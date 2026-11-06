@@ -8,6 +8,7 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
   checkRateLimit: vi.fn(),
 }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/format-engine/challenge-server', () => ({ makeChallenge: vi.fn(), answerChallenge: vi.fn(), withdrawChallenge: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/views-server', () => ({ loadParticipantNames: vi.fn() }));
 
@@ -133,6 +134,19 @@ describe('POST /api/seasons/[id]/format/challenges', () => {
         metadata: { challenge_id: CHALLENGE_ID, phase_id: PHASE_ID, defender_id: DEFENDER },
       }),
     );
+  });
+
+  it('still answers 201 once the challenge is committed when the name read fails (names are best effort)', async () => {
+    vi.mocked(loadParticipantNames).mockRejectedValueOnce(new Error('names read failed'));
+    const response = await POST(post(BODY), params);
+    expect(response.status).toBe(201);
+    expect(makeChallenge).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect((await response.json()).data.challenge).toMatchObject({
+      id: CHALLENGE_ID,
+      challenger: { id: VIEWER, name: null },
+      defender: { id: DEFENDER, name: null },
+    });
   });
 
   it('refuses a completed or archived league with 409 format_season_closed', async () => {

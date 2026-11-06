@@ -1,5 +1,5 @@
 import type { Enums, Json } from './database';
-import type { AdvancementRule, EnrollmentSource, SeasonFormatType } from './season';
+import type { AdvancementRule, EnrollmentContribution, EnrollmentSource, SeasonFormatType } from './season';
 import type { Player } from './player';
 import type { PublicTournamentParticipant } from '@/lib/players/public-player';
 
@@ -101,6 +101,18 @@ export function parseBoOverrides(raw: Json | null): BoOverrides {
   return result;
 }
 
+function parseEnrollmentContributions(raw: unknown): EnrollmentContribution[] | null {
+  if (!Array.isArray(raw)) return null;
+  const out: EnrollmentContribution[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') return null;
+    const { source_phase_id, player_ids } = item as Record<string, unknown>;
+    if (typeof source_phase_id !== 'string' || !Array.isArray(player_ids) || !player_ids.every((id) => typeof id === 'string')) return null;
+    out.push({ source_phase_id, player_ids: player_ids as string[] });
+  }
+  return out;
+}
+
 export function parseEnrollmentSource(raw: Json | null): EnrollmentSource | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
   const obj = raw as Record<string, unknown>;
@@ -109,11 +121,13 @@ export function parseEnrollmentSource(raw: Json | null): EnrollmentSource | null
     typeof obj.synced_at === 'string' &&
     typeof obj.frozen === 'boolean'
   ) {
+    const contributions = parseEnrollmentContributions(obj.contributions);
     return {
       type: obj.type,
       source_phase_id: typeof obj.source_phase_id === 'string' ? obj.source_phase_id : null,
       synced_at: obj.synced_at,
       frozen: obj.frozen,
+      ...(contributions ? { contributions } : {}),
     };
   }
   return null;

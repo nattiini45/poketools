@@ -817,6 +817,29 @@ export async function replacePhaseParticipants(
   if (insErr) throw insErr;
 }
 
+/**
+ * Replaces a phase's participants and its `enrollment_source` in one transaction (`tournament_enrollment_replace`), but only
+ * while the stored `enrollment_source.synced_at` still equals `expectedSyncedAt` (the value the caller read before it merged;
+ * null when it read no source). The timestamp is the token because the app reads the source through a normalising parser, so
+ * the raw jsonb would never compare equal. false: another sync of the same phase won in between, so the caller reads the phase again, merges again and retries.
+ */
+export async function replacePhaseEnrollment(
+  tournamentId: string,
+  entries: Array<{ player_id: string; seed: number }>,
+  source: import('@/types/season').EnrollmentSource,
+  expectedSyncedAt: string | null
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('tournament_enrollment_replace', {
+    p_tournament_id: tournamentId,
+    p_entries: entries as unknown as Json,
+    p_source: source as unknown as Json,
+    // NULL when the phase had no source; the generated type does not model a nullable argument.
+    p_expected_synced_at: expectedSyncedAt as unknown as string,
+  });
+  if (error) throw error;
+  return data === true;
+}
+
 /** Shift stage_order for phases at or after insert position. */
 export async function shiftStageOrders(
   seasonId: string,

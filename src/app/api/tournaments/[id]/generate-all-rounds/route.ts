@@ -38,9 +38,12 @@ import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-s
 import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import {
   announceKitRound,
+  assertBatchMayRunAhead,
+  assertMirroredGroupsPlayLegs,
   assertPhaseGenerates,
   assertPhaseOpenForRounds,
   assertPhaseReadyForFirstRound,
+  batchRoundCap,
   fillKitRoundDeadline,
   isKitEnginePhase,
   loadKitPhaseOfTournament,
@@ -74,6 +77,12 @@ interface RouteParams {
  * A phase of a kit league plays its stage's legs (`legs` times the circle schedule, later legs with sides swapped),
  * and each round it writes reacts like a round of `generate-round`: the stage calendar's deadline, the format's
  * `stage_start` / `round_start` events (fired when the round is generated) and the filter's check.
+ *
+ * A stage with an `end_when` bounds the batch. A `rounds` bound stops it at that round (the stage is over once that many
+ * rounds are played, so a later round would be stranded). An expression bound is checked after every round and can end
+ * the stage at any one, so a batch of two or more rounds is refused (409 `rounds_batch_end_when_expression`): such a stage
+ * goes round by round. A round robin with more than one leg on groups that mirror league groups is refused too (409
+ * `rounds_mirrored_groups_legs`): the league week plan has no legs, and the legs would be dropped silently.
  *
  * Optional JSON body `{ "start_round": true }` starts the lowest-numbered round this call wrote (best effort: if
  * the start fails the round stays pending and the admin starts it by hand); the later rounds stay pending.
@@ -167,6 +176,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A kit round robin plays each of its own groups as a round robin of the stage's legs; groups that mirror league
     // groups keep the league week plan (cross-group weeks, placement weeks).
     const kitGroups = kitPairing && groups.length > 0 && !mirrorsLeagueGroups(groups) ? groups : null;
+    // The league week plan has no legs: a multi-leg round robin on mirrored groups is refused, not played as one leg.
+    assertMirroredGroupsPlayLegs(kitPairing, groups.length > 0 && mirrorsLeagueGroups(groups));
+    // A stage that ends on a `rounds` bound takes no round past it: the batch stops there.
+    const roundCap = batchRoundCap(kitPhase) ?? Number.POSITIVE_INFINITY;
 
     // Every week to write with its pairings, computed in full before the first write. `byePlayerIds` lists the
     // trainers the circle method seats out (a phase without groups); a grouped week has none: a trainer without an
@@ -182,7 +195,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const missing = pendingWeeks(context, plan);
       // Up to (not including) the next placement week, unless the first missing week is one.
       const batch: number[] = [];
-      for (const week of missing) {
+      for (const week of missing.filter((planned) => planned.week <= roundCap)) {
         if (week.awaitingTables && batch.length > 0) break;
         batch.push(week.week);
       }
@@ -204,7 +217,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         : [participantIds];
       const circleRounds = (ids: readonly string[]) =>
         kitPairing ? (kitStageRounds(kitPairing, ids.length) ?? 0) : getRoundRobinTotalRounds(ids.length);
-      const totalRounds = Math.max(0, ...circles.map(circleRounds));
+      const totalRounds = Math.min(roundCap, Math.max(0, ...circles.map(circleRounds)));
       const withMatches = new Set((await getMatchesByTournament(id)).map((match) => match.round_id));
       // The circle schedule is rebuilt from the current participant order. A rename or a substitute after the first
       // round can make a missing round repeat a pairing that is already scheduled (any status): refuse before the
@@ -245,6 +258,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // A stage that ends on a condition is generated round by round: the condition can end it before the batch is played.
+    assertBatchMayRunAhead(kitPhase, weeksToWrite.length);
 
     const createdRounds: Round[] = [];
 

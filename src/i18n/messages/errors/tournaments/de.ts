@@ -20,6 +20,8 @@ export default defineDe<typeof en>()({
     'Die Teilnehmerliste ist eingefroren. Bestätige, um die importierten Tabellenstände zu überschreiben.',
   ENROLLMENT_ROUNDS_EXIST:
     'Solange es Runden gibt, lässt sich die Teilnehmerliste nicht neu abgleichen. Bestätige, um sie zu überschreiben.',
+  ENROLLMENT_SYNC_CONFLICT:
+    'Zur gleichen Zeit lief ein weiterer Abgleich der Teilnehmerliste dieser Phase. Versuche es noch einmal.',
   SEED_CONFLICT:
     'Setzplatz {seed} ist bereits an einen anderen Teilnehmer vergeben – nimm ihn in die Neusetzung auf oder wähle einen freien Setzplatz.',
   SEED_UPDATE_PARTIAL: {
@@ -122,6 +124,11 @@ export default defineDe<typeof en>()({
     'Eine Liga im Papierkorb nutzt dieses Regelwerk noch, daher wurde es nicht gelöscht. Stelle die Liga zuerst wieder her oder entferne sie endgültig.',
   seed_rulesets_admin_required: 'Dafür musst du als Admin angemeldet sein.',
   seed_rulesets_secret_invalid: 'Das Bootstrap-Secret fehlt oder ist ungültig.',
+
+  rounds_batch_end_when_expression:
+    'Diese Phase endet durch eine Bedingung, die nach jeder Runde geprüft wird. Ihre Runden können deshalb nicht alle auf einmal erzeugt werden. Erzeuge sie Runde für Runde.',
+  rounds_mirrored_groups_legs:
+    'Diese Jeder-gegen-jeden-Phase spielt mehr als einen Durchgang, aber ihre Gruppen werden von der Liga verwaltet und folgen deren Wochenplan, der keine Durchgänge kennt. Nutze einen einzigen Durchgang oder entferne die Ligagruppen.',
 
   // Resource admins
   resource_admin_target_required: 'Ressourcentyp und Ressourcen-ID sind erforderlich.',

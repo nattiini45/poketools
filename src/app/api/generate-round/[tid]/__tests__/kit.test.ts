@@ -367,6 +367,41 @@ describe('generate-round on a kit phase', () => {
   });
 });
 
+describe('generate-round: groups that mirror league groups have no legs', () => {
+  const mirrored = [
+    { id: 'g1', group_number: 1, name: 'Group A', season_group_id: 'sg-1', members: [{ player_id: 'p1', player_name: 'P1', seed: 1 }, { player_id: 'p4', player_name: 'P4', seed: 2 }] },
+    { id: 'g2', group_number: 2, name: 'Group B', season_group_id: 'sg-2', members: [{ player_id: 'p2', player_name: 'P2', seed: 1 }, { player_id: 'p3', player_name: 'P3', seed: 2 }] },
+  ];
+
+  beforeEach(() => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('round_robin', 0) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored as never);
+  });
+
+  it('refuses a two-leg kit round robin with 409 rounds_mirrored_groups_legs instead of playing one leg', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'round_robin', legs: 2, mirror_legs: true }));
+
+    const response = await POST(request, routeParams);
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('rounds_mirrored_groups_legs');
+    expect(body.params).toMatchObject({ legs: 2 });
+    expect(createRound).not.toHaveBeenCalled();
+    expect(createMatchBatch).not.toHaveBeenCalled();
+  });
+
+  it('still plays a single leg on the league week plan', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'round_robin', legs: 1, mirror_legs: true }));
+
+    const response = await POST(request, routeParams);
+
+    expect(response.status).not.toBe(409);
+    expect(createRound).toHaveBeenCalled();
+  });
+});
+
 describe('generate-round: the first round of a kit phase waits for the format set-up', () => {
   beforeEach(() => {
     vi.mocked(getTournamentById).mockResolvedValue(tournament('swiss', 0) as never);

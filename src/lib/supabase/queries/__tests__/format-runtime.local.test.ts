@@ -30,8 +30,9 @@ const ids = { season: randomUUID(), p1: randomUUID(), p2: randomUUID(), p3: rand
 let eventCounter = 0;
 const nextKey = () => `evt-${++eventCounter}`;
 
-async function fire(ops: FormatOp[], eventKey = nextKey()): Promise<boolean> {
-  return rt.fireFormatEvent({ seasonId: ids.season, eventKey, event: 'time', payload: {}, ops, firedBy: null });
+// Without an explicit revision the call carries the current one, like an event planned from a context loaded just before.
+async function fire(ops: FormatOp[], eventKey = nextKey(), revision?: number): Promise<boolean> {
+  return rt.fireFormatEvent({ seasonId: ids.season, eventKey, event: 'time', payload: {}, ops, firedBy: null, revision: revision ?? (await revisionOf()) });
 }
 
 const grant = (resource: string, player_id: string, item_id: string | null, extra: Partial<Extract<FormatOp, { op: 'grant_item' }>> = {}): FormatOp => ({
@@ -303,10 +304,10 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
   });
 
   describe('adjustments', () => {
-    const adjust = (over: Partial<Parameters<RuntimeMod['applyFormatAdjustment']>[0]> = {}) =>
+    const adjust = async (over: Partial<Parameters<RuntimeMod['applyFormatAdjustment']>[0]> = {}) =>
       rt.applyFormatAdjustment({
         seasonId: ids.season, kind: 'points', target: { stage: 'main', player_id: ids.p1 }, delta: { points: 2 },
-        reason: 'late report', adminId: null, ops: [], guardActions: [], ...over,
+        reason: 'late report', adminId: null, ops: [], guardActions: [], ...over, revision: over.revision ?? (await revisionOf()),
       });
     const amendments = async () => {
       const { data, error } = await client.from('season_formats').select('amendments').eq('season_id', ids.season).single();
@@ -421,10 +422,11 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     const submissionOf = async (action: string, actor: string) =>
       (await rows('actionSubmissions')).find((s) => s.action_key === action && s.actor_player_id === actor);
     const units = async (resource: string, player: string) => (await held(resource, player)).reduce((sum, r) => sum + r.amount, 0);
-    const adjustGrant = (resource: string, player: string, item: string) =>
+    const adjustGrant = async (resource: string, player: string, item: string) =>
       rt.applyFormatAdjustment({
         seasonId: ids.season, kind: 'resource', target: { resource, player_id: player, item_id: item }, delta: { amount: 1 },
         reason: 'capacity test', adminId: null, ops: [grant(resource, player, item, { source: 'adjustment' })], guardActions: [],
+        revision: await revisionOf(),
       });
     const item = (resource: string, item_id: string) => ({ resource, item_id, exclusive: false });
     const base = () => ({ seasonId: ids.season, actionKey: 'cap', actorId: ids.p1, targetId: null as string | null, picks: [] as Json });
@@ -523,7 +525,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       const stale = await revisionOf();
       await rt.applyFormatAdjustment({
         seasonId: ids.season, kind: 'domain', target: { domain: 'gifts' }, delta: { add: ['revision-test'] }, reason: 'late entry',
-        adminId: null, ops: [], guardActions: [],
+        adminId: null, ops: [], guardActions: [], revision: stale,
       });
       const current = await revisionOf();
       expect(current).toBeGreaterThan(stale);
@@ -557,6 +559,10 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       expect((await client.from('season_formats').delete().eq('season_id', ids.season)).error).toBeNull();
       await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
       await expect(save({ ...pick('rev_b'), revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(fire([], 'rev_b_event', last)).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(
+        rt.applyFormatAdjustment({ seasonId: ids.season, kind: 'points', target: {}, delta: {}, reason: 'r', adminId: null, ops: [], guardActions: [], revision: last }),
+      ).rejects.toMatchObject({ code: 'format_context_stale' });
 
       // The same row attached again (a restore does this) is a new version: the old number does not come back.
       const { error } = await client.from('season_formats').insert(kept.data as never);
@@ -564,7 +570,11 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       const again = await revisionOf();
       expect(again).toBeGreaterThan(last);
       await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(fire([], 'rev_b_event', last)).rejects.toMatchObject({ code: 'format_context_stale' });
       await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: again })).resolves.toMatchObject({ status: 'submitted' });
+      // The refused event never used its key up: it fires in the new format.
+      expect((await rows('eventLog')).some((e) => e.event_key === 'rev_b_event')).toBe(false);
+      await expect(fire([], 'rev_b_event', again)).resolves.toBe(true);
     });
 
     it('requires a revision', async () => {
@@ -573,6 +583,95 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
         p_expected_revision: null as unknown as number,
       });
       expect(call.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
+      const event = await client.rpc('format_fire_event', {
+        p_season_id: ids.season, p_event_key: 'rev_c_event', p_event: 'time', p_payload: {}, p_ops: [], p_fired_by: null as unknown as string,
+        p_expected_revision: null as unknown as number,
+      });
+      expect(event.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
+      const adjustment = await client.rpc('format_apply_adjustment', {
+        p_season_id: ids.season, p_kind: 'points', p_target: {}, p_delta: {}, p_reason: 'r', p_admin: null as unknown as string, p_ops: [],
+        p_guard_actions: [], p_expected_revision: null as unknown as number,
+      });
+      expect(adjustment.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
+      expect((await rows('eventLog')).some((e) => e.event_key === 'rev_c_event')).toBe(false);
+    });
+
+    it('refuses an event planned before a change, applies none of its ops and leaves its key free', async () => {
+      const stale = await revisionOf();
+      await update({ tunables: { planned_before: true } });
+      const ops: FormatOp[] = [
+        { op: 'set_flag', key: 'domain:stale_event', value: 'unlocked' },
+        grant('stale_pack', ids.p3, null, { amount: 1 }),
+      ];
+      await expect(fire(ops, 'stale_event_key', stale)).rejects.toMatchObject({
+        name: 'FormatRuntimeError', code: 'format_context_stale', statusCode: 409,
+      });
+      expect((await rows('eventLog')).some((e) => e.event_key === 'stale_event_key')).toBe(false);
+      expect((await rows('flags')).some((f) => f.key === 'domain:stale_event')).toBe(false);
+      expect(await held('stale_pack', ids.p3)).toHaveLength(0);
+
+      // The key was not burned: the event planned for the current format fires under it, once.
+      await expect(fire(ops, 'stale_event_key')).resolves.toBe(true);
+      await expect(fire(ops, 'stale_event_key')).resolves.toBe(false);
+      expect((await rows('eventLog')).filter((e) => e.event_key === 'stale_event_key')).toHaveLength(1);
+      expect(await held('stale_pack', ids.p3)).toHaveLength(1);
+    });
+
+    it('refuses an adjustment prepared before a change, of every kind, and writes no history row', async () => {
+      const stale = await revisionOf();
+      await update({ tunables: { adjusted_before: true } });
+      const before = (await rows('adjustments')).length;
+      const call = (kind: Parameters<RuntimeMod['applyFormatAdjustment']>[0]['kind'], ops: FormatOp[] = [], guardActions: string[] = []) =>
+        rt.applyFormatAdjustment({ seasonId: ids.season, kind, target: {}, delta: {}, reason: 'stale', adminId: null, ops, guardActions, revision: stale });
+      await expect(call('points')).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+      await expect(call('resource', [grant('stale_pack', ids.p3, null, { source: 'adjustment' })])).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(call('relation', [{ op: 'reveal_relation', relation: 'santa' }])).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(call('action', [{ op: 'lock_action', action: 'stale_action' }])).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(call('domain', [], ['stale_action'])).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect((await rows('adjustments')).length).toBe(before);
+      expect((await rows('flags')).some((f) => f.key === 'action:stale_action')).toBe(false);
+    });
+
+    it('never applies an event, or records an adjustment, against a format that changed, however the call and the change interleave', async () => {
+      for (let i = 0; i < 8; i++) {
+        const key = `rev_event_race_${i}`;
+        const revision = await revisionOf();
+        const [event, change] = await Promise.allSettled([fire([{ op: 'set_flag', key: `race:${i}`, value: 'on' }], key, revision), update({ tunables: { m: i } })]);
+        expect(change.status).toBe('fulfilled');
+        // The event landed before the change, or it was refused as stale: nothing else (no deadlock, no half write).
+        if (event.status === 'rejected') expect(event.reason).toMatchObject({ code: 'format_context_stale' });
+        expect((await rows('eventLog')).some((e) => e.event_key === key)).toBe(event.status === 'fulfilled');
+        expect((await rows('flags')).some((f) => f.key === `race:${i}`)).toBe(event.status === 'fulfilled');
+      }
+      for (let i = 0; i < 8; i++) {
+        const reason = `rev_adjust_race_${i}`;
+        const revision = await revisionOf();
+        const [adjustment, change] = await Promise.allSettled([
+          rt.applyFormatAdjustment({
+            seasonId: ids.season, kind: i % 2 === 0 ? 'points' : 'domain', target: {}, delta: i % 2 === 0 ? { points: 1 } : { add: [`race${i}`] },
+            reason, adminId: null, ops: [], guardActions: [], revision,
+          }),
+          update({ tunables: { a: i } }),
+        ]);
+        expect(change.status).toBe('fulfilled');
+        if (adjustment.status === 'rejected') expect(adjustment.reason).toMatchObject({ code: 'format_context_stale' });
+        expect((await rows('adjustments')).some((a) => a.reason === reason)).toBe(adjustment.status === 'fulfilled');
+      }
+    });
+
+    it('serialises concurrent events, amendments and locks of one action without a deadlock', async () => {
+      // An amendment holds the action lock of its guarded actions and then the season_formats row; an event that locks the
+      // action takes the action lock before the row. Both orders agree, so none of the calls may fail with anything but
+      // a stale revision (a deadlock would be 40P01).
+      const amend = async (i: number) =>
+        rt.applyFormatAdjustment({
+          seasonId: ids.season, kind: 'domain', target: { domain: 'gifts' }, delta: { add: [`dl${i}`] }, reason: 'deadlock test',
+          adminId: null, ops: [], guardActions: ['dl_action'], revision: await revisionOf(),
+        });
+      const calls = Array.from({ length: 6 }, (_, i) => (i % 2 === 0 ? fire([{ op: 'lock_action', action: 'dl_action' }], `dl_event_${i}`) : amend(i)));
+      for (const outcome of await Promise.allSettled(calls)) {
+        if (outcome.status === 'rejected') expect(outcome.reason).toMatchObject({ code: expect.stringMatching(/^(format_context_stale|domain_amendment_locked)$/) });
+      }
     });
 
     it('never stores a pick against a format that changed, however the write and the change interleave', async () => {

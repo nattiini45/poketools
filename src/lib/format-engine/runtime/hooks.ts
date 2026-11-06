@@ -23,6 +23,7 @@ import { openChecks, resolveCheck } from './checks-server';
 import { eventKey } from './events';
 import { isKitCandidate, type HookTournament } from '../kit-candidate';
 import { fireEvent } from './fire';
+import { isFormatContextStale, type HookReport } from './stale';
 import { matchContext, playerContext } from './expr-env';
 import { envBaseOf, loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
 import { loadStageTable, playerRowsOf } from './stage-table';
@@ -31,14 +32,22 @@ import { planTrackProgress } from './tracks';
 
 const TAG = 'format-engine/hooks';
 
-export { isKitCandidate, type HookTournament };
+export { isKitCandidate, type HookTournament, type HookReport };
 
 /** Runs one hook step; true when it completed, false when it threw (logged with the original error). */
-async function guarded(step: string, meta: Record<string, unknown>, run: () => Promise<void>): Promise<boolean> {
+async function guarded(step: string, meta: Record<string, unknown>, run: () => Promise<void>, report?: HookReport): Promise<boolean> {
   try {
     await run();
     return true;
   } catch (error) {
+    // The format was replaced or amended after this hook loaded it: nothing was written, and the caller's heal (or the
+    // next hook call) plans the step again against the current format. Not an error of the code.
+    if (isFormatContextStale(error)) {
+      if (report !== undefined) report.stale = true;
+      logger.warn(TAG, `format runtime hook skipped, the format changed meanwhile; it is retried: ${step}`, { ...meta });
+      return false;
+    }
+    if (report !== undefined) report.failed = true;
     logger.error(TAG, `format runtime hook failed: ${step}`, { ...meta, error });
     return false;
   }
@@ -74,6 +83,8 @@ export interface MatchCompletedInput {
    * the match is recent. The cron backfill, which the heal never sees, asks for `always` first and `never` on its repeat.
    */
   auditRetry?: AuditRetry;
+  /** Filled when the hook resolves false (`HookReport`). */
+  report?: HookReport;
 }
 
 /**
@@ -155,7 +166,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
     for (const issue of exprChecks.issues) logger.warn(TAG, 'check expression failed', { matchId: input.matchId, ...issue });
     checks.push(...exprChecks.checks);
     await open(tournament.season_id, checks);
-  });
+  }, input.report);
   const ready = loaded.value;
   let audited = true;
   if (ready !== null) {
@@ -171,7 +182,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
         context: ready.ctx,
         retry: input.auditRetry,
       });
-    });
+    }, input.report);
   }
   // A stage end that failed is a failed step like the others: the phase would stay active with nothing left to re-evaluate
   // `end_when` (the cron does not), while the heal's re-run completes it (`completePhaseAtStageEnd` is compare-and-set). A
@@ -179,7 +190,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
   // phase completed and repeats the reaction, which is idempotent by event and check keys.
   let stageEnded = true;
   if (ready !== null && ready.phase.stage.end_when !== undefined) {
-    stageEnded = await endStageIfDone(tournament, ready.ctx, ready.phase, input.roundId);
+    stageEnded = await endStageIfDone(tournament, ready.ctx, ready.phase, input.roundId, input.report);
   }
   return applied && audited && stageEnded;
 }
@@ -235,6 +246,8 @@ export function inverseOps(logged: Json | undefined): InverseOps {
 export interface MatchRevertedInput {
   tournament: HookTournament;
   matchId: string;
+  /** Filled when the hook resolves false (`HookReport`). */
+  report?: HookReport;
 }
 
 /** Whether `check` is a per-match check of the completion `generation` of the match: its team audit, an unresolved outcome or a match-level expression. */
@@ -301,7 +314,10 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
     // stays open ends the call: advancing the generation would leave it without a retry (the cron heal only looks at
     // matches whose current completion key is still fired, and the next call reads the new generation's keys).
     auditsClosed.value = await closeMatchChecks(tournament.season_id, input.matchId, generation, ctx.state.checks);
-    if (!auditsClosed.value) return;
+    if (!auditsClosed.value) {
+      if (input.report !== undefined) input.report.failed = true;
+      return;
+    }
     const completedKey = eventKey({ event: 'match_completed', match_id: completionMatchId(input.matchId, generation) });
     const { fireFormatEvent, getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
     if (!ctx.state.firedEventKeys.includes(completedKey)) {
@@ -316,6 +332,7 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
           payload: { match_id: input.matchId, reverts: completedKey },
           ops: [],
           firedBy: null,
+          revision: ctx.revision,
         });
         expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
       }
@@ -331,6 +348,7 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
       payload: { match_id: input.matchId, reverts: completedKey },
       ops: inverse.ops,
       firedBy: null,
+      revision: ctx.revision,
     });
     expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
     if (inverse.irreversible.length > 0) {
@@ -340,7 +358,7 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
         ops: [...new Set(inverse.irreversible)],
       });
     }
-  });
+  }, input.report);
   return reverted && auditsClosed.value;
 }
 
@@ -358,6 +376,7 @@ async function endStageIfDone(
   stale: KitContext,
   phase: KitPhaseInfo,
   roundId: string,
+  report?: HookReport,
 ): Promise<boolean> {
   return guarded('stage end', { tournamentId: tournament.id }, async () => {
     const { checkStageEnd } = await import('./stage-end-server');
@@ -373,7 +392,7 @@ async function endStageIfDone(
     const result = await completePhaseAtStageEnd(tournament.id, `end_when:${phase.stage.key}`);
     // The phase is completed but its reaction did not apply: a failed step, so the heal's re-run repeats the reaction.
     if (result === 'reaction_failed') throw new Error('the stage end reaction of the completed phase did not apply');
-  });
+  }, report);
 }
 
 /** A replay ended in an engine tie and the match was disputed: open the `unresolved_outcome` checks. */
@@ -496,13 +515,14 @@ export async function onPhaseStatusChanged(input: PhaseStatusInput): Promise<boo
  * `onMatchReverted` for a caller that holds the ids only (the reopen route): reads the tournament first. Resolves true
  * when the league runs no kit format or the revert applied, false when a read or the revert failed (logged).
  */
-export async function revertMatchCompletion(input: { tournamentId: string; matchId: string }): Promise<boolean> {
+export async function revertMatchCompletion(input: { tournamentId: string; matchId: string; report?: HookReport }): Promise<boolean> {
   let tournament: Tournament | null;
   try {
     tournament = await getTournamentById(input.tournamentId);
   } catch (error) {
-    logger.error(TAG, 'format runtime hook failed: match reverted (tournament read)', { ...input, error });
+    if (input.report !== undefined) input.report.failed = true;
+    logger.error(TAG, 'format runtime hook failed: match reverted (tournament read)', { tournamentId: input.tournamentId, matchId: input.matchId, error });
     return false;
   }
-  return tournament === null ? true : onMatchReverted({ tournament, matchId: input.matchId });
+  return tournament === null ? true : onMatchReverted({ tournament, matchId: input.matchId, report: input.report });
 }

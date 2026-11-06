@@ -11,8 +11,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
   getStagesBySeasonId: vi.fn(),
   getParticipants: vi.fn(),
-  replacePhaseParticipants: vi.fn(),
-  setEnrollmentSource: vi.fn(),
+  replacePhaseEnrollment: vi.fn(async () => true),
 }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonById: vi.fn(),
@@ -42,7 +41,7 @@ import {
   getParticipants,
   getStagesBySeasonId,
   getTournamentById,
-  replacePhaseParticipants,
+  replacePhaseEnrollment,
 } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
@@ -96,7 +95,7 @@ describe('per-group advancement', () => {
       group('gb', 2, 'sg-b', ['b1', 'b2']),
     ]);
     await syncStandingsEnrollment('s1', 'playoffs');
-    expect(vi.mocked(replacePhaseParticipants).mock.calls[0][1]).toEqual([
+    expect(vi.mocked(replacePhaseEnrollment).mock.calls[0][1]).toEqual([
       { player_id: 'a1', seed: 1 },
       { player_id: 'b1', seed: 2 },
     ]);
@@ -108,7 +107,7 @@ describe('per-group advancement', () => {
       group('gb', 2, null, ['b1', 'b2']),
     ]);
     await syncStandingsEnrollment('s1', 'playoffs');
-    expect(vi.mocked(replacePhaseParticipants).mock.calls[0][1]).toEqual([
+    expect(vi.mocked(replacePhaseEnrollment).mock.calls[0][1]).toEqual([
       { player_id: 'a2', seed: 1 },
       { player_id: 'b1', seed: 2 },
     ]);
@@ -141,7 +140,7 @@ describe('top-N advancement over the whole phase', () => {
     vi.mocked(getGroupsByTournament).mockResolvedValue([]);
   }
 
-  const enrolledSeeds = () => vi.mocked(replacePhaseParticipants).mock.calls[0][1];
+  const enrolledSeeds = () => vi.mocked(replacePhaseEnrollment).mock.calls[0][1];
 
   it('enrols the top N by standings, seeded by placement', async () => {
     arrange(2);
@@ -203,7 +202,7 @@ describe('advancement from a Swiss source with stored byes', () => {
     );
   }
 
-  const advanced = () => vi.mocked(replacePhaseParticipants).mock.calls[0][1].map((e) => e.player_id);
+  const advanced = () => vi.mocked(replacePhaseEnrollment).mock.calls[0][1].map((e) => e.player_id);
 
   it('lets a bye win count toward the top N, as in the stage table', async () => {
     arrange('swiss', { count: 3, per_group: false });
@@ -253,7 +252,7 @@ describe('per-group advancement follows the group member rows (substitution regr
     vi.mocked(getCompletedMatchRecords).mockResolvedValue(substitutionMatches);
   });
 
-  const advanced = () => vi.mocked(replacePhaseParticipants).mock.calls[0][1].map((e) => e.player_id);
+  const advanced = () => vi.mocked(replacePhaseEnrollment).mock.calls[0][1].map((e) => e.player_id);
 
   it("counts the substitute's matches when the group row moved to them", async () => {
     vi.mocked(getGroupsByTournament).mockResolvedValue([

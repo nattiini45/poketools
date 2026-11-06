@@ -126,22 +126,35 @@ describe('the RPC wrappers', () => {
     { op: 'grant_item', resource: 'gift', player_id: P1, item_id: 'pikachu', amount: 1, exclusive: true, source: 'event', source_ref: null },
   ];
 
-  it('fireFormatEvent passes the key, the ops and a NULL actor, and returns the boolean', async () => {
+  it('fireFormatEvent passes the key, the ops, a NULL actor and the revision it was planned from, and returns the boolean', async () => {
     state.rpcReply = { data: true };
     await expect(
-      fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: { stage: 'main' }, ops, firedBy: null }),
+      fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: { stage: 'main' }, ops, firedBy: null, revision: 41 }),
     ).resolves.toBe(true);
     expect(state.rpcCalls).toEqual([
       {
         name: 'format_fire_event',
-        args: { p_season_id: SEASON, p_event_key: 'stage_start:main', p_event: 'stage_start', p_payload: { stage: 'main' }, p_ops: ops, p_fired_by: null },
+        args: {
+          p_season_id: SEASON, p_event_key: 'stage_start:main', p_event: 'stage_start', p_payload: { stage: 'main' }, p_ops: ops,
+          p_fired_by: null, p_expected_revision: 41,
+        },
       },
     ]);
 
     state.rpcReply = { data: false };
     await expect(
-      fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: {}, ops: [], firedBy: P1 }),
+      fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: {}, ops: [], firedBy: P1, revision: 41 }),
     ).resolves.toBe(false);
+  });
+
+  it('fireFormatEvent and applyFormatAdjustment raise format_context_stale as a typed 409 error', async () => {
+    state.rpcReply = { error: { code: 'P0001', message: 'format_context_stale', details: null } };
+    await expect(
+      fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: {}, ops: [], firedBy: null, revision: 1 }),
+    ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'format_context_stale', statusCode: 409 });
+    await expect(
+      applyFormatAdjustment({ seasonId: SEASON, kind: 'points', target: {}, delta: {}, reason: 'r', adminId: P1, ops: [], guardActions: [], revision: 1 }),
+    ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'format_context_stale', statusCode: 409 });
   });
 
   it('saveFormatAction and submitFormatAction return the submission row', async () => {
@@ -198,13 +211,14 @@ describe('the RPC wrappers', () => {
     await expect(
       applyFormatAdjustment({
         seasonId: SEASON, kind: 'domain', target: { domain: 'gifts' }, delta: { add: ['x'] }, reason: 'typo', adminId: P1, ops, guardActions: ['pick'],
+        revision: 41,
       }),
     ).resolves.toBe('adj-1');
     expect(state.rpcCalls[0]).toEqual({
       name: 'format_apply_adjustment',
       args: {
         p_season_id: SEASON, p_kind: 'domain', p_target: { domain: 'gifts' }, p_delta: { add: ['x'] }, p_reason: 'typo',
-        p_admin: P1, p_ops: ops, p_guard_actions: ['pick'],
+        p_admin: P1, p_ops: ops, p_guard_actions: ['pick'], p_expected_revision: 41,
       },
     });
   });
@@ -212,7 +226,7 @@ describe('the RPC wrappers', () => {
   it.each(['relation_has_links', 'insufficient_holding'] as const)('applyFormatAdjustment turns the database refusal %s into a FormatAdjustmentRefusedError', async (code) => {
     state.rpcReply = { error: { code: 'P0001', message: code, details: '{}' } };
     const error = await applyFormatAdjustment({
-      seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'draw', adminId: P1, ops, guardActions: [],
+      seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'draw', adminId: P1, ops, guardActions: [], revision: 41,
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(FormatAdjustmentRefusedError);
     expect(error).toMatchObject({ refusal: code });
@@ -221,12 +235,12 @@ describe('the RPC wrappers', () => {
   it('applyFormatAdjustment still maps the other signals, and leaves a look-alike with another SQLSTATE alone', async () => {
     state.rpcReply = { error: { code: 'P0001', message: 'domain_amendment_locked', details: '{}' } };
     await expect(
-      applyFormatAdjustment({ seasonId: SEASON, kind: 'domain', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: ['pick'] }),
+      applyFormatAdjustment({ seasonId: SEASON, kind: 'domain', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: ['pick'], revision: 41 }),
     ).rejects.toMatchObject({ code: 'domain_amendment_locked' });
     const lookAlike = { code: '23505', message: 'relation_has_links' };
     state.rpcReply = { error: lookAlike };
     await expect(
-      applyFormatAdjustment({ seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: [] }),
+      applyFormatAdjustment({ seasonId: SEASON, kind: 'relation', target: {}, delta: {}, reason: 'r', adminId: P1, ops, guardActions: [], revision: 41 }),
     ).rejects.toBe(lookAlike);
   });
 

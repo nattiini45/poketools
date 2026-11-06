@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { FORMAT_ADJUSTMENT_REASON_MAX, FormatAdjustmentRefusedError } from '@/lib/supabase/queries/format-runtime';
+import { FORMAT_ADJUSTMENT_REASON_MAX, FormatAdjustmentRefusedError, FormatRuntimeError } from '@/lib/supabase/queries/format-runtime';
 import { PLAYERS, SEED, giftDef, item, link, stateFor } from './helpers';
 
 vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
@@ -53,6 +53,29 @@ beforeEach(() => {
   vi.mocked(loadFreshKitContext).mockResolvedValue(context());
   vi.mocked(applyFormatAdjustment).mockResolvedValue('adj-1');
   vi.mocked(fireEvent).mockResolvedValue(null);
+});
+
+describe('the revision of the format', () => {
+  it('hands the revision of the context it prepared from to the database, for every kind that writes', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context(), revision: 23 });
+    await applyAdjustment(request({ kind: 'points', stage: 'main', playerId: 'p1', points: 2 }));
+    await applyAdjustment(request({ kind: 'outcome', matchId: 'm-1' }));
+    await applyAdjustment(request({ kind: 'domain', domain: 'pool', add: [{ id: 'mew', attrs: [{ key: 'role', value: 'support' }] }] }));
+    expect(vi.mocked(applyFormatAdjustment).mock.calls.map((call) => [call[0].kind, call[0].revision])).toEqual([
+      ['points', 23],
+      ['outcome', 23],
+      ['domain', 23],
+    ]);
+  });
+
+  it('lets format_context_stale propagate (409): the admin reloads and repeats the change, and nothing fires', async () => {
+    vi.mocked(applyFormatAdjustment).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'locked' }))).rejects.toMatchObject({
+      code: 'format_context_stale',
+      statusCode: 409,
+    });
+    expect(fireEvent).not.toHaveBeenCalled();
+  });
 });
 
 describe('applyAdjustment', () => {

@@ -94,11 +94,23 @@ export interface AdvancementRule {
 }
 
 /** Tracks automatic standings enrollment for league phases (tournaments). */
+/** The players one source phase moved into a phase along its kit edge, in the source's seed order. */
+export interface EnrollmentContribution {
+  source_phase_id: string;
+  player_ids: string[];
+}
+
 export interface EnrollmentSource {
   type: 'standings' | 'roster';
   source_phase_id: string | null;
   synced_at: string;
   frozen: boolean;
+  /**
+   * Kit leagues only: what each source phase moved in, in the order the sources contributed. A phase fed by several
+   * edges is the sum of these blocks (first block first, a player once); a later sync of one source replaces only its
+   * own block. Absent for every other enrollment.
+   */
+  contributions?: EnrollmentContribution[];
 }
 
 export interface TournamentGroup {

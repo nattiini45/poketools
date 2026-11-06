@@ -79,6 +79,7 @@ src/lib/tournament/
 - **Purpose**: Auto-enroll phase participants from prior-phase standings; freeze on manual edit or bracket generation
 - **Standings source**: `computeStandingsForSeason()` (EPB-aware league standings chain, not raw W-L only)
 - **Guards**: `assertEnrollmentSyncAllowed(phaseId, force)` — without `force`, refuses when `enrollment_source.frozen` (`ENROLLMENT_FROZEN`) or rounds exist (`ENROLLMENT_ROUNDS_EXIST`). `sync-standings` and `POST /api/seasons/[id]/advance` accept `{ force: true }` to overwrite.
+- **Concurrent syncs**: a kit phase fed by several edges is the sum of its sources (`enrollment_source.contributions`, `mergeKitContributions`). The write is a compare-and-set: `replacePhaseEnrollment` calls `tournament_enrollment_replace`, which locks the phase row, compares the stored `enrollment_source.synced_at` with the one the sync read and only then replaces the roster and the source in one transaction. A sync that lost the race reads and merges again (up to `ENROLLMENT_SYNC_MAX_ATTEMPTS`), so two sources that complete together keep both blocks; after the last attempt the call answers 409 `ENROLLMENT_SYNC_CONFLICT` and the caller repeats it.
 - **Used by**: `POST .../phases/[phaseId]/participants/sync-standings`, phase creation, `ParticipantManager` / `SeedingTable` re-import for season-linked stages
 
 ### Pairing Dispatcher

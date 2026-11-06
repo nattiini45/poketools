@@ -135,6 +135,19 @@ describe('POST /api/seasons/[id]/format/challenges/[challengeId]/answer', () => 
     );
   });
 
+  it('still answers 200 once the answer is committed when the name read fails (names are best effort)', async () => {
+    vi.mocked(loadParticipantNames).mockRejectedValueOnce(new Error('names read failed'));
+    const response = await POST(post({ accept: true }), params());
+    expect(response.status).toBe(200);
+    expect(answerChallenge).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect((await response.json()).data.challenge).toMatchObject({
+      id: CHALLENGE_ID,
+      challenger: { id: CHALLENGER, name: null },
+      defender: { id: DEFENDER, name: null },
+    });
+  });
+
   it('refuses a completed or archived league with 409 format_season_closed', async () => {
     vi.mocked(assertSeasonOpenForPlay).mockRejectedValueOnce(refuse('format_season_closed'));
     const response = await POST(post({ accept: true }), params());

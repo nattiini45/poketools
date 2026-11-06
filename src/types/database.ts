@@ -7076,6 +7076,10 @@ export type Database = {
         Args: { p_expected_revision: number; p_season_id: string }
         Returns: undefined
       }
+      format__check_revision_for_update: {
+        Args: { p_expected_revision: number; p_season_id: string }
+        Returns: undefined
+      }
       format__clear_runtime: {
         Args: { p_season_id: string }
         Returns: undefined
@@ -7103,6 +7107,10 @@ export type Database = {
       }
       format__lock_holding: {
         Args: { p_player: string; p_resource: string; p_season_id: string }
+        Returns: undefined
+      }
+      format__lock_op_keys: {
+        Args: { p_ops: Json; p_season_id: string }
         Returns: undefined
       }
       format__open_round: {
@@ -7181,6 +7189,7 @@ export type Database = {
         Args: {
           p_admin: string
           p_delta: Json
+          p_expected_revision: number
           p_guard_actions: string[]
           p_kind: string
           p_ops: Json
@@ -7322,6 +7331,7 @@ export type Database = {
         Args: {
           p_event: string
           p_event_key: string
+          p_expected_revision: number
           p_fired_by: string
           p_ops: Json
           p_payload: Json
@@ -7641,6 +7651,15 @@ export type Database = {
           p_name?: string
           p_pokemon: Json
           p_team_id: string
+        }
+        Returns: boolean
+      }
+      tournament_enrollment_replace: {
+        Args: {
+          p_entries: Json
+          p_expected_synced_at: string
+          p_source: Json
+          p_tournament_id: string
         }
         Returns: boolean
       }

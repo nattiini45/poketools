@@ -112,6 +112,19 @@ describe('DELETE /api/seasons/[id]/format/challenges/[challengeId]', () => {
     );
   });
 
+  it('still answers 200 once the withdrawal is committed when the name read fails (names are best effort)', async () => {
+    vi.mocked(loadParticipantNames).mockRejectedValueOnce(new Error('names read failed'));
+    const response = await DELETE(del(), params());
+    expect(response.status).toBe(200);
+    expect(withdrawChallenge).toHaveBeenCalledTimes(1);
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    expect((await response.json()).data.challenge).toMatchObject({
+      id: CHALLENGE_ID,
+      challenger: { id: CHALLENGER, name: null },
+      defender: { id: DEFENDER, name: null },
+    });
+  });
+
   it('as=admin uses the league-admin guard, withdraws for the challenger and works in a closed league', async () => {
     vi.mocked(assertSeasonOpenForPlay).mockRejectedValue(refuse('format_season_closed'));
     const response = await DELETE(del('?as=admin'), params());

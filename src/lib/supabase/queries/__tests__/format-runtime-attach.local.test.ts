@@ -54,6 +54,7 @@ async function fillRuntime(seasonId: string, tag: string): Promise<void> {
     event: 'stage_start',
     payload: {},
     firedBy: null,
+    revision: await revisionOf(seasonId),
     ops: [
       { op: 'set_flag', key: 'domain:pool', value: 'unlocked' },
       { op: 'set_relation', relation: 'santa', links: [{ from: ids.p1, to: ids.p2 }, { from: ids.p2, to: ids.p1 }] },
@@ -135,7 +136,9 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
     expect(Object.values(await sizes(ids.season)).every((n) => n === 0)).toBe(true);
     // The old "already fired" key and the locked flag are gone: the same event fires again and the action is open.
     await expect(
-      rt.fireFormatEvent({ seasonId: ids.season, eventKey: 'stage_start:first', event: 'stage_start', payload: {}, firedBy: null, ops: [] }),
+      rt.fireFormatEvent({
+        seasonId: ids.season, eventKey: 'stage_start:first', event: 'stage_start', payload: {}, firedBy: null, ops: [], revision: await revisionOf(ids.season),
+      }),
     ).resolves.toBe(true);
     await expect(
       rt.saveFormatAction({ seasonId: ids.season, actionKey: 'pick', actorId: ids.p1, targetId: null, picks: [], revision: await revisionOf(ids.season) }),
@@ -156,6 +159,7 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
       event: 'stage_start',
       payload: {},
       firedBy: null,
+      revision: await revisionOf(ids.season),
       ops: [{ op: 'set_flag', key: 'domain:pool', value: 'unlocked' }],
     });
     expect((await attach(ids.season)).error).toBeNull();
@@ -212,6 +216,64 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
       // refused as stale. A pick written for the old format after the replace is the failure.
       if (write.status === 'rejected') expect(write.reason).toMatchObject({ code: 'format_context_stale' });
       expect((await rt.getFormatRuntime(ids.season)).actionSubmissions.filter((s) => s.action_key === action)).toEqual([]);
+    }
+  });
+
+  it('refuses an event and an adjustment planned before an attach-replace or a detach, and leaves the new format its key', async () => {
+    expect((await attach(ids.season, true)).error).toBeNull();
+    const stale = await revisionOf(ids.season);
+    expect((await attach(ids.season, true)).error).toBeNull();
+    const fire = (revision: number) =>
+      rt.fireFormatEvent({
+        seasonId: ids.season, eventKey: 'stage_start:old_format', event: 'stage_start', payload: {}, firedBy: null, revision,
+        ops: [{ op: 'set_flag', key: 'domain:old_format', value: 'unlocked' }],
+      });
+    const adjust = (revision: number) =>
+      rt.applyFormatAdjustment({
+        seasonId: ids.season, kind: 'points', target: { stage: 'main', player_id: ids.p1 }, delta: { points: 1 }, reason: 'old format',
+        adminId: null, ops: [], guardActions: [], revision,
+      });
+    await expect(fire(stale)).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    await expect(adjust(stale)).rejects.toMatchObject({ code: 'format_context_stale' });
+    let runtime = await rt.getFormatRuntime(ids.season);
+    expect(runtime.eventLog).toEqual([]);
+    expect(runtime.flags).toEqual([]);
+    expect(runtime.adjustments).toEqual([]);
+
+    // The key was never logged, so the event of the new format fires under it.
+    await expect(fire(await revisionOf(ids.season))).resolves.toBe(true);
+
+    // A detach removes the row: nothing planned for it is applied afterwards.
+    const last = await revisionOf(ids.season);
+    expect((await client.rpc('format_detach_season', { p_season_id: ids.season, p_confirm_clear: true })).error).toBeNull();
+    await expect(fire(last)).rejects.toMatchObject({ code: 'format_context_stale' });
+    await expect(adjust(last)).rejects.toMatchObject({ code: 'format_context_stale' });
+    runtime = await rt.getFormatRuntime(ids.season);
+    expect(runtime.eventLog).toEqual([]);
+    expect(runtime.adjustments).toEqual([]);
+  });
+
+  it('never leaves an event or its ops behind an attach-replace, however the call and the attach interleave (and never deadlocks)', async () => {
+    expect((await attach(ids.season, true)).error).toBeNull();
+    for (let round = 0; round < 6; round++) {
+      const key = `replace_event_race_${round}`;
+      const revision = await revisionOf(ids.season);
+      const [fired, replaced] = await Promise.allSettled([
+        rt.fireFormatEvent({
+          seasonId: ids.season, eventKey: key, event: 'time', payload: {}, firedBy: null, revision,
+          ops: [{ op: 'set_flag', key: `race:${round}`, value: 'old' }, { op: 'lock_action', action: `race_${round}` }],
+        }),
+        attach(ids.season, true).then((out) => {
+          if (out.error) throw new Error(JSON.stringify(out.error));
+        }),
+      ]);
+      expect(replaced.status).toBe('fulfilled');
+      // Either the event ran first and the replace emptied the runtime, or the replace came first and the event was refused
+      // as stale before its key was logged. A key or a flag of the old format in the new runtime is the failure.
+      if (fired.status === 'rejected') expect(fired.reason).toMatchObject({ code: 'format_context_stale' });
+      const runtime = await rt.getFormatRuntime(ids.season);
+      expect(runtime.eventLog.filter((e) => e.event_key === key)).toEqual([]);
+      expect(runtime.flags.filter((f) => f.key.startsWith('race:') || f.key.startsWith('action:race_'))).toEqual([]);
     }
   });
 });

@@ -7,10 +7,14 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
 }));
 vi.mock('@/lib/format-engine/runtime/effects', () => ({ eventNeedsRows: vi.fn(() => false), planEffects: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/stage-table', () => ({ loadStageRows: vi.fn() }));
-vi.mock('@/lib/supabase/queries/format-runtime', () => ({ fireFormatEvent: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
+  fireFormatEvent: vi.fn(),
+}));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 
-import { fireFormatEvent } from '@/lib/supabase/queries/format-runtime';
+import { expireSeasonReads } from '@/lib/revalidation';
+import { fireFormatEvent, FormatRuntimeError } from '@/lib/supabase/queries/format-runtime';
 import { eventNeedsRows, planEffects } from '../effects';
 import { fireEvent, fireLockedActionEvents, pendingLockEvents } from '../fire';
 import { loadFreshKitContext, type KitContext } from '../load';
@@ -55,6 +59,28 @@ describe('the rows of an event', () => {
     await fireEvent(SEASON, { event: 'stage_end', stage: 'swiss' }, null, { context: context() });
     expect(loadStageRows).not.toHaveBeenCalled();
     expect(vi.mocked(planEffects).mock.calls[0][5]).toEqual({ rows: undefined });
+  });
+});
+
+describe('the revision of the format', () => {
+  it('hands the revision of the context the ops were planned from to the database, for the event and for its cascade', async () => {
+    vi.mocked(planEffects).mockReturnValueOnce(plan([{ op: 'lock_action', action: 'give_gifts' }]) as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context({ flags: { 'action:give_gifts': 'locked' } }), revision: 12 });
+    await fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, { context: { ...context(), revision: 11 } });
+    // The cascade plans from a context it loads itself, so it carries that one.
+    expect(vi.mocked(fireFormatEvent).mock.calls.map((call) => [call[0].eventKey, call[0].revision])).toEqual([
+      ['stage_start:swiss', 11],
+      ['action_locked:give_gifts', 12],
+    ]);
+  });
+
+  it('lets format_context_stale leave as it is: nothing is cascaded, reloaded or expired, and the caller retries later', async () => {
+    const stale = new FormatRuntimeError('format_context_stale');
+    vi.mocked(fireFormatEvent).mockRejectedValue(stale);
+    vi.mocked(planEffects).mockReturnValue(plan([{ op: 'lock_action', action: 'give_gifts' }]) as never);
+    await expect(fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, { context: context() })).rejects.toBe(stale);
+    expect(fireFormatEvent).toHaveBeenCalledTimes(1);
+    expect(expireSeasonReads).not.toHaveBeenCalled();
   });
 });
 

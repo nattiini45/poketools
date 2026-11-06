@@ -107,11 +107,17 @@ describe('20261105090000 format runtime', () => {
     // The adjustment's revoke check takes the same lock through the same helper, not a copy of its key.
     expect(text.match(/hashtextextended\('format_holding:'/g)).toHaveLength(1);
 
-    // apply_ops (events and adjustments) and submit lock the holdings sorted before the first grant, action locks first.
+    // apply_ops (events and adjustments) and submit lock the holdings sorted before the first grant, relation and action locks
+    // first (format__lock_op_keys: relation, then action, each sorted).
+    const keys = text.slice(text.indexOf('FUNCTION public.format__lock_op_keys('), text.indexOf('FUNCTION public.format__apply_ops('));
+    expect(keys.indexOf('format__lock_action(p_season_id, v_lock.action_key)')).toBeGreaterThan(
+      keys.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'"),
+    );
+    expect(keys).toMatch(/ORDER BY action_key/);
     const ops = text.slice(text.indexOf('FUNCTION public.format__apply_ops('), text.indexOf('FUNCTION public.format_fire_event('));
-    const actionLocks = ops.indexOf('format__lock_action(p_season_id, v_lock.action_key)');
+    const actionLocks = ops.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
     const holdingLocks = ops.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, v_lock.player_id)');
-    expect(actionLocks).toBeGreaterThan(ops.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'"));
+    expect(actionLocks).toBeGreaterThan(-1);
     expect(holdingLocks).toBeGreaterThan(actionLocks);
     expect(holdingLocks).toBeLessThan(ops.indexOf('FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP'));
     expect(ops.slice(0, holdingLocks)).toMatch(/ORDER BY resource_key, player_id/);
@@ -142,11 +148,29 @@ describe('20261105090000 format runtime', () => {
     expect(text).not.toMatch(/(?:GRANT|REVOKE|COMMENT)[^;]*format_check_resolve\(uuid, text, uuid, text\)/);
   });
 
+  it('replaces a phase roster and its enrollment source as a compare-and-set under a row lock, service-role only', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.tournament_enrollment_replace(');
+    expect(start).toBeGreaterThan(-1);
+    const body = text.slice(start, text.indexOf('REVOKE ALL ON FUNCTION public.tournament_enrollment_replace', start));
+    const lock = body.indexOf('FOR UPDATE');
+    const compare = body.indexOf("(v_current ->> 'synced_at') IS DISTINCT FROM p_expected_synced_at");
+    expect(lock).toBeGreaterThan(-1);
+    expect(compare).toBeGreaterThan(lock);
+    // A lost race writes nothing: the roster and the source change only after the comparison.
+    expect(body.indexOf('RETURN false')).toBeLessThan(body.indexOf('DELETE FROM public.tournament_participants'));
+    expect(body.indexOf('DELETE FROM public.tournament_participants')).toBeLessThan(body.indexOf('INSERT INTO public.tournament_participants'));
+    expect(body.indexOf('INSERT INTO public.tournament_participants')).toBeLessThan(body.indexOf('UPDATE public.tournaments SET enrollment_source'));
+    expect(text).toContain('REVOKE ALL ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text) FROM PUBLIC, anon, authenticated;');
+    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text) TO service_role;');
+  });
+
   it('keeps the internal helpers service-role only', () => {
     for (const fn of [
       'format__lock_action(uuid, text)',
       'format__clear_runtime(uuid)',
       'format__check_revision(uuid, bigint)',
+      'format__check_revision_for_update(uuid, bigint)',
+      'format__lock_op_keys(uuid, jsonb)',
       'format__lock_holding(uuid, text, uuid)',
       'format__resource_capacity(uuid, text)',
     ]) {

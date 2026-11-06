@@ -10,6 +10,7 @@ import { toChallengeView } from '@/lib/format-engine/runtime/views';
 import { loadParticipantNames } from '@/lib/format-engine/runtime/views-server';
 import type { ChallengeResponse } from '@/lib/format-engine/runtime/view-types';
 import { validationFailedResponse } from '@/lib/format-studio/api-schemas';
+import { logger } from '@/lib/logger';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 import { CHALLENGE_WRITE_LIMIT } from '../../_lib/limits';
@@ -70,7 +71,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       metadata: { challenge_id: row.id, by: playerId === null ? 'admin' : 'challenger', challenger_id: row.challenger_id },
     });
 
-    const names = await loadParticipantNames(seasonId);
+    // The withdrawal is committed and audited by now: a failed name read must not turn it into an error (the client would
+    // retry into a conflict). The names are best effort, the view then carries `name: null`.
+    let names: Awaited<ReturnType<typeof loadParticipantNames>> = new Map();
+    try {
+      names = await loadParticipantNames(seasonId);
+    } catch (err) {
+      logger.warn('api/format/challenges', 'participant names unavailable after the withdrawal was committed', { seasonId, challengeId: row.id, error: err });
+    }
     return NextResponse.json<ApiResult<ChallengeResponse>>({
       success: true,
       data: { challenge: toChallengeView(row, names, new Date()) },

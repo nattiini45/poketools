@@ -32,6 +32,7 @@ export default {
   },
   ENROLLMENT_FROZEN: 'Enrollment is frozen. Confirm to overwrite imported standings.',
   ENROLLMENT_ROUNDS_EXIST: 'Enrollment cannot be re-synced while rounds exist. Confirm to overwrite.',
+  ENROLLMENT_SYNC_CONFLICT: 'Another enrollment sync of this phase was running at the same time. Try again.',
   SEED_CONFLICT:
     'Seed {seed} is already held by another participant — include them in the reseed or pick a free seed.',
   SEED_UPDATE_PARTIAL: {
@@ -135,6 +136,11 @@ export default {
     'A league in the trash still uses this ruleset, so it was not deleted. Restore or permanently remove that league first.',
   seed_rulesets_admin_required: 'Admin authentication required.',
   seed_rulesets_secret_invalid: 'Invalid or missing bootstrap secret.',
+
+  rounds_batch_end_when_expression:
+    'This phase ends by a condition that is checked after every round, so its rounds cannot be generated all at once. Generate them one round at a time.',
+  rounds_mirrored_groups_legs:
+    'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

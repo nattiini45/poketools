@@ -71,6 +71,47 @@ export async function assertPhaseOpenForRounds(tournament: HookTournament & { cu
   });
 }
 
+/**
+ * The highest round number a batch (generate-all-rounds) may write for this phase, or null when nothing caps it. A stage
+ * that ends on a `rounds` bound is over once that many rounds are played, so a batch past it would strand scheduled
+ * matches in a completed phase. An expression bound has no round number to cap at: see `assertBatchMayRunAhead`.
+ */
+export function batchRoundCap(kitPhase: KitPhase | null): number | null {
+  if (!isKitEnginePhase(kitPhase)) return null;
+  const endWhen = kitPhase.stage.end_when;
+  return endWhen?.kind === 'rounds' ? endWhen.rounds : null;
+}
+
+/**
+ * Refuses a batch of two or more rounds for a stage that ends on an expression (409 `rounds_batch_end_when_expression`):
+ * the condition is checked after every round and can end the phase early, which would strand the rounds already
+ * written ahead of it. Such a stage is generated round by round (`generate-round`). One round is the same as that, so
+ * it passes. A phase that is not on the kit engine, or has no expression bound, passes.
+ */
+export function assertBatchMayRunAhead(kitPhase: KitPhase | null, roundsToWrite: number): void {
+  if (!isKitEnginePhase(kitPhase) || kitPhase.stage.end_when?.kind !== 'expr' || roundsToWrite <= 1) return;
+  throw new UserFacingError(
+    'This phase ends by a condition that is checked after every round, so its rounds cannot be generated all at once. Generate them one round at a time.',
+    { code: 'rounds_batch_end_when_expression', status: 409 },
+  );
+}
+
+/**
+ * Refuses a kit round robin with more than one leg whose groups mirror league groups (409 `rounds_mirrored_groups_legs`):
+ * those groups follow the league week plan (cross-group weeks, placement weeks), which is a single schedule and has no
+ * legs or side swap, so the configured legs would be dropped without a word. League groups always win over a stage's own
+ * (`ensurePhaseGroupsFromLeague` runs first), so the way out is a single leg or removing the league groups; the stage
+ * cannot form its own groups while the league has any. A single leg, a phase that is not a kit round robin and groups of
+ * the phase's own pass.
+ */
+export function assertMirroredGroupsPlayLegs(pairing: { legs: number } | null, mirrored: boolean): void {
+  if (pairing === null || !mirrored || pairing.legs <= 1) return;
+  throw new UserFacingError(
+    'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
+    { code: 'rounds_mirrored_groups_legs', status: 409, params: { legs: pairing.legs } },
+  );
+}
+
 /** Why a phase is not ready for its first round: the codes `assertPhaseReadyForFirstRound` reports (409 `format_not_ready`). */
 export type FirstRoundReason = 'relation_undrawn' | 'action_incomplete';
 

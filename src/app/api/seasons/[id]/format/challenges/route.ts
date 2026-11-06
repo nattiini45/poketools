@@ -9,6 +9,7 @@ import { toChallengeView } from '@/lib/format-engine/runtime/views';
 import { loadParticipantNames } from '@/lib/format-engine/runtime/views-server';
 import type { ChallengeResponse } from '@/lib/format-engine/runtime/view-types';
 import { validationFailedResponse } from '@/lib/format-studio/api-schemas';
+import { logger } from '@/lib/logger';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 import { CHALLENGE_MAKE_LIMIT } from '../_lib/limits';
@@ -24,7 +25,8 @@ interface RouteParams {
  * (a body that names one is a 400). The stage's rules (rank range, open cap, cooldown, an open round) are enforced by the
  * database under a per-phase lock; its signals come back as typed errors (`challenge_rank_range` 400,
  * `challenge_cooldown` 409, ...). Refused in a completed or archived league (409 `format_season_closed`). The limiter
- * fails closed (503 `rate_limit_unavailable`). A challenge is read live per viewer, so nothing public is expired.
+ * fails closed (503 `rate_limit_unavailable`). A challenge is read live per viewer, so nothing public is expired. The names in
+ * the answer are best effort: once the challenge is committed, a failed name read still answers 201 (names `null`).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -54,7 +56,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       metadata: { challenge_id: row.id, phase_id: row.phase_id, defender_id: row.defender_id },
     });
 
-    const names = await loadParticipantNames(seasonId);
+    // The challenge is committed and audited by now: a failed name read must not turn it into an error (the player would
+    // retry into `challenge_already_open`). The names are best effort, the view then carries `name: null`.
+    let names: Awaited<ReturnType<typeof loadParticipantNames>> = new Map();
+    try {
+      names = await loadParticipantNames(seasonId);
+    } catch (err) {
+      logger.warn('api/format/challenges', 'participant names unavailable after the challenge was made', { seasonId, challengeId: row.id, error: err });
+    }
     return NextResponse.json<ApiResult<ChallengeResponse>>(
       { success: true, data: { challenge: toChallengeView(row, names, new Date()) } },
       { status: 201 },

@@ -2,6 +2,15 @@
  * The `auto` gate of a kit edge: when a phase completes, the players its format's `auto` edges select move into the
  * target phases at once, as if an admin had pressed Advance. An `admin_confirm` edge (the default) waits for the
  * admin. Server only.
+ *
+ * A phase fed by several edges (a playoff taking the top of two groups stages) is the sum of its sources, not the
+ * last source to finish. Each completed source moves its players in through `syncStandingsEnrollment`, which keeps the
+ * entrants of the sources that contributed before (`mergeKitContributions`, recorded in the phase's
+ * `enrollment_source.contributions`; the admin's Advance button does the same). The merged seed order is the order the
+ * sources contributed: the first source to complete holds seeds 1..n in its edge's own seeding (`rank`, `cross_group`,
+ * `random` or `manual`), the next source continues after it, a player already enrolled by an earlier edge keeps his
+ * earlier seed. This is the spec's `edge_order` seeding ("in the order they advance"). When a source is advanced
+ * again (a reopened phase completing once more) its own block is replaced in place and the others stay.
  */
 import 'server-only';
 

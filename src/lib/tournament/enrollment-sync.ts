@@ -1,4 +1,4 @@
-import type { AdvancementRule, EnrollmentSource } from '@/types/season';
+import type { AdvancementRule, EnrollmentContribution, EnrollmentSource } from '@/types/season';
 import type { TournamentGroupWithMembers } from '@/types/season';
 import type { Tournament } from '@/types/tournament';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -7,8 +7,7 @@ import {
   getStagesBySeasonId,
   getParticipants,
   getTournamentById,
-  replacePhaseParticipants,
-  setEnrollmentSource,
+  replacePhaseEnrollment,
 } from '@/lib/supabase/queries/tournaments';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
@@ -48,6 +47,41 @@ function resolveSourcePhase(
     .filter((s) => s.stage_order < target.stage_order)
     .sort((a, b) => b.stage_order - a.stage_order);
   return prior[0] ?? null;
+}
+
+/**
+ * The blocks a kit phase is enrolled from after `sourcePhase` moved `incoming` into it. A phase fed by several edges is
+ * the sum of its sources: the blocks recorded by earlier syncs stay (in the order the sources contributed), the block of
+ * `sourcePhase` replaces its own earlier one in place or comes last, so a later source never drops the entrants of an
+ * earlier one. A recorded block counts only while its source phase still exists and is completed: the enrollment a
+ * phase got when it was created (from the phase before it, still running) and the block of a deleted phase are not
+ * entrants of an edge.
+ */
+export function mergeKitContributions(
+  previous: readonly EnrollmentContribution[] | undefined,
+  sourcePhaseId: string,
+  incoming: readonly string[],
+  stages: readonly Pick<Tournament, 'id' | 'status'>[],
+): EnrollmentContribution[] {
+  const completed = new Set(stages.filter((s) => s.status === 'completed').map((s) => s.id));
+  const block: EnrollmentContribution = { source_phase_id: sourcePhaseId, player_ids: [...incoming] };
+  const out: EnrollmentContribution[] = [];
+  let placed = false;
+  for (const c of previous ?? []) {
+    if (c.source_phase_id === sourcePhaseId) {
+      if (!placed) out.push(block);
+      placed = true;
+    } else if (completed.has(c.source_phase_id)) {
+      out.push(c);
+    }
+  }
+  if (!placed) out.push(block);
+  return out;
+}
+
+/** The roster of merged blocks: each player once, at the place of the first block that holds him. */
+function playersOfContributions(blocks: readonly EnrollmentContribution[]): string[] {
+  return [...new Set(blocks.flatMap((b) => b.player_ids))];
 }
 
 /**
@@ -194,15 +228,39 @@ async function resolveAdvancingPlayerIds(
   return standings.map((s) => s.player_id);
 }
 
+/** How often a sync reads and merges again after another sync of the same phase won the write. */
+export const ENROLLMENT_SYNC_MAX_ATTEMPTS = 4;
+
 /**
  * Enroll phase participants from league roster or prior phase standings.
  * Placement in standings becomes seed (1 = best).
+ *
+ * The write is a compare-and-set on the phase's `enrollment_source.synced_at` (`replacePhaseEnrollment`): two sources of
+ * one phase that complete together each merge into the blocks they read, and the loser reads and merges again, so neither
+ * drops the other's entrants. After `ENROLLMENT_SYNC_MAX_ATTEMPTS` lost races the call refuses with 409
+ * `ENROLLMENT_SYNC_CONFLICT` and the caller repeats it.
  */
 export async function syncStandingsEnrollment(
   seasonId: string,
   phaseId: string,
   options: SyncStandingsOptions = {}
 ): Promise<SyncStandingsResult> {
+  for (let attempt = 0; attempt < ENROLLMENT_SYNC_MAX_ATTEMPTS; attempt += 1) {
+    const result = await syncStandingsEnrollmentOnce(seasonId, phaseId, options);
+    if (result !== null) return result;
+  }
+  throw new UserFacingError(
+    'Another enrollment sync of this phase was running at the same time. Try again.',
+    { code: 'ENROLLMENT_SYNC_CONFLICT', status: 409 }
+  );
+}
+
+/** One read-merge-write pass; null when another sync of the phase committed first (nothing was written). */
+async function syncStandingsEnrollmentOnce(
+  seasonId: string,
+  phaseId: string,
+  options: SyncStandingsOptions
+): Promise<SyncStandingsResult | null> {
   const phase = await getTournamentById(phaseId);
   if (!phase || phase.season_id !== seasonId) {
     throw new Error('Phase not found in this league');
@@ -217,8 +275,8 @@ export async function syncStandingsEnrollment(
   const sourcePhase = resolveSourcePhase(stages, phaseId, options.source_phase_id);
 
   let playerIds: string[] = [];
-  // Target seed per player when the kit decides it (seeding `rank`, `cross_group`, `random`, `manual`).
-  let kitSeeds: Map<string, number> | null = null;
+  // The blocks a kit phase is enrolled from; the seed of a player is his place in them.
+  let contributions: EnrollmentContribution[] | null = null;
   let sourceType: EnrollmentSource['type'] = 'roster';
   let sourcePhaseId: string | null = null;
   let sourcePhaseName: string | null = null;
@@ -261,8 +319,15 @@ export async function syncStandingsEnrollment(
           })
         : null;
     if (kitPlayers) {
-      playerIds = kitPlayers.map((p) => p.player_id);
-      kitSeeds = new Map(kitPlayers.map((p) => [p.player_id, p.seed]));
+      // `kitPlayers` is in the edge's seed order (seeding `rank`, `cross_group`, `random`, `manual`). Other edges into the
+      // same phase keep their earlier entrants (see mergeKitContributions).
+      contributions = mergeKitContributions(
+        phase.enrollment_source?.type === 'standings' ? phase.enrollment_source.contributions : undefined,
+        sourcePhase.id,
+        kitPlayers.map((p) => p.player_id),
+        stages,
+      );
+      playerIds = playersOfContributions(contributions);
     } else {
       playerIds = await resolveAdvancingPlayerIds(
         seasonId,
@@ -283,19 +348,19 @@ export async function syncStandingsEnrollment(
 
   const entries = playerIds.map((player_id, index) => ({
     player_id,
-    seed: kitSeeds?.get(player_id) ?? index + 1,
+    seed: index + 1,
   }));
-
-  await replacePhaseParticipants(phaseId, entries);
 
   const enrollmentSource: EnrollmentSource = {
     type: sourceType,
     source_phase_id: sourcePhaseId,
     synced_at: new Date().toISOString(),
     frozen: phase.enrollment_source?.frozen ?? false,
+    ...(contributions ? { contributions } : {}),
   };
 
-  await setEnrollmentSource(phaseId, enrollmentSource);
+  const written = await replacePhaseEnrollment(phaseId, entries, enrollmentSource, phase.enrollment_source?.synced_at ?? null);
+  if (!written) return null;
 
   return {
     enrolled_count: entries.length,

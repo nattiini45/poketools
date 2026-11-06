@@ -212,9 +212,19 @@ export interface FireFormatEventInput {
   payload: Json;
   ops: readonly FormatOp[];
   firedBy: string | null;
+  /**
+   * `season_formats.revision` of the format the ops were planned from (`KitContext.revision`). The database refuses the
+   * call with `format_context_stale` when the format was attached, replaced, detached, switched or amended since, before
+   * it logs the key: an event planned for the old format must neither touch the new runtime nor use up the key.
+   */
+  revision: number;
 }
 
-/** Logs the event and applies its ops once. True when it fired now, false when the key had fired before. */
+/**
+ * Logs the event and applies its ops once. True when it fired now, false when the key had fired before. Raises
+ * `FormatRuntimeError('format_context_stale')` when the league's format changed since `revision` was read; nothing is
+ * written then and the key stays free, so the caller treats it as "retry later" (the next cron pass, the heal).
+ */
 export async function fireFormatEvent(input: FireFormatEventInput): Promise<boolean> {
   const { data, error } = await supabase.rpc('format_fire_event', {
     p_season_id: input.seasonId,
@@ -223,6 +233,7 @@ export async function fireFormatEvent(input: FireFormatEventInput): Promise<bool
     p_payload: input.payload,
     p_ops: input.ops as unknown as Json,
     p_fired_by: nullable(input.firedBy),
+    p_expected_revision: input.revision,
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data === true;
@@ -306,11 +317,18 @@ export interface ApplyFormatAdjustmentInput {
   ops: readonly FormatOp[];
   /** For kind `domain`: the actions whose lock forbids the amendment. */
   guardActions: readonly string[];
+  /**
+   * `season_formats.revision` of the format the adjustment was prepared from (`KitContext.revision`): its ops, its audit
+   * row and, for a domain amendment, the amendment list it extends. The database refuses it with `format_context_stale`
+   * when the format changed since.
+   */
+  revision: number;
 }
 
 /**
  * Records an admin adjustment and applies its ops. Returns the adjustment id. Raises `FormatAdjustmentRefusedError` when
- * the relation already has links or the player holds fewer units than a revoke asks for (nothing is written then).
+ * the relation already has links or the player holds fewer units than a revoke asks for (nothing is written then), and
+ * `FormatRuntimeError('format_context_stale')` when the league's format changed since `revision` was read.
  */
 export async function applyFormatAdjustment(input: ApplyFormatAdjustmentInput): Promise<string> {
   const { data, error } = await supabase.rpc('format_apply_adjustment', {
@@ -322,6 +340,7 @@ export async function applyFormatAdjustment(input: ApplyFormatAdjustmentInput): 
     p_admin: nullable(input.adminId),
     p_ops: input.ops as unknown as Json,
     p_guard_actions: [...input.guardActions],
+    p_expected_revision: input.revision,
   });
   if (error) {
     const signal = parseDbError(error);

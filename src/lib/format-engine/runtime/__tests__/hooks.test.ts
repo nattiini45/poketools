@@ -16,7 +16,11 @@ vi.mock('@/lib/format-engine/runtime/stage-end-server', () => ({ checkStageEnd: 
 vi.mock('@/lib/format-engine/runtime/phase-complete', () => ({ completePhaseAtStageEnd: vi.fn() }));
 vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
-vi.mock('@/lib/supabase/queries/format-runtime', () => ({ fireFormatEvent: vi.fn(), getFormatRuntime: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
+  fireFormatEvent: vi.fn(),
+  getFormatRuntime: vi.fn(),
+}));
 
 import { checkStageEnd } from '../stage-end-server';
 import { completePhaseAtStageEnd } from '../phase-complete';
@@ -29,7 +33,7 @@ import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { logger } from '@/lib/logger';
-import { fireFormatEvent, getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
+import { fireFormatEvent, FormatRuntimeError, getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
 import { expireSeasonReads } from '@/lib/revalidation';
 import {
   inverseOps,
@@ -40,6 +44,7 @@ import {
   onPhaseStatusChanged,
   onRoundGenerated,
 } from '../hooks';
+import { isStaleOnly, newHookReport } from '../stale';
 
 const def = giftDef();
 const stage = def.stages[0];
@@ -128,6 +133,32 @@ describe('onMatchCompleted', () => {
     vi.mocked(fireEvent).mockRejectedValue(boom);
     await expect(onMatchCompleted(input)).resolves.toBe(false);
     expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('match completed'), expect.objectContaining({ error: boom, matchId: 'm-1' }));
+  });
+
+  it('reports a stale format as a failed step (the heal plans it again), as a warning and not as an error', async () => {
+    vi.mocked(fireEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(onMatchCompleted(input)).resolves.toBe(false);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('the format changed meanwhile'), expect.objectContaining({ matchId: 'm-1' }));
+  });
+
+  it('tells a stale format from a failure in the report a caller hands in (the cron counts only the failure)', async () => {
+    vi.mocked(fireEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    const stale = newHookReport();
+    await expect(onMatchCompleted({ ...input, report: stale })).resolves.toBe(false);
+    expect(stale).toEqual({ stale: true, failed: false });
+    expect(isStaleOnly(stale)).toBe(true);
+
+    vi.mocked(fireEvent).mockRejectedValue(new Error('db down'));
+    const failed = newHookReport();
+    await expect(onMatchCompleted({ ...input, report: failed })).resolves.toBe(false);
+    expect(failed).toEqual({ stale: false, failed: true });
+    expect(isStaleOnly(failed)).toBe(false);
+
+    vi.mocked(fireEvent).mockResolvedValue(fired as never);
+    const ok = newHookReport();
+    await expect(onMatchCompleted({ ...input, report: ok })).resolves.toBe(true);
+    expect(ok).toEqual({ stale: false, failed: false });
   });
 
   it('reports true when it applied, and when there is nothing to apply', async () => {
@@ -276,7 +307,7 @@ describe('onMatchReverted', () => {
   });
 
   it('takes back the logged effects and logs match_reverted, which opens the next completion', async () => {
-    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ revision: 7, state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
     vi.mocked(getFormatRuntime).mockResolvedValue({
       eventLog: [
         logRow('match_completed:m-1', [
@@ -295,6 +326,8 @@ describe('onMatchReverted', () => {
       payload: { match_id: 'm-1', reverts: 'match_completed:m-1' },
       ops: [{ op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1 }],
       firedBy: null,
+      // The revert is planned from the log of the format the context was loaded from: the database refuses it for another.
+      revision: 7,
     });
     expect(expireSeasonReads).toHaveBeenCalledWith('s-1', ['t-1']);
     expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('cannot be taken back'), expect.objectContaining({ ops: ['set_track'] }));
@@ -361,10 +394,12 @@ describe('onMatchReverted', () => {
     });
 
     it('closes the dispute of a match that never completed and advances the generation (a disputed match that is reopened)', async () => {
-      vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { checks: [check('c-1', 'unresolved_outcome', 'unresolved:m-1:0')] as never }) }));
+      vi.mocked(loadFreshKitContext).mockResolvedValue(
+        context({ revision: 9, state: stateFor(def, { checks: [check('c-1', 'unresolved_outcome', 'unresolved:m-1:0')] as never }) }),
+      );
       await expect(onMatchReverted(input)).resolves.toBe(true);
       expect(vi.mocked(resolveCheck).mock.calls.map(([request]) => request.checkId)).toEqual(['c-1']);
-      expect(fireFormatEvent).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'match_reverted:m-1:1', ops: [] }));
+      expect(fireFormatEvent).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'match_reverted:m-1:1', ops: [], revision: 9 }));
     });
 
     it('advances the generation when the dispute check was already decided, so the next tie opens a new one', async () => {
@@ -503,6 +538,30 @@ describe('onMatchReverted', () => {
       await expect(onMatchReverted(input)).resolves.toBe(true);
       expect(fireFormatEvent).toHaveBeenCalledTimes(1);
     });
+  });
+
+  it('reports false when the database refuses the revert as stale (the key stays free, the heal repeats it)', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
+    vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', [])] } as never);
+    vi.mocked(fireFormatEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(onMatchReverted(input)).resolves.toBe(false);
+    expect(expireSeasonReads).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('the format changed meanwhile'), expect.objectContaining({ matchId: 'm-1' }));
+  });
+
+  it('marks a stale revert in the report, and any other failure as failed', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
+    vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', [])] } as never);
+    vi.mocked(fireFormatEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    const stale = newHookReport();
+    await expect(onMatchReverted({ ...input, report: stale })).resolves.toBe(false);
+    expect(isStaleOnly(stale)).toBe(true);
+
+    vi.mocked(fireFormatEvent).mockRejectedValue(new Error('db down'));
+    const failed = newHookReport();
+    await expect(onMatchReverted({ ...input, report: failed })).resolves.toBe(false);
+    expect(failed).toEqual({ stale: false, failed: true });
   });
 
   it('never throws into the caller; the original error is logged', async () => {

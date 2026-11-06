@@ -71,6 +71,7 @@ import {
 } from './deadline-policy';
 import { currentCompletionKeyOf, eventKey } from './events';
 import { fireEvent, fireLockedActionEvents } from './fire';
+import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
 import { onMatchCompleted, revertMatchCompletion } from './hooks';
 import { loadFreshKitContext, phaseById, rosterOf, type KitContext, type KitPhaseInfo } from './load';
 import { planRandomPicks } from './random-pick';
@@ -503,10 +504,17 @@ async function backfillMatchCompleted(ctx: KitContext, budget: BackfillBudget, s
       winnerId: match.winner_id,
     };
     // The hook is idempotent by key, so the second call repeats only what failed.
-    const ok = (await onMatchCompleted({ ...input, auditRetry: 'always' })) || (await onMatchCompleted({ ...input, auditRetry: 'never' }));
+    // A hook refused only because the format changed meanwhile (`format_context_stale`) is not retried at once and not a failure:
+    // it wrote nothing and used no key, so the next run backfills the match against the current format.
+    const report = newHookReport();
+    const ok =
+      (await onMatchCompleted({ ...input, auditRetry: 'always', report })) ||
+      (!isStaleOnly(report) && (await onMatchCompleted({ ...input, auditRetry: 'never', report })));
     if (ok) {
       summary.completions_backfilled += 1;
       applied = true;
+    } else if (isStaleOnly(report)) {
+      logger.warn(TAG, 'match_completed backfill skipped, the format changed meanwhile; it is tried again next run', { seasonId: ctx.seasonId, matchId: match.id });
     } else {
       summary.failures += 1;
       // A hook that failed before its event key was logged is tried again by the next run; one that failed after it (a team
@@ -557,9 +565,13 @@ async function healPendingReverts(ctx: KitContext, now: Date, budget: BackfillBu
     const current = await getMatchById(row.id).catch(() => null);
     // Gone, or completed again since the read: the revert of the old completion is no longer this pass's to make.
     if (current === null || current.status === 'completed') continue;
-    if (await revertMatchCompletion({ tournamentId: row.tournament_id, matchId: row.id })) {
+    const report = newHookReport();
+    if (await revertMatchCompletion({ tournamentId: row.tournament_id, matchId: row.id, report })) {
       applied = true;
       logger.info(TAG, 'a pending match_reverted was applied', { seasonId: ctx.seasonId, matchId: row.id });
+    } else if (isStaleOnly(report)) {
+      // The format changed after this pass loaded it: nothing was written, the next run retries. Not a failure.
+      logger.warn(TAG, 'match_reverted retry skipped, the format changed meanwhile; it is tried again next run', { seasonId: ctx.seasonId, matchId: row.id });
     } else {
       summary.failures += 1;
       logger.error(TAG, 'match_reverted retry failed; it is tried again next run', { seasonId: ctx.seasonId, matchId: row.id });
@@ -643,8 +655,14 @@ export async function runFormatCronPass(now: Date = new Date(), options: FormatC
     try {
       await runLeague(seasonId, bySeason.get(seasonId) ?? [], now, summary, backfill);
     } catch (error) {
-      summary.failures += 1;
-      logger.error(TAG, 'league cron pass failed', { seasonId, error });
+      if (isFormatContextStale(error)) {
+        // An admin replaced or amended the format after this pass loaded it: the event that was planned for the old one
+        // was refused before it was logged, so the next pass plans it again against the current format. Not a failure.
+        logger.warn(TAG, 'the format changed during the pass; the league is retried next pass', { seasonId });
+      } else {
+        summary.failures += 1;
+        logger.error(TAG, 'league cron pass failed', { seasonId, error });
+      }
     }
   }
 

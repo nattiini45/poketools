@@ -45,20 +45,103 @@ describe('format_apply_adjustment domain guard', () => {
 
 describe('format__apply_ops relation lock', () => {
   const sql = read('20261105090000_format_runtime.sql');
+  const keysStart = sql.indexOf('CREATE OR REPLACE FUNCTION public.format__lock_op_keys(');
+  const keys = sql.slice(keysStart, sql.indexOf('CREATE OR REPLACE FUNCTION public.format__apply_ops(', keysStart));
   const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.format__apply_ops(');
   const body = sql.slice(start, sql.indexOf('-- Events', start));
 
   it('takes the per-relation advisory lock (same key as the adjustment) before the first op is applied', () => {
-    const lock = body.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'");
+    const lock = keys.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'");
+    const call = body.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
     const loop = body.indexOf('FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP');
-    expect(start).toBeGreaterThan(-1);
+    expect(keysStart).toBeGreaterThan(-1);
+    expect(start).toBeGreaterThan(keysStart);
     expect(lock).toBeGreaterThan(-1);
-    expect(lock).toBeLessThan(loop);
+    // The op applier takes them through the helper that events and adjustments also call before their revision check.
+    expect(call).toBeGreaterThan(-1);
+    expect(call).toBeLessThan(loop);
     // Sorted and deduplicated, so every caller (event or adjustment) locks relations in one order.
-    expect(body.slice(0, lock)).toMatch(/SELECT DISTINCT[\s\S]*ORDER BY relation_key/);
+    expect(keys.slice(0, lock)).toMatch(/SELECT DISTINCT[\s\S]*ORDER BY relation_key/);
     // Same key text as format_apply_adjustment, so the two paths exclude each other.
     expect(sql).toContain("hashtextextended('format_relation:' || p_season_id::text || ':' || v_rel, 0)");
-    expect(body.indexOf('IF NOT EXISTS (SELECT 1 FROM public.format_relation_links')).toBeGreaterThan(lock);
+    expect(body.indexOf('IF NOT EXISTS (SELECT 1 FROM public.format_relation_links')).toBeGreaterThan(call);
+  });
+});
+
+describe('format_fire_event and format_apply_adjustment revision check', () => {
+  const sql = read('20261105090000_format_runtime.sql');
+  const slice = (from: string, to: string) => {
+    const start = sql.indexOf(from);
+    return sql.slice(start, sql.indexOf(to, start));
+  };
+
+  it('checks the revision of the format before the event is logged, after the relation and action locks of its ops', () => {
+    const body = slice('CREATE OR REPLACE FUNCTION public.format_fire_event(', 'CREATE OR REPLACE FUNCTION public.format__action_flag_locked(');
+    expect(body).toContain('p_fired_by uuid, p_expected_revision bigint');
+    const keys = body.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
+    const check = body.indexOf('PERFORM public.format__check_revision(p_season_id, p_expected_revision)');
+    const insert = body.indexOf('INSERT INTO public.format_event_log');
+    const apply = body.indexOf('PERFORM public.format__apply_ops(');
+    expect(keys).toBeGreaterThan(-1);
+    // A stale event raises before its key is inserted, so the key stays free for the new format's event.
+    expect(check).toBeGreaterThan(keys);
+    expect(insert).toBeGreaterThan(check);
+    expect(apply).toBeGreaterThan(insert);
+  });
+
+  it('checks it in an adjustment before the history row, with the locks in the order of a submit (action lock, then the row)', () => {
+    const body = slice('CREATE OR REPLACE FUNCTION public.format_apply_adjustment(', '-- Checks');
+    expect(body).toContain('p_guard_actions text[],\n  p_expected_revision bigint\n) RETURNS uuid');
+    const insert = body.indexOf('INSERT INTO public.format_adjustments');
+    const other = body.indexOf('-- Every other kind plans its ops');
+    const keys = body.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
+    const shared = body.indexOf('PERFORM public.format__check_revision(p_season_id, p_expected_revision)');
+    const actionLocks = body.indexOf('PERFORM public.format__lock_action(p_season_id, g.k)');
+    const exclusive = body.indexOf('PERFORM public.format__check_revision_for_update(p_season_id, p_expected_revision)');
+    expect(other).toBeGreaterThan(-1);
+    // Every kind but domain: the ops' relation and action locks, then the share-locked check, before anything else reads or writes.
+    expect(keys).toBeGreaterThan(other);
+    expect(shared).toBeGreaterThan(keys);
+    expect(shared).toBeLessThan(body.indexOf("RAISE EXCEPTION 'relation_has_links'"));
+    expect(shared).toBeLessThan(insert);
+    // A domain amendment updates the row itself: it takes the guarded actions' locks, then the row FOR UPDATE (two amendments
+    // that both held the share lock would wait on each other), before the guard reads the lock state.
+    expect(body.lastIndexOf("IF p_kind = 'domain' THEN", actionLocks)).toBeGreaterThan(-1);
+    expect(actionLocks).toBeLessThan(other);
+    expect(exclusive).toBeGreaterThan(actionLocks);
+    expect(exclusive).toBeLessThan(other);
+    expect(exclusive).toBeLessThan(body.indexOf('format__action_flag_locked(p_season_id, g.k)'));
+    expect(exclusive).toBeLessThan(insert);
+  });
+
+  it('locks the row FOR UPDATE in the amendment variant of the check, after the seasons row, and raises the same signal', () => {
+    const body = slice('CREATE OR REPLACE FUNCTION public.format__check_revision_for_update(', 'CREATE OR REPLACE FUNCTION public.format__lock_holding(');
+    expect(body.indexOf('FROM public.seasons WHERE id = p_season_id FOR KEY SHARE')).toBeGreaterThan(-1);
+    expect(body.indexOf('FOR KEY SHARE')).toBeLessThan(body.indexOf('FROM public.season_formats f WHERE f.season_id = p_season_id FOR UPDATE'));
+    expect(body).toMatch(/IF NOT FOUND OR v_revision <> p_expected_revision THEN\s+RAISE EXCEPTION 'format_context_stale' USING ERRCODE = 'P0001'/);
+    expect(body).toMatch(/p_expected_revision IS NULL THEN\s+RAISE EXCEPTION 'invalid_op'/);
+  });
+
+  it('drops the old fire-event and apply-adjustment overloads before creating the new ones (a new argument is an overload)', () => {
+    const fireDrop = sql.indexOf('DROP FUNCTION IF EXISTS public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid);');
+    const fireCreate = sql.indexOf('CREATE OR REPLACE FUNCTION public.format_fire_event(');
+    const adjDrop = sql.indexOf(
+      'DROP FUNCTION IF EXISTS public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]);',
+    );
+    const adjCreate = sql.indexOf('CREATE OR REPLACE FUNCTION public.format_apply_adjustment(');
+    expect(fireDrop).toBeGreaterThan(-1);
+    expect(fireCreate).toBeGreaterThan(fireDrop);
+    expect(adjDrop).toBeGreaterThan(-1);
+    expect(adjCreate).toBeGreaterThan(adjDrop);
+  });
+
+  it('grants and comments only the new signatures (the old overloads are dropped, never granted)', () => {
+    expect(sql).toContain('public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint)');
+    expect(sql).toContain('public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint)');
+    const statements = sql.split(';').filter((st) => !/^\s*DROP FUNCTION/m.test(st) && /(?:REVOKE|GRANT|COMMENT ON FUNCTION)/.test(st));
+    const text = statements.join(';');
+    expect(text).not.toMatch(/format_fire_event\(uuid, text, text, jsonb, jsonb, uuid\)/);
+    expect(text).not.toMatch(/format_apply_adjustment\(uuid, text, jsonb, jsonb, text, uuid, jsonb, text\[\]\)/);
   });
 });
 

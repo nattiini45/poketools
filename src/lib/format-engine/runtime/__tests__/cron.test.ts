@@ -641,6 +641,7 @@ describe('match_completed backfill', () => {
           player2Id: 'p2',
           winnerId: 'p1',
           auditRetry: 'always',
+          report: { stale: false, failed: false },
         },
       ],
     ]);
@@ -682,6 +683,32 @@ describe('match_completed backfill', () => {
     vi.mocked(onMatchCompleted).mockResolvedValue(false);
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(summary).toMatchObject({ completions_backfilled: 0, failures: FORMAT_CRON_BACKFILL_PER_LEAGUE });
+  });
+
+  it('a hook that reports a stale format is retry-later: a warning, no immediate repeat, no failure', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(listFinalizedMatches).mockResolvedValue([finalized('m-1')] as never);
+    // `guarded` in the hook swallows format_context_stale and reports it here, so the pass never sees the error itself
+    vi.mocked(onMatchCompleted).mockImplementation(async (input) => {
+      if (input.report !== undefined) input.report.stale = true;
+      return false;
+    });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(onMatchCompleted).toHaveBeenCalledTimes(1);
+    expect(summary).toMatchObject({ completions_backfilled: 0, failures: 0 });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(vi.mocked(logger.warn).mock.calls.some(([, message]) => String(message).includes('backfill skipped'))).toBe(true);
+  });
+
+  it('a hook that is stale and also failed in another step still counts as a failure', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(listFinalizedMatches).mockResolvedValue([finalized('m-1')] as never);
+    vi.mocked(onMatchCompleted).mockImplementation(async (input) => {
+      if (input.report !== undefined) Object.assign(input.report, { stale: true, failed: true });
+      return false;
+    });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary).toMatchObject({ completions_backfilled: 0, failures: 1 });
   });
 
   it('repeats a failed hook once, giving up on a transient team audit failure the second time', async () => {
@@ -790,7 +817,7 @@ describe('pending match_reverted', () => {
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(listUncompletedMatches).toHaveBeenCalledWith([PHASE], ['m-1', 'm-2']);
     expect(revertMatchCompletion).toHaveBeenCalledTimes(1);
-    expect(revertMatchCompletion).toHaveBeenCalledWith({ tournamentId: PHASE, matchId: 'm-2' });
+    expect(revertMatchCompletion).toHaveBeenCalledWith({ tournamentId: PHASE, matchId: 'm-2', report: { stale: false, failed: false } });
     expect(summary.failures).toBe(0);
     // the revert fired events: the context is reloaded
     expect(loadFreshKitContext).toHaveBeenCalledTimes(2);
@@ -836,6 +863,20 @@ describe('pending match_reverted', () => {
     expect(vi.mocked(logger.error).mock.calls.some(([, message]) => String(message).includes('match_reverted retry failed'))).toBe(true);
     // nothing applied, nothing stale: no reload
     expect(loadFreshKitContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not count a revert the hook reports as stale (the format changed meanwhile): a warning, retried next run', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withFired(['match_completed:m-1']));
+    vi.mocked(listUncompletedMatches).mockResolvedValue([open('m-1', 'scheduled')]);
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'scheduled' } as never);
+    vi.mocked(revertMatchCompletion).mockImplementation(async (input) => {
+      if (input.report !== undefined) input.report.stale = true;
+      return false;
+    });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBe(0);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(vi.mocked(logger.warn).mock.calls.some(([, message]) => String(message).includes('match_reverted retry skipped'))).toBe(true);
   });
 
   it('is bounded per league and per run', async () => {
@@ -960,6 +1001,22 @@ describe('a pass', () => {
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(summary).toMatchObject({ leagues: 2, failures: 1, challenges_expired: 3 });
     expect(logger.error).toHaveBeenCalledWith('format-engine/cron', 'league cron pass failed', expect.objectContaining({ seasonId: SEASON, error: boom }));
+  });
+
+  it('treats a time event refused as stale as retry-later: a warning, no failure, and the next league still runs', async () => {
+    const marks = [{ key: 'kickoff', round: 1, offset_hours: 0 }];
+    vi.mocked(listKitCronPhases).mockResolvedValue([cronPhase(), { ...cronPhase(), id: 't-2', season_id: 's-2' }]);
+    vi.mocked(loadFreshKitContext).mockImplementation(async (seasonId: string) => (seasonId === SEASON ? context(calendar([], marks)) : null));
+    // An admin replaced the format after the pass loaded it: the database refused the event before it logged the key.
+    vi.mocked(fireEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    const summary = await runFormatCronPass(BEFORE_DEADLINE);
+    expect(summary).toMatchObject({ leagues: 2, failures: 0, marks: 0 });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/cron', expect.stringContaining('format changed during the pass'), { seasonId: SEASON });
+    // The next pass plans the same event again against the current format.
+    vi.mocked(fireEvent).mockResolvedValue(FIRED as never);
+    const next = await runFormatCronPass(BEFORE_DEADLINE);
+    expect(next.marks).toBe(1);
   });
 
   it('counts a failing challenge sweep', async () => {

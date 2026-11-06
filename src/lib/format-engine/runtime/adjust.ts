@@ -32,6 +32,11 @@
  *   entry carries the attribute an action step over the domain asks to be distinct in (`attr_missing`);
  * - `outcome`: recorded only. The match result itself changes through the match result route.
  *
+ * Every adjustment is prepared from the context loaded here (its ops, its audit row, the amendment list it extends) and the
+ * database applies it only to that version of the format: the call carries `KitContext.revision`, and a format that was
+ * replaced, switched or amended meanwhile (another admin's amendment included) raises `format_context_stale` (409, nothing
+ * written). The admin reloads and repeats the change against the current format.
+ *
  * Server only.
  */
 import 'server-only';
@@ -141,6 +146,7 @@ export async function applyAdjustment(request: AdjustmentRequest): Promise<Adjus
       adminId: request.adminId,
       ops: prepared.ops,
       guardActions: prepared.guardActions,
+      revision: ctx.revision,
     });
   } catch (error) {
     // The database repeats the two checks that read state (links of a relation, units held) under a lock: a concurrent

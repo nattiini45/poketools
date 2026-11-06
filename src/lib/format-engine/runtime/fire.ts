@@ -8,6 +8,13 @@
  * `action_locked` for every action whose flag is `"locked"` and whose event has not fired, and runs when an event that
  * had fired before is fired again (a retry) and in every cron pass. Callers that add their own ops to the same
  * transaction (track progress of a completed match) pass them in `options.ops`.
+ *
+ * The ops are planned from the context's format, and the database applies them only to that version of it: the call carries
+ * `KitContext.revision`, and an attach, a re-attach, a detach, an engine switch or an amendment that landed after the context
+ * was loaded makes it raise `format_context_stale` before the key is logged (nothing applied, the key stays free for the
+ * event of the new format). The error leaves `fireEvent` as it is: it means "retry later", and the callers do (a hook
+ * reports a failed step and the heal repeats it, the cron pass starts over on its next run, an admin's manual lock is picked
+ * up by the cron).
  */
 import 'server-only';
 
@@ -107,7 +114,15 @@ export async function fireEvent(
   const rows: Record<string, PlayerRow> | undefined = eventNeedsRows(ctx.def, event) ? await loadStageRows(ctx, event.stage) : undefined;
   const plan = planEffects(ctx.def, event, ctx.state, rosterOf(ctx, event.stage), ctx.seed, { rows });
   const ops = [...plan.ops, ...(options.ops ?? [])];
-  const fired = await fireFormatEvent({ seasonId, eventKey: key, event: event.event, payload: payloadOf(event), ops, firedBy });
+  const fired = await fireFormatEvent({
+    seasonId,
+    eventKey: key,
+    event: event.event,
+    payload: payloadOf(event),
+    ops,
+    firedBy,
+    revision: ctx.revision,
+  });
   if (!fired) return { ...empty, ops, notifications: plan.notifications, issues: plan.issues };
 
   expireSeasonReads(seasonId, ctx.phases.map((phase) => phase.id));

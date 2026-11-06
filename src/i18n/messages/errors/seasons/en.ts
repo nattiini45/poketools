@@ -138,7 +138,7 @@ export default {
   action_locked: 'This action is locked, so it can no longer be changed.',
   resource_item_taken: 'Another player already holds this item, so it cannot be picked again.',
   resource_capacity_reached: 'This player already holds as many of this resource as it allows, so nothing more can be added.',
-  format_context_stale: 'The league format changed while you were working, so your pick was not saved. The view has been refreshed: check your pick and try again.',
+  format_context_stale: 'The league format changed while you were working, so your change was not saved. The view has been refreshed: check it and try again.',
   domain_amendment_locked: 'This list cannot be amended because an action that uses it is already locked.',
   reason_required: 'A reason is required for this adjustment.',
   reason_too_long: 'The reason is too long: it can have at most 500 characters.',

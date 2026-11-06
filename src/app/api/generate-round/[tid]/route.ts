@@ -50,6 +50,7 @@ import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-s
 import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import {
   announceKitRound,
+  assertMirroredGroupsPlayLegs,
   assertPhaseGenerates,
   assertPhaseOpenForRounds,
   assertPhaseReadyForFirstRound,
@@ -207,6 +208,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // Groups another request has inserted but not filled yet (409 groups_forming_in_progress, never an empty round).
       assertKitGroupsFormed(groups, kit.stage);
     }
+    // The league week plan has no legs: a multi-leg kit round robin on groups that mirror league groups is refused here,
+    // not silently played as one leg (generate-all-rounds refuses it the same way).
+    assertMirroredGroupsPlayLegs(kit ? roundRobinOf(kit.stage.pairing) : null, groups.length > 0 && mirrorsLeagueGroups(groups));
 
     // 5. Generate pairings (group-scoped if groups exist)
     const nextRoundNumber = tournament.current_round + 1;
