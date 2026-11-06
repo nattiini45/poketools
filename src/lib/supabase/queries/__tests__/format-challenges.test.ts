@@ -212,6 +212,16 @@ describe('the RPC wrappers', () => {
     ]);
   });
 
+  it('raises challenge_expired for a withdrawal after the accept window (stored as expired, never cancelled)', async () => {
+    state.rpcReply = { data: row({ status: 'expired' }) };
+    await expect(cancelFormatChallenge(SEASON, CHALLENGE, P1)).rejects.toMatchObject({
+      name: 'FormatChallengeError',
+      code: 'challenge_expired',
+      statusCode: 409,
+    });
+    await expect(cancelFormatChallenge(SEASON, CHALLENGE, null)).rejects.toMatchObject({ code: 'challenge_expired' });
+  });
+
   it('expires one league or all of them and returns the count', async () => {
     state.rpcReply = { data: 3 };
     await expect(expireFormatChallenges(SEASON)).resolves.toBe(3);

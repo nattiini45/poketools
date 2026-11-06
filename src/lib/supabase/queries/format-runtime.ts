@@ -120,6 +120,8 @@ export const FORMAT_ADJUSTMENT_REASON_MAX = 500;
 export const FORMAT_RUNTIME_ERROR_CODES = [
   'action_locked',
   'resource_item_taken',
+  'resource_capacity_reached',
+  'format_context_stale',
   'domain_amendment_locked',
   'reason_required',
   'reason_too_long',
@@ -129,6 +131,8 @@ export type FormatRuntimeErrorCode = (typeof FORMAT_RUNTIME_ERROR_CODES)[number]
 const FORMAT_RUNTIME_ERROR_STATUS: { readonly [C in FormatRuntimeErrorCode]: number } = {
   action_locked: 409,
   resource_item_taken: 409,
+  resource_capacity_reached: 409,
+  format_context_stale: 409,
   domain_amendment_locked: 409,
   reason_required: 400,
   reason_too_long: 400,
@@ -230,9 +234,17 @@ export interface SaveFormatActionInput {
   actorId: string;
   targetId: string | null;
   picks: Json;
+  /**
+   * `season_formats.revision` of the format the caller validated against (`KitContext.revision`). The database refuses
+   * the write with `format_context_stale` when the format was attached, replaced, detached, switched or amended since.
+   */
+  revision: number;
 }
 
-/** Saves a draft pick. Raises `action_locked` while the action or the actor's submission is locked. */
+/**
+ * Saves a draft pick. Raises `action_locked` while the action or the actor's submission is locked and
+ * `format_context_stale` when the league's format changed since `revision` was read.
+ */
 export async function saveFormatAction(input: SaveFormatActionInput): Promise<FormatActionSubmissionRow> {
   const { data, error } = await supabase.rpc('format_action_save', {
     p_season_id: input.seasonId,
@@ -240,6 +252,7 @@ export async function saveFormatAction(input: SaveFormatActionInput): Promise<Fo
     p_actor: input.actorId,
     p_target: nullable(input.targetId),
     p_picks: input.picks,
+    p_expected_revision: input.revision,
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data;
@@ -258,8 +271,10 @@ export interface SubmitFormatActionInput extends SaveFormatActionInput {
 }
 
 /**
- * Submits a pick. Raises `action_locked` or `resource_item_taken` (nothing is written then), and with `onlyIfUnsubmitted`
- * a `FormatActionAlreadySubmittedError` when the pick is already submitted (a locked pick raises `action_locked`).
+ * Submits a pick. Raises `action_locked`, `format_context_stale` (the format changed since `revision` was read),
+ * `resource_item_taken` or `resource_capacity_reached` (a concurrent grant took the last free unit; nothing is written
+ * then), and with `onlyIfUnsubmitted` a `FormatActionAlreadySubmittedError` when the pick is already submitted (a locked
+ * pick raises `action_locked`).
  */
 export async function submitFormatAction(input: SubmitFormatActionInput): Promise<FormatActionSubmissionRow> {
   const { data, error } = await supabase.rpc('format_action_submit', {
@@ -270,6 +285,7 @@ export async function submitFormatAction(input: SubmitFormatActionInput): Promis
     p_picks: input.picks,
     p_items: input.items as unknown as Json,
     p_lock: input.lock,
+    p_expected_revision: input.revision,
     ...(input.onlyIfUnsubmitted === true ? { p_only_if_unsubmitted: true } : {}),
   });
   if (error) {

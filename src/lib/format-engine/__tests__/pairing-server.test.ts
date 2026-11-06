@@ -17,7 +17,7 @@ import { SEED, stateFor, wichtelDef } from '../runtime/__tests__/helpers';
 const def = wichtelDef();
 
 beforeEach(() => {
-  vi.mocked(loadFreshKitContext).mockResolvedValue({ seasonId: 's', seed: SEED, def, state: stateFor(def), tunableIssues: [], phases: [] });
+  vi.mocked(loadFreshKitContext).mockResolvedValue({ seasonId: 's', seed: SEED, revision: 1, def, state: stateFor(def), tunableIssues: [], phases: [] });
 });
 
 describe('PairingExprError', () => {

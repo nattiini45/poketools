@@ -24,7 +24,7 @@ function stage(key: string, pairing: Pairing): Stage {
 }
 
 function context(phases: KitContext['phases'], state = stateFor(def)): KitContext {
-  return { seasonId: 's', seed: SEED, def, state, tunableIssues: [], phases };
+  return { seasonId: 's', seed: SEED, revision: 1, def, state, tunableIssues: [], phases };
 }
 
 const swiss: Pairing = { kind: 'swiss', rounds: 'auto', avoid_repeats: true };

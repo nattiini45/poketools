@@ -120,6 +120,8 @@ export default defineDe<typeof en>()({
     'Der Ligatyp lässt sich nicht auf oder von einem eigenen Format umstellen, solange ein Format angehängt ist oder nachdem die Liga begonnen hat.',
   action_locked: 'Diese Aktion ist gesperrt, deshalb lässt sie sich nicht mehr ändern.',
   resource_item_taken: 'Ein anderer Spieler hat dieses Item schon, deshalb kannst du es nicht noch einmal wählen.',
+  resource_capacity_reached: 'Dieser Spieler hält von dieser Ressource bereits so viel, wie erlaubt ist, deshalb lässt sich nichts mehr hinzufügen.',
+  format_context_stale: 'Das Ligaformat hat sich geändert, während du gearbeitet hast, deshalb wurde deine Auswahl nicht gespeichert. Die Ansicht wurde aktualisiert: Prüfe deine Auswahl und versuche es erneut.',
   domain_amendment_locked: 'Diese Liste lässt sich nicht ändern, weil eine Aktion, die sie nutzt, schon gesperrt ist.',
   reason_required: 'Für diese Anpassung ist eine Begründung nötig.',
   reason_too_long: 'Die Begründung ist zu lang: erlaubt sind höchstens 500 Zeichen.',

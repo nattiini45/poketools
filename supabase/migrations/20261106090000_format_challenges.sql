@@ -17,6 +17,8 @@
 --   format_challenge_cancel(season, challenge, player)
 --       The challenger (player NULL = an admin acting for them) withdraws an open challenge of that league: a challenge
 --       id of another league is challenge_not_found, so an admin route scoped to one league cannot reach another's.
+--       One whose expires_at has passed is stored as expired (which the cooldown counts) and returned, like respond; the
+--       app raises challenge_expired. A withdrawn (cancelled) challenge does not count towards the cooldown.
 --   format_challenges_expire(season)
 --       Marks every open challenge past `expires_at` (of one league, or of all when NULL) expired; returns how many.
 --
@@ -237,6 +239,14 @@ BEGIN
   IF v_row.status <> 'open' THEN
     RAISE EXCEPTION 'challenge_not_open' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('status', v_row.status)::text;
   END IF;
+  -- A challenge whose accept window has run out is expired, not withdrawn, even when nothing has marked it yet: the
+  -- cooldown counts an expired challenge and ignores a cancelled one, so storing 'cancelled' here would let the challenger
+  -- challenge the same defender again at once. Like respond, the function stores the status and returns that row (a RAISE
+  -- would roll the status back); the application raises challenge_expired for it.
+  IF v_row.expires_at <= now() THEN
+    UPDATE public.format_challenges SET status = 'expired' WHERE id = v_row.id RETURNING * INTO v_row;
+    RETURN v_row;
+  END IF;
   UPDATE public.format_challenges SET status = 'cancelled', responded_at = now() WHERE id = v_row.id RETURNING * INTO v_row;
   RETURN v_row;
 END $$;
@@ -274,7 +284,7 @@ COMMENT ON FUNCTION public.format_challenge_create(uuid, uuid, uuid, uuid, integ
 COMMENT ON FUNCTION public.format_challenge_respond(uuid, uuid, uuid, boolean) IS
   'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired.';
 COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid, uuid) IS
-  'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found.';
+  'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired (which the cooldown counts) instead of cancelled.';
 COMMENT ON FUNCTION public.format_challenges_expire(uuid) IS
   'Marks open challenges past expires_at expired, for one league or (NULL) all; returns how many. Called by the cron pass.';
 

@@ -218,6 +218,24 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       expect(await stored()).toHaveLength(2);
     });
 
+    it('stores a withdrawal after the accept window as expired, which the cooldown still counts', async () => {
+      const lapsed = await create({ acceptWindowHours: 1 });
+      await lapse(lapsed.id);
+
+      // Nothing marked the challenge expired yet; withdrawing it must not turn it into a free `cancelled` one.
+      await expect(ladder.cancelFormatChallenge(ids.season, lapsed.id, ids.pChallenger)).rejects.toMatchObject({
+        code: 'challenge_expired',
+        statusCode: 409,
+      });
+      // The status is kept (a RAISE would have rolled it back): expired, answered by no one, not withdrawn.
+      expect(await rowOf(lapsed.id)).toMatchObject({ status: 'expired', responded_at: null });
+      await expect(create({ cooldownRounds: 1 })).rejects.toMatchObject({ code: 'challenge_cooldown' });
+      expect(await stored()).toHaveLength(1);
+
+      // The admin path (player NULL) is the same, and a second withdrawal finds it expired, not open.
+      await expect(ladder.cancelFormatChallenge(ids.season, lapsed.id, null)).rejects.toMatchObject({ code: 'challenge_not_open' });
+    });
+
     it('refuses a phase of another league, a completed phase, a non-participant and a phase without a round', async () => {
       await expect(create({ seasonId: randomUUID() })).rejects.toMatchObject({ code: 'challenge_phase_not_found' });
 

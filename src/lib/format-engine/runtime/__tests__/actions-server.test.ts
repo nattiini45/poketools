@@ -16,7 +16,7 @@ vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
 }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 
-import { saveFormatAction, submitFormatAction, type FormatActionSubmissionRow } from '@/lib/supabase/queries/format-runtime';
+import { FormatRuntimeError, saveFormatAction, submitFormatAction, type FormatActionSubmissionRow } from '@/lib/supabase/queries/format-runtime';
 import { saveAction, submitAction } from '../actions-server';
 import { loadFreshKitContext, type KitContext } from '../load';
 import type { ActionPick, RuntimeSubmission } from '../types';
@@ -40,6 +40,7 @@ function context(opts: { submission?: RuntimeSubmission['status']; visibility?: 
   return {
     seasonId: SEASON,
     seed: SEED,
+    revision: 1,
     def,
     state: stateFor(def, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')], submissions }),
     tunableIssues: [],
@@ -97,6 +98,32 @@ describe('saveAction over an earlier submission', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context());
     await expect(saveAction({ ...action, actionId: 'nope' })).resolves.toEqual({ ok: false, issues: [{ code: 'action_unknown' }] });
     expect(saveFormatAction).not.toHaveBeenCalled();
+  });
+});
+
+describe('the revision of the format a write was validated against', () => {
+  it('hands the revision of the loaded context to the database on a save and on a submit', async () => {
+    const ctx = { ...context(), revision: 4242 };
+    vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
+    await saveAction(action);
+    await submitAction(action);
+    expect(vi.mocked(saveFormatAction).mock.calls[0][0]).toMatchObject({ revision: 4242 });
+    expect(vi.mocked(submitFormatAction).mock.calls[0][0]).toMatchObject({ revision: 4242 });
+  });
+
+  it('hands it over on the deadline pick too (the system audience, onlyIfUnsubmitted)', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context(), revision: 77 });
+    await submitAction({ ...action, audience: 'system', onlyIfUnsubmitted: true });
+    expect(vi.mocked(submitFormatAction).mock.calls[0][0]).toMatchObject({ revision: 77, onlyIfUnsubmitted: true });
+  });
+
+  it('lets format_context_stale and resource_capacity_reached of the database leave as they are', async () => {
+    vi.mocked(submitFormatAction).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(submitAction(action)).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    vi.mocked(saveFormatAction).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(saveAction(action)).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    vi.mocked(submitFormatAction).mockRejectedValue(new FormatRuntimeError('resource_capacity_reached'));
+    await expect(submitAction(action)).rejects.toMatchObject({ code: 'resource_capacity_reached', statusCode: 409 });
   });
 });
 

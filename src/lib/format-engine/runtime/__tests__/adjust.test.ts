@@ -31,6 +31,7 @@ function context(patch: Partial<KitRuntimeState> = {}): KitContext {
   return {
     seasonId: SEASON,
     seed: SEED,
+    revision: 1,
     def,
     state: stateFor(def, patch),
     tunableIssues: [],

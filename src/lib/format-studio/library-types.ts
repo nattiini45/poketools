@@ -108,6 +108,12 @@ export interface SeasonFormatSummary {
 export interface SeasonFormatRow extends SeasonFormatSummary {
   spec: FormatDefinition;
   seed: string;
+  /**
+   * `season_formats.revision`: changes on every change of the row (attach, replace, engine switch, amendment). A writer
+   * that validated against this row hands it to the database, which refuses the write when it moved
+   * (`format_context_stale`).
+   */
+  revision: number;
 }
 
 /** What attach writes into `tournaments.stage_spec`: a frozen copy of one kit stage. */

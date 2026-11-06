@@ -37,7 +37,7 @@ describe('format_apply_adjustment domain guard', () => {
     expect(holding).toBeLessThan(insert);
     // Each decision is made under a transaction lock, so a concurrent adjustment waits and then sees the committed rows.
     expect(body.lastIndexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'", relation)).toBeGreaterThan(-1);
-    expect(body.lastIndexOf("pg_advisory_xact_lock(hashtextextended('format_holding:'", holding)).toBeGreaterThan(-1);
+    expect(body.lastIndexOf("PERFORM public.format__lock_holding(p_season_id, v_op ->> 'resource'", holding)).toBeGreaterThan(-1);
     // Only an adjustment refuses: the shared op still skips quietly for an event that fires twice.
     expect(sql.slice(0, start)).toMatch(/IF NOT EXISTS \(SELECT 1 FROM public\.format_relation_links/);
   });

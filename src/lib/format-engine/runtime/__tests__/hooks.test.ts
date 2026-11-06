@@ -49,6 +49,7 @@ function context(over: Partial<KitContext> = {}): KitContext {
   return {
     seasonId: 's-1',
     seed: SEED,
+    revision: 1,
     def,
     state: stateFor(def),
     tunableIssues: [],

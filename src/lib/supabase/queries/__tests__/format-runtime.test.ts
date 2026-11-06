@@ -147,20 +147,20 @@ describe('the RPC wrappers', () => {
   it('saveFormatAction and submitFormatAction return the submission row', async () => {
     const row = { id: 'sub', status: 'draft' };
     state.rpcReply = { data: row };
-    await expect(saveFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: P2, picks: [{ item_id: 'x' }] })).resolves.toBe(row);
+    await expect(saveFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: P2, picks: [{ item_id: 'x' }], revision: 41 })).resolves.toBe(row);
     await expect(
       submitFormatAction({
-        seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: true,
+        seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: true, revision: 41,
         items: [{ resource: 'gift', item_id: 'x', exclusive: true }],
       }),
     ).resolves.toBe(row);
     expect(state.rpcCalls).toEqual([
-      { name: 'format_action_save', args: { p_season_id: SEASON, p_action_key: 'pick', p_actor: P1, p_target: P2, p_picks: [{ item_id: 'x' }] } },
+      { name: 'format_action_save', args: { p_season_id: SEASON, p_action_key: 'pick', p_actor: P1, p_target: P2, p_picks: [{ item_id: 'x' }], p_expected_revision: 41 } },
       {
         name: 'format_action_submit',
         args: {
           p_season_id: SEASON, p_action_key: 'pick', p_actor: P1, p_target: null, p_picks: [],
-          p_items: [{ resource: 'gift', item_id: 'x', exclusive: true }], p_lock: true,
+          p_items: [{ resource: 'gift', item_id: 'x', exclusive: true }], p_lock: true, p_expected_revision: 41,
         },
       },
     ]);
@@ -168,7 +168,7 @@ describe('the RPC wrappers', () => {
 
   it('submitFormatAction asks the database to write only over a draft when told to, and leaves the argument out otherwise', async () => {
     state.rpcReply = { data: { id: 'sub' } };
-    const base = { seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] };
+    const base = { seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], revision: 7 };
     await submitFormatAction({ ...base, onlyIfUnsubmitted: true });
     await submitFormatAction({ ...base, onlyIfUnsubmitted: false });
     expect(state.rpcCalls[0].args).toMatchObject({ p_only_if_unsubmitted: true });
@@ -178,18 +178,18 @@ describe('the RPC wrappers', () => {
   it('submitFormatAction turns the database refusal action_already_submitted into a FormatActionAlreadySubmittedError', async () => {
     state.rpcReply = { error: { code: 'P0001', message: 'action_already_submitted', details: '{"action":"pick"}' } };
     const error = await submitFormatAction({
-      seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], onlyIfUnsubmitted: true,
+      seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], onlyIfUnsubmitted: true, revision: 7,
     }).catch((e: unknown) => e);
     expect(error).toBeInstanceOf(FormatActionAlreadySubmittedError);
     // The other signals still map, and a look-alike with another SQLSTATE is left alone.
     state.rpcReply = { error: { code: 'P0001', message: 'action_locked', details: '{}' } };
     await expect(
-      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] }),
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], revision: 7 }),
     ).rejects.toMatchObject({ code: 'action_locked' });
     const lookAlike = { code: '23505', message: 'action_already_submitted' };
     state.rpcReply = { error: lookAlike };
     await expect(
-      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [] }),
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], lock: false, items: [], revision: 7 }),
     ).rejects.toBe(lookAlike);
   });
 
@@ -249,6 +249,8 @@ describe('error mapping', () => {
   it.each([
     ['action_locked', 409],
     ['resource_item_taken', 409],
+    ['resource_capacity_reached', 409],
+    ['format_context_stale', 409],
     ['domain_amendment_locked', 409],
     ['reason_required', 400],
     ['reason_too_long', 400],
@@ -270,10 +272,21 @@ describe('error mapping', () => {
   it('throws the mapped error out of every wrapper', async () => {
     state.rpcReply = { error: signal('resource_item_taken') };
     await expect(
-      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], items: [], lock: false }),
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], items: [], lock: false, revision: 7 }),
     ).rejects.toMatchObject({ code: 'resource_item_taken' });
+    state.rpcReply = { error: signal('resource_capacity_reached') };
+    await expect(
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], items: [], lock: false, revision: 7 }),
+    ).rejects.toMatchObject({ code: 'resource_capacity_reached', statusCode: 409 });
+    state.rpcReply = { error: signal('format_context_stale') };
+    await expect(
+      submitFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], items: [], lock: false, revision: 7 }),
+    ).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    await expect(saveFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], revision: 7 })).rejects.toMatchObject({
+      code: 'format_context_stale',
+    });
     state.rpcReply = { error: signal('action_locked') };
-    await expect(saveFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [] })).rejects.toMatchObject({ code: 'action_locked' });
+    await expect(saveFormatAction({ seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], revision: 7 })).rejects.toMatchObject({ code: 'action_locked' });
   });
 
   it('leaves other errors alone, and still maps the format-studio signals', () => {

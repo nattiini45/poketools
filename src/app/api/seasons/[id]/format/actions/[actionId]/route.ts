@@ -23,7 +23,10 @@ interface RouteParams {
  * A participant saves a DRAFT pick for themselves (the actor is always the session player; a body that names one is a
  * 400). Refused when the pick is already submitted (409 `format_action_already_submitted`: the player submits again to
  * change it) and in a completed or archived league (409 `format_season_closed`). A rejected pick answers
- * `format_action_invalid` with the problems in `issues` (422, or 404 / 409 / 403 for the state of the league). Drafts are
+ * `format_action_invalid` with the problems in `issues` (422, or 404 / 409 / 403 for the state of the league). The
+ * database refuses a save as 409 `action_locked` (the action or the actor's submission is locked) or 409
+ * `format_context_stale` (an admin changed the format after the pick was validated; the client reloads and validates
+ * again); a save grants nothing, so it never answers `resource_item_taken` or `resource_capacity_reached`. Drafts are
  * not audited; the library expires the league reads.
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {

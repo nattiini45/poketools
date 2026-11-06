@@ -5427,6 +5427,7 @@ export type Database = {
           engine: string
           frozen_at: string
           preset_rulesets: Json
+          revision: number
           season_id: string
           seed: string
           spec: Json
@@ -5440,6 +5441,7 @@ export type Database = {
           engine?: string
           frozen_at?: string
           preset_rulesets?: Json
+          revision?: number
           season_id: string
           seed: string
           spec: Json
@@ -5453,6 +5455,7 @@ export type Database = {
           engine?: string
           frozen_at?: string
           preset_rulesets?: Json
+          revision?: number
           season_id?: string
           seed?: string
           spec?: Json
@@ -7069,6 +7072,10 @@ export type Database = {
         Args: { p_ops: Json; p_season_id: string }
         Returns: undefined
       }
+      format__check_revision: {
+        Args: { p_expected_revision: number; p_season_id: string }
+        Returns: undefined
+      }
       format__clear_runtime: {
         Args: { p_season_id: string }
         Returns: undefined
@@ -7094,6 +7101,10 @@ export type Database = {
         Args: { p_action_key: string; p_season_id: string }
         Returns: undefined
       }
+      format__lock_holding: {
+        Args: { p_player: string; p_resource: string; p_season_id: string }
+        Returns: undefined
+      }
       format__open_round: {
         Args: { p_phase_id: string }
         Returns: {
@@ -7101,10 +7112,15 @@ export type Database = {
           round_number: number
         }[]
       }
+      format__resource_capacity: {
+        Args: { p_resource: string; p_season_id: string }
+        Returns: number
+      }
       format_action_save: {
         Args: {
           p_action_key: string
           p_actor: string
+          p_expected_revision: number
           p_picks: Json
           p_season_id: string
           p_target: string
@@ -7133,6 +7149,7 @@ export type Database = {
         Args: {
           p_action_key: string
           p_actor: string
+          p_expected_revision: number
           p_items: Json
           p_lock: boolean
           p_only_if_unsubmitted?: boolean

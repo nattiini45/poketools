@@ -108,13 +108,13 @@ export async function getSeasonFormat(seasonId: string): Promise<SeasonFormatRow
   if (!isValidUuid(seasonId)) return null;
   const { data, error } = await supabase
     .from('season_formats')
-    .select(`${SUMMARY_COLUMNS}, spec, seed`)
+    .select(`${SUMMARY_COLUMNS}, spec, seed, revision`)
     .eq('season_id', seasonId)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const row = data as unknown as SummaryRow & { spec: Json; seed: string };
-  return { ...toSummary(row), spec: row.spec as unknown as FormatDefinition, seed: row.seed };
+  const row = data as unknown as SummaryRow & { spec: Json; seed: string; revision: number };
+  return { ...toSummary(row), spec: row.spec as unknown as FormatDefinition, seed: row.seed, revision: row.revision };
 }
 
 /** `child ( count )` embeds arrive as `[{ count: n }]`. */

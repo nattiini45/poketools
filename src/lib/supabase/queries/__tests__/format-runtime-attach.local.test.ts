@@ -39,6 +39,13 @@ const attach = (seasonId: string, confirmClear = false) =>
     p_confirm_clear: confirmClear,
   });
 
+/** The revision of the format attached to a league, as the application reads it with the spec it validates against. */
+async function revisionOf(seasonId: string): Promise<number> {
+  const { data, error } = await client.from('season_formats').select('revision').eq('season_id', seasonId).single();
+  if (error) throw new Error(JSON.stringify(error));
+  return data.revision;
+}
+
 /** One row in every one of the nine runtime tables of a league, written through the real writers. */
 async function fillRuntime(seasonId: string, tag: string): Promise<void> {
   await rt.fireFormatEvent({
@@ -57,7 +64,7 @@ async function fillRuntime(seasonId: string, tag: string): Promise<void> {
       { op: 'set_track', track: 'steps', player_id: ids.p1, step: 2 },
     ],
   });
-  await rt.saveFormatAction({ seasonId, actionKey: 'other_pick', actorId: ids.p1, targetId: null, picks: [] });
+  await rt.saveFormatAction({ seasonId, actionKey: 'other_pick', actorId: ids.p1, targetId: null, picks: [], revision: await revisionOf(seasonId) });
   await rt.openFormatCheck({ seasonId, source: 'expr', ruleId: 'r', dedupeKey: `expr:${tag}`, subject: {} });
 }
 
@@ -130,9 +137,9 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
     await expect(
       rt.fireFormatEvent({ seasonId: ids.season, eventKey: 'stage_start:first', event: 'stage_start', payload: {}, firedBy: null, ops: [] }),
     ).resolves.toBe(true);
-    await expect(rt.saveFormatAction({ seasonId: ids.season, actionKey: 'pick', actorId: ids.p1, targetId: null, picks: [] })).resolves.toMatchObject({
-      status: 'draft',
-    });
+    await expect(
+      rt.saveFormatAction({ seasonId: ids.season, actionKey: 'pick', actorId: ids.p1, targetId: null, picks: [], revision: await revisionOf(ids.season) }),
+    ).resolves.toMatchObject({ status: 'draft' });
     // The other league kept everything.
     expect(Object.values(await sizes(ids.other)).every((n) => n > 0)).toBe(true);
   });
@@ -168,5 +175,43 @@ describe.skipIf(!optIn)('format runtime clean-up on attach-replace and detach (l
     expect(cleared.links + cleared.items + cleared.submissions + cleared.adjustments).toBeGreaterThan(0);
     expect(Object.values(await sizes(ids.season)).every((n) => n === 0)).toBe(true);
     expect(Object.values(await sizes(ids.other)).every((n) => n > 0)).toBe(true);
+  });
+
+  it('refuses a pick validated before an attach-replace or a detach, and keeps no pick of the old format', async () => {
+    expect((await attach(ids.season, true)).error).toBeNull();
+    const stale = await revisionOf(ids.season);
+    expect((await attach(ids.season, true)).error).toBeNull();
+    const fresh = await revisionOf(ids.season);
+    expect(fresh).not.toBe(stale);
+    const pick = (revision: number, actionKey: string) => ({ seasonId: ids.season, actionKey, actorId: ids.p1, targetId: null, picks: [], revision });
+    await expect(rt.saveFormatAction(pick(stale, 'old_format'))).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    await expect(rt.submitFormatAction({ ...pick(stale, 'old_format'), items: [], lock: false })).rejects.toMatchObject({ code: 'format_context_stale' });
+
+    // Detach, then attach again: the new row never reuses the number of the old one.
+    expect((await client.rpc('format_detach_season', { p_season_id: ids.season, p_confirm_clear: true })).error).toBeNull();
+    await expect(rt.submitFormatAction({ ...pick(fresh, 'old_format'), items: [], lock: false })).rejects.toMatchObject({ code: 'format_context_stale' });
+    expect((await attach(ids.season)).error).toBeNull();
+    expect(await revisionOf(ids.season)).toBeGreaterThan(fresh);
+    await expect(rt.submitFormatAction({ ...pick(fresh, 'old_format'), items: [], lock: false })).rejects.toMatchObject({ code: 'format_context_stale' });
+    expect((await rt.getFormatRuntime(ids.season)).actionSubmissions).toEqual([]);
+  });
+
+  it('never leaves a pick behind an attach-replace, however the write and the attach interleave (and never deadlocks)', async () => {
+    expect((await attach(ids.season, true)).error).toBeNull();
+    for (let round = 0; round < 6; round++) {
+      const action = `replace_race_${round}`;
+      const revision = await revisionOf(ids.season);
+      const [write, replaced] = await Promise.allSettled([
+        rt.submitFormatAction({ seasonId: ids.season, actionKey: action, actorId: ids.p1, targetId: null, picks: [], items: [], lock: false, revision }),
+        attach(ids.season, true).then((out) => {
+          if (out.error) throw new Error(JSON.stringify(out.error));
+        }),
+      ]);
+      expect(replaced.status).toBe('fulfilled');
+      // Either the submit ran first and the replace emptied the runtime, or the replace came first and the submit was
+      // refused as stale. A pick written for the old format after the replace is the failure.
+      if (write.status === 'rejected') expect(write.reason).toMatchObject({ code: 'format_context_stale' });
+      expect((await rt.getFormatRuntime(ids.season)).actionSubmissions.filter((s) => s.action_key === action)).toEqual([]);
+    }
   });
 });

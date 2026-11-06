@@ -25,7 +25,8 @@ interface RouteParams {
  * (refused in a completed or archived league). `as=admin`: a league admin (or site admin) withdraws it for them, and may
  * do so in a closed league. An admin who also plays uses the default and is treated as a player. The `as` parameter picks
  * the guard, so it is read first; the challenge is season-scoped in the database (`challenge_not_found`,
- * `challenge_not_challenger` 403, `challenge_not_open` 409). An ACCEPTED challenge already created a match: an admin
+ * `challenge_not_challenger` 403, `challenge_not_open` 409). A challenge whose accept window has run out is stored as
+ * expired (which the cooldown counts) and answers `challenge_expired` 409; it is not withdrawn. An ACCEPTED challenge already created a match: an admin
  * removes that match with the match routes, the challenge row stays as history.
  */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {

@@ -209,6 +209,14 @@ describe('PUT /api/seasons/[id]/format/actions/[actionId]', () => {
     const locked = await PUT(put(PICKS), params());
     expect(locked.status).toBe(409);
     expect((await locked.json()).code).toBe('action_locked');
+
+    // The format changed after the pick was validated: 409 with its own catalog code (the client reloads and validates again).
+    vi.mocked(saveAction).mockRejectedValueOnce(new FormatRuntimeError('format_context_stale'));
+    const stale = await PUT(put(PICKS), params());
+    expect(stale.status).toBe(409);
+    const body = await stale.json();
+    expect(body.code).toBe('format_context_stale');
+    expect(body.error).toMatch(/format changed/i);
   });
 
   it('refuses a save over a submitted pick with 409 format_action_already_submitted', async () => {

@@ -63,6 +63,7 @@ function attached(over: Partial<SeasonFormatRow> = {}): SeasonFormatRow {
     amendments: [],
     spec: spec('classic-league'),
     seed: 'SECRET-SEED-VALUE',
+    revision: 7,
     ...over,
   };
 }

@@ -185,7 +185,7 @@ describe('GET /api/seasons/[id]/format', () => {
 
   it('adds the frozen spec on ?include=spec, never the seed', async () => {
     const spec = PRESETS[0].definition;
-    vi.mocked(getSeasonFormat).mockResolvedValue({ ...summary, spec, seed: 'secret-seed-value' });
+    vi.mocked(getSeasonFormat).mockResolvedValue({ ...summary, spec, seed: 'secret-seed-value', revision: 7 });
     const body = await (await GET(get('?include=spec'), params())).json();
     expect(body.data.spec.schema_version).toBe(1);
     expect(JSON.stringify(body)).not.toContain('secret-seed-value');

@@ -38,6 +38,7 @@ function context(ladder = false): KitContext {
   return {
     seasonId: SEASON,
     seed: SEED,
+    revision: 1,
     def,
     state: stateFor(def, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')] }),
     tunableIssues: [],

@@ -61,6 +61,7 @@ function context(opts: { state?: Partial<KitRuntimeState>; defs?: DefPatch[]; pl
   return {
     seasonId: 's-1',
     seed: SEED,
+    revision: 1,
     def,
     state,
     tunableIssues: [],
@@ -708,7 +709,7 @@ describe('the shipped Wichtelcup document keeps the leak contract', () => {
 
   function wichtelContext(patch: Partial<KitRuntimeState> = {}, players: string[] = GIVERS): KitContext {
     const state = stateFor(DEF, { flags: { 'action:choose_gifts': 'open' }, links: RING, ...patch });
-    return { seasonId: 's-1', seed: SEED, def: DEF, state, tunableIssues: [], phases: [{ id: 'cup', stage: DEF.stages[0], members: players }] };
+    return { seasonId: 's-1', seed: SEED, revision: 1, def: DEF, state, tunableIssues: [], phases: [{ id: 'cup', stage: DEF.stages[0], members: players }] };
   }
   const player = (viewer: string, ctx: KitContext) => running(buildPlayerView(ctx, viewer, WNAMES, [], NOW));
   const cardOf = (view: ReturnType<typeof player>) => view.actions.find((a) => a.id === 'choose_gifts')!;

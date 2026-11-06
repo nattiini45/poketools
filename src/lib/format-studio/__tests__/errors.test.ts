@@ -10,8 +10,14 @@ describe('code list', () => {
     // Every format_* key except the pre-existing format_mismatch (the point-buy league check) and the refusals of the
     // live format surface (FORMAT_REFUSALS, runtime/refusal.ts: their own code list and statuses), plus the league type lock.
     // format_action_invalid is the catalog text of the body of a refused action submission (not a thrown error).
+    // format_context_stale is a signal of the runtime functions (FormatRuntimeError, queries/format-runtime.ts): the
+    // format changed after a pick was validated.
     const ours = (key: string) =>
-      key.startsWith('format_') && key !== 'format_mismatch' && key !== 'format_action_invalid' && !(key in FORMAT_REFUSALS);
+      key.startsWith('format_') &&
+      key !== 'format_mismatch' &&
+      key !== 'format_action_invalid' &&
+      key !== 'format_context_stale' &&
+      !(key in FORMAT_REFUSALS);
     const fromCatalogs = [
       ...Object.keys(errorsAdmin.en).filter(ours),
       ...Object.keys(errorsSeasons.en).filter(ours),

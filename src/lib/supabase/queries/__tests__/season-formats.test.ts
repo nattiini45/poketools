@@ -111,13 +111,14 @@ describe('getSeasonFormatSummary and getSeasonFormat', () => {
     expect(state.calls).toHaveLength(0);
   });
 
-  it('the full read adds the spec and the seed', async () => {
-    state.respond = () => ({ data: { ...row, spec: { schema_version: 1 }, seed: 'abcdef12' } });
+  it('the full read adds the spec, the seed and the revision the spec was read at', async () => {
+    state.respond = () => ({ data: { ...row, spec: { schema_version: 1 }, seed: 'abcdef12', revision: 9007 } });
     const full = await getSeasonFormat(SEASON);
     expect(full?.seed).toBe('abcdef12');
     expect(full?.spec).toEqual({ schema_version: 1 });
+    expect(full?.revision).toBe(9007);
     expect(stepsOf(state.calls[0], 'select')[0][1]).toBe(
-      'season_id, definition_id, version_no, spec_hash, tunables, engine, frozen_at, amendments, spec, seed',
+      'season_id, definition_id, version_no, spec_hash, tunables, engine, frozen_at, amendments, spec, seed, revision',
     );
   });
 

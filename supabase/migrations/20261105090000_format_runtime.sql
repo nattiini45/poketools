@@ -18,7 +18,11 @@
 --   format__apply_ops(season, ops)           The single op applier (internal): set_flag, set_relation, reveal_relation,
 --                                            grant_item, revoke_item, set_attr, adjust_points, open_action, lock_action,
 --                                            set_track. An unknown op or a missing member raises invalid_op.
---   format__insert_item(...)                 Internal: one resource_items row; an exclusive clash raises resource_item_taken.
+--   format__insert_item(...)                 Internal: one resource_items row, under the holding's advisory lock. An exclusive
+--                                            clash raises resource_item_taken; a grant that would take the holder over the
+--                                            resource's capacity (read from the attached spec) raises resource_capacity_reached.
+--                                            Event, action and adjustment grants all go through it, so the check cannot be
+--                                            outrun by a concurrent grant of another path.
 --   format_fire_event(...)                   Logs the event once and applies its ops; false when it already fired.
 --   format_action_save / _submit(...)        Save a draft pick / submit it (replacing the items the earlier submission
 --                                            granted) and optionally lock it. Raises action_locked. A save over a submitted
@@ -26,10 +30,12 @@
 --                                            and the lock_action op of one action run under one advisory lock, so a submit
 --                                            can never slip in after the action's lock.
 --                                            A domain adjustment takes the same lock of every guarded action before its guard
---                                            reads, so a lock-submit cannot slip in beside the amendment. The lock orders the
---                                            writers only: a submit that was validated against the old domain before the
---                                            amendment and waits on the lock is not re-validated against the amended one
---                                            (the application validates picks, this function does not know the domains).
+--                                            reads, so a lock-submit cannot slip in beside the amendment.
+--                                            Both take p_expected_revision, the season_formats.revision the application
+--                                            validated the pick against (attach, replace, engine switch and every amendment
+--                                            bump it, a detach removes the row). Under the action lock the row is read FOR
+--                                            SHARE, so no attach, detach or amendment commits between the check and the
+--                                            write; a different revision raises format_context_stale and nothing is written.
 --                                            A locked pick raises action_locked even with p_only_if_unsubmitted; only a
 --                                            submitted (unlocked) one raises action_already_submitted.
 --   format_apply_adjustment(...)             Records an admin adjustment, applies its ops, appends a domain amendment to
@@ -44,9 +50,14 @@
 --                                            (before the league starts nothing in them is worth keeping).
 --
 -- Domain errors are `RAISE EXCEPTION '<code>' USING ERRCODE = 'P0001', DETAIL = <json text>`: action_locked,
--- resource_item_taken (DETAIL {"resource", "item_id"}), domain_amendment_locked (DETAIL {"actions"}), reason_required,
+-- format_context_stale (the format changed after the pick was validated), resource_capacity_reached
+-- (DETAIL {"resource", "player_id", "capacity"}), resource_item_taken (DETAIL {"resource", "item_id"}), domain_amendment_locked (DETAIL {"actions"}), reason_required,
 -- relation_has_links (DETAIL {"relation"}), insufficient_holding (DETAIL {"resource", "player_id", "item_id"}),
 -- invalid_op (DETAIL {"op"}). A league without an attached format raises FORMAT_NOT_ATTACHED on a domain adjustment.
+--
+-- Lock order, one for every writer (a transaction takes the locks it needs in this order, sorted within a kind, so no two
+-- can wait on each other): relation (format_relation:) -> action (format__lock_action) -> the seasons row (KEY SHARE) and
+-- the season_formats row (SHARE) of the revision check -> holding (format__lock_holding). A writer takes the subset it needs.
 --
 -- League recycle bin: all nine tables are owned (season_id = $1) and cascade with the league. They reference only
 -- seasons and players, so the restore order among them is free (steps 100-108). Their player columns are found by the
@@ -225,6 +236,77 @@ COMMENT ON TABLE public.format_adjustments IS
   'Audit of manual format adjustments by an admin or an adjust_points op; a reason is required. Service-role only. No RLS policies by design.';
 
 -- ---------------------------------------------------------------------------------------------------------------
+-- Context revision. season_formats.revision changes on EVERY insert and update of the row (an attach or a replace, an
+-- engine switch, a domain amendment, ...) and is drawn from one sequence, so a detach followed by a new attach never
+-- reuses the number a validator read from the old row. The application reads it together with the spec it validates a
+-- pick against and hands it back to format_action_save / format_action_submit, which refuse the write when it moved.
+-- Rows that exist before this file take 0 and a number at their first change. The sequence is used by the API role that
+-- writes season_formats (service_role), so it gets USAGE.
+CREATE SEQUENCE public.season_format_revision_seq;
+REVOKE ALL ON SEQUENCE public.season_format_revision_seq FROM PUBLIC, anon, authenticated;
+GRANT USAGE ON SEQUENCE public.season_format_revision_seq TO service_role;
+
+ALTER TABLE public.season_formats ADD COLUMN revision bigint NOT NULL DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION public.season_formats__bump_revision()
+RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  NEW.revision := nextval('public.season_format_revision_seq');
+  RETURN NEW;
+END $$;
+REVOKE ALL ON FUNCTION public.season_formats__bump_revision() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.season_formats__bump_revision() TO service_role;
+
+CREATE TRIGGER trg_season_formats_revision BEFORE INSERT OR UPDATE ON public.season_formats
+  FOR EACH ROW EXECUTE FUNCTION public.season_formats__bump_revision();
+
+COMMENT ON COLUMN public.season_formats.revision IS
+  'Changes on every insert and update of the row (one sequence). The runtime writes of a player action carry the revision they validated against and are refused (format_context_stale) when it moved.';
+
+-- Refuses a write validated against another version of the league's format. The caller holds the action lock. The seasons
+-- row is share-locked FIRST (the attach and the detach lock it FOR UPDATE before they touch season_formats, and the
+-- foreign keys of the rows written afterwards would take the same share lock): taking it after the season_formats lock
+-- could deadlock with an attach. The season_formats row is then read FOR SHARE, so an attach, a detach, an engine switch
+-- or an amendment waits for this transaction to commit, or has committed already and is seen here.
+CREATE OR REPLACE FUNCTION public.format__check_revision(p_season_id uuid, p_expected_revision bigint)
+RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE v_revision bigint;
+BEGIN
+  IF p_expected_revision IS NULL THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'revision')::text;
+  END IF;
+  PERFORM 1 FROM public.seasons WHERE id = p_season_id FOR KEY SHARE;
+  SELECT f.revision INTO v_revision FROM public.season_formats f WHERE f.season_id = p_season_id FOR SHARE;
+  IF NOT FOUND OR v_revision <> p_expected_revision THEN
+    RAISE EXCEPTION 'format_context_stale' USING ERRCODE = 'P0001';
+  END IF;
+END $$;
+
+-- ---------------------------------------------------------------------------------------------------------------
+-- Holdings. What a player holds of one resource is capped by the resource's `capacity` in the attached spec. Every
+-- writer of the holding takes the same transaction lock first and reads the held units under it, so two grants (a
+-- player's submit, an event, an admin adjustment) cannot both fit into the last free unit.
+CREATE OR REPLACE FUNCTION public.format__lock_holding(p_season_id uuid, p_resource text, p_player uuid)
+RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM pg_advisory_xact_lock(hashtextextended('format_holding:' || p_season_id::text || ':' || p_resource || ':' || p_player::text, 0));
+END $$;
+
+-- The capacity of a resource in the league's attached spec, or NULL (no format, no such resource, no capacity).
+CREATE OR REPLACE FUNCTION public.format__resource_capacity(p_season_id uuid, p_resource text)
+RETURNS integer
+LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
+  SELECT CASE WHEN jsonb_typeof(r -> 'capacity') = 'number' THEN (r ->> 'capacity')::integer END
+    FROM public.season_formats f,
+         jsonb_array_elements(CASE WHEN jsonb_typeof(f.spec -> 'resources') = 'array' THEN f.spec -> 'resources' ELSE '[]'::jsonb END) AS r
+   WHERE f.season_id = p_season_id AND jsonb_typeof(r) = 'object' AND r ->> 'key' = p_resource
+   LIMIT 1
+$$;
+
+-- ---------------------------------------------------------------------------------------------------------------
 -- Serialises everything that changes one action's lock state: a save or submit (flag check, then the row) against the
 -- lock_action op (flag, then the submitted rows). The lock is transaction-scoped.
 CREATE OR REPLACE FUNCTION public.format__lock_action(p_season_id uuid, p_action_key text)
@@ -258,13 +340,31 @@ CREATE OR REPLACE FUNCTION public.format__insert_item(
   p_exclusive boolean, p_source text, p_source_ref text
 ) RETURNS void
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_capacity integer;
+  v_held     bigint;
 BEGIN
-  INSERT INTO public.format_resource_items (season_id, resource_key, player_id, item_id, amount, exclusive, source, source_ref)
-  VALUES (p_season_id, p_resource, p_player, p_item, p_amount, p_exclusive, p_source, p_source_ref);
-EXCEPTION WHEN unique_violation THEN
-  -- Only format_resource_items_exclusive_key can fire: the id is random.
-  RAISE EXCEPTION 'resource_item_taken' USING ERRCODE = 'P0001',
-    DETAIL = jsonb_build_object('resource', p_resource, 'item_id', p_item)::text;
+  -- Under the holding's lock the units held are read after every earlier grant of the holding has committed (the caller
+  -- usually took the lock already, in sorted order; taking it again is free). A grant over the capacity is refused and the
+  -- whole call rolls back, so a submission never keeps a part of its items.
+  PERFORM public.format__lock_holding(p_season_id, p_resource, p_player);
+  v_capacity := public.format__resource_capacity(p_season_id, p_resource);
+  IF v_capacity IS NOT NULL THEN
+    SELECT coalesce(sum(i.amount), 0) INTO v_held FROM public.format_resource_items i
+     WHERE i.season_id = p_season_id AND i.resource_key = p_resource AND i.player_id = p_player;
+    IF v_held + p_amount > v_capacity THEN
+      RAISE EXCEPTION 'resource_capacity_reached' USING ERRCODE = 'P0001',
+        DETAIL = jsonb_build_object('resource', p_resource, 'player_id', p_player, 'capacity', v_capacity)::text;
+    END IF;
+  END IF;
+  BEGIN
+    INSERT INTO public.format_resource_items (season_id, resource_key, player_id, item_id, amount, exclusive, source, source_ref)
+    VALUES (p_season_id, p_resource, p_player, p_item, p_amount, p_exclusive, p_source, p_source_ref);
+  EXCEPTION WHEN unique_violation THEN
+    -- Only format_resource_items_exclusive_key can fire: the id is random.
+    RAISE EXCEPTION 'resource_item_taken' USING ERRCODE = 'P0001',
+      DETAIL = jsonb_build_object('resource', p_resource, 'item_id', p_item)::text;
+  END;
 END $$;
 
 CREATE OR REPLACE FUNCTION public.format__apply_ops(p_season_id uuid, p_ops jsonb)
@@ -278,6 +378,7 @@ DECLARE
   v_row  record;
   v_take integer;
   v_rel  text;
+  v_lock record;
 BEGIN
   IF p_ops IS NULL OR jsonb_typeof(p_ops) <> 'array' THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', NULL::text)::text;
@@ -293,6 +394,26 @@ BEGIN
      ORDER BY relation_key
   LOOP
     PERFORM pg_advisory_xact_lock(hashtextextended('format_relation:' || p_season_id::text || ':' || v_rel, 0));
+  END LOOP;
+
+  -- Then the action locks of the lock_action ops, and the holdings the grant_item ops write to (capacity is checked per
+  -- holding), each sorted: the order every writer uses (relation -> action -> holding), so an event and a player's submit
+  -- that touch the same action and holding cannot wait on each other. Malformed ops are left to the check below: a
+  -- player_id that is not a canonical uuid is skipped here and fails the cast of the op itself.
+  FOR v_lock IN
+    SELECT DISTINCT o ->> 'action' AS action_key FROM jsonb_array_elements(p_ops) AS o
+     WHERE jsonb_typeof(o) = 'object' AND o ->> 'op' = 'lock_action' AND o ->> 'action' IS NOT NULL
+     ORDER BY action_key
+  LOOP
+    PERFORM public.format__lock_action(p_season_id, v_lock.action_key);
+  END LOOP;
+  FOR v_lock IN
+    SELECT DISTINCT o ->> 'resource' AS resource_key, (o ->> 'player_id')::uuid AS player_id FROM jsonb_array_elements(p_ops) AS o
+     WHERE jsonb_typeof(o) = 'object' AND o ->> 'op' = 'grant_item' AND o ->> 'resource' IS NOT NULL
+       AND o ->> 'player_id' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     ORDER BY resource_key, player_id
+  LOOP
+    PERFORM public.format__lock_holding(p_season_id, v_lock.resource_key, v_lock.player_id);
   END LOOP;
 
   FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP
@@ -411,13 +532,20 @@ LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
   SELECT EXISTS (SELECT 1 FROM public.format_flags WHERE season_id = p_season_id AND key = 'action:' || p_action_key AND value = '"locked"'::jsonb)
 $$;
 
+-- The application validates a pick against the format it loaded and hands the season_formats.revision of that load as
+-- p_expected_revision; the write is refused with format_context_stale when the format changed since (see
+-- format__check_revision). A new argument is an overload, not a replacement: the five-argument save and the eight-argument
+-- submit of an earlier revision of this file are dropped before the new ones are created, and nothing grants, revokes or
+-- comments on them.
+DROP FUNCTION IF EXISTS public.format_action_save(uuid, text, uuid, uuid, jsonb);
 CREATE OR REPLACE FUNCTION public.format_action_save(
-  p_season_id uuid, p_action_key text, p_actor uuid, p_target uuid, p_picks jsonb
+  p_season_id uuid, p_action_key text, p_actor uuid, p_target uuid, p_picks jsonb, p_expected_revision bigint
 ) RETURNS public.format_action_submissions
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_action_submissions;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
   END IF;
@@ -442,20 +570,26 @@ END $$;
 -- A new argument is an overload: the seven-argument form is dropped before the new one is created, and nothing grants,
 -- revokes or comments on it.
 DROP FUNCTION IF EXISTS public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean);
+DROP FUNCTION IF EXISTS public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean);
 CREATE OR REPLACE FUNCTION public.format_action_submit(
   p_season_id uuid, p_action_key text, p_actor uuid, p_target uuid, p_picks jsonb, p_items jsonb, p_lock boolean,
-  p_only_if_unsubmitted boolean DEFAULT false
+  p_expected_revision bigint, p_only_if_unsubmitted boolean DEFAULT false
 ) RETURNS public.format_action_submissions
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   v_row  public.format_action_submissions;
   v_item jsonb;
+  v_lock record;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
   END IF;
   IF p_items IS NULL OR jsonb_typeof(p_items) <> 'array' THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'items')::text;
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_items) AS i WHERE jsonb_typeof(i) <> 'object' OR NOT (i ?& ARRAY['resource', 'item_id'])) THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'items')::text;
   END IF;
 
@@ -475,12 +609,18 @@ BEGIN
     RAISE EXCEPTION 'action_already_submitted' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
   END IF;
 
+  -- Every holding the items go to is locked first, sorted (one beneficiary, so by resource): two submits of different
+  -- actions that grant the same resources in a different step order cannot wait on each other. format__insert_item then
+  -- reads the held units under that lock and refuses a grant over the resource's capacity before it inserts; the raise
+  -- rolls the whole call back, the submission row and the items already written included.
+  FOR v_lock IN
+    SELECT DISTINCT i ->> 'resource' AS resource_key FROM jsonb_array_elements(p_items) AS i ORDER BY resource_key
+  LOOP
+    PERFORM public.format__lock_holding(p_season_id, v_lock.resource_key, coalesce(p_target, p_actor));
+  END LOOP;
   DELETE FROM public.format_resource_items
    WHERE season_id = p_season_id AND source = 'action' AND source_ref = v_row.id::text;
   FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) LOOP
-    IF jsonb_typeof(v_item) <> 'object' OR NOT (v_item ?& ARRAY['resource', 'item_id']) THEN
-      RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'items')::text;
-    END IF;
     PERFORM public.format__insert_item(
       p_season_id, v_item ->> 'resource', coalesce(p_target, p_actor), v_item ->> 'item_id', 1,
       coalesce((v_item ->> 'exclusive')::boolean, false), 'action', v_row.id::text);
@@ -514,9 +654,9 @@ BEGIN
   IF p_kind = 'domain' THEN
     -- Take the per-action advisory lock of every guarded action BEFORE the guard reads, in sorted order (one lock order
     -- for every caller). A concurrent submit-and-lock of one of them waits here until the amendment commits; one that
-    -- already holds the lock commits first and the guard below sees its locked row. The lock orders the writers, it does
-    -- not re-validate: a submit whose pick the application validated against the old domain and that waits here still
-    -- writes its items afterwards (format_action_submit has no view of the domains).
+    -- already holds the lock commits first and the guard below sees its locked row. A submit that was validated against
+    -- the old domain and waits here is refused afterwards: the amendment below changes season_formats.revision, which
+    -- the submit checks (format__check_revision) under the same lock.
     PERFORM public.format__lock_action(p_season_id, g.k)
        FROM (SELECT DISTINCT k FROM unnest(coalesce(p_guard_actions, '{}'::text[])) AS u(k) ORDER BY k) AS g;
     SELECT array_agg(g.k ORDER BY g.k) INTO v_locked
@@ -550,7 +690,7 @@ BEGIN
       SELECT o FROM jsonb_array_elements(CASE WHEN jsonb_typeof(p_ops) = 'array' THEN p_ops ELSE '[]'::jsonb END) AS o
        WHERE o ->> 'op' = 'revoke_item' ORDER BY o ->> 'resource', o ->> 'player_id', o ->> 'item_id'
     LOOP
-      PERFORM pg_advisory_xact_lock(hashtextextended('format_holding:' || p_season_id::text || ':' || (v_op ->> 'resource') || ':' || (v_op ->> 'player_id'), 0));
+      PERFORM public.format__lock_holding(p_season_id, v_op ->> 'resource', (v_op ->> 'player_id')::uuid);
       IF coalesce((
         SELECT sum(amount) FROM public.format_resource_items
          WHERE season_id = p_season_id AND resource_key = v_op ->> 'resource' AND player_id = (v_op ->> 'player_id')::uuid
@@ -617,12 +757,15 @@ END $$;
 REVOKE ALL ON FUNCTION
   public.format__insert_item(uuid, text, uuid, text, integer, boolean, text, text),
   public.format__lock_action(uuid, text),
+  public.format__check_revision(uuid, bigint),
+  public.format__lock_holding(uuid, text, uuid),
+  public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb),
   public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid),
   public.format__action_flag_locked(uuid, text),
-  public.format_action_save(uuid, text, uuid, uuid, jsonb),
-  public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean),
+  public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
+  public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
   public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]),
   public.format_check_open(uuid, text, text, text, jsonb),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
@@ -630,33 +773,42 @@ REVOKE ALL ON FUNCTION
 GRANT EXECUTE ON FUNCTION
   public.format__insert_item(uuid, text, uuid, text, integer, boolean, text, text),
   public.format__lock_action(uuid, text),
+  public.format__check_revision(uuid, bigint),
+  public.format__lock_holding(uuid, text, uuid),
+  public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb),
   public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid),
   public.format__action_flag_locked(uuid, text),
-  public.format_action_save(uuid, text, uuid, uuid, jsonb),
-  public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean),
+  public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
+  public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
   public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]),
   public.format_check_open(uuid, text, text, text, jsonb),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
   TO service_role;
 
 COMMENT ON FUNCTION public.format__insert_item(uuid, text, uuid, text, integer, boolean, text, text) IS
-  'Internal: inserts one format_resource_items row; an exclusive clash raises resource_item_taken (P0001).';
+  'Internal: inserts one format_resource_items row under the holding lock; an exclusive clash raises resource_item_taken, a grant over the resource capacity of the attached spec resource_capacity_reached (P0001).';
 COMMENT ON FUNCTION public.format__lock_action(uuid, text) IS
   'Internal: takes the transaction-scoped advisory lock of one action, so save, submit and the lock_action op of that action run one at a time.';
+COMMENT ON FUNCTION public.format__check_revision(uuid, bigint) IS
+  'Internal: raises format_context_stale unless season_formats.revision of the league equals the expected one (the row is share-locked until the transaction ends).';
+COMMENT ON FUNCTION public.format__lock_holding(uuid, text, uuid) IS
+  'Internal: takes the transaction-scoped advisory lock of one holding (league, resource, player) that every grant takes before it reads the held units.';
+COMMENT ON FUNCTION public.format__resource_capacity(uuid, text) IS
+  'Internal: the capacity of a resource in the attached spec of the league, or NULL.';
 COMMENT ON FUNCTION public.format__clear_runtime(uuid) IS
   'Internal: deletes the rows of the nine format runtime tables of one league (attach-replace and detach).';
 COMMENT ON FUNCTION public.format__apply_ops(uuid, jsonb) IS
-  'Internal: applies a jsonb array of format ops in order (set_flag, set_relation, reveal_relation, grant_item, revoke_item, set_attr, adjust_points, open_action, lock_action, set_track). Unknown op or missing member raises invalid_op.';
+  'Internal: applies a jsonb array of format ops in order (set_flag, set_relation, reveal_relation, grant_item, revoke_item, set_attr, adjust_points, open_action, lock_action, set_track). Unknown op or missing member raises invalid_op; a grant_item over the resource capacity raises resource_capacity_reached.';
 COMMENT ON FUNCTION public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid) IS
   'Logs a format event once (event_key) and applies its ops. Returns true when it fired now, false when it had fired before.';
 COMMENT ON FUNCTION public.format__action_flag_locked(uuid, text) IS
   'Internal: true when the flag action:<key> is "locked".';
-COMMENT ON FUNCTION public.format_action_save(uuid, text, uuid, uuid, jsonb) IS
-  'Saves a player action pick as a draft (a submitted pick becomes a draft again and its items are released). Raises action_locked when the action flag or the actor''s submission is locked.';
-COMMENT ON FUNCTION public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean) IS
-  'Submits (and with p_lock locks) a player action pick, replacing the resource items the earlier submission granted. With p_only_if_unsubmitted an already submitted or locked pick is left alone: a submitted one raises action_already_submitted, a locked one action_locked (the lock check comes first). Raises action_locked, resource_item_taken, action_already_submitted (the whole call rolls back).';
+COMMENT ON FUNCTION public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint) IS
+  'Saves a player action pick as a draft (a submitted pick becomes a draft again and its items are released). Raises action_locked when the action flag or the actor''s submission is locked, format_context_stale when the league''s format changed since p_expected_revision was read.';
+COMMENT ON FUNCTION public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean) IS
+  'Submits (and with p_lock locks) a player action pick, replacing the resource items the earlier submission granted. With p_only_if_unsubmitted an already submitted or locked pick is left alone: a submitted one raises action_already_submitted, a locked one action_locked (the lock check comes first). Raises action_locked, format_context_stale (p_expected_revision no longer matches season_formats.revision), resource_item_taken, resource_capacity_reached, action_already_submitted (the whole call rolls back).';
 COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]) IS
   'Records an admin adjustment, applies its ops and, for kind domain, appends the delta to season_formats.amendments. Raises reason_required, domain_amendment_locked. Returns the adjustment id.';
 COMMENT ON FUNCTION public.format_check_open(uuid, text, text, text, jsonb) IS

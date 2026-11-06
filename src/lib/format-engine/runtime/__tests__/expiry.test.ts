@@ -46,6 +46,7 @@ function context(window: 'open' | 'locked' = 'open'): KitContext {
   return {
     seasonId: SEASON,
     seed: SEED,
+    revision: 1,
     def,
     state: stateFor(def, { flags: { 'action:choose_gift': window, 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')] }),
     tunableIssues: [],

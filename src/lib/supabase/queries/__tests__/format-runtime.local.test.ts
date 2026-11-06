@@ -42,6 +42,19 @@ async function rows<K extends keyof FormatRuntime>(key: K): Promise<FormatRuntim
   return (await rt.getFormatRuntime(ids.season))[key];
 }
 
+/** The revision of the attached format, as the application reads it with the spec it validates against. */
+async function revisionOf(): Promise<number> {
+  const { data, error } = await client.from('season_formats').select('revision').eq('season_id', ids.season).single();
+  if (error) throw new Error(JSON.stringify(error));
+  return data.revision;
+}
+
+type SaveInput = Omit<Parameters<RuntimeMod['saveFormatAction']>[0], 'revision'> & { revision?: number };
+type SubmitInput = Omit<Parameters<RuntimeMod['submitFormatAction']>[0], 'revision'> & { revision?: number };
+// Without an explicit revision the call carries the current one, like a request that loaded the format just before.
+const save = async (input: SaveInput) => rt.saveFormatAction({ ...input, revision: input.revision ?? (await revisionOf()) });
+const submit = async (input: SubmitInput) => rt.submitFormatAction({ ...input, revision: input.revision ?? (await revisionOf()) });
+
 const held = async (resource: string, player: string) =>
   (await rows('resourceItems')).filter((r) => r.resource_key === resource && r.player_id === player);
 
@@ -172,24 +185,24 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       (await rows('actionSubmissions')).find((s) => s.action_key === action && s.actor_player_id === actor);
 
     it('saves a draft, submits it with its items, and replaces the items on a resubmit', async () => {
-      const saved = await rt.saveFormatAction(input({ targetId: ids.p2, picks: [{ item_id: 'a' }] }));
+      const saved = await save(input({ targetId: ids.p2, picks: [{ item_id: 'a' }] }));
       expect(saved).toMatchObject({ status: 'draft', actor_player_id: ids.p1, target_player_id: ids.p2, submitted_at: null });
 
-      const submitted = await rt.submitFormatAction({
+      const submitted = await submit({
         ...input({ targetId: ids.p2 }), items: [{ resource: 'gift', item_id: 'a', exclusive: true }], lock: false,
       });
       expect(submitted).toMatchObject({ id: saved.id, status: 'submitted', locked_at: null });
       expect(submitted.submitted_at).not.toBeNull();
       expect((await held('gift', ids.p2)).map((r) => [r.item_id, r.source, r.source_ref, r.exclusive])).toEqual([['a', 'action', saved.id, true]]);
 
-      await rt.submitFormatAction({ ...input({ targetId: ids.p2 }), items: [{ resource: 'gift', item_id: 'b', exclusive: true }], lock: false });
+      await submit({ ...input({ targetId: ids.p2 }), items: [{ resource: 'gift', item_id: 'b', exclusive: true }], lock: false });
       expect((await held('gift', ids.p2)).map((r) => r.item_id)).toEqual(['b']);
       expect(await held('gift', ids.p1)).toEqual([]);
     });
 
     it('rolls the whole submit back on an exclusive clash, even the first-time draft row', async () => {
       await expect(
-        rt.submitFormatAction({ ...input({ actorId: ids.p3, targetId: ids.p3 }), items: [{ resource: 'gift', item_id: 'b', exclusive: true }], lock: false }),
+        submit({ ...input({ actorId: ids.p3, targetId: ids.p3 }), items: [{ resource: 'gift', item_id: 'b', exclusive: true }], lock: false }),
       ).rejects.toMatchObject({ code: 'resource_item_taken' });
       expect(await submissionOf('pick', ids.p3)).toBeUndefined();
       expect(await held('gift', ids.p3)).toEqual([]);
@@ -197,7 +210,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     });
 
     it('locks submitted picks when the action locks, and then refuses saves and submits', async () => {
-      await rt.saveFormatAction(input({ actorId: ids.p3, targetId: ids.p1 }));
+      await save(input({ actorId: ids.p3, targetId: ids.p1 }));
       await fire([{ op: 'lock_action', action: 'pick' }]);
 
       expect(await submissionOf('pick', ids.p1)).toMatchObject({ status: 'locked' });
@@ -205,53 +218,53 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       expect(await submissionOf('pick', ids.p3)).toMatchObject({ status: 'draft', locked_at: null });
       expect((await rows('flags')).find((f) => f.key === 'action:pick')?.value).toBe('locked');
 
-      await expect(rt.saveFormatAction(input())).rejects.toMatchObject({ code: 'action_locked' });
-      await expect(rt.saveFormatAction(input({ actorId: ids.p3 }))).rejects.toBeInstanceOf(rt.FormatRuntimeError);
-      await expect(rt.submitFormatAction({ ...input({ actorId: ids.p3 }), items: [], lock: false })).rejects.toMatchObject({ code: 'action_locked' });
+      await expect(save(input())).rejects.toMatchObject({ code: 'action_locked' });
+      await expect(save(input({ actorId: ids.p3 }))).rejects.toBeInstanceOf(rt.FormatRuntimeError);
+      await expect(submit({ ...input({ actorId: ids.p3 }), items: [], lock: false })).rejects.toMatchObject({ code: 'action_locked' });
     });
 
     it('locks at once with p_lock, which a later save then refuses without any flag', async () => {
-      const locked = await rt.submitFormatAction({ ...input({ actionKey: 'quick' }), items: [], lock: true });
+      const locked = await submit({ ...input({ actionKey: 'quick' }), items: [], lock: true });
       expect(locked).toMatchObject({ status: 'locked' });
       expect(locked.locked_at).not.toBeNull();
       expect((await rows('flags')).some((f) => f.key === 'action:quick')).toBe(false);
-      await expect(rt.saveFormatAction(input({ actionKey: 'quick' }))).rejects.toMatchObject({ code: 'action_locked' });
+      await expect(save(input({ actionKey: 'quick' }))).rejects.toMatchObject({ code: 'action_locked' });
       // Another actor of the same action is not affected.
-      await expect(rt.saveFormatAction(input({ actionKey: 'quick', actorId: ids.p2 }))).resolves.toMatchObject({ status: 'draft' });
+      await expect(save(input({ actionKey: 'quick', actorId: ids.p2 }))).resolves.toMatchObject({ status: 'draft' });
     });
 
     it('with onlyIfUnsubmitted leaves a submitted pick alone (already submitted) and refuses a locked one (action_locked)', async () => {
       const action = 'drawn';
       // A draft (and a first-time row) is written over by the draw's picks, as the cron's deadline draw needs.
-      await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'draft' }] }));
+      await save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'draft' }] }));
       await expect(
-        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'own' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+        submit({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'own' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
       ).resolves.toMatchObject({ status: 'submitted', picks: [{ item_id: 'own' }] });
       // The pick is submitted now: the second draw is refused and nothing changes.
       await expect(
-        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+        submit({ ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
       ).rejects.toBeInstanceOf(rt.FormatActionAlreadySubmittedError);
       expect(await submissionOf(action, ids.p2)).toMatchObject({ status: 'submitted', picks: [{ item_id: 'own' }] });
 
       // A locked pick (lock: true, the 'on_submit' kind) raises action_locked, not action_already_submitted: the lock
       // check comes first, so a caller that leaves a submitted player alone has to leave a locked one alone too.
-      await rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'own' }] }), items: [], lock: true });
+      await submit({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'own' }] }), items: [], lock: true });
       await expect(
-        rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
+        submit({ ...input({ actionKey: action, actorId: ids.p3, picks: [{ item_id: 'drawn' }] }), items: [], lock: false, onlyIfUnsubmitted: true }),
       ).rejects.toMatchObject({ code: 'action_locked' });
       expect(await submissionOf(action, ids.p3)).toMatchObject({ status: 'locked', picks: [{ item_id: 'own' }] });
     });
 
     it('turns a submitted pick back into a draft on a save, releasing its items and its submitted_at', async () => {
       const action = 'revise';
-      const draft = await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'x' }] }));
-      const submitted = await rt.submitFormatAction({
+      const draft = await save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'x' }] }));
+      const submitted = await submit({
         ...input({ actionKey: action, actorId: ids.p2 }), items: [{ resource: 'gift2', item_id: 'x', exclusive: true }], lock: false,
       });
       expect(submitted).toMatchObject({ id: draft.id, status: 'submitted' });
       expect((await held('gift2', ids.p2)).map((r) => r.item_id)).toEqual(['x']);
 
-      const revised = await rt.saveFormatAction(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'y' }] }));
+      const revised = await save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'y' }] }));
       expect(revised).toMatchObject({ id: draft.id, status: 'draft', submitted_at: null, locked_at: null });
       expect(await held('gift2', ids.p2)).toEqual([]);
 
@@ -265,7 +278,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       const keys = Array.from({ length: 12 }, (_, i) => `race${i}`);
       await Promise.all(
         keys.flatMap((action) => [
-          rt.submitFormatAction({ ...input({ actionKey: action, actorId: ids.p1 }), items: [], lock: false }).catch((error) => {
+          submit({ ...input({ actionKey: action, actorId: ids.p1 }), items: [], lock: false }).catch((error) => {
             if (error?.code !== 'action_locked') throw error;
           }),
           fire([{ op: 'lock_action', action }]),
@@ -283,9 +296,9 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     it('opens an action by flag', async () => {
       await fire([{ op: 'open_action', action: 'pick' }]);
       expect((await rows('flags')).find((f) => f.key === 'action:pick')?.value).toBe('open');
-      await expect(rt.saveFormatAction(input({ actorId: ids.p3 }))).resolves.toMatchObject({ status: 'draft' });
+      await expect(save(input({ actorId: ids.p3 }))).resolves.toMatchObject({ status: 'draft' });
       // The p1 row stays locked: only the flag was reopened.
-      await expect(rt.saveFormatAction(input())).rejects.toMatchObject({ code: 'action_locked' });
+      await expect(save(input())).rejects.toMatchObject({ code: 'action_locked' });
     });
   });
 
@@ -400,6 +413,181 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       // A flag alone (no submission yet) also refuses.
       await fire([{ op: 'lock_action', action: 'flagonly' }]);
       await expect(adjust({ kind: 'domain', delta: { add: ['x'] }, guardActions: ['flagonly'] })).rejects.toMatchObject({ code: 'domain_amendment_locked' });
+    });
+  });
+
+  describe('resource capacity', () => {
+    const RACES = 6;
+    const submissionOf = async (action: string, actor: string) =>
+      (await rows('actionSubmissions')).find((s) => s.action_key === action && s.actor_player_id === actor);
+    const units = async (resource: string, player: string) => (await held(resource, player)).reduce((sum, r) => sum + r.amount, 0);
+    const adjustGrant = (resource: string, player: string, item: string) =>
+      rt.applyFormatAdjustment({
+        seasonId: ids.season, kind: 'resource', target: { resource, player_id: player, item_id: item }, delta: { amount: 1 },
+        reason: 'capacity test', adminId: null, ops: [grant(resource, player, item, { source: 'adjustment' })], guardActions: [],
+      });
+    const item = (resource: string, item_id: string) => ({ resource, item_id, exclusive: false });
+    const base = () => ({ seasonId: ids.season, actionKey: 'cap', actorId: ids.p1, targetId: null as string | null, picks: [] as Json });
+
+    beforeAll(async () => {
+      // The capacity of a resource lives in the attached spec, which the database reads itself.
+      const resources = [
+        { key: 'cap_pack', capacity: 2 },
+        ...Array.from({ length: RACES }, (_, i) => ({ key: `cap_one_${i}`, capacity: 1 })),
+      ];
+      const { error } = await client.from('season_formats').update({ spec: { resources } }).eq('season_id', ids.season);
+      if (error) throw new Error(JSON.stringify(error));
+    });
+
+    it('refuses a grant over the capacity on every path, and writes nothing of the refused call', async () => {
+      await fire([grant('cap_pack', ids.p1, 'a')]);
+      expect(await units('cap_pack', ids.p1)).toBe(1);
+
+      // An event: the whole event rolls back, its flag and its log row included.
+      const key = nextKey();
+      await expect(
+        fire([{ op: 'set_flag', key: 'domain:after-capacity', value: 'x' }, grant('cap_pack', ids.p1, 'b', { amount: 2 })], key),
+      ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'resource_capacity_reached', statusCode: 409 });
+      expect((await rows('flags')).some((f) => f.key === 'domain:after-capacity')).toBe(false);
+      expect((await rows('eventLog')).some((e) => e.event_key === key)).toBe(false);
+
+      // A submission: two items on top of the one held, so the whole submission is refused, the first item included.
+      const over = { ...base(), actionKey: 'cap_act', actorId: ids.p1, items: [item('cap_pack', 'c'), item('cap_pack', 'd')], lock: false };
+      await expect(submit(over)).rejects.toMatchObject({ code: 'resource_capacity_reached' });
+      expect(await submissionOf('cap_act', ids.p1)).toBeUndefined();
+      expect(await units('cap_pack', ids.p1)).toBe(1);
+
+      // An adjustment: the audit row goes with the refused grant (the first grant fills the pack, the second is refused).
+      const adjustments = (await rows('adjustments')).length;
+      await adjustGrant('cap_pack', ids.p1, 'z');
+      await expect(adjustGrant('cap_pack', ids.p1, 'y')).rejects.toMatchObject({ code: 'resource_capacity_reached' });
+      expect((await rows('adjustments')).length).toBe(adjustments + 1);
+      expect(await units('cap_pack', ids.p1)).toBe(2);
+    });
+
+    it('does not count the items of the submission it replaces, and does not cap a resource without a capacity', async () => {
+      const action = 'cap_replace';
+      await submit({ ...base(), actionKey: action, actorId: ids.p2, items: [item('cap_pack', 'a'), item('cap_pack', 'b')], lock: false });
+      expect(await units('cap_pack', ids.p2)).toBe(2);
+      // The same actor submits again: the two items it granted are not "held" against the new ones.
+      await submit({ ...base(), actionKey: action, actorId: ids.p2, items: [item('cap_pack', 'c'), item('cap_pack', 'd')], lock: false });
+      expect((await held('cap_pack', ids.p2)).map((r) => r.item_id).sort()).toEqual(['c', 'd']);
+      await submit({
+        ...base(), actionKey: 'cap_free', actorId: ids.p2, items: [item('uncapped', 'a'), item('uncapped', 'b'), item('uncapped', 'c')], lock: false,
+      });
+      expect(await units('uncapped', ids.p2)).toBe(3);
+    });
+
+    it('lets exactly one of several concurrent grants of different paths take the last free unit', async () => {
+      for (let i = 0; i < RACES; i++) {
+        const resource = `cap_one_${i}`;
+        const outcomes = await Promise.allSettled([
+          submit({ ...base(), actionKey: `cap_a${i}`, actorId: ids.p1, targetId: ids.p2, items: [item(resource, 'a')], lock: false }),
+          submit({ ...base(), actionKey: `cap_b${i}`, actorId: ids.p3, targetId: ids.p2, items: [item(resource, 'b')], lock: false }),
+          fire([grant(resource, ids.p2, 'c')]),
+          adjustGrant(resource, ids.p2, 'd'),
+        ]);
+        expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected') expect(outcome.reason).toMatchObject({ code: 'resource_capacity_reached' });
+        }
+        expect(await units(resource, ids.p2)).toBe(1);
+      }
+    });
+
+    it('orders two submissions that grant the same resources in a different step order, without a deadlock', async () => {
+      const [r1, r2] = ['cap_one_0', 'cap_one_1'];
+      for (let i = 0; i < 4; i++) {
+        const outcomes = await Promise.allSettled([
+          submit({ ...base(), actionKey: `cap_order${i}_0`, actorId: ids.p1, targetId: ids.p3, items: [item(r1, `x${i}`), item(r2, `x${i}`)], lock: false }),
+          submit({ ...base(), actionKey: `cap_order${i}_1`, actorId: ids.p2, targetId: ids.p3, items: [item(r2, `y${i}`), item(r1, `y${i}`)], lock: false }),
+        ]);
+        // The capacity leaves room for one of them at most; a deadlock (40P01) would be another code.
+        for (const outcome of outcomes) {
+          if (outcome.status === 'rejected') expect(outcome.reason).toMatchObject({ code: 'resource_capacity_reached' });
+        }
+      }
+    });
+  });
+
+  describe('format context revision', () => {
+    const pick = (actionKey: string, actorId = ids.p1) => ({ seasonId: ids.season, actionKey, actorId, targetId: null as string | null, picks: [] as Json });
+    const submissionOf = async (action: string, actor: string) =>
+      (await rows('actionSubmissions')).find((s) => s.action_key === action && s.actor_player_id === actor);
+    const update = async (patch: Record<string, unknown>) => {
+      const { error } = await client.from('season_formats').update(patch).eq('season_id', ids.season);
+      if (error) throw new Error(JSON.stringify(error));
+    };
+
+    it('refuses a save and a submit validated before a domain amendment, and writes nothing', async () => {
+      const stale = await revisionOf();
+      await rt.applyFormatAdjustment({
+        seasonId: ids.season, kind: 'domain', target: { domain: 'gifts' }, delta: { add: ['revision-test'] }, reason: 'late entry',
+        adminId: null, ops: [], guardActions: [],
+      });
+      const current = await revisionOf();
+      expect(current).toBeGreaterThan(stale);
+
+      await expect(submit({ ...pick('rev_a'), items: [], lock: false, revision: stale })).rejects.toMatchObject({
+        name: 'FormatRuntimeError', code: 'format_context_stale', statusCode: 409,
+      });
+      await expect(save({ ...pick('rev_a'), revision: stale })).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect(await submissionOf('rev_a', ids.p1)).toBeUndefined();
+
+      await expect(save({ ...pick('rev_a'), revision: current })).resolves.toMatchObject({ status: 'draft' });
+      await expect(submit({ ...pick('rev_a'), items: [], lock: false, revision: current })).resolves.toMatchObject({ status: 'submitted' });
+    });
+
+    it('moves the revision on an engine switch, a replaced spec, a detach and a re-attach, and never reuses a number', async () => {
+      const kept = await client.from('season_formats').select('*').eq('season_id', ids.season).single();
+      expect(kept.error).toBeNull();
+      const seen: number[] = [await revisionOf()];
+      const step = async (change: () => Promise<void>) => {
+        await change();
+        seen.push(await revisionOf());
+      };
+      await step(() => update({ engine: 'shadow' }));
+      await step(() => update({ engine: 'kit' }));
+      await step(() => update({ spec: kept.data?.spec }));
+      expect(new Set(seen).size).toBe(seen.length);
+      expect(seen).toEqual([...seen].sort((a, b) => a - b));
+
+      // The format is detached: nothing validated before can be written, whatever its number was.
+      const last = seen[seen.length - 1];
+      expect((await client.from('season_formats').delete().eq('season_id', ids.season)).error).toBeNull();
+      await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(save({ ...pick('rev_b'), revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
+
+      // The same row attached again (a restore does this) is a new version: the old number does not come back.
+      const { error } = await client.from('season_formats').insert(kept.data as never);
+      expect(error).toBeNull();
+      const again = await revisionOf();
+      expect(again).toBeGreaterThan(last);
+      await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: last })).rejects.toMatchObject({ code: 'format_context_stale' });
+      await expect(submit({ ...pick('rev_b'), items: [], lock: false, revision: again })).resolves.toMatchObject({ status: 'submitted' });
+    });
+
+    it('requires a revision', async () => {
+      const call = await client.rpc('format_action_save', {
+        p_season_id: ids.season, p_action_key: 'rev_c', p_actor: ids.p1, p_target: null as unknown as string, p_picks: [],
+        p_expected_revision: null as unknown as number,
+      });
+      expect(call.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
+    });
+
+    it('never stores a pick against a format that changed, however the write and the change interleave', async () => {
+      for (let i = 0; i < 8; i++) {
+        const action = `rev_race_${i}`;
+        const revision = await revisionOf();
+        const [write, change] = await Promise.allSettled([
+          submit({ ...pick(action), items: [], lock: false, revision }),
+          update({ tunables: { n: i } }),
+        ]);
+        expect(change.status).toBe('fulfilled');
+        // The pick landed before the change, or it was refused as stale: nothing else (no deadlock, no half write).
+        if (write.status === 'rejected') expect(write.reason).toMatchObject({ code: 'format_context_stale' });
+        expect(Boolean(await submissionOf(action, ids.p1))).toBe(write.status === 'fulfilled');
+      }
     });
   });
 

@@ -20,6 +20,7 @@ function poolsAt(flags: Record<string, string>) {
   const ctx: KitContext = {
     seasonId: 's-1',
     seed: SEED,
+    revision: 1,
     def: DEF,
     state,
     tunableIssues: [],
@@ -56,7 +57,7 @@ describe('the pools of the player view', () => {
   it('never lists an admins-only pool', () => {
     const hidden: FormatDefinition = { ...DEF, domains: (DEF.domains ?? []).map((d) => (d.key === 'new_year' ? { ...d, visibility: 'admins' as const } : d)) };
     const state = stateFor(hidden, { flags: {} });
-    const ctx: KitContext = { seasonId: 's-1', seed: SEED, def: hidden, state, tunableIssues: [], phases: [{ id: 'phase-1', stage: hidden.stages[0], members: PLAYERS }] };
+    const ctx: KitContext = { seasonId: 's-1', seed: SEED, revision: 1, def: hidden, state, tunableIssues: [], phases: [{ id: 'phase-1', stage: hidden.stages[0], members: PLAYERS }] };
     const view = buildPlayerView(ctx, 'p1', NAMES, [], NOW);
     if (!view.running) throw new Error('expected a running view');
     expect(view.pools.map((p) => p.key)).not.toContain('new_year');

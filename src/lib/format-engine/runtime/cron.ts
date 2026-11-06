@@ -253,12 +253,21 @@ async function applyActionPolicy(
     // then left alone like one who was seen submitted: no count, no audit entry, no check. A pick that was submitted AND
     // locked (`lock: 'on_submit'`) or an action locked meanwhile answers `action_locked` instead (the function checks the
     // lock first): the same case, the choice stands or the action is closed, so the loop goes on with the other players.
+    // The submit carries the revision of the format it validated against, so a draw never lands in a format an admin
+    // replaced or amended meanwhile (`format_context_stale`, retried by the next pass).
     let written: Awaited<ReturnType<typeof submitAction>>;
     try {
       written = await submitAction({ seasonId, actionId, actorId: player, picks, audience: 'system', onlyIfUnsubmitted: true });
     } catch (error) {
       if (error instanceof FormatActionAlreadySubmittedError) continue;
       if (error instanceof FormatRuntimeError && error.code === 'action_locked') continue;
+      // The format changed (attached again, amended, switched) or a concurrent grant took the last free unit between the
+      // draw and the write: the draw was made for a state that no longer exists. The player is still waiting, so the next
+      // pass draws again against the new one; nothing is counted or audited now.
+      if (error instanceof FormatRuntimeError && (error.code === 'format_context_stale' || error.code === 'resource_capacity_reached')) {
+        logger.warn(TAG, 'random pick skipped, the format or the holding changed meanwhile', { seasonId, action: actionId, code: error.code });
+        continue;
+      }
       throw error;
     }
     if (written.ok) {

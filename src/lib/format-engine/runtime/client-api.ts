@@ -140,6 +140,8 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   // refresh the view, then retry
   action_locked: 'conflict',
   resource_item_taken: 'conflict',
+  resource_capacity_reached: 'conflict',
+  format_context_stale: 'conflict',
   domain_amendment_locked: 'conflict',
   challenge_not_open: 'conflict',
   challenge_expired: 'conflict',

@@ -5,6 +5,8 @@
  * code) leave this module as `FormatChallengeError`; anything else goes through `mapFormatRuntimeDbError` and is
  * rethrown unchanged when it is not a format signal. A response after the accept window is not an error of the
  * database: it stores `expired` and returns that row, and `respondToFormatChallenge` raises `challenge_expired` for it.
+ * A withdrawal after the accept window does the same (`cancelFormatChallenge`): the challenge is stored as expired, which
+ * the cooldown counts, never as cancelled, which it ignores.
  */
 import 'server-only';
 
@@ -185,7 +187,9 @@ export async function respondToFormatChallenge(input: RespondFormatChallengeInpu
 
 /**
  * The challenger (or an admin, `playerId` null) withdraws an open challenge of the league. A challenge of another league
- * is `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another.
+ * is `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another. Raises
+ * `challenge_expired` when the accept window had already run out: the challenge is stored as expired, not cancelled, so
+ * the cooldown of its pair still counts it (a lapsed challenge cannot be withdrawn to skip the cooldown).
  */
 export async function cancelFormatChallenge(seasonId: string, challengeId: string, playerId: string | null): Promise<FormatChallengeRow> {
   const { data, error } = await supabase.rpc('format_challenge_cancel', {
@@ -194,6 +198,7 @@ export async function cancelFormatChallenge(seasonId: string, challengeId: strin
     p_player: nullable(playerId),
   });
   if (error) throw mapFormatChallengeDbError(error);
+  if (data.status === 'expired') throw new FormatChallengeError('challenge_expired');
   return data;
 }
 

@@ -44,7 +44,11 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
      `format_checks`, `format_adjustments`) and their writer functions. Edited in place on this branch: the signature of
      `format_check_resolve` is now `(p_season_id, p_check_id, p_status, p_admin, p_note)` (a check id of another league
      resolves nothing), and the helpers `format__lock_action` (one advisory lock for save, submit and the lock op of an
-     action) and `format__clear_runtime` are new.
+     action) and `format__clear_runtime` are new. It also adds `season_formats.revision` (a number from one sequence,
+     renewed by a trigger on every insert and update of the row), `format_action_save` and `format_action_submit` take
+     it as `p_expected_revision` (the old five- and eight-argument forms are dropped), and `format__insert_item` now
+     refuses a grant over the resource's `capacity` under a per-holding advisory lock. Rows that exist before the file
+     take revision 0 and a real number at their first change.
   5. `20261105120000_format_foreach_group.sql`: `tournaments.format_group`, the unique index
      `uq_tournaments_season_format_stage` on `(season_id, format_stage_key, format_group)`, and the unique index
      **`uq_tournament_groups_tournament_group_number`** on `tournament_groups (tournament_id, group_number)`. The index
@@ -55,13 +59,16 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   6. `20261106090000_format_challenges.sql`: `format_challenges` and its functions. Edited in place:
      `format_challenge_respond(p_season_id, p_challenge_id, p_player, p_accept)` and
      `format_challenge_cancel(p_season_id, p_challenge_id, p_player)` take the league id, and the `format_checks.source`
-     check gains `pairing_forbidden`, `deadline_missed` and `team_audit`. `league_trash__inventory()` now lists 61 owned
+     check gains `pairing_forbidden`, `deadline_missed` and `team_audit`; withdrawing a challenge whose accept window
+     has run out stores it as `expired` instead of `cancelled`. `league_trash__inventory()` now lists 61 owned
      tables.
 
   The migrations were edited in place because none of them had shipped: a development or preview database that applied an
-  earlier revision of these files has to be reset (`supabase db reset` locally), or have the changed functions re-created
-  (a function whose argument list changed, `match_outcome_record`, also needs its old 8-argument form dropped by hand);
-  there is nothing to run on a database that has not applied them. The cron `GET /api/cron/format-engine` was already in
+  earlier revision of these files has to be reset (`supabase db reset` locally). Re-creating only the changed functions is
+  not enough for `20261105090000`: its `format_action_save` / `format_action_submit` read the `season_formats.revision`
+  column, which needs the sequence `season_format_revision_seq` and the trigger `trg_season_formats_revision` too, and the
+  files are not idempotent (no `IF NOT EXISTS`), so a reset is the supported path; there is nothing to run on a database
+  that has not applied them. The cron `GET /api/cron/format-engine` was already in
   `vercel.json` (it needs `CRON_SECRET` like the others). No new environment variable.
 - **Switching a league to the kit engine applies its whole history.** The cron fires `match_completed` for every completed
   match of a league that was on `legacy` or `shadow` (up to 25 per run and 10 per league, so a long history takes several
@@ -237,6 +244,16 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   error message (`https://<project>.supabase.co/...`) for a baked Storage bucket. It now needs a real host.
 - `scripts/route-manifest.mjs` held a raw NUL byte, so git treated it as binary and its diff was hidden; a NUL byte in
   a tracked source file now fails `src/lib/__tests__/source-line-endings.test.ts`.
+- **Format runtime: a pick is no longer stored against a format that changed, and a holding cannot outgrow its capacity.**
+  A save or a submit of a player action (and the cron's deadline draw) now carries the revision of the format it was
+  validated against; an attach, a replace, a detach, an engine switch or a domain amendment that lands in between makes the
+  database refuse it as `format_context_stale` (409; the player view reloads and the pick is checked again; the cron
+  draws again on the next pass). The capacity of a resource is enforced in SQL under one lock per
+  (league, resource, player) that every grant takes, so concurrent submits of different actions, an event and an admin
+  adjustment cannot together exceed it (`resource_capacity_reached`, 409, nothing of the refused call is written); an
+  admin resource adjustment that would exceed the capacity is now refused too. Withdrawing a challenge after its accept
+  window no longer turns it into a free `cancelled` one: it is stored as `expired`, which the cooldown counts, and answers
+  `challenge_expired`.
 - **Format engine review follow-ups.** Rank steps at an advancement cut and in the pairing use the same table as the public
   page (custom metrics, placements, point adjustments and the admin order were ignored there); a `foreach_group` stage keeps
   every group's adjustments; byes score only in a Swiss stage; an exclusive grant respects the resource's capacity; the

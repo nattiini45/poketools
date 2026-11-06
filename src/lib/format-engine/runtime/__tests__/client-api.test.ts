@@ -176,6 +176,12 @@ describe('admin calls', () => {
 });
 
 describe('the classifier serves the player and the admin calls', () => {
+  it('classes a stale format and a full holding as a conflict, so the player view reloads and the pick is checked again', () => {
+    for (const code of ['format_context_stale', 'resource_capacity_reached']) {
+      expect(classifyFormatRuntimeError({ code }, 409).kind, code).toBe('conflict');
+    }
+  });
+
   it('never classes anything as a stale revision', () => {
     for (const code of ['action_locked', 'format_check_not_open', 'draft_rev', 'stale_revision', 'format_stale_revision']) {
       expect(classifyFormatRuntimeError({ code, params: { draft_rev: 3 } }).kind).not.toBe('stale_revision');

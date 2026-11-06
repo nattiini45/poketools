@@ -24,8 +24,10 @@ interface RouteParams {
  *
  * A participant submits their pick for themselves (the actor is the session player). Idempotent: a second submit
  * replaces the row and the items it granted. Refused in a completed or archived league (409 `format_season_closed`). A
- * rejected pick answers `format_action_invalid` with `issues`; `action_locked` and `resource_item_taken` (409) come from
- * the database under its lock. The library expires the league reads; the audit entry holds ids and counts, never the picks.
+ * rejected pick answers `format_action_invalid` with `issues`; `action_locked`, `resource_item_taken`,
+ * `resource_capacity_reached` and `format_context_stale` (all 409) come from the database under its lock. A stale
+ * format (an admin changed it after the pick was validated) is answered 409 `format_context_stale`: the client reloads
+ * and validates again. The library expires the league reads; the audit entry holds ids and counts, never the picks.
  *
  * The audit log is readable by every site admin, a site admin may play, and the entry is stamped with a time: for an
  * action whose giver a relation hides (`hiddenGiverActions`, whoever the giver is, also one no longer in a phase; e.g. a Secret Santa gift) the entry therefore names no

@@ -31,6 +31,11 @@ export interface KitContext {
   seasonId: string;
   /** Server side only. */
   seed: string;
+  /**
+   * `season_formats.revision` of the row `def` was read from. A writer of a player action hands it to the database, which
+   * refuses the write (`format_context_stale`) when the format changed after this context was loaded.
+   */
+  revision: number;
   def: FormatDefinition;
   state: KitRuntimeState;
   tunableIssues: TunableIssue[];
@@ -74,7 +79,7 @@ export async function loadFreshKitContext(seasonId: string): Promise<KitContext 
     stage: stages[i],
     members: members.filter((m) => m.tournament_id === row.id).map((m) => m.player_id).sort(),
   }));
-  return { seasonId, seed: format.seed, def: format.spec, state, tunableIssues, phases };
+  return { seasonId, seed: format.seed, revision: format.revision, def: format.spec, state, tunableIssues, phases };
 }
 
 export const loadKitContext = cache(loadFreshKitContext);

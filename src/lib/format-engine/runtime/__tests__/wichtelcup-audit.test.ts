@@ -64,6 +64,7 @@ function context(flags: Record<string, string> = {}): KitContext {
   return {
     seasonId: 's-1',
     seed: SEED,
+    revision: 1,
     def: DEF,
     state: stateFor(DEF, { flags, items: [gift('junk_gifts', OWN_JUNK), gift('premium_gift', OWN_PREMIUM)] }),
     tunableIssues: [],

@@ -38,14 +38,18 @@ describe('20261105090000 format runtime', () => {
   });
 
   it('lets the cron draw refuse to overwrite a submitted pick, under the action lock, in the submit function itself', () => {
-    // A new argument is an overload: the seven-argument form is dropped first and only the eight-argument form is granted.
+    // A new argument is an overload: the earlier forms are dropped first and only the nine-argument form is granted.
     expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_action_submit\(uuid, text, uuid, uuid, jsonb, jsonb, boolean\);/);
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_action_submit\(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean\);/);
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_action_save\(uuid, text, uuid, uuid, jsonb\);/);
     expect(text.indexOf('DROP FUNCTION IF EXISTS public.format_action_submit(')).toBeLessThan(
       text.indexOf('CREATE OR REPLACE FUNCTION public.format_action_submit('),
     );
-    expect(text).toMatch(/p_lock boolean,\s+p_only_if_unsubmitted boolean DEFAULT false\s*\) RETURNS public\.format_action_submissions/);
+    expect(text).toMatch(/p_lock boolean,\s+p_expected_revision bigint, p_only_if_unsubmitted boolean DEFAULT false\s*\) RETURNS public\.format_action_submissions/);
     expect(text).not.toMatch(/(?:GRANT|REVOKE|COMMENT)[^;]*format_action_submit\(uuid, text, uuid, uuid, jsonb, jsonb, boolean\)[^,]/);
-    expect(text).toContain('public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean)');
+    expect(text).toContain('public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean)');
+    expect(text).not.toMatch(/(?:GRANT|REVOKE|COMMENT)[^;]*format_action_submit\(uuid, text, uuid, uuid, jsonb, jsonb, boolean, boolean\)/);
+    expect(text).not.toMatch(/(?:GRANT|REVOKE|COMMENT)[^;]*format_action_save\(uuid, text, uuid, uuid, jsonb\)/);
 
     const body = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_action_submit('), text.indexOf('FUNCTION public.format_apply_adjustment('));
     // The refusal sits after the row lock (the existing row is read FOR UPDATE under the advisory lock) and before any write.
@@ -56,6 +60,68 @@ describe('20261105090000 format runtime', () => {
     expect(body.slice(refusal)).toMatch(/^[^;]*THEN\s+RAISE EXCEPTION 'action_already_submitted' USING ERRCODE = 'P0001'/);
     expect(refusal).toBeLessThan(body.indexOf('DELETE FROM public.format_resource_items'));
     expect(refusal).toBeLessThan(body.indexOf('UPDATE public.format_action_submissions'));
+  });
+
+  it('checks the revision of the format under the action lock, before any flag read or write, in save and submit', () => {
+    for (const fn of ['format_action_save', 'format_action_submit']) {
+      const start = text.indexOf(`CREATE OR REPLACE FUNCTION public.${fn}(`);
+      const body = text.slice(start, text.indexOf('END $$;', start));
+      expect(body).toContain('p_expected_revision bigint');
+      const lock = body.indexOf('format__lock_action');
+      const check = body.indexOf('format__check_revision(p_season_id, p_expected_revision)');
+      expect(check).toBeGreaterThan(lock);
+      expect(check).toBeLessThan(body.indexOf('format__action_flag_locked'));
+      expect(check).toBeLessThan(body.indexOf('INSERT INTO public.format_action_submissions'));
+    }
+    const check = text.slice(text.indexOf('FUNCTION public.format__check_revision('), text.indexOf('FUNCTION public.format__lock_holding('));
+    // The seasons row is share-locked before the season_formats row (the attach locks them in that order), and the
+    // season_formats row is read FOR SHARE so an attach, a detach or an amendment waits for the write.
+    expect(check.indexOf('FROM public.seasons WHERE id = p_season_id FOR KEY SHARE')).toBeGreaterThan(-1);
+    expect(check.indexOf('FOR KEY SHARE')).toBeLessThan(check.indexOf('FROM public.season_formats f WHERE f.season_id = p_season_id FOR SHARE'));
+    expect(check).toMatch(/IF NOT FOUND OR v_revision <> p_expected_revision THEN\s+RAISE EXCEPTION 'format_context_stale' USING ERRCODE = 'P0001'/);
+    // A missing revision is a caller bug, not a stale write.
+    expect(check).toMatch(/p_expected_revision IS NULL THEN\s+RAISE EXCEPTION 'invalid_op'/);
+  });
+
+  it('draws the revision from one sequence on every insert and update of season_formats, so a number is never reused', () => {
+    expect(text).toMatch(/CREATE SEQUENCE public\.season_format_revision_seq;/);
+    expect(text).toMatch(/REVOKE ALL ON SEQUENCE public\.season_format_revision_seq FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT USAGE ON SEQUENCE public\.season_format_revision_seq TO service_role;/);
+    expect(text).toMatch(/ALTER TABLE public\.season_formats ADD COLUMN revision bigint NOT NULL DEFAULT 0;/);
+    expect(text).toMatch(/NEW\.revision := nextval\('public\.season_format_revision_seq'\)/);
+    expect(text).toMatch(/CREATE TRIGGER trg_season_formats_revision BEFORE INSERT OR UPDATE ON public\.season_formats\s+FOR EACH ROW/);
+  });
+
+  it('caps every grant under the holding lock: one insert function for events, actions and adjustments', () => {
+    const insert = text.slice(text.indexOf('FUNCTION public.format__insert_item('), text.indexOf('FUNCTION public.format__apply_ops('));
+    const lock = insert.indexOf('format__lock_holding(p_season_id, p_resource, p_player)');
+    const read = insert.indexOf('FROM public.format_resource_items i');
+    const refuse = insert.indexOf("RAISE EXCEPTION 'resource_capacity_reached'");
+    const write = insert.indexOf('INSERT INTO public.format_resource_items');
+    expect(lock).toBeGreaterThan(-1);
+    expect(read).toBeGreaterThan(lock);
+    expect(refuse).toBeGreaterThan(read);
+    expect(write).toBeGreaterThan(refuse);
+    expect(insert).toContain('public.format__resource_capacity(p_season_id, p_resource)');
+    expect(insert).toContain('v_held + p_amount > v_capacity');
+    // The adjustment's revoke check takes the same lock through the same helper, not a copy of its key.
+    expect(text.match(/hashtextextended\('format_holding:'/g)).toHaveLength(1);
+
+    // apply_ops (events and adjustments) and submit lock the holdings sorted before the first grant, action locks first.
+    const ops = text.slice(text.indexOf('FUNCTION public.format__apply_ops('), text.indexOf('FUNCTION public.format_fire_event('));
+    const actionLocks = ops.indexOf('format__lock_action(p_season_id, v_lock.action_key)');
+    const holdingLocks = ops.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, v_lock.player_id)');
+    expect(actionLocks).toBeGreaterThan(ops.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'"));
+    expect(holdingLocks).toBeGreaterThan(actionLocks);
+    expect(holdingLocks).toBeLessThan(ops.indexOf('FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP'));
+    expect(ops.slice(0, holdingLocks)).toMatch(/ORDER BY resource_key, player_id/);
+
+    const submit = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_action_submit('), text.indexOf('FUNCTION public.format_apply_adjustment('));
+    const submitLocks = submit.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, coalesce(p_target, p_actor))');
+    expect(submitLocks).toBeGreaterThan(submit.indexOf('format__check_revision'));
+    expect(submit.slice(0, submitLocks)).toMatch(/ORDER BY resource_key/);
+    expect(submitLocks).toBeLessThan(submit.indexOf('DELETE FROM public.format_resource_items'));
+    expect(submitLocks).toBeLessThan(submit.indexOf('PERFORM public.format__insert_item('));
   });
 
   it('releases the items and the submitted_at of a submitted pick that a save turns into a draft', () => {
@@ -77,7 +143,13 @@ describe('20261105090000 format runtime', () => {
   });
 
   it('keeps the internal helpers service-role only', () => {
-    for (const fn of ['format__lock_action(uuid, text)', 'format__clear_runtime(uuid)']) {
+    for (const fn of [
+      'format__lock_action(uuid, text)',
+      'format__clear_runtime(uuid)',
+      'format__check_revision(uuid, bigint)',
+      'format__lock_holding(uuid, text, uuid)',
+      'format__resource_capacity(uuid, text)',
+    ]) {
       expect(text).toContain(`public.${fn}`);
     }
     expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*format__clear_runtime\(uuid\)[\s\S]*FROM PUBLIC, anon, authenticated/);
@@ -181,5 +253,15 @@ describe('20261106090000 challenges', () => {
     );
     expect(text).not.toMatch(/(?:GRANT|REVOKE|COMMENT)[^;]*format_challenge_respond\(uuid, uuid, boolean\)/);
     expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*format_challenge_respond\(uuid, uuid, uuid, boolean\)[\s\S]*TO service_role/);
+  });
+
+  it('stores a withdrawal of a lapsed challenge as expired, which the cooldown counts, never as cancelled', () => {
+    const cancel = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenges_expire('));
+    const lapsed = cancel.indexOf('IF v_row.expires_at <= now() THEN');
+    expect(lapsed).toBeGreaterThan(cancel.indexOf("IF v_row.status <> 'open' THEN"));
+    expect(cancel.slice(lapsed, cancel.indexOf('END IF;', lapsed))).toMatch(/SET status = 'expired' WHERE id = v_row\.id RETURNING \* INTO v_row;\s+RETURN v_row;/);
+    expect(lapsed).toBeLessThan(cancel.indexOf("SET status = 'cancelled'"));
+    // The cooldown counts everything but a withdrawal.
+    expect(text).toMatch(/status <> 'cancelled' AND v_round - round < p_cooldown_rounds/);
   });
 });

@@ -2,8 +2,12 @@
  * Saving and submitting a player action of a kit league. A draft is checked for access only (the action exists, its
  * window is open, the actor has a link); a submission passes the whole `validateActionSubmission`. Both end in one SQL
  * function (`format_action_save` / `format_action_submit`), which re-checks the lock and, for a submission, the
- * exclusive items under a row lock. A refusal of the database (`action_locked`, `resource_item_taken`) leaves as a
- * `FormatRuntimeError`; a submit that asked to write only over a draft (`onlyIfUnsubmitted`) and met a submitted pick
+ * exclusive items under a row lock. Both hand the database the revision of the format the context was loaded from
+ * (`KitContext.revision`): an admin change that landed after the validation (a format attached, replaced, detached,
+ * switched, or a domain amended) makes it refuse the write as `format_context_stale` (409; the caller reloads and
+ * validates again), so a pick is never stored against a format it was not validated for. The database also keeps the
+ * capacity of a resource under a lock that every grant shares. A refusal of the database (`action_locked`,
+ * `resource_item_taken`, `resource_capacity_reached`, `format_context_stale`) leaves as a `FormatRuntimeError`; a submit that asked to write only over a draft (`onlyIfUnsubmitted`) and met a submitted pick
  * leaves as a `FormatActionAlreadySubmittedError`. Server only.
  */
 import 'server-only';
@@ -75,6 +79,7 @@ export async function saveAction(request: ActionRequest): Promise<ActionWrite> {
     actorId: request.actorId,
     targetId: access.target,
     picks: picksJson(request.picks),
+    revision: ctx.revision,
   });
   expireSeasonReads(request.seasonId, ctx.phases.map((phase) => phase.id));
   return { ok: true, submission };
@@ -96,6 +101,7 @@ export async function submitAction(request: ActionRequest): Promise<ActionWrite>
     items: checked.items.map((item) => ({ resource: item.resource, item_id: item.item_id, exclusive: item.exclusive })),
     lock: rule.lock === 'on_submit',
     onlyIfUnsubmitted: request.onlyIfUnsubmitted,
+    revision: ctx.revision,
   });
   expireSeasonReads(request.seasonId, ctx.phases.map((phase) => phase.id));
   return { ok: true, submission };

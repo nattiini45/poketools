@@ -1,8 +1,10 @@
 /**
  * Player actions (`player.action`): who may act, whether the window is open and whether a set of picks is allowed.
  * `validateActionSubmission` reports every problem it finds, not the first, so a form can mark each pick. It reads the
- * state it is given; the database re-checks the two races a read cannot close (a lock and an exclusive item taken
- * meanwhile) and raises `action_locked` / `resource_item_taken` then.
+ * state it is given; the database re-checks the races a read cannot close and raises `action_locked` (a lock taken
+ * meanwhile), `resource_item_taken` (an exclusive item taken meanwhile), `resource_capacity_reached` (the last free unit
+ * of a capacity taken meanwhile by another grant) and `format_context_stale` (the format was replaced or amended after
+ * the state was loaded) then.
  *
  * Window: the flag `action:<id>` is `"locked"` (closed), `"open"` (open) or absent, in which case the action is open
  * unless its window names an `opens_on` event that has not fired. An admin opens or locks by hand through the same flag.

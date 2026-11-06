@@ -265,6 +265,17 @@ describe('POST /api/seasons/[id]/format/actions/[actionId]/submit', () => {
     const taken = await POST(post(PICKS), params());
     expect(taken.status).toBe(409);
     expect((await taken.json()).code).toBe('resource_item_taken');
+
+    vi.mocked(submitAction).mockRejectedValueOnce(new FormatRuntimeError('resource_capacity_reached'));
+    const full = await POST(post(PICKS), params());
+    expect(full.status).toBe(409);
+    expect((await full.json()).code).toBe('resource_capacity_reached');
+
+    // The format was replaced or amended after the pick was validated: 409, the client reloads and validates again.
+    vi.mocked(submitAction).mockRejectedValueOnce(new FormatRuntimeError('format_context_stale'));
+    const stale = await POST(post(PICKS), params());
+    expect(stale.status).toBe(409);
+    expect((await stale.json()).code).toBe('format_context_stale');
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 

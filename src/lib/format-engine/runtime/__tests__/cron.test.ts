@@ -78,7 +78,7 @@ function calendar(deadlines: DeadlinePolicy[], marks: StageCalendar['marks'] = [
 function context(cal: StageCalendar, patch: Parameters<typeof stateFor>[1] = {}): KitContext {
   const def = wichtelDef();
   const stage = { ...def.stages[0], calendar: cal };
-  return { seasonId: SEASON, seed: SEED, def, state: stateFor(def, patch), tunableIssues: [], phases: [{ id: PHASE, stage, members: PLAYERS }] };
+  return { seasonId: SEASON, seed: SEED, revision: 1, def, state: stateFor(def, patch), tunableIssues: [], phases: [{ id: PHASE, stage, members: PLAYERS }] };
 }
 
 const cronPhase = (status = 'active') => ({ id: PHASE, season_id: SEASON, status, format_stage_key: 'swiss', season_start_date: '2026-06-01' });
@@ -554,6 +554,25 @@ describe('action policies', () => {
     expect(audited).toHaveLength(1);
     expect(openFormatCheck).not.toHaveBeenCalled();
   });
+
+  it.each(['format_context_stale', 'resource_capacity_reached'] as const)(
+    'skips a draw the database refused as %s (the format or the holding changed meanwhile), retries it next pass and still draws for the others',
+    async (code) => {
+      const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
+      vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick]), { links, flags: OPEN_FLAGS }));
+      vi.mocked(submitAction)
+        .mockRejectedValueOnce(new FormatRuntimeError(code))
+        .mockResolvedValue({ ok: true, submission: {} } as never);
+      const summary = await runFormatCronPass(AFTER_DEADLINE);
+      expect(vi.mocked(submitAction).mock.calls.map((call) => call[0].actorId)).toEqual(['p1', 'p3']);
+      expect(summary.picks).toBe(1);
+      expect(summary.failures).toBe(0);
+      // No count, no audit entry and no check for the skipped player: the next pass draws for them again.
+      const audited = vi.mocked(logAuditEvent).mock.calls.map((call) => call[0]).filter((entry) => entry.action === 'season.format.action.auto_pick');
+      expect(audited).toHaveLength(1);
+      expect(openFormatCheck).not.toHaveBeenCalled();
+    },
+  );
 
   it('still fails the policy on a refusal that is not a lock (resource_item_taken)', async () => {
     const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
