@@ -14,7 +14,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   updateTournament: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), createRound: vi.fn() }));
-vi.mock('@/lib/supabase/queries/matches', () => ({ createMatchBatch: vi.fn() }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ createMatchBatch: vi.fn(), getMatchesByTournament: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ seasonHasGroups: vi.fn() }));
 vi.mock('@/lib/tournament/group-rounds', () => ({ ensurePhaseGroupsFromLeague: vi.fn() }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
@@ -33,7 +33,7 @@ import { POST } from '@/app/api/tournaments/[id]/rounds/manual/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch } from '@/lib/supabase/queries/matches';
+import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
@@ -185,6 +185,76 @@ describe('manual round on a kit phase', () => {
     expect(res.status).toBe(201);
     expect(loadKitPhase).not.toHaveBeenCalled();
     expect(onRoundGenerated).not.toHaveBeenCalled();
+  });
+});
+
+describe('manual round on a stage that ends on an expression', () => {
+  const exprPhase = (engine: KitPhase['engine'] = 'kit') => {
+    const kit = phase(engine);
+    kit.stage.end_when = { kind: 'expr', when: { k: 'bool', v: false } } as never;
+    return kit;
+  };
+  const roundOf = (n: number, status: string) => ({ id: `r-${n}`, name: `Round ${n}`, round_number: n, status });
+
+  it('refuses a round while an earlier round has unfinished matches, also for a round robin', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament({ bracket_type: 'round_robin', status: 'active', current_round: 1 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([roundOf(1, 'active')] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ round_id: 'r-1', status: 'scheduled' }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(exprPhase());
+
+    const res = await POST(body(), routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_end_when_round_open');
+    expect(json.params).toEqual({ round: 'Round 1' });
+    expect(createRound).not.toHaveBeenCalled();
+    expect(createMatchBatch).not.toHaveBeenCalled();
+  });
+
+  it('writes the round once every earlier match is completed', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament({ bracket_type: 'round_robin', status: 'active', current_round: 1 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([roundOf(1, 'active')] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ round_id: 'r-1', status: 'completed' }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(exprPhase());
+
+    expect((await POST(body(), routeParams)).status).toBe(201);
+    expect(createRound).toHaveBeenCalledTimes(1);
+  });
+
+  it('reads the open-round guard before the stage-end check, so a match completed in between is seen by the check', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament({ bracket_type: 'round_robin', status: 'active', current_round: 1 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([roundOf(1, 'active')] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ round_id: 'r-1', status: 'completed' }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(exprPhase());
+
+    expect((await POST(body(), routeParams)).status).toBe(201);
+
+    const guardRead = vi.mocked(getMatchesByTournament).mock.invocationCallOrder[0];
+    const endCheck = vi.mocked(assertStageNotEnded).mock.invocationCallOrder[0];
+    expect(guardRead).toBeDefined();
+    expect(endCheck).toBeDefined();
+    expect(guardRead).toBeLessThan(endCheck);
+  });
+
+  it('refuses on the open round without running the stage-end check', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament({ bracket_type: 'round_robin', status: 'active', current_round: 1 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([roundOf(1, 'active')] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ round_id: 'r-1', status: 'scheduled' }] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(exprPhase());
+
+    expect((await POST(body(), routeParams)).status).toBe(409);
+    expect(assertStageNotEnded).not.toHaveBeenCalled();
+  });
+
+  it('reads no matches for a phase off the kit engine or a stage without an expression bound', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament({ bracket_type: 'round_robin', status: 'active', current_round: 1 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([roundOf(1, 'active')] as never);
+    vi.mocked(loadKitPhase).mockResolvedValue(exprPhase('shadow'));
+    expect((await POST(body(), routeParams)).status).toBe(201);
+    vi.mocked(loadKitPhase).mockResolvedValue(phase());
+    expect((await POST(body(), routeParams)).status).toBe(201);
+    expect(getMatchesByTournament).not.toHaveBeenCalled();
   });
 });
 

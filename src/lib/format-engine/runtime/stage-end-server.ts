@@ -17,9 +17,14 @@ export interface StageEndCheck {
   issue?: string;
   facts: StageFacts;
   /**
-   * Matches of the round named by the caller that are still open (0 when none was named): not completed, or completed
-   * with a winner while their current `match_completed` event has not fired yet (the finalize is in flight, failed and
-   * waits for the heal, or the cron backfill has not reached it). The phase must not end before those effects exist.
+   * Matches that must finish before the phase may end (0 when no round was named). Two kinds count:
+   * - the round named by the caller: a match not completed, or completed with a winner while its current `match_completed`
+   *   event has not fired yet (the finalize is in flight, failed and waits for the heal, or the cron backfill has not
+   *   reached it). The phase must not end before those effects exist;
+   * - every other round the admin has not completed by force: a match that is not completed. A straggler of an earlier
+   *   round must not end the phase over a later round written meanwhile, and a round robin written in advance must not end
+   *   at its first round over the rest. The last match of the other round evaluates `end_when` through its own hook, so
+   *   no evaluation is lost. A round the admin completed by force settles its own leftovers (the completion lists them).
    */
   openInRound: number;
   /**
@@ -40,12 +45,15 @@ export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundI
   const facts = stageFactsOf(rounds, matches, phase.members.length);
   const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
   const fired = new Set(ctx.state.firedEventKeys);
+  const settledByForce = new Set(rounds.filter((round) => round.id !== roundId && round.status === 'completed').map((round) => round.id));
+  const knownRounds = new Set(rounds.map((round) => round.id));
   const openInRound =
     roundId === undefined
       ? 0
-      : matches.filter(
-          (match) => match.round_id === roundId && (match.status !== 'completed' || (match.winner_id !== null && !fired.has(keyOf(match.id)))),
-        ).length;
+      : matches.filter((match) => {
+          if (match.round_id === roundId) return match.status !== 'completed' || (match.winner_id !== null && !fired.has(keyOf(match.id)));
+          return match.status !== 'completed' && knownRounds.has(match.round_id) && !settledByForce.has(match.round_id);
+        }).length;
   const result = evaluateEndWhen(endWhen, facts, envBaseOf(ctx, `stage_end:${phase.stage.key}`));
   return {
     met: result.met,

@@ -51,6 +51,7 @@ import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine
 import {
   announceKitRound,
   assertMirroredGroupsPlayLegs,
+  assertNoOpenRoundBeforeNext,
   assertPhaseGenerates,
   assertPhaseOpenForRounds,
   assertPhaseReadyForFirstRound,
@@ -119,6 +120,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     //    depend on results, so rounds can be generated in advance.
     const existingRounds = await getRoundsByTournament(tid);
 
+    // A stage that ends on a condition is evaluated when a round finishes: no round is written ahead of one still in play,
+    // or the phase would complete with that round's matches stranded (a round robin writes rounds in advance). This read
+    // comes before the end check below on purpose: a match that completes in between is then seen by the end check, which
+    // refuses the round (`rounds_stage_ended`) when the condition holds on the finished state.
+    await assertNoOpenRoundBeforeNext(tid, kitPhase, existingRounds);
     // A stage that reached its end_when takes no further round.
     await assertPhaseOpenForRounds(tournament, kitPhase);
     // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The

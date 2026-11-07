@@ -235,18 +235,90 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
       phase(roundRobin, { kind: 'expr', when: { k: 'bool', v: false } } as never),
     );
     vi.mocked(getRoundsByTournament).mockResolvedValue([
-      { id: 'r-1', round_number: 1 },
-      { id: 'r-2', round_number: 2 },
+      { id: 'r-1', round_number: 1, name: 'Round 1', status: 'completed' },
+      { id: 'r-2', round_number: 2, name: 'Round 2', status: 'completed' },
     ] as never);
     vi.mocked(getMatchesByTournament).mockResolvedValue([
-      { id: 'm-1', round_id: 'r-1' },
-      { id: 'm-2', round_id: 'r-2' },
+      { id: 'm-1', round_id: 'r-1', status: 'completed' },
+      { id: 'm-2', round_id: 'r-2', status: 'completed' },
     ] as never);
 
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
     expect(vi.mocked(createRound).mock.calls.map((call) => call[0].round_number)).toEqual([3]);
+  });
+
+  it('refuses a batch of one for an expression bound while an earlier round has unfinished matches', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(
+      phase(roundRobin, { kind: 'expr', when: { k: 'bool', v: false } } as never),
+    );
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', round_number: 1, name: 'Round 1', status: 'completed' },
+      { id: 'r-2', round_number: 2, name: 'Round 2', status: 'active' },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([
+      { id: 'm-1', round_id: 'r-1', status: 'completed' },
+      { id: 'm-2', round_id: 'r-2', status: 'completed' },
+      { id: 'm-3', round_id: 'r-2', status: 'scheduled' },
+    ] as never);
+
+    const res = await POST({} as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('rounds_end_when_round_open');
+    expect(body.params).toEqual({ round: 'Round 2' });
+    expect(createRound).not.toHaveBeenCalled();
+    expect(createMatchBatch).not.toHaveBeenCalled();
+  });
+
+  it('reads the open-round guard before the stage-end check, so a match completed in between is seen by the check', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(
+      phase(roundRobin, { kind: 'expr', when: { k: 'bool', v: false } } as never),
+    );
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', round_number: 1, name: 'Round 1', status: 'completed' },
+      { id: 'r-2', round_number: 2, name: 'Round 2', status: 'active' },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([
+      { id: 'm-1', round_id: 'r-1', status: 'completed' },
+      { id: 'm-2', round_id: 'r-2', status: 'completed' },
+    ] as never);
+
+    expect((await POST({} as NextRequest, routeParams)).status).toBe(201);
+
+    // The stage-end check loads the format context; the guard's match read has to come first.
+    const guardRead = vi.mocked(getMatchesByTournament).mock.invocationCallOrder[0];
+    const endCheck = vi.mocked(loadFreshKitContext).mock.invocationCallOrder[0];
+    expect(guardRead).toBeDefined();
+    expect(endCheck).toBeDefined();
+    expect(guardRead).toBeLessThan(endCheck);
+  });
+
+  it('refuses on the open round without running the stage-end check', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(
+      phase(roundRobin, { kind: 'expr', when: { k: 'bool', v: false } } as never),
+    );
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'r-2', round_number: 2, name: 'Round 2', status: 'active' }] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-2', round_id: 'r-2', status: 'scheduled' }] as never);
+
+    expect((await POST({} as NextRequest, routeParams)).status).toBe(409);
+    expect(loadFreshKitContext).not.toHaveBeenCalled();
+  });
+
+  it('lets a batch of one pass a rounds bound while an earlier round is still open', async () => {
+    vi.mocked(loadKitPhase).mockResolvedValue(phase(roundRobin, { kind: 'rounds', rounds: 3 }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', round_number: 1, name: 'Round 1', status: 'completed' },
+      { id: 'r-2', round_number: 2, name: 'Round 2', status: 'active' },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([
+      { id: 'm-1', round_id: 'r-1', status: 'completed' },
+      { id: 'm-2', round_id: 'r-2', status: 'scheduled' },
+    ] as never);
+
+    expect((await POST({} as NextRequest, routeParams)).status).toBe(201);
   });
 });
 

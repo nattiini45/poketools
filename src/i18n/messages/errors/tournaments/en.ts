@@ -139,6 +139,8 @@ export default {
 
   rounds_batch_end_when_expression:
     'This phase ends by a condition that is checked after every round, so its rounds cannot be generated all at once. Generate them one round at a time.',
+  rounds_end_when_round_open:
+    'This phase ends by a condition that is checked when a round is finished. Finish the open matches of {round} before creating the next round, so the condition can be checked first, or complete {round} anyway with a reason.',
   rounds_mirrored_groups_legs:
     'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
 

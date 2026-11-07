@@ -282,7 +282,7 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "9c3561594cdb39f2",
+      "importFingerprint": "943b0c55ea0552dc",
       "importFiles": 399,
       "imports": {
         "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "f09cc23c9b074edd", "files": 203 },
@@ -300,6 +300,7 @@
           "names": [
             "announceKitRound",
             "assertMirroredGroupsPlayLegs",
+            "assertNoOpenRoundBeforeNext",
             "assertPhaseGenerates",
             "assertPhaseOpenForRounds",
             "assertPhaseReadyForFirstRound",
@@ -307,7 +308,7 @@
             "loadKitPhaseOfTournament",
             "wantsForcedStart"
           ],
-          "closure": "c9b1eebf2f21c3e5",
+          "closure": "4336d80b23233060",
           "files": 355
         },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },

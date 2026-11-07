@@ -40,6 +40,7 @@ import {
   announceKitRound,
   assertBatchMayRunAhead,
   assertMirroredGroupsPlayLegs,
+  assertNoOpenRoundBeforeNext,
   assertPhaseGenerates,
   assertPhaseOpenForRounds,
   assertPhaseReadyForFirstRound,
@@ -81,7 +82,8 @@ interface RouteParams {
  * A stage with an `end_when` bounds the batch. A `rounds` bound stops it at that round (the stage is over once that many
  * rounds are played, so a later round would be stranded). An expression bound is checked after every round and can end
  * the stage at any one, so a batch of two or more rounds is refused (409 `rounds_batch_end_when_expression`): such a stage
- * goes round by round. A round robin with more than one leg on groups that mirror league groups is refused too (409
+ * goes round by round, and even a batch of one waits until every earlier round is played (409 `rounds_end_when_round_open`).
+ * A round robin with more than one leg on groups that mirror league groups is refused too (409
  * `rounds_mirrored_groups_legs`): the league week plan has no legs, and the legs would be dropped silently.
  *
  * Optional JSON body `{ "start_round": true }` starts the lowest-numbered round this call wrote (best effort: if
@@ -125,6 +127,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A custom league without an attached format cannot start (as in generate-round); a kit phase plays its legs.
     const kitPhase = await loadKitPhaseOfTournament(tournament);
     assertPhaseGenerates(kitPhase);
+    // A stage that ends on a condition is evaluated when a round finishes, so even a batch of one waits until every earlier
+    // round is played (as in generate-round). It reads before the end check on purpose: a match that completes in between
+    // is then seen by the end check, which refuses the round when the condition holds.
+    const existingRounds = await getRoundsByTournament(id);
+    await assertNoOpenRoundBeforeNext(id, kitPhase, existingRounds);
     // A stage that reached its end_when takes no further round (as in generate-round).
     await assertPhaseOpenForRounds(tournament, kitPhase);
     // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
@@ -156,7 +163,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             playerIds: participants.map((p) => p.id),
           })
         : {};
-    const existingRounds = await getRoundsByTournament(id);
     // A phase of a league with groups mirrors them (rebuilt from the league groups while it has no round yet).
     let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)

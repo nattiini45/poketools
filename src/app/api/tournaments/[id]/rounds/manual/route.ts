@@ -16,6 +16,7 @@ import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-r
 import { expireTournamentReads } from '@/lib/revalidation';
 import {
   announceKitRound,
+  assertNoOpenRoundBeforeNext,
   assertPhaseOpenForRounds,
   assertPhaseReadyForFirstRound,
   fillKitRoundDeadline,
@@ -93,6 +94,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // A custom league without an attached format cannot start; a kit phase whose stage reached its end takes no round.
     const kitPhase = await loadKitPhaseOfTournament(tournament);
+    // A stage that ends on a condition is evaluated when a round finishes: no round is written ahead of one still in play,
+    // or the phase would complete with that round's matches stranded. A round robin skips the current-round check below
+    // and a challenge ladder has no generator, so both rely on this. It reads before the end check on purpose: a match
+    // that completes in between is then seen by the end check, which refuses the round when the condition holds.
+    const existingRounds = await getRoundsByTournament(id);
+    await assertNoOpenRoundBeforeNext(id, kitPhase, existingRounds);
     await assertPhaseOpenForRounds(tournament, kitPhase);
     // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
     // forced start is audited once the round is written (`announceKitRound`), not before the request can still be refused.
@@ -103,7 +110,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     // 3. Validate current round is completed (if any)
     //    Round Robin pairings are deterministic, so skip this check for RR.
-    const existingRounds = await getRoundsByTournament(id);
+    //    (`existingRounds` was read above, before the stage-end checks.)
     // A new elimination bracket is built whole by the bracket engine. A manual first round would be an unstructured
     // one, after which the legacy per-round generator could carry on and build a bracket without its slot graph.
     if (

@@ -71,6 +71,66 @@ export async function assertPhaseOpenForRounds(tournament: HookTournament & { cu
   });
 }
 
+/** The round numbers of a phase's open rounds, lowest first: not completed, with a match that is not completed. */
+export function openRoundsOf(
+  rounds: readonly Pick<Round, 'id' | 'name' | 'round_number' | 'status'>[],
+  matches: readonly { round_id: string; status: string }[],
+): Pick<Round, 'id' | 'name' | 'round_number'>[] {
+  const unfinished = new Set(matches.filter((match) => match.status !== 'completed').map((match) => match.round_id));
+  return rounds
+    .filter((round) => round.status !== 'completed' && unfinished.has(round.id))
+    .sort((a, b) => a.round_number - b.round_number);
+}
+
+/**
+ * Refuses a new round (409 `rounds_end_when_round_open`, `params.round`) while a round of the phase still has unfinished
+ * matches, for a kit stage that ends on an expression. The condition is evaluated when the last open match of a round
+ * completes, and a phase it ends completes whatever matches a later round holds: a round written ahead would be
+ * stranded. Refusing here means the condition is evaluated before a later round exists, and the admin then generates the
+ * next round only if the stage goes on (`assertPhaseOpenForRounds` refuses it once the condition holds). It is the
+ * per-round counterpart of `assertBatchMayRunAhead`. A round the admin completed by force does not block: the admin has
+ * settled it, and the stage-end completion accepts the unfinished matches it lists. A match of such a round that is played
+ * later (after the next round was written) cannot end the phase over the rounds written since: `checkStageEnd` holds the
+ * stage end while any other round that was not completed by force has an unfinished match, and the last match of that
+ * round evaluates the condition through its own hook. A `rounds` bound needs no guard (the generators stop at it), nor
+ * does a phase without `end_when` or one that is not on the kit engine.
+ * Pure: `assertNoOpenRoundBeforeNext` reads the matches.
+ */
+export function assertNoRoundOpenAhead(
+  kitPhase: KitPhase | null,
+  rounds: readonly Pick<Round, 'id' | 'name' | 'round_number' | 'status'>[],
+  matches: readonly { round_id: string; status: string }[],
+): void {
+  if (!isKitEnginePhase(kitPhase) || kitPhase.stage.end_when?.kind !== 'expr') return;
+  const open = openRoundsOf(rounds, matches)[0];
+  if (open === undefined) return;
+  throw new UserFacingError(
+    `This phase ends by a condition that is checked when a round is finished. Finish the open matches of ${open.name} before creating the next round, so the condition can be checked first, or complete ${open.name} anyway with a reason.`,
+    { code: 'rounds_end_when_round_open', status: 409, params: { round: open.name } },
+  );
+}
+
+/**
+ * `assertNoRoundOpenAhead` for the routes that write a round (generate-round, rounds/manual and generate-all-rounds, whose
+ * batch of one passes `assertBatchMayRunAhead` but must still wait for the rounds written earlier): reads the phase's
+ * matches only for a kit stage that ends on an expression, so every other phase costs nothing. Call it with the rounds the
+ * route already read, before anything is written and immediately before `assertPhaseOpenForRounds`: that check then reads
+ * the state at least as fresh as this guard's, so a match that completes in between is seen by it and a condition that
+ * holds on the finished state refuses the round (`rounds_stage_ended`). A completion that lands after both reads is
+ * covered only by the database's unsettled check.
+ */
+export async function assertNoOpenRoundBeforeNext(
+  tournamentId: string,
+  kitPhase: KitPhase | null,
+  rounds: readonly Pick<Round, 'id' | 'name' | 'round_number' | 'status'>[],
+): Promise<void> {
+  if (!isKitEnginePhase(kitPhase) || kitPhase.stage.end_when?.kind !== 'expr') return;
+  if (!rounds.some((round) => round.status !== 'completed')) return;
+  // Loaded on demand: the query layer is only needed for this one kind of stage.
+  const { getMatchesByTournament } = await import('@/lib/supabase/queries/matches');
+  assertNoRoundOpenAhead(kitPhase, rounds, await getMatchesByTournament(tournamentId));
+}
+
 /**
  * The highest round number a batch (generate-all-rounds) may write for this phase, or null when nothing caps it. A stage
  * that ends on a `rounds` bound is over once that many rounds are played, so a batch past it would strand scheduled
@@ -85,8 +145,9 @@ export function batchRoundCap(kitPhase: KitPhase | null): number | null {
 /**
  * Refuses a batch of two or more rounds for a stage that ends on an expression (409 `rounds_batch_end_when_expression`):
  * the condition is checked after every round and can end the phase early, which would strand the rounds already
- * written ahead of it. Such a stage is generated round by round (`generate-round`). One round is the same as that, so
- * it passes. A phase that is not on the kit engine, or has no expression bound, passes.
+ * written ahead of it. Such a stage is generated round by round (`generate-round`). One round passes this guard, but not
+ * `assertNoOpenRoundBeforeNext`, which still holds it while an earlier round has unfinished matches. A phase that is not
+ * on the kit engine, or has no expression bound, passes.
  */
 export function assertBatchMayRunAhead(kitPhase: KitPhase | null, roundsToWrite: number): void {
   if (!isKitEnginePhase(kitPhase) || kitPhase.stage.end_when?.kind !== 'expr' || roundsToWrite <= 1) return;

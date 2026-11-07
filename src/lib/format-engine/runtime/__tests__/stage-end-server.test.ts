@@ -57,14 +57,65 @@ describe('checkStageEnd: openInRound', () => {
     expect(check?.openInRound).toBe(0);
   });
 
-  it('still counts matches that are not completed, and ignores other rounds', async () => {
+  it('still counts matches of the named round that are not completed', async () => {
     vi.mocked(getMatchesByTournament).mockResolvedValue([
       match('m-1'),
       match('m-2', { status: 'in_progress', winner_id: null }),
-      match('m-3', { round_id: 'r-2', status: 'scheduled', winner_id: null }),
     ] as never);
     const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
     expect(check?.openInRound).toBe(1);
+  });
+
+  describe('other rounds of the phase', () => {
+    const rounds = (status2: string, status3 = 'pending') =>
+      [
+        { id: 'r-1', round_number: 1, status: 'active' },
+        { id: 'r-2', round_number: 2, status: status2 },
+        { id: 'r-3', round_number: 3, status: status3 },
+      ] as never;
+    const open = (id: string, round: string, status = 'scheduled') => match(id, { round_id: round, status, winner_id: null });
+
+    it('counts an unfinished match of a later round, so a straggler of round 1 cannot end the phase over round 2', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), open('m-2', 'r-2')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(1);
+    });
+
+    it('counts an unfinished match of an earlier round that is not completed (a round robin written in advance)', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([open('m-1', 'r-1', 'in_progress'), match('m-2', { round_id: 'r-2' })] as never);
+      const check = await checkStageEnd(context(['match_completed:m-2']), phase, 'r-2');
+      expect(check?.openInRound).toBe(1);
+    });
+
+    it('does not count the leftovers of a round the admin completed by force', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('completed'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), open('m-2', 'r-2')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(0);
+      expect(check?.unfinishedMatchIds).toEqual(['m-2']);
+    });
+
+    it('does not count completed matches of another round, nor a round that holds no match yet', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active', 'pending'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' })] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(0);
+    });
+
+    it('counts every unfinished match of every other open round', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active', 'active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), open('m-2', 'r-2'), open('m-3', 'r-3'), open('m-4', 'r-3', 'disputed')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(3);
+    });
+
+    it('counts nothing of other rounds when no round is named', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([open('m-2', 'r-2')] as never);
+      expect((await checkStageEnd(context([]), phase))?.openInRound).toBe(0);
+    });
   });
 
   it('follows the generation of a match that was reverted and completed again', async () => {

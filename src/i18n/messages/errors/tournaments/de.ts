@@ -127,6 +127,8 @@ export default defineDe<typeof en>()({
 
   rounds_batch_end_when_expression:
     'Diese Phase endet durch eine Bedingung, die nach jeder Runde geprüft wird. Ihre Runden können deshalb nicht alle auf einmal erzeugt werden. Erzeuge sie Runde für Runde.',
+  rounds_end_when_round_open:
+    'Diese Phase endet durch eine Bedingung, die geprüft wird, wenn eine Runde beendet ist. Beende die offenen Matches von {round}, bevor du die nächste Runde anlegst, damit die Bedingung zuerst geprüft werden kann, oder beende {round} trotzdem mit einer Begründung.',
   rounds_mirrored_groups_legs:
     'Diese Jeder-gegen-jeden-Phase spielt mehr als einen Durchgang, aber ihre Gruppen werden von der Liga verwaltet und folgen deren Wochenplan, der keine Durchgänge kennt. Nutze einen einzigen Durchgang oder entferne die Ligagruppen.',
 
