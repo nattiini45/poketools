@@ -26,11 +26,10 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
+  createRoundWithMatches: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
 }));
 
@@ -51,14 +50,17 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getRoundsByTournament, createRoundWithMatches } from '@/lib/supabase/queries/rounds';
+import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { revalidateTag } from 'next/cache';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+// The matches the route wrote: it writes each round with its matches in one call.
+const batches = () => vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.matches).filter((matches) => matches.length > 0);
 
 const makeRequest = (body: Record<string, unknown>) =>
   ({ json: () => Promise.resolve(body) }) as unknown as NextRequest;
@@ -261,7 +263,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
       vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
       vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-      vi.mocked(createRound).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
+      vi.mocked(createRoundWithMatches).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
     });
 
     it('refuses a manual round in a round robin phase of a league with groups (409), writing nothing', async () => {
@@ -278,8 +280,8 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       expect(res.status).toBe(409);
       expect(json.code).toBe('rounds_manual_league_grouped');
       expect(seasonHasGroups).toHaveBeenCalledWith(SEASON_ID);
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(ensurePhaseGroupsFromLeague).not.toHaveBeenCalled();
     });
 
@@ -294,7 +296,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       const res = await POST(makeRequest(twoPairings), routeParams);
 
       expect(res.status).toBe(201);
-      expect(createRound).toHaveBeenCalledTimes(1);
+      expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
     });
 
     it('mirrors the league groups before the round in any other league phase (a Swiss phase), like the generate routes', async () => {
@@ -308,7 +310,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       expect(seasonHasGroups).not.toHaveBeenCalled();
       expect(ensurePhaseGroupsFromLeague).toHaveBeenCalledWith(SEASON_ID, swiss);
       expect(vi.mocked(ensurePhaseGroupsFromLeague).mock.invocationCallOrder[0]).toBeLessThan(
-        vi.mocked(createRound).mock.invocationCallOrder[0],
+        vi.mocked(createRoundWithMatches).mock.invocationCallOrder[0],
       );
     });
 
@@ -322,8 +324,8 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
 
       await POST(makeRequest(twoPairings), routeParams);
 
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
     });
 
     it('does not mirror outside a league', async () => {
@@ -343,7 +345,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       { round_number: 1, status: 'completed' },
     ] as never);
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-    vi.mocked(createRound).mockResolvedValue({
+    vi.mocked(createRoundWithMatches).mockResolvedValue({
       id: 'round-2',
       round_number: 2,
       name: 'Round 2',
@@ -362,17 +364,24 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
 
     expect(res.status).toBe(201);
     expect(json.success).toBe(true);
-    expect(createMatchBatch).toHaveBeenCalledTimes(1);
+    // The round and its two matches are one write (`round_write`).
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
+    expect(batches()).toEqual([
+      [
+        { player_1_id: P1, player_2_id: P2 },
+        { player_1_id: P3, player_2_id: P4 },
+      ],
+    ]);
     expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', { current_round: 2 });
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
   });
 
-  it('answers 409 rounds_round_already_written, writing no match, when a concurrent call took the round number', async () => {
+  it('answers 409 rounds_round_already_written, moving nothing on, when a concurrent call took the round number', async () => {
     vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
     vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed' }] as never);
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-    vi.mocked(createRound).mockRejectedValue(
+    vi.mocked(createRoundWithMatches).mockRejectedValue(
       new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
         code: 'rounds_round_already_written',
         params: { round: 'Round 2' },
@@ -393,7 +402,35 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
 
     expect(res.status).toBe(409);
     expect(json.code).toBe('rounds_round_already_written');
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 rounds_phase_completed when the phase completed between the guards and the write, and moves nothing on', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, status: 'completed' }] as never);
+    vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+    vi.mocked(createRoundWithMatches).mockRejectedValue(
+      new UserFacingError('This phase was completed while the round was being created, so no round was written. No more rounds can be generated.', {
+        code: 'rounds_phase_completed',
+        status: 409,
+      }),
+    );
+
+    const res = await POST(
+      makeRequest({
+        pairings: [
+          { player_1_id: P1, player_2_id: P2 },
+          { player_1_id: P3, player_2_id: P4 },
+        ],
+      }),
+      routeParams,
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_phase_completed');
     expect(updateTournament).not.toHaveBeenCalled();
     expect(revalidateTag).not.toHaveBeenCalled();
   });
@@ -416,7 +453,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
         { round_number: 1, status: 'completed' },
       ] as never);
       vi.mocked(getParticipants).mockResolvedValue(roster as never);
-      vi.mocked(createRound).mockResolvedValue({ id: 'round-2', round_number: 2, name: 'Round 2' } as never);
+      vi.mocked(createRoundWithMatches).mockResolvedValue({ id: 'round-2', round_number: 2, name: 'Round 2' } as never);
       return POST(makeRequest({ pairings }), routeParams);
     }
 
@@ -424,7 +461,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       const res = await post('swiss', oddRoster);
 
       expect(res.status).toBe(201);
-      expect(createRound).toHaveBeenCalledWith(
+      expect(createRoundWithMatches).toHaveBeenCalledWith(
         expect.objectContaining({ bye_player_ids: [P5] }),
       );
       expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
@@ -433,7 +470,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     it('stores the bye of an odd round robin round too', async () => {
       await post('round_robin', oddRoster);
 
-      expect(createRound).toHaveBeenCalledWith(
+      expect(createRoundWithMatches).toHaveBeenCalledWith(
         expect.objectContaining({ bye_player_ids: [P5] }),
       );
     });
@@ -441,13 +478,13 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     it('stores no bye when the roster is even', async () => {
       await post('swiss', mockParticipants);
 
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
     });
 
     it('stores no bye for an elimination bracket', async () => {
       await post('single_elim', oddRoster);
 
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: [] }));
     });
   });
 
@@ -472,8 +509,8 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
 
       expect(res.status).toBe(400);
       expect(json.code).toBe('BRACKET_V2_REQUIRED');
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
     },
   );
@@ -495,7 +532,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
         { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bracket_side: null },
       ] as never);
       vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-      vi.mocked(createRound).mockResolvedValue({ id: 'r-2', round_number: 2, name: 'Round 2' } as never);
+      vi.mocked(createRoundWithMatches).mockResolvedValue({ id: 'r-2', round_number: 2, name: 'Round 2' } as never);
       vi.mocked(getMatchesByTournament).mockResolvedValue([
         ...matchStatuses.map((status, i) => ({ id: `m-${i}`, round_id: 'r-1', status })),
         { id: 'other', round_id: 'r-0', status: 'scheduled' },
@@ -513,8 +550,8 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
         expect(res.status).toBe(409);
         expect(json.code).toBe('rounds_previous_matches_unfinished');
         expect(json.params).toEqual({ round: 'Round 1', count: 1 });
-        expect(createRound).not.toHaveBeenCalled();
-        expect(createMatchBatch).not.toHaveBeenCalled();
+        expect(createRoundWithMatches).not.toHaveBeenCalled();
+        expect(batches()).toEqual([]);
         expect(updateTournament).not.toHaveBeenCalled();
       },
     );
@@ -525,7 +562,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       const res = await POST(makeRequest({ pairings }), routeParams);
 
       expect(res.status).toBe(201);
-      expect(createRound).toHaveBeenCalledTimes(1);
+      expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
     });
 
     it('does not read matches for a Swiss tournament', async () => {
@@ -548,7 +585,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([]);
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-    vi.mocked(createRound).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
+    vi.mocked(createRoundWithMatches).mockResolvedValue({ id: 'round-1', round_number: 1, name: 'Round 1' } as never);
 
     const res = await POST(
       makeRequest({ pairings: [{ player_1_id: P1, player_2_id: P2 }, { player_1_id: P3, player_2_id: P4 }] }),
@@ -567,7 +604,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([]);
     vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
-    vi.mocked(createRound).mockResolvedValue({
+    vi.mocked(createRoundWithMatches).mockResolvedValue({
       id: 'round-1',
       round_number: 1,
       name: 'Round 1',

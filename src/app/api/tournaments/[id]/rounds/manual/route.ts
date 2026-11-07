@@ -8,8 +8,7 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch } from '@/lib/supabase/queries/matches';
+import { getRoundsByTournament, createRoundWithMatches } from '@/lib/supabase/queries/rounds';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
@@ -244,22 +243,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const roundBestOf =
       body.best_of ?? tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
-    let round = await createRound({
+    // 7. The round and its match stubs are one transaction under the phase row lock (`round_write`): a stage end that
+    // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
+    // empty round behind.
+    let round = await createRoundWithMatches({
       tournament_id: id,
       name: roundName,
       round_number: nextRoundNumber,
       best_of: roundBestOf,
       bye_player_ids: byePlayerIds,
+      matches: body.pairings.map((pairing) => ({
+        player_1_id: pairing.player_1_id,
+        player_2_id: pairing.player_2_id,
+      })),
     });
-
-    // 7. Create match stubs
-    const matchInputs = body.pairings.map((pairing) => ({
-      round_id: round.id,
-      tournament_id: id,
-      player_1_id: pairing.player_1_id,
-      player_2_id: pairing.player_2_id,
-    }));
-    await createMatchBatch(matchInputs);
 
     // 8. Update tournament status and round counter
     if (tournament.status === 'upcoming') {

@@ -19,12 +19,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn(), updateSeason: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getCompletedMatchRecords: vi.fn(),
   getPairedMatchRecords: vi.fn(),
   getMatchesByTournament: vi.fn(),
@@ -53,9 +52,9 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
 import { POST } from '@/app/api/generate-round/[tid]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { addMatchesToRound, createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { writtenBatches } from '@/test/round-writes';
 import {
-  createMatchBatch,
   getCompletedMatchRecords,
   getMatchesByTournament,
   getPairedMatchRecords,
@@ -136,8 +135,10 @@ function tournament(bracket_type: 'swiss' | 'round_robin', current_round: number
   };
 }
 
+const batches = () => writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound));
+
 function writtenPairs(): string[] {
-  const inputs = vi.mocked(createMatchBatch).mock.calls[0]?.[0] ?? [];
+  const inputs = batches()[0] ?? [];
   return inputs.map((m: { player_1_id: string; player_2_id: string }) => `${m.player_1_id}-${m.player_2_id}`);
 }
 
@@ -151,7 +152,7 @@ beforeEach(() => {
   vi.mocked(getGroupsByTournament).mockResolvedValue([] as never);
   vi.mocked(getSeasonGroups).mockResolvedValue([]);
   vi.mocked(getMatchesByTournament).mockResolvedValue([]);
-  vi.mocked(createRound).mockImplementation(
+  vi.mocked(createRoundWithMatches).mockImplementation(
     async (input: { name: string; round_number: number }) =>
       ({ id: `r-${input.round_number}`, tournament_id: TID, name: input.name, round_number: input.round_number, status: 'pending' }) as never,
   );
@@ -208,7 +209,7 @@ describe('generate-round on a kit phase', () => {
 
     expect(response.status).toBe(400);
     expect(body.code).toBe('rounds_all_generated');
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('reports a rematch the search could not avoid', async () => {
@@ -305,7 +306,7 @@ describe('generate-round on a kit phase', () => {
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe('rounds_manual_pairing');
     expect(generateRound).not.toHaveBeenCalled();
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('forms the stage groups before the first round and pairs each group by itself', async () => {
@@ -362,8 +363,8 @@ describe('generate-round on a kit phase', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe('groups_forming_in_progress');
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 });
 
@@ -388,8 +389,8 @@ describe('generate-round: groups that mirror league groups have no legs', () => 
     expect(response.status).toBe(409);
     expect(body.code).toBe('rounds_mirrored_groups_legs');
     expect(body.params).toMatchObject({ legs: 2 });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('still plays a single leg on the league week plan', async () => {
@@ -398,7 +399,7 @@ describe('generate-round: groups that mirror league groups have no legs', () => 
     const response = await POST(request, routeParams);
 
     expect(response.status).not.toBe(409);
-    expect(createRound).toHaveBeenCalled();
+    expect(createRoundWithMatches).toHaveBeenCalled();
   });
 });
 
@@ -418,15 +419,15 @@ describe('generate-round: the first round of a kit phase waits for the format se
     expect(response.status).toBe(409);
     expect(body.code).toBe('format_not_ready');
     expect(body.params).toMatchObject({ reasons: 'relation_undrawn,action_incomplete', open_checks: 2 });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('writes the round once the relation is drawn and no check is open', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ drawn: true }));
 
     expect((await POST(request, routeParams)).status).toBe(201);
-    expect(createRound).toHaveBeenCalledTimes(1);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
   });
 
   it('lets an admin start anyway with ?force=true and audits it', async () => {
@@ -434,7 +435,7 @@ describe('generate-round: the first round of a kit phase waits for the format se
 
     expect((await POST(forced, routeParams)).status).toBe(201);
 
-    expect(createRound).toHaveBeenCalledTimes(1);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
     const actions = vi.mocked(logAuditEvent).mock.calls.map((call) => call[0].action);
     expect(actions).toContain('season.format.round.force_start');
     expect(vi.mocked(logAuditEvent).mock.calls.find((call) => call[0].action === 'season.format.round.force_start')?.[0]).toMatchObject({
@@ -451,7 +452,7 @@ describe('generate-round: the first round of a kit phase waits for the format se
     const response = await POST(forced, routeParams);
 
     expect(response.status).toBe(400);
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(vi.mocked(logAuditEvent).mock.calls.map((call) => call[0].action)).not.toContain('season.format.round.force_start');
   });
 
@@ -487,8 +488,8 @@ describe('generate-round on a stage that ends on an expression', () => {
     expect(response.status).toBe(409);
     expect(body.code).toBe('rounds_end_when_round_open');
     expect(body.params).toEqual({ round: 'Round 1' });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('writes the next round once the earlier rounds are played and the condition does not end the stage', async () => {
@@ -500,7 +501,7 @@ describe('generate-round on a stage that ends on an expression', () => {
     const response = await POST(request, routeParams);
 
     expect(response.status).toBe(201);
-    expect(createRound).toHaveBeenCalledTimes(1);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
   });
 
   it('reads the open-round guard before the stage-end check, so a match completed in between is seen by the check', async () => {

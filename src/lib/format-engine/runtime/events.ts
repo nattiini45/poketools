@@ -73,3 +73,41 @@ export function eventMatches(spec: EventSpec, event: KitEvent): boolean {
       return spec.mark === event.mark;
   }
 }
+
+/** The slice of a round row `unfiredRoundEnds` reads. */
+export interface RoundEndCandidate {
+  id: string;
+  tournament_id: string;
+  round_number: number;
+  status: string;
+}
+
+/**
+ * The rounds whose `round_end` event has not fired although the round is completed: the hook of that completion failed, was
+ * refused as stale or was deferred (`onRoundCompleted`), and the PATCH that completed the round is not repeated by anyone.
+ * One entry per (stage, round number): a `foreach_group` stage runs several phases under one key, and its `round_end` waits
+ * for the round of every phase that has that number, so the group counts once and only when all of its rounds are completed.
+ * `stageOfPhase` maps a phase id to its stage key; rounds of other tournaments are ignored. Sorted by round number, then by
+ * stage, so the earliest round is repaired first. Pure.
+ */
+export function unfiredRoundEnds(
+  stageOfPhase: ReadonlyMap<string, string>,
+  rounds: readonly RoundEndCandidate[],
+  firedKeys: readonly string[],
+): RoundEndCandidate[] {
+  const fired = new Set(firedKeys);
+  const groups = new Map<string, { stage: string; rounds: RoundEndCandidate[] }>();
+  for (const round of rounds) {
+    const stage = stageOfPhase.get(round.tournament_id);
+    if (stage === undefined) continue;
+    const key = eventKey({ event: 'round_end', stage, round: round.round_number });
+    const group = groups.get(key) ?? { stage, rounds: [] };
+    group.rounds.push(round);
+    groups.set(key, group);
+  }
+  return [...groups.entries()]
+    .filter(([key, group]) => !fired.has(key) && group.rounds.every((round) => round.status === 'completed'))
+    .map(([, group]) => ({ stage: group.stage, round: group.rounds[0] }))
+    .sort((a, b) => a.round.round_number - b.round.round_number || a.stage.localeCompare(b.stage))
+    .map((entry) => entry.round);
+}

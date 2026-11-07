@@ -290,6 +290,19 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
     reverted.
   - Known limit: the locked action card shows the giver's stored picks ("Your pick"), not the recipient's current
     holdings, so an admin resource adjustment does not change it.
+- **Kit leagues: a round is written together with its matches, and a round completion fires `round_end`.**
+  `generate-round`, `generate-all-rounds` and `rounds/manual` write a round and its matches through the new `round_write`
+  function (`20261106090000_format_challenges.sql`, one transaction under the phase lock), so a stage end that lands
+  between the route's guards and the inserts can no longer leave an empty round or matches in a completed phase: the write
+  answers 409 `rounds_phase_completed` and nothing is written (new error code, EN and DE), also not the new byes of a
+  retry that fills a round an interrupted call left empty. A round of byes only leaves no unfinished match, so a stage end
+  that comes right after it still completes the phase. A `generate-all-rounds` batch
+  refused part-way keeps the rounds it already wrote, each with its matches, and generating again continues from there.
+  Completing a round (`PATCH rounds/[rid]`) fires the kit `round_end` event and then evaluates the stage's `end_when`; the
+  format cron fires it for completed rounds whose event never fired, which includes rounds completed before this change
+  in leagues already running on the kit engine (bounded per run). Limits are listed in
+  [docs/format-kit.md](docs/format-kit.md): a reopened and completed-again round does not fire `round_end` a second time,
+  and a stage end that fails after `round_end` fired has no cron retry.
 - **Admin Assistant review follow-ups.** A refused fact check other than "not found" or "forbidden" now reads as
   unavailable instead of "it does not exist"; a precondition read that fails stops a Build under its own code
   (`precondition_read_failed`) instead of "the situation changed"; an older card is retired before its replacement is

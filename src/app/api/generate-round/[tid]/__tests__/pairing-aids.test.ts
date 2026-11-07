@@ -20,12 +20,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn(), updateSeason: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getCompletedMatchRecords: vi.fn(),
   getPairedMatchRecords: vi.fn(),
   getMatchesByTournament: vi.fn(),
@@ -55,9 +54,9 @@ import { revalidateTag } from 'next/cache';
 import { POST } from '@/app/api/generate-round/[tid]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { addMatchesToRound, createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { writtenBatches } from '@/test/round-writes';
 import {
-  createMatchBatch,
   getCompletedMatchRecords,
   getMatchesByTournament,
   getPairedMatchRecords,
@@ -112,7 +111,7 @@ function tournament(bracket_type: 'swiss' | 'round_robin', current_round: number
 }
 
 function writtenPairs(): string[] {
-  const inputs = vi.mocked(createMatchBatch).mock.calls[0]?.[0] ?? [];
+  const inputs = writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound))[0] ?? [];
   return inputs.map((m: { player_1_id: string; player_2_id: string }) => `${m.player_1_id}-${m.player_2_id}`);
 }
 
@@ -126,7 +125,7 @@ beforeEach(() => {
   vi.mocked(getSeasonGroups).mockResolvedValue([]);
   vi.mocked(getMatchesByTournament).mockResolvedValue([]);
   vi.mocked(loadPairingAids).mockResolvedValue({});
-  vi.mocked(createRound).mockImplementation(
+  vi.mocked(createRoundWithMatches).mockImplementation(
     async (input: { name: string; round_number: number }) =>
       ({ id: `r-${input.round_number}`, tournament_id: TID, name: input.name, round_number: input.round_number, status: 'pending' }) as never,
   );
@@ -197,7 +196,7 @@ describe('generate-round pairing aids', () => {
 
     expect(response.status).toBe(409);
     expect((await response.json()).code).toBe('rounds_challenge_ladder');
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(loadPairingAids).not.toHaveBeenCalled();
     expect(generateRound).not.toHaveBeenCalled();
   });

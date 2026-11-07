@@ -16,13 +16,13 @@ vi.mock('@/lib/supabase/queries/format-cron', () => ({
   listFinalizedMatches: vi.fn(),
   listUncompletedMatches: vi.fn(),
 }));
-vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onMatchCompleted: vi.fn(), revertMatchCompletion: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onMatchCompleted: vi.fn(), onRoundCompleted: vi.fn(), revertMatchCompletion: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
   openFormatCheck: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn(), getMatchesByTournament: vi.fn(), updateMatchStatus: vi.fn() }));
-vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn() }));
+vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), listRoundStatusesByTournamentIds: vi.fn() }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ listTeamsByTournament: vi.fn() }));
 vi.mock('@/lib/match/finalize', () => ({ finalizeMatchCompletion: vi.fn(), stageAdminOutcome: vi.fn(), discardStagedAdminOutcome: vi.fn() }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn(), revalidateMatchPages: vi.fn() }));
@@ -42,10 +42,12 @@ import {
   FORMAT_CRON_REVERT_LIMIT,
   FORMAT_CRON_REVERT_PER_LEAGUE,
   FORMAT_CRON_REVERT_SCAN_LIMIT,
+  FORMAT_CRON_ROUND_END_LIMIT,
+  FORMAT_CRON_ROUND_END_PER_LEAGUE,
   runFormatCronPass,
 } from '../cron';
 import { fireEvent, fireLockedActionEvents } from '../fire';
-import { onMatchCompleted, revertMatchCompletion } from '../hooks';
+import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from '../hooks';
 import { loadFreshKitContext, type KitContext } from '../load';
 import { discardStagedAdminOutcome, finalizeMatchCompletion, stageAdminOutcome } from '@/lib/match/finalize';
 import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
@@ -54,7 +56,7 @@ import { logger } from '@/lib/logger';
 import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 
 const STAGED = { setAt: '2026-11-06T10:00:00.123456+00:00' };
@@ -105,6 +107,8 @@ beforeEach(() => {
   vi.mocked(listKitIdleSeasonIds).mockResolvedValue([]);
   vi.mocked(listFinalizedMatches).mockResolvedValue([]);
   vi.mocked(onMatchCompleted).mockResolvedValue(true);
+  vi.mocked(onRoundCompleted).mockResolvedValue(true);
+  vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([]);
   vi.mocked(listUncompletedMatches).mockResolvedValue([]);
   vi.mocked(revertMatchCompletion).mockResolvedValue(true);
   vi.mocked(stageAdminOutcome).mockResolvedValue(STAGED);
@@ -1140,5 +1144,77 @@ describe('a pass', () => {
     vi.mocked(expireChallenges).mockRejectedValue(new Error('rpc'));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(summary.failures).toBe(1);
+  });
+});
+
+describe('round_end backfill', () => {
+  const roundRow = (id: string, round_number: number, status: 'pending' | 'active' | 'completed' = 'completed', tournament_id = PHASE) => ({ id, tournament_id, round_number, status });
+
+  it('fires the event of a completed round whose hook never applied, once the match backfill had its turn', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([roundRow('r-1', 1), roundRow('r-2', 2, 'active')]);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(listRoundStatusesByTournamentIds).toHaveBeenCalledWith([PHASE]);
+    expect(vi.mocked(onRoundCompleted).mock.calls.map(([call]) => [call.tournament, call.roundId])).toEqual([
+      [{ id: PHASE, season_id: SEASON, season_format_type: 'custom' }, 'r-1'],
+    ]);
+    // the hook fired an event: the context is reloaded
+    expect(loadFreshKitContext).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a round alone whose event fired, and reads no hook for a league without completed rounds', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['round_end:swiss:1'] }));
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([roundRow('r-1', 1)]);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(onRoundCompleted).not.toHaveBeenCalled();
+    expect(loadFreshKitContext).toHaveBeenCalledTimes(1);
+  });
+
+  it('is bounded per league and per run', async () => {
+    const many = Array.from({ length: 40 }, (_, i) => roundRow(`r-${i}`, i + 1));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue(many);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(onRoundCompleted).toHaveBeenCalledTimes(FORMAT_CRON_ROUND_END_PER_LEAGUE);
+
+    vi.mocked(onRoundCompleted).mockClear();
+    vi.mocked(listKitCronPhases).mockResolvedValue(['s-1', 's-2', 's-3'].map((id, i) => ({ ...cronPhase(), id: `t-${i}`, season_id: id })));
+    vi.mocked(listRoundStatusesByTournamentIds).mockImplementation(async (ids) => many.map((row) => ({ ...row, tournament_id: ids[0] })));
+    vi.mocked(loadFreshKitContext).mockImplementation(async (seasonId) => {
+      const base = context(calendar([]));
+      return { ...base, seasonId, phases: [{ ...base.phases[0], id: `t-${['s-1', 's-2', 's-3'].indexOf(seasonId)}` }] };
+    });
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(onRoundCompleted).toHaveBeenCalledTimes(FORMAT_CRON_ROUND_END_LIMIT);
+  });
+
+  it('counts a failed hook and tries it again next run; a stale format or a deferral is no failure', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([roundRow('r-1', 1)]);
+    vi.mocked(onRoundCompleted).mockImplementation(async (input) => {
+      if (input.report !== undefined) input.report.failed = true;
+      return false;
+    });
+    expect(await runFormatCronPass(AFTER_DEADLINE)).toMatchObject({ failures: 1 });
+
+    vi.mocked(onRoundCompleted).mockImplementation(async (input) => {
+      if (input.report !== undefined) input.report.stale = true;
+      return false;
+    });
+    expect(await runFormatCronPass(AFTER_DEADLINE)).toMatchObject({ failures: 0 });
+    expect(vi.mocked(logger.warn).mock.calls.some(([, message]) => String(message).includes('round_end backfill skipped'))).toBe(true);
+
+    // deferred behind a missing match_completed: false with nothing set in the report
+    vi.mocked(onRoundCompleted).mockResolvedValue(false);
+    expect(await runFormatCronPass(AFTER_DEADLINE)).toMatchObject({ failures: 0 });
+  });
+
+  it('reads one round per stage and number for a stage that repeats per group', async () => {
+    const base = context(calendar([]));
+    const groups = { ...base, phases: [{ ...base.phases[0], id: 't-1' }, { ...base.phases[0], id: 't-2' }] };
+    vi.mocked(loadFreshKitContext).mockResolvedValue(groups);
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([roundRow('a-1', 1, 'completed', 't-1'), roundRow('b-1', 1, 'completed', 't-2')]);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(onRoundCompleted).toHaveBeenCalledTimes(1);
   });
 });

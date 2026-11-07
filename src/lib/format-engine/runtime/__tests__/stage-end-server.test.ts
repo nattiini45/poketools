@@ -57,13 +57,38 @@ describe('checkStageEnd: openInRound', () => {
     expect(check?.openInRound).toBe(0);
   });
 
-  it('still counts matches of the named round that are not completed', async () => {
+  it('still counts matches of the named round that are not completed while the round is open', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'r-1', round_number: 1, status: 'active' }] as never);
     vi.mocked(getMatchesByTournament).mockResolvedValue([
       match('m-1'),
       match('m-2', { status: 'in_progress', winner_id: null }),
     ] as never);
     const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
     expect(check?.openInRound).toBe(1);
+  });
+
+  describe('the named round was completed by force', () => {
+    const unplayed = (id: string) => match(id, { status: 'scheduled', winner_id: null });
+
+    it('does not count its unfinished matches, so a straggler that completes later is not blocked by its siblings', async () => {
+      // r-1 is `completed` (beforeEach): the admin gave up on m-2 and m-3, then m-1 was played anyway.
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), unplayed('m-2'), unplayed('m-3')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(0);
+    });
+
+    it('still lists them for the phase completion, which keeps accepting exactly these', async () => {
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), unplayed('m-2'), unplayed('m-3')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.unfinishedMatchIds).toEqual(['m-2', 'm-3']);
+    });
+
+    it('still waits for the match_completed effects of its completed matches', async () => {
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2'), unplayed('m-3')] as never);
+      // m-1 fired, m-2 flipped to completed but its hook has not landed: the stage end waits for that one only.
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(1);
+    });
   });
 
   describe('other rounds of the phase', () => {

@@ -18,13 +18,15 @@ export interface StageEndCheck {
   facts: StageFacts;
   /**
    * Matches that must finish before the phase may end (0 when no round was named). Two kinds count:
-   * - the round named by the caller: a match not completed, or completed with a winner while its current `match_completed`
-   *   event has not fired yet (the finalize is in flight, failed and waits for the heal, or the cron backfill has not
-   *   reached it). The phase must not end before those effects exist;
+   * - the round named by the caller: a match not completed (unless the admin completed that round by force: it settles its
+   *   leftovers), or completed with a winner while its current `match_completed` event has not fired yet (the finalize is
+   *   in flight, failed and waits for the heal, or the cron backfill has not reached it). The phase must not end before
+   *   those effects exist;
    * - every other round the admin has not completed by force: a match that is not completed. A straggler of an earlier
    *   round must not end the phase over a later round written meanwhile, and a round robin written in advance must not end
    *   at its first round over the rest. The last match of the other round evaluates `end_when` through its own hook, so
-   *   no evaluation is lost. A round the admin completed by force settles its own leftovers (the completion lists them).
+   *   no evaluation is lost. A round the admin completed by force settles its own leftovers (the completion lists them), the
+   *   named round included.
    */
   openInRound: number;
   /**
@@ -45,14 +47,21 @@ export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundI
   const facts = stageFactsOf(rounds, matches, phase.members.length);
   const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
   const fired = new Set(ctx.state.firedEventKeys);
-  const settledByForce = new Set(rounds.filter((round) => round.id !== roundId && round.status === 'completed').map((round) => round.id));
+  // A round whose status is `completed` settles its own leftovers: an unfinished match of it can only be one the admin gave
+  // up on (completing without force needs every match finished, and a challenge accepted meanwhile plays in the next open
+  // round), whichever round the caller names. The named round's matches that DID complete still count until their
+  // `match_completed` event fired: the stage end waits for those effects, never for a match that will not be played.
+  const settled = new Set(rounds.filter((round) => round.status === 'completed').map((round) => round.id));
   const knownRounds = new Set(rounds.map((round) => round.id));
   const openInRound =
     roundId === undefined
       ? 0
       : matches.filter((match) => {
-          if (match.round_id === roundId) return match.status !== 'completed' || (match.winner_id !== null && !fired.has(keyOf(match.id)));
-          return match.status !== 'completed' && knownRounds.has(match.round_id) && !settledByForce.has(match.round_id);
+          if (match.round_id === roundId) {
+            const awaitingEffects = match.status === 'completed' && match.winner_id !== null && !fired.has(keyOf(match.id));
+            return awaitingEffects || (match.status !== 'completed' && !settled.has(roundId));
+          }
+          return match.status !== 'completed' && knownRounds.has(match.round_id) && !settled.has(match.round_id);
         }).length;
   const result = evaluateEndWhen(endWhen, facts, envBaseOf(ctx, `stage_end:${phase.stage.key}`));
   return {

@@ -16,12 +16,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
   getPairedMatchRecords: vi.fn(),
 }));
@@ -44,8 +43,9 @@ import { revalidateTag } from 'next/cache';
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
+import { addMatchesToRound, createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
+import { writtenBatches } from '@/test/round-writes';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
@@ -76,9 +76,9 @@ function phase(pairing: Pairing): KitPhase {
 
 /** The matches of each written round, in call order. */
 function written(): string[][] {
-  return vi
-    .mocked(createMatchBatch)
-    .mock.calls.map((call) => call[0].map((m: { player_1_id: string; player_2_id: string }) => `${m.player_1_id}-${m.player_2_id}`));
+  return writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound)).map((batch) =>
+    batch.map((m) => `${m.player_1_id}-${m.player_2_id}`),
+  );
 }
 
 beforeEach(() => {
@@ -102,7 +102,7 @@ beforeEach(() => {
   vi.mocked(getGroupsByTournament).mockResolvedValue([]);
   vi.mocked(getSeasonGroups).mockResolvedValue([]);
   vi.mocked(loadPairingAids).mockResolvedValue({});
-  vi.mocked(createRound).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, ...input }) as never);
+  vi.mocked(createRoundWithMatches).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, ...input }) as never);
 });
 
 describe('generate-all-rounds pairing aids', () => {
@@ -115,7 +115,7 @@ describe('generate-all-rounds pairing aids', () => {
 
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('rounds_challenge_ladder');
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(loadPairingAids).not.toHaveBeenCalled();
   });
 
@@ -132,7 +132,7 @@ describe('generate-all-rounds pairing aids', () => {
     expect(loadPairingAids).toHaveBeenCalledTimes(1);
     expect(loadPairingAids).toHaveBeenCalledWith(expect.objectContaining({ seasonId: SEASON, roundNumber: 1, playerIds: PLAYERS }));
 
-    const rounds = vi.mocked(createRound).mock.calls.map((call) => call[0].round_number);
+    const rounds = vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number);
     expect(rounds).toEqual([1, 2, 3]);
     // A four-player round robin pairs two matches a round; the filter drops p1's match from each.
     expect(written()).toHaveLength(3);

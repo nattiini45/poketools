@@ -60,7 +60,10 @@ export function assertPhaseGenerates(kitPhase: KitPhase | null): void {
   }
 }
 
-/** Refuses another round (409 `rounds_stage_ended`) for a phase whose stage reached its `end_when`. */
+/**
+ * Refuses another round (409 `rounds_stage_ended`) for a phase whose stage reached its `end_when`. A read, so it can be
+ * outdated by the time the round is written: the write refuses a phase that completed meanwhile (`round_write`).
+ */
 export async function assertPhaseOpenForRounds(tournament: HookTournament & { current_round: number }, kitPhase: KitPhase | null): Promise<void> {
   if (!isKitEnginePhase(kitPhase) || !isKitCandidate(tournament)) return;
   await assertStageNotEnded({
@@ -117,7 +120,10 @@ export function assertNoRoundOpenAhead(
  * route already read, before anything is written and immediately before `assertPhaseOpenForRounds`: that check then reads
  * the state at least as fresh as this guard's, so a match that completes in between is seen by it and a condition that
  * holds on the finished state refuses the round (`rounds_stage_ended`). A completion that lands after both reads is
- * covered only by the database's unsettled check.
+ * closed by the write itself: the routes write the round and its matches through `createRoundWithMatches` (the database
+ * function `round_write`, one transaction with the phase row read FOR SHARE), so the completion either commits first and
+ * the write is refused (409 `rounds_phase_completed`, nothing left behind) or waits for the write and finds the new
+ * matches (`phase_complete_at_stage_end` answers unsettled and the phase stays active).
  */
 export async function assertNoOpenRoundBeforeNext(
   tournamentId: string,

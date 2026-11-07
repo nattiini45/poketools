@@ -10,7 +10,9 @@ import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 // challenger (or an admin with a NULL player) withdraws, and format_challenges_expire counts what it expired. The
 // completion functions (round_complete, phase_complete_at_stage_end) and an accept are serialised on the round and the
 // phase rows: in either order, and under a real race, no match is left unfinished in a round or phase that completed
-// without force. Opt-in only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or `npm run test:db`), never loads `.env`.
+// without force. The round generators' write (round_write: a round and its matches in one transaction, the phase row read
+// FOR SHARE) is serialised with the stage end the same way. Opt-in only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or
+// `npm run test:db`), never loads `.env`.
 const optIn = localStackOptIn('LOCAL_SUPABASE_FORMAT_CHALLENGES');
 
 if (optIn) {
@@ -648,6 +650,221 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
           expect(await matchesOf()).toEqual([]);
         } else {
           expect(await matchesOf()).toHaveLength(1);
+        }
+      }
+    }, 60_000);
+  });
+
+  // The round generators write a round and its matches through round_write: one transaction with the phase row read FOR SHARE,
+  // so a stage end (phase_complete_at_stage_end, FOR UPDATE on the same row) and a round write are serialised. In either order
+  // the forbidden state (a completed phase that holds a round or an unfinished match the stage end did not see) cannot appear.
+  describe('writing a round next to the stage end (round_write)', () => {
+    const pairs = [
+      { player_1_id: ids.pTop, player_2_id: ids.pDefender },
+      { player_1_id: ids.pMid, player_2_id: ids.pChallenger },
+    ];
+    const write = (over: Partial<Parameters<RoundsMod['createRoundWithMatches']>[0]> = {}) =>
+      roundsQ.createRoundWithMatches({ tournament_id: ids.phase, name: 'Round 10', round_number: 10, best_of: 1, matches: pairs, ...over });
+    const written = async () => ((await client.from('rounds').select('id').eq('tournament_id', ids.phase).gte('round_number', 10)).data ?? []).length;
+    const statusOf = async () =>
+      ((await client.from('tournaments').select('status').eq('id', ids.phase).single()).data as { status: string }).status;
+    const reset = async () => {
+      await run('reset matches', client.from('matches').delete().in('tournament_id', PHASES));
+      await run('reset written rounds', client.from('rounds').delete().eq('tournament_id', ids.phase).gte('round_number', 10));
+      await run('reset phase', client.from('tournaments').update({ status: 'active' }).eq('id', ids.phase));
+    };
+
+    beforeEach(reset);
+    afterAll(reset);
+
+    it('writes the round and its matches together: scheduled matches of this phase and round, the byes on the round', async () => {
+      const round = await write({ bye_player_ids: [ids.pOutsider] });
+
+      expect(round).toMatchObject({ tournament_id: ids.phase, name: 'Round 10', round_number: 10, best_of: 1, bye_player_ids: [ids.pOutsider], pairings_generated: true });
+      const matches = (await matchesOf()).filter((match) => match.round_id === round.id);
+      expect(matches.map((match) => [match.player_1_id, match.player_2_id, match.status, match.tournament_id])).toEqual([
+        [ids.pTop, ids.pDefender, 'scheduled', ids.phase],
+        [ids.pMid, ids.pChallenger, 'scheduled', ids.phase],
+      ]);
+    });
+
+    it('writes a round of byes only (no match) and a round without a bye list', async () => {
+      const round = await write({ matches: [] });
+
+      expect(round).toMatchObject({ round_number: 10, bye_player_ids: [] });
+      expect((await matchesOf()).filter((match) => match.round_id === round.id)).toEqual([]);
+    });
+
+    it('refuses a completed phase with rounds_phase_completed and leaves nothing behind: no round, no match', async () => {
+      await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
+
+      await expect(write()).rejects.toMatchObject({ code: 'rounds_phase_completed', statusCode: 409 });
+
+      expect(await written()).toBe(0);
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    it('refuses the matches of a reused round in a completed phase the same way', async () => {
+      const empty = await write({ matches: [] });
+      await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
+
+      await expect(roundsQ.addMatchesToRound(empty, pairs)).rejects.toMatchObject({ code: 'rounds_phase_completed', statusCode: 409 });
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    const byesOf = async (roundId: string) =>
+      ((await client.from('rounds').select('bye_player_ids').eq('id', roundId).single()).data as { bye_player_ids: string[] }).bye_player_ids;
+
+    it('replaces the byes of a reused round in the same write as its matches, and keeps them when none are given', async () => {
+      const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+
+      await roundsQ.addMatchesToRound(empty, pairs);
+      expect(await byesOf(empty.id)).toEqual([ids.pOutsider]);
+
+      const other = await write({ round_number: 11, name: 'Round 11', matches: [], bye_player_ids: [ids.pOutsider] });
+      await roundsQ.addMatchesToRound(other, pairs, [ids.pTop]);
+      expect(await byesOf(other.id)).toEqual([ids.pTop]);
+      expect((await matchesOf()).filter((match) => match.round_id === other.id)).toHaveLength(2);
+    });
+
+    it('leaves the stored byes of a reused round as they were when the write is refused (the phase completed first)', async () => {
+      const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+      await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
+
+      await expect(roundsQ.addMatchesToRound(empty, pairs, [ids.pTop])).rejects.toMatchObject({ code: 'rounds_phase_completed', statusCode: 409 });
+      // A bye-only retry (no matches) is refused the same way and does not change the byes either.
+      await expect(roundsQ.addMatchesToRound(empty, [], [ids.pMid])).rejects.toMatchObject({ code: 'rounds_phase_completed', statusCode: 409 });
+
+      expect(await byesOf(empty.id)).toEqual([ids.pOutsider]);
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    it('stores the byes of a retried round that has no matches at all (a round of byes only)', async () => {
+      const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+
+      await roundsQ.addMatchesToRound(empty, [], [ids.pTop]);
+
+      expect(await byesOf(empty.id)).toEqual([ids.pTop]);
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    it('fills a round an interrupted call left empty, and only a round of the phase itself', async () => {
+      const empty = await write({ matches: [] });
+
+      await roundsQ.addMatchesToRound(empty, pairs);
+      expect((await matchesOf()).filter((match) => match.round_id === empty.id)).toHaveLength(2);
+
+      // A round of another phase of the league is not this phase's own: the function refuses it, nothing is written.
+      const foreign = { id: ids.roundOpen, name: 'Round 2', tournament_id: ids.emptyPhase };
+      await expect(roundsQ.addMatchesToRound(foreign, pairs)).rejects.toMatchObject({ message: 'round_not_found' });
+      expect((await client.from('matches').select('id').eq('tournament_id', ids.emptyPhase)).data).toEqual([]);
+    });
+
+    it('answers tournament_not_found for a phase that is gone', async () => {
+      await expect(write({ tournament_id: randomUUID() })).rejects.toMatchObject({ code: 'tournament_not_found', statusCode: 404 });
+    });
+
+    it('rolls the round back when a match is refused: no empty round is left behind', async () => {
+      // A player that does not exist violates the foreign key of the match, after the round row was inserted.
+      await expect(write({ matches: [{ player_1_id: ids.pTop, player_2_id: randomUUID() }] })).rejects.toBeTruthy();
+
+      expect(await written()).toBe(0);
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    it('answers the round number taken by an earlier write as rounds_round_already_written, and writes no match', async () => {
+      await write();
+
+      await expect(write()).rejects.toMatchObject({ code: 'rounds_round_already_written', statusCode: 409 });
+      expect(await written()).toBe(1);
+      expect(await matchesOf()).toHaveLength(2);
+    });
+
+    it('does not guard the other writes into a completed tournament: a restore, the dev seed or a bracket materialisation insert as before', async () => {
+      await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
+      const roundId = randomUUID();
+
+      await run('plain round insert', client.from('rounds').insert({ id: roundId, tournament_id: ids.phase, name: 'Round 11', round_number: 11, best_of: 1, status: 'completed' }));
+      await run('plain match insert', client.from('matches').insert({ round_id: roundId, tournament_id: ids.phase, player_1_id: ids.pTop, player_2_id: ids.pDefender }));
+
+      expect(await matchesOf()).toHaveLength(1);
+      await run('cleanup', client.from('matches').delete().eq('round_id', roundId));
+      await run('cleanup round', client.from('rounds').delete().eq('id', roundId));
+    });
+
+    // A real race: the stage end read the phase's matches before the write, so it knows of none. Whichever commits first, the
+    // pair of results must agree: the write either stands (the stage end finds its matches: unsettled, the phase stays
+    // active) or is refused (the stage end completed the phase first, and nothing was written).
+    it('never leaves a round or an unseen unfinished match in a phase that ended, however the write and the stage end interleave', async () => {
+      for (let i = 0; i < 12; i++) {
+        await reset();
+
+        const [wrote, ended] = await Promise.allSettled([write(), tournamentsQ.completeTournamentIfActive(ids.phase, [])]);
+
+        const phaseCompleted = (await statusOf()) === 'completed';
+        const unfinished = (await matchesOf()).filter((match) => match.status !== 'completed');
+        // The forbidden state.
+        expect(phaseCompleted && (unfinished.length > 0 || (await written()) > 0)).toBe(false);
+        if (wrote.status === 'fulfilled') {
+          expect(unfinished).toHaveLength(2);
+          expect(ended.status === 'fulfilled' && ended.value.outcome).toBe('unsettled');
+        } else {
+          expect(wrote.reason).toMatchObject({ code: 'rounds_phase_completed' });
+          expect(await written()).toBe(0);
+          expect(ended.status === 'fulfilled' && ended.value.outcome).toBe('completed');
+        }
+      }
+    }, 60_000);
+
+    // The limit of the guarantee above: a write without a match leaves no unfinished match for the stage end to find, so a
+    // stage end that comes after it completes the phase around the round it wrote (documented in the migration header and
+    // docs/format-kit.md). The write is never half done, and a refusal still leaves nothing.
+    it('a round of byes only does not make the stage end unsettled: the phase completes around it, and a refused write leaves nothing', async () => {
+      await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+
+      const ended = await tournamentsQ.completeTournamentIfActive(ids.phase, []);
+
+      expect(ended.outcome).toBe('completed');
+      expect(await statusOf()).toBe('completed');
+      expect(await written()).toBe(1);
+
+      for (let i = 0; i < 12; i++) {
+        await reset();
+
+        const [wrote, raced] = await Promise.allSettled([write({ matches: [] }), tournamentsQ.completeTournamentIfActive(ids.phase, [])]);
+
+        // Never unsettled (no match exists), always completed; the write either stands whole or leaves nothing.
+        expect(raced.status === 'fulfilled' && raced.value.outcome).toBe('completed');
+        if (wrote.status === 'fulfilled') {
+          expect(await written()).toBe(1);
+        } else {
+          expect(wrote.reason).toMatchObject({ code: 'rounds_phase_completed' });
+          expect(await written()).toBe(0);
+        }
+      }
+    }, 60_000);
+
+    it('serialises an admin completion (a plain status write) with a round write: a refusal leaves nothing, in either order', async () => {
+      for (let i = 0; i < 12; i++) {
+        await reset();
+
+        const [wrote] = await Promise.allSettled([
+          write(),
+          Promise.resolve(client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase)).then(({ error }) => {
+            if (error) throw new Error(JSON.stringify(error));
+          }),
+        ]);
+
+        // Write first: the round stands and the admin's completion follows (the admin chose to complete). Completion first:
+        // the write is refused and left no round and no match.
+        expect(await statusOf()).toBe('completed');
+        if (wrote.status === 'rejected') {
+          expect(wrote.reason).toMatchObject({ code: 'rounds_phase_completed' });
+          expect(await written()).toBe(0);
+          expect(await matchesOf()).toEqual([]);
+        } else {
+          expect(await written()).toBe(1);
+          expect(await matchesOf()).toHaveLength(2);
         }
       }
     }, 60_000);

@@ -14,12 +14,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
   getPairedMatchRecords: vi.fn(),
 }));
@@ -41,7 +40,7 @@ vi.mock('@/lib/format-engine/pairing-server', () => ({ loadPairingAids: vi.fn(),
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
@@ -99,7 +98,7 @@ beforeEach(() => {
   vi.mocked(updateTournament).mockResolvedValue(undefined as never);
   vi.mocked(loadKitPhase).mockResolvedValue(phase({ kind: 'round_robin', legs: 1, mirror_legs: false }));
   vi.mocked(loadPairingAids).mockResolvedValue({});
-  vi.mocked(createRound).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, deadline: null, ...input }) as never);
+  vi.mocked(createRoundWithMatches).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, deadline: null, ...input }) as never);
   vi.mocked(fillRoundDeadline).mockImplementation(async ({ round }) => ({ ...round, deadline: `2026-12-0${round.round_number}T00:00:00Z` }) as never);
 });
 
@@ -145,7 +144,7 @@ describe('generate-all-rounds on a kit phase: the reactions of a written round',
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('rounds_stage_ended');
     expect(assertStageNotEnded).toHaveBeenCalledWith(expect.objectContaining({ seasonId: 's-1', phaseId: ID, currentRound: 3 }));
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(onRoundGenerated).not.toHaveBeenCalled();
   });
 

@@ -7598,6 +7598,18 @@ export type Database = {
         Args: { p_force: boolean; p_round_id: string }
         Returns: Json
       }
+      round_write: {
+        Args: {
+          p_best_of: number
+          p_bye_player_ids: string[]
+          p_matches: Json
+          p_name: string
+          p_round_id: string
+          p_round_number: number
+          p_tournament_id: string
+        }
+        Returns: Json
+      }
       ruleset_fold_ids: { Args: { p_names: string[] }; Returns: string[] }
       ruleset_publish_version: {
         Args: {

@@ -1,6 +1,6 @@
 /**
  * The points where the league's own writes feed the format runtime: a match completes, a round is generated, a phase
- * starts or completes, a replay ends in an engine tie. Every hook is best effort: it does nothing for a league that is
+ * starts, completes or ends a round, a replay ends in an engine tie. Every hook is best effort: it does nothing for a league that is
  * not a custom league on the `kit` engine, and a failure is logged with its original error and never throws into the
  * caller, so the write that triggered it always stands. The hooks whose effects must not be lost (`onMatchCompleted`)
  * report whether they applied: the match finalize turns a `false` into a failed step, so the marker stays unset and the
@@ -12,7 +12,7 @@ import 'server-only';
 import { logger } from '@/lib/logger';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
-import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { Json } from '@/types/database';
 import type { FormatOp } from '@/lib/supabase/queries/format-runtime';
@@ -20,12 +20,12 @@ import type { Tournament } from '@/types/tournament';
 import type { KitRuntimeState } from './types';
 import { planChecks, type CheckPlan } from './checks';
 import { openChecks, resolveCheck } from './checks-server';
-import { eventKey } from './events';
+import { currentCompletionKeyOf, eventKey } from './events';
 import { isKitCandidate, type HookTournament } from '../kit-candidate';
 import { fireEvent } from './fire';
 import { isFormatContextStale, type HookReport } from './stale';
 import { matchContext, playerContext } from './expr-env';
-import { envBaseOf, loadFreshKitContext, phaseById, type KitContext, type KitPhaseInfo } from './load';
+import { envBaseOf, loadFreshKitContext, phaseById, phasesOfStageKey, type KitContext, type KitPhaseInfo } from './load';
 import { loadStageTable, playerRowsOf } from './stage-table';
 import { auditMatchTeams, type AuditRetry } from './team-audit-server';
 import { planTrackProgress } from './tracks';
@@ -393,6 +393,100 @@ async function endStageIfDone(
     // The phase is completed but its reaction did not apply: a failed step, so the heal's re-run repeats the reaction.
     if (result === 'reaction_failed') throw new Error('the stage end reaction of the completed phase did not apply');
   }, report);
+}
+
+export interface RoundCompletedInput {
+  tournament: HookTournament;
+  roundId: string;
+  /** Filled when the hook resolves false (`HookReport`). */
+  report?: HookReport;
+}
+
+/**
+ * What stands between a completed round and its `round_end` event, over every phase of the stage (a `foreach_group` stage
+ * runs one phase per group under one event key): `waiting` while a peer phase's round of that number is not completed yet
+ * (that phase's own completion fires the event), `deferred` while a match of any of those rounds completed with a winner and
+ * its `match_completed` event has not fired (the effects of the round's matches must exist first; the finalize heal or the
+ * cron backfill fires it, and the cron's round-end sweep comes back), else `ready`. A peer without a round of that number
+ * does not hold the event.
+ */
+async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { id: string; round_number: number }): Promise<'ready' | 'waiting' | 'deferred'> {
+  const { getMatchesByTournament } = await import('@/lib/supabase/queries/matches');
+  const fired = new Set(ctx.state.firedEventKeys);
+  const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
+  let waiting = false;
+  for (const peer of phasesOfStageKey(ctx, phase.stage.key)) {
+    let roundId = round.id;
+    if (peer.id !== phase.id) {
+      const peerRound = (await getRoundsByTournament(peer.id)).find((entry) => entry.round_number === round.round_number);
+      if (peerRound === undefined) continue;
+      if (peerRound.status !== 'completed') {
+        waiting = true;
+        continue;
+      }
+      roundId = peerRound.id;
+    }
+    const matches = await getMatchesByTournament(peer.id);
+    const awaiting = matches.some((match) => match.round_id === roundId && match.status === 'completed' && match.winner_id !== null && !fired.has(keyOf(match.id)));
+    if (awaiting) return 'deferred';
+  }
+  return waiting ? 'waiting' : 'ready';
+}
+
+/**
+ * A round was completed (`PATCH /api/tournaments/[id]/rounds/[rid]`, with or without `force`): fire `round_end` for the
+ * stage and round number, then evaluate the stage's `end_when`. The event fires once per (stage, round) like every other
+ * (`round_end:<stage>:<n>`), after the effects of the round's own matches exist (`roundEndReadiness`), over a context loaded
+ * now and revision-checked by `fireEvent`, so a stale format raises before the key is logged and the key stays free for a
+ * retry. A round that is no longer completed when the hook runs (a match was reset and `revertRoundIfCompleted` reopened it)
+ * fires nothing; a round reopened and completed again does not fire a second time, and the effects of the first stand.
+ *
+ * Completing a round changes the facts `end_when` reads (`rounds_played` counts a completed round, a force-completed one
+ * with its unplayed matches included, and `checkStageEnd` treats that round's leftovers as settled), so the stage end is
+ * evaluated here too, after the event: the round's effects (points) exist before the phase completes and advances its
+ * players. Without it the last open match of a stage could never be played and no completed match would be left to
+ * evaluate the condition.
+ *
+ * Resolves true when the event and the stage end applied or there was nothing to apply, false when a step failed (logged)
+ * or the event is deferred behind a missing `match_completed` (not a failure: nothing is set in `report`). A false is
+ * repaired by the format cron (`backfillRoundEnds`): it finds the completed round whose event has not fired and calls this
+ * again, which repeats only what is missing. A stage end that failed after the event fired has no such trigger: it is logged
+ * as an error, and the next completed match or an admin completing the phase by hand settles it.
+ */
+export async function onRoundCompleted(input: RoundCompletedInput): Promise<boolean> {
+  const { tournament } = input;
+  if (!isKitCandidate(tournament)) return true;
+  const outcome: { phase: KitPhaseInfo | null; ctx: KitContext | null; deferred: boolean } = { phase: null, ctx: null, deferred: false };
+  const applied = await guarded('round completed', { roundId: input.roundId, tournamentId: tournament.id }, async () => {
+    const [round, ctx] = await Promise.all([getRoundById(input.roundId), loadFreshKitContext(tournament.season_id)]);
+    const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
+    if (ctx === null || phase === undefined || round === null || round.tournament_id !== tournament.id || round.status !== 'completed') return;
+    const readiness = await roundEndReadiness(ctx, phase, round);
+    if (readiness === 'deferred') {
+      outcome.deferred = true;
+      logger.info(TAG, 'round_end deferred: a completed match of the round has not fired match_completed yet', { roundId: round.id, tournamentId: tournament.id });
+      return;
+    }
+    outcome.phase = phase;
+    outcome.ctx = ctx;
+    // A peer group's round that is still open fires the event when it completes.
+    if (readiness === 'waiting') return;
+    const fired = await fireEvent(tournament.season_id, { event: 'round_end', stage: phase.stage.key, round: round.round_number }, null, { context: ctx });
+    for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { roundId: round.id, tournamentId: tournament.id, ...issue });
+  }, input.report);
+  let stageEnded = true;
+  const { phase, ctx } = outcome;
+  if (applied && phase !== null && ctx !== null && phase.stage.end_when !== undefined) {
+    stageEnded = await endStageIfDone(tournament, ctx, phase, input.roundId, input.report);
+    if (!stageEnded) {
+      logger.error(TAG, 'the stage end after a completed round did not apply: the next completed match or an admin completing the phase settles it', {
+        roundId: input.roundId,
+        tournamentId: tournament.id,
+        stage: phase.stage.key,
+      });
+    }
+  }
+  return applied && stageEnded && !outcome.deferred;
 }
 
 /** A replay ended in an engine tie and the match was disputed: open the `unresolved_outcome` checks. */

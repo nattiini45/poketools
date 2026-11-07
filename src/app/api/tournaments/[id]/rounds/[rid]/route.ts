@@ -22,6 +22,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { toPublicMatches } from '@/lib/match/public-match';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import type { ApiResult } from '@/types/api';
 import type { RoundWithMatches } from '@/types/round';
 import type { RoundCompletedData } from '@/types/discord';
@@ -221,6 +222,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           reason: body.reason,
         },
       });
+    }
+
+    // A kit league: the round's `round_end` event and the stage's `end_when`, before the announcement so that its standings
+    // already hold what the event's rules awarded. Best effort and never thrown: a failure is logged and the format cron fires
+    // the event of a completed round that has none (`backfillRoundEnds`), so the completion itself always stands. Only the
+    // call that made the transition fires it.
+    if (completedNow && tournament && isKitCandidate(tournament)) {
+      const { onRoundCompleted } = await import('@/lib/format-engine/runtime/hooks');
+      await onRoundCompleted({ tournament, roundId: rid });
     }
 
     // Emit round_completed Discord event when this call completed the round

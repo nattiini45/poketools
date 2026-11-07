@@ -26,6 +26,10 @@
  * so its new completion applied nothing and the old effects stand (an admin sees the failed revert in the logs only), and a
  * match row that has been deleted cannot be reverted from here (the sweep reads matches).
  *
+ * Completed rounds whose `round_end` never fired (the hook of the completion failed or was deferred) are fired by a bounded
+ * sweep too (`backfillRoundEnds`: `FORMAT_CRON_ROUND_END_LIMIT` per run, `FORMAT_CRON_ROUND_END_PER_LEAGUE` per league), after
+ * the match backfill, in running leagues only.
+ *
  * Policies (`Stage.calendar.deadlines`):
  * - `match` / `team` on a round past its policy instant, for each match still `scheduled` or `in_progress`:
  *   `forfeit` settles it when exactly one side has no registered team (the match-linked row, else the planned one;
@@ -57,7 +61,7 @@ import {
 } from '@/lib/supabase/queries/format-cron';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 import { validateTransition } from '@/lib/tournament/match-state';
 import type { DeadlinePolicy, Stage, StageCalendar } from '@/lib/format-kit/types';
@@ -73,10 +77,10 @@ import {
   type DeadlineCheckPlan,
   type ForfeitPlan,
 } from './deadline-policy';
-import { currentCompletionKeyOf, eventKey } from './events';
+import { currentCompletionKeyOf, eventKey, unfiredRoundEnds } from './events';
 import { fireEvent, fireLockedActionEvents } from './fire';
 import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
-import { onMatchCompleted, revertMatchCompletion } from './hooks';
+import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from './hooks';
 import { loadFreshKitContext, phaseById, rosterOf, type KitContext, type KitPhaseInfo } from './load';
 import { planRandomPicks } from './random-pick';
 import { hiddenGiverActions } from './views';
@@ -110,6 +114,12 @@ export const FORMAT_CRON_REVERT_SCAN_LIMIT = 500;
 
 /** Completed or archived leagues whose pending reverts one run checks (each costs a context load); the window moves on per slot. */
 export const FORMAT_CRON_IDLE_LEAGUE_LIMIT = 10;
+
+/** `round_end` events one run fires for completed rounds that have none (see `backfillRoundEnds`); the rest wait for the next. */
+export const FORMAT_CRON_ROUND_END_LIMIT = 25;
+
+/** The share of that budget one league may take (a round whose hook keeps failing cannot take the run). */
+export const FORMAT_CRON_ROUND_END_PER_LEAGUE = 10;
 
 /** The runs are 15 minutes apart (vercel.json); the window moves on once per slot of that length. */
 const CRON_SLOT_MS = 15 * 60_000;
@@ -475,10 +485,11 @@ async function runPhase(job: PhaseJob, ctx: KitContext, now: Date, summary: Form
   return current;
 }
 
-/** Matches a pass may still backfill and reverts it may still retry; shared by every league of the pass. */
+/** Matches a pass may still backfill, reverts it may still retry and round ends it may still fire; shared by every league of the pass. */
 interface BackfillBudget {
   left: number;
   reverts: number;
+  roundEnds: number;
 }
 
 /**
@@ -527,6 +538,46 @@ async function backfillMatchCompleted(ctx: KitContext, budget: BackfillBudget, s
       // A hook that failed before its event key was logged is tried again by the next run; one that failed after it (a team
       // audit whose check could not even be opened) is no longer missing, so this log is the only trace of it.
       logger.error(TAG, 'match_completed backfill failed; it is tried again next run only while its event has not fired', { seasonId: ctx.seasonId, matchId: match.id });
+    }
+  }
+  return applied;
+}
+
+/**
+ * The completed rounds of a league whose `round_end` event never fired: the hook of the completion
+ * (`PATCH rounds/[rid]`, `onRoundCompleted`) failed, was refused because the format changed meanwhile, or was deferred behind
+ * a `match_completed` that had not fired (the match backfill above runs first in the pass, so a deferral is usually settled
+ * by the time this sweep looks). `unfiredRoundEnds` picks one round per (stage, round number), earliest first; at most
+ * `FORMAT_CRON_ROUND_END_PER_LEAGUE` rounds per league and what is left of the run's budget are handled. The hook is
+ * idempotent by key and runs the stage's `end_when` after the event, so a repeat applies nothing twice. A round the hook
+ * still defers is not a failure and is looked at again next run. Returns whether anything was handled (the context is
+ * stale then).
+ */
+async function backfillRoundEnds(ctx: KitContext, budget: BackfillBudget, summary: FormatCronSummary): Promise<boolean> {
+  if (budget.roundEnds <= 0 || ctx.phases.length === 0) return false;
+  const rounds = await listRoundStatusesByTournamentIds(ctx.phases.map((phase) => phase.id));
+  const stageOfPhase = new Map(ctx.phases.map((phase) => [phase.id, phase.stage.key]));
+  const missing = unfiredRoundEnds(stageOfPhase, rounds, ctx.state.firedEventKeys).slice(0, Math.min(budget.roundEnds, FORMAT_CRON_ROUND_END_PER_LEAGUE));
+  let applied = false;
+  for (const round of missing) {
+    budget.roundEnds -= 1;
+    // A league on the kit engine is a custom league (`isKitCandidate`).
+    const report = newHookReport();
+    const ok = await onRoundCompleted({
+      tournament: { id: round.tournament_id, season_id: ctx.seasonId, season_format_type: 'custom' as const },
+      roundId: round.id,
+      report,
+    });
+    if (ok) {
+      applied = true;
+      logger.info(TAG, 'a pending round_end was fired', { seasonId: ctx.seasonId, roundId: round.id });
+    } else if (isStaleOnly(report)) {
+      logger.warn(TAG, 'round_end backfill skipped, the format changed meanwhile; it is tried again next run', { seasonId: ctx.seasonId, roundId: round.id });
+    } else if (report.failed) {
+      summary.failures += 1;
+      logger.error(TAG, 'round_end backfill failed; it is tried again next run while its event has not fired', { seasonId: ctx.seasonId, roundId: round.id });
+    } else {
+      logger.info(TAG, 'round_end still deferred behind a match_completed; it is tried again next run', { seasonId: ctx.seasonId, roundId: round.id });
     }
   }
   return applied;
@@ -631,6 +682,12 @@ async function runLeague(
     if (reloaded === null) return;
     ctx = reloaded;
   }
+  // After the match backfill: a round whose event was deferred behind a missing `match_completed` is ready now.
+  if (await backfillRoundEnds(ctx, budget, summary)) {
+    const reloaded = await loadFreshKitContext(seasonId);
+    if (reloaded === null) return;
+    ctx = reloaded;
+  }
   for (const cron of crons) {
     const phase = phaseById(ctx, cron.id);
     const stage: Stage | undefined = phase?.stage;
@@ -662,7 +719,7 @@ export async function runFormatCronPass(now: Date = new Date(), options: FormatC
     summary.failures += 1;
     logger.error(TAG, 'could not list the running leagues without a calendar', { error });
   }
-  const backfill: BackfillBudget = { left: FORMAT_CRON_BACKFILL_LIMIT, reverts: FORMAT_CRON_REVERT_LIMIT };
+  const backfill: BackfillBudget = { left: FORMAT_CRON_BACKFILL_LIMIT, reverts: FORMAT_CRON_REVERT_LIMIT, roundEnds: FORMAT_CRON_ROUND_END_LIMIT };
 
   const sorted = [...bySeason.keys()].sort();
   const start = cronWindowStart(now, sorted.length);

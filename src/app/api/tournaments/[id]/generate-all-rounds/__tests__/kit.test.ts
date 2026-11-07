@@ -15,12 +15,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
   getPairedMatchRecords: vi.fn(),
 }));
@@ -46,8 +45,9 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
+import { addMatchesToRound, createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
+import { writtenBatches } from '@/test/round-writes';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
@@ -104,10 +104,10 @@ const group = (id: string, n: number, players: string[], seasonGroupId: string |
   members: players.map((player_id, i) => ({ player_id, player_name: player_id, seed: i + 1 })),
 });
 
+const batches = () => writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound));
+
 function written(): string[][] {
-  return vi
-    .mocked(createMatchBatch)
-    .mock.calls.map((call) => call[0].map((m: { player_1_id: string; player_2_id: string }) => `${m.player_1_id}-${m.player_2_id}`));
+  return batches().map((batch) => batch.map((m) => `${m.player_1_id}-${m.player_2_id}`));
 }
 
 beforeEach(() => {
@@ -129,7 +129,7 @@ beforeEach(() => {
   vi.mocked(getMatchesByTournament).mockResolvedValue([]);
   vi.mocked(getPairedMatchRecords).mockResolvedValue([]);
   vi.mocked(getSeasonGroups).mockResolvedValue([]);
-  vi.mocked(createRound).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, ...input }) as never);
+  vi.mocked(createRoundWithMatches).mockImplementation(async (input) => ({ id: `r-${input.round_number}`, ...input }) as never);
 });
 
 describe('generate-all-rounds on a kit phase', () => {
@@ -139,7 +139,7 @@ describe('generate-all-rounds on a kit phase', () => {
     const res = await POST({} as NextRequest, routeParams);
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('rounds_manual_pairing');
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('plays each own group over the legs, the second leg with sides swapped', async () => {
@@ -150,7 +150,7 @@ describe('generate-all-rounds on a kit phase', () => {
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
-    expect(vi.mocked(createRound).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2]);
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2]);
     expect(written()).toEqual([
       ['p1-p4', 'p2-p3'],
       ['p4-p1', 'p3-p2'],
@@ -165,7 +165,7 @@ describe('generate-all-rounds on a kit phase', () => {
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
-    const rounds = vi.mocked(createRound).mock.calls.map((call) => call[0]);
+    const rounds = vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0]);
     expect(rounds.map((round) => round.round_number)).toEqual([1, 2, 3]);
     const all = written();
     expect(all[0]).toContain('d-e');
@@ -191,7 +191,7 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
 
     expect(res.status).toBe(201);
     // Four players play three rounds, the bound stops the batch at two.
-    expect(vi.mocked(createRound).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2]);
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2]);
   });
 
   it('writes the whole schedule when the rounds bound is not below it', async () => {
@@ -199,7 +199,7 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
 
     expect((await POST({} as NextRequest, routeParams)).status).toBe(201);
 
-    expect(vi.mocked(createRound).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2, 3]);
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number)).toEqual([1, 2, 3]);
   });
 
   it('stops a rounds bound on league week-plan groups at the bound too', async () => {
@@ -213,7 +213,7 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
-    const numbers = vi.mocked(createRound).mock.calls.map((call) => call[0].round_number);
+    const numbers = vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number);
     expect(numbers).toEqual([1, 2]);
   });
 
@@ -226,8 +226,8 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
 
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('rounds_batch_end_when_expression');
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('lets an expression-bounded stage write its last remaining round', async () => {
@@ -246,7 +246,7 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
-    expect(vi.mocked(createRound).mock.calls.map((call) => call[0].round_number)).toEqual([3]);
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map((call) => call[0].round_number)).toEqual([3]);
   });
 
   it('refuses a batch of one for an expression bound while an earlier round has unfinished matches', async () => {
@@ -269,8 +269,8 @@ describe('generate-all-rounds: a stage end condition bounds the batch', () => {
     expect(res.status).toBe(409);
     expect(body.code).toBe('rounds_end_when_round_open');
     expect(body.params).toEqual({ round: 'Round 2' });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('reads the open-round guard before the stage-end check, so a match completed in between is seen by the check', async () => {
@@ -340,7 +340,7 @@ describe('generate-all-rounds: legs on groups that mirror league groups', () => 
     expect(res.status).toBe(409);
     expect(body.code).toBe('rounds_mirrored_groups_legs');
     expect(body.params).toMatchObject({ legs: 2 });
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('refuses a filter over a two-leg round robin the same way', async () => {
@@ -360,7 +360,7 @@ describe('generate-all-rounds: legs on groups that mirror league groups', () => 
     const res = await POST({} as NextRequest, routeParams);
 
     expect(res.status).toBe(201);
-    expect(createRound).toHaveBeenCalled();
+    expect(createRoundWithMatches).toHaveBeenCalled();
   });
 
   it('does not touch a phase that is not on the kit engine', async () => {
@@ -388,14 +388,14 @@ describe('generate-all-rounds: the first rounds of a kit phase wait for the form
     expect(res.status).toBe(409);
     expect(body.code).toBe('format_not_ready');
     expect(body.params).toMatchObject({ reasons: 'relation_undrawn,action_incomplete', open_checks: 1 });
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('writes the rounds once the relation is drawn', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(santaContext({ drawn: true }));
 
     expect((await POST({} as NextRequest, routeParams)).status).toBe(201);
-    expect(createRound).toHaveBeenCalled();
+    expect(createRoundWithMatches).toHaveBeenCalled();
   });
 
   it('lets an admin start anyway with ?force=true and audits it', async () => {
@@ -403,7 +403,7 @@ describe('generate-all-rounds: the first rounds of a kit phase wait for the form
 
     expect((await POST(forced, routeParams)).status).toBe(201);
 
-    expect(createRound).toHaveBeenCalled();
+    expect(createRoundWithMatches).toHaveBeenCalled();
     expect(vi.mocked(logAuditEvent).mock.calls.find((call) => call[0].action === 'season.format.round.force_start')?.[0]).toMatchObject({
       actor_id: 'admin-1',
       resource_id: ID,

@@ -13,8 +13,8 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getParticipants: vi.fn(),
   updateTournament: vi.fn(),
 }));
-vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), createRound: vi.fn() }));
-vi.mock('@/lib/supabase/queries/matches', () => ({ createMatchBatch: vi.fn(), getMatchesByTournament: vi.fn() }));
+vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), createRoundWithMatches: vi.fn() }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchesByTournament: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ seasonHasGroups: vi.fn() }));
 vi.mock('@/lib/tournament/group-rounds', () => ({ ensurePhaseGroupsFromLeague: vi.fn() }));
 vi.mock('@/lib/format-studio/attach', () => ({ assertSeasonFormatAttached: vi.fn() }));
@@ -32,8 +32,8 @@ vi.mock('@/lib/format-engine/pairing-server', () => ({ openForbiddenPairingCheck
 import { POST } from '@/app/api/tournaments/[id]/rounds/manual/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { createRoundWithMatches, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { loadKitPhase, type KitPhase } from '@/lib/format-engine/load';
@@ -44,6 +44,9 @@ import { fillRoundDeadline } from '@/lib/format-engine/runtime/calendar-server';
 import { assertStageNotEnded } from '@/lib/format-engine/runtime/stage-end-server';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Pairing, Stage } from '@/lib/format-kit/types';
+
+// The matches the route wrote: the manual editor writes each round with its matches in one call.
+const batches = () => vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.matches).filter((matches) => matches.length > 0);
 
 const ID = 'a5cb20ac-a127-482d-855d-d802e29185bc';
 const P1 = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
@@ -112,9 +115,8 @@ beforeEach(() => {
   vi.mocked(getRoundsByTournament).mockResolvedValue([]);
   vi.mocked(seasonHasGroups).mockResolvedValue(false);
   vi.mocked(updateTournament).mockResolvedValue(undefined as never);
-  vi.mocked(createMatchBatch).mockResolvedValue([] as never);
   vi.mocked(loadKitPhase).mockResolvedValue(phase());
-  vi.mocked(createRound).mockImplementation(async (input) => ({ id: 'r-1', deadline: null, ...input }) as never);
+  vi.mocked(createRoundWithMatches).mockImplementation(async (input) => ({ id: 'r-1', deadline: null, ...input }) as never);
   vi.mocked(fillRoundDeadline).mockImplementation(async ({ round }) => ({ ...round, deadline: '2026-12-01T00:00:00Z' }) as never);
 });
 
@@ -151,7 +153,7 @@ describe('manual round on a kit phase', () => {
 
     expect(res.status).toBe(409);
     expect((await res.json()).code).toBe('rounds_stage_ended');
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(onRoundGenerated).not.toHaveBeenCalled();
   });
 
@@ -163,7 +165,7 @@ describe('manual round on a kit phase', () => {
     const res = await POST(body(), routeParams);
 
     expect(res.status).toBe(404);
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('writes a plain round for a phase that is not on the kit engine', async () => {
@@ -208,8 +210,8 @@ describe('manual round on a stage that ends on an expression', () => {
     expect(res.status).toBe(409);
     expect(json.code).toBe('rounds_end_when_round_open');
     expect(json.params).toEqual({ round: 'Round 1' });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('writes the round once every earlier match is completed', async () => {
@@ -219,7 +221,7 @@ describe('manual round on a stage that ends on an expression', () => {
     vi.mocked(loadKitPhase).mockResolvedValue(exprPhase());
 
     expect((await POST(body(), routeParams)).status).toBe(201);
-    expect(createRound).toHaveBeenCalledTimes(1);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
   });
 
   it('reads the open-round guard before the stage-end check, so a match completed in between is seen by the check', async () => {
@@ -268,7 +270,7 @@ describe('manual round: the first round of a kit phase waits for the format set-
     expect(res.status).toBe(409);
     expect(json.code).toBe('format_not_ready');
     expect(json.params).toMatchObject({ reasons: 'relation_undrawn,action_incomplete', open_checks: 3 });
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
     expect(onRoundGenerated).not.toHaveBeenCalled();
   });
 

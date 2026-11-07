@@ -42,6 +42,18 @@
 --     match's own finalize evaluates end_when again).
 --   * the round completion goes through round_complete(round, force): under FOR UPDATE on the round row it counts the
 --     unfinished matches and refuses (without force) or reports the count (with force, for the audit entry).
+--   * a round and its matches are written by round_write(tournament, round, ...), one transaction: it reads the phase
+--     status under FOR SHARE (the same lock an accept takes), refuses a completed phase (rounds_phase_completed) and inserts
+--     the round and its matches before it commits (a retry that fills a round an interrupted call left empty brings that
+--     round's byes up to date in the same transaction). The stage end therefore either commits first (the write is refused
+--     and leaves nothing behind, not even an empty round and not new byes) or waits for the write and then finds its
+--     unfinished matches (phase_complete_at_stage_end answers `unsettled`). That second half holds for a write with at
+--     least one match: a bye-only round (an empty p_matches) leaves no unfinished match, so a stage end that comes after it
+--     completes the phase around it, and that round's byes are then part of the completed phase. The application's own
+--     stage-end guards read earlier and in other requests; this is what closes the window between them and the inserts. Only the three round generators call it
+--     (generate-round, generate-all-rounds, rounds/manual): a plain trigger on rounds/matches would also refuse the writes
+--     into a completed tournament that are legitimate (the league recycle bin restoring a league, the dev seed, an
+--     admin's result edit that materialises a bracket match, the bracket regeneration).
 --
 -- Domain errors are `RAISE EXCEPTION '<code>' USING ERRCODE = 'P0001', DETAIL = <json text>`: challenge_self,
 -- challenge_phase_not_found, challenge_phase_closed, challenge_not_participant (DETAIL {"player_id"}),
@@ -389,6 +401,68 @@ BEGIN
   RETURN jsonb_build_object('outcome', 'completed', 'tournament', to_jsonb(v_row));
 END $$;
 
+-- Writes a round of a phase together with its matches, in one transaction and under the phase row lock. The phase status
+-- is read FOR SHARE, which conflicts with a status UPDATE and with phase_complete_at_stage_end's FOR UPDATE, so of a write
+-- and a completion exactly one goes first: the write that commits first is seen by the completion (an unfinished match it
+-- did not list: `unsettled`, the phase stays active), and a completion that commits first is seen by the write, which is
+-- refused with rounds_phase_completed and rolls back everything it did (no empty round is left, no bye changed). It also
+-- waits for a running enrollment replace (FOR UPDATE on the same row), like an accept. The 'finds the new matches' half
+-- needs at least one inserted match: with an empty p_matches (a round of byes only) the write commits without leaving an
+-- unfinished match, and a completion that comes after it finds nothing to wait for and completes the phase.
+--   p_round_id NULL   a new round (name, number, best_of and the byes) is inserted, then the matches
+--   p_round_id set    the matches go into that round of the phase, which an interrupted call left without matches; its
+--                     bye_player_ids are replaced by p_bye_player_ids in the same transaction when that is not NULL (NULL
+--                     keeps them), the other columns are not touched
+-- p_matches is a jsonb array of {"player_1_id", "player_2_id"}; it may be empty (a round of byes only). The matches are
+-- inserted in array order, status `scheduled`. Returns {"round": <the row>, "matches": n}. The insert triggers of rounds and
+-- matches run as for a plain insert (PHASE_GROUPS_STALE of the first round of a mirrored phase, the unique round number).
+-- Refusals (P0001): invalid_op, tournament_not_found, rounds_phase_completed, round_not_found.
+CREATE OR REPLACE FUNCTION public.round_write(
+  p_tournament_id uuid, p_round_id uuid, p_name text, p_round_number integer, p_best_of integer,
+  p_bye_player_ids uuid[], p_matches jsonb
+) RETURNS jsonb
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_status  public.tournament_status;
+  v_round   public.rounds;
+  v_matches integer;
+BEGIN
+  IF p_tournament_id IS NULL OR p_matches IS NULL OR jsonb_typeof(p_matches) <> 'array'
+     OR (p_round_id IS NULL AND (p_name IS NULL OR p_round_number IS NULL OR p_best_of IS NULL)) THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'round_write')::text;
+  END IF;
+
+  -- FOR SHARE (not a plain read, not FOR KEY SHARE): see the header of this function.
+  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = p_tournament_id FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'tournament_not_found' USING ERRCODE = 'P0001';
+  END IF;
+  IF v_status = 'completed' THEN
+    RAISE EXCEPTION 'rounds_phase_completed' USING ERRCODE = 'P0001';
+  END IF;
+
+  IF p_round_id IS NULL THEN
+    INSERT INTO public.rounds (tournament_id, name, round_number, best_of, bye_player_ids, pairings_generated)
+    VALUES (p_tournament_id, p_name, p_round_number, p_best_of, COALESCE(p_bye_player_ids, '{}'), true)
+    RETURNING * INTO v_round;
+  ELSE
+    SELECT * INTO v_round FROM public.rounds r WHERE r.id = p_round_id AND r.tournament_id = p_tournament_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'round_not_found' USING ERRCODE = 'P0001';
+    END IF;
+    IF p_bye_player_ids IS NOT NULL THEN
+      UPDATE public.rounds SET bye_player_ids = p_bye_player_ids WHERE id = v_round.id RETURNING * INTO v_round;
+    END IF;
+  END IF;
+
+  INSERT INTO public.matches (round_id, tournament_id, player_1_id, player_2_id)
+  SELECT v_round.id, p_tournament_id, m.player_1_id, m.player_2_id
+    FROM ROWS FROM (jsonb_to_recordset(p_matches) AS (player_1_id uuid, player_2_id uuid)) WITH ORDINALITY AS m(player_1_id, player_2_id, ord)
+   ORDER BY m.ord;
+  GET DIAGNOSTICS v_matches = ROW_COUNT;
+  RETURN jsonb_build_object('round', to_jsonb(v_round), 'matches', v_matches);
+END $$;
+
 REVOKE ALL ON FUNCTION
   public.format__open_round(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
@@ -396,7 +470,8 @@ REVOKE ALL ON FUNCTION
   public.format_challenge_cancel(uuid, uuid, uuid),
   public.format_challenges_expire(uuid),
   public.round_complete(uuid, boolean),
-  public.phase_complete_at_stage_end(uuid, uuid[])
+  public.phase_complete_at_stage_end(uuid, uuid[]),
+  public.round_write(uuid, uuid, text, integer, integer, uuid[], jsonb)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
   public.format__open_round(uuid),
@@ -405,7 +480,8 @@ GRANT EXECUTE ON FUNCTION
   public.format_challenge_cancel(uuid, uuid, uuid),
   public.format_challenges_expire(uuid),
   public.round_complete(uuid, boolean),
-  public.phase_complete_at_stage_end(uuid, uuid[])
+  public.phase_complete_at_stage_end(uuid, uuid[]),
+  public.round_write(uuid, uuid, text, integer, integer, uuid[], jsonb)
   TO service_role;
 
 COMMENT ON FUNCTION public.format__open_round(uuid) IS
@@ -422,6 +498,8 @@ COMMENT ON FUNCTION public.round_complete(uuid, boolean) IS
   'Completes a round under FOR UPDATE on its row, counting the unfinished matches under that lock (a challenge accept locks the round FOR SHARE before it inserts its match). Returns jsonb: outcome completed (round, unfinished; unfinished > 0 only with p_force), unfinished (refused without p_force), already_completed or not_found.';
 COMMENT ON FUNCTION public.phase_complete_at_stage_end(uuid, uuid[]) IS
   'Completes an active phase at its stage end under FOR UPDATE on the phase row, only while no unfinished match exists beyond p_known_unfinished (the ids the caller''s read saw unfinished). Returns jsonb: outcome completed (tournament), unsettled (an unseen unfinished match, e.g. a challenge accepted since the read; the phase stays active) or not_active.';
+COMMENT ON FUNCTION public.round_write(uuid, uuid, text, integer, integer, uuid[], jsonb) IS
+  'Inserts a round (or, with p_round_id, fills a round an interrupted call left empty and replaces its byes when p_bye_player_ids is not NULL) and its matches in one transaction, with the phase row read FOR SHARE so a stage-end completion either commits first (rounds_phase_completed, nothing written) or, for a write with at least one match, finds the new matches (unsettled); a round of byes only is not seen that way. Returns jsonb {round, matches}. Raises invalid_op, tournament_not_found, rounds_phase_completed, round_not_found (P0001).';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- The recycle bin classifies the new table. These definitions replace 20261105090000's; the inventory test reads the

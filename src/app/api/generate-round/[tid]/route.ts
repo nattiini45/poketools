@@ -11,12 +11,11 @@ import {
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 import {
   getRoundsByTournament,
-  createRound,
-  updateRoundByePlayers,
+  createRoundWithMatches,
+  addMatchesToRound,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
 import {
-  createMatchBatch,
   getCompletedMatchRecords,
   getMatchesByTournament,
   getPairedMatchRecords,
@@ -440,41 +439,45 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 6. Create round record (use bo_overrides if round name matches, else default)
+    // 6. Write the round and its matches (use bo_overrides if round name matches, else default). One transaction under the
+    // phase row lock (`round_write`): a stage end that completed the phase after the guards above read it refuses the write
+    // (409 `rounds_phase_completed`, nothing left behind, not even an empty round), and one that comes later waits for it.
     const roundBestOf = tournament.bo_overrides[roundName] ?? tournament.best_of_default;
     // Swiss and round robin byes are stored on the round; an elimination bye is
     // structural (the bracket engine owns it) and stays out of the column.
     const storesByes =
       tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin';
+    const matchInputs = allPairings.map((pairing) => ({
+      player_1_id: pairing.player_1_id,
+      player_2_id: pairing.player_2_id,
+    }));
     let round: Round;
     if (emptyRound) {
       // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so a round
-      // reused by a retry carries them exactly like a freshly inserted one.
+      // reused by a retry carries them exactly like a freshly inserted one. The byes go in the same transaction as the
+      // matches (`round_write`), so a write the completed phase refuses leaves the round's stored byes as they were.
       const storedByes = emptyRound.bye_player_ids ?? [];
       const byesChanged =
         storesByes &&
         (storedByes.length !== allByePlayerIds.length ||
           storedByes.some((id) => !allByePlayerIds.includes(id)));
-      round = byesChanged ? await updateRoundByePlayers(emptyRound.id, allByePlayerIds) : emptyRound;
+      round = byesChanged ? { ...emptyRound, bye_player_ids: allByePlayerIds } : emptyRound;
+      // 7. Match stubs of the reused round
+      if (byesChanged) {
+        await addMatchesToRound(round, matchInputs, allByePlayerIds);
+      } else {
+        await addMatchesToRound(round, matchInputs);
+      }
     } else {
-      round = await createRound({
+      // 7. The new round carries its match stubs
+      round = await createRoundWithMatches({
         tournament_id: tid,
         name: roundName,
         round_number: roundNumber,
         best_of: roundBestOf,
         ...(storesByes ? { bye_player_ids: allByePlayerIds } : {}),
+        matches: matchInputs,
       });
-    }
-
-    // 7. Create match stubs
-    if (allPairings.length > 0) {
-      const matchInputs = allPairings.map((pairing) => ({
-        round_id: round.id,
-        tournament_id: tid,
-        player_1_id: pairing.player_1_id,
-        player_2_id: pairing.player_2_id,
-      }));
-      await createMatchBatch(matchInputs);
     }
 
     // 8. Update tournament to active and increment round (a grouped phase that filled an earlier week never moves

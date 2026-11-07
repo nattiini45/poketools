@@ -131,6 +131,7 @@ export default defineDe<typeof en>()({
     'Diese Phase endet durch eine Bedingung, die geprüft wird, wenn eine Runde beendet ist. Beende die offenen Matches von {round}, bevor du die nächste Runde anlegst, damit die Bedingung zuerst geprüft werden kann, oder beende {round} trotzdem mit einer Begründung.',
   rounds_mirrored_groups_legs:
     'Diese Jeder-gegen-jeden-Phase spielt mehr als einen Durchgang, aber ihre Gruppen werden von der Liga verwaltet und folgen deren Wochenplan, der keine Durchgänge kennt. Nutze einen einzigen Durchgang oder entferne die Ligagruppen.',
+  rounds_phase_completed: 'Diese Phase wurde abgeschlossen, während die Runde angelegt wurde, deshalb wurde keine Runde geschrieben. Es können keine weiteren Runden erzeugt werden.',
 
   // Resource admins
   resource_admin_target_required: 'Ressourcentyp und Ressourcen-ID sind erforderlich.',

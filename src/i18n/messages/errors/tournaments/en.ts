@@ -143,6 +143,8 @@ export default {
     'This phase ends by a condition that is checked when a round is finished. Finish the open matches of {round} before creating the next round, so the condition can be checked first, or complete {round} anyway with a reason.',
   rounds_mirrored_groups_legs:
     'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
+  // The phase completed (a stage end, or an admin) between the generator's checks and its write; nothing was written (409).
+  rounds_phase_completed: 'This phase was completed while the round was being created, so no round was written. No more rounds can be generated.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

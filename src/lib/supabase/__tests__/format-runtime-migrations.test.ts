@@ -352,9 +352,46 @@ describe('20261106090000 challenges', () => {
     expect(fn).toMatch(/p_known_unfinished IS NULL THEN\s+RAISE EXCEPTION 'invalid_op'/);
   });
 
+  it('writes a round and its matches in one function that reads the phase status FOR SHARE before the first insert', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_write(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const lock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR SHARE;/);
+    const refusal = fn.indexOf("RAISE EXCEPTION 'rounds_phase_completed'");
+    const roundInsert = fn.indexOf('INSERT INTO public.rounds');
+    const matchInsert = fn.indexOf('INSERT INTO public.matches');
+    // The status is read under the lock a stage-end completion (FOR UPDATE) and a status write conflict with, then the round
+    // and the matches go in, all in this one transaction: a completion either commits first (refused here) or waits for the
+    // matches and finds them (`unsettled`).
+    expect(lock).toBeGreaterThan(-1);
+    expect(refusal).toBeGreaterThan(lock);
+    expect(roundInsert).toBeGreaterThan(refusal);
+    expect(matchInsert).toBeGreaterThan(roundInsert);
+    expect(fn.slice(lock, refusal)).toMatch(/IF NOT FOUND THEN\s+RAISE EXCEPTION 'tournament_not_found'[\s\S]*IF v_status = 'completed' THEN\s+$/);
+    expect(fn).not.toMatch(/FOR KEY SHARE/);
+    // a round that already exists (an interrupted call left it empty) gets the matches under the same lock, and must be the phase's own
+    expect(fn).toMatch(/SELECT \* INTO v_round FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id;\s+IF NOT FOUND THEN\s+RAISE EXCEPTION 'round_not_found'/);
+    expect(fn.search(/p_round_id IS NULL THEN\s+INSERT INTO public\.rounds/)).toBeGreaterThan(refusal);
+    // the matches are inserted in array order, with the phase and round the function resolved (not caller-supplied ids)
+    expect(fn).toMatch(/INSERT INTO public\.matches \(round_id, tournament_id, player_1_id, player_2_id\)\s+SELECT v_round\.id, p_tournament_id, m\.player_1_id, m\.player_2_id[\s\S]*ORDER BY m\.ord;/);
+    // a NULL or non-array match list would insert nothing and still return a round: refused
+    expect(fn).toMatch(/p_matches IS NULL OR jsonb_typeof\(p_matches\) <> 'array'[\s\S]*RAISE EXCEPTION 'invalid_op'/);
+  });
+
+  it('does not put a status guard on every round and match insert: the writes into a completed tournament that are legitimate stay possible', () => {
+    // A BEFORE INSERT trigger on rounds or matches would also refuse the league recycle bin restoring a completed league, the dev
+    // seed, the bracket materialisation after an admin's result edit and the bracket regeneration. The guard lives in round_write,
+    // which only the three round generators call.
+    expect(text).not.toMatch(/CREATE TRIGGER[^;]*ON public\.(rounds|matches)/);
+  });
+
+  it('grants round_write to service_role only', () => {
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb\)\s+FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb\)\s+TO service_role;/);
+  });
+
   it('grants the two completion functions to service_role only', () => {
-    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\)\s+FROM PUBLIC, anon, authenticated;/);
-    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\)\s+TO service_role;/);
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\),[^;]*FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\),[^;]*TO service_role;/);
   });
 
   it('stores a withdrawal of a lapsed challenge as expired, which the cooldown counts, never as cancelled', () => {

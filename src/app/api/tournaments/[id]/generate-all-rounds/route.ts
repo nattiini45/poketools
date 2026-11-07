@@ -9,11 +9,11 @@ import {
 } from '@/lib/supabase/queries/tournaments';
 import {
   getRoundsByTournament,
-  createRound,
-  updateRoundByePlayers,
+  createRoundWithMatches,
+  addMatchesToRound,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
+import { getMatchesByTournament, getPairedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
@@ -275,34 +275,39 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const roundBestOf =
         tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
+      // Each round and its matches are one transaction under the phase row lock (`round_write`): a stage end that
+      // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
+      // empty round behind. A batch that is refused part-way keeps the rounds it had written (each one whole, with its
+      // matches); generating again continues from there.
+      const matchInputs = allPairings.map((pairing) => ({
+        player_1_id: pairing.player_1_id,
+        player_2_id: pairing.player_2_id,
+      }));
       // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so it carries
-      // them exactly like a freshly inserted one.
+      // them exactly like a freshly inserted one. The byes go in the same transaction as the matches (`round_write`), so
+      // a write the completed phase refuses leaves the round's stored byes as they were.
       const reused = emptyRounds.get(roundNumber);
       let round: Round;
       if (reused) {
         const storedByes = reused.bye_player_ids ?? [];
         const byesChanged =
           storedByes.length !== byePlayerIds.length || storedByes.some((pid) => !byePlayerIds.includes(pid));
-        round = byesChanged ? await updateRoundByePlayers(reused.id, byePlayerIds) : reused;
+        round = byesChanged ? { ...reused, bye_player_ids: byePlayerIds } : reused;
+        if (byesChanged) {
+          await addMatchesToRound(round, matchInputs, byePlayerIds);
+        } else {
+          await addMatchesToRound(round, matchInputs);
+        }
       } else {
-        round = await createRound({
+        round = await createRoundWithMatches({
           tournament_id: id,
           name: roundName,
           round_number: roundNumber,
           best_of: roundBestOf,
           // Round robin byes are stored for display; they earn nothing in standings.
           bye_player_ids: byePlayerIds,
+          matches: matchInputs,
         });
-      }
-
-      if (allPairings.length > 0) {
-        const matchInputs = allPairings.map((pairing) => ({
-          round_id: round.id,
-          tournament_id: id,
-          player_1_id: pairing.player_1_id,
-          player_2_id: pairing.player_2_id,
-        }));
-        await createMatchBatch(matchInputs);
       }
 
       createdRounds.push(round);
