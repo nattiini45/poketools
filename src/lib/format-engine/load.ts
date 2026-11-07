@@ -1,6 +1,6 @@
 /**
- * Loads what a kit league's standings need (`KitStandingsData`) in six reads: the attached format's engine and seed,
- * the phases it generated, then their matches, match outcomes, members and standings adjustments in parallel. A stage
+ * Loads what a kit league's standings need (`KitStandingsData`) in seven reads: the attached format's engine and seed,
+ * the phases it generated, then their matches, match outcomes, members, standings adjustments and game counts in parallel. A stage
  * that ranks by or shows a custom metric adds the spec and the runtime rows (`loadStageMetrics`). Server only: the season
  * seed is read here and turned into per-player coin flip draws, so it never reaches a client or a cached value.
  */
@@ -9,6 +9,8 @@ import 'server-only';
 import {
   getKitPhases,
   getOutcomesByPhases,
+  getPhaseBattleStats,
+  getPhaseGameCounts,
   getPhaseMatchIds,
   getPhaseMembers,
   getSeasonKitHead,
@@ -27,7 +29,7 @@ import type { KitStageMetrics, KitStageRules, KitStandingsData } from './context
 import { standingAdjustments } from './runtime/adjustments';
 import { stageHasCustomMetrics, stageMetricsFor } from './runtime/metrics';
 import { buildRuntimeState } from './runtime/state';
-import { coinFlipDraws, kitOutcomesByMatch, type KitOutcome, type StageTableExtras } from './standings';
+import { coinFlipDraws, kitOutcomesByMatch, stageCountsKills, type KitOutcome, type StageTableExtras } from './standings';
 
 export type { StageTableExtras };
 
@@ -104,16 +106,23 @@ export interface StageTableExtrasInput {
 }
 
 /**
- * The adjustments, custom metrics, seeds and ratings a phase's table needs, read like the public table reads them, so
- * the advancement, the pairing and the runtime rank the way the standings page does. Reads the format and the runtime
- * rows only when a metric of the format applies to the stage, and seeds and ratings only when the stage ranks by or
- * shows `seed` / `rating`.
+ * The game counts, kill stats (round robin), adjustments, custom metrics, seeds and ratings a phase's table needs, read like the public table reads
+ * them, so the advancement, the pairing and the runtime rank the way the standings page does (`games_played` included:
+ * a threshold or metric on it sees the real count). Reads the format and the runtime rows only when a metric of the
+ * format applies to the stage, and seeds and ratings only when the stage ranks by or shows `seed` / `rating`.
  */
 export async function loadStageTableExtras(input: StageTableExtrasInput): Promise<StageTableExtras> {
   const { phase, stage, playerIds } = input;
-  const adjustmentRows = input.adjustmentRows ?? (await getStandingAdjustments(input.seasonId));
+  const [adjustmentRows, gameCounts, battleStats] = await Promise.all([
+    input.adjustmentRows ?? getStandingAdjustments(input.seasonId),
+    getPhaseGameCounts([phase.id]),
+    // Kills count in a round robin stage only, like the public table.
+    stageCountsKills(stage) ? getPhaseBattleStats([phase.id]) : Promise.resolve([]),
+  ]);
   const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, new Map([[stage.key, phase.id]]));
   const out: StageTableExtras = {
+    ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
+    ...(battleStats.length > 0 ? { battleStats } : {}),
     ...(adjustments[phase.id] !== undefined ? { pointAdjustments: adjustments[phase.id] } : {}),
     ...(manualOrder[phase.id] !== undefined ? { manualOrder: manualOrder[phase.id] } : {}),
   };
@@ -202,11 +211,12 @@ export async function loadKitStandingsData(
   const engine = head.engine === 'kit' ? 'kit' : 'shadow';
   const phases = await getKitPhases(seasonId);
   const ids = phases.map((phase) => phase.id);
-  const [matchRows, outcomeRows, members, adjustmentRows] = await Promise.all([
+  const [matchRows, outcomeRows, members, adjustmentRows, gameCounts] = await Promise.all([
     getPhaseMatchIds(ids),
     getOutcomesByPhases(ids),
     getPhaseMembers(ids),
     getStandingAdjustments(seasonId),
+    getPhaseGameCounts(ids),
   ]);
 
   const stages: Record<string, KitStageRules> = {};
@@ -248,6 +258,7 @@ export async function loadKitStandingsData(
     stageOfMatch,
     outcomes,
     coinFlips,
+    ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
     ...(Object.keys(adjustments).length > 0 ? { adjustments } : {}),
     ...(Object.keys(manualOrder).length > 0 ? { manualOrder } : {}),
     ...(metrics !== undefined ? { metrics } : {}),

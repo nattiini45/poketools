@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Expr } from '@/lib/format-kit/expr/ast';
 import type { RankStep, Scoring } from '@/lib/format-kit/types';
-import { computeStageStandings, kitOutcomesByMatch, toKitOutcome, type StageStandingsInput } from '../standings';
+import { computeStageStandings, kitOutcomesByMatch, stageCountsKills, toKitOutcome, type StageStandingsInput } from '../standings';
 
 const SCORING: Scoring = { win: 3, loss: 0, bye: 0 };
 const ids = ['a', 'b', 'c', 'd'];
@@ -84,5 +84,72 @@ describe('custom metrics in a table', () => {
       [{ kind: 'metric', metric: 'bonus', direction: 'desc' }],
     );
     expect(rows[0]).toMatchObject({ player_id: 'd', points: 5 });
+  });
+});
+
+describe('games_played counts the games of the completed matches', () => {
+  const rec = (match_id: string, p1: string, p2: string, winner: string, round_number = 1) => ({ match_id, player_1_id: p1, player_2_id: p2, winner_id: winner, round_number });
+  const matches = [rec('m1', 'a', 'b', 'a'), rec('m2', 'a', 'b', 'b', 2), rec('m3', 'c', 'd', 'c')];
+  const played = (rows: ReturnType<typeof table>) => Object.fromEntries(rows.map((r) => [r.player_id, r.games_played]));
+
+  it('reads the per-match counts, a rematch of the same pair counting its own games', () => {
+    const rows = table({ matches, gameCounts: { m1: 2, m2: 3, m3: 1 } });
+    expect(played(rows)).toEqual({ a: 5, b: 5, c: 1, d: 1 });
+  });
+
+  it('ranks and filters by games_played, and honours the round filter', () => {
+    const rank: RankStep[] = [{ kind: 'metric', metric: 'games_played', direction: 'desc' }];
+    expect(table({ matches, gameCounts: { m1: 2, m2: 3, m3: 1 } }, rank).map((r) => r.player_id)).toEqual(['a', 'b', 'c', 'd']);
+    expect(played(table({ matches, gameCounts: { m1: 2, m2: 3, m3: 1 }, maxRound: 1 }))).toEqual({ a: 2, b: 2, c: 1, d: 1 });
+  });
+
+  it('counts nothing without counts, and a match missing from them has no games', () => {
+    expect(played(table({ matches }))).toEqual({ a: 0, b: 0, c: 0, d: 0 });
+    expect(played(table({ matches, gameCounts: { m3: 2 } }))).toEqual({ a: 0, b: 0, c: 2, d: 2 });
+  });
+
+  it('lets the legacy game list of a match win over the counts', () => {
+    const rows = table({ matches, gamesByMatch: { m1: ['a', 'b', 'a'] }, gameCounts: { m1: 1, m3: 2 } });
+    expect(played(rows)).toEqual({ a: 3, b: 3, c: 2, d: 2 });
+  });
+});
+
+describe('kill_differential reads the battle stats', () => {
+  const stat = (player_id: string, kos_dealt: number, was_koed: boolean, round_number = 1) => ({
+    game_id: `g-${player_id}-${round_number}`,
+    player_id,
+    pokemon_name: 'x',
+    was_brought: true,
+    was_lead: false,
+    kos_dealt,
+    was_koed,
+    round_number,
+  });
+  const kills = (rows: ReturnType<typeof table>) => Object.fromEntries(rows.map((r) => [r.player_id, r.kill_differential]));
+
+  it('sums the kills a player dealt minus the Pokemon they lost, honouring the round filter', () => {
+    const battleStats = [stat('a', 3, false), stat('b', 1, true), stat('a', 2, true, 2)];
+    expect(kills(table({ battleStats }))).toEqual({ a: 4, b: 0, c: 0, d: 0 });
+    expect(kills(table({ battleStats, maxRound: 1 }))).toEqual({ a: 3, b: 0, c: 0, d: 0 });
+  });
+
+  it('is 0 for every player without the stats, which is why the loaders must pass them', () => {
+    expect(kills(table())).toEqual({ a: 0, b: 0, c: 0, d: 0 });
+  });
+});
+
+describe('stageCountsKills', () => {
+  it.each([
+    [{ kind: 'round_robin', legs: 1, mirror_legs: true }, true],
+    [{ kind: 'manual' }, true],
+    [{ kind: 'swiss', rounds: 'auto', avoid_repeats: true }, false],
+    [{ kind: 'single_elim', third_place: false }, false],
+  ] as const)('%j counts kills: %s', (pairing, expected) => {
+    expect(stageCountsKills({ pairing: pairing as never })).toBe(expected);
+  });
+
+  it('follows the base of a filter, as the legacy bracket type does', () => {
+    expect(stageCountsKills({ pairing: { kind: 'filter', base: { kind: 'swiss' } } as never })).toBe(false);
+    expect(stageCountsKills({ pairing: { kind: 'filter', base: { kind: 'round_robin' } } as never })).toBe(true);
   });
 });

@@ -22,6 +22,7 @@ import type { Expr, ExprValue } from '@/lib/format-kit/expr/ast';
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import { seededRand } from '@/lib/format-kit/expr/rand';
 import { forfeitScoringOf, perOpponentFaintOf } from '@/lib/format-kit/scoring';
+import { mappedBracketType } from '@/lib/format-kit/engine/plan';
 import type { RankStep, Scoring, Stage } from '@/lib/format-kit/types';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
@@ -83,8 +84,19 @@ export interface StageStandingsInput {
   /** Outcome rows by match id. */
   outcomes?: Readonly<Record<string, KitOutcome>>;
   byes?: readonly ByeRecord[];
+  /**
+   * The battle stats of the completed matches' games (`kill_differential`). The public table passes them for a round
+   * robin stage only (`stageCountsKills`), and every kit consumer loads them with the stage's other extras
+   * (`getPhaseBattleStats`), so the table agrees everywhere.
+   */
   battleStats?: readonly TournamentBattleStat[];
+  /** The games of a match as its game winners' ids (the legacy tables' shape); a match listed here wins over `gameCounts`. */
   gamesByMatch?: Readonly<Record<string, readonly string[]>>;
+  /**
+   * How many games each match has, by match id (`getPhaseGameCounts`): what `games_played` counts. A match without an
+   * entry has no games. Every kit consumer loads it with the stage's other extras, so the table agrees everywhere.
+   */
+  gameCounts?: Readonly<Record<string, number>>;
   /** Only matches, byes and stats up to this round. */
   maxRound?: number;
   /**
@@ -136,8 +148,17 @@ export interface StageStandingsInput {
  */
 export type StageTableExtras = Pick<
   StageStandingsInput,
-  'pointAdjustments' | 'manualOrder' | 'metricDefs' | 'placements' | 'playerRefs' | 'relations' | 'seeds' | 'ratings'
+  'pointAdjustments' | 'manualOrder' | 'metricDefs' | 'placements' | 'playerRefs' | 'relations' | 'seeds' | 'ratings' | 'gameCounts' | 'battleStats'
 >;
+
+/**
+ * Whether a stage's table counts kills (`kill_differential`) from `battle_stats`. Only a round robin stage does, as in the
+ * public tables (a Swiss table passes no battle stats); the loaders read them for those stages alone, so a threshold, a
+ * rank step or a pairing on `kill_differential` sees the value the standings page shows, and nothing is read for the rest.
+ */
+export function stageCountsKills(stage: Pick<Stage, 'pairing'>): boolean {
+  return mappedBracketType(stage.pairing) === 'round_robin';
+}
 
 /** The order a stage without a rank chain uses: the legacy table's sort. */
 export const LEGACY_RANK_CHAIN: readonly RankStep[] = [
@@ -372,10 +393,10 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
       s2.faints_taken += outcome.p2_faints ?? 0;
       s2.faints_dealt += outcome.p1_faints ?? 0;
     }
-    const games = match.match_id === undefined ? undefined : input.gamesByMatch?.[match.match_id];
-    if (games) {
-      s1.games_played += games.length;
-      s2.games_played += games.length;
+    const played = match.match_id === undefined ? undefined : (input.gamesByMatch?.[match.match_id]?.length ?? input.gameCounts?.[match.match_id]);
+    if (played) {
+      s1.games_played += played;
+      s2.games_played += played;
     }
   }
 

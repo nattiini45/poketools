@@ -43,6 +43,11 @@ export interface KitStandingsData {
   /** The phase of every match of the phases. */
   stageOfMatch: Record<string, string>;
   outcomes: Record<string, KitOutcome>;
+  /**
+   * Games per completed match id (`games_played` of every table); absent until a game exists. Public like the match
+   * results, and needed by every bracket type: a Swiss table counts games exactly as a round robin one does.
+   */
+  gameCounts?: Record<string, number>;
   /** Coin flip draws per phase id and player id. */
   coinFlips: Record<string, Record<string, number>>;
   /** An admin's order of the players per phase id (`rank.manual`); absent until one is set. */
@@ -71,17 +76,21 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
   if (!kit || !stage) return undefined;
   const stageOfMatch: Record<string, string> = {};
   const outcomes: Record<string, KitOutcome> = {};
+  const gameCounts: Record<string, number> = {};
   for (const [matchId, phase] of Object.entries(kit.stageOfMatch)) {
     if (phase !== phaseId) continue;
     stageOfMatch[matchId] = phase;
     const outcome = kit.outcomes[matchId];
     if (outcome) outcomes[matchId] = outcome;
+    const games = kit.gameCounts?.[matchId];
+    if (games !== undefined) gameCounts[matchId] = games;
   }
   return {
     engine: kit.engine,
     stages: { [phaseId]: stage },
     stageOfMatch,
     outcomes,
+    ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
     coinFlips: { [phaseId]: kit.coinFlips[phaseId] ?? {} },
     ...(kit.manualOrder?.[phaseId] ? { manualOrder: { [phaseId]: kit.manualOrder[phaseId] } } : {}),
     ...(kit.adjustments?.[phaseId] ? { adjustments: { [phaseId]: kit.adjustments[phaseId] } } : {}),
@@ -143,6 +152,7 @@ export function kitStandings(
     byes: options.byes,
     battleStats: options.battleStats,
     gamesByMatch: options.gamesByMatch,
+    gameCounts: kit.gameCounts,
     maxRound: options.maxRound,
   };
   if (phase !== null && kit.stages[phase] !== undefined) {

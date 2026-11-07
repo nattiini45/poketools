@@ -1,14 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/supabase/queries/format-engine', () => ({ getOutcomesByPhases: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getOutcomesByPhases: vi.fn(), getPhaseBattleStats: vi.fn(), getPhaseGameCounts: vi.fn() }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getCompletedMatchRecords: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn() }));
 vi.mock('../../load', () => ({ loadSeedsAndRatings: vi.fn(), stageOf: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', () => ({ getFormatRuntime: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormat: vi.fn() }));
 
-import { getOutcomesByPhases } from '@/lib/supabase/queries/format-engine';
+import { getOutcomesByPhases, getPhaseBattleStats, getPhaseGameCounts } from '@/lib/supabase/queries/format-engine';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import type { Pairing, Stage } from '@/lib/format-kit/types';
@@ -34,6 +34,8 @@ const match = (id: string, p1: string, p2: string, winner: string) => ({ match_i
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getOutcomesByPhases).mockResolvedValue([]);
+  vi.mocked(getPhaseGameCounts).mockResolvedValue({});
+  vi.mocked(getPhaseBattleStats).mockResolvedValue([]);
   vi.mocked(getCompletedMatchRecords).mockResolvedValue([]);
   vi.mocked(getRoundsByTournament).mockResolvedValue([{ round_number: 1, bye_player_ids: ['c'] }] as never);
   vi.mocked(loadSeedsAndRatings).mockResolvedValue({});
@@ -62,6 +64,62 @@ describe('loadStageTable extras', () => {
     const ranked = { ...stage('swiss', swiss), rank: [{ kind: 'metric', metric: 'seed', direction: 'asc' }] } as Stage;
     const table = await loadStageTable(context([{ id: 'ph', stage: ranked, members: ['a', 'b', 'c'] }]), 'ph');
     expect(table?.map((row) => row.player_id)).toEqual(['b', 'c', 'a']);
+  });
+});
+
+describe('loadStageTable games', () => {
+  it('counts the games of the completed matches, so games_played and a games_played rank step are real', async () => {
+    vi.mocked(getCompletedMatchRecords).mockResolvedValue([match('m1', 'a', 'b', 'a'), match('m2', 'b', 'c', 'c')]);
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({ m1: 1, m2: 3 });
+    const ranked = { ...stage('swiss', swiss), rank: [{ kind: 'metric', metric: 'games_played', direction: 'desc' }] } as Stage;
+    const table = await loadStageTable(context([{ id: 'ph', stage: ranked, members: ['a', 'b', 'c'] }]), 'ph');
+    expect(getPhaseGameCounts).toHaveBeenCalledWith(['ph']);
+    expect(Object.fromEntries((table ?? []).map((row) => [row.player_id, row.games_played]))).toEqual({ a: 1, b: 4, c: 3 });
+    expect(table?.map((row) => row.player_id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('hands games_played to the advancement rows an event target reads', async () => {
+    vi.mocked(getCompletedMatchRecords).mockResolvedValue([match('m1', 'a', 'b', 'a')]);
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({ m1: 2 });
+    const rows = await loadStageRows(context([{ id: 'ph', stage: stage('swiss', swiss), members: ['a', 'b'] }]), 'swiss');
+    expect(rows?.a.games_played).toBe(2);
+    expect(rows?.b.games_played).toBe(2);
+  });
+});
+
+describe('loadStageTable kills', () => {
+  const stat = (game_id: string, player_id: string, kos_dealt: number, was_koed: boolean) => ({
+    game_id,
+    player_id,
+    pokemon_name: 'x',
+    was_brought: true,
+    was_lead: false,
+    kos_dealt,
+    was_koed,
+    round_number: 1,
+  });
+  const killRanked = (pairing: Pairing) =>
+    ({ ...stage('league', pairing), rank: [{ kind: 'metric', metric: 'kill_differential', direction: 'desc' }] }) as Stage;
+
+  it('counts the kills of a round robin stage from the battle stats, like the public table', async () => {
+    vi.mocked(getPhaseBattleStats).mockResolvedValue([stat('g1', 'a', 3, false), stat('g1', 'b', 1, true), stat('g2', 'b', 2, false)]);
+    const table = await loadStageTable(context([{ id: 'ph', stage: killRanked(roundRobin), members: ['a', 'b', 'c'] }]), 'ph');
+    expect(getPhaseBattleStats).toHaveBeenCalledWith(['ph']);
+    expect(Object.fromEntries((table ?? []).map((row) => [row.player_id, row.kill_differential]))).toEqual({ a: 3, b: 2, c: 0 });
+    expect(table?.map((row) => row.player_id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('hands kill_differential to the advancement rows an event target reads', async () => {
+    vi.mocked(getPhaseBattleStats).mockResolvedValue([stat('g1', 'a', 4, false), stat('g1', 'b', 0, true)]);
+    const rows = await loadStageRows(context([{ id: 'ph', stage: killRanked(roundRobin), members: ['a', 'b'] }]), 'league');
+    expect(rows?.a.kill_differential).toBe(4);
+    expect(rows?.b.kill_differential).toBe(-1);
+  });
+
+  it('reads no battle stats for a Swiss stage, which the public table does not count either', async () => {
+    const table = await loadStageTable(context([{ id: 'ph', stage: killRanked(swiss), members: ['a', 'b'] }]), 'ph');
+    expect(getPhaseBattleStats).not.toHaveBeenCalled();
+    expect(table?.every((row) => row.kill_differential === 0)).toBe(true);
   });
 });
 

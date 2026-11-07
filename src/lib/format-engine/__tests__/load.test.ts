@@ -8,6 +8,8 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({ getParticipantsBatch: vi.
 vi.mock('@/lib/supabase/queries/format-engine', () => ({
   getKitPhases: vi.fn(),
   getOutcomesByPhases: vi.fn(),
+  getPhaseBattleStats: vi.fn(),
+  getPhaseGameCounts: vi.fn(),
   getPhaseMatchIds: vi.fn(),
   getPhaseMembers: vi.fn(),
   getSeasonKitHead: vi.fn(),
@@ -15,12 +17,12 @@ vi.mock('@/lib/supabase/queries/format-engine', () => ({
 }));
 
 import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
-import { getKitPhases, getOutcomesByPhases, getPhaseMatchIds, getPhaseMembers, getSeasonKitHead, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
+import { getKitPhases, getOutcomesByPhases, getPhaseBattleStats, getPhaseGameCounts, getPhaseMatchIds, getPhaseMembers, getSeasonKitHead, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
 import type { Stage } from '@/lib/format-kit/types';
-import { kitStandings } from '../context';
+import { kitForPhase, kitStandings } from '../context';
 import { loadKitPhase, loadKitStandingsData, loadSeedsAndRatings, loadStageTableExtras } from '../load';
 
 const SEASON = '11111111-1111-4111-8111-111111111111';
@@ -61,6 +63,8 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: 'seed-0123456789' });
   vi.mocked(getPhaseMatchIds).mockResolvedValue([]);
+  vi.mocked(getPhaseGameCounts).mockResolvedValue({});
+  vi.mocked(getPhaseBattleStats).mockResolvedValue([]);
   vi.mocked(getOutcomesByPhases).mockResolvedValue([]);
   vi.mocked(getStandingAdjustments).mockResolvedValue([]);
   vi.mocked(getSeasonFormat).mockResolvedValue({ engine: 'kit', seed: 'seed-0123456789', spec: { stages: [], metrics: [] }, tunables: {}, amendments: [] } as never);
@@ -171,11 +175,103 @@ describe('loadStageTableExtras and loadKitPhase', () => {
     expect(extras.playerRefs).toHaveProperty('a');
   });
 
+  it('carries the game counts of the phase, so games_played is real in every consumer', async () => {
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({ m1: 2, m2: 3 });
+    const extras = await loadStageTableExtras({ seasonId: SEASON, phase: phaseRow('p', cup) as never, stage: cup, seed: 's', playerIds: ['a', 'b'] });
+    expect(extras.gameCounts).toEqual({ m1: 2, m2: 3 });
+    expect(getPhaseGameCounts).toHaveBeenCalledWith(['p']);
+  });
+
+  it('hands the generate routes the game counts with the phase', async () => {
+    vi.mocked(getKitPhases).mockResolvedValue([phaseRow('p', cup)] as never);
+    vi.mocked(getPhaseMembers).mockResolvedValue([{ tournament_id: 'p', player_id: 'a' }]);
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({ m1: 2 });
+    expect((await loadKitPhase(SEASON, 'p'))?.tableExtras).toEqual({ gameCounts: { m1: 2 } });
+  });
+
+  describe('kill stats', () => {
+    const killStat = { game_id: 'g1', player_id: 'a', pokemon_name: 'x', was_brought: true, was_lead: false, kos_dealt: 2, was_koed: false, round_number: 1 };
+    const load = (s: Stage) => loadStageTableExtras({ seasonId: SEASON, phase: phaseRow('p', s) as never, stage: s, seed: 's', playerIds: ['a'] });
+
+    it('carries the battle stats of a round robin phase, so kill_differential is real in every consumer', async () => {
+      vi.mocked(getPhaseBattleStats).mockResolvedValue([killStat]);
+      expect((await load(cup)).battleStats).toEqual([killStat]);
+      expect(getPhaseBattleStats).toHaveBeenCalledWith(['p']);
+    });
+
+    it('reads no battle stats for a stage the public table does not count kills in', async () => {
+      vi.mocked(getPhaseBattleStats).mockResolvedValue([killStat]);
+      const extras = await load(stage('swiss', { pairing: { kind: 'swiss', rounds: 3, avoid_repeats: true } }));
+      expect(extras).not.toHaveProperty('battleStats');
+      expect(getPhaseBattleStats).not.toHaveBeenCalled();
+    });
+
+    it('hands the generate routes the battle stats with the phase', async () => {
+      vi.mocked(getKitPhases).mockResolvedValue([phaseRow('p', cup)] as never);
+      vi.mocked(getPhaseMembers).mockResolvedValue([{ tournament_id: 'p', player_id: 'a' }]);
+      vi.mocked(getPhaseBattleStats).mockResolvedValue([killStat]);
+      expect((await loadKitPhase(SEASON, 'p'))?.tableExtras).toEqual({ battleStats: [killStat] });
+    });
+  });
+
   it('hands the generate routes the extras with the phase', async () => {
     vi.mocked(getKitPhases).mockResolvedValue([phaseRow('p', cup)] as never);
     vi.mocked(getPhaseMembers).mockResolvedValue([{ tournament_id: 'p', player_id: 'a' }]);
     vi.mocked(getStandingAdjustments).mockResolvedValue([points('cup', 'a', 3)]);
     const phase = await loadKitPhase(SEASON, 'p');
     expect(phase?.tableExtras).toEqual({ pointAdjustments: { a: 3 } });
+  });
+});
+
+describe('game counts in the public kit data', () => {
+  const swiss = stage('swiss', { pairing: { kind: 'swiss', rounds: 3, avoid_repeats: true } });
+  const cup = stage('cup');
+  const rec = (match_id: string, p1: string, p2: string, winner: string) => ({ match_id, player_1_id: p1, player_2_id: p2, winner_id: winner, round_number: 1 });
+
+  function arrange() {
+    vi.mocked(getKitPhases).mockResolvedValue([phaseRow('s', swiss), phaseRow('c', cup)] as never);
+    vi.mocked(getPhaseMembers).mockResolvedValue([
+      { tournament_id: 's', player_id: 'a' },
+      { tournament_id: 's', player_id: 'b' },
+      { tournament_id: 'c', player_id: 'c' },
+      { tournament_id: 'c', player_id: 'd' },
+    ]);
+    vi.mocked(getPhaseMatchIds).mockResolvedValue([
+      { id: 'm1', tournament_id: 's' },
+      { id: 'm2', tournament_id: 'c' },
+    ]);
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({ m1: 3, m2: 2 });
+  }
+
+  it('reads the counts of every phase once, and leaves them out when no game exists', async () => {
+    arrange();
+    expect((await loadKitStandingsData(SEASON))?.gameCounts).toEqual({ m1: 3, m2: 2 });
+    expect(getPhaseGameCounts).toHaveBeenCalledWith(['s', 'c']);
+    vi.mocked(getPhaseGameCounts).mockResolvedValue({});
+    expect(await loadKitStandingsData(SEASON)).not.toHaveProperty('gameCounts');
+  });
+
+  it('gives a Swiss table its games_played, though no caller passes game lists for it', async () => {
+    arrange();
+    const data = await loadKitStandingsData(SEASON);
+    const rows = kitStandings(kitForPhase(data, 's')!, ['a', 'b'], { a: 'A', b: 'B' }, [rec('m1', 'a', 'b', 'a')]);
+    expect(rows.map((row) => row.games_played)).toEqual([3, 3]);
+  });
+
+  it('narrows the counts to the phase a stage page shows', async () => {
+    arrange();
+    const data = await loadKitStandingsData(SEASON);
+    expect(kitForPhase(data, 's')?.gameCounts).toEqual({ m1: 3 });
+    expect(kitForPhase(data, 'c')?.gameCounts).toEqual({ m2: 2 });
+  });
+
+  it('counts them in the season-wide table too, and a caller game list still wins', async () => {
+    arrange();
+    const data = await loadKitStandingsData(SEASON);
+    const matches = [rec('m1', 'a', 'b', 'a'), rec('m2', 'c', 'd', 'c')];
+    const season = kitStandings(data!, ['a', 'b', 'c', 'd'], {}, matches);
+    expect(Object.fromEntries(season.map((row) => [row.player_id, row.games_played]))).toEqual({ a: 3, b: 3, c: 2, d: 2 });
+    const listed = kitStandings(data!, ['a', 'b', 'c', 'd'], {}, matches, {}, { gamesByMatch: { m1: ['a'] } });
+    expect(Object.fromEntries(listed.map((row) => [row.player_id, row.games_played]))).toEqual({ a: 1, b: 1, c: 2, d: 2 });
   });
 });

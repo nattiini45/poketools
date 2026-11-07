@@ -46,8 +46,8 @@ export async function kitAdvancingPlayers(input: KitAdvanceInput): Promise<Advan
     getOutcomesByPhases([source.id]),
     getStandingAdjustments(input.seasonId),
   ]);
-  // The same extras the public table ranks with (custom metrics, seeds, ratings, adjustments, the admin's order): a cut
-  // by a custom metric must see the values the standings page shows.
+  // The same extras the public table ranks with (game counts, custom metrics, seeds, ratings, adjustments, the admin's
+  // order): a cut by a custom metric, or a threshold on `games_played`, must see the values the standings page shows.
   const extras = await loadStageTableExtras({
     seasonId: input.seasonId,
     phase: source,

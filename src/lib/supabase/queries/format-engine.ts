@@ -13,6 +13,7 @@ import type { Json } from '@/types/database';
 import { isMatchOutcomeKind, type MatchOutcomeKind } from '@/types/match-outcome';
 import type { SeasonFormatEngine } from '@/lib/format-studio/library-types';
 import { isValidUuid } from '@/lib/utils/uuid';
+import type { TournamentBattleStat } from './games';
 
 /** Ids per `.in()` filter. */
 const IN_CHUNK = 100;
@@ -143,6 +144,68 @@ export async function getPhaseMatchIds(phaseIds: readonly string[]): Promise<{ i
         .range(from, to),
     );
     out.push(...rows);
+  }
+  return out;
+}
+
+/**
+ * How many games each completed match of the phases has, by match id: what a table's `games_played` counts
+ * (`StageStandingsInput.gameCounts`). Only completed matches, like the match records a table is computed from; a match
+ * without a game row is absent. The one place the kit's tables read their games, so no consumer can rank without them.
+ */
+export async function getPhaseGameCounts(phaseIds: readonly string[]): Promise<Record<string, number>> {
+  const ids = [...new Set(phaseIds)];
+  const counts: Record<string, number> = {};
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const rows = await readAllPages((from, to) =>
+      supabase
+        .from('games')
+        .select('id, match_id, matches!inner(tournament_id, status)')
+        .in('matches.tournament_id', chunk)
+        .eq('matches.status', 'completed')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    for (const row of rows) counts[row.match_id] = (counts[row.match_id] ?? 0) + 1;
+  }
+  return counts;
+}
+
+/**
+ * The narrow battle_stats rows of the completed matches of the phases, with the round of each: what a table's
+ * `kill_differential` sums (`StageStandingsInput.battleStats`). Only completed matches, like the match records a table is
+ * computed from (a game of a match still open scores nothing). Callers read it for a round robin stage only
+ * (`stageCountsKills`); the public pages do the same.
+ */
+export async function getPhaseBattleStats(phaseIds: readonly string[]): Promise<TournamentBattleStat[]> {
+  const ids = [...new Set(phaseIds)];
+  const out: TournamentBattleStat[] = [];
+  for (let i = 0; i < ids.length; i += IN_CHUNK) {
+    const chunk = ids.slice(i, i + IN_CHUNK);
+    const rows = await readAllPages((from, to) =>
+      supabase
+        .from('battle_stats')
+        .select(
+          'id, game_id, player_id, pokemon_name, was_brought, was_lead, kos_dealt, was_koed, games!inner(matches!inner(tournament_id, status, rounds!inner(round_number)))',
+        )
+        .in('games.matches.tournament_id', chunk)
+        .eq('games.matches.status', 'completed')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    for (const row of rows) {
+      out.push({
+        game_id: row.game_id,
+        player_id: row.player_id,
+        pokemon_name: row.pokemon_name,
+        was_brought: row.was_brought,
+        was_lead: row.was_lead,
+        kos_dealt: row.kos_dealt,
+        was_koed: row.was_koed,
+        round_number: row.games.matches.rounds.round_number,
+      });
+    }
   }
   return out;
 }

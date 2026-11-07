@@ -8,6 +8,8 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({ getParticipantsBatch: vi.
 vi.mock('@/lib/supabase/queries/format-engine', () => ({
   getKitPhases: vi.fn(),
   getOutcomesByPhases: vi.fn(),
+  getPhaseBattleStats: vi.fn(),
+  getPhaseGameCounts: vi.fn(),
   getSeasonKitHead: vi.fn(),
   getPhaseMatchIds: vi.fn(),
   getPhaseMembers: vi.fn(),
@@ -15,7 +17,7 @@ vi.mock('@/lib/supabase/queries/format-engine', () => ({
 }));
 
 import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
-import { getKitPhases, getOutcomesByPhases, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
+import { getKitPhases, getOutcomesByPhases, getPhaseBattleStats, getPhaseGameCounts, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import type { Edge, RankStep, Stage } from '@/lib/format-kit/types';
@@ -54,8 +56,8 @@ const INPUT: KitAdvanceInput = {
   groupOf: {},
 };
 
-function arrange(source: Stage, metrics: unknown[] = []) {
-  const edge: Edge = { key: 'to_finals', from: source.key, to: 'finals', select: [{ kind: 'top_n', n: 1 }], seeding: 'rank', gate: 'admin_confirm' };
+function arrange(source: Stage, metrics: unknown[] = [], select: Edge['select'] = [{ kind: 'top_n', n: 1 }]) {
+  const edge: Edge = { key: 'to_finals', from: source.key, to: 'finals', select, seeding: 'rank', gate: 'admin_confirm' };
   vi.mocked(getSeasonFormat).mockResolvedValue({
     engine: 'kit',
     seed: 'seed-0123456789',
@@ -69,6 +71,8 @@ function arrange(source: Stage, metrics: unknown[] = []) {
   ] as never);
   vi.mocked(getOutcomesByPhases).mockResolvedValue([]);
   vi.mocked(getStandingAdjustments).mockResolvedValue([]);
+  vi.mocked(getPhaseGameCounts).mockResolvedValue({});
+  vi.mocked(getPhaseBattleStats).mockResolvedValue([]);
   vi.mocked(getFormatRuntime).mockResolvedValue({
     relationLinks: [],
     resourceItems: [],
@@ -121,5 +125,84 @@ describe('kitAdvancingPlayers ranks like the public table', () => {
     arrange(stage('groups', [{ kind: 'metric', metric: 'rating', direction: 'desc' }]));
     vi.mocked(getPlayerRatingsBatch).mockResolvedValue(new Map([['b', { rating: 1900 }], ['a', { rating: 1500 }]]) as never);
     expect(await pick()).toEqual(['b']);
+  });
+});
+
+describe('kitAdvancingPlayers counts games like the public table', () => {
+  /** Games per match, powers of two so every player's total differs: a 7, b 25, c 42, d 52. */
+  const GAMES = { m1: 1, m2: 2, m3: 4, m4: 8, m5: 16, m6: 32 };
+  const gamesAtLeast = (n: number): Edge['select'] => [
+    { kind: 'threshold', when: { k: 'cmp', op: '>=', a: { k: 'ref', name: 'games_played', t: 'number' }, b: { k: 'num', v: n } } },
+  ];
+
+  it('reads the game counts of the source phase', async () => {
+    arrange(stage('groups', [{ kind: 'metric', metric: 'points', direction: 'desc' }]));
+    vi.mocked(getPhaseGameCounts).mockResolvedValue(GAMES);
+    await pick();
+    expect(getPhaseGameCounts).toHaveBeenCalledWith(['src']);
+  });
+
+  it('advances the players whose games_played meets a threshold', async () => {
+    arrange(stage('groups', [{ kind: 'metric', metric: 'points', direction: 'desc' }]), [], gamesAtLeast(40));
+    vi.mocked(getPhaseGameCounts).mockResolvedValue(GAMES);
+    expect(await pick()).toEqual(['c', 'd']);
+  });
+
+  it('advances nobody on a games_played threshold while no game is recorded', async () => {
+    arrange(stage('groups', [{ kind: 'metric', metric: 'points', direction: 'desc' }]), [], gamesAtLeast(1));
+    expect(await pick()).toEqual([]);
+  });
+
+  it('cuts by a games_played rank step', async () => {
+    // Without counts the step ties everybody and the cut falls back to participant order (d first).
+    arrange(stage('groups', [{ kind: 'metric', metric: 'games_played', direction: 'asc' }]));
+    vi.mocked(getPhaseGameCounts).mockResolvedValue(GAMES);
+    expect(await pick()).toEqual(['a']);
+  });
+});
+
+describe('kitAdvancingPlayers counts kills like the public table', () => {
+  const stat = (game_id: string, player_id: string, kos_dealt: number, was_koed: boolean) => ({
+    game_id,
+    player_id,
+    pokemon_name: 'x',
+    was_brought: true,
+    was_lead: false,
+    kos_dealt,
+    was_koed,
+    round_number: 1,
+  });
+  /** a dealt 9 kills, d lost one Pokemon without a kill: a +9, b 0, c 0, d -1. */
+  const STATS = [stat('g1', 'a', 9, false), stat('g1', 'd', 0, true)];
+  const killRank: RankStep[] = [{ kind: 'metric', metric: 'kill_differential', direction: 'desc' }];
+  const killsAtLeast = (n: number): Edge['select'] => [
+    { kind: 'threshold', when: { k: 'cmp', op: '>=', a: { k: 'ref', name: 'kill_differential', t: 'number' }, b: { k: 'num', v: n } } },
+  ];
+
+  it('reads the battle stats of the source phase', async () => {
+    arrange(stage('groups', killRank));
+    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
+    await pick();
+    expect(getPhaseBattleStats).toHaveBeenCalledWith(['src']);
+  });
+
+  it('cuts by a kill_differential rank step', async () => {
+    // Without the stats the step ties everybody and the cut falls back to participant order (d first).
+    arrange(stage('groups', killRank));
+    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
+    expect(await pick()).toEqual(['a']);
+  });
+
+  it('advances the players whose kill_differential meets a threshold', async () => {
+    arrange(stage('groups', [{ kind: 'metric', metric: 'points', direction: 'desc' }]), [], killsAtLeast(1));
+    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
+    expect(await pick()).toEqual(['a']);
+  });
+
+  it('does not count kills of a Swiss stage, which the public table does not either', async () => {
+    arrange({ ...stage('groups', killRank), pairing: { kind: 'swiss', rounds: 'auto', avoid_repeats: true } });
+    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
+    expect(await pick()).toEqual(['d']);
+    expect(getPhaseBattleStats).not.toHaveBeenCalled();
   });
 });
