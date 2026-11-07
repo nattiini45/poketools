@@ -120,7 +120,7 @@ export default defineDe<typeof en>()({
     constraint_source_invalid: 'Eine Teamregel in Stage {stage} zählt die Ressource {resource}: {reason}.',
     constraint_species_unknown: 'Eine Teamregel in Stage {stage} nennt {id}, aber das ist keine bekannte Art.',
     constraint_source_hidden_domain:
-      'Eine Teamregel ({constraint}) in Stage {stage} liest den Pool {domain}, den nur Admins sehen dürfen. Ihr Ergebnis würde jedem Spieler verraten, welche Arten in diesem Pool sind.',
+      'Eine Teamregel ({constraint}) in Stage {stage} liest den Pool {domain}, den Spieler nicht vollständig sehen dürfen (nur Admins, oder verborgen bis zur Freischaltung). Ihr Ergebnis würde jedem Spieler verraten, welche Arten in diesem Pool sind. Mach den Pool öffentlich, entferne das Attribut aus seinen Einträgen oder aktiviere bei einer Zählquelle „Nur freigeschaltete Einträge“.',
     calendar_invalid: 'Der Kalender von Stage {stage} ist ungültig: {reason}.',
     deadline_policy_invalid: 'Eine Frist im Kalender von Stage {stage} ist ungültig: {reason}.',
     foreach_group_invalid: 'Stage {stage} kann nicht für die Gruppen von Stage {from_stage} wiederholt werden: {reason}.',

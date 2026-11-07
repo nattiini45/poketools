@@ -135,7 +135,8 @@ export interface FirstRoundStart {
 /**
  * The relations (non-manual) that the events right after the first round's write draw: `stage_start` when the round
  * starts the phase (and it has not fired), and `round_start` of round 1. A `generate_relation` effect of a rule on one
- * of them whose `when` holds draws the relation over the same roster, so the gate does not have to wait for it.
+ * of them whose `when` holds draws the relation over the same roster, so the gate does not have to wait for it (only
+ * while the relation has no link: `set_relation` skips a relation that has links, see `firstRoundGap`).
  * An event that failed to evaluate counts as not drawing (the gate then stays closed).
  */
 function relationsDrawnAfterRound(ctx: Pick<KitContext, 'def' | 'state' | 'seed'>, start: FirstRoundStart): Set<string> {
@@ -167,7 +168,9 @@ function relationsDrawnAfterRound(ctx: Pick<KitContext, 'def' | 'state' | 'seed'
  *   redone once links exist and an action reaches only the players it has links for, so a round started before the draw
  *   (or over a roster the draw missed) leaves those players with no recipient and no gifts for good. A relation that a
  *   `generate_relation` effect draws on the events right after the round (`start`: `stage_start`, `round_start` of round
- *   1) is not undrawn: that draw runs over the same roster, before anything can be played;
+ *   1) is not undrawn while the relation has no link at all: that draw runs over the same roster, before anything can be
+ *   played. Once the relation has links the draw is a no-op (the op skips a relation that has links), so a pending draw
+ *   does not mask a player the old links miss;
  * - `action_incomplete`: a deadline policy of an action opened a `deadline_missed` check that nobody resolved, which
  *   means a player did not do what the action asks, so their team rules can not be met.
  * A format with no `via` action and no action policy never reports anything.
@@ -180,13 +183,15 @@ export function firstRoundGap(ctx: Pick<KitContext, 'def' | 'state' | 'phases' |
     const drawnAfter = start === undefined ? new Set<string>() : relationsDrawnAfterRound(ctx, start);
     const roster = rosterOf(ctx);
     for (const relation of [...viaKeys].sort()) {
-      if (drawnAfter.has(relation)) continue;
       const linked = new Set<string>();
       for (const link of ctx.state.links) {
         if (link.relation !== relation) continue;
         linked.add(link.from);
         linked.add(link.to);
       }
+      // A pending draw covers only a relation that has no link yet: the set_relation op skips a relation that already has
+      // links (an event may fire twice), so over an old draw it would leave a player enrolled since without a recipient.
+      if (linked.size === 0 && drawnAfter.has(relation)) continue;
       // No link at all, or a draw that missed a player (enrolled after it): the links can not be redone.
       if (linked.size === 0 || roster.some((player) => !linked.has(player))) undrawn.push(relation);
     }

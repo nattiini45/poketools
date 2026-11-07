@@ -130,7 +130,7 @@ export default {
     constraint_source_invalid: 'A team rule in stage {stage} counts the resource {resource}: {reason}.',
     constraint_species_unknown: 'A team rule in stage {stage} names {id}, which is not a known species.',
     constraint_source_hidden_domain:
-      'A {constraint} team rule in stage {stage} reads the pool {domain}, which only admins may see. Its verdict would tell every player which species are in that pool.',
+      'A {constraint} team rule in stage {stage} reads the pool {domain}, which players cannot see in full (admins only, or hidden until it is unlocked). Its verdict would tell every player which species are in that pool. Make the pool public, remove the attribute from its entries, or, for a count source, turn on "Unlocked entries only".',
     calendar_invalid: 'The calendar of stage {stage} is not valid: {reason}.',
     deadline_policy_invalid: 'A deadline in the calendar of stage {stage} is not valid: {reason}.',
     foreach_group_invalid: 'Stage {stage} cannot repeat for the groups of stage {from_stage}: {reason}.',

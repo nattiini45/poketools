@@ -643,7 +643,7 @@ export function wichtelcupDoc(): Json {
         key: 'new_year',
         label: lt('New Year pool', 'Neujahrspool'),
         initially: 'locked',
-        visibility: 'when_unlocked',
+        visibility: 'public',
         entries: [{ id: 'corviknight', attrs: [{ key: 'role', value: 'tank' }] }],
       },
     ],

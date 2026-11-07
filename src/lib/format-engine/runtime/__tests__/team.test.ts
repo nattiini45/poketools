@@ -206,6 +206,51 @@ describe('species matching', () => {
   });
 });
 
+describe('a pool the players may not see never reaches a verdict', () => {
+  /** The cup's New Year pool with another visibility (the shipped reading is public). */
+  const withVisibility = (visibility: 'when_unlocked' | 'admins'): FormatDefinition => ({
+    ...DEF,
+    domains: (DEF.domains ?? []).map((d) => (d.key === 'new_year' ? { ...d, visibility } : d)),
+  });
+  const count = (unlocked_only: boolean): TeamConstraint[] => [{ kind: 'count', source: { kind: 'domain', domain: 'new_year', unlocked_only }, max: 0 }];
+  const members = normals('corviknight');
+  const run = (def: FormatDefinition, constraints: TeamConstraint[], flags: Record<string, string> = {}) =>
+    evaluateConstraints(input({ def, constraints, members, state: stateFor(def, { amendments: [POOL, NEW_YEAR], flags }) }));
+
+  it('matches nothing in a locked when_unlocked pool, with or without unlocked_only', () => {
+    const def = withVisibility('when_unlocked');
+    expect(run(def, count(false))).toEqual([]);
+    expect(run(def, count(true))).toEqual([]);
+    // The complement is no oracle either: a pooled species and an unrelated one get the same verdict.
+    const complement: TeamConstraint[] = [{ kind: 'count', source: { kind: 'not', source: { kind: 'domain', domain: 'new_year', unlocked_only: false } }, max: 0 }];
+    const verdictFor = (species: string) =>
+      codes(evaluateConstraints(input({ def, constraints: complement, members: normals(species), state: stateFor(def, { amendments: [POOL, NEW_YEAR] }) })));
+    expect(verdictFor('corviknight')).toEqual(verdictFor('zzz'));
+  });
+
+  it('reads a when_unlocked pool once it is unlocked', () => {
+    expect(codes(run(withVisibility('when_unlocked'), count(false), UNLOCKED))).toEqual(['kit_count_max#0']);
+  });
+
+  it('matches nothing in an admins pool, even when it is unlocked', () => {
+    expect(run(withVisibility('admins'), count(false), UNLOCKED)).toEqual([]);
+  });
+
+  it('forms no distinct group from the attribute of a locked when_unlocked pool', () => {
+    const distinctRole: TeamConstraint[] = [{ kind: 'distinct', by: 'attr', attr: 'role', max_per: 1 }];
+    const tanks = [member('corviknight'), member('aggron')];
+    const amendments: DomainAmendment[] = [
+      { domain: 'new_year', add: ['corviknight', 'aggron'].map((id) => ({ id, attrs: [{ key: 'role', value: 'tank' }] })) },
+    ];
+    const verdict = (def: FormatDefinition, flags: Record<string, string> = {}) =>
+      evaluateConstraints(input({ def, constraints: distinctRole, members: tanks, state: stateFor(def, { amendments, flags }) }));
+    expect(codes(verdict(DEF))).toEqual(['kit_distinct#0']);
+    expect(verdict(withVisibility('when_unlocked'))).toEqual([]);
+    expect(codes(verdict(withVisibility('when_unlocked'), UNLOCKED))).toEqual(['kit_distinct#0']);
+    expect(verdict(withVisibility('admins'), UNLOCKED)).toEqual([]);
+  });
+});
+
 describe('the allowlist rule (kit_not_allowed)', () => {
   const allowlist = (over: Partial<Extract<TeamConstraint, { kind: 'count' }>> = {}): TeamConstraint[] => [
     {

@@ -84,10 +84,16 @@ describe('firstRoundGap', () => {
     expect(firstRoundGap(context({ links: [...cycle, other], members: ['p1', 'p2', 'p3', 'p4'] })).undrawn).toEqual(['santa']);
   });
 
-  it('lets a draw right after the round cover the player the earlier draw missed', () => {
+  it('does not let a pending draw cover the player an earlier draw missed (the draw is a no-op over existing links)', () => {
     const kickoff = { kind: 'rule.on_event', id: 'kickoff', on: { event: 'stage_start' }, effects: [{ effect: 'generate_relation', relation: 'santa' }] };
-    const late = context({ rules: [action('santa'), kickoff], relations: [{ key: 'santa', shape: 'derangement' }], links: cycle, members: ['p1', 'p2', 'p3', 'p4'] });
-    expect(firstRoundGap(late, { stage: 'cup', startsPhase: true }).undrawn).toEqual([]);
+    const rules = [action('santa'), kickoff];
+    const relations = [{ key: 'santa', shape: 'derangement' }];
+    const late = context({ rules, relations, links: cycle, members: ['p1', 'p2', 'p3', 'p4'] });
+    expect(firstRoundGap(late, { stage: 'cup', startsPhase: true })).toEqual({ reasons: ['relation_undrawn'], undrawn: ['santa'], openChecks: 0 });
+    // Every enrolled player covered by the old links: nothing to wait for.
+    expect(firstRoundGap(context({ rules, relations, links: cycle }), { stage: 'cup', startsPhase: true }).reasons).toEqual([]);
+    // No link at all: the pending draw still covers the relation.
+    expect(firstRoundGap(context({ rules, relations, members: ['p1', 'p2', 'p3', 'p4'] }), { stage: 'cup', startsPhase: true }).undrawn).toEqual([]);
   });
 
   it('needs at least two players before an undrawn relation counts', () => {
@@ -200,6 +206,16 @@ describe('assertPhaseReadyForFirstRound', () => {
     await expect(run({ tournament: tournament({ status: 'upcoming' }) })).resolves.toBeNull();
     // An active phase fired its stage_start already: nothing will draw after this round.
     await expect(run({ tournament: tournament({ status: 'active' }) })).rejects.toMatchObject({ code: 'format_not_ready' });
+  });
+
+  it('refuses a new phase whose pending draw would be a no-op over old links that miss a player, unless forced', async () => {
+    const kickoff = { kind: 'rule.on_event', id: 'kickoff', on: { event: 'stage_start', stage: 'cup' }, effects: [{ effect: 'generate_relation', relation: 'santa' }] };
+    vi.mocked(loadFreshKitContext).mockResolvedValue(
+      context({ rules: [action('santa'), kickoff], relations: [{ key: 'santa', shape: 'derangement' }], links: cycle, members: ['p1', 'p2', 'p3', 'p4'] }),
+    );
+    const upcoming = tournament({ status: 'upcoming' });
+    await expect(run({ tournament: upcoming })).rejects.toMatchObject({ code: 'format_not_ready', params: { reasons: 'relation_undrawn', undrawn: 1 } });
+    await expect(run({ tournament: upcoming, force: true })).resolves.toMatchObject({ gap: { reasons: ['relation_undrawn'], undrawn: ['santa'] } });
   });
 
   it('returns the override of a forced start and writes no audit row itself', async () => {

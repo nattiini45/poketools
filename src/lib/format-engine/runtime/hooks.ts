@@ -426,7 +426,8 @@ export interface RoundGeneratedInput {
  * A round was generated: `stage_start` when it opens the phase, then `round_start`, and a rematch check if needed.
  *
  * The first-round gate (`firstRoundGap`) treats a relation as drawn when a `stage_start` effect draws it right after the
- * round, and it never looks again once the round exists, so a `stage_start` that failed would leave the relation undrawn
+ * round (only while the relation has no link yet), and it never looks again once the round exists, so a `stage_start`
+ * that failed would leave the relation undrawn
  * with nothing to retry it. The start is therefore tried twice (the event is idempotent by key); if it still fails, that
  * is logged as an error that names the way out (a manual `draw` adjustment of the relation), and the round goes on.
  */

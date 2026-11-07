@@ -145,8 +145,10 @@ function checkFilter(out: Diagnostic[], lookup: Lookup, stage: Stage, i: number)
 // --- Team constraints ---------------------------------------------------------------------------
 
 /**
- * A team rule reads a pool only admins may see. The team advice and the post-match audit are shown to any signed-in player,
- * so the verdict of such a rule would answer "is this species in the hidden pool" for any species the player tries.
+ * A team rule reads a pool the players may not see in full: an `admins` pool, or a `when_unlocked` pool that is still
+ * locked. The team advice and the post-match audit are shown to any signed-in player, so the verdict of such a rule would
+ * answer "is this species in the hidden pool" for any species the player tries. A `when_unlocked` pool is safe to read
+ * only through a count source with `unlocked_only` (the evaluator matches nothing while it is locked).
  */
 function hiddenDomainDiag(pointer: string, stage: Stage, constraint: TeamConstraint, domain: string): Diagnostic {
   return diag('constraint_source_hidden_domain', pointer, { stage: stage.key, constraint: constraint.kind, domain });
@@ -157,8 +159,11 @@ function checkCountSource(out: Diagnostic[], lookup: Lookup, stage: Stage, const
     case 'domain':
       if (!lookup.domains.has(source.domain)) {
         out.push(diag('ref_unknown', `${pointer}/domain`, { ref: 'domain', key: source.domain, where: 'constraint' }));
-      } else if (lookup.domains.get(source.domain)?.visibility === 'admins') {
-        out.push(hiddenDomainDiag(`${pointer}/domain`, stage, constraint, source.domain));
+      } else {
+        const visibility = lookup.domains.get(source.domain)?.visibility;
+        if (visibility === 'admins' || (visibility === 'when_unlocked' && !source.unlocked_only)) {
+          out.push(hiddenDomainDiag(`${pointer}/domain`, stage, constraint, source.domain));
+        }
       }
       return;
     case 'resource': {
@@ -245,10 +250,11 @@ function checkConstraint(out: Diagnostic[], lookup: Lookup, stage: Stage, constr
       const reason = attr === undefined ? 'unknown' : attr.on !== 'entry' ? 'player' : attr.multi === true ? 'multi' : null;
       attrProblem(out, stage, constraint, at('attr'), constraint.attr, reason);
       if (reason === null) {
-        // The groups are read from the entries of every domain, so an attribute carried by a hidden pool shows its members.
+        // The groups are read from the entries of every domain, so an attribute carried by a hidden pool (`admins`, or
+        // `when_unlocked`: its entries are in the runtime state while it is locked) shows its members.
         const attrKey = constraint.attr;
         for (const domain of lookup.domains.values()) {
-          if (domain.visibility === 'admins' && domain.entries.some((entry) => entry.attrs.some((a) => a.key === attrKey))) {
+          if (domain.visibility !== 'public' && domain.entries.some((entry) => entry.attrs.some((a) => a.key === attrKey))) {
             out.push(hiddenDomainDiag(at('attr'), stage, constraint, domain.key));
           }
         }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { lookupPath } from '@/i18n/core';
 import { formatStudioMessages } from '@/i18n/messages/format-studio';
+import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import { compile } from '../compile';
 import {
   compareDiagnostics,
@@ -323,12 +324,50 @@ describe('constraint_source_hidden_domain', () => {
     expect(pointers.some((p) => p.includes('/resource'))).toBe(false);
   });
 
+  describe('a when_unlocked pool: its entries are in the runtime state while it is locked', () => {
+    const lockedPool = () => mutate(compile(wichtelcupDoc()).definition!, [{ op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' }]);
+
+    it('rejects a count source that reads it without unlocked_only, and a distinct-by-attr over an attribute it carries', () => {
+      const pointers = hiddenCodes(lockedPool()).map((d) => d.json_pointer);
+      expect(pointers).toContain('/stages/0/constraints/9/source/domain');
+      expect(pointers).toContain('/stages/2/constraints/2/attr');
+      expect(compile(lockedPool()).ok).toBe(false);
+    });
+
+    it('keeps the safe unlocked_only source, also inside any_of / not, and the resource sources', () => {
+      const pointers = hiddenCodes(lockedPool()).map((d) => d.json_pointer);
+      expect(pointers.filter((p) => p.startsWith('/stages/0/constraints/4/'))).toEqual([]);
+      expect(pointers.some((p) => p.includes('/resource'))).toBe(false);
+    });
+
+    it('accepts the rule once the source is gated and the attribute is not carried by the pool', () => {
+      const gated = mutate(compile(wichtelcupDoc()).definition!, [
+        { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+        { op: 'replace', path: '/stages/0/constraints/9/source/unlocked_only', value: true },
+        { op: 'replace', path: '/domains/1/entries/0/attrs', value: [] },
+      ]);
+      expect(hiddenCodes(gated)).toEqual([]);
+    });
+  });
+
   it('does not flag a distinct-by-attr rule whose attribute no hidden domain carries', () => {
     const input = mutate(compile(wichtelcupDoc()).definition!, [
       { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
       { op: 'replace', path: '/domains/1/entries/0/attrs', value: [] },
     ]);
     expect(hiddenCodes(input).map((d) => d.json_pointer)).not.toContain('/stages/2/constraints/2/attr');
+  });
+
+  it('advises with the exact editor label of the unlocked_only control, and offers a way out for distinct-by-attr', () => {
+    for (const locale of ['en', 'de'] as const) {
+      const message = lookupPath(formatStudioMessages[locale], 'diagnostics.constraint_source_hidden_domain') as string;
+      const label = lookupPath(formatStudioPrimitivesMessages[locale], 'field.unlocked_only') as string;
+      expect(typeof label, locale).toBe('string');
+      expect(message, locale).toContain(locale === 'de' ? `„${label}“` : `"${label}"`);
+      // Remedies that do not depend on the source kind are named too.
+      expect(message, locale).toMatch(locale === 'de' ? /öffentlich/ : /public/);
+      expect(message, locale).toMatch(locale === 'de' ? /Attribut/ : /attribute/);
+    }
   });
 
   it('compiles the shipped Wichtelcup preset without that error', () => {

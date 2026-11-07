@@ -602,6 +602,12 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'constraint-distinct-attr-hidden-domain', 'constraint_source_hidden_domain', '/stages/2/constraints/2/attr', mutate(W, [
     { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
   ]), { params: { stage: 'ladder', constraint: 'distinct', domain: 'new_year' } }),
+  fx('error', 'constraint-source-when-unlocked-domain', 'constraint_source_hidden_domain', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'new_year' } }),
+  fx('error', 'constraint-distinct-attr-when-unlocked-domain', 'constraint_source_hidden_domain', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', domain: 'new_year' } }),
   fx('warning', 'constraint-species-unknown', 'constraint_species_unknown', '/stages/2/constraints/4/source/ids/1', mutate(W, []), {
     env: withSpecies(['garchomp', 'corviknight']),
     params: { stage: 'ladder', id: 'blissey' },

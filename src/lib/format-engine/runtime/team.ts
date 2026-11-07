@@ -10,7 +10,8 @@
  * `deerlingwinter` covers only that forme (the base forme `deerling` does not match it).
  *
  * Count sources: `domain` is the entry ids after the admin's amendments (with `unlocked_only` a locked domain matches
- * nothing), `resource` the player's OWN item ids of that resource, `species` the listed ids, `any_of` a union and `not`
+ * nothing; a pool the players may not see, an `admins` pool or a still locked `when_unlocked` one, matches nothing
+ * either way, so a verdict never reveals its members: the compiler rejects such a source too), `resource` the player's OWN item ids of that resource, `species` the listed ids, `any_of` a union and `not`
  * the complement over the team.
  *
  * Type quota: a Pokémon counts for its primary type only, or for both when `allow_multi_count` (the same reading as the
@@ -23,7 +24,7 @@ import type { ValidationIssueCode, ValidationIssueParams, SetIssue, TeamIssue, T
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import { attributeMap } from '@/lib/format-kit/engine/runtime-names';
 import type { CountSource, DomainEntry, FormatDefinition, TeamConstraint } from '@/lib/format-kit/types';
-import { domainView, findDomainView } from './domains';
+import { domainView, findDomainView, visibleEntries } from './domains';
 import { teamContext, playerAttrValue, type EnvBase } from './expr-env';
 import type { KitRuntimeState } from './types';
 
@@ -92,7 +93,8 @@ function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
     case 'domain': {
       const view = findDomainView(input.def, source.domain, input.state.flags, input.state.amendments);
       if (view === null || (source.unlocked_only && !view.unlocked)) return () => false;
-      return idMatcher(new Set(view.entries.map((entry) => entry.id)));
+      // The team verdict is shown to players: read only what a player may see (an `admins` or a locked `when_unlocked` pool is empty).
+      return idMatcher(new Set(visibleEntries(view, false).map((entry) => entry.id)));
     }
     case 'resource': {
       const ids = new Set<string>();
@@ -173,7 +175,8 @@ function distinctGroups(
       return { by: 'type', groups };
     case 'attr': {
       const key = constraint.attr ?? '';
-      const entries = domainView(input.def, input.state.flags, input.state.amendments).flatMap((view) => view.entries);
+      // Only the entries a player may see: a hidden pool's attribute values would otherwise form groups (and so a verdict).
+      const entries = domainView(input.def, input.state.flags, input.state.amendments).flatMap((view) => visibleEntries(view, false));
       members.forEach((m, i) => {
         const value = entryOf(entries, m)?.attrs.find((a) => a.key === key)?.value;
         if (value !== undefined && !Array.isArray(value)) add(String(value), String(value), i);
