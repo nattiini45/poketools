@@ -439,6 +439,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // A round the admin completed while it was empty cannot take matches (`round_write` refuses it, which is meant for a
+    // completion that raced the write): refused here with the way out, instead of failing on every retry.
+    if (emptyRound?.status === 'completed') {
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `${emptyRound.name} is already completed and holds no matches. Delete it to generate it again.`,
+          code: 'rounds_round_completed',
+          params: { round: emptyRound.name },
+        },
+        { status: 409 }
+      );
+    }
+
     // 6. Write the round and its matches (use bo_overrides if round name matches, else default). One transaction under the
     // phase row lock (`round_write`): a stage end that completed the phase after the guards above read it refuses the write
     // (409 `rounds_phase_completed`, nothing left behind, not even an empty round), and one that comes later waits for it.

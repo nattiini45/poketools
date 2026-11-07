@@ -268,6 +268,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A stage that ends on a condition is generated round by round: the condition can end it before the batch is played.
     assertBatchMayRunAhead(kitPhase, weeksToWrite.length);
 
+    // A reused round the admin completed while it was empty cannot take matches (`round_write` refuses it). Refused
+    // here, before the first write, so the batch does not abort part-way at that week; the round has to be deleted.
+    for (const { roundNumber } of weeksToWrite) {
+      const completedEmpty = emptyRounds.get(roundNumber);
+      if (completedEmpty?.status === 'completed') {
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `${completedEmpty.name} is already completed and holds no matches. Delete it to generate it again.`,
+            code: 'rounds_round_completed',
+            params: { round: completedEmpty.name },
+          },
+          { status: 409 }
+        );
+      }
+    }
+
     const createdRounds: Round[] = [];
 
     for (const { roundNumber, pairings: allPairings, byePlayerIds } of weeksToWrite) {

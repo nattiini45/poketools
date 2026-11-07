@@ -141,6 +141,7 @@ export default defineDe<typeof en>()({
   challenge_expired: 'Die Zeit zum Beantworten dieser Herausforderung ist abgelaufen.',
   challenge_player_not_enrolled: 'Einer der beiden Spieler gehört nicht mehr zu dieser Phase, deshalb wurde die Herausforderung abgebrochen.',
   challenge_not_ladder: 'Diese Phase ist keine Herausforderungsleiter.',
+  challenge_ladder_inactive: 'Die Herausforderungsleiter dieser Liga läuft im Moment nicht, deshalb können Herausforderungen weder gestellt noch angenommen werden. Ablehnen oder zurückziehen geht weiterhin.',
   format_not_running: 'Diese Liga läuft gerade nicht mit einem eigenen Format.',
   format_not_participant: 'Du nimmst an dieser Liga nicht teil.',
   format_season_closed: 'Diese Liga ist abgeschlossen, deshalb sind keine Züge mehr möglich.',

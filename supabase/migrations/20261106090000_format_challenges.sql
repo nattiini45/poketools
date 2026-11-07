@@ -8,13 +8,16 @@
 --
 --   format_challenge_create(season, phase, challenger, defender, challenger_rank, defender_rank, rank_range, max_open,
 --                           cooldown_rounds, accept_window_hours)
---       Under an advisory lock on the phase. Lapsed open challenges of the phase are expired first, and open ones whose
+--       Under an advisory lock on the phase. The league's season_formats row must say engine 'kit' (read FOR SHARE, see
+--       "The ladder runs only on the kit engine" below): otherwise challenge_ladder_inactive. Lapsed open challenges of the phase are expired first, and open ones whose
 --       challenger or defender is no longer enrolled in the phase are cancelled (they would otherwise count against
 --       max_open and block the pair). The ranks are the players' places in the stage standings (computed by the app: the
 --       standings are not SQL).
 --   format_challenge_respond(season, challenge, player, accept)
 --       Only the defender, only while open; a challenge id of another league is challenge_not_found. Accept inserts a
---       `scheduled` match (challenger = player 1) into the phase's highest round that is not completed. A response after `expires_at` stores `expired` and returns that row (the app
+--       `scheduled` match (challenger = player 1) into the phase's highest round that is not completed, and only while the
+--       league's engine is 'kit' (challenge_ladder_inactive otherwise, the challenge stays open; a decline needs no engine).
+--       A response after `expires_at` stores `expired` and returns that row (the app
 --       raises challenge_expired; the status is kept, which a RAISE would roll back).
 --       Accept rechecks the enrollment: both players must still be in tournament_participants of the phase (the rows are
 --       locked FOR KEY SHARE, so a concurrent removal waits for the match insert and cannot slip in between). When one of them
@@ -27,6 +30,21 @@
 --       app raises challenge_expired. A withdrawn (cancelled) challenge does not count towards the cooldown.
 --   format_challenges_expire(season)
 --       Marks every open challenge past `expires_at` (of one league, or of all when NULL) expired; returns how many.
+--
+-- The ladder runs only on the kit engine. An admin may switch the league's engine at any time (PUT format/engine:
+-- season_formats.engine legacy | shadow | kit), and a challenge made on the kit engine stays open when the engine moves away.
+-- Create and accept therefore read season_formats.engine themselves, inside their transaction, and refuse
+-- challenge_ladder_inactive unless it is 'kit': an accept would otherwise insert a match for a ladder that no longer runs
+-- (the application's own engine read, in loadFreshKitContext, is a different request). The row is read FOR SHARE under the
+-- same lock order as format__check_revision (the seasons row FOR KEY SHARE, then season_formats FOR SHARE, both before the
+-- challenge row and the other locks of the call), so an engine switch (an UPDATE of the row) either commits first and is seen, or waits until the
+-- match of the accept exists. Nothing is closed by the switch: an open challenge keeps its status and expires on its own
+-- clock, and switching back to 'kit' makes it answerable again (a 'shadow' run for the admin diff does not wipe the ladder).
+-- Withdrawing (cancel), declining and expiring close a challenge and need no engine, so they work in every state. A detach
+-- cannot strand a challenge: the detach and the attach refuse a league that has started (format_season_started), and a
+-- challenge needs a round of the phase; the foreign keys would remove the challenges with their phases anyway. Accepting
+-- does not take p_expected_revision (the revision of format_action_save): it validates nothing against the spec, the stage's
+-- rules were checked at create, so the engine is the only part of the format row that gates it.
 --
 -- Completion races (create and accept against a phase or a round that completes). Lock order everywhere: the phase
 -- (tournaments) row, then the round row, then matches.
@@ -45,7 +63,7 @@
 --   * a round and its matches are written by round_write(tournament, round, ...), one transaction: it reads the phase
 --     status under FOR SHARE (the same lock an accept takes), refuses a completed phase (rounds_phase_completed) and inserts
 --     the round and its matches before it commits (a retry that fills a round an interrupted call left empty brings that
---     round's byes up to date in the same transaction). The stage end therefore either commits first (the write is refused
+--     round's byes up to date in the same transaction, see below). The stage end therefore either commits first (the write is refused
 --     and leaves nothing behind, not even an empty round and not new byes) or waits for the write and then finds its
 --     unfinished matches (phase_complete_at_stage_end answers `unsettled`). That second half holds for a write with at
 --     least one match: a bye-only round (an empty p_matches) leaves no unfinished match, so a stage end that comes after it
@@ -55,9 +73,17 @@
 --     into a completed tournament that are legitimate (the league recycle bin restoring a league, the dev seed, an
 --     admin's result edit that materialises a bracket match, the bracket regeneration).
 --
+--   * a write into an EXISTING round (round_write with p_round_id: the retry of generate-round / generate-all-rounds that
+--     reuses a round an interrupted call left without matches) locks that round FOR UPDATE after the phase FOR SHARE (the
+--     order phase -> round -> matches of round_complete and the accept), then checks it under the lock: a completed round
+--     is refused (rounds_round_completed), and so is a round that has matches by now (rounds_round_already_written: a
+--     concurrent retry wrote them first; two retries would otherwise insert the same fixtures twice). Of two concurrent
+--     retries exactly one writes, the other is refused and writes nothing; an accept into the round waits for the write
+--     (its FOR SHARE conflicts), and a round that completes first is seen as completed.
+--
 -- Domain errors are `RAISE EXCEPTION '<code>' USING ERRCODE = 'P0001', DETAIL = <json text>`: challenge_self,
 -- challenge_phase_not_found, challenge_phase_closed, challenge_not_participant (DETAIL {"player_id"}),
--- challenge_no_open_round, challenge_rank_range (DETAIL {"rank_range", "distance"}), challenge_max_open
+-- challenge_no_open_round, challenge_ladder_inactive, challenge_rank_range (DETAIL {"rank_range", "distance"}), challenge_max_open
 -- (DETAIL {"max_open"}), challenge_already_open, challenge_cooldown (DETAIL {"cooldown_rounds"}), challenge_not_found,
 -- challenge_not_defender, challenge_not_challenger, challenge_not_open (DETAIL {"status"}). challenge_player_not_enrolled
 -- is not a RAISE: respond stores and returns the cancelled row (see above), and the application raises it.
@@ -119,6 +145,19 @@ LANGUAGE sql STABLE SET search_path = public, pg_temp AS $$
    LIMIT 1
 $$;
 
+-- The engine of a league's attached format, read under the locks of format__check_revision (the seasons row FOR KEY
+-- SHARE first, then the season_formats row FOR SHARE, until the end of the transaction): an engine switch waits for the
+-- caller, or has committed already and is seen. NULL: no such league, or no format attached. Used by create and accept.
+CREATE OR REPLACE FUNCTION public.format__lock_engine(p_season_id uuid)
+RETURNS text
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE v_engine text;
+BEGIN
+  PERFORM 1 FROM public.seasons s WHERE s.id = p_season_id FOR KEY SHARE;
+  SELECT f.engine INTO v_engine FROM public.season_formats f WHERE f.season_id = p_season_id FOR SHARE;
+  RETURN v_engine;
+END $$;
+
 CREATE OR REPLACE FUNCTION public.format_challenge_create(
   p_season_id uuid, p_phase_id uuid, p_challenger uuid, p_defender uuid,
   p_challenger_rank integer, p_defender_rank integer,
@@ -127,6 +166,7 @@ CREATE OR REPLACE FUNCTION public.format_challenge_create(
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   v_status   public.tournament_status;
+  v_engine   text;
   v_round    integer;
   v_distance integer;
   v_row      public.format_challenges;
@@ -143,6 +183,16 @@ BEGIN
 
   -- One writer per phase at a time: max_open and the cooldown are counts over the phase's challenges.
   PERFORM pg_advisory_xact_lock(hashtextextended('format_challenge:' || p_phase_id::text, 0));
+
+  -- The ladder runs on the kit engine only (see the header): the engine is read here, under the lock, because the
+  -- application's check happened in another request. An unknown league stays a missing phase.
+  v_engine := public.format__lock_engine(p_season_id);
+  IF v_engine IS DISTINCT FROM 'kit' THEN
+    IF NOT EXISTS (SELECT 1 FROM public.seasons s WHERE s.id = p_season_id) THEN
+      RAISE EXCEPTION 'challenge_phase_not_found' USING ERRCODE = 'P0001';
+    END IF;
+    RAISE EXCEPTION 'challenge_ladder_inactive' USING ERRCODE = 'P0001';
+  END IF;
 
   -- FOR SHARE (not a plain read): a phase completion that commits after this read would otherwise let a challenge be
   -- made in a closed phase. It conflicts with the status UPDATE, so the completion waits for this transaction, or this
@@ -228,9 +278,16 @@ DECLARE
   v_round_done boolean;
   v_match_id uuid;
   v_enrolled integer;
+  v_engine   text;
 BEGIN
   IF p_accept IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'challenge')::text;
+  END IF;
+  -- An accept makes a match, which only a running ladder may do: the engine row is locked FOR SHARE first (before the
+  -- challenge row, the lock order of format__check_revision), so a switch away from 'kit' either commits before this
+  -- read and is seen below, or waits for the match. A decline closes the challenge and needs no engine.
+  IF p_accept THEN
+    v_engine := public.format__lock_engine(p_season_id);
   END IF;
   SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -251,6 +308,13 @@ BEGIN
   IF NOT p_accept THEN
     UPDATE public.format_challenges SET status = 'declined', responded_at = now() WHERE id = v_row.id RETURNING * INTO v_row;
     RETURN v_row;
+  END IF;
+
+  -- The league's engine moved away from 'kit' (or the format is gone) since the challenge was made: no match for a ladder
+  -- that no longer runs. The challenge stays open (a RAISE keeps it so): it can still be declined or withdrawn, expires
+  -- on its own clock, and is answerable again when the engine goes back to 'kit'.
+  IF v_engine IS DISTINCT FROM 'kit' THEN
+    RAISE EXCEPTION 'challenge_ladder_inactive' USING ERRCODE = 'P0001';
   END IF;
 
   -- FOR SHARE on the phase row waits for a running enrollment replace (which holds it FOR UPDATE and deletes and re-inserts
@@ -413,10 +477,15 @@ END $$;
 --   p_round_id set    the matches go into that round of the phase, which an interrupted call left without matches; its
 --                     bye_player_ids are replaced by p_bye_player_ids in the same transaction when that is not NULL (NULL
 --                     keeps them), the other columns are not touched
+-- With p_round_id the round row is also locked FOR UPDATE (after the phase, before the matches: the order of round_complete
+-- and the accept) and re-read under that lock: a round that has completed meanwhile is refused (rounds_round_completed),
+-- and so is one that holds matches by then (rounds_round_already_written: a concurrent retry filled it first). Of two retries
+-- of the same empty round exactly one writes; the other changes nothing (no second set of fixtures, no byes replaced).
 -- p_matches is a jsonb array of {"player_1_id", "player_2_id"}; it may be empty (a round of byes only). The matches are
 -- inserted in array order, status `scheduled`. Returns {"round": <the row>, "matches": n}. The insert triggers of rounds and
 -- matches run as for a plain insert (PHASE_GROUPS_STALE of the first round of a mirrored phase, the unique round number).
--- Refusals (P0001): invalid_op, tournament_not_found, rounds_phase_completed, round_not_found.
+-- Refusals (P0001): invalid_op, tournament_not_found, rounds_phase_completed, round_not_found, rounds_round_completed,
+-- rounds_round_already_written.
 CREATE OR REPLACE FUNCTION public.round_write(
   p_tournament_id uuid, p_round_id uuid, p_name text, p_round_number integer, p_best_of integer,
   p_bye_player_ids uuid[], p_matches jsonb
@@ -446,9 +515,19 @@ BEGIN
     VALUES (p_tournament_id, p_name, p_round_number, p_best_of, COALESCE(p_bye_player_ids, '{}'), true)
     RETURNING * INTO v_round;
   ELSE
-    SELECT * INTO v_round FROM public.rounds r WHERE r.id = p_round_id AND r.tournament_id = p_tournament_id;
+    -- FOR UPDATE: two retries of one empty round, a round completion and an accept into the round all meet on this row.
+    -- The row is re-checked after the lock is granted (a waiting write sees what the holder committed).
+    SELECT * INTO v_round FROM public.rounds r WHERE r.id = p_round_id AND r.tournament_id = p_tournament_id FOR UPDATE;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'round_not_found' USING ERRCODE = 'P0001';
+    END IF;
+    IF v_round.status = 'completed' THEN
+      RAISE EXCEPTION 'rounds_round_completed' USING ERRCODE = 'P0001';
+    END IF;
+    -- A new statement after the lock: it sees every match committed before the lock was granted. The caller read the round
+    -- as empty; matches now mean a concurrent retry (or an accepted challenge) wrote first.
+    IF EXISTS (SELECT 1 FROM public.matches m WHERE m.round_id = v_round.id) THEN
+      RAISE EXCEPTION 'rounds_round_already_written' USING ERRCODE = 'P0001';
     END IF;
     IF p_bye_player_ids IS NOT NULL THEN
       UPDATE public.rounds SET bye_player_ids = p_bye_player_ids WHERE id = v_round.id RETURNING * INTO v_round;
@@ -465,6 +544,7 @@ END $$;
 
 REVOKE ALL ON FUNCTION
   public.format__open_round(uuid),
+  public.format__lock_engine(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
   public.format_challenge_respond(uuid, uuid, uuid, boolean),
   public.format_challenge_cancel(uuid, uuid, uuid),
@@ -475,6 +555,7 @@ REVOKE ALL ON FUNCTION
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
   public.format__open_round(uuid),
+  public.format__lock_engine(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
   public.format_challenge_respond(uuid, uuid, uuid, boolean),
   public.format_challenge_cancel(uuid, uuid, uuid),
@@ -486,10 +567,12 @@ GRANT EXECUTE ON FUNCTION
 
 COMMENT ON FUNCTION public.format__open_round(uuid) IS
   'Internal: the highest round of a phase that is not completed (id, round_number), or no row.';
+COMMENT ON FUNCTION public.format__lock_engine(uuid) IS
+  'Internal: the engine of the league''s attached format (NULL: no such league or no format), read with the seasons row FOR KEY SHARE and the season_formats row FOR SHARE held until the transaction ends, so an engine switch cannot interleave.';
 COMMENT ON FUNCTION public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer) IS
-  'Creates a challenge in the phase''s open round under a per-phase lock, enforcing rank_range, max_open, the cooldown and one open challenge per pair; open challenges of players who left the phase are cancelled first. Raises the challenge_* codes (P0001).';
+  'Creates a challenge in the phase''s open round under a per-phase lock, only while the league''s engine is kit (challenge_ladder_inactive), enforcing rank_range, max_open, the cooldown and one open challenge per pair; open challenges of players who left the phase are cancelled first. Raises the challenge_* codes (P0001).';
 COMMENT ON FUNCTION public.format_challenge_respond(uuid, uuid, uuid, boolean) IS
-  'The defender accepts (a scheduled match is inserted into the open round) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired. An accept rechecks that both players are still enrolled in the phase (rows locked FOR KEY SHARE); when one is not, it stores and returns status cancelled and inserts no match.';
+  'The defender accepts (a scheduled match is inserted into the open round, only while the league''s engine is kit: challenge_ladder_inactive otherwise, the challenge stays open) or declines an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired. An accept rechecks that both players are still enrolled in the phase (rows locked FOR KEY SHARE); when one is not, it stores and returns status cancelled and inserts no match.';
 COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid, uuid) IS
   'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired (which the cooldown counts) instead of cancelled.';
 COMMENT ON FUNCTION public.format_challenges_expire(uuid) IS
@@ -499,7 +582,7 @@ COMMENT ON FUNCTION public.round_complete(uuid, boolean) IS
 COMMENT ON FUNCTION public.phase_complete_at_stage_end(uuid, uuid[]) IS
   'Completes an active phase at its stage end under FOR UPDATE on the phase row, only while no unfinished match exists beyond p_known_unfinished (the ids the caller''s read saw unfinished). Returns jsonb: outcome completed (tournament), unsettled (an unseen unfinished match, e.g. a challenge accepted since the read; the phase stays active) or not_active.';
 COMMENT ON FUNCTION public.round_write(uuid, uuid, text, integer, integer, uuid[], jsonb) IS
-  'Inserts a round (or, with p_round_id, fills a round an interrupted call left empty and replaces its byes when p_bye_player_ids is not NULL) and its matches in one transaction, with the phase row read FOR SHARE so a stage-end completion either commits first (rounds_phase_completed, nothing written) or, for a write with at least one match, finds the new matches (unsettled); a round of byes only is not seen that way. Returns jsonb {round, matches}. Raises invalid_op, tournament_not_found, rounds_phase_completed, round_not_found (P0001).';
+  'Inserts a round (or, with p_round_id, fills a round an interrupted call left empty, locked FOR UPDATE and re-checked under the lock: rounds_round_completed, rounds_round_already_written when a concurrent retry filled it first; replaces its byes when p_bye_player_ids is not NULL) and its matches in one transaction, with the phase row read FOR SHARE so a stage-end completion either commits first (rounds_phase_completed, nothing written) or, for a write with at least one match, finds the new matches (unsettled); a round of byes only is not seen that way. Returns jsonb {round, matches}. Raises invalid_op, tournament_not_found, rounds_phase_completed, round_not_found, rounds_round_completed, rounds_round_already_written (P0001).';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- The recycle bin classifies the new table. These definitions replace 20261105090000's; the inventory test reads the

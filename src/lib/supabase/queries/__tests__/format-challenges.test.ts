@@ -64,6 +64,7 @@ const EXPECTED_STATUS: Record<FormatChallengeErrorCode, number> = {
   challenge_phase_closed: 409,
   challenge_not_participant: 400,
   challenge_no_open_round: 409,
+  challenge_ladder_inactive: 409,
   challenge_rank_range: 400,
   challenge_max_open: 409,
   challenge_already_open: 409,
@@ -200,6 +201,29 @@ describe('the RPC wrappers', () => {
       code: 'challenge_expired',
       statusCode: 409,
     });
+  });
+
+  it('maps the refusal of an acceptance while the league does not run the kit engine to 409 challenge_ladder_inactive', async () => {
+    state.rpcReply = { error: signal('challenge_ladder_inactive') };
+    await expect(respondToFormatChallenge({ seasonId: SEASON, challengeId: CHALLENGE, playerId: P2, accept: true })).rejects.toMatchObject({
+      name: 'FormatChallengeError',
+      code: 'challenge_ladder_inactive',
+      statusCode: 409,
+    });
+    await expect(
+      createFormatChallenge({
+        seasonId: SEASON,
+        phaseId: PHASE,
+        challengerId: P1,
+        defenderId: P2,
+        challengerRank: 3,
+        defenderRank: 1,
+        rankRange: 2,
+        maxOpen: 1,
+        cooldownRounds: 0,
+        acceptWindowHours: 24,
+      }),
+    ).rejects.toMatchObject({ code: 'challenge_ladder_inactive', statusCode: 409 });
   });
 
   it('raises challenge_player_not_enrolled for an acceptance that came back cancelled (a player left the phase)', async () => {

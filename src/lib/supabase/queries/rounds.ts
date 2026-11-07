@@ -211,6 +211,18 @@ function mapRoundWriteError(error: { code?: string; message?: string }, roundNam
       status: 409,
     });
   }
+  // Only a write into an existing round (`addMatchesToRound`) raises these two, both decided under the round row lock.
+  if (isRoundWriteSignal(error, 'rounds_round_completed')) {
+    return new UserFacingError(`${roundName} is already completed, so no matches were written into it. Delete it to generate it again.`, {
+      code: 'rounds_round_completed',
+      params: { round: roundName },
+      status: 409,
+    });
+  }
+  if (isRoundWriteSignal(error, 'rounds_round_already_written')) {
+    // A concurrent retry filled the round first; nothing of this call was written.
+    return new RoundAlreadyWrittenError(roundName);
+  }
   if (isRoundWriteSignal(error, 'tournament_not_found')) {
     return new UserFacingError('Tournament not found', { code: 'tournament_not_found', status: 404 });
   }
@@ -295,6 +307,10 @@ export async function createRoundWithMatches(input: {
  * left as it was. With `byePlayerIds` the round's stored byes are replaced in the same transaction (a retry brings the
  * reused round to this call's byes like a fresh insert), so a refused write changes neither the matches nor the byes;
  * omitted, they stay. The round's other columns are never touched. With neither matches nor byes nothing is written.
+ * The round row is locked `FOR UPDATE` and re-read under the lock: a round that was completed meanwhile is refused
+ * (409 `rounds_round_completed`), and so is one that has matches by now (409 `rounds_round_already_written`, a concurrent
+ * retry of the same round wrote first), each leaving the round and its byes as they were. Of two concurrent retries
+ * exactly one writes.
  */
 export async function addMatchesToRound(
   round: Pick<Round, 'id' | 'name' | 'tournament_id'>,

@@ -202,7 +202,10 @@ describe('generate-all-rounds — league groups', () => {
   it('a written week an interrupted call left without matches is filled into its round, not skipped', async () => {
     // Week 2 was written, but its matches never were (an interrupted call of an earlier version, which wrote the round and its matches apart).
     const { rounds, matches } = storedWeeks(2);
-    vi.mocked(getRoundsByTournament).mockResolvedValue(rounds as never);
+    // The interrupted call left the round as it inserts it (pending); a completed empty round is refused (next test).
+    vi.mocked(getRoundsByTournament).mockResolvedValue(
+      rounds.map((r) => (r.id === 'r2' ? { ...r, status: 'pending' } : r)) as never,
+    );
     vi.mocked(getMatchesByTournament).mockResolvedValue(matches.filter((m) => m.round_id !== 'r2') as never);
     vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
 
@@ -217,6 +220,23 @@ describe('generate-all-rounds — league groups', () => {
     expect(addMatchesToRound).toHaveBeenCalledTimes(1);
     expect(addMatchesToRound).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }), firstBatch);
     expect(firstBatch).toHaveLength(week2.groupPairings.length + week2.crossPairings.length);
+  });
+
+  it('a week whose round the admin completed while it was empty is refused before anything is written (409 rounds_round_completed)', async () => {
+    // Week 2 holds no match and is completed: round_write would refuse it, so the batch must not write weeks 3.. around it.
+    const { rounds, matches } = storedWeeks(2);
+    vi.mocked(getRoundsByTournament).mockResolvedValue(rounds.map((r) => (r.id === 'r2' ? { ...r, name: 'Round 2' } : r)) as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue(matches.filter((m) => m.round_id !== 'r2') as never);
+    vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
+
+    const res = await POST({} as NextRequest, params);
+    const json = await res.json();
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_round_completed');
+    expect(json.params).toEqual({ round: 'Round 2' });
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(addMatchesToRound).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('a trainer of the phase in no league group is refused before anything is written', async () => {

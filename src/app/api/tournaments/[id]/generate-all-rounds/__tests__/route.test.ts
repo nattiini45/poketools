@@ -372,6 +372,71 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['rounds_round_already_written', 'a concurrent retry filled the reused round first'],
+    ['rounds_round_completed', 'the reused round completed first'],
+  ] as const)('answers 409 %s and writes no later round when %s', async (code, _reason) => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 1 } as never);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }] as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', round_number: 1 },
+      { id: 'r-2-empty', round_number: 2 },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+    vi.mocked(generateRoundRobinRound).mockReturnValue({
+      pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+      bye_player_ids: [],
+    } as never);
+    vi.mocked(addMatchesToRound).mockRejectedValueOnce(
+      new UserFacingError('Round 2 was written or completed by someone else.', { code, params: { round: 'Round 2' }, status: 409 }),
+    );
+
+    const res = await POST({} as NextRequest, routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe(code);
+    expect(json.params).toEqual({ round: 'Round 2' });
+    // The reused round is the first write of the batch; its refusal stops the loop before round 3.
+    expect(addMatchesToRound).toHaveBeenCalledTimes(1);
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses the batch before its first write when a reused empty round is already completed (409 rounds_round_completed)', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ ...mockTournament, current_round: 1 } as never);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }] as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([
+      { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed' },
+      { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'completed' },
+    ] as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+    vi.mocked(generateRoundRobinRound).mockReturnValue({
+      pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+      bye_player_ids: [],
+    } as never);
+
+    const res = await POST({} as NextRequest, routeParams);
+    const json = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_round_completed');
+    expect(json.params).toEqual({ round: 'Round 2' });
+    expect(json.error).toContain('already completed');
+    // Nothing was written, not even round 3: the batch does not abort part-way at the completed week.
+    expect(addMatchesToRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
   it('refills a round an interrupted call wrote without matches instead of skipping it', async () => {
     // Round 2 was written, its match batch failed, and current_round stayed at 1: the retry fills round 2 and
     // writes round 3, never leaving round 2 empty.

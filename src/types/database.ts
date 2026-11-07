@@ -7105,6 +7105,7 @@ export type Database = {
         Args: { p_action_key: string; p_season_id: string }
         Returns: undefined
       }
+      format__lock_engine: { Args: { p_season_id: string }; Returns: string }
       format__lock_holding: {
         Args: { p_player: string; p_resource: string; p_season_id: string }
         Returns: undefined

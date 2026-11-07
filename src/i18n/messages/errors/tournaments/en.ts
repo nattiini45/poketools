@@ -145,6 +145,8 @@ export default {
     'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
   // The phase completed (a stage end, or an admin) between the generator's checks and its write; nothing was written (409).
   rounds_phase_completed: 'This phase was completed while the round was being created, so no round was written. No more rounds can be generated.',
+  // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
+  rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

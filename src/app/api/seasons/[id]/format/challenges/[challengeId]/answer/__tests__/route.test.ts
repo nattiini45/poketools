@@ -174,12 +174,13 @@ describe('POST /api/seasons/[id]/format/challenges/[challengeId]/answer', () => 
     expect(answerChallenge).not.toHaveBeenCalled();
   });
 
-  it('maps the database rules: another league 404, not the defender 403, expired, a player no longer enrolled and not open 409', async () => {
+  it('maps the database rules: another league 404, not the defender 403, expired, a player no longer enrolled, a ladder that is not running and not open 409', async () => {
     const cases: [ConstructorParameters<typeof FormatChallengeError>[0], number][] = [
       ['challenge_not_found', 404],
       ['challenge_not_defender', 403],
       ['challenge_expired', 409],
       ['challenge_player_not_enrolled', 409],
+      ['challenge_ladder_inactive', 409],
       ['challenge_not_open', 409],
     ];
     for (const [code, status] of cases) {

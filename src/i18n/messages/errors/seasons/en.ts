@@ -160,6 +160,8 @@ export default {
   challenge_expired: 'The time to answer this challenge has run out.',
   challenge_player_not_enrolled: 'One of the two players is no longer part of this phase, so the challenge was cancelled.',
   challenge_not_ladder: 'This phase is not a challenge ladder.',
+  // The league's engine is not the kit (an admin switched it): a challenge can neither be made nor accepted until it is back (409).
+  challenge_ladder_inactive: 'The challenge ladder of this league is not running at the moment, so challenges cannot be made or accepted. You can still decline or withdraw one.',
 
   // Live format surface (api/seasons/[id]/format/{me,actions,challenges,adjustments,checks,relations}): the refusals of
   // src/lib/format-engine/runtime/refusal.ts, plus the body of an action submission that has problems.

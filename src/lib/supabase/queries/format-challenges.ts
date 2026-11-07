@@ -9,6 +9,9 @@
  * `respondToFormatChallenge` raises `challenge_player_not_enrolled`.
  * A withdrawal after the accept window does the same (`cancelFormatChallenge`): the challenge is stored as expired, which
  * the cooldown counts, never as cancelled, which it ignores.
+ * The ladder runs only on the kit engine: making a challenge and accepting one are refused (409 `challenge_ladder_inactive`)
+ * while the league's `season_formats.engine` is not `kit`, decided by the database inside the transaction. The refused
+ * challenge stays open (declining and withdrawing still work); it is answerable again when the engine goes back to `kit`.
  */
 import 'server-only';
 
@@ -30,6 +33,7 @@ export const FORMAT_CHALLENGE_ERROR_CODES = [
   'challenge_phase_closed',
   'challenge_not_participant',
   'challenge_no_open_round',
+  'challenge_ladder_inactive',
   'challenge_rank_range',
   'challenge_max_open',
   'challenge_already_open',
@@ -50,6 +54,7 @@ const FORMAT_CHALLENGE_ERROR_STATUS: { readonly [C in FormatChallengeErrorCode]:
   challenge_phase_closed: 409,
   challenge_not_participant: 400,
   challenge_no_open_round: 409,
+  challenge_ladder_inactive: 409,
   challenge_rank_range: 400,
   challenge_max_open: 409,
   challenge_already_open: 409,
@@ -142,7 +147,7 @@ export interface CreateFormatChallengeInput {
 
 /**
  * Makes a challenge in the phase's open round. Raises `challenge_self`, `challenge_phase_not_found`,
- * `challenge_phase_closed`, `challenge_not_participant`, `challenge_no_open_round`, `challenge_rank_range`,
+ * `challenge_ladder_inactive` (the league's engine is not kit), `challenge_phase_closed`, `challenge_not_participant`, `challenge_no_open_round`, `challenge_rank_range`,
  * `challenge_already_open`, `challenge_max_open`, `challenge_cooldown`.
  */
 export async function createFormatChallenge(input: CreateFormatChallengeInput): Promise<FormatChallengeRow> {
@@ -174,7 +179,8 @@ export interface RespondFormatChallengeInput {
 /**
  * The defender accepts (a scheduled match is created in the open round) or declines. A challenge of another league is
  * `challenge_not_found`, so a route scoped to one league cannot reach the challenges of another. Raises `challenge_not_found`,
- * `challenge_not_defender`, `challenge_not_open`, `challenge_phase_closed`, `challenge_no_open_round`, and
+ * `challenge_not_defender`, `challenge_not_open`, `challenge_phase_closed`, `challenge_no_open_round`,
+ * `challenge_ladder_inactive` (an acceptance while the league's engine is not kit: no match, the challenge stays open), and
  * `challenge_expired` when the accept window had run out (the challenge is stored as expired), and
  * `challenge_player_not_enrolled` when an acceptance finds the challenger or the defender no longer enrolled in the phase
  * (the challenge is stored as cancelled and no match is made).

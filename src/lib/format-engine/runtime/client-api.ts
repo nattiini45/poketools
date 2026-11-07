@@ -148,6 +148,7 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   challenge_player_not_enrolled: 'conflict',
   challenge_not_found: 'conflict',
   challenge_no_open_round: 'conflict',
+  challenge_ladder_inactive: 'conflict',
   challenge_phase_closed: 'conflict',
   challenge_max_open: 'conflict',
   challenge_already_open: 'conflict',

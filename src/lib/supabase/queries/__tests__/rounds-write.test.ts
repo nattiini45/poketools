@@ -218,6 +218,27 @@ describe('addMatchesToRound', () => {
     await expect(addMatchesToRound(round, matches)).rejects.toMatchObject({ code: 'rounds_phase_completed', statusCode: 409 });
   });
 
+  it('maps a round that completed first to 409 rounds_round_completed, wording it with the round name', async () => {
+    h.results.push({ data: null, error: signal('rounds_round_completed') });
+
+    await expect(addMatchesToRound(round, matches)).rejects.toMatchObject({
+      code: 'rounds_round_completed',
+      statusCode: 409,
+      params: { round: 'Round 2' },
+    });
+  });
+
+  it('maps a round a concurrent retry filled first to the shared 409 rounds_round_already_written', async () => {
+    h.results.push({ data: null, error: signal('rounds_round_already_written') });
+
+    await expect(addMatchesToRound(round, matches, ['p-9'])).rejects.toMatchObject({
+      name: 'RoundAlreadyWrittenError',
+      code: 'rounds_round_already_written',
+      statusCode: 409,
+      params: { round: 'Round 2' },
+    });
+  });
+
   it('does not word a refusal of the round that is gone as a phase refusal', async () => {
     const gone = signal('round_not_found');
     h.results.push({ data: null, error: gone });

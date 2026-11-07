@@ -968,6 +968,80 @@ describe('POST /api/generate-round/[tid]', () => {
     });
   });
 
+  // ---- a retry of a reused empty round loses to a concurrent retry or to a completion (`round_write` locks the round) ----
+
+  describe('reused empty round written or completed by someone else first', () => {
+    const reusedEmptyRound = () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+    };
+
+    it('answers 409 rounds_round_already_written when a concurrent retry filled the round first, and moves nothing on', async () => {
+      reusedEmptyRound();
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(
+        new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
+          code: 'rounds_round_already_written',
+          params: { round: 'Round 2' },
+          status: 409,
+        }),
+      );
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_already_written');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('answers 409 rounds_round_completed when the round completed first, and moves nothing on', async () => {
+      reusedEmptyRound();
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(
+        new UserFacingError('Round 2 is already completed, so no matches were written into it. Delete it to generate it again.', {
+          code: 'rounds_round_completed',
+          params: { round: 'Round 2' },
+          status: 409,
+        }),
+      );
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_completed');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses a reused round the admin already completed while empty with 409 rounds_round_completed, before any write', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'completed', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_completed');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(payload.error).toContain('already completed');
+      expect(addMatchesToRound).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
   // ---- #42: generate-round never starts an elimination bracket ----
 
   describe('elimination tournament without rounds', () => {

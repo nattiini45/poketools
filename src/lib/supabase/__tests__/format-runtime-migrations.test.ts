@@ -369,12 +369,71 @@ describe('20261106090000 challenges', () => {
     expect(fn.slice(lock, refusal)).toMatch(/IF NOT FOUND THEN\s+RAISE EXCEPTION 'tournament_not_found'[\s\S]*IF v_status = 'completed' THEN\s+$/);
     expect(fn).not.toMatch(/FOR KEY SHARE/);
     // a round that already exists (an interrupted call left it empty) gets the matches under the same lock, and must be the phase's own
-    expect(fn).toMatch(/SELECT \* INTO v_round FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id;\s+IF NOT FOUND THEN\s+RAISE EXCEPTION 'round_not_found'/);
+    expect(fn).toMatch(/SELECT \* INTO v_round FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id FOR UPDATE;\s+IF NOT FOUND THEN\s+RAISE EXCEPTION 'round_not_found'/);
     expect(fn.search(/p_round_id IS NULL THEN\s+INSERT INTO public\.rounds/)).toBeGreaterThan(refusal);
     // the matches are inserted in array order, with the phase and round the function resolved (not caller-supplied ids)
     expect(fn).toMatch(/INSERT INTO public\.matches \(round_id, tournament_id, player_1_id, player_2_id\)\s+SELECT v_round\.id, p_tournament_id, m\.player_1_id, m\.player_2_id[\s\S]*ORDER BY m\.ord;/);
     // a NULL or non-array match list would insert nothing and still return a round: refused
     expect(fn).toMatch(/p_matches IS NULL OR jsonb_typeof\(p_matches\) <> 'array'[\s\S]*RAISE EXCEPTION 'invalid_op'/);
+  });
+
+  it('locks an existing round FOR UPDATE after the phase and re-checks it under the lock before any match goes in', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_write(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const phaseLock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR SHARE;/);
+    const roundLock = fn.search(/FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id FOR UPDATE;/);
+    const completed = fn.indexOf("RAISE EXCEPTION 'rounds_round_completed'");
+    const filled = fn.search(/IF EXISTS \(SELECT 1 FROM public\.matches m WHERE m\.round_id = v_round\.id\) THEN\s+RAISE EXCEPTION 'rounds_round_already_written'/);
+    const byes = fn.indexOf('UPDATE public.rounds SET bye_player_ids');
+    const matchInsert = fn.indexOf('INSERT INTO public.matches');
+    // lock order: the phase row, then the round row, then the matches; the byes are replaced only after both checks, so a
+    // refused retry changes nothing
+    expect(phaseLock).toBeGreaterThan(-1);
+    expect(roundLock).toBeGreaterThan(phaseLock);
+    expect(completed).toBeGreaterThan(roundLock);
+    expect(filled).toBeGreaterThan(completed);
+    expect(byes).toBeGreaterThan(filled);
+    expect(matchInsert).toBeGreaterThan(byes);
+    expect(fn.slice(completed - 70, completed)).toMatch(/IF v_round\.status = 'completed' THEN\s+$/);
+  });
+
+  it('reads the league engine FOR SHARE (after the seasons row, before the challenge row) and refuses a make or an accept unless it is kit', () => {
+    const lockStart = text.indexOf('CREATE OR REPLACE FUNCTION public.format__lock_engine(');
+    const lock = text.slice(lockStart, text.indexOf('END $$;', lockStart));
+    // the lock order of format__check_revision: seasons KEY SHARE, then season_formats FOR SHARE
+    expect(lock).toMatch(/FROM public\.seasons s WHERE s\.id = p_season_id FOR KEY SHARE;\s+SELECT f\.engine INTO v_engine FROM public\.season_formats f WHERE f\.season_id = p_season_id FOR SHARE;/);
+
+    const create = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_create('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('));
+    const advisory = create.indexOf('pg_advisory_xact_lock');
+    const createEngine = create.indexOf('public.format__lock_engine(p_season_id)');
+    expect(createEngine).toBeGreaterThan(advisory);
+    expect(createEngine).toBeLessThan(create.indexOf('FROM public.tournaments t WHERE t.id = p_phase_id'));
+    expect(create).toMatch(/IF v_engine IS DISTINCT FROM 'kit' THEN[\s\S]*RAISE EXCEPTION 'challenge_phase_not_found'[\s\S]*RAISE EXCEPTION 'challenge_ladder_inactive'/);
+
+    const respond = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('));
+    const respondEngine = respond.indexOf('v_engine := public.format__lock_engine(p_season_id);');
+    const challengeLock = respond.indexOf('FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;');
+    const decline = respond.indexOf("SET status = 'declined'");
+    const refusal = respond.indexOf("RAISE EXCEPTION 'challenge_ladder_inactive'");
+    const matchInsert = respond.indexOf('INSERT INTO public.matches');
+    expect(respond).toMatch(/IF p_accept THEN\s+v_engine := public\.format__lock_engine\(p_season_id\);\s+END IF;/);
+    // engine lock before the challenge row; a decline returns before the engine check (it only closes the challenge); the
+    // refusal comes before the phase lock and the match insert
+    expect(respondEngine).toBeGreaterThan(-1);
+    expect(challengeLock).toBeGreaterThan(respondEngine);
+    expect(refusal).toBeGreaterThan(decline);
+    expect(refusal).toBeLessThan(respond.indexOf('v_row.phase_id FOR SHARE;'));
+    expect(refusal).toBeLessThan(matchInsert);
+    expect(respond.slice(refusal - 60, refusal)).toMatch(/IF v_engine IS DISTINCT FROM 'kit' THEN\s+$/);
+
+    // withdrawing and expiring close a challenge and need no engine
+    const cancel = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenges_expire('));
+    expect(cancel).not.toMatch(/format__lock_engine|ladder_inactive/);
+  });
+
+  it('grants the engine lock helper to service_role only', () => {
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.format__lock_engine\(uuid\),[^;]*FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.format__lock_engine\(uuid\),[^;]*TO service_role;/);
   });
 
   it('does not put a status guard on every round and match insert: the writes into a completed tournament that are legitimate stay possible', () => {

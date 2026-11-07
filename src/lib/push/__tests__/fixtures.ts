@@ -6,7 +6,8 @@ export function makeVapidKeys(): { publicKey: string; privateKey: string } {
   ecdh.generateKeys();
   return {
     publicKey: ecdh.getPublicKey().toString('base64url'),
-    privateKey: ecdh.getPrivateKey().toString('base64url'),
+    // getPrivateKey() drops leading zero bytes (about 1 key in 256), which is no longer a 32-byte scalar.
+    privateKey: Buffer.from(ecdh.getPrivateKey().toString('hex').padStart(64, '0'), 'hex').toString('base64url'),
   };
 }
 

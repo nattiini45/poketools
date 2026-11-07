@@ -11,7 +11,10 @@ import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 // completion functions (round_complete, phase_complete_at_stage_end) and an accept are serialised on the round and the
 // phase rows: in either order, and under a real race, no match is left unfinished in a round or phase that completed
 // without force. The round generators' write (round_write: a round and its matches in one transaction, the phase row read
-// FOR SHARE) is serialised with the stage end the same way. Opt-in only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or
+// FOR SHARE) is serialised with the stage end the same way, and a write into an existing empty round (a retry) locks that
+// round: of two concurrent retries one writes, a completed round takes none. Create and accept read the league's engine
+// under a lock: only 'kit' runs the ladder (an engine switch next to an accept leaves a match only when the accept won).
+// Opt-in only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or
 // `npm run test:db`), never loads `.env`.
 const optIn = localStackOptIn('LOCAL_SUPABASE_FORMAT_CHALLENGES');
 
@@ -107,6 +110,10 @@ const run = async (label: string, op: PromiseLike<{ error: unknown }>) => {
   if (error) throw new Error(`[seed ${label}] ${JSON.stringify(error)}`);
 };
 
+/** What an admin's PUT format/engine does to the league: a plain UPDATE of season_formats.engine. */
+const setEngine = (engine: 'legacy' | 'shadow' | 'kit') =>
+  run(`engine ${engine}`, client.from('season_formats').update({ engine }).eq('season_id', ids.season));
+
 describe.skipIf(!optIn)('format challenges (local stack)', () => {
   beforeAll(async () => {
     assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
@@ -124,6 +131,18 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       ),
     );
     await run('seasons', client.from('seasons').insert({ id: ids.season, name: `Challenges ${RUN}`, format_type: 'custom' }));
+    // The ladder runs on the kit engine only: the league carries an attached format on that engine (the spec is not read).
+    await run(
+      'season_formats',
+      client.from('season_formats').insert({
+        season_id: ids.season,
+        version_no: 1,
+        spec: {},
+        spec_hash: '0'.repeat(64),
+        seed: `challenges-${RUN}`,
+        engine: 'kit',
+      }),
+    );
     await run(
       'tournaments',
       client.from('tournaments').insert([
@@ -174,6 +193,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     await run('reset matches', client.from('matches').delete().in('tournament_id', PHASES));
     await run('reset phase', client.from('tournaments').update({ status: 'active' }).in('id', PHASES));
     await run('reset round', client.from('rounds').update({ status: 'pending' }).eq('id', ids.roundOpen));
+    await setEngine('kit');
   }, 30_000);
 
   describe('format_challenge_create', () => {
@@ -338,6 +358,63 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
         ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
       ).resolves.toMatchObject({ status: 'accepted' });
       expect(await matchesOf()).toHaveLength(1);
+    });
+
+    it('refuses an accept while the league does not run the kit engine: no match, the challenge stays open, and it works again on kit', async () => {
+      const row = await create();
+
+      for (const engine of ['legacy', 'shadow'] as const) {
+        await setEngine(engine);
+        await expect(
+          ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
+        ).rejects.toMatchObject({ code: 'challenge_ladder_inactive', statusCode: 409 });
+        expect(await matchesOf()).toEqual([]);
+        expect((await rowOf(row.id))?.status).toBe('open');
+      }
+
+      await setEngine('kit');
+      const answered = await ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true });
+      expect(answered.status).toBe('accepted');
+      expect(await matchesOf()).toHaveLength(1);
+    });
+
+    it('lets the defender decline and the challenger withdraw while the engine is not kit (they only close a challenge)', async () => {
+      const declined = await create();
+      const withdrawn = await create({ defenderId: ids.pDefender, defenderRank: RANK.get(ids.pDefender) as number });
+      await setEngine('shadow');
+
+      await expect(
+        ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: declined.id, playerId: ids.pTop, accept: false }),
+      ).resolves.toMatchObject({ status: 'declined' });
+      await expect(ladder.cancelFormatChallenge(ids.season, withdrawn.id, ids.pChallenger)).resolves.toMatchObject({ status: 'cancelled' });
+      expect(await matchesOf()).toEqual([]);
+    });
+
+    it('makes a challenge only on kit, and refuses both make and accept in a league whose format is gone', async () => {
+      const row = await create();
+
+      await setEngine('legacy');
+      await expect(create({ defenderId: ids.pDefender, defenderRank: RANK.get(ids.pDefender) as number })).rejects.toMatchObject({
+        code: 'challenge_ladder_inactive',
+        statusCode: 409,
+      });
+      // Nothing was made by the refused call; the open challenge is the one from before the switch.
+      expect((await stored()).map((challenge) => challenge.id)).toEqual([row.id]);
+
+      await setEngine('kit');
+      await expect(create({ defenderId: ids.pDefender, defenderRank: RANK.get(ids.pDefender) as number })).resolves.toMatchObject({ status: 'open' });
+
+      const saved = (await client.from('season_formats').select('*').eq('season_id', ids.season).single()).data as Record<string, unknown>;
+      await run('format detached', client.from('season_formats').delete().eq('season_id', ids.season));
+      try {
+        await expect(
+          ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId: row.id, playerId: ids.pTop, accept: true }),
+        ).rejects.toMatchObject({ code: 'challenge_ladder_inactive' });
+        await expect(create({ challengerId: ids.pMid, challengerRank: 3, defenderId: ids.pTop })).rejects.toMatchObject({ code: 'challenge_ladder_inactive' });
+      } finally {
+        await run('format re-attached', client.from('season_formats').insert(saved as never));
+      }
+      expect(await matchesOf()).toEqual([]);
     });
 
     it('declines without creating a match', async () => {
@@ -630,6 +707,32 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       }
     }, 60_000);
 
+    // The engine switch is a plain UPDATE of the league's season_formats row; the accept holds that row FOR SHARE until its
+    // match exists, so either the accept commits first (its match stands, the switch follows) or the switch commits first
+    // (the accept is refused and made no match). Never a match the accept made after the switch.
+    // This can only check the outcome: it cannot show that the accept took its engine lock before the challenge row, so that
+    // lock order is pinned by the static test in format-runtime-migrations.test.ts ("reads the league engine FOR SHARE ...").
+    it('serialises an engine switch with an accept: a refusal leaves no match and the challenge open, in either order', async () => {
+      for (let i = 0; i < 12; i++) {
+        await resetRace();
+        await setEngine('kit');
+        const row = await create();
+
+        const [accepted] = await Promise.allSettled([accept(row.id), setEngine(i % 2 === 0 ? 'shadow' : 'legacy')]);
+
+        const { data } = await client.from('season_formats').select('engine').eq('season_id', ids.season).single();
+        expect((data as { engine: string }).engine).not.toBe('kit');
+        if (accepted.status === 'rejected') {
+          expect(accepted.reason).toMatchObject({ code: 'challenge_ladder_inactive' });
+          expect(await matchesOf()).toEqual([]);
+          expect((await rowOf(row.id))?.status).toBe('open');
+        } else {
+          expect(await matchesOf()).toHaveLength(1);
+          expect((await rowOf(row.id))?.status).toBe('accepted');
+        }
+      }
+    }, 60_000);
+
     it('serialises an admin completion (a plain status write) with an accept: a refusal leaves no match, in either order', async () => {
       for (let i = 0; i < 12; i++) {
         await resetRace();
@@ -758,6 +861,102 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       const foreign = { id: ids.roundOpen, name: 'Round 2', tournament_id: ids.emptyPhase };
       await expect(roundsQ.addMatchesToRound(foreign, pairs)).rejects.toMatchObject({ message: 'round_not_found' });
       expect((await client.from('matches').select('id').eq('tournament_id', ids.emptyPhase)).data).toEqual([]);
+    });
+
+    describe('resuming an empty round (a retry of generate-round / generate-all-rounds)', () => {
+      const matchesOfRound = async (roundId: string) => (await matchesOf()).filter((match) => match.round_id === roundId);
+      const statusOfRound = async (roundId: string) =>
+        ((await client.from('rounds').select('status').eq('id', roundId).single()).data as { status: string }).status;
+
+      it('refuses a round that has matches by now, and changes neither its matches nor its byes', async () => {
+        const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+        await roundsQ.addMatchesToRound(empty, pairs);
+
+        // A second retry read the round as empty before the first one wrote; it must not add a second set.
+        await expect(roundsQ.addMatchesToRound(empty, pairs, [ids.pTop])).rejects.toMatchObject({
+          code: 'rounds_round_already_written',
+          statusCode: 409,
+          params: { round: 'Round 10' },
+        });
+        await expect(roundsQ.addMatchesToRound(empty, [], [ids.pMid])).rejects.toMatchObject({ code: 'rounds_round_already_written' });
+
+        expect(await matchesOfRound(empty.id)).toHaveLength(2);
+        expect(await byesOf(empty.id)).toEqual([ids.pOutsider]);
+      });
+
+      it('refuses a completed round with rounds_round_completed: no match, the byes as they were', async () => {
+        const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+        await run('round completed', client.from('rounds').update({ status: 'completed' }).eq('id', empty.id));
+
+        await expect(roundsQ.addMatchesToRound(empty, pairs, [ids.pTop])).rejects.toMatchObject({
+          code: 'rounds_round_completed',
+          statusCode: 409,
+          params: { round: 'Round 10' },
+        });
+        await expect(roundsQ.addMatchesToRound(empty, [], [ids.pMid])).rejects.toMatchObject({ code: 'rounds_round_completed' });
+
+        expect(await matchesOfRound(empty.id)).toEqual([]);
+        expect(await byesOf(empty.id)).toEqual([ids.pOutsider]);
+      });
+
+      it('lets a retry that wrote nothing (a round of byes only) run again', async () => {
+        const empty = await write({ matches: [] });
+
+        await roundsQ.addMatchesToRound(empty, [], [ids.pTop]);
+        await roundsQ.addMatchesToRound(empty, [], [ids.pMid]);
+
+        expect(await byesOf(empty.id)).toEqual([ids.pMid]);
+        expect(await matchesOfRound(empty.id)).toEqual([]);
+      });
+
+      // A real race: two retries read the same empty round and both write. The phase lock is shared (FOR SHARE), so only
+      // the lock on the round row separates them: exactly one inserts its fixtures, the other writes nothing.
+      it('lets exactly one of two concurrent retries write, however they interleave', async () => {
+        for (let i = 0; i < 12; i++) {
+          await reset();
+          const empty = await write({ matches: [], bye_player_ids: [ids.pOutsider] });
+
+          const results = await Promise.allSettled([
+            roundsQ.addMatchesToRound(empty, pairs, [ids.pTop]),
+            roundsQ.addMatchesToRound(empty, pairs, [ids.pMid]),
+          ]);
+
+          const won = results.filter((result) => result.status === 'fulfilled');
+          const lost = results.filter((result): result is PromiseRejectedResult => result.status === 'rejected');
+          expect(won, `iteration ${i}`).toHaveLength(1);
+          expect(lost).toHaveLength(1);
+          expect(lost[0].reason).toMatchObject({ code: 'rounds_round_already_written', statusCode: 409 });
+          // One set of fixtures, and the byes of the winner (the loser's replacement rolled back with its refusal).
+          expect(await matchesOfRound(empty.id)).toHaveLength(2);
+          const winnerByes = results[0].status === 'fulfilled' ? [ids.pTop] : [ids.pMid];
+          expect(await byesOf(empty.id)).toEqual(winnerByes);
+        }
+      }, 60_000);
+
+      // A real race: the round completes while a retry writes into it. The completion (round_complete, FOR UPDATE on the
+      // round) and the write (FOR UPDATE on the same row) are serialised: a write that commits first leaves unfinished
+      // matches, which a completion without force refuses; a completion that commits first refuses the write.
+      it('never leaves matches in a round that completed without force, however the retry and the completion interleave', async () => {
+        for (let i = 0; i < 12; i++) {
+          await reset();
+          const empty = await write({ matches: [] });
+
+          const [wrote, completed] = await Promise.allSettled([roundsQ.addMatchesToRound(empty, pairs), roundsQ.completeRound(empty.id, { force: false })]);
+
+          const matches = await matchesOfRound(empty.id);
+          const roundCompleted = (await statusOfRound(empty.id)) === 'completed';
+          // The forbidden state.
+          expect(roundCompleted && matches.length > 0, `iteration ${i}`).toBe(false);
+          if (wrote.status === 'fulfilled') {
+            expect(matches).toHaveLength(2);
+            expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('unfinished');
+          } else {
+            expect(wrote.reason).toMatchObject({ code: 'rounds_round_completed' });
+            expect(matches).toEqual([]);
+            expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('completed');
+          }
+        }
+      }, 60_000);
     });
 
     it('answers tournament_not_found for a phase that is gone', async () => {
