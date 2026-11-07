@@ -704,23 +704,30 @@ describe('onMatchCompleted: end_when', () => {
 
   it('completes the phase when the condition holds and the round has no open match', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: [] });
     await onMatchCompleted(input);
-    expect(completePhaseAtStageEnd).toHaveBeenCalledWith('t-1', 'end_when:main');
+    expect(completePhaseAtStageEnd).toHaveBeenCalledWith('t-1', 'end_when:main', []);
+  });
+
+  it('hands the unfinished matches its read saw to the completion, which refuses any other (a challenge accepted since)', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: ['m-8', 'm-9'] });
+    await onMatchCompleted(input);
+    expect(completePhaseAtStageEnd).toHaveBeenCalledWith('t-1', 'end_when:main', ['m-8', 'm-9']);
   });
 
   it('waits while the round still has open matches or the condition is unmet', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 1 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 1, unfinishedMatchIds: [] });
     await onMatchCompleted(input);
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, facts, openInRound: 0, unfinishedMatchIds: [] });
     await onMatchCompleted(input);
     expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
   });
 
   it('warns and keeps the phase running when the expression cannot be evaluated', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, issue: 'expr_eval_failed', facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, issue: 'expr_eval_failed', facts, openInRound: 0, unfinishedMatchIds: [] });
     await onMatchCompleted(input);
     expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
     expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', 'end_when could not be evaluated', expect.objectContaining({ issue: 'expr_eval_failed' }));
@@ -729,19 +736,19 @@ describe('onMatchCompleted: end_when', () => {
   it('never throws into the caller when completing the phase throws, and reports the failed step so the heal calls it again', async () => {
     const boom = new Error('db down');
     vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: [] });
     vi.mocked(completePhaseAtStageEnd).mockRejectedValueOnce(boom);
     await expect(onMatchCompleted(input)).resolves.toBe(false);
     expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('stage end'), expect.objectContaining({ error: boom }));
     // the heal's re-run completes the phase and reports success
     await expect(onMatchCompleted(input)).resolves.toBe(true);
     expect(completePhaseAtStageEnd).toHaveBeenCalledTimes(2);
-    expect(completePhaseAtStageEnd).toHaveBeenLastCalledWith('t-1', 'end_when:main');
+    expect(completePhaseAtStageEnd).toHaveBeenLastCalledWith('t-1', 'end_when:main', []);
   });
 
   it('reports a stage end whose reaction failed after the flip as a failed step, so the heal repeats the reaction', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd());
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: [] });
     vi.mocked(completePhaseAtStageEnd).mockResolvedValueOnce('reaction_failed');
     await expect(onMatchCompleted(input)).resolves.toBe(false);
     expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('stage end'), expect.anything());
@@ -755,7 +762,7 @@ describe('onMatchCompleted: end_when', () => {
     const started = withEnd();
     const afterEvent = { ...withEnd(), state: { ...withEnd().state, firedEventKeys: ['match_completed:m-1'] } };
     vi.mocked(loadFreshKitContext).mockResolvedValueOnce(started).mockResolvedValue(afterEvent);
-    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, facts, openInRound: 0 });
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: false, facts, openInRound: 0, unfinishedMatchIds: [] });
     await onMatchCompleted(input);
     expect(checkStageEnd).toHaveBeenCalledTimes(1);
     expect(vi.mocked(checkStageEnd).mock.calls[0][0]).toBe(afterEvent);

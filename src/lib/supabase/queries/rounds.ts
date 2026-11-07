@@ -212,22 +212,47 @@ export async function updateRoundStatus(
   return toRound(data);
 }
 
-/**
- * Atomic claim of the transition to `completed`: the conditional update changes a row only for the call that moves
- * the round out of another status. `null` means the round was already completed (or is gone), so a caller that
- * acts on a completion (audit, events, recap) acts only when it gets the round back.
- */
-export async function completeRound(id: string): Promise<Round | null> {
-  const { data, error } = await supabase
-    .from('rounds')
-    .update({ status: 'completed' })
-    .eq('id', id)
-    .neq('status', 'completed')
-    .select()
-    .maybeSingle();
+/** What `completeRound` found; see `round_complete` in 20261106090000_format_challenges.sql. */
+export type CompleteRoundResult =
+  /** This call moved the round. `unfinished` is the number of matches it left open, counted under the lock (> 0 only when forced). */
+  | { outcome: 'completed'; round: Round; unfinished: number }
+  /** Refused: `unfinished` matches are not completed and the call was not forced. The round is untouched. */
+  | { outcome: 'unfinished'; unfinished: number }
+  /** Nothing to do: the round was already completed (a repeat, or another call won) or is gone. */
+  | { outcome: 'unchanged' };
 
+/**
+ * Atomic claim of the transition to `completed`, decided under a lock on the round row (`round_complete`): the
+ * unfinished matches are counted after the lock is held, so a challenge accepted a moment before is counted, and one
+ * accepted a moment after finds the round completed (it locks the round before it inserts its match). Without `force`
+ * unfinished matches refuse the completion; with it they are reported in `unfinished` for the audit entry. A caller that
+ * acts on a completion (audit, events, recap) acts only on `outcome: 'completed'`, which exactly one of overlapping
+ * calls gets.
+ */
+export async function completeRound(id: string, options: { force: boolean }): Promise<CompleteRoundResult> {
+  const { data, error } = await supabase.rpc('round_complete', { p_round_id: id, p_force: options.force });
   if (error) throw error;
-  return data ? toRound(data) : null;
+  const result = parseRoundComplete(data);
+  if (result === null) throw new Error(`round_complete returned an unexpected result: ${JSON.stringify(data)}`);
+  return result;
+}
+
+function parseRoundComplete(data: unknown): CompleteRoundResult | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const body = data as { outcome?: unknown; round?: unknown; unfinished?: unknown };
+  const count = typeof body.unfinished === 'number' ? body.unfinished : 0;
+  switch (body.outcome) {
+    case 'completed':
+      if (typeof body.round !== 'object' || body.round === null) return null;
+      return { outcome: 'completed', round: toRound(body.round as RoundRow), unfinished: count };
+    case 'unfinished':
+      return { outcome: 'unfinished', unfinished: count };
+    case 'already_completed':
+    case 'not_found':
+      return { outcome: 'unchanged' };
+    default:
+      return null;
+  }
 }
 
 export async function updateRoundBestOf(

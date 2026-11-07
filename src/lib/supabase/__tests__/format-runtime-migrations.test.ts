@@ -282,7 +282,7 @@ describe('20261106090000 challenges', () => {
   it('locks the phase row and both enrollment rows before the match insert, so a removal cannot slip in between', () => {
     const start = text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond(');
     const respond = text.slice(start, text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel(', start));
-    const phaseLock = respond.search(/FROM public\.tournaments t WHERE t\.id = v_row\.phase_id FOR KEY SHARE;/);
+    const phaseLock = respond.search(/FROM public\.tournaments t WHERE t\.id = v_row\.phase_id FOR SHARE;/);
     const enrolled = respond.search(/FROM public\.tournament_participants tp\s+WHERE tp\.tournament_id = v_row\.phase_id AND tp\.player_id IN \(v_row\.challenger_id, v_row\.defender_id\)\s+FOR KEY SHARE/);
     const insert = respond.indexOf('INSERT INTO public.matches');
     expect(phaseLock).toBeGreaterThan(-1);
@@ -290,6 +290,71 @@ describe('20261106090000 challenges', () => {
     expect(insert).toBeGreaterThan(enrolled);
     // a challenge whose player left is cancelled before any match is made
     expect(respond.slice(enrolled, insert)).toMatch(/IF v_enrolled < 2 THEN[\s\S]*SET status = 'cancelled'[\s\S]*RETURN v_row;/);
+  });
+
+  it('reads the phase status under FOR SHARE, which conflicts with a status update, in create and in accept', () => {
+    const create = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_create('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('));
+    const respond = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('));
+    // A FOR KEY SHARE does not conflict with the FOR NO KEY UPDATE of `UPDATE tournaments SET status`, so a completion could
+    // slip between the read and the write that depends on it.
+    expect(create).toMatch(/FROM public\.tournaments t WHERE t\.id = p_phase_id AND t\.season_id = p_season_id FOR SHARE;/);
+    expect(create.indexOf('FOR SHARE;')).toBeGreaterThan(create.indexOf('pg_advisory_xact_lock'));
+    expect(create.indexOf('FOR SHARE;')).toBeLessThan(create.indexOf("IF v_status = 'completed'"));
+    expect(respond).toMatch(/FROM public\.tournaments t WHERE t\.id = v_row\.phase_id FOR SHARE;/);
+    expect(text).not.toMatch(/FROM public\.tournaments t WHERE [^;]*FOR KEY SHARE;/);
+  });
+
+  it('locks the round row FOR SHARE and re-checks it is not completed before the accepted match is inserted', () => {
+    const respond = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_cancel('));
+    const phaseLock = respond.indexOf('v_row.phase_id FOR SHARE;');
+    const loop = respond.indexOf('LOOP\n');
+    const roundLock = respond.search(/SELECT \(r\.status = 'completed'\) INTO v_round_done FROM public\.rounds r WHERE r\.id = v_round_id FOR SHARE;/);
+    const insert = respond.indexOf('INSERT INTO public.matches');
+    // lock order: the phase row, then the round row, then matches
+    expect(phaseLock).toBeGreaterThan(-1);
+    expect(loop).toBeGreaterThan(phaseLock);
+    expect(roundLock).toBeGreaterThan(loop);
+    expect(insert).toBeGreaterThan(roundLock);
+    // a round that completed meanwhile is looked up again; none left is challenge_no_open_round
+    expect(respond.slice(loop, insert)).toMatch(/EXIT WHEN v_round_done IS FALSE;\s+END LOOP;/);
+    expect(respond.slice(loop, insert)).toMatch(/IF v_round_id IS NULL THEN\s+RAISE EXCEPTION 'challenge_no_open_round'/);
+  });
+
+  it('completes a round only under FOR UPDATE on its row, counting the unfinished matches after the lock', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_complete(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const lock = fn.search(/FROM public\.rounds WHERE id = p_round_id FOR UPDATE;/);
+    const count = fn.search(/count\(\*\) INTO v_unfinished FROM public\.matches m WHERE m\.round_id = p_round_id AND m\.status <> 'completed'/);
+    const write = fn.indexOf("UPDATE public.rounds SET status = 'completed' WHERE id = p_round_id");
+    expect(lock).toBeGreaterThan(-1);
+    expect(count).toBeGreaterThan(lock);
+    expect(write).toBeGreaterThan(count);
+    // a refusal writes nothing; force completes with the count for the audit entry
+    expect(fn.slice(count, write)).toMatch(/IF v_unfinished > 0 AND NOT p_force THEN\s+RETURN jsonb_build_object\('outcome', 'unfinished'/);
+    expect(fn).toMatch(/'outcome', 'completed', 'round', to_jsonb\(v_row\), 'unfinished', v_unfinished/);
+    // a repeat or a lost race changes nothing
+    expect(fn.slice(lock, count)).toMatch(/v_row\.status = 'completed' THEN\s+RETURN jsonb_build_object\('outcome', 'already_completed'\)/);
+  });
+
+  it('ends a phase at its stage end only under FOR UPDATE on the phase row and only while no unseen match is unfinished', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.phase_complete_at_stage_end(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const lock = fn.search(/FROM public\.tournaments WHERE id = p_phase_id FOR UPDATE;/);
+    const unknown = fn.search(/m\.tournament_id = p_phase_id AND m\.status <> 'completed' AND m\.id <> ALL \(p_known_unfinished\)/);
+    const write = fn.indexOf("UPDATE public.tournaments SET status = 'completed' WHERE id = p_phase_id");
+    expect(lock).toBeGreaterThan(-1);
+    expect(unknown).toBeGreaterThan(lock);
+    expect(write).toBeGreaterThan(unknown);
+    // only an active phase moves; an unseen unfinished match leaves it active
+    expect(fn.slice(lock, unknown)).toMatch(/v_row\.status <> 'active' THEN\s+RETURN jsonb_build_object\('outcome', 'not_active'\)/);
+    expect(fn.slice(unknown, write)).toMatch(/IF v_unknown > 0 THEN\s+RETURN jsonb_build_object\('outcome', 'unsettled'/);
+    // a NULL id list would make `<> ALL` unknown for every match and complete the phase: it is refused
+    expect(fn).toMatch(/p_known_unfinished IS NULL THEN\s+RAISE EXCEPTION 'invalid_op'/);
+  });
+
+  it('grants the two completion functions to service_role only', () => {
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\)\s+FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_complete\(uuid, boolean\),\s+public\.phase_complete_at_stage_end\(uuid, uuid\[\]\)\s+TO service_role;/);
   });
 
   it('stores a withdrawal of a lapsed challenge as expired, which the cooldown counts, never as cancelled', () => {

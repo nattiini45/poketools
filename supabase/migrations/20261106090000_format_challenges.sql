@@ -28,6 +28,21 @@
 --   format_challenges_expire(season)
 --       Marks every open challenge past `expires_at` (of one league, or of all when NULL) expired; returns how many.
 --
+-- Completion races (create and accept against a phase or a round that completes). Lock order everywhere: the phase
+-- (tournaments) row, then the round row, then matches.
+--   * create and accept read the phase status under FOR SHARE, which conflicts with a status UPDATE (FOR NO KEY UPDATE),
+--     where FOR KEY SHARE did not: a completion that commits first is seen (challenge_phase_closed), and one that comes
+--     second waits until the accept's match exists. Every plain `UPDATE tournaments SET status = 'completed'` (the admin
+--     routes) is serialised that way with no change of its own.
+--   * accept locks the round it plays in FOR SHARE and re-checks that it is still not completed (when it just was, it
+--     looks for the next open round again, and challenge_no_open_round when none is left).
+--   * the stage end of a phase decides from an application-side read, so it goes through
+--     phase_complete_at_stage_end(phase, known_unfinished): under FOR UPDATE on the phase row it completes the phase only
+--     when no unfinished match exists beyond the ones the read saw (a match accepted since leaves the phase active; the
+--     match's own finalize evaluates end_when again).
+--   * the round completion goes through round_complete(round, force): under FOR UPDATE on the round row it counts the
+--     unfinished matches and refuses (without force) or reports the count (with force, for the audit entry).
+--
 -- Domain errors are `RAISE EXCEPTION '<code>' USING ERRCODE = 'P0001', DETAIL = <json text>`: challenge_self,
 -- challenge_phase_not_found, challenge_phase_closed, challenge_not_participant (DETAIL {"player_id"}),
 -- challenge_no_open_round, challenge_rank_range (DETAIL {"rank_range", "distance"}), challenge_max_open
@@ -117,7 +132,10 @@ BEGIN
   -- One writer per phase at a time: max_open and the cooldown are counts over the phase's challenges.
   PERFORM pg_advisory_xact_lock(hashtextextended('format_challenge:' || p_phase_id::text, 0));
 
-  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = p_phase_id AND t.season_id = p_season_id;
+  -- FOR SHARE (not a plain read): a phase completion that commits after this read would otherwise let a challenge be
+  -- made in a closed phase. It conflicts with the status UPDATE, so the completion waits for this transaction, or this
+  -- read waits for the completion and sees `completed`. It also waits for a running enrollment replace (FOR UPDATE).
+  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = p_phase_id AND t.season_id = p_season_id FOR SHARE;
   IF NOT FOUND THEN
     RAISE EXCEPTION 'challenge_phase_not_found' USING ERRCODE = 'P0001';
   END IF;
@@ -195,6 +213,7 @@ DECLARE
   v_row      public.format_challenges;
   v_status   public.tournament_status;
   v_round_id uuid;
+  v_round_done boolean;
   v_match_id uuid;
   v_enrolled integer;
 BEGIN
@@ -222,9 +241,11 @@ BEGIN
     RETURN v_row;
   END IF;
 
-  -- KEY SHARE on the phase row waits for a running enrollment replace (which holds it FOR UPDATE and deletes and re-inserts
-  -- the participants), so the enrollment read below never sees its half-done state.
-  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = v_row.phase_id FOR KEY SHARE;
+  -- FOR SHARE on the phase row waits for a running enrollment replace (which holds it FOR UPDATE and deletes and re-inserts
+  -- the participants), so the enrollment read below never sees its half-done state. It also conflicts with a status UPDATE
+  -- (FOR KEY SHARE did not): a phase completion either commits first, and the status read here is `completed`, or waits
+  -- until this transaction has inserted its match, which the completion then finds (see phase_complete_at_stage_end).
+  SELECT t.status INTO v_status FROM public.tournaments t WHERE t.id = v_row.phase_id FOR SHARE;
   IF v_status IS NULL OR v_status = 'completed' THEN
     RAISE EXCEPTION 'challenge_phase_closed' USING ERRCODE = 'P0001';
   END IF;
@@ -244,10 +265,18 @@ BEGIN
     RETURN v_row;
   END IF;
 
-  SELECT o.id INTO v_round_id FROM public.format__open_round(v_row.phase_id) o;
-  IF v_round_id IS NULL THEN
-    RAISE EXCEPTION 'challenge_no_open_round' USING ERRCODE = 'P0001';
-  END IF;
+  -- The round the match goes into is locked FOR SHARE, which conflicts with round_complete's FOR UPDATE and any status
+  -- UPDATE: a round that completes meanwhile is seen as completed (the next open round is looked for again, each pass with
+  -- a fresh snapshot, so a completed round is never picked twice), and a completion that comes second waits for the match.
+  LOOP
+    SELECT o.id INTO v_round_id FROM public.format__open_round(v_row.phase_id) o;
+    IF v_round_id IS NULL THEN
+      RAISE EXCEPTION 'challenge_no_open_round' USING ERRCODE = 'P0001';
+    END IF;
+    v_round_done := NULL;
+    SELECT (r.status = 'completed') INTO v_round_done FROM public.rounds r WHERE r.id = v_round_id FOR SHARE;
+    EXIT WHEN v_round_done IS FALSE;
+  END LOOP;
 
   INSERT INTO public.matches (round_id, tournament_id, player_1_id, player_2_id)
   VALUES (v_round_id, v_row.phase_id, v_row.challenger_id, v_row.defender_id)
@@ -295,19 +324,88 @@ BEGIN
   RETURN v_rows;
 END $$;
 
+-- Completes a round under a lock on its row, so the count of unfinished matches it decides on is the final one: an accepted
+-- challenge locks the round FOR SHARE before it inserts its match, so it either committed first (the match is counted
+-- here) or waits for this transaction and then finds the round completed. FOR UPDATE (not FOR NO KEY UPDATE) also waits
+-- for a match insert in flight (the foreign key takes FOR KEY SHARE on the round). Returns jsonb:
+--   {"outcome": "completed", "round": <the row>, "unfinished": n}   n > 0 only with p_force
+--   {"outcome": "unfinished", "unfinished": n}                      refused: n matches are not completed and p_force is off
+--   {"outcome": "already_completed"}                                 nothing to do (a repeat or a concurrent completion won)
+--   {"outcome": "not_found"}                                         the round is gone
+CREATE OR REPLACE FUNCTION public.round_complete(p_round_id uuid, p_force boolean)
+RETURNS jsonb
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_row        public.rounds;
+  v_unfinished integer;
+BEGIN
+  IF p_round_id IS NULL OR p_force IS NULL THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'round_complete')::text;
+  END IF;
+  SELECT * INTO v_row FROM public.rounds WHERE id = p_round_id FOR UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('outcome', 'not_found');
+  END IF;
+  IF v_row.status = 'completed' THEN
+    RETURN jsonb_build_object('outcome', 'already_completed');
+  END IF;
+  -- A new statement after the lock: it sees every match committed before the lock was granted.
+  SELECT count(*) INTO v_unfinished FROM public.matches m WHERE m.round_id = p_round_id AND m.status <> 'completed';
+  IF v_unfinished > 0 AND NOT p_force THEN
+    RETURN jsonb_build_object('outcome', 'unfinished', 'unfinished', v_unfinished);
+  END IF;
+  UPDATE public.rounds SET status = 'completed' WHERE id = p_round_id RETURNING * INTO v_row;
+  RETURN jsonb_build_object('outcome', 'completed', 'round', to_jsonb(v_row), 'unfinished', v_unfinished);
+END $$;
+
+-- The stage end of a phase (`end_when` met): the application decides from a read of the phase's matches, which an accepted
+-- challenge can outdate before the status write. Under FOR UPDATE on the phase row (an accept holds it FOR SHARE until its
+-- match is inserted), the phase completes only while no unfinished match exists beyond p_known_unfinished, the ids the
+-- read saw unfinished: a forced-complete round may legitimately leave some behind, a match nobody has seen may not. Returns
+-- jsonb:
+--   {"outcome": "completed", "tournament": <the row>}
+--   {"outcome": "unsettled", "unknown_unfinished": n}   an unfinished match the read did not see: the phase stays active
+--   {"outcome": "not_active"}                           upcoming, already completed, or gone: nothing to do
+CREATE OR REPLACE FUNCTION public.phase_complete_at_stage_end(p_phase_id uuid, p_known_unfinished uuid[])
+RETURNS jsonb
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_row     public.tournaments;
+  v_unknown integer;
+BEGIN
+  IF p_phase_id IS NULL OR p_known_unfinished IS NULL THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'phase_complete')::text;
+  END IF;
+  SELECT * INTO v_row FROM public.tournaments WHERE id = p_phase_id FOR UPDATE;
+  IF NOT FOUND OR v_row.status <> 'active' THEN
+    RETURN jsonb_build_object('outcome', 'not_active');
+  END IF;
+  SELECT count(*) INTO v_unknown FROM public.matches m
+   WHERE m.tournament_id = p_phase_id AND m.status <> 'completed' AND m.id <> ALL (p_known_unfinished);
+  IF v_unknown > 0 THEN
+    RETURN jsonb_build_object('outcome', 'unsettled', 'unknown_unfinished', v_unknown);
+  END IF;
+  UPDATE public.tournaments SET status = 'completed' WHERE id = p_phase_id RETURNING * INTO v_row;
+  RETURN jsonb_build_object('outcome', 'completed', 'tournament', to_jsonb(v_row));
+END $$;
+
 REVOKE ALL ON FUNCTION
   public.format__open_round(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
   public.format_challenge_respond(uuid, uuid, uuid, boolean),
   public.format_challenge_cancel(uuid, uuid, uuid),
-  public.format_challenges_expire(uuid)
+  public.format_challenges_expire(uuid),
+  public.round_complete(uuid, boolean),
+  public.phase_complete_at_stage_end(uuid, uuid[])
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
   public.format__open_round(uuid),
   public.format_challenge_create(uuid, uuid, uuid, uuid, integer, integer, integer, integer, integer, integer),
   public.format_challenge_respond(uuid, uuid, uuid, boolean),
   public.format_challenge_cancel(uuid, uuid, uuid),
-  public.format_challenges_expire(uuid)
+  public.format_challenges_expire(uuid),
+  public.round_complete(uuid, boolean),
+  public.phase_complete_at_stage_end(uuid, uuid[])
   TO service_role;
 
 COMMENT ON FUNCTION public.format__open_round(uuid) IS
@@ -320,6 +418,10 @@ COMMENT ON FUNCTION public.format_challenge_cancel(uuid, uuid, uuid) IS
   'The challenger (or an admin, player NULL) withdraws an open challenge of the given league; a challenge of another league is challenge_not_found. After expires_at it stores and returns status expired (which the cooldown counts) instead of cancelled.';
 COMMENT ON FUNCTION public.format_challenges_expire(uuid) IS
   'Marks open challenges past expires_at expired, for one league or (NULL) all; returns how many. Called by the cron pass.';
+COMMENT ON FUNCTION public.round_complete(uuid, boolean) IS
+  'Completes a round under FOR UPDATE on its row, counting the unfinished matches under that lock (a challenge accept locks the round FOR SHARE before it inserts its match). Returns jsonb: outcome completed (round, unfinished; unfinished > 0 only with p_force), unfinished (refused without p_force), already_completed or not_found.';
+COMMENT ON FUNCTION public.phase_complete_at_stage_end(uuid, uuid[]) IS
+  'Completes an active phase at its stage end under FOR UPDATE on the phase row, only while no unfinished match exists beyond p_known_unfinished (the ids the caller''s read saw unfinished). Returns jsonb: outcome completed (tournament), unsettled (an unseen unfinished match, e.g. a challenge accepted since the read; the phase stays active) or not_active.';
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- The recycle bin classifies the new table. These definitions replace 20261105090000's; the inventory test reads the

@@ -17,7 +17,9 @@ import { isKitCandidate, onPhaseStatusChanged } from './hooks';
 const TAG = 'format-engine/stage-end';
 
 /**
- * `completed` when this call moved the phase, `skipped` when it did not (not active, or another call moved it), and
+ * `completed` when this call moved the phase, `skipped` when it did not (not active, another call moved it, or an unfinished
+ * match exists that `knownUnfinished` does not list: a challenge accepted after the caller read the phase's matches, so the
+ * stage has not ended after all; the phase stays active and the finalize of that match evaluates `end_when` again), and
  * `reaction_failed` when the phase is completed but the format's reaction to it (the `stage_end` event, the tie and
  * expression checks) did not apply: the caller reports a failed step so that its retry (the match finalize heal) calls
  * this again. A call that finds the phase already completed repeats only that reaction, which is idempotent by event and
@@ -26,6 +28,7 @@ const TAG = 'format-engine/stage-end';
 export async function completePhaseAtStageEnd(
   tournamentId: string,
   reason: string,
+  knownUnfinished: readonly string[],
 ): Promise<'completed' | 'skipped' | 'reaction_failed'> {
   const before = await getTournamentById(tournamentId);
   if (before === null || !isKitCandidate(before)) return 'skipped';
@@ -36,9 +39,18 @@ export async function completePhaseAtStageEnd(
   }
   if (before.status !== 'active') return 'skipped';
 
-  // Compare-and-set: of two last matches finishing together, only the call that moved the row runs the rest.
-  const tournament = await completeTournamentIfActive(tournamentId);
-  if (tournament === null) return 'skipped';
+  // Compare-and-set under a lock on the phase row: of two last matches finishing together, only the call that moved the row
+  // runs the rest, and a match created since the caller's read (`knownUnfinished`) keeps the phase open.
+  const claim = await completeTournamentIfActive(tournamentId, knownUnfinished);
+  if (claim.outcome === 'unsettled') {
+    logger.info(TAG, 'stage end deferred: an unfinished match appeared after the facts were read', {
+      tournamentId,
+      unknownUnfinished: claim.unknownUnfinished,
+    });
+    return 'skipped';
+  }
+  if (claim.outcome !== 'completed') return 'skipped';
+  const tournament = claim.tournament;
 
   let autoAdvanceError: string | null = null;
   let results: AutoAdvanceResult[] = [];

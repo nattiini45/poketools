@@ -85,3 +85,21 @@ describe('checkStageEnd: openInRound', () => {
     expect((await checkStageEnd(context([]), phase))?.openInRound).toBe(0);
   });
 });
+
+describe('checkStageEnd: unfinishedMatchIds', () => {
+  it('lists every match of the phase that is not completed, in every round, so the completion can tell a new one from these', async () => {
+    vi.mocked(getMatchesByTournament).mockResolvedValue([
+      match('m-1'),
+      match('m-2', { status: 'in_progress', winner_id: null }),
+      match('m-3', { round_id: 'r-2', status: 'scheduled', winner_id: null }),
+      match('m-4', { status: 'disputed', winner_id: null }),
+    ] as never);
+    const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+    expect(check?.unfinishedMatchIds).toEqual(['m-2', 'm-3', 'm-4']);
+  });
+
+  it('is empty when every match is completed', async () => {
+    vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2')] as never);
+    expect((await checkStageEnd(context([]), phase))?.unfinishedMatchIds).toEqual([]);
+  });
+});

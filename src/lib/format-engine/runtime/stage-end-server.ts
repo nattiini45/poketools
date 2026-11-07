@@ -22,6 +22,11 @@ export interface StageEndCheck {
    * waits for the heal, or the cron backfill has not reached it). The phase must not end before those effects exist.
    */
   openInRound: number;
+  /**
+   * The ids of every match of the phase that was not completed when the facts were read. The phase's completion hands
+   * them to the database, which refuses it when an unfinished match exists beyond these (a challenge accepted since).
+   */
+  unfinishedMatchIds: string[];
 }
 
 /**
@@ -42,7 +47,13 @@ export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundI
           (match) => match.round_id === roundId && (match.status !== 'completed' || (match.winner_id !== null && !fired.has(keyOf(match.id)))),
         ).length;
   const result = evaluateEndWhen(endWhen, facts, envBaseOf(ctx, `stage_end:${phase.stage.key}`));
-  return { met: result.met, ...(result.issue !== undefined ? { issue: result.issue } : {}), facts, openInRound };
+  return {
+    met: result.met,
+    ...(result.issue !== undefined ? { issue: result.issue } : {}),
+    facts,
+    openInRound,
+    unfinishedMatchIds: matches.filter((match) => match.status !== 'completed').map((match) => match.id),
+  };
 }
 
 export interface GenerationGuardInput {

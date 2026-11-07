@@ -7,8 +7,10 @@ import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 // Supabase stack to prove the challenge functions: a challenge goes up the ladder within rank_range, one pair has one
 // open challenge, max_open and the cooldown hold, the accept window expires an answer (stored, not rolled back), an
 // accepted challenge creates one scheduled match in the phase's open round with the challenger as player 1, only the
-// challenger (or an admin with a NULL player) withdraws, and format_challenges_expire counts what it expired. Opt-in
-// only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or `npm run test:db`), never loads `.env`.
+// challenger (or an admin with a NULL player) withdraws, and format_challenges_expire counts what it expired. The
+// completion functions (round_complete, phase_complete_at_stage_end) and an accept are serialised on the round and the
+// phase rows: in either order, and under a real race, no match is left unfinished in a round or phase that completed
+// without force. Opt-in only (`LOCAL_SUPABASE_FORMAT_CHALLENGES=1` or `npm run test:db`), never loads `.env`.
 const optIn = localStackOptIn('LOCAL_SUPABASE_FORMAT_CHALLENGES');
 
 if (optIn) {
@@ -19,10 +21,14 @@ if (optIn) {
 
 type ClientMod = typeof import('@/lib/supabase/client');
 type ChallengesMod = typeof import('@/lib/supabase/queries/format-challenges');
+type RoundsMod = typeof import('@/lib/supabase/queries/rounds');
+type TournamentsMod = typeof import('@/lib/supabase/queries/tournaments');
 type CreateInput = Parameters<ChallengesMod['createFormatChallenge']>[0];
 
 let client: ClientMod['supabase'];
 let ladder: ChallengesMod;
+let roundsQ: RoundsMod;
+let tournamentsQ: TournamentsMod;
 
 const RUN = randomUUID().slice(0, 8);
 const ids = {
@@ -104,6 +110,8 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
     ({ supabase: client } = await import('@/lib/supabase/client'));
     ladder = await import('@/lib/supabase/queries/format-challenges');
+    roundsQ = await import('@/lib/supabase/queries/rounds');
+    tournamentsQ = await import('@/lib/supabase/queries/tournaments');
 
     await run('rulesets', insertLocalRuleset(client, { id: ids.ruleset, name: `Challenges ${RUN} Ruleset` }));
     await run(
@@ -163,6 +171,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
     await run('reset challenges', client.from('format_challenges').delete().eq('season_id', ids.season));
     await run('reset matches', client.from('matches').delete().in('tournament_id', PHASES));
     await run('reset phase', client.from('tournaments').update({ status: 'active' }).in('id', PHASES));
+    await run('reset round', client.from('rounds').update({ status: 'pending' }).eq('id', ids.roundOpen));
   }, 30_000);
 
   describe('format_challenge_create', () => {
@@ -417,6 +426,231 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
       await expect(ladder.cancelFormatChallenge(elsewhere, row.id, null)).rejects.toMatchObject({ code: 'challenge_not_found' });
       expect((await rowOf(row.id))?.status).toBe('open');
     });
+  });
+
+  describe('completing the round or the phase next to an accept', () => {
+    const accept = (challengeId: string) =>
+      ladder.respondToFormatChallenge({ seasonId: ids.season, challengeId, playerId: ids.pTop, accept: true });
+    const statusOf = async (table: 'rounds' | 'tournaments', id: string) =>
+      ((await client.from(table).select('status').eq('id', id).single()).data as { status: string }).status;
+    const unfinishedMatches = async () =>
+      (await matchesOf()).filter((match) => match.status !== 'completed').map((match) => match.id);
+    const resetRace = async () => {
+      await run('reset matches', client.from('matches').delete().in('tournament_id', PHASES));
+      await run('reset challenges', client.from('format_challenges').delete().eq('season_id', ids.season));
+      await run('reset phase', client.from('tournaments').update({ status: 'active' }).eq('id', ids.phase));
+      await run('reset round', client.from('rounds').update({ status: 'pending' }).eq('id', ids.roundOpen));
+    };
+
+    it('refuses an accept once the round completed: no match is made in a completed round', async () => {
+      const row = await create();
+
+      await expect(roundsQ.completeRound(ids.roundOpen, { force: false })).resolves.toMatchObject({ outcome: 'completed', unfinished: 0 });
+
+      await expect(accept(row.id)).rejects.toMatchObject({ code: 'challenge_no_open_round', statusCode: 409 });
+      expect(await matchesOf()).toEqual([]);
+      expect((await rowOf(row.id))?.status).toBe('open');
+    });
+
+    // The accept looks for the open round again when the one it picked completed meanwhile (the highest round that is not
+    // completed). Round 3 is added on top of round 2 for these cases, so a round is left to fall back to.
+    describe('with a second open round', () => {
+      const roundHigh = randomUUID();
+      const dropHighRound = async () => {
+        await run('high round matches', client.from('matches').delete().eq('round_id', roundHigh));
+        await run('high round', client.from('rounds').delete().eq('id', roundHigh));
+      };
+
+      beforeEach(async () => {
+        await dropHighRound();
+        await run(
+          'high round',
+          client.from('rounds').insert({ id: roundHigh, tournament_id: ids.phase, name: 'Round 3', round_number: 3, best_of: 1, status: 'pending' }),
+        );
+      });
+      afterAll(async () => {
+        await dropHighRound();
+      });
+
+      it('creates and accepts into the highest open round while it is open', async () => {
+        const row = await create();
+        expect(row.round).toBe(3);
+
+        const answered = await accept(row.id);
+
+        expect((await matchesOf()).find((match) => match.id === answered.match_id)?.round_id).toBe(roundHigh);
+      });
+
+      it('falls back to the next open round when the one it would pick completed: the match lands there, never in the completed round', async () => {
+        const row = await create();
+        await expect(roundsQ.completeRound(roundHigh, { force: false })).resolves.toMatchObject({ outcome: 'completed', unfinished: 0 });
+
+        const answered = await accept(row.id);
+
+        expect(answered.status).toBe('accepted');
+        const matches = await matchesOf();
+        expect(matches).toHaveLength(1);
+        expect(matches[0]).toMatchObject({ id: answered.match_id, round_id: ids.roundOpen, status: 'scheduled' });
+        expect(matches.filter((match) => match.round_id === roundHigh)).toEqual([]);
+        expect(await statusOf('rounds', ids.roundOpen)).toBe('pending');
+      });
+
+      it('skips every completed round above the open one and still refuses once none is left', async () => {
+        const row = await create();
+        await roundsQ.completeRound(roundHigh, { force: false });
+        await roundsQ.completeRound(ids.roundOpen, { force: false });
+
+        await expect(accept(row.id)).rejects.toMatchObject({ code: 'challenge_no_open_round', statusCode: 409 });
+        expect(await matchesOf()).toEqual([]);
+      });
+
+      it('lands the match in exactly one open round, and a completed round holds none, however the accept and the completion interleave', async () => {
+        for (let i = 0; i < 12; i++) {
+          await resetRace();
+          await run('high round matches', client.from('matches').delete().eq('round_id', roundHigh));
+          await run('high round', client.from('rounds').update({ status: 'pending' }).eq('id', roundHigh));
+          const row = await create();
+
+          const [accepted, completed] = await Promise.allSettled([accept(row.id), roundsQ.completeRound(roundHigh, { force: false })]);
+
+          // Round 2 stays open, so the accept always finds a round: it never raises challenge_no_open_round.
+          expect(accepted.status).toBe('fulfilled');
+          const matches = await matchesOf();
+          expect(matches).toHaveLength(1);
+          const highCompleted = (await statusOf('rounds', roundHigh)) === 'completed';
+          if (matches[0].round_id === roundHigh) {
+            // The match went in first: the completion counted it and was refused.
+            expect(highCompleted).toBe(false);
+            expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('unfinished');
+          } else {
+            // The completion went first: the match fell back to round 2.
+            expect(matches[0].round_id).toBe(ids.roundOpen);
+            expect(highCompleted).toBe(true);
+            expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('completed');
+          }
+        }
+      }, 60_000);
+    });
+
+    it('counts a match accepted before the completion: refused without force, reported with force', async () => {
+      const row = await create();
+      await accept(row.id);
+
+      await expect(roundsQ.completeRound(ids.roundOpen, { force: false })).resolves.toEqual({ outcome: 'unfinished', unfinished: 1 });
+      expect(await statusOf('rounds', ids.roundOpen)).toBe('pending');
+
+      await expect(roundsQ.completeRound(ids.roundOpen, { force: true })).resolves.toMatchObject({
+        outcome: 'completed',
+        unfinished: 1,
+        round: { id: ids.roundOpen, status: 'completed' },
+      });
+      expect(await statusOf('rounds', ids.roundOpen)).toBe('completed');
+    });
+
+    it('answers a repeat, a completed round and an unknown round with unchanged', async () => {
+      await roundsQ.completeRound(ids.roundOpen, { force: false });
+
+      await expect(roundsQ.completeRound(ids.roundOpen, { force: false })).resolves.toEqual({ outcome: 'unchanged' });
+      await expect(roundsQ.completeRound(ids.roundDone, { force: true })).resolves.toEqual({ outcome: 'unchanged' });
+      await expect(roundsQ.completeRound(randomUUID(), { force: false })).resolves.toEqual({ outcome: 'unchanged' });
+    });
+
+    it('keeps the phase active at its stage end while a match exists that the read did not see, then completes', async () => {
+      const row = await create();
+      const answered = await accept(row.id);
+      const matchId = answered.match_id as string;
+
+      // The caller read the phase's matches before the accept: it knows of none.
+      await expect(tournamentsQ.completeTournamentIfActive(ids.phase, [])).resolves.toEqual({ outcome: 'unsettled', unknownUnfinished: 1 });
+      expect(await statusOf('tournaments', ids.phase)).toBe('active');
+
+      // A caller that saw the match (a forced-complete round may leave one behind) completes it, exactly once.
+      await expect(tournamentsQ.completeTournamentIfActive(ids.phase, [matchId])).resolves.toMatchObject({
+        outcome: 'completed',
+        tournament: { id: ids.phase, status: 'completed' },
+      });
+      await expect(tournamentsQ.completeTournamentIfActive(ids.phase, [matchId])).resolves.toEqual({ outcome: 'not_active' });
+    });
+
+    it('completes a phase with no unfinished match, ignores an unknown phase, and refuses an accept after an admin completion', async () => {
+      await expect(tournamentsQ.completeTournamentIfActive(ids.phase, [])).resolves.toMatchObject({ outcome: 'completed' });
+      // Reopened by an admin, challenged, then completed by an admin (a plain status write): the accept finds it closed.
+      await run('phase active', client.from('tournaments').update({ status: 'active' }).eq('id', ids.phase));
+      const row = await create();
+      await run('phase completed', client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase));
+      await expect(accept(row.id)).rejects.toMatchObject({ code: 'challenge_phase_closed' });
+      expect(await matchesOf()).toEqual([]);
+
+      await expect(tournamentsQ.completeTournamentIfActive(randomUUID(), [])).resolves.toEqual({ outcome: 'not_active' });
+    });
+
+    // A real race over HTTP: whichever of the two wins, the pair of results must agree. The accept either made its match
+    // before the completion (counted, so a completion without force is refused) or found the round completed.
+    it('never leaves an unfinished match in a round that completed without force, however the accept and the completion interleave', async () => {
+      for (let i = 0; i < 12; i++) {
+        await resetRace();
+        const row = await create();
+
+        const [accepted, completed] = await Promise.allSettled([accept(row.id), roundsQ.completeRound(ids.roundOpen, { force: false })]);
+
+        const roundCompleted = (await statusOf('rounds', ids.roundOpen)) === 'completed';
+        const unfinished = await unfinishedMatches();
+        // The forbidden state.
+        expect(roundCompleted && unfinished.length > 0).toBe(false);
+        if (accepted.status === 'fulfilled') {
+          expect(unfinished).toHaveLength(1);
+          expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('unfinished');
+        } else {
+          expect(accepted.reason).toMatchObject({ code: 'challenge_no_open_round' });
+          expect(completed.status === 'fulfilled' && completed.value.outcome).toBe('completed');
+        }
+      }
+    }, 60_000);
+
+    it('never leaves an unseen unfinished match in a phase that ended, however the accept and the stage end interleave', async () => {
+      for (let i = 0; i < 12; i++) {
+        await resetRace();
+        const row = await create();
+
+        // The stage end read the phase's matches before the accept: it knows of none.
+        const [accepted, ended] = await Promise.allSettled([accept(row.id), tournamentsQ.completeTournamentIfActive(ids.phase, [])]);
+
+        const phaseCompleted = (await statusOf('tournaments', ids.phase)) === 'completed';
+        const unfinished = await unfinishedMatches();
+        expect(phaseCompleted && unfinished.length > 0).toBe(false);
+        if (accepted.status === 'fulfilled') {
+          expect(unfinished).toHaveLength(1);
+          expect(ended.status === 'fulfilled' && ended.value.outcome).toBe('unsettled');
+        } else {
+          expect(accepted.reason).toMatchObject({ code: 'challenge_phase_closed' });
+          expect(ended.status === 'fulfilled' && ended.value.outcome).toBe('completed');
+        }
+      }
+    }, 60_000);
+
+    it('serialises an admin completion (a plain status write) with an accept: a refusal leaves no match, in either order', async () => {
+      for (let i = 0; i < 12; i++) {
+        await resetRace();
+        const row = await create();
+
+        const [accepted] = await Promise.allSettled([
+          accept(row.id),
+          Promise.resolve(client.from('tournaments').update({ status: 'completed' }).eq('id', ids.phase)).then(({ error }) => {
+            if (error) throw new Error(JSON.stringify(error));
+          }),
+        ]);
+
+        // Accept first: its match stands and the admin's completion follows (the admin chose to complete). Completion first:
+        // the accept is refused and made no match.
+        expect(await statusOf('tournaments', ids.phase)).toBe('completed');
+        if (accepted.status === 'rejected') {
+          expect(accepted.reason).toMatchObject({ code: 'challenge_phase_closed' });
+          expect(await matchesOf()).toEqual([]);
+        } else {
+          expect(await matchesOf()).toHaveLength(1);
+        }
+      }
+    }, 60_000);
   });
 
   describe('format_challenges_expire', () => {

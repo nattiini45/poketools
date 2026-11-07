@@ -7518,6 +7518,10 @@ export type Database = {
         Args: { existing: Json; incoming: Json }
         Returns: Json
       }
+      phase_complete_at_stage_end: {
+        Args: { p_known_unfinished: string[]; p_phase_id: string }
+        Returns: Json
+      }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: {
@@ -7589,6 +7593,10 @@ export type Database = {
           p_player_deltas: Json
         }
         Returns: string
+      }
+      round_complete: {
+        Args: { p_force: boolean; p_round_id: string }
+        Returns: Json
       }
       ruleset_fold_ids: { Args: { p_names: string[] }; Returns: string[] }
       ruleset_publish_version: {

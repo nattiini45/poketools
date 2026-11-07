@@ -389,7 +389,7 @@ async function endStageIfDone(
     }
     if (!check.met) return;
     const { completePhaseAtStageEnd } = await import('./phase-complete');
-    const result = await completePhaseAtStageEnd(tournament.id, `end_when:${phase.stage.key}`);
+    const result = await completePhaseAtStageEnd(tournament.id, `end_when:${phase.stage.key}`, check.unfinishedMatchIds);
     // The phase is completed but its reaction did not apply: a failed step, so the heal's re-run repeats the reaction.
     if (result === 'reaction_failed') throw new Error('the stage end reaction of the completed phase did not apply');
   }, report);

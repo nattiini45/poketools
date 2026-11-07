@@ -386,21 +386,50 @@ export async function updateTournament(
   return toTournament(data);
 }
 
-/**
- * Compare-and-set of the status: `active` to `completed`. `null` when the tournament was no longer active (another
- * writer completed it first), so exactly one of two concurrent callers gets the row back.
- */
-export async function completeTournamentIfActive(id: string): Promise<Tournament | null> {
-  const { data, error } = await supabase
-    .from('tournaments')
-    .update({ status: 'completed' })
-    .eq('id', id)
-    .eq('status', 'active')
-    .select()
-    .maybeSingle();
+/** What `completeTournamentIfActive` found; see `phase_complete_at_stage_end` in 20261106090000_format_challenges.sql. */
+export type CompleteTournamentResult =
+  /** This call moved the row, so exactly one of two concurrent callers gets it. */
+  | { outcome: 'completed'; tournament: Tournament }
+  /** The tournament was not active (another writer completed it first, or it never started), or is gone. */
+  | { outcome: 'not_active' }
+  /** An unfinished match exists that the caller's read did not see (a challenge accepted since): the phase stays active. */
+  | { outcome: 'unsettled'; unknownUnfinished: number };
 
+/**
+ * Compare-and-set of the status at a stage end: `active` to `completed`, decided under a lock on the phase row
+ * (`phase_complete_at_stage_end`). `knownUnfinished` are the ids of the matches the caller's read saw unfinished (the
+ * facts its `end_when` decision rests on): the phase completes only while no other unfinished match exists, so a match
+ * created after that read (a challenge accepted meanwhile locks the phase row FOR SHARE until it has inserted it) keeps
+ * the phase open instead of being left unfinished in a completed phase.
+ */
+export async function completeTournamentIfActive(
+  id: string,
+  knownUnfinished: readonly string[],
+): Promise<CompleteTournamentResult> {
+  const { data, error } = await supabase.rpc('phase_complete_at_stage_end', {
+    p_phase_id: id,
+    p_known_unfinished: [...knownUnfinished],
+  });
   if (error) throw error;
-  return data === null ? null : toTournament(data);
+  const result = parsePhaseComplete(data);
+  if (result === null) throw new Error(`phase_complete_at_stage_end returned an unexpected result: ${JSON.stringify(data)}`);
+  return result;
+}
+
+function parsePhaseComplete(data: unknown): CompleteTournamentResult | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const body = data as { outcome?: unknown; tournament?: unknown; unknown_unfinished?: unknown };
+  switch (body.outcome) {
+    case 'completed':
+      if (typeof body.tournament !== 'object' || body.tournament === null) return null;
+      return { outcome: 'completed', tournament: toTournament(body.tournament as TournamentRow) };
+    case 'not_active':
+      return { outcome: 'not_active' };
+    case 'unsettled':
+      return { outcome: 'unsettled', unknownUnfinished: typeof body.unknown_unfinished === 'number' ? body.unknown_unfinished : 0 };
+    default:
+      return null;
+  }
 }
 
 export async function archiveTournamentsBySeason(seasonId: string, archived: boolean): Promise<void> {
