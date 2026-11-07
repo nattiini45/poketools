@@ -139,3 +139,18 @@ describe('the team boundaries use the team schema', () => {
     expect(parse('Garchomp').success).toBe(false);
   });
 });
+
+describe('validateTeamSchema names the match of a team', () => {
+  const base = { pokemon: [makeSet()], ruleset_id: UUID, tournament_id: UUID };
+
+  it('takes an optional uuid match_id next to round_number', () => {
+    expect(validateTeamSchema.safeParse(base).success).toBe(true);
+    const parsed = validateTeamSchema.safeParse({ ...base, match_id: UUID, round_number: 4 });
+    expect(parsed.success).toBe(true);
+    expect(parsed.success && parsed.data.match_id).toBe(UUID);
+  });
+
+  it.each(['not-a-uuid', '', 7, null])('refuses match_id %j', (match_id) => {
+    expect(validateTeamSchema.safeParse({ ...base, match_id }).success).toBe(false);
+  });
+});

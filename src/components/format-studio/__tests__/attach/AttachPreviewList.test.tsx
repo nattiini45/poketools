@@ -183,11 +183,6 @@ describe('EngineGapList: one sentence per gap code', () => {
       en: 'Phase “Group stage”: only one round-robin leg is played (2 planned).',
       de: 'Phase „Group stage“: Es wird nur ein Durchgang der Jeder-gegen-jeden-Runde gespielt (2 geplant).',
     },
-    third_place_not_run: {
-      gap: { code: 'third_place_not_run', stage: 'finals', params: {} },
-      en: 'Phase “Finals”: the third-place match is not played.',
-      de: 'Phase „Finals“: Das Spiel um Platz 3 wird nicht gespielt.',
-    },
     edge_select_not_run: {
       gap: { code: 'edge_select_not_run', stage: 'group', edge: 'to_finals', params: { kind: 'wildcard' } },
       en: 'Advancement “to_finals”: the selection “wildcards” is not run. An admin moves the players by hand.',
@@ -197,6 +192,31 @@ describe('EngineGapList: one sentence per gap code', () => {
       gap: { code: 'groups_not_created', stage: 'group', params: { count: 4, method: 'serpentine' } },
       en: 'Phase “Group stage”: the 4 groups are not created automatically.',
       de: 'Phase „Group stage“: Die 4 Gruppen werden nicht automatisch angelegt.',
+    },
+    pairing_not_run: {
+      gap: { code: 'pairing_not_run', stage: 'group', params: { kind: 'bipartite' } },
+      en: 'Phase “Group stage”: the pairing “bipartite” is recorded, but no round is generated for it. An admin pairs the rounds by hand.',
+      de: 'Phase „Group stage“: Die Paarung „bipartite“ wird gespeichert, erzeugt aber keine Runden. Ein Admin paart die Runden von Hand.',
+    },
+    constraints_not_run: {
+      gap: { code: 'constraints_not_run', stage: 'group', params: { count: 9 } },
+      en: 'Phase “Group stage”: the 9 team rules are recorded and not checked against teams.',
+      de: 'Phase „Group stage“: Die 9 Teamregeln werden gespeichert und nicht gegen Teams geprüft.',
+    },
+    calendar_not_run: {
+      gap: { code: 'calendar_not_run', stage: 'group', params: {} },
+      en: 'Phase “Group stage”: the calendar is recorded. Rounds and deadlines do not start on their own.',
+      de: 'Phase „Group stage“: Der Kalender wird gespeichert. Runden und Fristen starten nicht von selbst.',
+    },
+    end_when_not_run: {
+      gap: { code: 'end_when_not_run', stage: 'group', params: {} },
+      en: 'Phase “Group stage”: the end condition is recorded and not checked. An admin ends the phase by hand.',
+      de: 'Phase „Group stage“: Die Endbedingung wird gespeichert und nicht geprüft. Ein Admin beendet die Phase von Hand.',
+    },
+    foreach_group_not_run: {
+      gap: { code: 'foreach_group_not_run', stage: 'group', params: {} },
+      en: 'Phase “Group stage”: the repeat per group is recorded and not run.',
+      de: 'Phase „Group stage“: Die Wiederholung je Gruppe wird gespeichert und nicht ausgeführt.',
     },
   };
 
@@ -227,7 +247,7 @@ describe('EngineGapList: one sentence per gap code', () => {
   });
 
   it('a phase the caller does not know is named by its key', () => {
-    const html = render(<EngineGapList gaps={[GAPS.third_place_not_run.gap]} stageNames={{}} />);
+    const html = render(<EngineGapList gaps={[GAPS.override_unmapped.gap]} stageNames={{}} />);
     expect(html).toContain('Phase “finals”');
   });
 

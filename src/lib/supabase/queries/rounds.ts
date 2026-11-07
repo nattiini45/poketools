@@ -1,7 +1,7 @@
 import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isUniqueViolationOf } from '../unique-violation';
-import type { Tables } from '@/types/database';
+import type { Json, Tables } from '@/types/database';
 import type { Round, RoundStatus } from '@/types/round';
 import type { RoundByeSource } from '@/lib/tournament/byes';
 
@@ -35,6 +35,46 @@ export async function getRoundsByTournament(tournamentId: string): Promise<Round
   return data.map(toRound);
 }
 
+/** The PostgREST `max_rows` ceiling (`supabase/config.toml`); a full page may have been cut, so the read pages. */
+const BYE_ROUNDS_PAGE_SIZE = 1000;
+
+/** The columns of a round that the format cron reads to find the `round_end` events a completion left unfired. */
+export interface RoundStatusRow {
+  id: string;
+  tournament_id: string;
+  round_number: number;
+  status: RoundStatus;
+}
+
+/**
+ * The id, number and status of every round of the given tournaments, paged (the PostgREST `max_rows` ceiling cuts a long
+ * list), in tournament then round order. The format cron reads the phases of one league with it: one query for all of them,
+ * not one per phase. A tournament without rounds contributes nothing.
+ */
+export async function listRoundStatusesByTournamentIds(tournamentIds: readonly string[]): Promise<RoundStatusRow[]> {
+  const unique = [...new Set(tournamentIds)];
+  const rounds: RoundStatusRow[] = [];
+  if (unique.length === 0) return rounds;
+  for (let from = 0; ; from += BYE_ROUNDS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from('rounds')
+      .select('id, tournament_id, round_number, status')
+      .in('tournament_id', unique)
+      .order('tournament_id')
+      .order('round_number')
+      // Neither key is unique, so `id` makes the page boundaries stable.
+      .order('id')
+      .range(from, from + BYE_ROUNDS_PAGE_SIZE - 1);
+
+    if (error) throw error;
+    for (const row of data) {
+      rounds.push({ id: row.id, tournament_id: row.tournament_id, round_number: row.round_number, status: row.status as RoundStatus });
+    }
+    if (data.length < BYE_ROUNDS_PAGE_SIZE) break;
+  }
+  return rounds;
+}
+
 /** The columns of a round that standings read to score its byes. */
 export interface ByeRound extends RoundByeSource {
   id: string;
@@ -49,9 +89,6 @@ function toByeRound(row: Pick<RoundRow, 'id' | 'tournament_id' | 'round_number' 
     bye_player_ids: row.bye_player_ids ?? [],
   };
 }
-
-/** The PostgREST `max_rows` ceiling (`supabase/config.toml`); a full page may have been cut, so the read pages. */
-const BYE_ROUNDS_PAGE_SIZE = 1000;
 
 /**
  * The bye columns of every round of the given tournaments, in ONE query per page (not one per tournament), grouped
@@ -151,6 +188,52 @@ export class RoundAlreadyWrittenError extends UserFacingError {
   }
 }
 
+/**
+ * The refusals of a round write that leave this module as a typed error, shared by `createRound`,
+ * `createRoundWithMatches` and `addMatchesToRound`; anything else is returned unchanged (the caller throws it).
+ * `roundName` words the duplicate-number refusal.
+ */
+function mapRoundWriteError(error: { code?: string; message?: string }, roundName: string, tag: string): unknown {
+  if (isUniqueViolationOf(error, ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY)) {
+    console.error(`[${tag}] round "${roundName}" of the tournament already exists (concurrent generation)`, error);
+    return new RoundAlreadyWrittenError(roundName);
+  }
+  if (isPhaseGroupsStale(error)) {
+    console.error(`[${tag}] phase groups changed before the first round:`, error);
+    return new UserFacingError('The league groups changed while the round was being generated; generate it again', {
+      code: 'PHASE_GROUPS_STALE',
+      status: 409,
+    });
+  }
+  if (isRoundWriteSignal(error, 'rounds_phase_completed')) {
+    return new UserFacingError('This phase was completed while the round was being created, so no round was written. No more rounds can be generated.', {
+      code: 'rounds_phase_completed',
+      status: 409,
+    });
+  }
+  // Only a write into an existing round (`addMatchesToRound`) raises these two, both decided under the round row lock.
+  if (isRoundWriteSignal(error, 'rounds_round_completed')) {
+    return new UserFacingError(`${roundName} is already completed, so no matches were written into it. Delete it to generate it again.`, {
+      code: 'rounds_round_completed',
+      params: { round: roundName },
+      status: 409,
+    });
+  }
+  if (isRoundWriteSignal(error, 'rounds_round_already_written')) {
+    // A concurrent retry filled the round first; nothing of this call was written.
+    return new RoundAlreadyWrittenError(roundName);
+  }
+  if (isRoundWriteSignal(error, 'tournament_not_found')) {
+    return new UserFacingError('Tournament not found', { code: 'tournament_not_found', status: 404 });
+  }
+  return error;
+}
+
+/** A domain refusal of `round_write` (`RAISE EXCEPTION '<code>' USING ERRCODE = 'P0001'`, message = code). */
+function isRoundWriteSignal(error: { code?: string; message?: string }, signal: string): boolean {
+  return error.code === 'P0001' && error.message === signal;
+}
+
 export async function createRound(input: {
   tournament_id: string;
   name: string;
@@ -177,24 +260,90 @@ export async function createRound(input: {
     .select()
     .single();
 
-  if (error) {
-    if (isUniqueViolationOf(error, ROUNDS_TOURNAMENT_ROUND_NUMBER_KEY)) {
-      console.error(
-        `[createRound] round ${input.round_number} of tournament ${input.tournament_id} already exists (concurrent generation)`,
-        error
-      );
-      throw new RoundAlreadyWrittenError(input.name);
-    }
-    if (isPhaseGroupsStale(error)) {
-      console.error('[createRound] phase groups changed before the first round:', error);
-      throw new UserFacingError('The league groups changed while the round was being generated; generate it again', {
-        code: 'PHASE_GROUPS_STALE',
-        status: 409,
-      });
-    }
-    throw error;
-  }
+  if (error) throw mapRoundWriteError(error, input.name, 'createRound');
   return toRound(data);
+}
+
+/** One pairing of a round: the players of a `scheduled` match. */
+export interface RoundMatchInput {
+  player_1_id: string;
+  player_2_id: string;
+}
+
+/**
+ * Writes a round and its matches in ONE transaction under the phase row lock (`round_write`,
+ * 20261106090000_format_challenges.sql), for the three round generators (generate-round, generate-all-rounds,
+ * rounds/manual). A phase that completed first (a stage end that landed after the route's own guards) refuses the write
+ * (409 `rounds_phase_completed`) and nothing is left behind, not even an empty round; a stage end that comes second waits
+ * for the write and finds its unfinished matches, so the phase stays active. `createRound` plus `createMatchBatch` are two
+ * requests and cannot give either guarantee. A concurrent generation of the same number answers
+ * `RoundAlreadyWrittenError`, a first round of a mirrored phase whose groups changed 409 `PHASE_GROUPS_STALE`.
+ */
+export async function createRoundWithMatches(input: {
+  tournament_id: string;
+  name: string;
+  round_number: number;
+  best_of: number;
+  /** Players the pairing result gave a bye (Swiss / round robin); omitted for elimination. */
+  bye_player_ids?: string[];
+  matches: readonly RoundMatchInput[];
+}): Promise<Round> {
+  const { data, error } = await supabase.rpc('round_write', {
+    p_tournament_id: input.tournament_id,
+    p_round_id: NULL_ARG as string,
+    p_name: input.name,
+    p_round_number: input.round_number,
+    p_best_of: input.best_of,
+    p_bye_player_ids: input.bye_player_ids ?? [],
+    p_matches: roundMatchesJson(input.matches),
+  });
+  if (error) throw mapRoundWriteError(error, input.name, 'createRoundWithMatches');
+  return parseRoundWrite(data);
+}
+
+/**
+ * Writes the matches of a round that already exists (an interrupted call left it without matches) under the phase row
+ * lock, like `createRoundWithMatches`: a completed phase refuses them (409 `rounds_phase_completed`) and the round is
+ * left as it was. With `byePlayerIds` the round's stored byes are replaced in the same transaction (a retry brings the
+ * reused round to this call's byes like a fresh insert), so a refused write changes neither the matches nor the byes;
+ * omitted, they stay. The round's other columns are never touched. With neither matches nor byes nothing is written.
+ * The round row is locked `FOR UPDATE` and re-read under the lock: a round that was completed meanwhile is refused
+ * (409 `rounds_round_completed`), and so is one that has matches by now (409 `rounds_round_already_written`, a concurrent
+ * retry of the same round wrote first), each leaving the round and its byes as they were. Of two concurrent retries
+ * exactly one writes.
+ */
+export async function addMatchesToRound(
+  round: Pick<Round, 'id' | 'name' | 'tournament_id'>,
+  matches: readonly RoundMatchInput[],
+  byePlayerIds?: readonly string[],
+): Promise<void> {
+  if (matches.length === 0 && byePlayerIds === undefined) return;
+  const { data, error } = await supabase.rpc('round_write', {
+    p_tournament_id: round.tournament_id,
+    p_round_id: round.id,
+    p_name: NULL_ARG as string,
+    p_round_number: NULL_ARG as number,
+    p_best_of: NULL_ARG as number,
+    p_bye_player_ids: byePlayerIds === undefined ? (NULL_ARG as string[]) : [...byePlayerIds],
+    p_matches: roundMatchesJson(matches),
+  });
+  if (error) throw mapRoundWriteError(error, round.name, 'addMatchesToRound');
+  parseRoundWrite(data);
+}
+
+/** The generated RPC types mark every parameter non-null although `round_write` accepts NULL for these. */
+const NULL_ARG: unknown = null;
+
+function roundMatchesJson(matches: readonly RoundMatchInput[]): Json {
+  return matches.map((match) => ({ player_1_id: match.player_1_id, player_2_id: match.player_2_id }));
+}
+
+function parseRoundWrite(data: unknown): Round {
+  const body = typeof data === 'object' && data !== null && !Array.isArray(data) ? (data as { round?: unknown }) : null;
+  if (body === null || typeof body.round !== 'object' || body.round === null) {
+    throw new Error(`round_write returned an unexpected result: ${JSON.stringify(data)}`);
+  }
+  return toRound(body.round as RoundRow);
 }
 
 export async function updateRoundStatus(
@@ -212,22 +361,47 @@ export async function updateRoundStatus(
   return toRound(data);
 }
 
-/**
- * Atomic claim of the transition to `completed`: the conditional update changes a row only for the call that moves
- * the round out of another status. `null` means the round was already completed (or is gone), so a caller that
- * acts on a completion (audit, events, recap) acts only when it gets the round back.
- */
-export async function completeRound(id: string): Promise<Round | null> {
-  const { data, error } = await supabase
-    .from('rounds')
-    .update({ status: 'completed' })
-    .eq('id', id)
-    .neq('status', 'completed')
-    .select()
-    .maybeSingle();
+/** What `completeRound` found; see `round_complete` in 20261106090000_format_challenges.sql. */
+export type CompleteRoundResult =
+  /** This call moved the round. `unfinished` is the number of matches it left open, counted under the lock (> 0 only when forced). */
+  | { outcome: 'completed'; round: Round; unfinished: number }
+  /** Refused: `unfinished` matches are not completed and the call was not forced. The round is untouched. */
+  | { outcome: 'unfinished'; unfinished: number }
+  /** Nothing to do: the round was already completed (a repeat, or another call won) or is gone. */
+  | { outcome: 'unchanged' };
 
+/**
+ * Atomic claim of the transition to `completed`, decided under a lock on the round row (`round_complete`): the
+ * unfinished matches are counted after the lock is held, so a challenge accepted a moment before is counted, and one
+ * accepted a moment after finds the round completed (it locks the round before it inserts its match). Without `force`
+ * unfinished matches refuse the completion; with it they are reported in `unfinished` for the audit entry. A caller that
+ * acts on a completion (audit, events, recap) acts only on `outcome: 'completed'`, which exactly one of overlapping
+ * calls gets.
+ */
+export async function completeRound(id: string, options: { force: boolean }): Promise<CompleteRoundResult> {
+  const { data, error } = await supabase.rpc('round_complete', { p_round_id: id, p_force: options.force });
   if (error) throw error;
-  return data ? toRound(data) : null;
+  const result = parseRoundComplete(data);
+  if (result === null) throw new Error(`round_complete returned an unexpected result: ${JSON.stringify(data)}`);
+  return result;
+}
+
+function parseRoundComplete(data: unknown): CompleteRoundResult | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const body = data as { outcome?: unknown; round?: unknown; unfinished?: unknown };
+  const count = typeof body.unfinished === 'number' ? body.unfinished : 0;
+  switch (body.outcome) {
+    case 'completed':
+      if (typeof body.round !== 'object' || body.round === null) return null;
+      return { outcome: 'completed', round: toRound(body.round as RoundRow), unfinished: count };
+    case 'unfinished':
+      return { outcome: 'unfinished', unfinished: count };
+    case 'already_completed':
+    case 'not_found':
+      return { outcome: 'unchanged' };
+    default:
+      return null;
+  }
 }
 
 export async function updateRoundBestOf(
@@ -237,26 +411,6 @@ export async function updateRoundBestOf(
   const { data, error } = await supabase
     .from('rounds')
     .update({ best_of: bestOf })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return toRound(data);
-}
-
-/**
- * Replace the byes stored on a round. Used when generation reuses an existing empty round (a retry after an
- * interrupted call) instead of inserting one, so the reused round carries this call's byes like a fresh insert does.
- * An UPDATE never fires the rounds insert guard (`trg_rounds_league_groups_guard` is BEFORE INSERT only).
- */
-export async function updateRoundByePlayers(
-  id: string,
-  byePlayerIds: string[]
-): Promise<Round> {
-  const { data, error } = await supabase
-    .from('rounds')
-    .update({ bye_player_ids: byePlayerIds })
     .eq('id', id)
     .select()
     .single();

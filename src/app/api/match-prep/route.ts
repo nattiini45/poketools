@@ -14,6 +14,8 @@ import { upsertTeamForMatch } from '@/lib/supabase/queries/teams';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
 import { assertNoSuspendedLinesInTeam, assertEpbTeamCompliant } from '@/lib/draft/epb-team-validation';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { adviseKitTeam, isKitTeamCandidate, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
+import { roundNumberOfMatch } from '@/lib/team/match-round';
 import type { ApiResult } from '@/types/api';
 import type { MatchPrepTeam } from '@/types/match-prep';
 import type { PokemonSet } from '@/types/team';
@@ -135,6 +137,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // A kit league's stage constraints and the player's resources (rounds change what is allowed): advice, never a
+    // refusal. A completed match's rewrite is an admin correction and gets no advisory, as the rules have moved on since.
+    // The verdict reads the target player's own gifts and pools (own-visibility resources whose giver is hidden), so
+    // an admin saving a team for the opponent gets none: it would leak their holdings (`validate-team` withholds it too).
+    let advisory: KitTeamAdvisory = {};
+    if (isKitTeamCandidate(tournament) && match.status !== 'completed' && targetPlayerId === player.playerId) {
+      const context = { tournamentId: tournament.id, playerId: targetPlayerId };
+      try {
+        // The rules of the match's round, never the phase's latest one. A round that cannot be read is no reason to
+        // refuse the save, and no reason to judge the team by another round: the advisory is reported unavailable.
+        const roundNumber = await roundNumberOfMatch(match);
+        if (roundNumber === undefined) {
+          // The match's round row is gone: never fall back to the phase's round.
+          logger.warn('api/team-check', 'Match round not found for the team advisory', { ...context, matchId: match.id });
+          advisory = { team_check: { status: 'unavailable' } };
+        } else {
+          advisory = await adviseKitTeam({ tournament, playerId: targetPlayerId, pokemon, roundNumber }, context);
+        }
+      } catch (roundError) {
+        logger.error('api/team-check', 'Match round could not be read for the team advisory', { ...context, matchId: match.id, error: roundError });
+        advisory = { team_check: { status: 'unavailable' } };
+      }
+    }
+
     const prep = await upsertMatchPrepTeam(
       body.match_id,
       targetPlayerId,
@@ -173,6 +199,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json<ApiResult<MatchPrepTeam>>({
       success: true,
       data: prep,
+      ...advisory,
     });
   } catch (error) {
     return safeErrorResponse(error, 'Failed to save match prep team');

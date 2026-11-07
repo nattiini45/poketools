@@ -25,6 +25,7 @@ export const LEAGUE_ADMIN_TABS = [
   'phases',
   'rules',
   'format',
+  'live',
   'settings',
   'danger',
 ] as const;
@@ -46,9 +47,12 @@ export const LEAGUE_ADMIN_TAB_ALIASES: Readonly<Record<string, LeagueAdminTab>> 
  * The tabs a league's format shows, in display order (from `getFormatCapabilities`):
  * - singles / doubles: overview, participants, phases, format, settings, danger;
  * - classic draft: those plus draft (pool and Draft Room) and rules (evolution tiers, tier limits);
- * - Evolution Point Buy: all eight (rules = point-buy list, format rules, data import).
+ * - Evolution Point Buy: all but live (rules = point-buy list, format rules, data import);
+ * - custom: the singles-like set plus live.
  *
  * The format tab (read-only generated outline and rules text) has no capability gate: every format shows it.
+ * The live tab (checks inbox, adjustments, player actions, relations, challenges of a running kit league) exists for
+ * custom leagues only; a custom league that has no running kit format sees a notice there, so the tab never moves.
  */
 export function availableLeagueAdminTabs(format: SeasonFormatType): LeagueAdminTab[] {
   const caps = getFormatCapabilities(format);
@@ -57,6 +61,7 @@ export function availableLeagueAdminTabs(format: SeasonFormatType): LeagueAdminT
   return LEAGUE_ADMIN_TABS.filter((tab) => {
     if (tab === 'draft') return hasDraft;
     if (tab === 'rules') return hasRules;
+    if (tab === 'live') return format === 'custom';
     return true;
   });
 }

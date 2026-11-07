@@ -160,6 +160,7 @@ export default defineDe<typeof en>()({
     group: '{source} · {generation} · {family}',
     source: {
       showdown: 'Showdown',
+      community: 'PokéTools-Community',
       smogonDraft: 'Smogon-Draft',
     },
     family: {
@@ -170,6 +171,7 @@ export default defineDe<typeof en>()({
       draft: 'Draft',
       draftNational: 'NatDex-Draft',
       draftDoubles: 'Doppel-Draft',
+      community: 'Community',
       draftChampions: 'Champions-Draft',
     },
   },

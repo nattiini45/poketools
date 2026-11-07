@@ -67,6 +67,7 @@ export default defineDe<typeof en>()({
     bestOfDefault: 'Best of (Standard)',
     doubles: 'Doppel-Format (erfasst Einsatz-, Lead- und Siegquoten)',
     bracketReset: 'Bracket-Reset im Großen Finale (zweites Set „falls nötig“)',
+    thirdPlace: 'Spiel um Platz 3 (die Verlierer der Halbfinals spielen um Platz 3; ab 4 Spielern)',
     teamVisibility: 'Sichtbarkeit der Teams',
     submit: 'Turnier erstellen',
     saveChanges: 'Änderungen speichern',
@@ -196,6 +197,13 @@ export default defineDe<typeof en>()({
       cascadeMessage:
         '{cascade} Danach wird der Turnierbaum aus den aktuellen Setzplätzen neu aufgebaut. Das lässt sich nicht rückgängig machen.',
       cascadeConfirm: 'Zurücksetzen und neu erstellen',
+    },
+    forceStart: {
+      title: 'Trotzdem starten?',
+      message: '{reasons} Der Start wird im Audit-Log festgehalten.',
+      confirm: 'Trotzdem starten',
+      relationUndrawn: 'Die Auslosung, die das Format braucht, ist noch nicht erfolgt. Spieler ohne Zuordnung gehen dauerhaft leer aus.',
+      actionIncomplete: 'Einige Spieler schulden noch eine Aktion, die das Format verlangt.',
     },
     deleteDialog: {
       title: 'Runde löschen',

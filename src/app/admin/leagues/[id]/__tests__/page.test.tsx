@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   loadLeagueFormatState: vi.fn(),
   loadAttachCandidates: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
+  livePanel: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -78,6 +79,8 @@ vi.mock('@/lib/format-studio/loader', () => ({ loadLeagueFormat: mocks.loadLeagu
 vi.mock('@/lib/format-studio/readiness-loader', () => ({ loadLeagueFormatState: mocks.loadLeagueFormatState }));
 vi.mock('@/lib/format-studio/attach-candidates', () => ({ loadAttachCandidates: mocks.loadAttachCandidates }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormatSummary: mocks.getSeasonFormatSummary }));
+// The Live tab is a server panel of its own (it loads the kit context); its test is live-panel.test.tsx.
+vi.mock('../_components/panels/LivePanel', () => ({ formatLivePanel: mocks.livePanel }));
 vi.mock('@/components/format-studio/attach/FormatAttachPanel', () => stub('FormatAttachPanel'));
 vi.mock('@/components/format-studio/attach/ReadinessCard', () => stub('ReadinessCard'));
 vi.mock('@/components/format-studio/FormatDetail', () => stub('FormatDetail'));
@@ -302,6 +305,7 @@ beforeEach(() => {
   });
   mocks.loadAttachCandidates.mockResolvedValue({ items: [], capped: false });
   mocks.getSeasonFormatSummary.mockResolvedValue(null);
+  mocks.livePanel.mockResolvedValue(null);
 });
 
 // ─── Tabs ───────────────────────────────────────────────────────────
@@ -311,7 +315,8 @@ describe('admin league page tabs (?tab=)', () => {
     ['singles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
     ['doubles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
     ['draft', ['overview', 'participants', 'draft', 'phases', 'rules', 'format', 'settings', 'danger']],
-    ['evolution_point_buy', [...LEAGUE_ADMIN_TABS]],
+    ['evolution_point_buy', LEAGUE_ADMIN_TABS.filter((tab) => tab !== 'live')],
+    ['custom', ['overview', 'participants', 'phases', 'format', 'live', 'settings', 'danger']],
   ])('%s: the tab strip shows the format’s tabs', async (format, expected) => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: format }));
     const nav = tabsOf(await render());
@@ -456,6 +461,50 @@ describe('admin league page tabs (?tab=)', () => {
     expect((tabsOf(await render()).props.labels as Record<string, string>).phases).toBe('Phasen');
   });
 
+  describe('the Live tab (?tab=live)', () => {
+    beforeEach(() => {
+      mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'custom', point_buy_list_id: null }));
+    });
+
+    it('a custom league renders the live panel, once, with the page context and nothing else', async () => {
+      const tree = await render('live');
+      expect(panelOf(tree).props['data-admin-panel']).toBe('live');
+      expect(panelOf(tree).props['aria-labelledby']).toBe('league-admin-tab-live');
+      expect(tabsOf(tree).props.activeTab).toBe('live');
+      expect(mocks.livePanel).toHaveBeenCalledTimes(1);
+      expect(mocks.livePanel.mock.calls[0][0]).toMatchObject({ id: S1, playerId: 'u1', isSiteAdmin: true });
+      expect(tabReads()).toEqual([]);
+    });
+
+    it('the strip lists the tab between Format and Settings, labelled Live format / Live-Format', async () => {
+      const nav = tabsOf(await render());
+      expect(nav.props.tabs).toEqual(['overview', 'participants', 'phases', 'format', 'live', 'settings', 'danger']);
+      expect((nav.props.labels as Record<string, string>).live).toBe('Live format');
+      mocks.locale = 'de';
+      expect((tabsOf(await render()).props.labels as Record<string, string>).live).toBe('Live-Format');
+    });
+
+    it('no other tab runs the live panel', async () => {
+      for (const tab of ['overview', 'format', 'settings']) await render(tab);
+      expect(mocks.livePanel).not.toHaveBeenCalled();
+    });
+
+    it.each(['singles', 'doubles', 'draft', 'evolution_point_buy'])('%s has no live tab: ?tab=live opens the overview', async (format) => {
+      mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: format, point_buy_list_id: null }));
+      const tree = await render('live');
+      expect(panelOf(tree).props['data-admin-panel']).toBe('overview');
+      expect(tabsOf(tree).props.tabs).not.toContain('live');
+      expect(mocks.livePanel).not.toHaveBeenCalled();
+    });
+
+    it('a league admin of another league gets the forbidden notice and the panel never runs', async () => {
+      mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+      mocks.isResourceAdminFor.mockResolvedValue(false);
+      await render('live');
+      expect(mocks.livePanel).not.toHaveBeenCalled();
+    });
+  });
+
   it('German tab labels and landmark name', async () => {
     mocks.locale = 'de';
     const nav = tabsOf(await render());
@@ -467,6 +516,7 @@ describe('admin league page tabs (?tab=)', () => {
       phases: 'Phasen',
       rules: 'Regeln',
       format: 'Format',
+      live: 'Live-Format',
       settings: 'Einstellungen',
       danger: 'Gefahrenzone',
     });

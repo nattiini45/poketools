@@ -7,7 +7,7 @@
  */
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { MAX_RANK_STEPS } from '../limits';
-import type { FormatDefinition, RankStep, Stage } from '../types';
+import type { FormatDefinition, Pairing, RankStep, Stage } from '../types';
 import { diag, ptr, type Diagnostic } from './diagnostics';
 import type { CompileEnv } from './env';
 import {
@@ -24,22 +24,47 @@ import {
   fixSetSwissRoundsAuto,
   fixSetTwoPlayers,
 } from './fixes';
+import { customMetricKeys } from './runtime-names';
 import { isElimination, isExact, type CountRange, type PlanBuild } from './plan';
 
 export type MetricProblem = 'unknown_metric' | 'needs_kill_stats' | 'needs_rating' | 'needs_opponents';
 
-const ALWAYS_PRODUCED: ReadonlySet<string> = new Set(['points', 'wins', 'losses', 'games_played', 'seed']);
+// Faints come from the `match_outcomes` tally that every completed match writes, so every stage produces them.
+const ALWAYS_PRODUCED: ReadonlySet<string> = new Set(['points', 'wins', 'losses', 'games_played', 'seed', 'faints_dealt', 'faints_taken']);
 
-/** Why a stage cannot produce a metric, or `null` when it can. The production table of the standings engine. */
-export function metricProblem(metric: string, stage: Stage | null, env: CompileEnv): MetricProblem | null {
-  if (ALWAYS_PRODUCED.has(metric)) return null;
+const NO_CUSTOM_METRICS: ReadonlySet<string> = new Set();
+
+/** Whether a pairing puts players against each other in rounds (the table pairings and the ones built on them). */
+function pairsOpponents(pairing: Pairing): boolean {
+  switch (pairing.kind) {
+    case 'round_robin':
+    case 'swiss':
+    case 'bipartite':
+      return true;
+    case 'filter':
+      return pairsOpponents(pairing.base);
+    default:
+      return false;
+  }
+}
+
+/**
+ * Why a stage cannot produce a metric, or `null` when it can. The production table of the standings engine.
+ * `custom` holds the keys of the document's own player metrics and placement scores.
+ */
+export function metricProblem(
+  metric: string,
+  stage: Stage | null,
+  env: CompileEnv,
+  custom: ReadonlySet<string> = NO_CUSTOM_METRICS,
+): MetricProblem | null {
+  if (ALWAYS_PRODUCED.has(metric) || custom.has(metric)) return null;
   if (metric === 'kill_differential') return env.features.killStats ? null : 'needs_kill_stats';
   if (metric === 'rating') return env.features.rating ? null : 'needs_rating';
   if (metric === 'buchholz') {
     // Without a stage (a view naming none that exists) there is nothing to judge the opponents by.
     if (stage === null) return null;
-    const opponents =
-      (stage.pairing.kind === 'round_robin' || stage.pairing.kind === 'swiss') && stage.players_per_match === 2;
+    const opponents = pairsOpponents(stage.pairing) && stage.players_per_match === 2;
     return opponents ? null : 'needs_opponents';
   }
   return 'unknown_metric';
@@ -125,7 +150,7 @@ function checkGate(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv):
   }
 }
 
-function checkRank(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv): void {
+function checkRank(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv, custom: ReadonlySet<string>): void {
   const key = stage.key;
   const rank = stage.rank;
   const bracket = isElimination(stage);
@@ -139,7 +164,7 @@ function checkRank(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv):
 
   rank.forEach((step, k) => {
     if (step.kind !== 'metric') return;
-    const problem = metricProblem(step.metric, stage, env);
+    const problem = metricProblem(step.metric, stage, env, custom);
     if (problem !== null) {
       out.push(
         diag(
@@ -153,7 +178,7 @@ function checkRank(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv):
     }
   });
   stage.columns.forEach((metric, k) => {
-    const problem = metricProblem(metric, stage, env);
+    const problem = metricProblem(metric, stage, env, custom);
     if (problem !== null) {
       out.push(
         diag('metric_unproduced', ptr('stages', i, 'columns', k), { stage: key, metric, reason: problem, where: 'columns' }),
@@ -195,16 +220,22 @@ function checkRank(out: Diagnostic[], stage: Stage, i: number, env: CompileEnv):
 }
 
 /** A cross-stage view sums one metric over several stages, so every stage it names must produce that metric. */
-function checkViews(out: Diagnostic[], def: FormatDefinition, env: CompileEnv, first: ReadonlyMap<string, number>): void {
+function checkViews(
+  out: Diagnostic[],
+  def: FormatDefinition,
+  env: CompileEnv,
+  first: ReadonlyMap<string, number>,
+  custom: ReadonlySet<string>,
+): void {
   def.views.forEach((view, i) => {
     const stages = view.stages.flatMap((key) => {
       const at = first.get(key);
       return at === undefined ? [] : [def.stages[at]];
     });
-    let problem = metricProblem(view.metric, null, env);
+    let problem = metricProblem(view.metric, null, env, custom);
     for (const stage of stages) {
       if (problem !== null) break;
-      problem = metricProblem(view.metric, stage, env);
+      problem = metricProblem(view.metric, stage, env, custom);
     }
     if (problem !== null) {
       out.push(
@@ -221,6 +252,7 @@ function checkViews(out: Diagnostic[], def: FormatDefinition, env: CompileEnv, f
 
 export function checkStages(def: FormatDefinition, env: CompileEnv, plan: PlanBuild): Diagnostic[] {
   const out: Diagnostic[] = [];
+  const custom = customMetricKeys(def);
   const first = new Map<string, number>();
   def.stages.forEach((stage, i) => {
     if (!first.has(stage.key)) first.set(stage.key, i);
@@ -261,14 +293,16 @@ export function checkStages(def: FormatDefinition, env: CompileEnv, plan: PlanBu
 
     // Repeats only matter when the pairing avoids them; a field of n can play getRoundRobinTotalRounds(n) rounds
     // (n - 1 for an even field, n for an odd one, because of the bye) before a pairing has to repeat.
-    if (stage.pairing.kind === 'swiss' && stage.pairing.rounds !== 'auto' && stage.pairing.avoid_repeats && participants) {
-      if (stage.pairing.rounds > getRoundRobinTotalRounds(participants.max)) {
+    const filtered = stage.pairing.kind === 'filter';
+    const swiss = stage.pairing.kind === 'filter' ? stage.pairing.base : stage.pairing;
+    if (swiss.kind === 'swiss' && swiss.rounds !== 'auto' && swiss.avoid_repeats && participants) {
+      if (swiss.rounds > getRoundRobinTotalRounds(participants.max)) {
         out.push(
           diag(
             'swiss_rounds_too_many',
-            ptr('stages', i, 'pairing', 'rounds'),
-            { stage: key, rounds: stage.pairing.rounds, participants: participants.max },
-            [fixSetSwissRoundsAuto(i)],
+            filtered ? ptr('stages', i, 'pairing', 'base', 'rounds') : ptr('stages', i, 'pairing', 'rounds'),
+            { stage: key, rounds: swiss.rounds, participants: participants.max },
+            [fixSetSwissRoundsAuto(i, filtered)],
           ),
         );
       }
@@ -276,9 +310,9 @@ export function checkStages(def: FormatDefinition, env: CompileEnv, plan: PlanBu
 
     checkSeries(out, stage, i, stagePlan?.rounds ?? null);
     checkGate(out, stage, i, env);
-    checkRank(out, stage, i, env);
+    checkRank(out, stage, i, env, custom);
   });
-  checkViews(out, def, env, first);
+  checkViews(out, def, env, first, custom);
 
   return out;
 }

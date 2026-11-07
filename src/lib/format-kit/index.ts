@@ -4,6 +4,7 @@
  * code imports `client.ts`. Only server code (the Studio loader) imports this file.
  */
 export * from './types';
+export * from './scoring';
 export * from './limits';
 export * from '@/lib/studio-core/keys';
 export * from '@/lib/studio-core/json';
@@ -22,6 +23,7 @@ export { USER_CHOICE_FIXES } from './engine/fixes';
 export type { CompileResult } from './engine/core';
 export type { StageGraph, StageNode } from './engine/graph';
 export type { CountRange, StagePlan } from './engine/plan';
+export { mappedBracketType } from './engine/plan';
 export { deriveCapabilities } from './engine/capabilities';
 export { renderDiagnostic, renderFix, renderSeverity } from './engine/render';
 export * from './engine/describe-definition';

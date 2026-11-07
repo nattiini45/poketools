@@ -35,6 +35,7 @@ export type HubStage = Pick<
   | 'current_round'
   | 'stage_order'
   | 'bracket_reset_enabled'
+  | 'third_place_enabled'
 >;
 
 // ─── Scores ───────────────────────────────────────────────────────────────
@@ -571,7 +572,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
       avatars,
       options,
       { ...gymTypes },
-      { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder },
+      { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder, kit: context.kit },
     ).map((row) => (row.gym_type ? row : { ...row, gym_type: gymTypes[row.player_id] ?? null }));
     return {
       key,

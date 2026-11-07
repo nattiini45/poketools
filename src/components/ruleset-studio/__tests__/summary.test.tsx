@@ -62,6 +62,15 @@ describe('diagnostic sentences', () => {
     expect(diagnosticText(clause, en, nameOf)).toBe('The clause OHKO Clause is not known.');
   });
 
+  it('a duplicate level rule reads as a sentence with the Pokémon name, not the raw category key', () => {
+    const en = createTranslator(rulesetStudioDiagnosticsMessages, 'en');
+    const de = createTranslator(rulesetStudioDiagnosticsMessages, 'de');
+    const d: RulesetDiagnostic = { code: 'duplicate_entry', severity: 'error', path: '/levels/entries/1/id', params: { id: 'dialga', category: 'levels' } };
+    const pokemonName = (category: string, id: string) => (category === 'pokemon' ? 'Dialga' : id);
+    expect(diagnosticText(d, en, pokemonName)).toBe('Dialga is listed twice in level rules.');
+    expect(diagnosticText(d, de, pokemonName)).toBe('Dialga steht in Level-Regeln doppelt.');
+  });
+
   it('every structure problem has a name in both languages', () => {
     for (const locale of ['en', 'de'] as const) {
       const t = createTranslator(rulesetStudioDiagnosticsMessages, locale);

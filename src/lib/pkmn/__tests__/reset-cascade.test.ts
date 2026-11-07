@@ -72,6 +72,11 @@ vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
   deleteMatchSnapshots: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  deleteMatchOutcome: vi.fn(async () => 0),
+  recordMatchOutcome: vi.fn(async () => 'written'),
+}));
+
 vi.mock('@/lib/rating/updateRatings', () => ({
   rebuildRatingsForPlayers: vi.fn(async (playerIds: string[]) =>
     playerIds.map((playerId) => ({

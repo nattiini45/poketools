@@ -102,19 +102,34 @@ describe('StageInspector: sections', () => {
 });
 
 describe('StageInspector: scoring', () => {
-  it.each(['en', 'de'] as const)('shows draw and forfeit disabled with the reason (%s)', (locale) => {
+  it.each(['en', 'de'] as const)('shows draws disabled with the reason (%s)', (locale) => {
     const html = render(presetDoc(), 0, locale);
     const { p, e } = words(locale);
-    for (const [pointerId, label, reason] of [
-      ['ff-stages-0-scoring-draw', p('field.draw'), e('inspector.stage.drawDisabled')],
-      ['ff-stages-0-scoring-forfeit', p('field.forfeit'), e('inspector.stage.forfeitDisabled')],
-    ]) {
+    for (const [pointerId, label, reason] of [['ff-stages-0-scoring-draw', p('field.draw'), e('inspector.stage.drawDisabled')]]) {
       const input = new RegExp(`<input[^>]*id="${pointerId}"[^>]*>`).exec(html)?.[0] ?? '';
       expect(input, label).toContain('disabled');
       expect(input).toContain(`aria-describedby="${pointerId}-why"`);
       expect(html).toContain(`id="${pointerId}-why"`);
       expect(html).toContain(esc(reason));
     }
+  });
+
+  it.each(['en', 'de'] as const)('edits the faint bonus and separate forfeit points (%s)', (locale) => {
+    const { p, e } = words(locale);
+    const plain = render(presetDoc(), 0, locale);
+    expect(plain).toContain(esc(p('field.per_opponent_faint')));
+    expect(plain).toContain(esc(e('inspector.stage.forfeitOn')));
+    expect(plain).not.toContain('id="ff-stages-0-scoring-forfeit-win"');
+
+    const doc = updateStage(presetDoc(), 0, (s) => ({
+      ...s,
+      scoring: { ...s.scoring, per_opponent_faint: 1, forfeit: { win: 30, loss: 0, faint_bonus: false } },
+    }));
+    const html = render(doc, 0, locale);
+    expect(/<input[^>]*id="ff-stages-0-scoring-per_opponent_faint"[^>]*>/.exec(html)?.[0]).toContain('value="1"');
+    expect(/<input[^>]*id="ff-stages-0-scoring-forfeit-win"[^>]*>/.exec(html)?.[0]).toContain('value="30"');
+    expect(/<input[^>]*id="ff-stages-0-scoring-forfeit-loss"[^>]*>/.exec(html)?.[0]).toContain('value="0"');
+    expect(html).toContain(esc(p('field.faint_bonus')));
   });
 
   it('shows a draw value that came with an import, still disabled, and the finding with its fix is in the Issues tab', () => {

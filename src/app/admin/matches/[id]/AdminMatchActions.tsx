@@ -9,6 +9,7 @@ import Alert from '@/components/ui/Alert';
 import ReasonDialog from '@/components/admin/ReasonDialog';
 import type { MatchStatus, GameSummary } from '@/types/match';
 import type { MatchRecalculationSummary } from '@/types/game';
+import { ADMIN_OUTCOME_KINDS, type AdminOutcomeKind } from '@/types/match-outcome';
 import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -187,6 +188,7 @@ export default function AdminMatchActions({
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
   const [resetting, setResetting] = useState(false);
   const [settleWinnerId, setSettleWinnerId] = useState('');
+  const [settleOutcome, setSettleOutcome] = useState<AdminOutcomeKind>('played');
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [settling, setSettling] = useState(false);
 
@@ -292,7 +294,7 @@ export default function AdminMatchActions({
       const res = await fetch(`/api/admin/matches/${matchId}/result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ winner_id: settleWinnerId, reason }),
+        body: JSON.stringify({ winner_id: settleWinnerId, reason, outcome: settleOutcome }),
       });
       const json = await res.json();
       if (json.success) {
@@ -609,6 +611,26 @@ export default function AdminMatchActions({
                   }`}
                 >
                   {p.name}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
+            <p className="block text-sm font-heading text-poke-text-muted mb-2">{tMatch('actions.settle.outcomeLabel')}</p>
+            <div className="flex flex-wrap gap-3" role="group" aria-label={tMatch('actions.settle.outcomeLabel')}>
+              {ADMIN_OUTCOME_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={settleOutcome === kind}
+                  onClick={() => setSettleOutcome(kind)}
+                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
+                    settleOutcome === kind
+                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
+                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
+                  }`}
+                >
+                  {tMatch(`actions.settle.outcome.${kind}`)}
                 </button>
               ))}
             </div>

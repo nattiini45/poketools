@@ -95,7 +95,7 @@ export interface ScheduleResult {
 }
 
 /** Post-commit steps of a reopen; a failed one is reported, not rolled back. */
-export type ReopenStep = 'round' | 'bracket' | 'cleanup' | 'ratings' | 'evolution';
+export type ReopenStep = 'outcome' | 'format' | 'round' | 'bracket' | 'cleanup' | 'ratings' | 'evolution';
 
 export interface ReopenMatchResult {
   from_status: MatchStatus;

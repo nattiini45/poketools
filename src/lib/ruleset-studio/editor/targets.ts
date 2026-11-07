@@ -10,7 +10,7 @@ import { parsePointer } from '@/lib/studio-core/patch';
 const FIELD_PREFIX = 'rf';
 
 /** The sections of the editor, in outline order. */
-export const EDITOR_SECTIONS = ['base', 'clauses', 'pokemon', 'moves', 'items', 'abilities', 'constraints', 'notes'] as const;
+export const EDITOR_SECTIONS = ['base', 'clauses', 'pokemon', 'moves', 'items', 'abilities', 'constraints', 'levels', 'notes'] as const;
 export type EditorSection = (typeof EDITOR_SECTIONS)[number];
 
 export interface Selection {
@@ -42,6 +42,8 @@ export function sectionOfPointer(pointer: string): EditorSection {
     case 'min_shared_type_pct':
     case 'team_constraints':
       return 'constraints';
+    case 'levels':
+      return 'levels';
     case 'custom_rules':
       return 'notes';
     default:

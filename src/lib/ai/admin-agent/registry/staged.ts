@@ -340,7 +340,7 @@ const formatForkPreset = defineStaged({
   name: 'format_fork_preset',
   class: 'D',
   description:
-    'Copy one of the shipped example formats (classic-league, cup, swiss-top-cut) into a PRIVATE draft, optionally pre-picking a catalog rule preset on every stage (ruleset_preset, an id from format_catalog). Returns the draft id and draft_rev.',
+    'Copy one of the shipped example formats (classic-league, cup, swiss-top-cut, wichtelcup) into a PRIVATE draft, optionally pre-picking a catalog rule preset on every stage (ruleset_preset, an id from format_catalog). Returns the draft id and draft_rev.',
   args: z.strictObject({
     preset_id: textArg('Example format id', 60),
     ruleset_preset: textArg('Catalog rule preset id', 60).optional(),

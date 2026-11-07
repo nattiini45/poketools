@@ -22,6 +22,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { toPublicMatches } from '@/lib/match/public-match';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import type { ApiResult } from '@/types/api';
 import type { RoundWithMatches } from '@/types/round';
 import type { RoundCompletedData } from '@/types/discord';
@@ -35,6 +36,18 @@ interface RouteParams {
 function sameInstant(a: string | null, b: string | null): boolean {
   if (a === null || b === null) return a === b;
   return new Date(a).getTime() === new Date(b).getTime();
+}
+
+/** The refusal to complete a round that still has unfinished matches (raised by the read before the write and by the locked claim). */
+function roundMatchesUnfinished(roundName: string, count: number): UserFacingError {
+  return new UserFacingError(
+    `${roundName} still has ${count} unfinished match(es). Finish them, or complete the round anyway with a reason.`,
+    {
+      code: 'round_matches_unfinished',
+      params: { round: roundName, count },
+      status: 409,
+    }
+  );
 }
 
 // Public: no auth required — round detail with matches (public match shape only)
@@ -127,16 +140,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       roundMatches = await getMatchesByRound(rid);
       const unfinished = roundMatches.filter((match) => match.status !== 'completed');
       if (unfinished.length > 0) {
-        if (body.force !== true) {
-          throw new UserFacingError(
-            `${round.name} still has ${unfinished.length} unfinished match(es). Finish them, or complete the round anyway with a reason.`,
-            {
-              code: 'round_matches_unfinished',
-              params: { round: round.name, count: unfinished.length },
-              status: 409,
-            }
-          );
-        }
+        if (body.force !== true) throw roundMatchesUnfinished(round.name, unfinished.length);
         forcedOpenMatches = unfinished.length;
       }
     }
@@ -153,15 +157,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const statusBefore = round.status;
-    // Side effects of a completion belong to the one call that really made the transition. The conditional claim
-    // gives overlapping submissions the same guarantee as a sequential repeat.
+    // Side effects of a completion belong to the one call that really made the transition. The claim gives overlapping
+    // submissions the same guarantee as a sequential repeat, and it counts the unfinished matches again under a lock on the
+    // round row: a challenge accepted since the read above is counted (the completion is refused, or forced and audited with
+    // the count), and one accepted after it finds the round completed. That refusal can follow the best_of write above (a
+    // match appeared after the read); nothing else of the request is written then, and a repeat converges.
     let completedNow = false;
     if (body.status === 'completed') {
       if (round.status !== 'completed') {
-        const claimed = await completeRound(rid);
-        if (claimed) {
-          round = claimed;
+        const claimed = await completeRound(rid, { force: body.force === true });
+        if (claimed.outcome === 'unfinished') throw roundMatchesUnfinished(round.name, claimed.unfinished);
+        if (claimed.outcome === 'completed') {
+          round = claimed.round;
           completedNow = true;
+          forcedOpenMatches = claimed.unfinished;
         } else {
           const current = await getRoundById(rid);
           if (!current) {
@@ -213,6 +222,15 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           reason: body.reason,
         },
       });
+    }
+
+    // A kit league: the round's `round_end` event and the stage's `end_when`, before the announcement so that its standings
+    // already hold what the event's rules awarded. Best effort and never thrown: a failure is logged and the format cron fires
+    // the event of a completed round that has none (`backfillRoundEnds`), so the completion itself always stands. Only the
+    // call that made the transition fires it.
+    if (completedNow && tournament && isKitCandidate(tournament)) {
+      const { onRoundCompleted } = await import('@/lib/format-engine/runtime/hooks');
+      await onRoundCompleted({ tournament, roundId: rid });
     }
 
     // Emit round_completed Discord event when this call completed the round

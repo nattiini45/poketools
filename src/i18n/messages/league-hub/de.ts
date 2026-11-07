@@ -32,6 +32,7 @@ export default defineDe<typeof en>()({
     matchup: 'Matchup-Analyse',
     teams: 'Teams & Fortschritt',
     phasePage: 'Zur Phasenseite',
+    play: 'Deine Aktionen',
   },
   table: {
     rank: '#',

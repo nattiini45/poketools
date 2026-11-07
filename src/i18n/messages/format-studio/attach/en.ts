@@ -44,6 +44,8 @@ export default {
     reattachBody:
       'Re-attaching replaces the current format. Phases that exist in both versions are kept; phases the new version no longer has are removed.',
     reattachConfirm: 'Re-attach',
+    clearTitle: 'Delete the league’s format data?',
+    clearConfirm: 'Delete it and continue',
     pickerLabel: 'Choose a published format',
     pickerPlaceholder: 'Choose a format…',
     group: {
@@ -89,10 +91,15 @@ export default {
       override_unmapped:
         'Phase “{stage}”: the best-of-{best_of} exception for round {round} cannot be matched to a round of the phase and is ignored.',
       rr_legs_not_run: 'Phase “{stage}”: only one round-robin leg is played ({legs} planned).',
-      third_place_not_run: 'Phase “{stage}”: the third-place match is not played.',
       edge_select_not_run:
         'Advancement “{edge}”: the selection “{kind}” is not run. An admin moves the players by hand.',
       groups_not_created: 'Phase “{stage}”: the {count} groups are not created automatically.',
+      pairing_not_run:
+        'Phase “{stage}”: the pairing “{kind}” is recorded, but no round is generated for it. An admin pairs the rounds by hand.',
+      constraints_not_run: 'Phase “{stage}”: the {count} team rules are recorded and not checked against teams.',
+      calendar_not_run: 'Phase “{stage}”: the calendar is recorded. Rounds and deadlines do not start on their own.',
+      end_when_not_run: 'Phase “{stage}”: the end condition is recorded and not checked. An admin ends the phase by hand.',
+      foreach_group_not_run: 'Phase “{stage}”: the repeat per group is recorded and not run.',
     },
     gapKinds: {
       wildcard: 'wildcards',
@@ -155,12 +162,23 @@ export default {
       },
       waiting: 'The rulesets are checked once a format is attached.',
     },
+    calendar_start: {
+      met: 'The league has a start date, so the format’s calendar can run.',
+      unmet: {
+        zero: 'Set the league’s start date. The format’s calendar starts with it: without a date no round opens and no calendar mark fires.',
+        one: '{count} calendar mark is already due before the league starts. Due marks all fire together the next time the schedule runs, in calendar order. Move the start date if that is not what you want.',
+        other:
+          '{count} calendar marks are already due before the league starts. Due marks all fire together the next time the schedule runs, in calendar order. Move the start date if that is not what you want.',
+      },
+      waiting: 'The calendar is checked once a format is attached.',
+    },
     action: {
       format_attached: 'Attach a format',
       phases_created: 'Open the format',
       phases_manual: 'Open phases',
       roster_size: 'Open participants',
       rulesets: 'Choose another format',
+      calendar_start: 'Open settings',
     },
   },
   status: {

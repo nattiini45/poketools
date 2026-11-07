@@ -31,13 +31,12 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
-  updateRoundByePlayers: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getCompletedMatchRecords: vi.fn(),
   getPairedMatchRecords: vi.fn(),
   getMatchesByTournament: vi.fn(),
@@ -93,12 +92,12 @@ import {
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 import {
   getRoundsByTournament,
-  createRound,
-  updateRoundByePlayers,
+  createRoundWithMatches,
+  addMatchesToRound,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
+import { writtenBatches } from '@/test/round-writes';
 import {
-  createMatchBatch,
   getCompletedMatchRecords,
   getPairedMatchRecords,
   getMatchesByTournament,
@@ -114,6 +113,9 @@ import { FormatStudioError } from '@/lib/format-studio/errors';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // --------------- helpers ---------------
+
+// The matches the route wrote (a new round carries them, a reused round gets them added), in call order.
+const batches = () => writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound));
 
 const ADMIN = { playerId: 'admin-1', name: 'Admin' };
 
@@ -164,7 +166,7 @@ describe('POST /api/generate-round/[tid]', () => {
       round_name: 'Round 2',
       bye_player_ids: [],
     } as never);
-    vi.mocked(createRound).mockResolvedValue({
+    vi.mocked(createRoundWithMatches).mockResolvedValue({
       id: 'r-2',
       tournament_id: 'ae13bc20-d43b-42b5-8de0-4944cb4025e3',
       name: 'Round 2',
@@ -271,17 +273,23 @@ describe('POST /api/generate-round/[tid]', () => {
     expect(payload.data.id).toBe('r-2');
 
     expect(requireResourceAdmin).toHaveBeenCalledWith('tournament', 'ae13bc20-d43b-42b5-8de0-4944cb4025e3');
-    expect(createRound).toHaveBeenCalledWith(
+    expect(createRoundWithMatches).toHaveBeenCalledWith(
       expect.objectContaining({
         tournament_id: 'ae13bc20-d43b-42b5-8de0-4944cb4025e3',
         round_number: 2,
         best_of: 3,
       })
     );
-    expect(createMatchBatch).toHaveBeenCalledWith([
-      expect.objectContaining({ round_id: 'r-2', player_1_id: 'p1', player_2_id: 'p2' }),
-      expect.objectContaining({ round_id: 'r-2', player_1_id: 'p3', player_2_id: 'p4' }),
-    ]);
+    // The round and its matches are one write (`round_write`): the matches travel with the round.
+    expect(createRoundWithMatches).toHaveBeenCalledWith(
+      expect.objectContaining({
+        matches: [
+          { player_1_id: 'p1', player_2_id: 'p2' },
+          { player_1_id: 'p3', player_2_id: 'p4' },
+        ],
+      })
+    );
+    expect(addMatchesToRound).not.toHaveBeenCalled();
     expect(updateTournament).toHaveBeenCalledWith('ae13bc20-d43b-42b5-8de0-4944cb4025e3', { current_round: 2 });
     // D37: the pairings show on the tournament and league pages' next view.
     expect(revalidateTag).toHaveBeenCalledWith('tournament:ae13bc20-d43b-42b5-8de0-4944cb4025e3', { expire: 0 });
@@ -297,7 +305,7 @@ describe('POST /api/generate-round/[tid]', () => {
     const request = {} as NextRequest;
     await POST(request, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
 
-    expect(createRound).toHaveBeenCalledWith(
+    expect(createRoundWithMatches).toHaveBeenCalledWith(
       expect.objectContaining({ best_of: 5 })
     );
   });
@@ -449,8 +457,8 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
       expect(response.status).toBe(201);
       const week2 = plan.weeks[1];
-      expect(vi.mocked(createRound)).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2, name: 'Round 2' }));
-      expect(vi.mocked(createMatchBatch).mock.calls[0][0].map((m) => [m.player_1_id, m.player_2_id])).toEqual(
+      expect(vi.mocked(createRoundWithMatches)).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2, name: 'Round 2' }));
+      expect(batches()[0].map((m) => [m.player_1_id, m.player_2_id])).toEqual(
         [...week2.groupPairings, ...week2.crossPairings].map((p) => [p.player_1_id, p.player_2_id]),
       );
       expect(week2.crossPairings).toHaveLength(1);
@@ -480,10 +488,11 @@ describe('POST /api/generate-round/[tid]', () => {
       );
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
       expect(response.status).toBe(201);
-      expect(createRound).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
       const week2 = plan.weeks[1];
-      const batch = vi.mocked(createMatchBatch).mock.calls[0][0];
-      expect(batch.every((m) => m.round_id === 'r-2')).toBe(true);
+      // The matches go into the round the interrupted call wrote, not into a new one.
+      expect(addMatchesToRound).toHaveBeenCalledWith(expect.objectContaining({ id: 'r-2' }), expect.any(Array));
+      const batch = batches()[0];
       expect(batch).toHaveLength(week2.groupPairings.length + week2.crossPairings.length);
     });
 
@@ -499,7 +508,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const json = await response.json();
       expect(response.status).toBe(409);
       expect(json.code).toBe('rounds_group_placement_not_ready');
-      expect(createRound).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
     });
 
     it('answers rounds_all_generated past the last planned week', async () => {
@@ -512,7 +521,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
       expect(response.status).toBe(400);
       expect((await response.json()).code).toBe('rounds_all_generated');
-      expect(createRound).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
     });
 
     it('phase-only groups of different sizes: the smaller group rests instead of failing', async () => {
@@ -527,7 +536,7 @@ describe('POST /api/generate-round/[tid]', () => {
       written(4);
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
       expect(response.status).toBe(201);
-      const batch = vi.mocked(createMatchBatch).mock.calls[0][0];
+      const batch = batches()[0];
       // Round 5: the 5-group plays (2 matches, one bye); the 4-group (3 rounds) rests; no cross match.
       expect(batch).toHaveLength(2);
       expect(batch.every((m) => m.player_1_id.startsWith('a') && m.player_2_id.startsWith('a'))).toBe(true);
@@ -543,8 +552,8 @@ describe('POST /api/generate-round/[tid]', () => {
       written(3);
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
       expect(response.status).toBe(201);
-      expect(vi.mocked(createRound)).toHaveBeenCalledWith(expect.objectContaining({ round_number: 4 }));
-      expect(vi.mocked(createRound)).not.toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
+      expect(vi.mocked(createRoundWithMatches)).toHaveBeenCalledWith(expect.objectContaining({ round_number: 4 }));
+      expect(vi.mocked(createRoundWithMatches)).not.toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
       expect(vi.mocked(updateTournament)).toHaveBeenCalledWith(baseTournament.id, expect.objectContaining({ current_round: 4 }));
     });
   });
@@ -565,10 +574,10 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(201);
       expect(payload.data.id).toBe('r-2-empty');
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).toHaveBeenCalledWith([
-        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p1', player_2_id: 'p2' }),
-        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p3', player_2_id: 'p4' }),
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(addMatchesToRound).toHaveBeenCalledWith(expect.objectContaining({ id: 'r-2-empty' }), [
+        { player_1_id: 'p1', player_2_id: 'p2' },
+        { player_1_id: 'p3', player_2_id: 'p4' },
       ]);
       expect(updateTournament).toHaveBeenCalledWith(tid, { current_round: 2 });
     });
@@ -589,8 +598,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(response.status).toBe(409);
       expect(payload.code).toBe('rounds_round_already_written');
       expect(payload.params).toEqual({ round: 'Round 2' });
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
     });
   });
@@ -656,7 +665,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(createRound).toHaveBeenCalledWith(
+      expect(createRoundWithMatches).toHaveBeenCalledWith(
         expect.objectContaining({ round_number: 2, bye_player_ids: ['p5'] })
       );
       // The round (and its bye) shows on the next public view.
@@ -694,7 +703,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
       await POST({} as NextRequest, routeParams(baseTournament.id));
 
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: ['p3'] }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ bye_player_ids: ['p3'] }));
     });
 
     it('does not store an elimination bye (it is structural)', async () => {
@@ -713,7 +722,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
       await POST({} as NextRequest, routeParams(baseTournament.id));
 
-      const input = vi.mocked(createRound).mock.calls[0][0];
+      const input = vi.mocked(createRoundWithMatches).mock.calls[0][0];
       expect('bye_player_ids' in input).toBe(false);
     });
 
@@ -734,25 +743,22 @@ describe('POST /api/generate-round/[tid]', () => {
         round_name: 'Round 2',
         bye_player_ids: ['p1'],
       } as never);
-      vi.mocked(updateRoundByePlayers).mockResolvedValue({
-        id: 'r-2-empty',
-        name: 'Round 2',
-        round_number: 2,
-        bye_player_ids: ['p1'],
-      } as never);
-
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(createRound).not.toHaveBeenCalled();
-      expect(updateRoundByePlayers).toHaveBeenCalledWith('r-2-empty', ['p1']);
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
       expect(vi.mocked(generateRound).mock.calls[0][5]).toEqual(
         expect.objectContaining({ byeHistory: [{ player_id: 'p5', round_number: 1 }] })
       );
-      expect(createMatchBatch).toHaveBeenCalledWith([
-        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p1', player_2_id: 'p2' }),
-        expect.objectContaining({ round_id: 'r-2-empty', player_1_id: 'p3', player_2_id: 'p4' }),
-      ]);
+      // The new byes travel with the matches (one `round_write` transaction), not in a request of their own.
+      expect(addMatchesToRound).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'r-2-empty', bye_player_ids: ['p1'] }),
+        [
+          { player_1_id: 'p1', player_2_id: 'p2' },
+          { player_1_id: 'p3', player_2_id: 'p4' },
+        ],
+        ['p1'],
+      );
     });
 
     it('does not rewrite a reused round whose stored byes already match', async () => {
@@ -765,7 +771,8 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(updateRoundByePlayers).not.toHaveBeenCalled();
+      // No third argument: the stored byes stay as they are.
+      expect(vi.mocked(addMatchesToRound).mock.calls[0]).toHaveLength(2);
     });
 
     it('collects the byes of every group and scopes the bye history to each group', async () => {
@@ -807,7 +814,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const optionsOf = (call: number) => vi.mocked(generateRound).mock.calls[call][5];
       expect(optionsOf(0)?.byeHistory).toEqual([{ player_id: 'p1', round_number: 1 }]);
       expect(optionsOf(1)?.byeHistory).toEqual([{ player_id: 'p3', round_number: 1 }]);
-      expect(createRound).toHaveBeenCalledWith(
+      expect(createRoundWithMatches).toHaveBeenCalledWith(
         expect.objectContaining({ bye_player_ids: ['p2', 'p4'] })
       );
     });
@@ -842,8 +849,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(payload.error).toBe('All rounds have already been generated');
       expect(payload.code).toBe('rounds_all_generated');
       expect(generateRound).not.toHaveBeenCalled();
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
       expect(logAuditEvent).not.toHaveBeenCalled();
     });
@@ -856,7 +863,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 5 }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ round_number: 5 }));
     });
 
     it('still generates below the last round', async () => {
@@ -866,15 +873,15 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 3 }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ round_number: 3 }));
     });
   });
 
   // ---- #38: a concurrent call wrote this round number first ----
 
   describe('round written by a concurrent call', () => {
-    it('answers 409 rounds_round_already_written when the round insert loses the race, and writes no match', async () => {
-      vi.mocked(createRound).mockRejectedValue(
+    it('answers 409 rounds_round_already_written when the round write loses the race, and moves nothing on', async () => {
+      vi.mocked(createRoundWithMatches).mockRejectedValue(
         new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
           code: 'rounds_round_already_written',
           params: { round: 'Round 2' },
@@ -888,9 +895,150 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(response.status).toBe(409);
       expect(payload.code).toBe('rounds_round_already_written');
       expect(payload.params).toEqual({ round: 'Round 2' });
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(addMatchesToRound).not.toHaveBeenCalled();
       expect(updateTournament).not.toHaveBeenCalled();
       expect(revalidateTag).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- the phase completed between the guards and the write (`round_write`) ----
+
+  describe('phase completed between the guards and the write', () => {
+    const phaseCompleted = () =>
+      new UserFacingError('This phase was completed while the round was being created, so no round was written. No more rounds can be generated.', {
+        code: 'rounds_phase_completed',
+        status: 409,
+      });
+
+    it('answers 409 rounds_phase_completed for a new round, and counts, audits and announces nothing', async () => {
+      vi.mocked(createRoundWithMatches).mockRejectedValue(phaseCompleted());
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_phase_completed');
+      expect(addMatchesToRound).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(updateRoundStatus).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('answers it for a reused round whose byes changed too: the refused write carries the byes, nothing else is written', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: ['p5'] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: ['p4'] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+      vi.mocked(generateRound).mockReturnValue({
+        pairings: [{ player_1_id: 'p2', player_2_id: 'p3' }],
+        round_name: 'Round 2',
+        bye_player_ids: ['p1'],
+      } as never);
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(phaseCompleted());
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe('rounds_phase_completed');
+      // The byes are part of the one guarded write; the route has no write of its own for them to leave behind.
+      expect(addMatchesToRound).toHaveBeenCalledTimes(1);
+      expect(vi.mocked(addMatchesToRound).mock.calls[0][2]).toEqual(['p1']);
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('answers it for the matches of a reused round too, and does not move current_round', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(phaseCompleted());
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe('rounds_phase_completed');
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+  });
+
+  // ---- a retry of a reused empty round loses to a concurrent retry or to a completion (`round_write` locks the round) ----
+
+  describe('reused empty round written or completed by someone else first', () => {
+    const reusedEmptyRound = () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'pending', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+    };
+
+    it('answers 409 rounds_round_already_written when a concurrent retry filled the round first, and moves nothing on', async () => {
+      reusedEmptyRound();
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(
+        new UserFacingError('Round 2 already exists with its matches. Delete it to generate it again.', {
+          code: 'rounds_round_already_written',
+          params: { round: 'Round 2' },
+          status: 409,
+        }),
+      );
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_already_written');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('answers 409 rounds_round_completed when the round completed first, and moves nothing on', async () => {
+      reusedEmptyRound();
+      vi.mocked(addMatchesToRound).mockRejectedValueOnce(
+        new UserFacingError('Round 2 is already completed, so no matches were written into it. Delete it to generate it again.', {
+          code: 'rounds_round_completed',
+          params: { round: 'Round 2' },
+          status: 409,
+        }),
+      );
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_completed');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('refuses a reused round the admin already completed while empty with 409 rounds_round_completed, before any write', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r-1', name: 'Round 1', round_number: 1, status: 'completed', bye_player_ids: [] },
+        { id: 'r-2-empty', name: 'Round 2', round_number: 2, status: 'completed', bye_player_ids: [] },
+      ] as never);
+      vi.mocked(getMatchesByTournament).mockResolvedValue([{ id: 'm-1', round_id: 'r-1' }] as never);
+
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('rounds_round_completed');
+      expect(payload.params).toEqual({ round: 'Round 2' });
+      expect(payload.error).toContain('already completed');
+      expect(addMatchesToRound).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
     });
   });
 
@@ -915,8 +1063,8 @@ describe('POST /api/generate-round/[tid]', () => {
         expect(payload.code).toBe('BRACKET_V2_REQUIRED');
         expect(getParticipants).not.toHaveBeenCalled();
         expect(generateRound).not.toHaveBeenCalled();
-        expect(createRound).not.toHaveBeenCalled();
-        expect(createMatchBatch).not.toHaveBeenCalled();
+        expect(createRoundWithMatches).not.toHaveBeenCalled();
+        expect(batches()).toEqual([]);
         expect(updateTournament).not.toHaveBeenCalled();
       }
     );
@@ -957,8 +1105,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(payload.code).toBe('rounds_previous_matches_unfinished');
       expect(payload.params).toEqual({ round: 'Quarterfinals', count: 1 });
       expect(generateRound).not.toHaveBeenCalled();
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
     });
 
     it('generates a legacy elimination round once every previous-round match is completed', async () => {
@@ -1018,8 +1166,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(response.status).toBe(409);
       expect(payload.code).toBe('round_robin_schedule_drift');
       expect(payload.params).toEqual({ round: 'Round 2' });
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
       expect(revalidateTag).not.toHaveBeenCalled();
     });
@@ -1035,7 +1183,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST({} as NextRequest, routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(createRound).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
     });
 
     it('does not count the matches of the round it refills', async () => {
@@ -1088,7 +1236,7 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(updateRoundStatus).toHaveBeenCalledTimes(1);
       expect(updateRoundStatus).toHaveBeenCalledWith('r-2', 'active');
       expect(payload.data.status).toBe('active');
-      expect(vi.mocked(createMatchBatch).mock.invocationCallOrder[0]).toBeLessThan(
+      expect(vi.mocked(createRoundWithMatches).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(updateRoundStatus).mock.invocationCallOrder[0]
       );
     });
@@ -1150,8 +1298,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(response.status).toBe(400);
       expect(payload.code).toBe('validation_failed');
       expect(getTournamentById).not.toHaveBeenCalled();
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
       expect(logAuditEvent).not.toHaveBeenCalled();
     });
@@ -1236,8 +1384,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(getRoundsByTournament).not.toHaveBeenCalled();
       expect(getParticipants).not.toHaveBeenCalled();
       expect(generateRound).not.toHaveBeenCalled();
-      expect(createRound).not.toHaveBeenCalled();
-      expect(createMatchBatch).not.toHaveBeenCalled();
+      expect(createRoundWithMatches).not.toHaveBeenCalled();
+      expect(batches()).toEqual([]);
       expect(updateTournament).not.toHaveBeenCalled();
       expect(updateSeason).not.toHaveBeenCalled();
       expect(revalidateTag).not.toHaveBeenCalled();
@@ -1258,7 +1406,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(201);
       expect(assertSeasonFormatAttached).toHaveBeenCalledTimes(1);
-      expect(createRound).toHaveBeenCalledTimes(1);
+      expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
     });
 
     it.each(['singles', 'doubles', 'draft', 'evolution_point_buy', undefined])(
@@ -1270,7 +1418,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
         expect(response.status).toBe(201);
         expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
-        expect(createRound).toHaveBeenCalledTimes(1);
+        expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
       },
     );
 

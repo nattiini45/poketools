@@ -47,10 +47,15 @@ import { cleanMatchChildren } from '@/lib/match/match-children';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { MatchSubmitForbiddenError } from '@/lib/auth/match-access';
 import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay-reference';
-import { resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
+import { ReplayEngineTieError, resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
+import { deleteMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { revalidateMatchPages } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
+import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
 import type { Round } from '@/types/round';
-import type { ParticipantWithSeed } from '@/types/tournament';
+import type { ParticipantWithSeed, Tournament } from '@/types/tournament';
 import type {
   Game, GameSource, BattleStatInsert, BattleStat,
   DeleteGameResult, ResetMatchResult, ResetRoundResult,
@@ -212,6 +217,116 @@ export class MatchStateConflictError extends UserFacingError {
 }
 
 /**
+ * A replay was an engine tie: the match moved to `disputed` with an `unresolved` outcome, and no game was
+ * recorded. An admin decides the match (dispute resolution or reopen).
+ */
+export class MatchReplayUnresolvedError extends UserFacingError {
+  constructor() {
+    super(
+      'Pokémon Showdown ended this battle as a tie, so no result was recorded. The match is now disputed and an admin decides it.',
+      { code: 'match_replay_unresolved', status: 409 },
+    );
+    this.name = 'MatchReplayUnresolvedError';
+  }
+}
+
+/** Best effort: a custom league's `unresolved_outcome` check rules open a check for the disputed match. */
+async function openUnresolvedCheck(match: MatchWithPlayers): Promise<void> {
+  try {
+    const tournament = await getTournamentById(match.tournament_id);
+    if (!tournament || !isKitCandidate(tournament)) return;
+    const { onMatchUnresolved } = await import('@/lib/format-engine/runtime/hooks');
+    await onMatchUnresolved({ tournament, matchId: match.id, player1Id: match.player_1_id, player2Id: match.player_2_id });
+  } catch (err) {
+    logger.error('match/outcome', 'format runtime hook failed for an unresolved match', { matchId: match.id, error: err });
+  }
+}
+
+/**
+ * An engine tie is never scored: the match moves to `disputed` (through `in_progress` when it had not started)
+ * with an `unresolved` outcome whose reason is the engine's code, and no game is written, so the replay stays free
+ * for nothing else to claim. Always throws: `MatchReplayUnresolvedError` once the match is disputed,
+ * `MatchStateConflictError` when a concurrent write moved the match first (nothing written then).
+ *
+ * The status flip commits first (a lost race must leave no outcome row behind), so a failed outcome write cannot undo
+ * it. The dispute then still completes its other effects (the page refresh, the admins' `unresolved_outcome` check, the
+ * audit event, which records the missing row) and answers the same 409: a disputed match is never scored, so the row is
+ * not needed to keep it out of the standings, and an admin resolves the match from the check.
+ */
+async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGameInput): Promise<never> {
+  const context = {
+    actor_id: input.submitter_id,
+    player_1_id: match.player_1_id,
+    player_2_id: match.player_2_id,
+  };
+  let status: MatchStatus = match.status;
+  if (status === 'scheduled') {
+    const start = validateTransition('scheduled', 'in_progress', { ...context, is_admin: input.is_admin ?? false });
+    if (!start.valid) throw new Error(start.error ?? 'Cannot start match');
+    const started = await updateMatchStatus(match.id, 'in_progress', undefined, undefined, undefined, 'scheduled');
+    if (!started) {
+      const latest = await getMatchById(match.id);
+      if (latest?.status !== 'in_progress') throw new MatchStateConflictError();
+    }
+    status = 'in_progress';
+  }
+
+  // No player chose this move: the engine disputes the match on the admins' behalf, and in_progress -> disputed
+  // is an admin transition.
+  const transition = validateTransition(status, 'disputed', { ...context, is_admin: true });
+  if (!transition.valid) throw new Error(transition.error ?? 'Cannot dispute match');
+  const disputed = await transitionMatchStatus(match.id, {
+    expectedStatus: status,
+    status: 'disputed',
+    autoConfirmAt: null,
+  });
+  if (!disputed) throw new MatchStateConflictError();
+
+  // After the status, so a lost race leaves no outcome row behind.
+  let outcomeRecorded = true;
+  try {
+    await recordMatchOutcome({
+      matchId: match.id,
+      kind: 'unresolved',
+      p1Faints: null,
+      p2Faints: null,
+      source: 'replay',
+      reason: 'replay_engine_tie',
+      setBy: null,
+      force: false,
+    });
+  } catch (err) {
+    outcomeRecorded = false;
+    logger.error('match/outcome', 'the unresolved outcome of a disputed match could not be recorded', { matchId: match.id, error: err });
+  }
+
+  await revalidateMatchPages(match.tournament_id, match.id);
+  await openUnresolvedCheck(match);
+  logger.warn('match/outcome', 'replay was an engine tie; match disputed with an unresolved outcome', {
+    matchId: match.id,
+    replayUrl: input.replay.url,
+    fromStatus: match.status,
+  });
+  logAuditEvent({
+    actor_id: null,
+    actor_name: 'System',
+    action: 'match.replay_unresolved',
+    resource_type: 'match',
+    resource_id: match.id,
+    resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+    changes: { status: { before: match.status, after: 'disputed' } },
+    metadata: {
+      tournament_id: match.tournament_id,
+      replay_url: input.replay.url,
+      submitter_id: input.submitter_id,
+      reason: 'replay_engine_tie',
+      ...(outcomeRecorded ? {} : { outcome_recorded: false }),
+    },
+  });
+  throw new MatchReplayUnresolvedError();
+}
+
+/**
  * The match's round, read through the typed query (throws on a read error).
  * `best_of` decides when a match is over, so a failed or empty read must stop
  * the caller BEFORE it writes anything, never fall back to Bo1.
@@ -311,7 +426,15 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
 
   // Winner and stats: from the bound replay for a replay result, as entered otherwise. Throws
   // (nothing written) when the replay's sides are not the two participants or it names no winner.
-  const recorded = resolveRecordedResult(input, match);
+  let recorded: RecordedResult;
+  try {
+    recorded = resolveRecordedResult(input, match);
+  } catch (err) {
+    if (err instanceof ReplayEngineTieError && input.source === 'ps_replay') {
+      await disputeUnresolvedMatch(match, input);
+    }
+    throw err;
+  }
 
   assertReplayNotDuplicate(match, recorded.replay_url);
   await assertReplayHashUnused(recorded.replay_hash);
@@ -487,6 +610,43 @@ async function getMatchContext(matchId: string) {
   const tournament = await getTournamentById(match.tournament_id);
   if (!tournament) throw new Error('Tournament not found');
   return { match, tournament };
+}
+
+/**
+ * A completed match left `completed` (reset, or a game deleted or edited): a custom league's format takes back what the
+ * completion applied, and the next completion of the match counts again (`onMatchReverted`). A disputed match that is
+ * reset or moved on runs the same hook: it closes the dispute's check and advances the generation. The admin change is saved
+ * either way, the hook logs its own failure with the original error, and the import is lazy because only custom leagues
+ * need the format engine. A replay cannot repair a failed revert: the match is no longer completed, so it computes
+ * the same completion key and fires nothing, and the old winner's grants and points would stand until the format cron
+ * retries it (`healPendingReverts` in `format-engine/runtime/cron.ts`: the match is not completed but its current
+ * `match_completed` key is still fired). The cron does not cover a match that was completed again before its next pass,
+ * or a deleted match row. So this resolves `false` and the caller reports it in the result (`format_revert_failed`,
+ * catalogue warning `admin_game_format_revert_failed`); there is no retry in this call because the hook can fail after
+ * its event fired, and a second call would then miss the half that failed. Resolves `true` when there was nothing to
+ * revert.
+ */
+async function revertFormatCompletion(
+  match: { id: string },
+  tournament: Tournament,
+  statusBefore: string,
+  statusAfter: string
+): Promise<boolean> {
+  // A disputed match never completed, but its dispute (the unresolved replay tie) opened an `unresolved_outcome` check
+  // under the current completion generation. Once the dispute is over (reset, or a game change that moved the match on),
+  // that check is closed and the generation advances, so the next tie opens a new dispute instead of being deduplicated
+  // against the old key (`onMatchReverted`). A match that is still disputed afterwards keeps its dispute.
+  const wasCompleted = statusBefore === 'completed';
+  const dispute = statusBefore === 'disputed' && statusAfter !== 'disputed';
+  if (!(wasCompleted || dispute) || statusAfter === 'completed') return true;
+  if (!isKitCandidate(tournament)) return true;
+  try {
+    const { onMatchReverted } = await import('@/lib/format-engine/runtime/hooks');
+    return await onMatchReverted({ tournament, matchId: match.id });
+  } catch (err) {
+    logger.error('match/format-revert', 'format runtime hook failed for a match that left completed', { matchId: match.id, error: err });
+    return false;
+  }
 }
 
 /**
@@ -880,6 +1040,7 @@ async function reevaluateMatchStatus(
   if (totalGames === 0) {
     // No games left → reset to scheduled
     await resetMatchFields(matchId);
+    await deleteMatchOutcome(matchId);
     return { status: 'scheduled', winnerId: null, statusConflict: false };
   }
 
@@ -1018,6 +1179,7 @@ export async function deleteGame(
   const rebuiltRatingPlayerIds = await rebuildGamificationAfterUncomplete(
     wasCompleted, status, match.player_1_id, match.player_2_id
   );
+  const formatReverted = await revertFormatCompletion(match, tournament, match.status, status);
 
   // 4. Re-check evolutions.
   // EPB: rebuild the whole season chronologically via repairSeasonEvolution.
@@ -1063,6 +1225,7 @@ export async function deleteGame(
     games_remaining: remaining.length,
     evolution_events: evolutionEvents,
     ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
+    ...(formatReverted ? {} : { format_revert_failed: true }),
     impossibleLineups,
     recalculation: {
       gamesDeleted: 1,
@@ -1100,10 +1263,12 @@ export async function collectPlayedDownstreamMatches(
     return [];
   }
 
-  const structure = buildBracketStructureForParticipants(
-    tournament.bracket_type,
-    participants
-  );
+  // Both optional slots stay in whatever the settings say now: a reset or third-place match played while the
+  // setting was on is still downstream of its feeders. A slot without a match adds nothing.
+  const structure = buildBracketStructureForParticipants(tournament.bracket_type, participants, {
+    bracketResetEnabled: true,
+    thirdPlaceEnabled: true,
+  });
   if (!structure) return [];
 
   const rounds = await getRoundsByTournament(tournament.id);
@@ -1300,8 +1465,12 @@ export async function resetMatch(
   await Promise.all([
     deleteMatchAnalysis(matchId),
     deleteMatchPrepAnalysesByMatch(matchId),
+    deleteMatchOutcome(matchId),
   ]);
   await deleteMatchSnapshots(matchId);
+
+  // 4b. The format runtime of a custom league takes back what the completion applied (match_completed).
+  const formatReverted = await revertFormatCompletion(match, tournament, match.status, 'scheduled');
 
   // 5. Rebuild gamification effects if this match was completed.
   const rebuiltRatingPlayerIds: string[] = [];
@@ -1373,6 +1542,7 @@ export async function resetMatch(
     has_downstream_matches: downstream,
     evolution_events: evolutionEvents,
     ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
+    ...(formatReverted ? {} : { format_revert_failed: true }),
     childrenCleanup,
     impossibleLineups,
     recalculation: {
@@ -1434,6 +1604,7 @@ export async function resetRound(
   let totalGamesDeleted = 0;
   const allEvolutionEvents: EvolutionEvent[] = [];
   let evolutionRecheckFailed = false;
+  let formatRevertFailed = false;
 
   // Cascade can touch shared downstream matches, so stay sequential.
   // Without cascade, keep the existing bounded parallel chunks.
@@ -1443,6 +1614,7 @@ export async function resetRound(
       totalGamesDeleted += result.games_deleted;
       allEvolutionEvents.push(...result.evolution_events);
       if (result.evolution_recheck_failed) evolutionRecheckFailed = true;
+      if (result.format_revert_failed) formatRevertFailed = true;
     }
   } else {
     const CHUNK_SIZE = 4;
@@ -1455,6 +1627,7 @@ export async function resetRound(
         totalGamesDeleted += result.games_deleted;
         allEvolutionEvents.push(...result.evolution_events);
         if (result.evolution_recheck_failed) evolutionRecheckFailed = true;
+        if (result.format_revert_failed) formatRevertFailed = true;
       }
     }
   }
@@ -1467,6 +1640,7 @@ export async function resetRound(
     total_games_deleted: totalGamesDeleted,
     evolution_events: allEvolutionEvents,
     ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
+    ...(formatRevertFailed ? { format_revert_failed: true } : {}),
   };
 }
 
@@ -1748,6 +1922,7 @@ async function editClaimedGame(
   const rebuiltRatingPlayerIds = await rebuildGamificationAfterUncomplete(
     wasCompleted, status, match.player_1_id, match.player_2_id
   );
+  const formatReverted = await revertFormatCompletion(match, tournament, match.status, status);
 
   // 7. Re-check evolutions. EPB: debit the game's credited kills (the match
   //    left `completed`), then re-read the match and credit the edited stats
@@ -1774,5 +1949,6 @@ async function editClaimedGame(
     ...(rebuiltRatingPlayerIds.length > 0 ? { ratings_rebuilt: rebuiltRatingPlayerIds } : {}),
     evolution_events: recheck.events,
     ...(recheck.failed ? { evolution_recheck_failed: true } : {}),
+    ...(formatReverted ? {} : { format_revert_failed: true }),
   };
 }

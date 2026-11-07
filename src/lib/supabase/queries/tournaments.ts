@@ -38,6 +38,7 @@ function toTournament(row: TournamentRow): Tournament {
     archived: row.archived,
     legacy: row.legacy,
     bracket_reset_enabled: row.bracket_reset_enabled,
+    third_place_enabled: row.third_place_enabled,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -248,6 +249,7 @@ export async function createTournament(input: TournamentFormData): Promise<Tourn
     stage_order: input.stage_order ?? 0,
     advancement_rule: (input.advancement_rule as Json) ?? null,
     bracket_reset_enabled: input.bracket_reset_enabled ?? true,
+    third_place_enabled: input.third_place_enabled ?? false,
   };
 
   const { data, error } = await supabase
@@ -366,6 +368,9 @@ export async function updateTournament(
   if (input.bracket_reset_enabled !== undefined) {
     updates.bracket_reset_enabled = input.bracket_reset_enabled;
   }
+  if (input.third_place_enabled !== undefined) {
+    updates.third_place_enabled = input.third_place_enabled;
+  }
   if (input.enrollment_source !== undefined) {
     updates.enrollment_source = input.enrollment_source as Json;
   }
@@ -379,6 +384,52 @@ export async function updateTournament(
 
   if (error) throw error;
   return toTournament(data);
+}
+
+/** What `completeTournamentIfActive` found; see `phase_complete_at_stage_end` in 20261106090000_format_challenges.sql. */
+export type CompleteTournamentResult =
+  /** This call moved the row, so exactly one of two concurrent callers gets it. */
+  | { outcome: 'completed'; tournament: Tournament }
+  /** The tournament was not active (another writer completed it first, or it never started), or is gone. */
+  | { outcome: 'not_active' }
+  /** An unfinished match exists that the caller's read did not see (a challenge accepted since): the phase stays active. */
+  | { outcome: 'unsettled'; unknownUnfinished: number };
+
+/**
+ * Compare-and-set of the status at a stage end: `active` to `completed`, decided under a lock on the phase row
+ * (`phase_complete_at_stage_end`). `knownUnfinished` are the ids of the matches the caller's read saw unfinished (the
+ * facts its `end_when` decision rests on): the phase completes only while no other unfinished match exists, so a match
+ * created after that read (a challenge accepted meanwhile locks the phase row FOR SHARE until it has inserted it) keeps
+ * the phase open instead of being left unfinished in a completed phase.
+ */
+export async function completeTournamentIfActive(
+  id: string,
+  knownUnfinished: readonly string[],
+): Promise<CompleteTournamentResult> {
+  const { data, error } = await supabase.rpc('phase_complete_at_stage_end', {
+    p_phase_id: id,
+    p_known_unfinished: [...knownUnfinished],
+  });
+  if (error) throw error;
+  const result = parsePhaseComplete(data);
+  if (result === null) throw new Error(`phase_complete_at_stage_end returned an unexpected result: ${JSON.stringify(data)}`);
+  return result;
+}
+
+function parsePhaseComplete(data: unknown): CompleteTournamentResult | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const body = data as { outcome?: unknown; tournament?: unknown; unknown_unfinished?: unknown };
+  switch (body.outcome) {
+    case 'completed':
+      if (typeof body.tournament !== 'object' || body.tournament === null) return null;
+      return { outcome: 'completed', tournament: toTournament(body.tournament as TournamentRow) };
+    case 'not_active':
+      return { outcome: 'not_active' };
+    case 'unsettled':
+      return { outcome: 'unsettled', unknownUnfinished: typeof body.unknown_unfinished === 'number' ? body.unknown_unfinished : 0 };
+    default:
+      return null;
+  }
 }
 
 export async function archiveTournamentsBySeason(seasonId: string, archived: boolean): Promise<void> {
@@ -793,6 +844,29 @@ export async function replacePhaseParticipants(
       }))
     );
   if (insErr) throw insErr;
+}
+
+/**
+ * Replaces a phase's participants and its `enrollment_source` in one transaction (`tournament_enrollment_replace`), but only
+ * while the stored `enrollment_source.synced_at` still equals `expectedSyncedAt` (the value the caller read before it merged;
+ * null when it read no source). The timestamp is the token because the app reads the source through a normalising parser, so
+ * the raw jsonb would never compare equal. false: another sync of the same phase won in between, so the caller reads the phase again, merges again and retries.
+ */
+export async function replacePhaseEnrollment(
+  tournamentId: string,
+  entries: Array<{ player_id: string; seed: number }>,
+  source: import('@/types/season').EnrollmentSource,
+  expectedSyncedAt: string | null
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('tournament_enrollment_replace', {
+    p_tournament_id: tournamentId,
+    p_entries: entries as unknown as Json,
+    p_source: source as unknown as Json,
+    // NULL when the phase had no source; the generated type does not model a nullable argument.
+    p_expected_synced_at: expectedSyncedAt as unknown as string,
+  });
+  if (error) throw error;
+  return data === true;
 }
 
 /** Shift stage_order for phases at or after insert position. */

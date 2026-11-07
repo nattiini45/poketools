@@ -671,6 +671,20 @@ describe('parseReplayLog', () => {
 
     const result = parseReplayLog(log);
     expect(result.winner_ps_username).toBe('');
+    expect(result).not.toHaveProperty('tie');
+  });
+
+  it('marks a battle Showdown ended as a tie, with no winner', () => {
+    const log = [
+      '|switch|p1a: Pikachu|Pikachu, L50|100/100',
+      '|switch|p2a: Charizard|Charizard, L50|100/100',
+      '|turn|1',
+      '|tie',
+    ].join('\n');
+
+    const result = parseReplayLog(log);
+    expect(result.winner_ps_username).toBe('');
+    expect(result.tie).toBe(true);
   });
 
   it('skips non-| lines', () => {

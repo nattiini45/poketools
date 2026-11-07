@@ -40,6 +40,7 @@ import {
   RESERVED_RULE_KINDS,
   RESERVED_SECTIONS,
   RESERVED_STAGE_FIELDS,
+  manifestForSlot,
 } from './manifest';
 import { patternRegex, type FieldSpec, type JsonDefault, type Spec } from './spec';
 
@@ -58,6 +59,18 @@ export function createSpecOut(): SpecOut {
 
 const ABORTING: ReadonlySet<SchemaIssueCode> = new Set<SchemaIssueCode>(['type', 'required', 'enum']);
 
+/** Whether the member an expression-relative JSON pointer names is absent (its parent exists but lacks the key). */
+function isAbsentAt(root: unknown, relativePointer: string): boolean {
+  const segments = relativePointer.split('/').slice(1).map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+  let node: unknown = root;
+  for (const segment of segments.slice(0, -1)) {
+    if (typeof node !== 'object' || node === null || !hasOwn(node, segment)) return false;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  const last = segments[segments.length - 1];
+  if (last === undefined || typeof node !== 'object' || node === null) return false;
+  return !hasOwn(node, last) || (node as Record<string, unknown>)[last] === undefined;
+}
 function push(out: SpecOut, code: SchemaIssueCode, pointer: string, params: IssueParams = noParams()): void {
   out.issues.push({ code, pointer, params });
   if (ABORTING.has(code)) out.aborting += 1;
@@ -245,7 +258,12 @@ export function validateSpec(spec: Spec, value: unknown, pointer: string, out: S
       return validateLText(value, pointer, out);
     case 'expr': {
       const issues = validateExprJson(value, spec.type);
-      for (const issue of issues) push(out, issue.code, pointer + issue.pointer, issue.params);
+      // Inside a document the zod mapping reports an absent enum member as `required` and carries params only for
+      // type and limit issues; the standalone expression validator does neither.
+      for (const issue of issues) {
+        const code = issue.code === 'enum' && isAbsentAt(value, issue.pointer) ? 'required' : issue.code;
+        push(out, code, pointer + issue.pointer, code === 'type' || code === 'limit' ? issue.params : undefined);
+      }
       return issues.length === 0 ? cloneJson(value) : undefined;
     }
     case 'obj':
@@ -379,6 +397,9 @@ export function precheckInput(input: unknown): SchemaIssue | null {
 
 // --- Rules list: the open kind list ---------------------------------------------------------------
 
+/** The rule kinds the document knows; any other well-formed kind degrades to a manual rule card. */
+const KNOWN_RULE_KINDS: ReadonlySet<string> = new Set(manifestForSlot('rule').map((entry) => entry.tag as string));
+
 export type RuleDecision =
   | { action: 'keep' }
   | { action: 'issue'; issue: SchemaIssue }
@@ -404,7 +425,7 @@ export function classifyRuleEntry(entry: unknown, pointer: string): RuleDecision
   if (typeof kind !== 'string') {
     return { action: 'issue', issue: { code: 'type', pointer: kindPointer, params: { expected: 'string' } } };
   }
-  if (kind === 'rule.custom') return { action: 'keep' };
+  if (KNOWN_RULE_KINDS.has(kind)) return { action: 'keep' };
   if ((RESERVED_RULE_KINDS as readonly string[]).includes(kind)) {
     return { action: 'issue', issue: { code: 'not_available_yet', pointer, params: { what: kind } } };
   }

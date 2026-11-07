@@ -220,6 +220,7 @@ export default function LeagueHub({
     { href: `/insights?scope=league&id=${league.id}&tab=usage`, label: copy.links.insights },
     ...(draftHref ? [{ href: draftHref, label: copy.links.draft }] : []),
     ...(caps.matchupRoles ? [{ href: `/leagues/${league.id}/matchup`, label: copy.links.matchup }] : []),
+    ...(league.format_type === 'custom' ? [{ href: `/dashboard/leagues/${league.id}/play`, label: copy.links.play }] : []),
   ];
   const facts = [
     copy.formatType[league.format_type] ?? league.format_type,

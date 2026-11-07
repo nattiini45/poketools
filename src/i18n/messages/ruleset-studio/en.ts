@@ -12,6 +12,7 @@ export default {
     subtitle: 'Battle rules for your leagues: bans, clauses and team rules. A ruleset starts from a catalog preset or a blank page, is fully editable and is published in versions.',
     presetsHeading: 'Rule presets',
     presetsShowdown: 'Showdown formats',
+    presetsCommunity: 'PokéTools community formats',
     presetsDraft: 'Smogon draft formats',
     presetsCount: { one: '{count} preset', other: '{count} presets' },
     leagues: 'League rulesets',

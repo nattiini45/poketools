@@ -44,7 +44,7 @@ export function leagueStructureDocument(def: FormatDefinition, base: Locale): Dr
       ruleset: stage.ruleset?.kind === 'ruleset' ? { kind: 'season_default' } : stage.ruleset,
     })),
     views: copy.views.map((view) => ({ ...view, label: named(view.label) })),
-    rules: copy.rules.map((rule) => ({ ...rule, text: named(rule.text) })),
+    rules: copy.rules.map((rule) => (rule.kind === 'rule.custom' ? { ...rule, text: named(rule.text) } : rule)),
     text: {
       ...copy.text,
       sections: copy.text.sections.map((section) => ({ ...section, title: named(section.title), body: named(section.body) })),

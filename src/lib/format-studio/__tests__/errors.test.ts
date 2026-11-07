@@ -2,18 +2,29 @@ import { describe, expect, it } from 'vitest';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { FORMAT_REFUSALS } from '@/lib/format-engine/runtime/refusal';
 import { FORMAT_ERROR_CODES, FORMAT_ERROR_STATUS, FormatStudioError, mapFormatDbError } from '../errors';
 
 describe('code list', () => {
   it('equals the keys this feature added to the two catalogs', () => {
-    // Every format_* key except the pre-existing format_mismatch (the point-buy league check), plus the league type lock.
+    // Every format_* key except the pre-existing format_mismatch (the point-buy league check) and the refusals of the
+    // live format surface (FORMAT_REFUSALS, runtime/refusal.ts: their own code list and statuses), plus the league type lock.
+    // format_action_invalid is the catalog text of the body of a refused action submission (not a thrown error).
+    // format_context_stale is a signal of the runtime functions (FormatRuntimeError, queries/format-runtime.ts): the
+    // format changed after a pick was validated.
+    const ours = (key: string) =>
+      key.startsWith('format_') &&
+      key !== 'format_mismatch' &&
+      key !== 'format_action_invalid' &&
+      key !== 'format_context_stale' &&
+      !(key in FORMAT_REFUSALS);
     const fromCatalogs = [
-      ...Object.keys(errorsAdmin.en).filter((key) => key.startsWith('format_')),
-      ...Object.keys(errorsSeasons.en).filter((key) => key.startsWith('format_') && key !== 'format_mismatch'),
+      ...Object.keys(errorsAdmin.en).filter(ours),
+      ...Object.keys(errorsSeasons.en).filter(ours),
       'season_format_type_locked',
     ];
     expect([...FORMAT_ERROR_CODES].sort()).toEqual(fromCatalogs.sort());
-    expect(FORMAT_ERROR_CODES).toHaveLength(31);
+    expect(FORMAT_ERROR_CODES).toHaveLength(32);
     expect(FORMAT_ERROR_CODES).not.toContain('format_mismatch');
   });
 
@@ -66,6 +77,7 @@ describe('code list', () => {
       format_not_attached: 409,
       format_nothing_attached: 404,
       format_detach_blocked: 409,
+      format_runtime_has_data: 409,
       season_format_type_locked: 409,
     });
   });
@@ -149,6 +161,24 @@ describe('mapFormatDbError', () => {
     const mapped = mapFormatDbError(p0001('FORMAT_SEASON_HAS_MANUAL_PHASES', '{"count":2}'));
     expect(mapped).toMatchObject({ code: 'format_attach_manual_phases', statusCode: 409, params: { count: 2 } });
     expect((mapped as Error).message).toBe('This league already has 2 phases that were not created from a format. Delete them first.');
+  });
+
+  it('maps a replace or detach over runtime data with the four counts', () => {
+    const mapped = mapFormatDbError(p0001('FORMAT_RUNTIME_HAS_DATA', '{"links":10,"items":4,"submissions":3,"adjustments":1}'));
+    expect(mapped).toBeInstanceOf(FormatStudioError);
+    expect(mapped).toMatchObject({
+      code: 'format_runtime_has_data',
+      statusCode: 409,
+      params: { links: 10, items: 4, submissions: 3, adjustments: 1 },
+    });
+    expect((mapped as Error).message).toContain('10 links, 4 items, 3 submissions and 1 adjustments');
+  });
+
+  it('reads missing counts of the runtime-data signal as zero', () => {
+    expect(mapFormatDbError(p0001('FORMAT_RUNTIME_HAS_DATA'))).toMatchObject({
+      code: 'format_runtime_has_data',
+      params: { links: 0, items: 0, submissions: 0, adjustments: 0 },
+    });
   });
 
   it('maps a taken slug by SQLSTATE and constraint name', () => {

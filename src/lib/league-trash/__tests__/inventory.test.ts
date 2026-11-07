@@ -117,7 +117,7 @@ describe('the replay sees the schema (sanity)', () => {
   });
 
   it('parses the four lists', () => {
-    expect(OWNED.size).toBe(50);
+    expect(OWNED.size).toBe(61);
     expect(sorted([...INVENTORY].filter(([, c]) => c === 'derived').map(([r]) => r))).toEqual([
       'aggregate_jobs',
       'aggregates',
@@ -225,14 +225,17 @@ describe('the restore plan', () => {
 
 describe('guard triggers that fire on INSERT of an owned table', () => {
   /**
-   * A restore inserts in plan order and no guard is bypassed: the seven triggers below pass because of that order
+   * A restore inserts in plan order and no guard is bypassed: the group guards below pass because of that order
    * (section "Restore order" of the migration header). A new INSERT trigger on an owned table can break a restore, so it
    * fails this test until somebody reads that section, proves the order still works and adds it here.
+   * `season_formats.trg_season_formats_revision` is no guard: it only stamps the restored row with a new revision number
+   * (a write validated before the league was deleted is then refused as stale) and never raises.
    */
   const REVIEWED = [
     'draft_pools.trg_draft_pools_guard_group',
     'evolution_tracker.trg_evolution_tracker_group',
     'rounds.trg_rounds_league_groups_guard',
+    'season_formats.trg_season_formats_revision',
     'season_group_members.trg_season_group_members_guard',
     'season_groups.trg_season_groups_guard',
     'season_participants.trg_season_participants_group_guard',

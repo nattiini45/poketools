@@ -8,20 +8,49 @@
  */
 import { z } from 'zod';
 import { ltextSchema, slugSchema } from '@/lib/studio-core/text-schema';
-import { MAX_EDGES, MAX_MODULES, MAX_RULES, MAX_STAGES, MAX_TEXT_SECTIONS, MAX_VIEWS } from '../limits';
+import {
+  MAX_ATTRIBUTES,
+  MAX_DOMAINS,
+  MAX_EDGES,
+  MAX_METRICS,
+  MAX_MODULES,
+  MAX_RELATIONS,
+  MAX_RESOURCES,
+  MAX_RULES,
+  MAX_STAGES,
+  MAX_TEXT_SECTIONS,
+  MAX_TUNABLES,
+  MAX_VIEWS,
+} from '../limits';
 import { boundedArray } from './common';
 import {
+  adjustRuleSchema,
+  attributeDefSchema,
+  checkRuleSchema,
   crossStageViewSchema,
+  domainDefSchema,
   edgeSchema,
   legacyModuleSchema,
+  metricEntrySchema,
+  onEventRuleSchema,
+  playerActionRuleSchema,
+  relationDefSchema,
+  resourceDefSchema,
   ruleCardSchema,
   stageSchema,
   textSectionSchema,
   themeSchema,
+  tunableDefSchema,
 } from './primitives';
 
-/** The open `rules` list after the pre-pass: only `rule.custom` cards remain. */
-export const ruleEntrySchema = z.discriminatedUnion('kind', [ruleCardSchema]);
+/** The open `rules` list after the pre-pass: every kind the document knows (unknown kinds became rule cards). */
+export const ruleEntrySchema = z.discriminatedUnion('kind', [
+  ruleCardSchema,
+  onEventRuleSchema,
+  playerActionRuleSchema,
+  checkRuleSchema,
+  adjustRuleSchema,
+]);
 
 export const documentShape = z.strictObject({
   schema_version: z.literal(1),
@@ -41,4 +70,10 @@ export const documentShape = z.strictObject({
     .default(() => ({ sections: [] })),
   theme: themeSchema.default(() => ({ world: 'auto' })),
   modules: boundedArray(legacyModuleSchema, 0, MAX_MODULES).default(() => []),
+  attributes: boundedArray(attributeDefSchema, 0, MAX_ATTRIBUTES).optional(),
+  domains: boundedArray(domainDefSchema, 0, MAX_DOMAINS).optional(),
+  relations: boundedArray(relationDefSchema, 0, MAX_RELATIONS).optional(),
+  resources: boundedArray(resourceDefSchema, 0, MAX_RESOURCES).optional(),
+  metrics: boundedArray(metricEntrySchema, 0, MAX_METRICS).optional(),
+  tunables: boundedArray(tunableDefSchema, 0, MAX_TUNABLES).optional(),
 });

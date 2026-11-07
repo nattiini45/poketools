@@ -30,6 +30,7 @@ export function newRulesetDocument(name: string, baseLocale: Locale, preset?: st
     abilities: EMPTY_CATEGORY(),
     min_shared_type_pct: 0,
     team_constraints: null,
+    levels: null,
     custom_rules: '',
   };
 }

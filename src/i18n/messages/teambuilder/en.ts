@@ -48,6 +48,8 @@ export default {
       ev_stat_invalid: '{stat} EVs ({value}) must be a whole number from 0 to 252',
       iv_range: '{stat} IVs ({value}) must be a whole number from 0 to 31',
       level_range: 'Level ({value}) must be a whole number from 1 to 100',
+      level_exact: 'Level ({value}) must be exactly {level}',
+      level_max: 'Level ({value}) exceeds the maximum of {level}',
       malformed_set: 'This set is incomplete or malformed',
       duplicate_move: '{move} is listed more than once',
       move_illegal: '{species} cannot legally learn {move}',
@@ -77,6 +79,19 @@ export default {
         'Your assigned core could not be read, so the rules that depend on it could not be checked. Try again in a moment',
       ruleset_load_failed:
         'The ruleset for this check could not be used, so the team was checked against the format only and is not confirmed legal for your league',
+      // Custom-format stage constraints; the English texts equal `constraintIssueText` (format-engine/runtime/team.ts)
+      kit_roster_size: 'Team size: this league needs {min} to {max} Pokémon, found {have}',
+      kit_count_min: 'Team rule: at least {min} Pokémon from {source} needed, found {have}',
+      kit_count_max: 'Team rule: at most {max} Pokémon from {source} allowed, found {have}',
+      kit_not_allowed: '{species} is not in any pool you may use in this league',
+      kit_distinct: 'Team rule: at most {max} Pokémon may share the same {by} ({value}), found {have}',
+      kit_type_quota: 'Type quota: need at least {min} {type}-type Pokémon, have {have}',
+      kit_tera_banned: 'Terastallization is not allowed in this league',
+      kit_tera_stab: "Tera type {type} must be one of {species}'s types ({types})",
+      kit_tera_attr: 'Tera type {type} must be your assigned type ({types})',
+      kit_evolution_stage:
+        'Evolution stage rule: at most {max} Pokémon of stage {stage} (fe: fully evolved, nfe: not fully evolved, lc: first stage) allowed, found {have}',
+      kit_constraint_expr: 'League rule {index} could not be checked ({reason})',
     },
   },
   /** Outspeed solver notes (`api/pkmn/speed-calc` `impossible`); `{item}` is the localized Choice Scarf. */
@@ -130,6 +145,8 @@ export default {
       locked: 'Locked',
       saving: 'Saving…',
       saved: 'Saved',
+      savedWithIssues: 'Saved, rules not met',
+      savedUnchecked: 'Saved, rules could not be checked',
       saveFailed: 'Save failed',
       unsaved: 'Unsaved',
     },
@@ -149,8 +166,10 @@ export default {
   },
   mobile: {
     intel: 'Intel',
+    validation: 'Validate',
     ai: 'AI',
     intelSheet: 'Intel',
+    validationSheet: 'Validation',
     aiSheet: 'AI Coach',
   },
   budgetMeter: {

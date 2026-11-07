@@ -35,6 +35,7 @@ import {
   getTeamById,
   getPlayerTeamForTournament,
   getPlayerTeamForMatch,
+  TeamRowConflictError,
   listTeamsByPlayerWithContext,
   listTeamsBySeason,
   createTeam,
@@ -261,16 +262,20 @@ describe('getPlayerTeamForMatch', () => {
   it('throws on two planned rows (data error, no silent pick)', async () => {
     mockBuilder.order.mockReturnValue({ data: [TEAM_ROW, OTHER_PLANNED], error: null });
     await expect(getPlayerTeamForMatch('p1', MATCH)).rejects.toThrow('2 planned rows');
+    await expect(getPlayerTeamForMatch('p1', MATCH)).rejects.toBeInstanceOf(TeamRowConflictError);
   });
 
   it('throws on two rows linked to the match', async () => {
     mockBuilder.order.mockReturnValue({ data: [LINKED_ROW, { ...LINKED_ROW, id: 'dup' }], error: null });
     await expect(getPlayerTeamForMatch('p1', MATCH)).rejects.toThrow('2 rows linked to match');
+    await expect(getPlayerTeamForMatch('p1', MATCH)).rejects.toBeInstanceOf(TeamRowConflictError);
   });
 
   it('throws on a database error', async () => {
     mockBuilder.order.mockReturnValue({ data: null, error: new Error('match read err') });
-    await expect(getPlayerTeamForMatch('p1', MATCH)).rejects.toThrow('match read err');
+    const failure = getPlayerTeamForMatch('p1', MATCH);
+    await expect(failure).rejects.toThrow('match read err');
+    await expect(failure).rejects.not.toBeInstanceOf(TeamRowConflictError);
   });
 
   it('selects no share column (C1)', async () => {

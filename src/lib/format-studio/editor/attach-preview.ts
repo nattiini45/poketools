@@ -9,8 +9,8 @@ import { CURRENT_ENV, compile, namedRulesetsOf, presetsOf, type DiagnosticCode }
 import type { Locale } from '@/i18n/config';
 import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
 import type { RulesetChoice } from '@/lib/format-studio/editor/catalog';
-import type { EngineGap } from '@/lib/format-studio/library-types';
-import { planStages } from '@/lib/format-studio/materialise';
+import type { EngineGap, SeasonFormatEngine } from '@/lib/format-studio/library-types';
+import { engineGaps, planStages } from '@/lib/format-studio/materialise';
 import type { BracketType } from '@/types/tournament';
 
 /** Stands in for a ruleset id the preview does not have (the league's, a preset's); `planStages` only needs an id to avoid its guard. */
@@ -67,6 +67,8 @@ export function previewAttach(input: {
   seasonRuleset?: RulesetLabel | null;
   /** The stored rulesets a stage may name, by the id the spec uses (a definition id or a legacy id, `rulesetLabelsOf`): name and newest published version (what attach pins). */
   namedRulesets?: ReadonlyMap<string, RulesetLabel>;
+  /** The engine that will run the format: a re-attach keeps the league's, a first attach starts on `kit` (the default). */
+  engine?: SeasonFormatEngine;
 }): AttachPreview {
   const result = compile(input.spec, CURRENT_ENV);
   const firstError = result.diagnostics.find((d) => d.severity === 'error');
@@ -100,5 +102,5 @@ export function previewAttach(input: {
   });
   const leagueRulesetMissing =
     input.seasonRulesetId === null ? definition.stages.filter((stage) => stage.ruleset.kind === 'season_default').length : 0;
-  return { ok: true, stages, warnings: planned.warnings, leagueRulesetMissing };
+  return { ok: true, stages, warnings: engineGaps(planned.warnings, input.engine ?? 'kit'), leagueRulesetMissing };
 }

@@ -16,6 +16,7 @@ import { LOCALES } from '@/i18n/config';
 import { LEGACY_POINTS_MAX, LEGACY_ROUNDS } from '@/lib/draft/points-limits';
 import { formatPack } from '@/lib/format-pack';
 import type { BroadcastMomentType } from '@/types/broadcast';
+import { ADMIN_OUTCOME_KINDS } from '@/types/match-outcome';
 import {
   MOMENT_DESCRIPTION_MAX_LENGTH,
   MOMENT_MAX_PER_GAME,
@@ -313,6 +314,7 @@ export const tournamentCreateSchema = z.object({
   team_visibility: teamVisibilitySchema.default('hidden_until_match'),
   stage_order: z.number().int().min(0).optional(),
   bracket_reset_enabled: z.boolean().optional(),
+  third_place_enabled: z.boolean().optional(),
 });
 
 export const tournamentUpdateSchema = z.object({
@@ -328,6 +330,7 @@ export const tournamentUpdateSchema = z.object({
   archived: z.boolean().optional(),
   stage_order: z.number().int().min(0).optional(),
   bracket_reset_enabled: z.boolean().optional(),
+  third_place_enabled: z.boolean().optional(),
 });
 
 const advancementRuleSchema = z.object({
@@ -375,6 +378,8 @@ export const syncStandingsSchema = z.object({
 
 export const seasonAdvanceSchema = z.object({
   force: z.boolean().optional(),
+  /** A kit edge with a `manual_list` selection: the players who move on, in order. */
+  manual_list: z.array(uuid).max(256).optional(),
 });
 
 /** Optional destructive confirmation for reset / regenerate paths. */
@@ -641,6 +646,8 @@ export const matchReopenSchema = z.object({
 export const matchResultSchema = z.object({
   winner_id: uuid,
   reason: reasonSchema,
+  /** How the match ended; a format with forfeit scoring scores `forfeit` and `no_show` apart from a played win. */
+  outcome: z.enum(ADMIN_OUTCOME_KINDS).default('played'),
 });
 
 /** Match reset: cascade flag plus an optional reason (the admin UI requires it). */
@@ -1072,6 +1079,12 @@ export const validateTeamSchema = z.object({
   // This prevents the base 'Gen 9 RU' ruleset from being used for tournaments
   // of a league that has a dedicated custom ruleset.
   tournament_id: uuid.optional(),
+  // The round a custom-format league's team rules are checked for; omitted = the phase's current round. Honoured only
+  // without `match_id`: a match names its own round.
+  round_number: z.number().int().min(1).max(500).optional(),
+  // The match the team is being built for (needs `tournament_id`). Its round decides which round-gated team rules apply,
+  // so a week-3 match opened in week 4 is still checked as week 3.
+  match_id: uuid.optional(),
 });
 
 // ─── Pagination Query Schema ─────────────────────────────────────────

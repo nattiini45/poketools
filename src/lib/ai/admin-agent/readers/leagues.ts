@@ -304,6 +304,7 @@ export const phaseGet = defineRunnable('tournament', {
         is_doubles: z.boolean(),
         bo_overrides: z.array(z.strictObject({ round_label: label(), best_of: z.number().int() })),
         bracket_reset_enabled: z.boolean(),
+        third_place_enabled: z.boolean(),
         description_user_text: userText(),
       }),
   }),
@@ -336,6 +337,7 @@ export const phaseGet = defineRunnable('tournament', {
           .slice(0, 20)
           .map(([round, bestOf]) => ({ round_label: fenceLabel(round), best_of: bestOf })),
         bracket_reset_enabled: tournament.bracket_reset_enabled ?? true,
+        third_place_enabled: tournament.third_place_enabled ?? false,
         description_user_text: fenceText(tournament.description),
       },
     };

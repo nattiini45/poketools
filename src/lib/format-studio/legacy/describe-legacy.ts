@@ -104,7 +104,7 @@ const isTable = (stage: LegacyStageInput): boolean => stage.bracketType === 'rou
  * - Evolution Point Buy: the standings take the points per win from the pack (`effectiveMatchPoints`,
  *   `src/lib/tournament/standings-rules.ts`) in round robin and Swiss alike, whatever the caller passes. Neither
  *   scores a bye (`formatScoresByes`).
- * Draws and forfeits are never set: the match model has neither.
+ * Draws and forfeits are never set: the match model has no draws, and legacy scoring counts a forfeit as a win.
  */
 function scoringOf(stage: LegacyStageInput, evolutionPointBuy: boolean, pack: LegacyPack): Scoring {
   const table = isTable(stage);

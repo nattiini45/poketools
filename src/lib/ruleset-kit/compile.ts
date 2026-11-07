@@ -25,6 +25,7 @@ import { unbanIsRedundant } from './entry-state';
 import { validateRulesetDocument } from './validate';
 import {
   RULESET_CATEGORIES,
+  type LevelRules,
   type ResolvedRules,
   type RulesetCategory,
   type RulesetDocument,
@@ -199,6 +200,39 @@ function checkClauses(doc: RulesetDocument, out: RulesetDiagnostic[]): void {
   });
 }
 
+function checkLevels(doc: RulesetDocument, ctx: CompileContext, out: RulesetDiagnostic[]): void {
+  if (doc.levels === null) return;
+  const seen = new Set<string>();
+  doc.levels.entries.forEach((entry, index) => {
+    const path = `/levels/entries/${index}/id`;
+    if (seen.has(entry.id)) out.push(diag('duplicate_entry', path, { id: entry.id, category: 'levels' }, [{ op: 'remove', path: `/levels/entries/${index}` }]));
+    seen.add(entry.id);
+    if (ctx.known?.pokemon !== undefined && !ctx.known.pokemon.has(entry.id)) out.push(diag('unknown_entry', path, { id: entry.id, category: 'pokemon' }));
+  });
+}
+
+/**
+ * The value a hash is taken over. `levels` was added to documents and resolved rules after rulesets were published; a
+ * `levels: null` key would change the canonical JSON, and with it every stored `content_hash` / `resolved_hash`, making a
+ * no-op edit of an old ruleset look new (spurious versions, `nothing_new` at the publish gate). So a null `levels` is left out
+ * of the hashed form: documents without level rules hash exactly as before the field existed.
+ */
+function hashable<T extends { levels: LevelRules | null }>(value: T): Omit<T, 'levels'> | T {
+  if (value.levels !== null) return value;
+  const { levels: _levels, ...rest } = value;
+  return rest;
+}
+
+/** The content hash of a document (stable for documents without level rules). */
+export function hashDocument(doc: RulesetDocument): string {
+  return contentHash(hashable(doc) as unknown as JsonValue);
+}
+
+/** The hash of resolved rules (stable for rules without level rules). */
+export function hashResolved(resolved: ResolvedRules): string {
+  return contentHash(hashable(resolved) as unknown as JsonValue);
+}
+
 /** One `clause_informational` info per effective clause the validator does not enforce. */
 function informationalClauses(resolved: ResolvedRules, out: RulesetDiagnostic[]): void {
   for (const id of resolved.clauses) {
@@ -236,6 +270,7 @@ export function compileRuleset(input: unknown, ctx: CompileContext): CompileResu
   }
   checkClauses(doc, diagnostics);
   for (const category of RULESET_CATEGORIES) checkList(doc, category, ctx, diagnostics);
+  checkLevels(doc, ctx, diagnostics);
 
   const ok = diagnostics.every((d) => d.severity !== 'error');
   if (!ok) return { ok: false, diagnostics, document: doc, resolved: null, content_hash: null, resolved_hash: null };
@@ -247,7 +282,7 @@ export function compileRuleset(input: unknown, ctx: CompileContext): CompileResu
     diagnostics,
     document: doc,
     resolved,
-    content_hash: contentHash(doc as unknown as JsonValue),
-    resolved_hash: contentHash(resolved as unknown as JsonValue),
+    content_hash: hashDocument(doc),
+    resolved_hash: hashResolved(resolved),
   };
 }

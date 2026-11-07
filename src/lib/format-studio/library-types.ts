@@ -108,6 +108,12 @@ export interface SeasonFormatSummary {
 export interface SeasonFormatRow extends SeasonFormatSummary {
   spec: FormatDefinition;
   seed: string;
+  /**
+   * `season_formats.revision`: changes on every change of the row (attach, replace, engine switch, amendment). A writer
+   * that validated against this row hands it to the database, which refuses the write when it moved
+   * (`format_context_stale`).
+   */
+  revision: number;
 }
 
 /** What attach writes into `tournaments.stage_spec`: a frozen copy of one kit stage. */
@@ -121,9 +127,13 @@ export interface StageSpecSnapshot {
 export type EngineGapCode =
   | 'override_unmapped'
   | 'rr_legs_not_run'
-  | 'third_place_not_run'
   | 'edge_select_not_run'
-  | 'groups_not_created';
+  | 'groups_not_created'
+  | 'pairing_not_run'
+  | 'constraints_not_run'
+  | 'calendar_not_run'
+  | 'end_when_not_run'
+  | 'foreach_group_not_run';
 
 /** A part of the format the engine does not run yet; codes and params only, the UI words them. */
 export interface EngineGap {

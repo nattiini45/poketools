@@ -8,6 +8,7 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
 import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
 import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
+import { deleteMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { canReopenMatch, validateTransition } from '@/lib/tournament/match-state';
 import {
@@ -17,6 +18,7 @@ import {
   recheckEvolutions,
   revertRoundIfCompleted,
 } from '@/lib/pkmn/game-pipeline';
+import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import type { ReopenMatchResult, ReopenStep } from '@/lib/admin/match-detail';
@@ -70,10 +72,13 @@ export class MatchReopenDownstreamPlayedError extends UserFacingError {
  *      rebuild must not be refused halfway (`RatingHistoryIntegrityError`),
  *      and a played later bracket match refuses the reopen outright
  *   3. one compare-and-set status write (`MatchStateChangedError` on a miss)
- *   4. post-commit steps, only for a match that WAS completed (pending and
- *      disputed matches never finalized, so the status write is all they
- *      need). Each step is isolated and logged; a failed one is reported in
- *      `failed_steps` and the others still run. Achievements are permanent and
+ *   4. post-commit steps. The outcome row goes for every status (an admin
+ *      forfeit, or the unresolved row of a disputed replay tie, must not
+ *      outlive the result it described); the rest only for a match that WAS
+ *      completed (pending and disputed matches never finalized), starting
+ *      with the format runtime taking back the effects of `match_completed`. Each step is
+ *      isolated and logged; a failed one is reported in `failed_steps` and the
+ *      others still run. Achievements are permanent and
  *      a Discord / social announcement already sent cannot be retracted.
  */
 export async function reopenMatch(matchId: string, adminId: string): Promise<ReopenMatchResult> {
@@ -135,7 +140,6 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     bracket_matches_removed: 0,
     failed_steps: [],
   };
-  if (!wasCompleted) return result;
 
   const runStep = async <T>(step: ReopenStep, run: () => Promise<T>): Promise<T | undefined> => {
     try {
@@ -146,6 +150,23 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
       return undefined;
     }
   };
+
+  await runStep('outcome', () => deleteMatchOutcome(matchId));
+
+  // A custom league's format takes back what the completion applied (`match_completed`), so every caller of the reopen
+  // does, not only the admin route. A disputed match never completed, but its dispute (the unresolved replay tie) opened
+  // an `unresolved_outcome` check that this reopen ends. The module is loaded on demand: only custom leagues need the
+  // format engine.
+  if (wasCompleted || fromStatus === 'disputed') {
+    await runStep('format', async () => {
+      if (!isKitCandidate(tournament)) return;
+      const { revertMatchCompletion } = await import('@/lib/format-engine/runtime/hooks');
+      if (!(await revertMatchCompletion({ tournamentId: tournament.id, matchId }))) {
+        throw new Error('The format runtime could not take back the effects of the completion');
+      }
+    });
+  }
+  if (!wasCompleted) return result;
 
   await runStep('round', () => revertRoundIfCompleted(match.round_id));
 

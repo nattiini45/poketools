@@ -14,6 +14,10 @@
  * the readiness row and the record of the rulesets. A refusal at any step calls no RPC; when the RPC fails, the rulesets
  * this attach created are discarded, so a failed attach leaves no orphan row.
  *
+ * A replace (and a detach) that would delete the league's links, items, submissions or adjustments is refused by the RPC
+ * with `format_runtime_has_data` (the counts in `params`) unless the caller passes `confirmClear`: the draw and the gifts
+ * of a Secret Santa live in a phase that counts as not started. A first attach never needs it.
+ *
  * The caller (the route) expires the read cache and writes the audit event after the RPC commits; this module
  * returns the stage ids to expire.
  */
@@ -35,6 +39,7 @@ import {
   getSeasonPresetRulesets,
   getSeasonManualPhaseCount,
   getSeasonStartSignals,
+  type RuntimeCleared,
 } from '@/lib/supabase/queries/season-formats';
 import { isSeasonStarted } from '@/lib/season/season-started';
 import type { SessionPlayer } from '@/types/auth';
@@ -43,7 +48,7 @@ import type { SeasonFormatType } from '@/types/season';
 import { canAttachDefinition, type FormatActor } from './access';
 import { FormatStudioError } from './errors';
 import type { EngineGap, SeasonFormatSummary } from './library-types';
-import { planStages } from './materialise';
+import { engineGaps, planStages } from './materialise';
 import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
 import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
 
@@ -52,6 +57,8 @@ export interface AttachInput {
   seasonId: string;
   definitionId: string;
   versionNo?: number;
+  /** The admin confirmed that a replace may delete the league's runtime data (see the module header). */
+  confirmClear?: boolean;
 }
 
 export interface AttachedStage {
@@ -74,6 +81,8 @@ export interface AttachOutcome {
   touched_stage_ids: string[];
   /** True when the attach created or deleted a ruleset row (the ruleset list has changed). */
   rulesets_changed: boolean;
+  /** The runtime rows a replace deleted (null for a first attach): what the audit entry records. */
+  cleared: RuntimeCleared | null;
 }
 
 const toActor = (player: SessionPlayer): FormatActor => ({ playerId: player.playerId, isAdmin: player.isAdmin });
@@ -182,6 +191,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
       seed: randomBytes(16).toString('hex'),
       stages: planned.stages,
       presetRulesets: Object.fromEntries(ensured.definitionIds),
+      confirmClear: input.confirmClear === true,
     });
   } catch (err) {
     await discardMaterialised(ensured.created);
@@ -205,24 +215,31 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
     replaced: result.replaced,
     season_format: summary,
     stages,
-    warnings: planned.warnings,
+    warnings: engineGaps(planned.warnings, summary.engine),
     definition: { id: meta.id, slug: meta.slug },
     version_no: version.version_no,
     spec_hash: version.content_hash,
     touched_stage_ids: [...result.stages.map((s) => s.id), ...result.removed_stage_ids],
     rulesets_changed: ensured.created.length > 0 || result.removed_ruleset_ids.length > 0,
+    cleared: result.cleared,
   };
 }
 
 /**
  * Removes the attached format, the stages it created and the rulesets it created for its preset stages (the
- * ones no phase or league still points at), in one transaction.
+ * ones no phase or league still points at), in one transaction. Refused with `format_runtime_has_data` while the
+ * league holds links, items, submissions or adjustments, unless `confirmClear` is true.
  */
 export async function detachFormatFromSeason(
   seasonId: string,
-): Promise<{ removed_stage_ids: string[]; removed_ruleset_ids: string[] }> {
-  const result = await detachSeasonFormat(seasonId);
-  return { removed_stage_ids: result.removed_stage_ids, removed_ruleset_ids: result.removed_ruleset_ids };
+  options: { confirmClear?: boolean } = {},
+): Promise<{ removed_stage_ids: string[]; removed_ruleset_ids: string[]; cleared: RuntimeCleared | null }> {
+  const result = await detachSeasonFormat(seasonId, options.confirmClear === true);
+  return {
+    removed_stage_ids: result.removed_stage_ids,
+    removed_ruleset_ids: result.removed_ruleset_ids,
+    cleared: result.cleared,
+  };
 }
 
 /**

@@ -12,7 +12,8 @@ import {
 } from '@/lib/supabase/queries/teams';
 import { getTournamentById, isPlayerTournamentParticipant } from '@/lib/supabase/queries/tournaments';
 import type { ApiResponse, ApiResult } from '@/types/api';
-import type { TeamFormData } from '@/types/team';
+import type { PokemonSet, TeamFormData } from '@/types/team';
+import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
 import { filterTeamVisibility } from '@/lib/team/visibility';
 import {
   toPublicTeam,
@@ -105,6 +106,8 @@ export async function POST(request: NextRequest) {
     }
     const body = zodResult.data;
 
+    // The league-rules advisory of a kit league (a team that breaks them is saved all the same).
+    let advisory: KitTeamAdvisory = {};
     if (body.tournament_id) {
       // Verify tournament exists and is not completed
       const tournament = await getTournamentById(body.tournament_id);
@@ -152,11 +155,18 @@ export async function POST(request: NextRequest) {
           { status: 409 }
         );
       }
+
+      // A kit league's stage constraints and the player's resources: advice, never a refusal (the post-match audit
+      // is where a played team that breaks them reaches an admin).
+      advisory = await adviseKitTeam(
+        { tournament, playerId: player.playerId, pokemon: body.pokemon as PokemonSet[] },
+        { tournamentId: tournament.id, playerId: player.playerId }
+      );
     }
     // null tournament_id = personal team, no tournament checks needed
 
     const team = await createTeam(player.playerId, body as TeamFormData);
-    return NextResponse.json<ApiResult<PublicTeam>>({ success: true, data: toPublicTeam(team) }, { status: 201 });
+    return NextResponse.json<ApiResult<PublicTeam>>({ success: true, data: toPublicTeam(team), ...advisory }, { status: 201 });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to create team');
   }

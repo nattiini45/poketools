@@ -218,6 +218,18 @@ describe('scenarios', () => {
     expect(dto?.upcoming[1].duration_ms).toBe(150_000);
   });
 
+  it('every running scenario places the active pick in its round with one seat per participant', () => {
+    for (const id of PREVIEW_SCENARIOS) {
+      const dto = build(id).init.snapshot;
+      if (!dto?.active_slot || dto.pool.status !== 'in_progress') continue;
+      const progress = toDraftViewModel(dto).roundProgress;
+      expect(progress, id).not.toBeNull();
+      expect(progress?.seats, id).toHaveLength(dto.participants.length);
+      expect(progress?.overallPick, id).toBe(dto.picks.length + 1);
+      expect(progress?.makeupForRound ?? null, id).toBe(dto.active_slot.kind === 'makeup' ? dto.active_slot.round : null);
+    }
+  });
+
   it('every draft uses the pack budget', () => {
     expect(build('live-my-turn').init.snapshot?.pool.budget).toBe(epbPack.defaults.draftBudget);
   });

@@ -9,6 +9,7 @@ import * as roster from '../preset-data/champions-roster.generated';
 import { DRAFT_BANS, DRAFT_COMBINATION_BANS, DRAFT_TIER_BANS } from '../preset-data/draft';
 import { PRESET_DATA_PIN, PRESET_RULES_VERSION } from '../preset-data/pin';
 import * as standard from '../preset-data/standard';
+import * as wichtelcup from '../preset-data/wichtelcup';
 import { TOUR_OVERLAYS } from '../preset-data/tour-overlay';
 
 // Integrity of the committed preset data: every name exists in the dex for its generation and universe, the
@@ -23,6 +24,7 @@ const DATA_HASHES: Readonly<Record<string, string>> = {
   '2026-10-26.1': '2523ad1f88146ea0499a6015b2038746d3ffdb475e499405cdbfd94a631fb6c5',
   '2026-10-27.1': 'add971e53efe718d833a820650dd45185199de513dc278134320cbac6c3f0afa',
   '2026-10-27.2': 'c2665cb8ee8c068c193d3b00af1aabe6d14fb98e3186aae2cefc2f2b29ea2507',
+  '2026-11-05.1': '99371dcf363a121cf0877fa1c9f8176a7d15ab1fc41a605945c329dc64301a5e',
 };
 
 function canonical(value: unknown): unknown {
@@ -48,6 +50,7 @@ function dataHash(): string {
     draftTierBans: DRAFT_TIER_BANS,
     draftCombinationBans: DRAFT_COMBINATION_BANS,
     overlays: TOUR_OVERLAYS,
+    wichtelcup,
     roster: Object.fromEntries(Object.entries(roster).filter(([key]) => key !== 'CHAMPIONS_ROSTER_PIN')),
     rosterPin: roster.CHAMPIONS_ROSTER_PIN,
     pin: PRESET_DATA_PIN,
@@ -139,6 +142,18 @@ describe('every name in the tables exists in the dex of its generation and unive
       for (const check of fromBans(id, preset.gen, preset.universe, bans)) for (const name of missing(check)) problems.push(`${check.where}: ${name}`);
     }
     expect(problems).toEqual([]);
+  });
+
+  it('the Wichtelcup pool and bans name exact entries in the installed Gen 9 dex', () => {
+    // Exact cosmetic forms and newly filed Mega Stones are legal through the preset's allowlist even when the
+    // National Dex universe readers omit them. Validate the authored ids directly, like the Champions roster check.
+    const dex = Dex.forGen(9);
+    expect(wichtelcup.WICHTELCUP_SPECIES.filter((name) => !dex.species.get(name).exists)).toEqual([]);
+    for (const [kind, names] of [['moves', wichtelcup.WICHTELCUP_BANS.moves], ['items', wichtelcup.WICHTELCUP_BANS.items], ['abilities', wichtelcup.WICHTELCUP_BANS.abilities]] as const) {
+      expect(names.filter((name) => !dex[kind].get(name).exists)).toEqual([]);
+    }
+    expect(wichtelcup.WICHTELCUP_SPECIES).toHaveLength(141);
+    expect(new Set(wichtelcup.WICHTELCUP_SPECIES).size).toBe(141);
   });
 
   it('the tour overlays (Gen 9, National Dex)', () => {

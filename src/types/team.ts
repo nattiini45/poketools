@@ -1,3 +1,5 @@
+import type { LevelRuleEntry, LevelRules } from '@/lib/ruleset-kit/types';
+
 import type { Enums } from './database';
 
 // ── Stat spread ──────────────────────────────────────────────────────
@@ -122,6 +124,8 @@ export type ValidationIssueCode =
   | 'ev_stat_invalid'
   | 'iv_range'
   | 'level_range'
+  | 'level_exact'
+  | 'level_max'
   // Team-wide (`TeamIssue`)
   | 'team_empty'
   | 'team_too_large'
@@ -134,7 +138,19 @@ export type ValidationIssueCode =
   | 'evolution_stage_cap'
   | 'not_in_roster'
   | 'ruleset_load_failed'
-  | 'core_load_failed';
+  | 'core_load_failed'
+  // Custom-format stage constraints (`src/lib/format-engine/runtime/team.ts`)
+  | 'kit_roster_size'
+  | 'kit_count_min'
+  | 'kit_count_max'
+  | 'kit_not_allowed'
+  | 'kit_distinct'
+  | 'kit_type_quota'
+  | 'kit_tera_banned'
+  | 'kit_tera_stab'
+  | 'kit_tera_attr'
+  | 'kit_evolution_stage'
+  | 'kit_constraint_expr';
 
 /**
  * Params of a validation issue. Names follow the pkmn seam
@@ -189,6 +205,16 @@ export interface TeamValidationResult {
   team_issue_details?: TeamIssue[];
   /** Which rules the server enforced (set by the shared server-side check; absent from the bare `validateTeam`). */
   ruleset_source?: RulesetSource;
+  /** Level requirements of the enforced ruleset, for the teambuilder's validation panel. */
+  level_rules?: LevelRulesView | null;
+}
+
+/**
+ * A ruleset's level rules as the validation panel shows them. A rule keys on a dex id; the shared check adds the English
+ * species name (`name`) because the browser has no id-to-name table, and the panel localizes that name.
+ */
+export interface LevelRulesView extends Omit<LevelRules, 'entries'> {
+  entries: (LevelRuleEntry & { name?: string })[];
 }
 
 export interface ValidateTeamRequest {

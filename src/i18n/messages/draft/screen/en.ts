@@ -57,6 +57,10 @@ export default {
   clock: {
     label: 'Draft clock',
     roundPick: 'Round {round} · Pick {pick}',
+    roundOf: 'Round {round} of {rounds} · Pick {pick} of {picks}',
+    overall: 'Pick {pick} of {total}',
+    seatTrack: 'Round {round}: {done} of {total} picks made',
+    makeupFor: 'Make-up pick (round {round})',
     next: 'Next: {player}',
     nextFive: 'Next {n}:',
     complete: 'Draft complete',
@@ -83,6 +87,12 @@ export default {
     makeupAria: 'Make-up pick {pick}: {player}, {time}',
     makeupAriaNoTime: 'Make-up pick {pick}: {player}',
     roundBreak: 'Round {round}',
+    roundShort: 'R{round}',
+    now: 'On the clock',
+    nowAria: 'On the clock, pick {pick}: {player}',
+    nowMakeupAria: 'On the clock, make-up pick {pick}: {player}',
+    upNext: 'Up next',
+    makeup: 'Make-up',
   },
   players: {
     title: 'Players',

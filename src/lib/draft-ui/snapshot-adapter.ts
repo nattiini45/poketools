@@ -60,6 +60,36 @@ export interface UpcomingVM {
   roundBreakBefore: boolean;
 }
 
+export type RoundSeatState = 'done' | 'now' | 'upcoming';
+
+/** One turn of the current round. `playerId` is null for a turn beyond the upcoming window. */
+export interface RoundSeatVM {
+  state: RoundSeatState;
+  playerId: string | null;
+  name: string;
+  isViewer: boolean;
+  makeup: boolean;
+}
+
+/**
+ * Where the draft stands. `round` is the round the draft is in: a make-up slot keeps the round of the pick it
+ * replaces (`makeupForRound`) but runs after later picks, so it never moves the draft back a round.
+ */
+export interface RoundProgressVM {
+  round: number;
+  roundsTotal: number;
+  /** The turn being played in `round` (1-based). */
+  pickInRound: number;
+  /** = participants. */
+  picksInRound: number;
+  overallPick: number;
+  overallTotal: number;
+  /** `picksInRound` seats: this round's picks, the active slot when it belongs to this round, then the turns to come. */
+  seats: RoundSeatVM[];
+  /** The active slot is a make-up pick: the round of the pick it replaces. */
+  makeupForRound: number | null;
+}
+
 export interface DraftViewModel {
   version: number;
   /** `Date.parse(server_now)`. */
@@ -76,6 +106,8 @@ export interface DraftViewModel {
   /** = `upcoming[0]`. */
   nextPlayer: { playerId: string; name: string; isViewer: boolean } | null;
   upcoming: UpcomingVM[];
+  /** null unless the draft is in progress with an active slot. */
+  roundProgress: RoundProgressVM | null;
   viewerOnClock: boolean;
   viewerUpNext: boolean;
   participants: ParticipantVM[];
@@ -152,6 +184,51 @@ function rosterOrder(
     const [pb, cb] = rank(b);
     return pa - pb || ca - cb || (a < b ? -1 : a > b ? 1 : 0);
   });
+}
+
+function roundProgressOf(
+  dto: DraftSnapshotDTO,
+  slot: ActiveSlotVM | null,
+  picks: PickVM[],
+  name: (playerId: string) => string,
+  isViewer: (playerId: string) => boolean,
+): RoundProgressVM | null {
+  if (!slot || dto.pool.status !== 'in_progress') return null;
+  const makeup = slot.kind === 'makeup';
+  const latestPickRound = picks.reduce((max, p) => Math.max(max, p.round), 0);
+  const round = makeup ? Math.max(slot.round, latestPickRound) : slot.round;
+  const picksInRound = Math.max(1, dto.participants.length);
+  const seat = (playerId: string, state: RoundSeatState, isMakeup: boolean): RoundSeatVM => ({
+    state,
+    playerId,
+    name: name(playerId),
+    isViewer: isViewer(playerId),
+    makeup: isMakeup,
+  });
+
+  const done = picks.filter((p) => p.round === round).map((p) => seat(p.player_id, 'done', false));
+  const nowInRound = slot.round === round;
+  const seats: RoundSeatVM[] = [
+    ...done,
+    ...(nowInRound ? [seat(slot.player_id, 'now', makeup)] : []),
+    ...dto.upcoming.filter((u) => u.round === round).map((u) => seat(u.player_id, 'upcoming', u.kind === 'makeup')),
+  ].slice(0, picksInRound);
+  while (seats.length < picksInRound) seats.push({ state: 'upcoming', playerId: null, name: '', isViewer: false, makeup: false });
+
+  const slotsTotal = dto.participants.reduce((sum, p) => sum + p.slots_total, 0);
+  const overallTotal = slotsTotal > 0 ? slotsTotal : dto.pool.roster_size * picksInRound;
+  const maxSlots = dto.participants.reduce((max, p) => Math.max(max, p.slots_total), 0);
+
+  return {
+    round,
+    roundsTotal: Math.max(maxSlots > 0 ? maxSlots : dto.pool.roster_size, round),
+    pickInRound: Math.min(done.length + 1, picksInRound),
+    picksInRound,
+    overallPick: Math.min(picks.length + 1, Math.max(overallTotal, 1)),
+    overallTotal,
+    seats,
+    makeupForRound: makeup ? slot.round : null,
+  };
 }
 
 /**
@@ -242,6 +319,7 @@ export function toDraftViewModel(dto: DraftSnapshotDTO, catalog?: CatalogOrderLi
     activeSlot,
     nextPlayer,
     upcoming,
+    roundProgress: roundProgressOf(dto, activeSlot, picks, name, isViewer),
     viewerOnClock,
     viewerUpNext,
     participants,

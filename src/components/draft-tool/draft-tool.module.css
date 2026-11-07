@@ -1058,13 +1058,121 @@
   font-weight: 700;
 }
 
+/* A round change: a labelled "R4" separator between two hairlines. */
 .orderBreak {
+  display: inline-flex;
   flex: 0 0 auto;
-  align-self: stretch;
+  align-items: center;
+  gap: 0.25rem;
+  margin: 0 0.125rem;
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--draft-ink-2);
+}
+
+.orderBreak::before,
+.orderBreak::after {
+  content: "";
   width: 2px;
-  margin: 0 0.25rem;
+  height: 1rem;
   border-radius: 1px;
   background: var(--draft-border);
+}
+
+/* The active slot: a tinted accent fill (the CTA violet stays reserved for DRAFT). */
+.orderChipNow {
+  border-color: var(--draft-accent);
+  background: color-mix(in srgb, var(--draft-accent) 22%, var(--draft-surface));
+  font-weight: 700;
+}
+
+/* Make-up slots keep their older pick number; the dashed border says why. */
+.orderChipMakeup {
+  border-style: dashed;
+}
+
+.orderLabel {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--draft-ink-2);
+}
+
+.makeupBadge {
+  border: 1px dashed var(--draft-border);
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--draft-ink-2);
+}
+
+/* The current round, one segment per turn: done = filled, now = accent, to come = hollow. */
+.seatTrack {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  max-width: 14rem;
+}
+
+.seat {
+  width: 0.875rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+  border: 1px solid var(--draft-border);
+}
+
+.seatDone {
+  background: var(--draft-ink-2);
+  border-color: var(--draft-ink-2);
+}
+
+.seatNow {
+  background: var(--draft-accent);
+  border-color: var(--draft-accent);
+  box-shadow: 0 0 0 2px var(--draft-glow);
+}
+
+.seatUpcoming {
+  background: transparent;
+}
+
+/* The player on the clock (someone else's turn; your own keeps the banner). */
+.onClockPill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--draft-accent);
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--draft-accent) 14%, var(--draft-surface));
+  font-weight: 700;
+}
+
+.liveDot {
+  flex: 0 0 auto;
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: var(--draft-accent);
+}
+
+.liveDotPaused,
+.seatPaused {
+  opacity: 0.55;
+}
+
+@keyframes livePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* ── Breakpoint variants ─────────────────────────────────────────────── */
@@ -1276,6 +1384,10 @@
   }
   .filterSheet[data-state="open"] {
     animation: filterSheetIn 180ms ease-out;
+  }
+  .liveDot:not(.liveDotPaused),
+  .seatNow:not(.seatPaused) {
+    animation: livePulse 1.6s ease-in-out infinite;
   }
   .filterSheet[data-state="closed"] {
     animation: filterSheetOut 120ms ease-in;

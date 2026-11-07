@@ -343,6 +343,9 @@ export default function FormatAttachPanel({
   const [error, setError] = useState<{ error: ApiErrorLike; blocked: boolean } | null>(null);
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [confirm, setConfirm] = useState<'reattach' | 'detach' | null>(null);
+  // The server refused a replace or detach over the league's draw or gifts and sent the counts: ask, then send again with
+  // `confirm_clear`.
+  const [clearPrompt, setClearPrompt] = useState<{ action: 'attach' | 'detach'; error: ApiErrorLike } | null>(null);
   // Only the newest preview request may write its answer.
   const ticket = useRef(0);
   useEffect(
@@ -397,24 +400,29 @@ export default function FormatAttachPanel({
     void loadPreview(id);
   }
 
-  function reportFailure(failure: ApiErrorLike, status: number) {
+  function reportFailure(failure: ApiErrorLike, status: number, action: 'attach' | 'detach') {
+    if (failure.code === 'format_runtime_has_data') {
+      setClearPrompt({ action, error: failure });
+      return;
+    }
     const kind = classifyApiError(failure, status).kind;
     setError({ error: failure, blocked: kind === 'blocked' });
     if (failure.code && REFRESH_AFTER_CODES.has(failure.code)) router.refresh();
   }
 
-  async function runAttach() {
+  async function runAttach(confirmClear = false) {
     if (preview.status !== 'ready' || !preview.preview.ok) return;
     const names: Record<string, string> = {};
     for (const stage of preview.preview.stages) names[stage.key] = stage.name;
     setConfirm(null);
+    setClearPrompt(null);
     setBusy(true);
     setError(null);
     setOutcome(null);
-    const out = await attachFormatRequest(seasonId, preview.id, preview.versionNo);
+    const out = await attachFormatRequest(seasonId, preview.id, preview.versionNo, undefined, confirmClear);
     setBusy(false);
     if (!out.ok) {
-      reportFailure(out.error, out.status);
+      reportFailure(out.error, out.status, 'attach');
       return;
     }
     setOutcome({ kind: 'attached', stages: out.data.stages, warnings: out.data.warnings, names });
@@ -424,15 +432,16 @@ export default function FormatAttachPanel({
     router.refresh();
   }
 
-  async function runDetach() {
+  async function runDetach(confirmClear = false) {
     setConfirm(null);
+    setClearPrompt(null);
     setBusy(true);
     setError(null);
     setOutcome(null);
-    const out = await detachFormatRequest(seasonId);
+    const out = await detachFormatRequest(seasonId, undefined, confirmClear);
     setBusy(false);
     if (!out.ok) {
-      reportFailure(out.error, out.status);
+      reportFailure(out.error, out.status, 'detach');
       return;
     }
     setOutcome({ kind: 'detached', count: out.data.removed_stage_ids.length });
@@ -558,6 +567,15 @@ export default function FormatAttachPanel({
         title={t('panel.detachTitle')}
         message={t('panel.detachBody', { count: attached?.createdPhases ?? 0 })}
         confirmLabel={t('panel.detachConfirm')}
+        loading={busy}
+      />
+      <ConfirmDialog
+        open={clearPrompt !== null}
+        onClose={() => setClearPrompt(null)}
+        onConfirm={() => void (clearPrompt?.action === 'detach' ? runDetach(true) : runAttach(true))}
+        title={t('panel.clearTitle')}
+        message={clearPrompt === null ? '' : errorText(clearPrompt.error)}
+        confirmLabel={t('panel.clearConfirm')}
         loading={busy}
       />
     </div>

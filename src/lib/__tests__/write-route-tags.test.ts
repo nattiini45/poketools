@@ -57,9 +57,14 @@ const EXTRA_ROUTES = [
   'admin/league-trash/[id]/rebuild/route.ts',
 ];
 
-/** A call that expires public read-cache tags (directly or through a match pass). */
+/**
+ * A call that expires public read-cache tags (directly or through a match pass). The last five are the format
+ * runtime's orchestrators: each expires the league reads itself, and their unit tests assert it
+ * (`format-engine/runtime/__tests__/expiry.test.ts`; `answerChallenge` in `format-engine/__tests__/challenge-server.test.ts`),
+ * so a live-format route that calls one of them has expired what it changed.
+ */
 const EXPIRE_CALL =
-  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath)\(/;
+  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge)\(/;
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -90,6 +95,13 @@ const EXEMPT: Record<string, string> = {
   // token routes
   'seasons/[id]/draft-tokens/route.ts#POST': 'retired endpoint answering 410; writes nothing',
   'seasons/[id]/kill-tokens/route.ts#POST': 'retired endpoint answering 410; writes nothing',
+  // live format of a kit league
+  'seasons/[id]/format/challenges/route.ts#POST':
+    'makes a challenge; challenges are viewer-scoped and read live, no cached public read shows an open challenge',
+  'seasons/[id]/format/challenges/[challengeId]/route.ts#DELETE':
+    'withdraws an open challenge; challenges are viewer-scoped and read live (an accepted one expires in answerChallenge)',
+  'seasons/[id]/format/relations/unmask/route.ts#POST':
+    'an audited admin read of the hidden relation sides; it writes only an audit row',
 };
 
 /**
@@ -145,6 +157,15 @@ const REQUIRED = [
   'formats/presets/[presetId]/fork/route.ts#POST',
   'seasons/[id]/format/route.ts#POST',
   'seasons/[id]/format/route.ts#DELETE',
+  // live format of a kit league: player actions, the challenge ladder, admin adjustments and checks
+  'seasons/[id]/format/actions/[actionId]/route.ts#PUT',
+  'seasons/[id]/format/actions/[actionId]/submit/route.ts#POST',
+  'seasons/[id]/format/challenges/route.ts#POST',
+  'seasons/[id]/format/challenges/[challengeId]/route.ts#DELETE',
+  'seasons/[id]/format/challenges/[challengeId]/answer/route.ts#POST',
+  'seasons/[id]/format/adjustments/route.ts#POST',
+  'seasons/[id]/format/checks/[checkId]/resolve/route.ts#POST',
+  'seasons/[id]/format/relations/unmask/route.ts#POST',
   // league trash: restore (superadmin) and the pending rebuild after a delete or restore
   'admin/league-trash/[id]/restore/route.ts#POST',
   'admin/league-trash/[id]/rebuild/route.ts#POST',

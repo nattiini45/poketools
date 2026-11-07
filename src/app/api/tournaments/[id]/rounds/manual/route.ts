@@ -8,12 +8,20 @@ import {
   getParticipants,
   updateTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament, createRound } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch } from '@/lib/supabase/queries/matches';
+import { getRoundsByTournament, createRoundWithMatches } from '@/lib/supabase/queries/rounds';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
 import { expireTournamentReads } from '@/lib/revalidation';
+import {
+  announceKitRound,
+  assertNoOpenRoundBeforeNext,
+  assertPhaseOpenForRounds,
+  assertPhaseReadyForFirstRound,
+  fillKitRoundDeadline,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
 import type { ApiResult } from '@/types/api';
 import type { Round } from '@/types/round';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -26,12 +34,14 @@ interface RouteParams {
  * POST /api/tournaments/[id]/rounds/manual
  *
  * Admin: Create a round with manually specified matchups.
- * Bypasses the pairing algorithm entirely.
+ * Bypasses the pairing algorithm entirely. The round of a kit league's phase is written like a generated one: a stage
+ * that reached its end is refused (409 `rounds_stage_ended`), the stage calendar gives the round its deadline and the
+ * format reacts (`stage_start` for the first round, `round_start`).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
 
@@ -81,9 +91,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A custom league without an attached format cannot start; a kit phase whose stage reached its end takes no round.
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
+    // A stage that ends on a condition is evaluated when a round finishes: no round is written ahead of one still in play,
+    // or the phase would complete with that round's matches stranded. A round robin skips the current-round check below
+    // and a challenge ladder has no generator, so both rely on this. It reads before the end check on purpose: a match
+    // that completes in between is then seen by the end check, which refuses the round when the condition holds.
+    const existingRounds = await getRoundsByTournament(id);
+    await assertNoOpenRoundBeforeNext(id, kitPhase, existingRounds);
+    await assertPhaseOpenForRounds(tournament, kitPhase);
+    // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
+    // forced start is audited once the round is written (`announceKitRound`), not before the request can still be refused.
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
+    });
+
     // 3. Validate current round is completed (if any)
     //    Round Robin pairings are deterministic, so skip this check for RR.
-    const existingRounds = await getRoundsByTournament(id);
+    //    (`existingRounds` was read above, before the stage-end checks.)
     // A new elimination bracket is built whole by the bracket engine. A manual first round would be an unstructured
     // one, after which the legacy per-round generator could carry on and build a bracket without its slot graph.
     if (
@@ -217,22 +243,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const roundBestOf =
       body.best_of ?? tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
-    const round = await createRound({
+    // 7. The round and its match stubs are one transaction under the phase row lock (`round_write`): a stage end that
+    // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
+    // empty round behind.
+    let round = await createRoundWithMatches({
       tournament_id: id,
       name: roundName,
       round_number: nextRoundNumber,
       best_of: roundBestOf,
       bye_player_ids: byePlayerIds,
+      matches: body.pairings.map((pairing) => ({
+        player_1_id: pairing.player_1_id,
+        player_2_id: pairing.player_2_id,
+      })),
     });
-
-    // 7. Create match stubs
-    const matchInputs = body.pairings.map((pairing) => ({
-      round_id: round.id,
-      tournament_id: id,
-      player_1_id: pairing.player_1_id,
-      player_2_id: pairing.player_2_id,
-    }));
-    await createMatchBatch(matchInputs);
 
     // 8. Update tournament status and round counter
     if (tournament.status === 'upcoming') {
@@ -245,7 +269,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         current_round: nextRoundNumber,
       });
     }
+    round = await fillKitRoundDeadline(tournament, kitPhase, round);
     expireTournamentReads(id, tournament.season_id);
+    await announceKitRound(tournament, kitPhase, { roundNumber: nextRoundNumber }, tournament.status === 'upcoming', forcedStart);
 
     return NextResponse.json<ApiResult<Round>>(
       { success: true, data: round },

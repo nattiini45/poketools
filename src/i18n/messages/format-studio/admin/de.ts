@@ -12,7 +12,7 @@ export default defineDe<typeof en>()({
   },
   gallery: {
     heading: 'Beispiele',
-    intro: 'Drei Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen, oder nutze es als Ausgangspunkt.',
+    intro: 'Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen, oder nutze es als Ausgangspunkt.',
     exampleBadge: 'Beispiel',
     readOnlyNote: 'Beispiele sind schreibgeschützt. Nutze eines als Ausgangspunkt, um eine private Kopie zu bekommen, die du ändern kannst.',
     open: 'Öffnen',

@@ -33,6 +33,13 @@ const classic = () => preset('classic-league');
 const cup = () => preset('cup');
 const swiss = () => preset('swiss-top-cut');
 
+/** The rule at an index, which the presets and these tests only fill with manual cards. */
+function cardAt(doc: DraftDocument, i: number): { scope: unknown } {
+  const rule = doc.rules[i];
+  if (rule.kind !== 'rule.custom') throw new Error('expected a manual rule card');
+  return rule;
+}
+
 const valid = (doc: DraftDocument): boolean => validateFormatDefinition(doc).ok;
 const errorCodes = (doc: DraftDocument): string[] =>
   compileDraft(doc).diagnostics.filter((d) => d.severity === 'error').map((d) => d.code);
@@ -134,9 +141,9 @@ describe('stages', () => {
       expect(removed).toEqual({ edges: 1, ruleCards: 1, textSections: 1, views: 1 });
       expect(doc.stages.map((s) => s.key)).toEqual(['knockout']);
       expect(doc.edges).toEqual([]);
-      expect(doc.rules[0].scope).toEqual({ kind: 'season' });
-      expect(doc.rules[1].scope).toEqual({ kind: 'stage', stage: 'knockout' });
-      expect(doc.rules[2].scope).toEqual({ kind: 'season' });
+      expect(cardAt(doc, 0).scope).toEqual({ kind: 'season' });
+      expect(cardAt(doc, 1).scope).toEqual({ kind: 'stage', stage: 'knockout' });
+      expect(cardAt(doc, 2).scope).toEqual({ kind: 'season' });
       expect(doc.text.sections[0]).not.toHaveProperty('stage');
       expect(doc.text.sections[1]).not.toHaveProperty('stage');
       expect(doc.views).toEqual([]);
@@ -192,7 +199,7 @@ describe('stages', () => {
       expect(result.doc.stages[0].key).toBe('pool');
       expect(result.doc.edges[0].from).toBe('pool');
       expect(result.doc.edges[0].to).toBe('knockout');
-      expect(result.doc.rules[0].scope).toEqual({ kind: 'stage', stage: 'pool' });
+      expect(cardAt(result.doc, 0).scope).toEqual({ kind: 'stage', stage: 'pool' });
       expect(result.doc.text.sections[0].stage).toBe('pool');
       expect(result.doc.views[0].stages).toEqual(['pool', 'knockout']);
       expect(errorCodes(result.doc)).toEqual([]);

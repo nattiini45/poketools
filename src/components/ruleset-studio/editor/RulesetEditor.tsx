@@ -36,6 +36,7 @@ import BaseSection from '../sections/BaseSection';
 import ClausesSection from '../sections/ClausesSection';
 import ConstraintsSection from '../sections/ConstraintsSection';
 import ListSection from '../sections/ListSection';
+import LevelsSection from '../sections/LevelsSection';
 import NotesSection from '../sections/NotesSection';
 import SummaryPanel from '../summary/SummaryPanel';
 import OutlineNav from './OutlineNav';
@@ -248,6 +249,9 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
       break;
     case 'constraints':
       content = <ConstraintsSection doc={doc} onChange={model.edit} />;
+      break;
+    case 'levels':
+      content = <LevelsSection doc={doc} onChange={model.edit} />;
       break;
     case 'notes':
       content = <NotesSection doc={doc} onChange={model.edit} />;

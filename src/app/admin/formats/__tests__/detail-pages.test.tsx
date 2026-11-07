@@ -282,7 +282,7 @@ describe('example format page', () => {
     expect(findByType(tree, FormatDetail)).toHaveLength(0);
   });
 
-  it.each(['classic-league', 'cup', 'swiss-top-cut'])('%s: renders the detail as an example and reads nothing', async (presetId) => {
+  it.each(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup'])('%s: renders the detail as an example and reads nothing', async (presetId) => {
     mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
     const tree = await ExamplePage(exampleParams(presetId));
     const detail = findByType(tree, FormatDetail);
@@ -293,7 +293,7 @@ describe('example format page', () => {
     for (const read of leagueReads()) expect(read).not.toHaveBeenCalled();
   });
 
-  it.each(['classic-league', 'cup', 'swiss-top-cut'])('%s: offers the fork button for that preset', async (presetId) => {
+  it.each(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup'])('%s: offers the fork button for that preset', async (presetId) => {
     mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
     const tree = await ExamplePage(exampleParams(presetId));
     const fork = findByType(tree, ForkPresetButton);

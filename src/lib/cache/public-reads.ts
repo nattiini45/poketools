@@ -7,6 +7,7 @@ import { getAggregateForPokemon, getAggregatesSummary, getTotalGamesInScope } fr
 import { listAchievementDefinitions } from '@/lib/supabase/queries/achievements';
 import { getSeasonEvolutionPoints, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
+import { loadKitStandingsData } from '@/lib/format-engine/load';
 import { getBattleStatsForSeason, getBattleStatsForTournament } from '@/lib/supabase/queries/games';
 import { getLeagueSchedule, type LeagueSchedulePreload } from '@/lib/supabase/queries/league-standings';
 import {
@@ -375,6 +376,14 @@ const seasonFormatRules = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-format-rules', seasonId), () => getFormatRules(seasonId)),
 );
 
+/**
+ * A custom league's kit standings data (`loadKitStandingsData`), null when its format does not rank. Holds no seed:
+ * the coin flips arrive as draws. Throws on a failed read.
+ */
+const seasonKitStandings = cache((seasonId: string) =>
+  cachedRead(seasonSpec('season-kit-standings', seasonId), async () => (await loadKitStandingsData(seasonId)) ?? null),
+);
+
 /** The narrow battle_stats rows of every stage of a league (kill rankings). */
 const seasonBattleStats = cache((seasonId: string) =>
   cachedRead(seasonSpec('season-battle-stats', seasonId), () => getBattleStatsForSeason(seasonId)),
@@ -406,12 +415,13 @@ const seasonMatchRecords = cache((seasonId: string) =>
  * entries cached before roster lines carried their `line_id` (B-LINE); `-v3`
  * retires entries cached before the standings carried league group tables; `-v4`
  * retires entries cached before the standings scored Swiss byes; `-v5` retires entries cached before an
- * Evolution Point Buy table ranked by the stored tiebreaker order.
+ * Evolution Point Buy table ranked by the stored tiebreaker order; `-v6` retires entries cached before a kit league's
+ * tables ranked by its format (`kit`).
  */
 function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
   const listId = preload.league.point_buy_list_id;
   const extraTags = [publicTags.players, ...(listId ? [publicTags.pointBuyList(listId)] : [])];
-  return cachedRead(seasonSpec('world-route-data-public-v5', seasonId, extraTags), () =>
+  return cachedRead(seasonSpec('world-route-data-public-v6', seasonId, extraTags), () =>
     buildWorldRouteData(seasonId, preload),
   );
 }
@@ -422,10 +432,10 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
  * The `-v2` name retires entries cached before league group tables
  * (`groupStandings`, `standingsRanking`); `-v3` retires entries cached before
  * the standings scored Swiss byes; `-v4` retires entries cached before an Evolution Point Buy table ranked by the
- * stored tiebreaker order.
+ * stored tiebreaker order; `-v5` retires entries cached before a kit league's tables ranked by its format.
  */
 function leagueSchedule(seasonId: string, preload: LeagueSchedulePreload) {
-  return cachedRead(seasonSpec('league-schedule-public-v4', seasonId, [publicTags.players]), () =>
+  return cachedRead(seasonSpec('league-schedule-public-v5', seasonId, [publicTags.players]), () =>
     getLeagueSchedule(seasonId, preload),
   );
 }
@@ -604,6 +614,7 @@ export const publicReads = {
   seasonEvolutionPoints,
   seasonTrackers,
   seasonFormatRules,
+  seasonKitStandings,
   seasonBattleStats,
   seasonByeRounds,
   seasonMatchRecords,

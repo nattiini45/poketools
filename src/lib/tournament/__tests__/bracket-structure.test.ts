@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  THIRD_PLACE_BRACKET_POS,
   bracketStructureInputsFromParticipants,
+  bracketStructureOptionsOf,
   buildBracketStructureForParticipants,
+  isThirdPlaceMatch,
   buildDoubleElimStructure,
   buildSingleElimStructure,
   buildSlotIndexMap,
@@ -382,5 +385,61 @@ describe('double-elim losers-bracket starts', () => {
     expect(reset!.global_round_number).toBe(gf!.global_round_number);
     expect(gf!.bracket_pos).toBe(0);
     expect(reset!.bracket_pos).toBe(1);
+  });
+});
+
+describe('third-place slot', () => {
+  it('is off by default', () => {
+    expect(buildSingleElimStructure(8).slots.some((s) => s.isThirdPlace)).toBe(false);
+    expect(buildBracketStructureForParticipants('single_elim', makeSeededParticipants(8, []))?.slots).toHaveLength(7);
+  });
+
+  it('adds one slot in the final round fed by both semifinal losers', () => {
+    const structure = buildBracketStructureForParticipants('single_elim', makeSeededParticipants(8, []), {
+      thirdPlaceEnabled: true,
+    })!;
+    expect(structure.rounds).toHaveLength(3);
+    const final = structure.slots.find((s) => s.side_round_index === 2 && s.bracket_pos === 0)!;
+    const semis = structure.slots.filter((s) => s.side_round_index === 1);
+    const third = structure.slots.find((s) => s.isThirdPlace)!;
+    expect(third).toMatchObject({
+      bracket_side: 'winners',
+      bracket_pos: THIRD_PLACE_BRACKET_POS,
+      global_round_number: final.global_round_number,
+      round_name: final.round_name,
+      feeder1: { kind: 'loser', slotKey: semis[0].slotKey },
+      feeder2: { kind: 'loser', slotKey: semis[1].slotKey },
+    });
+    expect(new Set(structure.slots.map((s) => s.slotKey)).size).toBe(structure.slots.length);
+  });
+
+  it('needs four players', () => {
+    expect(buildSingleElimStructure(3, true).slots.some((s) => s.isThirdPlace)).toBe(false);
+    expect(buildSingleElimStructure(2, true).slots.some((s) => s.isThirdPlace)).toBe(false);
+    expect(buildSingleElimStructure(4, true).slots.some((s) => s.isThirdPlace)).toBe(true);
+  });
+
+  it('is ignored by double elimination', () => {
+    const participants = makeSeededParticipants(8, []);
+    expect(buildBracketStructureForParticipants('double_elim', participants, { thirdPlaceEnabled: true })).toEqual(
+      buildBracketStructureForParticipants('double_elim', participants),
+    );
+  });
+
+  it('bracketStructureOptionsOf reads the stored settings with their defaults', () => {
+    expect(bracketStructureOptionsOf({})).toEqual({ bracketResetEnabled: true, thirdPlaceEnabled: false });
+    expect(bracketStructureOptionsOf({ bracket_reset_enabled: false, third_place_enabled: true })).toEqual({
+      bracketResetEnabled: false,
+      thirdPlaceEnabled: true,
+    });
+  });
+
+  it('isThirdPlaceMatch matches only position 1 of the last single-elimination round', () => {
+    const third = { bracket_side: 'winners' as const, bracket_pos: 1 };
+    expect(isThirdPlaceMatch(third, 3, 3, 'single_elim')).toBe(true);
+    expect(isThirdPlaceMatch({ ...third, bracket_pos: 0 }, 3, 3, 'single_elim')).toBe(false);
+    expect(isThirdPlaceMatch(third, 2, 3, 'single_elim')).toBe(false);
+    expect(isThirdPlaceMatch(third, 3, 3, 'double_elim')).toBe(false);
+    expect(isThirdPlaceMatch({ bracket_side: null, bracket_pos: null }, 3, 3, 'round_robin')).toBe(false);
   });
 });

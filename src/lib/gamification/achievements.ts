@@ -11,7 +11,9 @@ import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/roun
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getParticipants, getTournamentsByPlayer } from '@/lib/supabase/queries/tournaments';
+import { isThirdPlaceMatch } from '@/lib/tournament/bracket-structure';
 import type { AchievementCriteria, EarnedAchievement } from '@/types/achievement';
+import type { BracketType } from '@/types/tournament';
 
 interface MatchStatsSummary {
   kos_dealt_total: number;
@@ -115,7 +117,11 @@ function computeMatchStats(
   };
 }
 
-async function didPlayerWinTournamentFinal(playerId: string, tournamentId: string): Promise<boolean> {
+async function didPlayerWinTournamentFinal(
+  playerId: string,
+  tournamentId: string,
+  bracketType: BracketType
+): Promise<boolean> {
   const rounds = await getRoundsByTournament(tournamentId);
   if (rounds.length === 0) return false;
 
@@ -124,7 +130,14 @@ async function didPlayerWinTournamentFinal(playerId: string, tournamentId: strin
 
   for (const round of finalRounds) {
     const matches = await getMatchesByRound(round.id);
-    if (matches.some((m) => m.status === 'completed' && m.winner_id === playerId)) {
+    if (
+      matches.some(
+        (m) =>
+          m.status === 'completed' &&
+          m.winner_id === playerId &&
+          !isThirdPlaceMatch(m, round.round_number, maxRoundNumber, bracketType)
+      )
+    ) {
       return true;
     }
   }
@@ -167,7 +180,10 @@ async function buildStatsContext(
     if (round) {
       const rounds = await getRoundsByTournament(matchContext.tournament_id);
       const maxRoundNumber = rounds.length > 0 ? Math.max(...rounds.map((r) => r.round_number)) : -1;
-      tournamentFinalWin = round.round_number === maxRoundNumber;
+      const bracketType = tournaments.find((t) => t.id === matchContext.tournament_id)?.bracket_type;
+      tournamentFinalWin =
+        round.round_number === maxRoundNumber &&
+        !(bracketType && isThirdPlaceMatch(match, round.round_number, maxRoundNumber, bracketType));
     }
   }
 
@@ -181,7 +197,11 @@ async function buildStatsContext(
     const previousTournament = currentIndex >= 0 ? completed[currentIndex + 1] : null;
 
     if (previousTournament) {
-      backToBackFinalWins = await didPlayerWinTournamentFinal(playerId, previousTournament.id);
+      backToBackFinalWins = await didPlayerWinTournamentFinal(
+        playerId,
+        previousTournament.id,
+        previousTournament.bracket_type
+      );
     }
   }
 

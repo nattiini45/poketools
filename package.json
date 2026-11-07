@@ -15,7 +15,7 @@
     "assets:placeholders": "node scripts/generate-placeholder-avatars.mjs",
     "assets:fetch": "node scripts/fetch-private-assets.mjs",
     "typecheck": "tsc --noEmit",
-    "typecheck:example": "node --max-old-space-size=4096 node_modules/typescript/bin/tsc -p tsconfig.example.json --noEmit",
+    "typecheck:example": "node --max-old-space-size=8192 node_modules/typescript/bin/tsc -p tsconfig.example.json --noEmit",
     "start": "next start",
     "lint": "eslint src/ scripts/ --max-warnings=0",
     "test": "vitest run",

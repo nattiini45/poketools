@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { lookupPath } from '@/i18n/core';
 import { formatStudioMessages } from '@/i18n/messages/format-studio';
+import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import { compile } from '../compile';
 import {
   compareDiagnostics,
@@ -16,6 +17,8 @@ import { USER_CHOICE_FIXES } from '../engine/fixes';
 import { classicLeague } from '../presets/classic-league';
 import { cup } from '../presets/cup';
 import { swissTopCut } from '../presets/swiss-top-cut';
+import { wichtelcup } from '../presets';
+import { wichtelcupDoc } from './fixtures/docs';
 import { fixtureDiagnostics, mutate, NEGATIVE_FIXTURES, rosterEnv } from './fixtures/negative';
 
 const codesOf = (input: unknown, env = CURRENT_ENV) => compile(input, env).diagnostics.map((d) => `${d.code}@${d.json_pointer}`);
@@ -26,10 +29,10 @@ const fixture = (id: string) => {
 };
 
 describe('diagnostic vocabulary', () => {
-  it('lists 59 distinct codes', () => {
-    expect(DIAGNOSTIC_CODES).toHaveLength(59);
+  it('lists 100 distinct codes', () => {
+    expect(DIAGNOSTIC_CODES).toHaveLength(100);
     expect(new Set(DIAGNOSTIC_CODES).size).toBe(DIAGNOSTIC_CODES.length);
-    expect(DIAGNOSTIC_SEVERITY.size).toBe(59);
+    expect(DIAGNOSTIC_SEVERITY.size).toBe(100);
   });
 
   it('has at least one negative fixture for every code, and none for an unknown code', () => {
@@ -91,11 +94,15 @@ describe('the match-model gate', () => {
   const players = fixture('players-per-match').input;
   const flip = (change: Partial<typeof CURRENT_ENV.matchModel>) => ({ ...CURRENT_ENV, matchModel: { ...CURRENT_ENV.matchModel, ...change } });
 
-  it('refuses draws and forfeits with the current environment', () => {
+  it('refuses draws with the current environment and accepts forfeits (match_outcomes records them)', () => {
     expect(codesOf(draws)).toContain('draws_unsupported@/stages/0/scoring/draw');
     expect(codesOf(series)).toContain('draws_unsupported@/stages/0/series/allow_draw');
-    expect(codesOf(forfeits)).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
+    expect(codesOf(forfeits).some((c) => c.startsWith('forfeits_unsupported'))).toBe(false);
     expect(compile(draws).ok).toBe(false);
+  });
+
+  it('refuses forfeits in an environment without them', () => {
+    expect(codesOf(forfeits, flip({ forfeits: false }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
   });
 
   it('accepts them once the match model records them', () => {
@@ -108,7 +115,7 @@ describe('the match-model gate', () => {
 
   it('only lets a draw through where the flag it needs is on', () => {
     expect(codesOf(draws, flip({ forfeits: true }))).toContain('draws_unsupported@/stages/0/scoring/draw');
-    expect(codesOf(forfeits, flip({ draws: true }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
+    expect(codesOf(forfeits, flip({ draws: true, forfeits: false }))).toContain('forfeits_unsupported@/stages/0/scoring/forfeit');
   });
 
   it('errors for three players per match with the current environment and passes with room for three', () => {
@@ -255,7 +262,7 @@ describe('swiss rounds against the field size', () => {
 });
 
 describe('threshold expressions', () => {
-  it.each(NEGATIVE_FIXTURES.filter((f) => f.code.startsWith('expr_')).map((f) => [f.id, f] as const))(
+  it.each(NEGATIVE_FIXTURES.filter((f) => f.code.startsWith('expr_') && f.code !== 'expr_invalid').map((f) => [f.id, f] as const))(
     '%s surfaces at the pointer of the expression plus its own pointer',
     (_id, f) => {
       expect(f.pointer.startsWith('/edges/0/select/0/when')).toBe(true);
@@ -290,5 +297,81 @@ describe('threshold expressions', () => {
 describe('fix catalog', () => {
   it('only the documented user-choice fixes may be empty', () => {
     expect(USER_CHOICE_FIXES).toEqual([]);
+  });
+});
+
+describe('constraint_source_hidden_domain', () => {
+  const hiddenCodes = (input: unknown) => compile(input).diagnostics.filter((d) => d.code === 'constraint_source_hidden_domain');
+
+  it('is an error: the advisory verdict of such a rule is an oracle of the hidden pool', () => {
+    expect(DIAGNOSTIC_SEVERITY.get('constraint_source_hidden_domain')).toBe('error');
+    const input = fixture('constraint-source-hidden-domain').input;
+    expect(compile(input).ok).toBe(false);
+  });
+
+  it('names the hidden domain of every count source that reads it, also inside any_of / not', () => {
+    const hidden = hiddenCodes(fixture('constraint-source-hidden-domain-in-not').input);
+    expect(hidden.map((d) => d.json_pointer)).toContain('/stages/0/constraints/4/source/source/sources/0/domain');
+    expect(hidden.every((d) => d.params.domain === 'normal')).toBe(true);
+  });
+
+  it('does not fire for a public or when_unlocked domain, nor for a resource that holds a hidden one', () => {
+    expect(hiddenCodes(wichtelcupDoc())).toEqual([]);
+    const resourceOnly = mutate(compile(wichtelcupDoc()).definition!, [{ op: 'replace', path: '/domains/1/visibility', value: 'admins' }]);
+    // new_year is read by two `domain` sources of the cup and by `distinct by role` of the ladder: only those fire, not the resource sources.
+    const pointers = hiddenCodes(resourceOnly).map((d) => d.json_pointer);
+    expect(pointers).toContain('/stages/0/constraints/9/source/domain');
+    expect(pointers.some((p) => p.includes('/resource'))).toBe(false);
+  });
+
+  describe('a when_unlocked pool: its entries are in the runtime state while it is locked', () => {
+    const lockedPool = () => mutate(compile(wichtelcupDoc()).definition!, [{ op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' }]);
+
+    it('rejects a count source that reads it without unlocked_only, and a distinct-by-attr over an attribute it carries', () => {
+      const pointers = hiddenCodes(lockedPool()).map((d) => d.json_pointer);
+      expect(pointers).toContain('/stages/0/constraints/9/source/domain');
+      expect(pointers).toContain('/stages/2/constraints/2/attr');
+      expect(compile(lockedPool()).ok).toBe(false);
+    });
+
+    it('keeps the safe unlocked_only source, also inside any_of / not, and the resource sources', () => {
+      const pointers = hiddenCodes(lockedPool()).map((d) => d.json_pointer);
+      expect(pointers.filter((p) => p.startsWith('/stages/0/constraints/4/'))).toEqual([]);
+      expect(pointers.some((p) => p.includes('/resource'))).toBe(false);
+    });
+
+    it('accepts the rule once the source is gated and the attribute is not carried by the pool', () => {
+      const gated = mutate(compile(wichtelcupDoc()).definition!, [
+        { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+        { op: 'replace', path: '/stages/0/constraints/9/source/unlocked_only', value: true },
+        { op: 'replace', path: '/domains/1/entries/0/attrs', value: [] },
+      ]);
+      expect(hiddenCodes(gated)).toEqual([]);
+    });
+  });
+
+  it('does not flag a distinct-by-attr rule whose attribute no hidden domain carries', () => {
+    const input = mutate(compile(wichtelcupDoc()).definition!, [
+      { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+      { op: 'replace', path: '/domains/1/entries/0/attrs', value: [] },
+    ]);
+    expect(hiddenCodes(input).map((d) => d.json_pointer)).not.toContain('/stages/2/constraints/2/attr');
+  });
+
+  it('advises with the exact editor label of the unlocked_only control, and offers a way out for distinct-by-attr', () => {
+    for (const locale of ['en', 'de'] as const) {
+      const message = lookupPath(formatStudioMessages[locale], 'diagnostics.constraint_source_hidden_domain') as string;
+      const label = lookupPath(formatStudioPrimitivesMessages[locale], 'field.unlocked_only') as string;
+      expect(typeof label, locale).toBe('string');
+      expect(message, locale).toContain(locale === 'de' ? `„${label}“` : `"${label}"`);
+      // Remedies that do not depend on the source kind are named too.
+      expect(message, locale).toMatch(locale === 'de' ? /öffentlich/ : /public/);
+      expect(message, locale).toMatch(locale === 'de' ? /Attribut/ : /attribute/);
+    }
+  });
+
+  it('compiles the shipped Wichtelcup preset without that error', () => {
+    const result = compile(wichtelcup);
+    expect(result.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
   });
 });

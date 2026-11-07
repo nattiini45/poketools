@@ -64,7 +64,7 @@ export function checkStructure(def: FormatDefinition, env: CompileEnv): Diagnost
     });
   });
   def.rules.forEach((rule, i) => {
-    if (rule.scope.kind === 'stage' && !stages.has(rule.scope.stage)) {
+    if (rule.kind === 'rule.custom' && rule.scope.kind === 'stage' && !stages.has(rule.scope.stage)) {
       out.push(diag('ref_unknown_stage', ptr('rules', i, 'scope', 'stage'), { key: rule.scope.stage, where: 'rule' }));
     }
   });
@@ -123,7 +123,29 @@ export function collectLTexts(def: FormatDefinition): { pointer: string; text: L
   if (def.identity.summary !== undefined) out.push({ pointer: ptr('identity', 'summary'), text: def.identity.summary });
   def.stages.forEach((stage, i) => out.push({ pointer: ptr('stages', i, 'name'), text: stage.name }));
   def.views.forEach((view, i) => out.push({ pointer: ptr('views', i, 'label'), text: view.label }));
-  def.rules.forEach((rule, i) => out.push({ pointer: ptr('rules', i, 'text'), text: rule.text }));
+  def.rules.forEach((rule, i) => {
+    if (rule.kind === 'rule.custom') out.push({ pointer: ptr('rules', i, 'text'), text: rule.text });
+    else if (rule.kind === 'player.action') out.push({ pointer: ptr('rules', i, 'label'), text: rule.label });
+    else if (rule.kind === 'check.assisted' && rule.label !== undefined) out.push({ pointer: ptr('rules', i, 'label'), text: rule.label });
+    else if (rule.kind === 'rule.on_event') {
+      rule.effects.forEach((effect, j) => {
+        if (effect.effect === 'notify') out.push({ pointer: ptr('rules', i, 'effects', j, 'message'), text: effect.message });
+      });
+    }
+  });
+  const labelled = (name: string, items: readonly { label: LText }[] | undefined) =>
+    (items ?? []).forEach((item, i) => out.push({ pointer: ptr(name, i, 'label'), text: item.label }));
+  labelled('attributes', def.attributes);
+  labelled('domains', def.domains);
+  labelled('relations', def.relations);
+  labelled('resources', def.resources);
+  labelled('tunables', def.tunables);
+  (def.metrics ?? []).forEach((metric, i) => {
+    out.push({ pointer: ptr('metrics', i, 'label'), text: metric.label });
+    if (metric.kind === 'track.progression') {
+      metric.steps.forEach((step, j) => out.push({ pointer: ptr('metrics', i, 'steps', j, 'label'), text: step.label }));
+    }
+  });
   def.text.sections.forEach((section, i) => {
     out.push({ pointer: ptr('text', 'sections', i, 'title'), text: section.title });
     out.push({ pointer: ptr('text', 'sections', i, 'body'), text: section.body });

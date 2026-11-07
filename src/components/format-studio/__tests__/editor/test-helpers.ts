@@ -9,7 +9,7 @@ import { compileDraft } from '@/lib/format-studio/editor/preview';
 export { esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, stripMarkup } from '@/test/markup';
 
 /** A kit preset as the editor holds it: normalised, and a copy the test may change. */
-export function presetDoc(id: 'classic-league' | 'cup' | 'swiss-top-cut' = 'classic-league'): DraftDocument {
+export function presetDoc(id: 'classic-league' | 'cup' | 'swiss-top-cut' | 'wichtelcup' = 'classic-league'): DraftDocument {
   const preset = PRESETS.find((p) => p.id === id);
   if (preset === undefined) throw new Error(`no preset ${id}`);
   const result = normalizeDraft(structuredClone(preset.definition) as FormatDefinition);

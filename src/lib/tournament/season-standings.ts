@@ -2,7 +2,8 @@
  * Server-side, format-aware standings entry point.
  *
  * Loads the season's format and (for evolution_point_buy) the per-player
- * evolution-points map and the stored tiebreaker order, then delegates to the pure dispatcher in
+ * evolution-points map and the stored tiebreaker order, or (for a custom league with an attached format) the
+ * kit's standings data, then delegates to the pure dispatcher in
  * standings.ts. Non-EPB seasons and standalone tournaments pay a single
  * seasons lookup and keep the generic computeStandings behavior.
  *
@@ -24,6 +25,8 @@ import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { StandingsOptions } from './standings';
 import type { Standing, MatchRecord } from './types';
 import type { TiebreakerStep } from '@/types/format-rules';
+import type { KitStandingsData } from '@/lib/format-engine/context';
+import { loadKitStandingsData } from '@/lib/format-engine/load';
 
 /** What the format-aware standings need to know about a tournament's season. */
 export interface SeasonStandingsContext {
@@ -37,6 +40,11 @@ export interface SeasonStandingsContext {
    * an absent or unusable order.
    */
   tiebreakerOrder?: readonly TiebreakerStep[];
+  /**
+   * The kit's standings data; set only for a custom league with an attached format on the engine `kit` or `shadow`.
+   * Plain JSON without the season seed, so a page may hand it to a client component.
+   */
+  kit?: KitStandingsData;
 }
 
 /** The context of a tournament without a season (generic standings). */
@@ -83,6 +91,29 @@ export async function loadEpbStandingsContext(
   return epbStandingsContext(formatType, evolutionPoints, formatRules?.tiebreaker_order);
 }
 
+/** The context of a custom league: its kit data when the attached format ranks on the kit or in shadow. */
+export async function customStandingsContext(seasonId: string, formatType: string): Promise<SeasonStandingsContext> {
+  const kit = await loadKitStandingsData(seasonId);
+  return kit ? { formatType, kit } : { formatType };
+}
+
+/**
+ * The ranking context of a league whose format the caller already holds, or undefined when the generic table ranks
+ * it: Evolution Point Buy loads its evolution points and stored order, a custom league its kit data (when its
+ * attached format ranks). Other formats read nothing.
+ */
+export async function loadRankingContext(
+  seasonId: string,
+  formatType: string,
+): Promise<SeasonStandingsContext | undefined> {
+  if (isEvolutionPointBuy(formatType)) return loadEpbStandingsContext(seasonId, formatType);
+  if (formatType === 'custom') {
+    const context = await customStandingsContext(seasonId, formatType);
+    return context.kit ? context : undefined;
+  }
+  return undefined;
+}
+
 /** One season's context: the season row, plus its evolution points and stored tiebreaker order when EPB. */
 export async function loadSeasonStandingsContext(
   seasonId: string | null | undefined,
@@ -90,6 +121,7 @@ export async function loadSeasonStandingsContext(
   if (!seasonId) return NO_SEASON_CONTEXT;
   const season = await getSeasonById(seasonId);
   if (!season) return NO_SEASON_CONTEXT;
+  if (season.format_type === 'custom') return customStandingsContext(seasonId, season.format_type);
   if (!isEvolutionPointBuy(season.format_type)) return { formatType: season.format_type };
   return loadEpbStandingsContext(seasonId, season.format_type);
 }
@@ -113,17 +145,22 @@ export async function loadSeasonStandingsContexts(
     const format = formats.get(id);
     return format !== undefined && isEvolutionPointBuy(format);
   });
-  const [epbPoints, orders] = await Promise.all([
+  const customIds = ids.filter((id) => formats.get(id) === 'custom');
+  const [epbPoints, orders, kits] = await Promise.all([
     Promise.all(epbIds.map((id) => getSeasonEvolutionPoints(id))),
     epbIds.length > 0 ? getTiebreakerOrdersBySeason(epbIds) : new Map<string, TiebreakerStep[]>(),
+    Promise.all(customIds.map((id) => loadKitStandingsData(id))),
   ]);
   const pointsById = new Map(epbIds.map((id, index) => [id, epbPoints[index]]));
+  const kitById = new Map(customIds.map((id, index) => [id, kits[index]]));
 
   for (const id of ids) {
     const formatType = formats.get(id);
     if (formatType === undefined) continue;
     const evolutionPoints = pointsById.get(id);
-    contexts.set(id, evolutionPoints ? epbStandingsContext(formatType, evolutionPoints, orders.get(id)) : { formatType });
+    const kit = kitById.get(id);
+    if (evolutionPoints) contexts.set(id, epbStandingsContext(formatType, evolutionPoints, orders.get(id)));
+    else contexts.set(id, kit ? { formatType, kit } : { formatType });
   }
   return contexts;
 }
@@ -149,7 +186,7 @@ export function computeStandingsFromContext(
     participantAvatars,
     options,
     participantGymTypes,
-    { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder },
+    { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder, kit: context.kit },
   );
 }
 

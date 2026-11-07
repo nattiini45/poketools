@@ -158,6 +158,7 @@ export function planPhaseCopies(phases: readonly Tournament[], newSeasonId: stri
       is_doubles: phase.is_doubles,
       team_visibility: phase.team_visibility,
       bracket_reset_enabled: phase.bracket_reset_enabled ?? true,
+      third_place_enabled: phase.third_place_enabled ?? false,
       // As stored on this phase, so its position semantics are preserved.
       advancement_rule: phase.advancement_rule ? { ...phase.advancement_rule } : null,
       season_id: newSeasonId,

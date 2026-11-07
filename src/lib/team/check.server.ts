@@ -42,16 +42,18 @@ import type { Season, CoreTriple } from '@/types/season';
 import type {
   PokemonSet,
   RulesetSource,
+  LevelRulesView,
   SetIssue,
   TeamIssue,
   TeamValidationResult,
 } from '@/types/team';
 import { codedIssue, validateTeam } from '@/lib/pkmn/validation';
 import { checkTeamLegality } from '@/lib/pkmn/team-legality';
+import { getRawEntity } from '@/lib/pkmn/dex';
 import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { resolvePresetRules } from '@/lib/pkmn/preset-rules.server';
 import { RESOLVED_RULES_VERSION, rulesFromBans } from '@/lib/ruleset-kit/effective';
-import type { ResolvedRules } from '@/lib/ruleset-kit/types';
+import type { LevelRules, ResolvedRules } from '@/lib/ruleset-kit/types';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import {
   loadEpbSeasonState,
@@ -127,6 +129,7 @@ export function rulesetForFormat(format: string): { ruleset: Ruleset; source: Ru
       added_pokemon: [],
       min_shared_type_pct: 0,
       team_constraints: null,
+      levels: null,
       custom_rules: '',
     };
     const blockIds = (list: ResolvedRules['pokemon']) => (list.mode === 'block' ? [...list.ids] : []);
@@ -320,6 +323,20 @@ export async function checkTeam(input: TeamCheckInput): Promise<TeamValidationRe
     team_issues: teamIssues.map((i) => i.issue),
     team_issue_details: teamIssues,
     ruleset_source: source,
+    // The validator's level requirements, so the teambuilder's panel can state them (the union above would drop them).
+    level_rules: levelRulesView(core.level_rules, ruleset.gen),
+  };
+}
+
+/** The level rules with the English species name of every entry, which the browser cannot look up from an id. */
+function levelRulesView(levels: LevelRules | null | undefined, gen: number): LevelRulesView | null | undefined {
+  if (levels === null || levels === undefined) return levels;
+  return {
+    ...levels,
+    entries: levels.entries.map((entry) => {
+      const name = getRawEntity('species', entry.id, gen)?.name;
+      return name === undefined ? entry : { ...entry, name };
+    }),
   };
 }
 

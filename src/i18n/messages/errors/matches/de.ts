@@ -43,6 +43,9 @@ export default defineDe<typeof en>()({
   manual_result_winner_not_participant: 'Der Sieger muss einer der beiden Spieler dieses Spiels sein.',
   replay_player_not_in_match: 'Spieler „{username}“ ({player}) gehört nicht zu diesem Spiel.',
   replay_winner_unknown: 'Aus dem Replay ließ sich kein Sieger ermitteln.',
+  replay_engine_tie: 'Pokémon Showdown hat diesen Kampf als Unentschieden beendet.',
+  match_replay_unresolved:
+    'Pokémon Showdown hat diesen Kampf als Unentschieden beendet, deshalb wurde kein Ergebnis eingetragen. Das Spiel ist jetzt angefochten und ein Admin entscheidet es.',
   replay_already_recorded:
     'Mit diesem Replay wurde schon ein Partieergebnis eingetragen. Jeder Kampf kann nur einmal eingetragen werden.',
   replay_not_found: 'Pokémon Showdown kennt kein Replay mit diesem Link oder dieser ID. Prüfe die Eingabe und versuche es erneut.',
@@ -85,6 +88,8 @@ export default defineDe<typeof en>()({
     'Die Änderung an der Partie ist fehlgeschlagen, und die Partie konnte nicht erneut zur Zählung eingereiht werden, daher fehlt sie möglicherweise in den Statistiken. Baue die Aggregate ihres Turniers und ihrer Saison neu auf (Admin-Datenwerkzeuge).',
   admin_game_evolution_recheck_failed:
     'Die Änderung an der Partie wurde gespeichert, aber die erneute Prüfung des Entwicklungsfortschritts ist fehlgeschlagen. Der Fehler wurde protokolliert; führe im Datenabgleich (Admin-Datenwerkzeuge) „Reparieren“ aus, um den Entwicklungsstand zu reparieren.',
+  admin_game_format_revert_failed:
+    'Die Änderung an der Partie wurde gespeichert, aber die Auswirkungen des alten Ergebnisses auf das Ligaformat (Gegenstände, Punkte) konnten nicht zurückgenommen werden. Der Fehler wurde protokolliert. Solange sie nicht zurückgenommen sind, bleiben die Auswirkungen des alten Ergebnisses bestehen und die des nächsten Ergebnisses werden nicht angewendet. Die regelmäßige Formatprüfung der Liga versucht es normalerweise beim nächsten Durchlauf von selbst erneut. Wird das Spiel vorher wieder abgeschlossen, öffne es wieder (das Wiedereröffnen nimmt die alten Auswirkungen zurück) und schließe es danach erneut ab.',
   admin_match_reset_partial: {
     one: 'Das Zurücksetzen wurde abgebrochen, weil ein anderer Admin im selben Moment eine Partie dieses Spiels geändert hat. {count} Partie wurde bereits entfernt (ihre Statistiken zurückgerechnet); das Spiel selbst wurde nicht zurückgesetzt. Lade das Spiel neu und setze es noch einmal zurück.',
     other: 'Das Zurücksetzen wurde abgebrochen, weil ein anderer Admin im selben Moment eine Partie dieses Spiels geändert hat. {count} Partien wurden bereits entfernt (ihre Statistiken zurückgerechnet); das Spiel selbst wurde nicht zurückgesetzt. Lade das Spiel neu und setze es noch einmal zurück.',
@@ -118,6 +123,10 @@ export default defineDe<typeof en>()({
   auto_confirm_partial_failure: {
     one: 'Die automatische Bestätigung ist bei {count} Spiel fehlgeschlagen.',
     other: 'Die automatische Bestätigung ist bei {count} Spielen fehlgeschlagen.',
+  },
+  format_cron_partial_failure: {
+    one: 'Der Zeitlauf der Format-Engine ist bei {count} Fall fehlgeschlagen.',
+    other: 'Der Zeitlauf der Format-Engine ist bei {count} Fällen fehlgeschlagen.',
   },
   INVALID_GAME_ID: 'Partie nicht gefunden.',
   INVALID_PROPOSAL_ID: 'Terminvorschlag nicht gefunden.',

@@ -4,7 +4,14 @@ import { authorizeMatchAdmin } from '@/lib/auth/match-admin';
 import { formatZodErrors, matchResultSchema } from '@/lib/validation';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { validateTransition } from '@/lib/tournament/match-state';
-import { finalizeMatchCompletion } from '@/lib/match/finalize';
+import {
+  discardStagedAdminOutcome,
+  finalizeMatchCompletion,
+  stageAdminOutcome,
+  type StagedAdminOutcome,
+} from '@/lib/match/finalize';
+import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
+import { logger } from '@/lib/logger';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -13,6 +20,28 @@ import type { Match } from '@/types/match';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
+}
+
+/**
+ * The status write did not complete the match (it lost the compare-and-set or threw): the outcome staged before it
+ * describes a result that never happened, so it goes. It stays when its status is unknown (`current` null: the write
+ * may have committed). When the match is completed by now, the request that completed it either rewrote the row (an
+ * admin result: the row is no longer ours) or finalized without any admin intent (a player's confirmation, the
+ * auto-confirm), which keeps our admin row and would score a played match as a forfeit; `staged` identifies our own
+ * row so exactly that one is taken back (and the played row put in its place). Without a handle (nothing written, or
+ * not readable back) a completed match's row is left alone. Best effort, logged.
+ */
+async function unstageOutcome(
+  matchId: string,
+  current: Pick<Match, 'status'> | null,
+  staged: StagedAdminOutcome | null
+): Promise<void> {
+  if (current === null || (current.status === 'completed' && staged === null)) return;
+  try {
+    await discardStagedAdminOutcome(matchId, staged);
+  } catch (err) {
+    logger.error('admin-match-result', 'could not remove the staged outcome of a result that did not complete', { matchId, error: err });
+  }
 }
 
 /**
@@ -31,8 +60,18 @@ interface RouteParams {
  * two simultaneous requests one wins and the other answers 409
  * `match_state_changed`; only the winner runs `finalizeMatchCompletion` (ratings,
  * streaks, bracket propagation, announcements), exactly once. The reason is
- * required and lands in the `match.admin_result` audit event. A real forfeit
- * (scored differently) is out of scope while `CURRENT_ENV.forfeits` is off.
+ * required and lands in the `match.admin_result` audit event. `outcome` (played,
+ * forfeit or no_show; default played) and the reason become the match's admin
+ * `match_outcomes` row: a format with forfeit scoring scores a forfeit or
+ * no-show apart from a played win. The row is written BEFORE the status flip
+ * (`stageAdminOutcome`), so a completed match can never lose the admin's
+ * intent to a failed follow-up write (the heal would write a played row); a
+ * flip that loses the compare-and-set removes it again (only the row it wrote itself, even when the match was
+ * completed meanwhile by a request without an admin outcome). Finalize's outcome
+ * step rewrites it with the faints of a played result. A match a replay-tie has
+ * disputed since the read above keeps its `unresolved` row: staging refuses and the
+ * request answers 409 `match_state_changed`; a dispute that lands between the staging
+ * and the status write has its row put back when the staged one is taken back.
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -61,7 +100,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const { winner_id: winnerId, reason } = parsed.data;
+    const { winner_id: winnerId, reason, outcome } = parsed.data;
 
     if (match.status !== 'scheduled' && match.status !== 'in_progress') {
       return NextResponse.json<ApiResult<never>>(
@@ -92,19 +131,46 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const previousStatus = match.status;
-    const updated = await updateMatchStatus(
-      id,
-      'completed',
-      winnerId,
-      // The original reporter stays the submitter; an unplayed match gets the admin.
-      match.submitter_id ?? player.playerId,
-      undefined,
-      previousStatus
-    );
+    const adminOutcome = { kind: outcome, reason, setBy: player.playerId };
+    let staged: StagedAdminOutcome | null;
+    try {
+      staged = (await stageAdminOutcome(id, adminOutcome)) ?? null;
+    } catch (err) {
+      if (!(err instanceof StagedOutcomeBlockedError)) throw err;
+      // A replay-tie disputed the match since it was read: a deliberate client-facing 409, logged so the dispute is traceable.
+      logger.warn('admin-match-result', 'staged outcome blocked: the match changed state since it was read', { matchId: id, status: err.status, error: err });
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `The match changed to ${err.status} while you were editing it. Review it and try again.`,
+          code: 'match_state_changed',
+          params: { status: err.status },
+        },
+        { status: 409 }
+      );
+    }
+    let updated: Match | null;
+    try {
+      updated = await updateMatchStatus(
+        id,
+        'completed',
+        winnerId,
+        // The original reporter stays the submitter; an unplayed match gets the admin.
+        match.submitter_id ?? player.playerId,
+        undefined,
+        previousStatus
+      );
+    } catch (err) {
+      // The write threw, so it may have committed: a completed match may be this request's own, whose row stays.
+      const current = await getMatchById(id).catch(() => null);
+      await unstageOutcome(id, current, current?.status === 'completed' ? null : staged);
+      throw err;
+    }
 
     if (!updated) {
       // The compare-and-set missed: the match left `previousStatus` meanwhile.
       const current = await getMatchById(id);
+      await unstageOutcome(id, current, staged);
       if (!current) {
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Match not found', code: 'match_not_found' },
@@ -138,6 +204,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       metadata: {
         tournament_id: match.tournament_id,
         reason,
+        outcome,
         from_status: previousStatus,
         games_recorded: match.games.length,
       },
@@ -147,6 +214,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       match: { ...match, winner_id: winnerId, status: 'completed' },
       winnerId,
       previousStatus,
+      adminOutcome,
     });
     if (!finalize.finalized) {
       // Unreachable after the checks above (the winner is a participant and the

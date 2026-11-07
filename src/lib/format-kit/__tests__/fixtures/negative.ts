@@ -17,6 +17,7 @@ import { cup } from '../../presets/cup';
 import { swissTopCut } from '../../presets/swiss-top-cut';
 import { ltext } from '@/lib/studio-core/ltext';
 import type { AdvanceSelect, Edge, FormatDefinition, Stage } from '../../types';
+import { giftExchangeDoc, wichtelcupDoc } from './docs';
 
 /** A valid stage (a single-elimination stage fed by edges) with any field overridden. */
 export function makeStage(key: string, over: Partial<Stage> = {}): Stage {
@@ -174,6 +175,21 @@ const fx = (
 const C = classicLeague;
 const U = cup;
 const S = swissTopCut;
+
+/** The gift exchange as a compiled definition (defaults filled in): the base of the Phase 3 fixtures. */
+const G: FormatDefinition = (() => {
+  const { definition } = compile(giftExchangeDoc());
+  if (definition === null) throw new Error('the gift exchange fixture must compile');
+  return definition;
+})();
+
+/** The Wichtelcup as a compiled definition: the base of the Phase 4 fixtures. */
+const W: FormatDefinition = (() => {
+  const { definition } = compile(wichtelcupDoc());
+  if (definition === null) throw new Error('the Wichtelcup fixture must compile');
+  return definition;
+})();
+const withSpecies = (ids: readonly string[]): CompileEnv => ({ ...CURRENT_ENV, speciesIds: new Set(ids) });
 const setRank = (steps: unknown[]): PatchOp => ({ op: 'replace', path: '/stages/0/rank', value: steps as JsonValue });
 const points = { kind: 'metric', metric: 'points', direction: 'desc' };
 const wins = { kind: 'metric', metric: 'wins', direction: 'desc' };
@@ -195,8 +211,8 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     '/identity/name',
     mutate(C, [{ op: 'replace', path: '/identity/name', value: { base: 'de', en: { v: 'Classic league', s: 'human' } } }]),
   ),
-  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/attributes', mutate(C, [{ op: 'add', path: '/attributes', value: [] }]), {
-    params: { what: 'attributes' },
+  fx('error', 'schema-not-available-yet', 'schema_not_available_yet', '/stages/0/acquire', mutate(C, [{ op: 'add', path: '/stages/0/acquire', value: {} }]), {
+    params: { what: 'acquire' },
   }),
   fx('warning', 'rule-unknown-primitive', 'rule_unknown_primitive', '/rules/1', mutate(C, [
     { op: 'add', path: '/rules/-', value: { kind: 'custom.mystery', id: 'mystery' } },
@@ -287,7 +303,7 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   ]), { params: { stage: 'league', where: 'series' } }),
   fx('error', 'forfeits', 'forfeits_unsupported', '/stages/0/scoring/forfeit', mutate(C, [
     { op: 'add', path: '/stages/0/scoring/forfeit', value: -1 },
-  ]), { params: { stage: 'league' } }),
+  ]), { env: envWith({ forfeits: false }), params: { stage: 'league' } }),
   fx('error', 'players-per-match', 'players_per_match_unsupported', '/stages/0/players_per_match', mutate(C, [
     { op: 'replace', path: '/stages/0/players_per_match', value: 3 },
   ]), { params: { stage: 'league', players: 3, max: 2 } }),
@@ -410,7 +426,225 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     mutate(C, threshold(anyOver('standings', anyOver('standings', bool(true))))),
     { params: { edge: 'to_playoffs' } },
   ),
-];
+
+  // Phase 3: attributes, domains, relations, resources, tunables, metrics.
+  fx('error', 'key-duplicate-attribute', 'key_duplicate', '/attributes/7/key', mutate(G, [
+    { op: 'add', path: '/attributes/-', value: JSON.parse(JSON.stringify(G.attributes?.[0])) as JsonValue },
+  ]), { params: { scope: 'attributes', key: 'house' } }),
+  fx('error', 'ref-unknown-domain', 'ref_unknown', '/rules/0/effects/0/domain', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/0/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-resource-domain', 'ref_unknown', '/resources/0/holds/domain', mutate(G, [
+    { op: 'replace', path: '/resources/0/holds/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'resource' } }),
+  fx('error', 'ref-unknown-relation', 'ref_unknown', '/rules/0/effects/1/relation', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/1/relation', value: 'nowhere' },
+  ]), { params: { ref: 'relation', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-resource', 'ref_unknown', '/rules/0/effects/2/resource', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/2/resource', value: 'nowhere' },
+  ]), { params: { ref: 'resource', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-action', 'ref_unknown', '/rules/0/effects/3/action', mutate(G, [
+    { op: 'replace', path: '/rules/0/effects/3/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'effect' } }),
+  fx('error', 'ref-unknown-via', 'ref_unknown', '/rules/6/via', mutate(G, [
+    { op: 'replace', path: '/rules/6/via', value: 'nowhere' },
+  ]), { params: { ref: 'relation', key: 'nowhere', where: 'action' } }),
+  fx('error', 'ref-unknown-event-action', 'ref_unknown', '/relations/0/reveal_on/action', mutate(G, [
+    { op: 'replace', path: '/relations/0/reveal_on/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'event' } }),
+  fx('error', 'ref-unknown-stage-metric', 'ref_unknown_stage', '/metrics/2/stage', mutate(G, [
+    { op: 'replace', path: '/metrics/2/stage', value: 'nowhere' },
+  ]), { params: { key: 'nowhere', where: 'metric' } }),
+  fx('error', 'expr-invalid-metric', 'expr_invalid', '/metrics/0/expr/a/name', mutate(G, [
+    { op: 'replace', path: '/metrics/0/expr/a/name', value: 'missing' },
+  ]), { params: { context: 'metric', issue: 'expr_unknown_ref' } }),
+  fx('error', 'expr-invalid-action-step', 'expr_invalid', '/rules/6/steps/0/where/a/name', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/where/a/name', value: 'attr.missing' },
+  ]), { params: { context: 'action_step', issue: 'expr_unknown_ref' } }),
+  fx('error', 'attr-values-required', 'attr_values_required', '/attributes/0/type', mutate(G, [
+    { op: 'remove', path: '/attributes/0/values' },
+  ]), { params: { attr: 'house' } }),
+  fx('error', 'attr-values-unexpected', 'attr_values_unexpected', '/attributes/2/values', mutate(G, [
+    { op: 'add', path: '/attributes/2/values', value: ['yes'] },
+  ]), { params: { attr: 'veteran', type: 'bool' } }),
+  fx('error', 'attr-value-duplicate', 'attr_value_duplicate', '/attributes/0/values/1', mutate(G, [
+    { op: 'replace', path: '/attributes/0/values', value: ['ember', 'ember', 'grove'] },
+  ]), { params: { attr: 'house', value: 'ember' } }),
+  fx('error', 'attr-multi-invalid', 'attr_multi_invalid', '/attributes/0/multi', mutate(G, [
+    { op: 'add', path: '/attributes/0/multi', value: true },
+  ]), { params: { attr: 'house' } }),
+  fx('error', 'attr-assign-on-entry', 'attr_assign_on_entry', '/attributes/6/assign', mutate(G, [
+    { op: 'add', path: '/attributes/6/assign', value: { kind: 'manual' } },
+  ]), { params: { attr: 'bonus' } }),
+  fx('error', 'attr-random-type', 'attr_random_type', '/attributes/1/assign/kind', mutate(G, [
+    { op: 'replace', path: '/attributes/1/assign', value: { kind: 'random_seeded' } },
+  ]), { params: { attr: 'level', type: 'number' } }),
+  fx('error', 'domain-entry-duplicate', 'domain_entry_duplicate', '/domains/0/entries/3/id', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/-', value: { id: 'garchomp', attrs: [] } },
+  ]), { params: { domain: 'pool', id: 'garchomp' } }),
+  fx('error', 'domain-entry-unknown-species', 'domain_entry_unknown_species', '/domains/0/entries/2/id', mutate(G, []), {
+    env: withSpecies(['garchomp', 'blissey']),
+    params: { domain: 'pool', id: 'corviknight' },
+  }),
+  fx('error', 'domain-attr-unknown', 'domain_attr_unknown', '/domains/0/entries/1/attrs/0/key', mutate(G, [
+    { op: 'replace', path: '/domains/0/entries/1/attrs/0/key', value: 'nothing' },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'nothing' } }),
+  fx('error', 'domain-attr-duplicate', 'domain_attr_duplicate', '/domains/0/entries/1/attrs/2/key', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/1/attrs/-', value: { key: 'role', value: 'tank' } },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'role' } }),
+  fx('error', 'domain-attr-value-invalid', 'domain_attr_value_invalid', '/domains/0/entries/1/attrs/0/value', mutate(G, [
+    { op: 'replace', path: '/domains/0/entries/1/attrs/0/value', value: 'wizard' },
+  ]), { params: { domain: 'pool', id: 'blissey', attr: 'role', reason: 'enum_value' } }),
+  fx('warning', 'relation-roster-too-small', 'relation_roster_too_small', '/relations/0/shape', mutate(G, []), {
+    env: rosterEnv(1),
+    params: { relation: 'santa', roster: 1 },
+  }),
+  fx('error', 'resource-exclusive-needs-domain', 'resource_exclusive_needs_domain', '/resources/1/exclusive', mutate(G, [
+    { op: 'replace', path: '/resources/1/exclusive', value: 'global' },
+  ]), { params: { resource: 'coins' } }),
+  fx('error', 'metric-key-builtin', 'metric_key_builtin', '/metrics/0/key', mutate(G, [
+    { op: 'replace', path: '/metrics/0/key', value: 'points' },
+  ]), { params: { metric: 'points' } }),
+  fx('error', 'tunable-values-required', 'tunable_values_mismatch', '/tunables/2/values', mutate(G, [
+    { op: 'remove', path: '/tunables/2/values' },
+  ]), { params: { tunable: 'mode', reason: 'required' } }),
+  fx('error', 'tunable-values-unexpected', 'tunable_values_mismatch', '/tunables/0/values', mutate(G, [
+    { op: 'add', path: '/tunables/0/values', value: ['a'] },
+  ]), { params: { tunable: 'base_level', reason: 'unexpected' } }),
+  fx('error', 'tunable-bounds-min-over-max', 'tunable_bounds_invalid', '/tunables/0/min', mutate(G, [
+    { op: 'replace', path: '/tunables/0/min', value: 20 },
+  ]), { params: { tunable: 'base_level', reason: 'min_over_max' } }),
+  fx('error', 'tunable-bounds-not-number', 'tunable_bounds_invalid', '/tunables/4/type', mutate(G, [
+    { op: 'add', path: '/tunables/4/min', value: 0 },
+  ]), { params: { tunable: 'open', reason: 'not_number' } }),
+  fx('error', 'tunable-default-invalid', 'tunable_default_invalid', '/tunables/0/default', mutate(G, [
+    { op: 'replace', path: '/tunables/0/default', value: 99 },
+  ]), { params: { tunable: 'base_level', reason: 'range' } }),
+  fx('error', 'effect-item-missing', 'effect_item_invalid', '/rules/1/effects/3/item', mutate(G, [
+    { op: 'remove', path: '/rules/1/effects/3/item' },
+  ]), { params: { resource: 'picks', reason: 'missing' } }),
+  fx('error', 'effect-item-on-counter', 'effect_item_invalid', '/rules/0/effects/2/item', mutate(G, [
+    { op: 'add', path: '/rules/0/effects/2/item', value: 'blissey' },
+  ]), { params: { resource: 'coins', reason: 'counter' } }),
+  fx('error', 'effect-item-unknown', 'effect_item_invalid', '/rules/1/effects/3/item', mutate(G, [
+    { op: 'replace', path: '/rules/1/effects/3/item', value: 'mew' },
+  ]), { params: { resource: 'picks', reason: 'unknown' } }),
+  fx('error', 'effect-set-attr-invalid', 'effect_set_attr_invalid', '/rules/1/effects/1/attr', mutate(G, [
+    { op: 'replace', path: '/rules/1/effects/1/value', value: 'maybe' },
+  ]), { params: { attr: 'veteran', reason: 'type' } }),
+  fx('error', 'action-step-mismatch', 'action_step_mismatch', '/rules/6/steps/0/resource', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/resource', value: 'coins' },
+  ]), { params: { action: 'choose_gift', resource: 'coins', reason: 'counter' } }),
+  fx('error', 'action-distinct-attr-invalid', 'action_distinct_attr_invalid', '/rules/6/steps/0/distinct_attr', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/distinct_attr', value: 'house' },
+  ]), { params: { action: 'choose_gift', attr: 'house', reason: 'player' } }),
+  fx('error', 'action-distinct-attr-missing', 'action_distinct_attr_missing', '/rules/6/steps/0/distinct_attr', mutate(G, [
+    { op: 'add', path: '/domains/0/entries/-', value: { id: 'mew', attrs: [{ key: 'bonus', value: 1 }] } },
+  ]), { params: { action: 'choose_gift', domain: 'pool', attr: 'role', count: 1, first: 'mew' } }),
+  fx('warning', 'action-exceeds-capacity', 'action_exceeds_capacity', '/rules/6/steps', mutate(G, [
+    { op: 'replace', path: '/rules/6/steps/0/count', value: 3 },
+  ]), { params: { action: 'choose_gift', resource: 'picks', count: 3, capacity: 2 } }),
+  fx('warning', 'action-close-missing', 'action_close_missing', '/rules/6/lock', mutate(G, [
+    { op: 'remove', path: '/rules/6/window/closes_on' },
+  ]), { params: { action: 'choose_gift' } }),
+  fx('error', 'adjust-kind-duplicate', 'adjust_kind_duplicate', '/rules/11/allow/1', mutate(G, [
+    { op: 'replace', path: '/rules/11/allow', value: ['points', 'points'] },
+  ]), { params: { rule: 'admin_tools', adjust: 'points' } }),
+  // Phase 4: pairings, team constraints, calendar and stage fields.
+  fx('error', 'bipartite-attr-invalid', 'bipartite_attr_invalid', '/stages/1/pairing/attr', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/attr', value: 'role' },
+  ]), { params: { stage: 'houses', attr: 'role', reason: 'entry' } }),
+  fx('error', 'bipartite-value-unknown', 'bipartite_value_invalid', '/stages/1/pairing/side_a/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_a', value: ['ember', 'meadow'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'meadow', side: 'a', reason: 'unknown_value' } }),
+  fx('error', 'bipartite-value-duplicate', 'bipartite_value_invalid', '/stages/1/pairing/side_b/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_b', value: ['tide', 'tide'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'tide', side: 'b', reason: 'duplicate' } }),
+  fx('error', 'bipartite-sides-overlap', 'bipartite_sides_overlap', '/stages/1/pairing/side_b/0', mutate(W, [
+    { op: 'replace', path: '/stages/1/pairing/side_b', value: ['ember', 'tide'] },
+  ]), { params: { stage: 'houses', attr: 'house', value: 'ember' } }),
+  // 16 players, all assigned a house and every house on a side: the larger side has at least 8, the stage plays 3 rounds.
+  fx('warning', 'bipartite-rounds-short', 'bipartite_rounds_short', '/stages/1/pairing/rounds', mutate(W, []), {
+    env: rosterEnv(16),
+    params: { stage: 'houses', attr: 'house', rounds: 3, needed: 8, players: 16 },
+  }),
+  fx('error', 'filter-expr-unknown-relation', 'expr_invalid', '/stages/0/pairing/allow/a/relation', mutate(W, [
+    { op: 'replace', path: '/stages/0/pairing/allow/a/relation', value: 'nobody' },
+  ]), { params: { context: 'pair_filter', issue: 'expr_unknown_relation' } }),
+  fx('error', 'constraint-bounds-min-over-max', 'constraint_bounds_invalid', '/stages/0/constraints/5/min', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/5/min', value: 3 },
+  ]), { params: { stage: 'cup', constraint: 'count', reason: 'min_over_max' } }),
+  fx('error', 'constraint-bounds-no-bound', 'constraint_bounds_invalid', '/stages/0/constraints/4/min', mutate(W, [
+    { op: 'remove', path: '/stages/0/constraints/4/max' },
+  ]), { params: { stage: 'cup', constraint: 'count', reason: 'no_bound' } }),
+  fx('error', 'constraint-attr-invalid', 'constraint_attr_invalid', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/stages/2/constraints/2/attr', value: 'house' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', attr: 'house', reason: 'player' } }),
+  fx('error', 'constraint-attr-usage', 'constraint_attr_usage', '/stages/0/constraints/3/attr', mutate(W, [
+    { op: 'add', path: '/stages/0/constraints/3/attr', value: 'house' },
+  ]), { params: { stage: 'cup', constraint: 'tera', reason: 'attr_unexpected' } }),
+  fx('error', 'constraint-type-unknown', 'constraint_type_invalid', '/stages/1/constraints/0/types/types/1', mutate(W, [
+    { op: 'replace', path: '/stages/1/constraints/0/types/types/1', value: 'Waterr' },
+  ]), { params: { stage: 'houses', constraint: 'type_quota', type: 'Waterr', reason: 'unknown_type' } }),
+  fx('error', 'constraint-type-duplicate', 'constraint_type_invalid', '/stages/1/constraints/0/types/types/2', mutate(W, [
+    { op: 'replace', path: '/stages/1/constraints/0/types/types/2', value: 'FIRE' },
+  ]), { params: { stage: 'houses', constraint: 'type_quota', type: 'FIRE', reason: 'duplicate' } }),
+  fx('error', 'constraint-source-counter', 'constraint_source_invalid', '/stages/0/constraints/5/source/resource', mutate(W, [
+    { op: 'add', path: '/resources/-', value: { key: 'coins', label: { base: 'en', en: { v: 'Coins', s: 'human' } }, holds: { kind: 'counter' } } },
+    { op: 'replace', path: '/stages/0/constraints/5/source/resource', value: 'coins' },
+  ]), { params: { stage: 'cup', resource: 'coins', reason: 'counter' } }),
+  fx('error', 'constraint-source-hidden-domain', 'constraint_source_hidden_domain', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'new_year' } }),
+  fx('error', 'constraint-source-hidden-domain-in-not', 'constraint_source_hidden_domain', '/stages/0/constraints/4/source/source/sources/0/domain', mutate(W, [
+    { op: 'replace', path: '/domains/0/visibility', value: 'admins' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'normal' } }),
+  fx('error', 'constraint-distinct-attr-hidden-domain', 'constraint_source_hidden_domain', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'admins' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', domain: 'new_year' } }),
+  fx('error', 'constraint-source-when-unlocked-domain', 'constraint_source_hidden_domain', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+  ]), { params: { stage: 'cup', constraint: 'count', domain: 'new_year' } }),
+  fx('error', 'constraint-distinct-attr-when-unlocked-domain', 'constraint_source_hidden_domain', '/stages/2/constraints/2/attr', mutate(W, [
+    { op: 'replace', path: '/domains/1/visibility', value: 'when_unlocked' },
+  ]), { params: { stage: 'ladder', constraint: 'distinct', domain: 'new_year' } }),
+  fx('warning', 'constraint-species-unknown', 'constraint_species_unknown', '/stages/2/constraints/4/source/ids/1', mutate(W, []), {
+    env: withSpecies(['garchomp', 'corviknight']),
+    params: { stage: 'ladder', id: 'blissey' },
+  }),
+  fx('error', 'constraint-ref-unknown-domain', 'ref_unknown', '/stages/0/constraints/9/source/domain', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/9/source/domain', value: 'nowhere' },
+  ]), { params: { ref: 'domain', key: 'nowhere', where: 'constraint' } }),
+  fx('error', 'constraint-when-unknown-ref', 'expr_invalid', '/stages/0/constraints/5/when/a/name', mutate(W, [
+    { op: 'replace', path: '/stages/0/constraints/5/when/a/name', value: 'missing' },
+  ]), { params: { context: 'team_constraint', issue: 'expr_unknown_ref' } }),
+  fx('error', 'calendar-invalid-date', 'calendar_invalid', '/stages/0/calendar/start/date', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/start/date', value: '2026-02-30' },
+  ]), { params: { stage: 'cup', reason: 'date' } }),
+  fx('error', 'calendar-mark-duplicate', 'key_duplicate', '/stages/0/calendar/marks/1/key', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/marks/1/key', value: 'gift_deadline' },
+  ]), { params: { scope: 'marks', key: 'gift_deadline' } }),
+  fx('error', 'deadline-policy-invalid', 'deadline_policy_invalid', '/stages/0/calendar/deadlines/1', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/1/on_miss', value: 'auto_lock' },
+  ]), { params: { stage: 'cup', applies: 'match', on_miss: 'auto_lock', reason: 'action_only' } }),
+  fx('error', 'deadline-random-pick-after-close', 'deadline_policy_invalid', '/stages/0/calendar/deadlines/0', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/0/offset_hours', value: 0 },
+  ]), { params: { stage: 'cup', applies: 'action', on_miss: 'seeded_random_pick', reason: 'pick_after_close' } }),
+  fx('error', 'deadline-action-unknown', 'ref_unknown', '/stages/0/calendar/deadlines/0/action', mutate(W, [
+    { op: 'replace', path: '/stages/0/calendar/deadlines/0/action', value: 'nowhere' },
+  ]), { params: { ref: 'action', key: 'nowhere', where: 'deadline' } }),
+  fx('error', 'end-when-unknown-ref', 'expr_invalid', '/stages/0/end_when/when/a/name', mutate(W, [
+    { op: 'replace', path: '/stages/0/end_when/when/a/name', value: 'missing' },
+  ]), { params: { context: 'stage_end', issue: 'expr_unknown_ref' } }),
+  fx('error', 'foreach-group-own-groups', 'foreach_group_invalid', '/stages/4/groups', mutate(W, [
+    { op: 'add', path: '/stages/4/groups', value: { count: 2, method: 'serpentine' } },
+  ]), { params: { stage: 'per_group', from_stage: 'groups', reason: 'own_groups' } }),
+  fx('error', 'foreach-group-not-earlier', 'foreach_group_invalid', '/stages/4/foreach_group/from', mutate(W, [
+    { op: 'replace', path: '/stages/4/foreach_group/from', value: 'houses' },
+  ]), { params: { stage: 'per_group', from_stage: 'houses', reason: 'no_groups' } }),
+  fx('error', 'foreach-group-unknown-stage', 'ref_unknown_stage', '/stages/4/foreach_group/from', mutate(W, [
+    { op: 'replace', path: '/stages/4/foreach_group/from', value: 'nowhere' },
+  ]), { params: { key: 'nowhere', where: 'foreach_group' } }),];
 
 /** The diagnostics a fixture is meant to produce: through `compile`, or straight from the engine for `engineOnly`. */
 export function fixtureDiagnostics(fixture: NegativeFixture): readonly Diagnostic[] {

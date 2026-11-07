@@ -7,6 +7,7 @@ import { LEAGUE_TIME_ZONE, type Locale } from '@/i18n/config';
 import { createFormatter } from '@/i18n/format';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { createTranslator, getMessages } from '@/i18n/core';
+import { bracketMessages } from '@/i18n/messages/bracket';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { glossaryMessages } from '@/i18n/messages/glossary';
@@ -49,6 +50,8 @@ export interface LeagueHubCopy {
     matchup: string;
     teams: string;
     phasePage: string;
+    /** The player's page of a custom league (`/dashboard/leagues/{id}/play`). */
+    play: string;
   };
   table: {
     rank: string;
@@ -231,6 +234,7 @@ function buildShared(locale: Locale): HubSharedLabels {
         winnersBracket: enums.bracketSide.winners,
         losersBracket: enums.bracketSide.losers,
         grandFinals: enums.bracketSide.grand_finals,
+        thirdPlace: getMessages(bracketMessages, locale).labels.thirdPlace,
         noRounds: shared.bracket.noRounds,
         tbd: shared.bracket.tbd,
         match: shared.bracket.match,

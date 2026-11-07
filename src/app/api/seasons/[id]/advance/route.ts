@@ -18,7 +18,8 @@ interface RouteParams {
 /**
  * POST /api/seasons/[id]/advance
  *
- * Delegates to standings enrollment on the next upcoming phase.
+ * Delegates to standings enrollment on the next upcoming phase. A kit league moves the players its format's edge
+ * selects (`manual_list` in the body answers a `manual_list` selection).
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
@@ -82,6 +83,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const result = await syncStandingsEnrollment(id, targetStage.id, {
       source_phase_id: sourceStage.id,
       force: parsed.data.force,
+      manual_list: parsed.data.manual_list,
     });
     expireSeasonReads(id, [sourceStage.id, targetStage.id]);
 

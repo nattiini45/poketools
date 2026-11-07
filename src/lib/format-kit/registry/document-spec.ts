@@ -7,14 +7,20 @@
  * Zero zod, no server-only import.
  */
 import {
+  MAX_ATTRIBUTES,
+  MAX_DOMAINS,
   MAX_EDGES,
+  MAX_METRICS,
   MAX_MODULES,
+  MAX_RELATIONS,
+  MAX_RESOURCES,
   MAX_RULES,
   MAX_STAGES,
   MAX_TEXT_SECTIONS,
+  MAX_TUNABLES,
   MAX_VIEWS,
 } from '../limits';
-import { RESERVED_RULE_KINDS, RESERVED_SECTIONS, manifestForSlot, specOf } from './manifest';
+import { RESERVED_RULE_KINDS, RESERVED_SECTIONS, manifestForSlot, specOf, tunableSpec } from './manifest';
 import { NO_MAX, type FieldSpec, type Spec } from './spec';
 
 const LTEXT: Spec = { t: 'ltext' };
@@ -29,6 +35,13 @@ const RULES_ITEM: Spec = {
   variants: manifestForSlot('rule').map((entry) => ({ tag: entry.tag as string, spec: entry.spec as Spec })),
   reservedTags: RESERVED_RULE_KINDS,
   unknown: 'degrade_rule',
+};
+
+/** The metrics list: custom metrics, progression tracks and placement scoring, told apart by kind. */
+const METRICS_ITEM: Spec = {
+  t: 'union',
+  tag: 'kind',
+  variants: manifestForSlot('metric').map((entry) => ({ tag: entry.tag as string, spec: entry.spec as Spec })),
 };
 
 export const DOCUMENT_SPEC: Spec = {
@@ -58,5 +71,11 @@ export const DOCUMENT_SPEC: Spec = {
     },
     { name: 'theme', spec: specOf('theme.hint'), default: { world: 'auto' } },
     { name: 'modules', spec: arr(specOf('module.legacy'), 0, MAX_MODULES), default: [] },
+    opt('attributes', arr(specOf('attr.define'), 0, MAX_ATTRIBUTES)),
+    opt('domains', arr(specOf('domain.define'), 0, MAX_DOMAINS)),
+    opt('relations', arr(specOf('relation.define'), 0, MAX_RELATIONS)),
+    opt('resources', arr(specOf('resource.define'), 0, MAX_RESOURCES)),
+    opt('metrics', arr(METRICS_ITEM, 0, MAX_METRICS)),
+    opt('tunables', arr(tunableSpec(), 0, MAX_TUNABLES)),
   ],
 };

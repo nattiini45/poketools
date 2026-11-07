@@ -169,6 +169,7 @@ export default {
     group: '{source} · {generation} · {family}',
     source: {
       showdown: 'Showdown',
+      community: 'PokéTools community',
       smogonDraft: 'Smogon draft',
     },
     family: {
@@ -179,6 +180,7 @@ export default {
       draft: 'Draft',
       draftNational: 'NatDex draft',
       draftDoubles: 'Doubles draft',
+      community: 'Community',
       draftChampions: 'Champions draft',
     },
   },

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CURRENT_ENV, PRESETS, compile, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
-import { planStages } from '../../materialise';
+import { CURRENT_ENV, PRESETS, compile, deepFreeze, presetsOf, type FormatDefinition } from '@/lib/format-kit/client';
+import { engineGaps, planStages } from '../../materialise';
 import { previewAttach, rulesetLabelsOf, type AttachPreview } from '../../editor/attach-preview';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
@@ -68,17 +68,24 @@ describe('warnings', () => {
       graphOrder: compiled.graph.order,
       plan: compiled.plan,
       seasonRulesetId: RULESET,
+      presetRulesetIds: new Map(presetsOf(compiled.definition).map((preset) => [preset, RULESET])),
       seasonLanguage: 'en',
       specHash: HASH,
     });
-    expect(okPreview(source).warnings).toEqual(planned.warnings);
+    expect(okPreview(source, { engine: 'legacy' }).warnings).toEqual(planned.warnings);
+    expect(okPreview(source).warnings).toEqual(engineGaps(planned.warnings, 'kit'));
   });
 
-  it('names the parts the engine does not run yet', () => {
-    const codes = okPreview(spec('classic-league')).warnings.map((w) => w.code);
-    expect(codes).toContain('rr_legs_not_run');
-    expect(okPreview(spec('swiss-top-cut')).warnings.map((w) => w.code)).toContain('third_place_not_run');
-    expect(okPreview(spec('cup')).warnings.map((w) => w.code)).toContain('groups_not_created');
+  it('names the parts the engine does not run: legs and groups only on legacy, groups of a kit league only when manual', () => {
+    expect(okPreview(spec('classic-league'), { engine: 'legacy' }).warnings.map((w) => w.code)).toContain('rr_legs_not_run');
+    expect(okPreview(spec('classic-league')).warnings.map((w) => w.code)).not.toContain('rr_legs_not_run');
+    expect(okPreview(spec('cup'), { engine: 'legacy' }).warnings.map((w) => w.code)).toContain('groups_not_created');
+    expect(okPreview(spec('cup')).warnings.map((w) => w.code)).not.toContain('groups_not_created');
+    const manual = spec('cup');
+    const groups = manual.stages.find((stage) => stage.groups !== undefined);
+    if (groups?.groups === undefined) throw new Error('the cup preset has a stage with groups');
+    groups.groups.method = 'manual';
+    expect(okPreview(manual).warnings.map((w) => w.code)).toContain('groups_not_created');
   });
 });
 

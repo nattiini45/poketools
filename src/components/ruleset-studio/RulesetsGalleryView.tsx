@@ -8,9 +8,10 @@ import { groupRulesetPresets, listRulesetPresets } from '@/lib/pkmn/ruleset-pres
 import type { PresetSource } from '@/lib/pkmn/format-catalog';
 import type { RulesetDefinitionSummary, RulesetPinCounts } from '@/lib/ruleset-studio/library-types';
 
-const SOURCES: readonly { source: PresetSource; heading: 'presetsShowdown' | 'presetsDraft' }[] = [
+const SOURCES: readonly { source: PresetSource; heading: 'presetsShowdown' | 'presetsDraft' | 'presetsCommunity' }[] = [
   { source: 'showdown', heading: 'presetsShowdown' },
   { source: 'smogon-draft', heading: 'presetsDraft' },
+  { source: 'poketools', heading: 'presetsCommunity' },
 ];
 
 /** One list of the gallery: the rows shown and how many exist (the list is capped). */

@@ -234,7 +234,7 @@ export function validateTeam(
   // ── Structural checks ─────────────────────────────────────────────
   if (!Array.isArray(pokemon) || pokemon.length === 0) {
     teamIssues.push({ issue: 'Team must have at least 1 Pokémon', ...codedIssue('team_empty') });
-    return { valid: false, issues, ...teamIssueFields(teamIssues) };
+    return { valid: false, issues, ...teamIssueFields(teamIssues), level_rules: ruleset.rules.levels };
   }
   if (pokemon.length > 6) {
     teamIssues.push({ issue: 'Team cannot have more than 6 Pokémon', ...codedIssue('team_too_large') });
@@ -436,6 +436,31 @@ export function validateTeam(
         });
       }
     }
+
+    // Approved per-species rules replace the configured default. Experimental entries are visible but not enforced.
+    const levelRules = rules.levels;
+    if (levelRules != null && (set.level === undefined || set.level === null || (typeof set.level === 'number' && Number.isInteger(set.level) && set.level >= 1 && set.level <= 100))) {
+      const override = levelRules.entries.find((entry) => entry.status === 'approved' && entry.id === toID(species.name));
+      const required = override?.level ?? levelRules.default;
+      const actual = typeof set.level === 'number' ? set.level : 100;
+      if (levelRules.policy === 'exact' && actual !== required) {
+        issues.push({
+          pokemon_index: i,
+          species: species.name,
+          issue: `Level (${actual}) must be exactly ${required}`,
+          severity: 'error',
+          ...codedIssue('level_exact', { level: required, value: actual }),
+        });
+      } else if (levelRules.policy === 'max' && actual > required) {
+        issues.push({
+          pokemon_index: i,
+          species: species.name,
+          issue: `Level (${actual}) exceeds the maximum of ${required}`,
+          severity: 'error',
+          ...codedIssue('level_max', { level: required, value: actual }),
+        });
+      }
+    }
   }
 
   // ── Clause checks ──────────────────────────────────────────────────
@@ -531,7 +556,7 @@ export function validateTeam(
   }
 
   const valid = issues.every(i => i.severity !== 'error') && teamIssues.length === 0;
-  return { valid, issues, ...teamIssueFields(teamIssues) };
+  return { valid, issues, ...teamIssueFields(teamIssues), level_rules: rules.levels };
 }
 
 // ── Team Constraints implementation ─────────────────────────────────

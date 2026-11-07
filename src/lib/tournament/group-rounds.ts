@@ -253,6 +253,7 @@ async function placementPairings(
   const names: Record<string, string> = {};
   for (const group of context.groups) for (const member of group.members) names[member.player_id] = member.player_name;
   const records: MatchRecord[] = earlier.map((match) => ({
+    match_id: match.id,
     player_1_id: match.player_1_id,
     player_2_id: match.player_2_id,
     winner_id: match.winner_id,

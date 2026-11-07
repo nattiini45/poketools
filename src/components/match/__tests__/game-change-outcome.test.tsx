@@ -49,6 +49,15 @@ describe('gameChangeWarnings', () => {
     ]);
   });
 
+  it('turns format_revert_failed into its catalogue warning, next to the recheck warning', () => {
+    expect(gameChangeWarnings({ format_revert_failed: true })).toEqual([{ code: 'admin_game_format_revert_failed' }]);
+    expect(gameChangeWarnings({ evolution_recheck_failed: true, format_revert_failed: true })).toEqual([
+      { code: 'admin_game_evolution_recheck_failed' },
+      { code: 'admin_game_format_revert_failed' },
+    ]);
+    expect(gameChangeWarnings({ format_revert_failed: 'yes' })).toEqual([]);
+  });
+
   it('has no warning without the flag, with a non-true flag or for a malformed body', () => {
     expect(gameChangeWarnings({ match_status: 'in_progress' })).toEqual([]);
     expect(gameChangeWarnings({ evolution_recheck_failed: 'yes' })).toEqual([]);

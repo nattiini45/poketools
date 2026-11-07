@@ -11,6 +11,7 @@ export type TournamentSettingsSource = Pick<
   | 'is_doubles'
   | 'team_visibility'
   | 'bracket_reset_enabled'
+  | 'third_place_enabled'
 >;
 
 /** Which fields the started-tournament lock freezes (the server refuses a changed value). */
@@ -30,6 +31,7 @@ export interface TournamentUpdatePatch {
   is_doubles?: boolean;
   team_visibility?: TeamVisibility;
   bracket_reset_enabled?: boolean;
+  third_place_enabled?: boolean;
 }
 
 /** Positive overrides only, keys sorted: the form drops 0 (= default) the same way. */
@@ -50,7 +52,8 @@ function sameOverrides(a: BoOverrides, b: BoOverrides): boolean {
  * when its control changed. `bo_overrides` is compared as an effective map
  * and an emptied map is sent as `{}` (the form submits `undefined` for
  * "none", which the endpoint would ignore). `bracket_reset_enabled` only
- * applies to a double-elimination bracket. Returns `{}` when nothing changed.
+ * applies to a double-elimination bracket, `third_place_enabled` only to a
+ * single-elimination one. Returns `{}` when nothing changed.
  */
 export function buildTournamentPatch(
   initial: TournamentSettingsSource,
@@ -91,6 +94,13 @@ export function buildTournamentPatch(
     submitted.bracket_reset_enabled !== (initial.bracket_reset_enabled ?? true)
   ) {
     patch.bracket_reset_enabled = submitted.bracket_reset_enabled;
+  }
+  if (
+    finalBracketType === 'single_elim' &&
+    submitted.third_place_enabled !== undefined &&
+    submitted.third_place_enabled !== (initial.third_place_enabled ?? false)
+  ) {
+    patch.third_place_enabled = submitted.third_place_enabled;
   }
 
   return patch;

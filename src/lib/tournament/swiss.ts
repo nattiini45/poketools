@@ -13,6 +13,18 @@ type PairingHistory = ReturnType<typeof buildPairingHistory>;
 interface Matching {
   pairs: Array<[string, string]>;
   rematches: number;
+  /** Pairs the caller's `allowPair` rejects (0 without a filter). */
+  forbidden: number;
+}
+
+type AllowPair = (a: string, b: string) => boolean;
+
+/**
+ * What a matching costs: a forbidden pair outweighs any number of rematches (a round holds fewer than `size` of them), so
+ * the search first minimises the forbidden pairs and then the rematches.
+ */
+function costOf(matching: Pick<Matching, 'rematches' | 'forbidden'>, size: number): number {
+  return matching.forbidden * (size + 1) + matching.rematches;
 }
 
 /**
@@ -20,30 +32,46 @@ interface Matching {
  * search that always pairs the highest-ranked unpaired player first and tries opponents in standings order. With
  * `maxRematches` = 0 it returns the first rematch-free pairing in that order: the top-down Monrad pairing whenever that
  * pairing has no rematch, else the nearest rematch-free one to it. `maxRematches` bounds the search; `budget` caps its steps. Returns null when no pairing within
- * the bound was found, or when the budget ran out before one was.
+ * the bound was found, or when the budget ran out before one was. `allow` marks the pairs that may be paired: a rejected
+ * pair costs more than any rematch (`costOf`), and `maxRematches` and `maxForbidden` bound each count on its own.
  */
-function searchPairing(players: readonly string[], history: PairingHistory, maxRematches: number, budget: { steps: number }): Matching | null {
+function searchPairing(
+  players: readonly string[],
+  history: PairingHistory,
+  maxRematches: number,
+  budget: { steps: number },
+  allow?: AllowPair,
+  maxForbidden = 0,
+): Matching | null {
   const paired = new Set<string>();
   const pairs: Array<[string, string]> = [];
   let best: Matching | null = null;
+  const weight = players.length + 1;
 
-  const visit = (rematches: number): boolean => {
+  const visit = (cost: number, rematches: number, forbidden: number): boolean => {
     if (--budget.steps < 0) return true;
     const first = players.find((player) => !paired.has(player));
     if (first === undefined) {
-      if (best === null || rematches < best.rematches) best = { pairs: [...pairs], rematches };
-      // A pairing without rematches cannot be beaten: stop.
-      return rematches === 0;
+      if (best === null || cost < costOf(best, players.length)) best = { pairs: [...pairs], rematches, forbidden };
+      // A pairing without rematches or forbidden pairs cannot be beaten: stop.
+      return cost === 0;
     }
     paired.add(first);
     for (const opponent of players) {
       if (paired.has(opponent)) continue;
-      const cost = havePlayed(history, first, opponent) ? 1 : 0;
-      const total = rematches + cost;
-      if (total > maxRematches || (best !== null && total >= best.rematches)) continue;
+      const rematch = havePlayed(history, first, opponent) ? 1 : 0;
+      const forbids = allow !== undefined && !allow(first, opponent) ? 1 : 0;
+      const total = cost + rematch + forbids * weight;
+      if (
+        rematches + rematch > maxRematches ||
+        forbidden + forbids > maxForbidden ||
+        (best !== null && total >= costOf(best, players.length))
+      ) {
+        continue;
+      }
       paired.add(opponent);
       pairs.push([first, opponent]);
-      const stop = visit(total);
+      const stop = visit(total, rematches + rematch, forbidden + forbids);
       pairs.pop();
       paired.delete(opponent);
       if (stop) {
@@ -55,29 +83,36 @@ function searchPairing(players: readonly string[], history: PairingHistory, maxR
     return false;
   };
 
-  visit(0);
+  visit(0, 0, 0);
   return best;
 }
 
 /** The old top-down pairing: next unpaired opponent who has not met the player, else simply the next one. */
-function greedyPairing(players: readonly string[], history: PairingHistory): Matching {
+function greedyPairing(players: readonly string[], history: PairingHistory, allow?: AllowPair): Matching {
   const paired = new Set<string>();
   const pairs: Array<[string, string]> = [];
   let rematches = 0;
+  let forbidden = 0;
+  const open = (p1: string, from: number) => players.slice(from).filter((candidate) => !paired.has(candidate) && candidate !== p1);
   for (let i = 0; i < players.length; i++) {
     const p1 = players[i];
     if (paired.has(p1)) continue;
-    let p2 = players.slice(i + 1).find((candidate) => !paired.has(candidate) && !havePlayed(history, p1, candidate));
+    const rest = open(p1, i + 1);
+    const allowed = rest.filter((candidate) => allow === undefined || allow(p1, candidate));
+    // An allowed opponent first (without a rematch when there is one), a forbidden one only when none is left.
+    let p2 = allowed.find((candidate) => !havePlayed(history, p1, candidate));
+    if (p2 === undefined) p2 = allowed[0];
     if (p2 === undefined) {
-      p2 = players.slice(i + 1).find((candidate) => !paired.has(candidate));
+      p2 = rest[0];
       if (p2 === undefined) break;
-      rematches += 1;
+      forbidden += 1;
     }
+    if (havePlayed(history, p1, p2)) rematches += 1;
     paired.add(p1);
     paired.add(p2);
     pairs.push([p1, p2]);
   }
-  return { pairs, rematches };
+  return { pairs, rematches, forbidden };
 }
 
 /**
@@ -107,18 +142,24 @@ export function generateSwissRound(
      * Defaults to `matchHistory`.
      */
     pairedMatches?: MatchRecord[];
+    /**
+     * The players in standings order, best first, when the caller ranks them itself (the format kit ranks by the
+     * stage's own scoring and chain). Defaults to the generic table of `matchHistory` and `byeHistory`.
+     */
+    ranked?: readonly string[];
+    /**
+     * A hard filter: the pairs it rejects are never paired while any other pairing of the round exists. When none does,
+     * the round is the one with the fewest rejected pairs (then the fewest rematches) and `forbidden` reports how many.
+     */
+    allowPair?: (a: string, b: string) => boolean;
   } = {},
 ): GeneratedRound {
   const stepLimit = options.stepLimit ?? SWISS_SEARCH_STEP_LIMIT;
-  const standings = computeStandings(
-    participantIds,
-    participantNames,
-    matchHistory,
-    {},
-    { byes: byeHistory },
-  );
   const history = buildPairingHistory(options.pairedMatches ?? matchHistory, byeHistory);
-  const ranked = standings.map((s) => s.player_id);
+  const ranked =
+    options.ranked !== undefined
+      ? [...options.ranked]
+      : computeStandings(participantIds, participantNames, matchHistory, {}, { byes: byeHistory }).map((s) => s.player_id);
 
   // The bye candidates, best first: the lowest-ranked players without a bye, then the lowest-ranked with one.
   const byeCandidates: Array<string | null> =
@@ -136,7 +177,7 @@ export function generateSwissRound(
   // First: the best bye candidate that leaves a pairing without any rematch.
   for (const bye of byeCandidates) {
     tried += 1;
-    const matching = searchPairing(without(bye), history, 0, budget);
+    const matching = searchPairing(without(bye), history, 0, budget, options.allowPair);
     if (matching !== null) {
       chosen = { bye, matching };
       break;
@@ -155,14 +196,14 @@ export function generateSwissRound(
     const bye = byeCandidates[0];
     const fallbackBudget = { steps: stepLimit };
     const players = without(bye);
-    const searched = searchPairing(players, history, players.length, fallbackBudget);
-    const greedy = greedyPairing(players, history);
-    const matching = searched !== null && searched.rematches <= greedy.rematches ? searched : greedy;
+    const searched = searchPairing(players, history, players.length, fallbackBudget, options.allowPair, players.length);
+    const greedy = greedyPairing(players, history, options.allowPair);
+    const matching = searched !== null && costOf(searched, players.length) <= costOf(greedy, players.length) ? searched : greedy;
     // Only a result the search could not prove minimal is worth a line: a completed search's fallback is the best there is.
     if (fallbackBudget.steps < 0) {
       console.warn(
         `[swiss] round ${roundNumber} of ${ranked.length} players: the fewest-rematches search hit its step limit; ` +
-          `${matching === greedy ? 'used the greedy pairing' : 'used the best pairing found'} (${matching.rematches} rematches)`,
+          `${matching === greedy ? 'used the greedy pairing' : 'used the best pairing found'} (${matching.rematches} rematches, ${matching.forbidden} forbidden)`,
       );
     }
     chosen = { bye, matching };
@@ -173,5 +214,7 @@ export function generateSwissRound(
     round_name: `Round ${roundNumber}`,
     pairings: chosen.matching.pairs.map(([player_1_id, player_2_id]): Pairing => ({ player_1_id, player_2_id })),
     bye_player_ids: chosen.bye === null ? [] : [chosen.bye],
+    rematches: chosen.matching.rematches,
+    ...(options.allowPair !== undefined ? { forbidden: chosen.matching.forbidden } : {}),
   };
 }

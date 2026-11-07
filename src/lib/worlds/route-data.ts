@@ -13,7 +13,9 @@ import {
 import { toPublicMatch } from '@/lib/match/public-match';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
-import { epbStandingsContext, sumEvolutionPoints } from '@/lib/tournament/season-standings';
+import { epbStandingsContext, sumEvolutionPoints, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
+import type { KitStandingsData } from '@/lib/format-engine/context';
+import { loadKitStandingsData } from '@/lib/format-engine/load';
 import { getDraftPoolsBySeason } from '@/lib/supabase/queries/drafts';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
@@ -134,6 +136,11 @@ export interface WorldRouteData {
   rulesetName: string | null;
   /** Whether a draft pool row exists for the season (not just a bound list); any group's pool counts. */
   hasDraftPool: boolean;
+  /**
+   * Custom leagues whose attached format ranks on the kit (or compares in shadow) only: the kit's standings data, so
+   * the hub's stage tables rank like the season table. Holds no seed (`KitStandingsData`).
+   */
+  kit?: KitStandingsData;
 }
 
 /** Already-fetched rows `assembleWorldRouteData` shapes into the contract. */
@@ -168,6 +175,8 @@ export interface WorldRouteDataInput {
    * pass their fixture teams through `teamToLead`).
    */
   teamLeads?: TeamLead[];
+  /** Custom leagues only: the kit's standings data (`loadKitStandingsData`). */
+  kit?: KitStandingsData;
 }
 
 /**
@@ -282,7 +291,19 @@ export function assembleWorldRouteData(input: WorldRouteDataInput): WorldRouteDa
     formatRules: input.formatRules,
     rulesetName: input.league?.ruleset_name ?? input.stages[0]?.ruleset_name ?? null,
     hasDraftPool: input.hasDraftPool,
+    ...(input.kit ? { kit: input.kit } : {}),
   };
+}
+
+/** The standings context of a league from the rows the world wave already read (no extra query). */
+export function worldStandingsContext(
+  formatType: SeasonFormatType,
+  rows: { trackers: readonly EvolutionTracker[]; formatRules: FormatRules | null; kit?: KitStandingsData },
+): SeasonStandingsContext {
+  if (isEvolutionPointBuy(formatType)) {
+    return epbStandingsContext(formatType, sumEvolutionPoints(rows.trackers), rows.formatRules?.tiebreaker_order);
+  }
+  return rows.kit ? { formatType, kit: rows.kit } : { formatType };
 }
 
 /**
@@ -307,7 +328,8 @@ export interface WorldRouteDataPreload {
  * point-buy list (only with a bound list), format rules, trackers, every
  * stage's matches in one `.in()` read, the draft pools, the team leads and
  * the league groups (group tables; none in a league without groups) and, only in a
- * non-EPB league with a Swiss stage, the Swiss stages' bye rounds.
+ * non-EPB league with a Swiss stage, the Swiss stages' bye rounds; a custom league adds the kit's standings data
+ * (`loadKitStandingsData`).
  * The standings are computed in memory from those rows: the season format
  * comes from the league row and, for EPB, the evolution points are summed
  * from the trackers already loaded (the reduction `getSeasonEvolutionPoints`
@@ -337,6 +359,7 @@ export async function buildWorldRouteData(
     teamLeads,
     leagueGroups,
     byeRoundsByStage,
+    kit,
   ] =
     await Promise.all([
       league.point_buy_list_id ? getListEntries(league.point_buy_list_id) : Promise.resolve([]),
@@ -366,6 +389,7 @@ export async function buildWorldRouteData(
       // The group tables are the standings themselves: a failed read fails the world, as the matches do.
       getSeasonGroups(seasonId),
       readsByes ? loadSeasonSwissByeRounds(seasonId) : Promise.resolve(undefined),
+      league.format_type === 'custom' ? loadKitStandingsData(seasonId) : Promise.resolve(undefined),
     ]);
 
   const schedule = assembleLeagueSchedule({
@@ -373,9 +397,7 @@ export async function buildWorldRouteData(
     participants,
     matchesByStage,
     // The format rules of the wave above carry the stored tiebreaker order, so ranking by it costs no read.
-    context: isEvolutionPointBuy(league.format_type)
-      ? epbStandingsContext(league.format_type, sumEvolutionPoints(evolutionTrackers), formatRules?.tiebreaker_order)
-      : { formatType: league.format_type },
+    context: worldStandingsContext(league.format_type, { trackers: evolutionTrackers, formatRules, kit }),
     groups: toLeagueScheduleGroups(leagueGroups),
     byeRoundsByStage,
   });
@@ -393,5 +415,6 @@ export async function buildWorldRouteData(
     formatRules,
     hasDraftPool: draftPools.length > 0,
     teamLeads,
+    kit,
   });
 }

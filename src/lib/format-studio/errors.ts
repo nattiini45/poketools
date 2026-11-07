@@ -52,6 +52,7 @@ export const FORMAT_ERROR_CODES = [
   'format_not_attached',
   'format_nothing_attached',
   'format_detach_blocked',
+  'format_runtime_has_data',
   'season_format_type_locked',
 ] as const satisfies readonly ApiErrorCode[];
 
@@ -89,6 +90,7 @@ export const FORMAT_ERROR_STATUS: { readonly [C in FormatErrorCode]: number } = 
   format_not_attached: 409,
   format_nothing_attached: 404,
   format_detach_blocked: 409,
+  format_runtime_has_data: 409,
   season_format_type_locked: 409,
 };
 
@@ -154,6 +156,14 @@ export function mapFormatDbError(error: unknown): unknown {
         return new FormatStudioError('format_not_attached');
       case 'FORMAT_NOTHING_ATTACHED':
         return new FormatStudioError('format_nothing_attached');
+      case 'FORMAT_RUNTIME_HAS_DATA':
+        // The counts of what a replace or a detach would delete; the admin confirms with `confirm_clear`.
+        return new FormatStudioError('format_runtime_has_data', {
+          links: detailNumber(e, 'links', 0),
+          items: detailNumber(e, 'items', 0),
+          submissions: detailNumber(e, 'submissions', 0),
+          adjustments: detailNumber(e, 'adjustments', 0),
+        });
       default:
         return error;
     }

@@ -63,8 +63,32 @@ describe('settling a scheduled match from the admin page', () => {
     const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(url).toBe('/api/admin/matches/m1/result');
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ winner_id: 'p2', reason: 'Players reported it' });
+    expect(JSON.parse(init.body as string)).toEqual({ winner_id: 'p2', reason: 'Players reported it', outcome: 'played' });
     await screen.findByText('Result recorded. The match is completed.');
+  });
+
+  it.each([
+    ['en' as const, 'Forfeit', 'forfeit'],
+    ['en' as const, 'No-show', 'no_show'],
+    ['de' as const, 'Aufgegeben', 'forfeit'],
+    ['de' as const, 'Nicht erschienen', 'no_show'],
+  ])('posts the chosen outcome (%s, %s)', async (locale, label, outcome) => {
+    fetchMock.mockResolvedValue({ json: async () => ({ success: true, data: {} }) });
+    const user = userEvent.setup();
+    render(withI18n(ui(), { locale }));
+    const record = locale === 'de' ? 'Ergebnis eintragen' : 'Record result';
+
+    await user.click(screen.getByRole('button', { name: 'Ash' }));
+    const option = screen.getByRole('button', { name: label });
+    await user.click(option);
+    expect(option.getAttribute('aria-pressed')).toBe('true');
+    await user.click(screen.getByRole('button', { name: record }));
+    await user.type(screen.getByRole('textbox'), 'Gary never joined');
+    await user.click(screen.getAllByRole('button', { name: record }).at(-1)!);
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toEqual({ winner_id: 'p1', reason: 'Gary never joined', outcome });
   });
 
   it.each([

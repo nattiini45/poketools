@@ -59,7 +59,7 @@ function libraryEntry(item: FormatDefinitionSummary, locale: Locale, t: EditorT,
 }
 
 /**
- * `/admin/formats`: the Format Studio home. The "New format" action, the three example formats, the viewer's own
+ * `/admin/formats`: the Format Studio home. The "New format" action, the example formats, the viewer's own
  * stored formats ("Your formats"), the ones other admins shared ("Shared with you") and "Your leagues" with the
  * format each league's phases and settings add up to. Any admin may open it; a site admin sees every active
  * league, a resource admin only their own (tournament-only admins see the examples, their formats and an empty

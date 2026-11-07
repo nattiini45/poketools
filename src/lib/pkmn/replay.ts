@@ -198,6 +198,7 @@ export function parseReplayLog(log: string): ParsedBattleStats {
   };
 
   let winner_ps_username = '';
+  let tie = false;
   let currentTurn = 0;
 
   // Attribution state
@@ -1008,6 +1009,11 @@ export function parseReplayLog(log: string): ParsedBattleStats {
         break;
       }
 
+      case 'tie': {
+        tie = true;
+        break;
+      }
+
       // ── Player ────────────────────────────────────────────────
       case 'player': {
         // Player names are captured from the replay data, not here
@@ -1046,5 +1052,6 @@ export function parseReplayLog(log: string): ParsedBattleStats {
   return {
     winner_ps_username,
     players,
+    ...(tie ? { tie: true as const } : {}),
   };
 }

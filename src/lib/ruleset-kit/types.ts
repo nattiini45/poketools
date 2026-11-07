@@ -49,6 +49,18 @@ export interface RulesetIdentity {
   based_on?: string;
 }
 
+export interface LevelRuleEntry {
+  id: string;
+  level: number;
+  status: 'experimental' | 'approved';
+}
+
+export interface LevelRules {
+  policy: 'exact' | 'max';
+  default: number;
+  entries: LevelRuleEntry[];
+}
+
 export interface RulesetDocument {
   schema_version: typeof RULESET_SCHEMA_VERSION;
   identity: RulesetIdentity;
@@ -62,6 +74,8 @@ export interface RulesetDocument {
   /** Integer 0..100: at least this share of the team must share a type (relaxed monotype). 0 switches it off. */
   min_shared_type_pct: number;
   team_constraints: TeamConstraints | null;
+  /** Per-species level rules. Only approved entries are enforced; an unset level on a set means 100. */
+  levels: LevelRules | null;
   /** Notes and custom rules: shown on the rules page, never enforced. */
   custom_rules: string;
 }
@@ -95,6 +109,7 @@ export interface ResolvedRules {
   added_pokemon: string[];
   min_shared_type_pct: number;
   team_constraints: TeamConstraints | null;
+  levels: LevelRules | null;
   custom_rules: string;
 }
 

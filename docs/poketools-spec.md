@@ -43,7 +43,7 @@ A private web application for managing competitive Pokémon leagues and tourname
 - VGC / doubles (Bring/Lead/Win stats enabled for these formats only)
 - Custom / homebrew rulesets (the Ruleset Studio: a base preset plus changes, published as immutable versions; [ruleset-studio.md](./ruleset-studio.md))
 - Draft leagues (data model included; UI in Phase 2)
-- **Custom format** (`custom`, Format Studio) — a league whose phases come from an attached, published format document ([format-kit.md](./format-kit.md#database-and-api)); the engine of those phases is still the classic one. No editor UI yet.
+- **Custom format** (`custom`, Format Studio) — a league whose phases come from an attached, published format document ([format-kit.md](./format-kit.md#database-and-api)). On the `kit` engine (`season_formats.engine`, the default for a new attach) the format kit schedules, scores, advances and runs the league ([format-kit.md](./format-kit.md#format-engine-and-runtime)); on `legacy` or `shadow` the phases are classic phases. The Format Studio editor, a player page (`/dashboard/leagues/[id]/play`) and a Live tab for league admins exist.
 - **Evolution Point Buy** (`evolution_point_buy`) — versioned point-buy list, budget/pick-capped draft with branched-line identity `(base, stage3)`, surviving-Pokémon Comeback Tokens, Participation Tokens and per-line rulings. The league's tuning (budget, picks, token tables, line rulings, price groups, workbook layout, draft-clock quiet hours, Comeback Token earn window and exchange ratio) comes from the active format pack (`docs/format-packs.md`). Canonical module doc: `docs/evolution-point-buy.md`.
 
 **Mechanics public, tuning in the pack.** Every mechanic (draft engines, quiet hours, pool completability, token rules, scoring and tiebreaks) is public code under neutral names; a league's numbers and wording live in its format pack. A pack may also fill the optional, server-only **pack-extension seam** (`src/lib/pack-extensions/`: supplementary records shown beside the live statistics and never added to them, extra profile and settings sections, extra admin and site links). The example pack fills nothing, so a public build has no pack-specific code, schema or data. Contract and rules: `docs/format-packs.md` ("Pack extensions").
@@ -141,6 +141,8 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 | stage_order | Number | Order within the league (reorderable while `upcoming`) |
 | advancement_rule | JSONB | `{ type: 'top_n', count, per_group }` — who advances into THIS phase from the one before it. It is stored on the receiving phase (read by `enrollment-sync` when that phase is filled from the standings), so the first phase never has one; the Admin Assistant's Plan refuses a rule on its first phase (`advancement_rule_on_first_phase`) |
 | enrollment_source | JSONB | Auto-enrollment sync: `{ type: 'standings' \| 'roster', source_phase_id, synced_at, frozen }`. Unfrozen phases silently re-sync from the source table until the first manual seed/participant edit or bracket generation. Re-sync and `POST /api/seasons/[id]/advance` refuse when frozen or rounds exist unless `{ force: true }` (`ENROLLMENT_FROZEN`, `ENROLLMENT_ROUNDS_EXIST`). Standings use EPB-aware `computeStandingsForSeason`. |
+| third_place_enabled | Checkbox | single elimination with four or more players: a match for third place between the semifinal losers, played in the final's round (default false; `20261104100000`; [tournament.md](./tournament.md)) |
+| format_group | Number | 0 for an ordinary phase, N for the phase a `foreach_group` stage plays for group N of its source stage; with `format_stage_key` it identifies a kit phase (`20261105120000`) |
 | format_stage_key | Text | nullable; the format stage a phase was created from when a Format Studio format is attached to a custom league (`^[a-z][a-z0-9_]{0,31}$`, unique per league, CHECK needs `season_id`); null for hand-made phases. Not mapped into `Tournament` objects |
 | stage_spec | JSONB | nullable; frozen copy of that stage (`{ v: 1, spec_hash, stage, mapped_bracket_type }`, an object up to 262,144 bytes of jsonb text). Not mapped into `Tournament` objects. A later engine change reads it |
 | bracket_type | Select | single_elim / double_elim / round_robin / swiss |
@@ -429,7 +431,17 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `season_storylines` | Caster-maintained season storylines |
 | `season_groups` | League groups: one row per group of a league; groups persist across its phases and draft their own pools (`season_groups_replace` is the editor's atomic write) |
 | `season_group_members` | League group membership: one group per trainer per league, the trainer must be a league participant |
-| `season_formats` | The Format Studio format attached to a custom league: a frozen copy of the spec with its hash, the seed (server only), tunables and amendments (both empty today) and the engine (`kit`). One row per league (`season_id` is the key); gone with the league |
+| `season_formats` | The Format Studio format attached to a custom league: a frozen copy of the spec with its hash, the seed (server only), tunables, amendments (domain edits appended by `format_apply_adjustment`) and the engine (`legacy`, `shadow` or `kit`). One row per league (`season_id` is the key); gone with the league |
+| `format_relation_links` | Format runtime: player-to-player links of a relation (a hidden gift giver, a pairing), with the time a link was revealed (`20261105090000`) |
+| `format_resource_items` | Format runtime: what a player holds of a resource (a domain item or a counter); an exclusive item can be held once per league (partial unique index) |
+| `format_action_submissions` | Format runtime: one player action per actor (draft, submitted, locked) and its picks; written by `format_action_save` / `format_action_submit` |
+| `format_event_log` | Format runtime: every fired event once (unique event key), with the ops it applied; written by `format_fire_event` |
+| `format_flags` | Format runtime: domain lock state and action window state per league |
+| `format_player_attrs` | Format runtime: player attribute values (manual, seeded or computed) |
+| `format_track_progress` | Format runtime: the step each player reached on a progression track |
+| `format_checks` | Format runtime: checks an admin confirms or rejects, deduplicated per league; sources `unresolved_outcome`, `standings_tie`, `pairing_rematch`, `pairing_forbidden` (a filtered round had to pair a forbidden pair), `deadline_missed` (a calendar deadline policy fired), `team_audit` (a played team broke the stage's team rules, differs from the replay or could not be audited; the subject is admin-only) and `expr` |
+| `format_adjustments` | Format runtime: admin corrections (points, resource, relation, outcome, action, domain, rank) with a required reason |
+| `format_challenges` | Format runtime: open, accepted, declined, expired or cancelled challenge-ladder challenges, with their expiry and accepted match (`20261106090000`) |
 | `tournaments` | Standalone tournaments and league phases (4.3) |
 | `tournament_participants` | Phase or tournament enrollment and seeds (4.3) |
 | `tournament_groups` | Groups of a group-stage phase (`season_group_id` links one to the league group it mirrors) |
@@ -438,6 +450,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `matches` | Matches (4.5) |
 | `match_proposals` | Proposed match times and their answers |
 | `games` | Games of a match (4.6) |
+| `match_outcomes` | How a match ended: played (with each side's faints), forfeit, no-show or unresolved (an engine tie); written through `match_outcome_record` (`20261104090000`) |
 | `ruleset_definitions` | Ruleset Studio library: one row per ruleset with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the head version (4.7) |
 | `ruleset_definition_versions` | Immutable published versions of a ruleset: document, frozen effective rules, hashes, catalog version. A league or phase pins one (4.7, 9) |
 | `ruleset_pin_backfill_log` | The previous `ruleset_id` of every league and phase the one-time pin replay changed (revert source) |
@@ -847,6 +860,7 @@ This map covers the main pages and the routes whose contracts the rest of the sp
 /dashboard/confirm/[mid]       Confirm opponent's submitted result
 /dashboard/team/[tid]          Edit my team for a tournament (pre-lock)
 /dashboard/match-prep/[mid]    Match preparation
+/dashboard/leagues/[id]/play  Live format view of a custom league: action forms, items, relations, challenge ladders
 /dashboard/broadcast/*         Cast Studio match tracker (player)
 /dashboard/settings            World experience (3D on/off) and Language (LanguageOptions, §17)
 
@@ -869,7 +883,8 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/leagues/new             Create league
 /admin/leagues/[id]            League admin page in URL tabs (?tab=): Overview, Participants, Draft,
                                Phases (PhaseTimeline; the old ?tab=schedule opens it), Rules, Format
-                               (read-only generated outline and rules text), Settings, Danger zone;
+                               (read-only generated outline and rules text), Live (custom leagues: checks
+                               inbox, adjustments, actions, relations, challenges), Settings, Danger zone;
                                which tabs a format shows and what each holds: docs/admin.md
                                (League admin page)
 /admin/leagues/[id]/phases/[phaseId]  Phase workspace: PhaseForm, SeedingTable, PhaseGroupsPanel, RoundManager
@@ -892,7 +907,7 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/rulesets/[id]/edit      The ruleset editor (owner, league admins of a league-owned ruleset, site admins)
 /admin/rulesets/catalog/[presetId]  One catalog rule preset, read-only, with the start of a private copy
 /admin/rulesets/new            Redirects to the library, where the New ruleset dialog starts a ruleset
-/admin/formats                 Format Studio (read-only): three example formats and "Your leagues"
+/admin/formats                 Format Studio: four example formats, your formats and "Your leagues"
                                with a generated descriptor each (site admins: all leagues; league admins: their own)
 /admin/formats/example/[presetId]  One example format: stage outline, rules text (EN/DE), diagnostics, coverage
 /admin/formats/league/[id]     One league's format, same view; per-league live gate (docs/admin.md, Format Studio)
@@ -998,7 +1013,24 @@ GET/POST/DELETE /api/seasons/[id]/format    Custom format league: state (`not_cu
                                             `can_start`, `started`, `?include=spec`) / attach a published format version
                                             (`definition_id`, optional `version_no`; 201 first attach, 200 re-attach; creates
                                             one phase per format stage, answers the stages and the engine gaps) / detach.
-                                            League admin of that league; format-attach 30 per hour
+                                            League admin of that league; format-attach 30 per hour. A replace or detach over a
+                                            draw, gifts, submitted picks or adjustments is 409 format_runtime_has_data unless
+                                            `confirm_clear: true`
+PUT  /api/seasons/[id]/format/engine        League admin: `{ engine }` legacy | shadow | kit (format-engine 30 per hour;
+                                            audit season.format.engine)
+GET  /api/seasons/[id]/format/shadow        League admin: rows where the legacy and the kit table differ (format-shadow 60 per hour)
+GET  /api/seasons/[id]/format/me            Participant: the viewer's own live view, or { running: false } (30 per minute)
+PUT  /api/seasons/[id]/format/actions/[actionId]         Participant: save a draft pick (409 when already submitted)
+POST /api/seasons/[id]/format/actions/[actionId]/submit  Participant: submit a pick (30 per hour)
+POST /api/seasons/[id]/format/challenges    Participant: challenge a player of a challenge ladder phase (20 per hour, fails closed)
+POST /api/seasons/[id]/format/challenges/[challengeId]/answer  The defender: { accept }
+DELETE /api/seasons/[id]/format/challenges/[challengeId]?as=self|admin  Withdraw an open challenge
+GET/POST /api/seasons/[id]/format/adjustments  League admin: history and form targets / one manual adjustment with a
+                                            required reason (120 per hour, fails closed)
+GET  /api/seasons/[id]/format/checks        League admin: a page of checks (admin-only subjects)
+POST /api/seasons/[id]/format/checks/[checkId]/resolve  League admin: { verdict, note? }
+POST /api/seasons/[id]/format/relations/unmask  League admin: hidden relation sides, audited before it answers
+                                            (all live-format routes: docs/format-kit.md, Live format routes)
 GET/POST /api/formats                       Format library: list (`scope` all | mine | shared | gallery, `visibility`, `kind`,
                                             `limit` max 100, `offset`) / create (`document` or `name` + `base_locale`).
                                             Any admin tier; a league admin sees own and shared formats; format-create 20 per hour
@@ -1061,10 +1093,14 @@ POST /api/players/[id]/claim (admin)      Link Discord onto guest row (409 SOURC
 POST /api/tournaments                       Rejects `season_id` — use phases API instead
 
 POST /api/validate-team         Validate a team against a ruleset; returns issues with
-                                stable issue_id for UI jump-to-slot
+                                stable issue_id for UI jump-to-slot. In a kit league the stage's team rules are
+                                merged in; optional `match_id` (with `tournament_id`) judges the match's round;
+                                240 per minute per player
 
 GET  /api/teams                 List teams (by tournament_id, player_id, or own)
 POST /api/teams                 Create a team for a tournament (one per player per tournament)
+                                (in a kit league the success body may carry `team_check`: the stage rules are advisory,
+                                never a refusal; the same on PATCH /api/teams/[id] and POST /api/match-prep, docs/team.md)
 GET  /api/teams/[id]            Get single team (with visibility redaction)
 PATCH /api/teams/[id]           Update team pokemon (blocked when locked; 409 team_match_completed for a
                                 non-admin when the row is linked to a completed match; admins correct)
@@ -1106,6 +1142,11 @@ GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation
                                 then heals completed matches whose finalize did not finish
                                 (finalized_at IS NULL, older than 10 min; replay-safe steps only).
                                 500 auto_confirm_partial_failure when any match failed
+GET  /api/cron/format-engine    Cron (15 min): fires due format calendar events, applies match/team/action deadline
+                                policies, expires challenges, fires lost action_locked events and backfills missed
+                                match_completed events (at most 100 leagues per run in a window that moves on each slot,
+                                stops starting leagues after 240 s); one league's failure is logged and skipped, with
+                                500 format_cron_partial_failure when any league failed
 GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggregate jobs; 500 on a
                                 failed claim or queue write, or when jobs are stranded
 GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one
@@ -1412,6 +1453,8 @@ pending_confirmation  (Bo threshold reached, winner determined)
               ▼
            completed  (admin manual override)
 ```
+
+A replay that Showdown ended as a tie is never scored: the game pipeline moves the match from `in_progress` (after starting a `scheduled` one) to `disputed` on the admins' behalf, records an `unresolved` row in `match_outcomes` and writes no game (409 `match_replay_unresolved`). An admin decides it like any other dispute.
 
 An admin (a site admin, or a resource admin of the match's tournament or league) can also settle a match that has not reached `pending_confirmation`: `scheduled → completed` (and `in_progress → completed`) through `POST /api/admin/matches/[id]/result` with a winner and a required reason. The settle takes the finalize path of any other completion (ratings, streaks, standings, bracket advancement) and records the audit event `match.admin_result`. The transition is admin-only: `validateTransition` refuses it for a player with `match_settle_admin_only`. `POST /api/confirm-match/[mid]` does not settle an unplayed match: it answers 409 `match_settle_use_result_route`, so every direct completion of a `scheduled` match carries a reason and the audit event.
 
@@ -1780,8 +1823,9 @@ components/
       FormatPicker.tsx        Gen-grouped collapsible meta switcher
       EditorContext.tsx       { state, dispatch } context
       EditorDialogs.tsx       Import / Export / Share / Publish dialogs
+      SaveStatusChips.tsx     The save-state badges of the top bar: locked, saving, saved, "saved, rules not met" (`warned`), "saved, rules not checked" (`unchecked`), failed, unsaved. The only client signal of the advisory `team_check`
       SampleSetPicker.tsx     One-click apply Smogon sample sets (used by intel/SetsTab)
-      MobileTabBar.tsx        <lg bottom tab bar (Intel/AI bottom sheets)
+      MobileTabBar.tsx        <lg bottom tab bar (Intel/Validation/AI bottom sheets; the validation sheet is the only place below `lg` that lists the verdict, so the save chips have a cause to point at)
       state.ts                Reducer + createInitialState
     workspace/                Inline Showdown-style set editor (center column)
       SetWorkspace.tsx        Grid ↔ set switch, validation-jump highlight
@@ -1816,7 +1860,8 @@ components/
     primitives/
       TeamCardPrimitive.tsx   Single-Pokémon read-only card (shared primitive)
     validation/
-      ValidationPanel.tsx     Issue list with jump-to-field
+      ValidationPanel.tsx     Issue list with jump-to-field; takes `seasonId` and, in a kit league, adds an advisory note (it promises the post-match re-check only next to a stage-rule `kit_*` issue; ruleset breaks are never re-checked) and PoolsCard
+      PoolsCard.tsx           "Your pools this week" (own gifts; every non-admin pool of the league, open or locked, from the view's `pools`, so a pool no action step draws from is listed too) + `useKitLeagueView` (one read of the viewer's live format view per season; nothing shown for a plain league)
 
   stats/
     StandingsTable.tsx
@@ -2400,8 +2445,8 @@ Text from the database reaches the model: player and guest names; league, phase,
 These are facts about the current engine and app. `engine_support` is a constant table, each row unit-tested against the constant it describes; when the engine changes, the row flips with its test. The assistant states the gap in a "capability gap" card before Build and offers the alternative that exists.
 
 - **A league or standalone tournament is public the moment it exists.** There is no draft or hidden state, and no rehearsal on the running app: rehearse in the Plan or on a local database. Build shows an acknowledgement box.
-- **The classic engine plays one round-robin circle, not a double one.** A double round robin is refused as typed. A Format Studio `legs: 2` is recorded but not run (attach reports `rr_legs_not_run`), and two chained round-robin phases are not offered (the top-N cut would read only the second phase). A small engine change (a second circle, read from the stage spec's legs) is scheduled before P2; until it lands the assistant offers a single round robin, and the literal "double round robin plus top 4 playoff" case is a P2 exit gate.
-- **Not run by the engine:** wildcard and threshold advancement, third place; Format Studio groups, legs, third place, wildcard, threshold and bottom-N (attach warnings). Swiss round count is not settable.
+- **The classic engine plays one round-robin circle, not a double one.** A double round robin is refused as typed. A Format Studio `legs: 2` is recorded but not run on the legacy or shadow engine (attach reports `rr_legs_not_run`); the kit engine plays every leg. Two chained round-robin phases are not offered (the top-N cut would read only the second phase). A small engine change (a second circle, read from the stage spec's legs) is scheduled before P2; until it lands the assistant offers a single round robin, and the literal "double round robin plus top 4 playoff" case is a P2 exit gate.
+- **Engine coverage differs by engine.** Third place runs on every engine (`third_place_enabled`, single elimination with four or more players). Wildcard, threshold and bottom-N advancement, Format Studio groups and legs run only on the kit engine, in a custom league whose attached format runs on it; a plan cannot build them. The legacy and shadow engine only record groups, legs and bottom-N cuts, and the attach preview warns `groups_not_created`, `rr_legs_not_run` and `edge_select_not_run`. Swiss round count is not settable.
 - **`start_date` is only a label.** No scheduler reads it. A league starts as a side effect of generating its first round, which posts to Discord and social. After Build, "start on <date>" appears as a to-do and the start is a separate Go-live card.
 - **Discord and social posts cannot be recalled or suppressed;** the card says exactly what will post and to how many channels.
 - **A ruleset edit never changes a running league** (pinned versions, §4.7); moving a pin is its own confirmed operation. A private ruleset pinned by a league becomes publicly readable.

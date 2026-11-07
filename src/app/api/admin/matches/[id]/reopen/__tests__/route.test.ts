@@ -206,6 +206,21 @@ describe('POST /api/admin/matches/[id]/reopen', () => {
       });
     });
 
+    it('reports a failed format revert like any other failed follow-up step', async () => {
+      vi.mocked(reopenMatch).mockResolvedValue({
+        from_status: 'completed',
+        ratings_rebuilt_players: 2,
+        bracket_matches_removed: 0,
+        failed_steps: ['format'],
+      });
+
+      const res = await POST(request({ reason: 'typo' }), routeParams);
+
+      expect(res.status).toBe(500);
+      expect((await res.json()).code).toBe('match_reopen_incomplete');
+      expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ incomplete: true, failed_steps: ['format'] });
+    });
+
     it('audits the status the match really had when reopening a disputed match', async () => {
       vi.mocked(getMatchById).mockResolvedValue({ ...completedMatch, status: 'disputed', winner_id: null } as never);
       vi.mocked(reopenMatch).mockResolvedValue({

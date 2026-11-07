@@ -4,12 +4,13 @@
  *
  * A league pins a ruleset VERSION (`seasons.ruleset_id`, `tournaments.ruleset_id`), so a fixture that needs "a ruleset"
  * inserts a definition and a published version whose id is the id the fixture will pin. The version carries a valid
- * minimal document and its resolved rules (a blank Gen 9 start, no bans), the same shape the publish function writes.
+ * minimal document and its resolved rules (a blank Gen 9 start, no bans), the same shape and hashes the publish function
+ * writes (`hashDocument`, `hashResolved`).
  * Cleaning deletes the definition, which cascades over its versions (and is refused by the database while a league or a
  * trashed league still pins one, exactly like the application).
  */
 import { randomUUID } from 'node:crypto';
-import { contentHash, type JsonValue } from '@/lib/studio-core/json';
+import { hashDocument, hashResolved } from '@/lib/ruleset-kit/compile';
 import { rulesFromBans } from '@/lib/ruleset-kit/effective';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
 
@@ -63,8 +64,9 @@ export async function insertLocalRuleset(anyClient: AnyClient, input: LocalRules
     name_text: input.name,
     spec: document,
     resolved,
-    content_hash: contentHash(document as unknown as JsonValue),
-    resolved_hash: contentHash(resolved as unknown as JsonValue),
+    // The same hashes the publish function stores, so a fixture version compares equal to one the application writes.
+    content_hash: hashDocument(document),
+    resolved_hash: hashResolved(resolved),
     catalog_version: 'test',
     gen: 9,
     format_key: 'gen9',

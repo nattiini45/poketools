@@ -23,6 +23,7 @@ import {
   withRulesetPreset,
   ptr,
   type Diagnostic,
+  forfeitScoringOf,
   type RankStep,
   type Stage,
 } from '@/lib/format-kit/client';
@@ -61,6 +62,8 @@ import {
   setParticipantsFrom,
   setRuleset,
   setScoreValue,
+  setForfeitScoring,
+  setPerOpponentFaint,
   setSeeding,
   updateStage,
 } from '@/lib/format-studio/editor/ops';
@@ -310,6 +313,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   const fromRoster = stage.participants.from === 'roster';
   const eliminationStage = stage.pairing.kind === 'single_elim' || stage.pairing.kind === 'double_elim';
   const seedings = fromRoster ? SEEDING_ROSTER : SEEDING_EDGES;
+  const forfeit = forfeitScoringOf(stage.scoring);
 
   // A legacy id (an alias of a definition) is offered only while this stage names it, in place of its definition's own
   // entry, so the same ruleset is never listed twice.
@@ -634,13 +638,47 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
               value={stage.scoring.draw}
               reason={t('inspector.stage.drawDisabled')}
             />
-            <UnsupportedScoreRow
-              pointer={ptr('stages', index, 'scoring', 'forfeit')}
-              label={p('field.forfeit')}
-              value={stage.scoring.forfeit}
-              reason={t('inspector.stage.forfeitDisabled')}
+            <NumberField
+              pointer={ptr('stages', index, 'scoring', 'per_opponent_faint')}
+              label={p('field.per_opponent_faint')}
+              value={stage.scoring.per_opponent_faint ?? 0}
+              integer={false}
+              min={0}
+              max={SCORE_ABS_MAX}
+              onCommit={(value) => edit((s) => setPerOpponentFaint(s, value))}
             />
           </div>
+          <CheckboxField
+            pointer={ptr('stages', index, 'scoring', 'forfeit')}
+            label={t('inspector.stage.forfeitOn')}
+            checked={forfeit !== null}
+            onChange={(checked) =>
+              edit((s) => setForfeitScoring(s, checked ? { win: s.scoring.win, loss: 0, faint_bonus: false } : undefined))
+            }
+          />
+          {forfeit !== null && (
+            <div className="grid gap-3 sm:grid-cols-3">
+              {(['win', 'loss'] as const).map((key) => (
+                <NumberField
+                  key={key}
+                  pointer={ptr('stages', index, 'scoring', 'forfeit', key)}
+                  label={t(key === 'win' ? 'inspector.stage.forfeitWin' : 'inspector.stage.forfeitLoss')}
+                  value={forfeit[key]}
+                  integer={false}
+                  min={-SCORE_ABS_MAX}
+                  max={SCORE_ABS_MAX}
+                  onCommit={(value) => value !== undefined && edit((s) => setForfeitScoring(s, { ...forfeit, [key]: value }))}
+                />
+              ))}
+              <CheckboxField
+                className="self-end"
+                pointer={ptr('stages', index, 'scoring', 'forfeit', 'faint_bonus')}
+                label={p('field.faint_bonus')}
+                checked={forfeit.faint_bonus}
+                onChange={(checked) => edit((s) => setForfeitScoring(s, { ...forfeit, faint_bonus: checked }))}
+              />
+            </div>
+          )}
         </Section>
 
         <Section pointer={ptr('stages', index, 'rank')} legend={p('field.rank')}>

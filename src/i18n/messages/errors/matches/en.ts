@@ -60,6 +60,11 @@ export default {
   manual_result_winner_not_participant: 'Winner must be a match participant',
   replay_player_not_in_match: 'Player "{username}" ({player}) is not a participant in this match',
   replay_winner_unknown: 'Could not determine winner from replay',
+  // Showdown ended the battle as a tie (no draws are scored); the pipeline turns it into match_replay_unresolved
+  replay_engine_tie: 'Pokémon Showdown ended this battle as a tie',
+  // recordGameResult: the replay is an engine tie, so the match went to disputed with an unresolved outcome (409, no game written)
+  match_replay_unresolved:
+    'Pokémon Showdown ended this battle as a tie, so no result was recorded. The match is now disputed and an admin decides it.',
   // A replay's battle is bound to at most one game, in any match (games.replay_hash, unique; 409, nothing written)
   replay_already_recorded: 'This replay was already used to record a game result. Each battle can be recorded only once.',
   // replay_url_invalid (not a Showdown replay link or id; 400, checked before the match is read or any fetch) lives in errors/stats
@@ -120,6 +125,9 @@ export default {
   // Admin game edit/delete/match reset warning (sent with a 200 in the result's evolution_recheck_failed): the change is saved, the EPB evolution recheck failed (details in the server log)
   admin_game_evolution_recheck_failed:
     'The game change was saved, but re-checking the evolution progress failed. The failure was logged; run Repair in Record Reconciliation (admin data tools) to fix the evolution state.',
+  // Admin game edit/delete/match reset warning (sent with a 200 in the result's format_revert_failed): the change is saved, taking back the league format's effects of the old result failed (details in the server log)
+  admin_game_format_revert_failed:
+    "The game change was saved, but the league format's effects of the match's old result (item grants, points) could not be taken back. The failure was logged. The league's format check normally retries this on its own on its next pass. Until it is taken back, the old result's effects stay and the next result's are not applied. If the match is completed again before that retry, reopen it (the reopen takes the old effects back) and complete it once more.",
   // Admin match reset: a game rollback lost a race after {count} sibling game(s) were already removed; the match fields were not reset (409, retry finishes it)
   admin_match_reset_partial: {
     one: "The reset stopped because another admin changed one of this match's games at the same moment. {count} game was already removed (its statistics rolled back); the match itself was not reset. Reload the match and reset it again.",
@@ -163,6 +171,11 @@ export default {
   auto_confirm_partial_failure: {
     one: 'Auto-confirm run finished with {count} failed match.',
     other: 'Auto-confirm run finished with {count} failed matches.',
+  },
+  // format-engine cron: a league or the challenge sweep failed (details in the server log)
+  format_cron_partial_failure: {
+    one: 'Format engine cron run finished with {count} failure.',
+    other: 'Format engine cron run finished with {count} failures.',
   },
   INVALID_GAME_ID: 'Game not found',
   INVALID_PROPOSAL_ID: 'Proposal not found',

@@ -7,6 +7,7 @@ export default defineDe<typeof en>()({
     winnersBracket: 'Gewinnerseite',
     losersBracket: 'Verliererseite',
     grandFinals: 'Großes Finale',
+    thirdPlace: 'Spiel um Platz 3',
     noRounds: 'Noch keine Runden angelegt.',
     tbd: 'Offen',
     match: 'Spiel',

@@ -11,10 +11,11 @@
  *   not exist gives `null`, a node of the wrong shape gives its key or its kind label), nothing is mutated, and
  *   the output holds plain strings, numbers and booleans only.
  * - Coverage (`computeCoverage`) is locale-free: it counts the rule units of a definition by how they are
- *   enforced. `auto` units are run by the engine, `checked` units compute a result an admin confirms, `honor`
- *   units are rule cards nobody enforces and `legacy` units are modules that carry data of an existing format.
- *   Nothing executes in this release, so the buckets state the intended enforcement of each primitive
- *   (`manifestEntry(kind).level`).
+ *   enforced. `auto` units are run by the engine, `checked` units compute a result an admin confirms (every team
+ *   constraint: advisory feedback plus the post-match team audit), `honor` units are rule cards nobody enforces and
+ *   `legacy` units are modules that carry data of an existing format.
+ *   The buckets mirror `manifestEntry(kind).level`: the kit engine (`src/lib/format-engine`) runs the `auto` kinds of a
+ *   league whose `season_formats.engine` is `kit`, and a team constraint is `checked`.
  */
 import type { Locale } from '@/i18n/config';
 import { createTranslator, type Translator } from '@/i18n/core';
@@ -69,6 +70,14 @@ export interface StageDescription {
   incoming: string[];
   /** One sentence per advancement rule that leaves this stage. */
   outgoing: string[];
+  /** One sentence per team constraint of the stage, in order. */
+  constraints: string[];
+  /** The calendar sentence followed by one sentence per deadline policy; empty without a calendar. */
+  schedule: string[];
+  /** When the stage ends early; null without an end condition. */
+  endWhen: string | null;
+  /** Which finished group stage this one repeats per group; null without one. */
+  foreachGroup: string | null;
 }
 
 export interface ModuleDescription {
@@ -97,6 +106,8 @@ export interface DefinitionDescription {
   views: string[];
   rules: RuleCardDescription[];
   modules: ModuleDescription[];
+  /** One sentence per attribute, list, relation, resource and custom metric, in that order. */
+  runtime: string[];
   /** `stage` is the display name of the stage a section belongs to, or null for a section of the whole format. */
   sections: { id: string; title: string; body: string; stage: string | null }[];
   coverage: Coverage;
@@ -134,6 +145,14 @@ const squash = (text: string): string => text.replace(/\s+/g, ' ').trim();
 
 type Bucket = 'auto' | 'checked' | 'honor';
 
+/** The document sections whose entries are all of one kind (metrics carry their own `kind`). */
+const RUNTIME_SECTIONS: readonly (readonly [string, string])[] = [
+  ['attributes', 'attr.define'],
+  ['domains', 'domain.define'],
+  ['relations', 'relation.define'],
+  ['resources', 'resource.define'],
+];
+
 function levelOf(kind: string): Bucket {
   const level = manifestEntry(kind)?.level;
   return level === 'checked' || level === 'honor' ? level : 'auto';
@@ -141,9 +160,12 @@ function levelOf(kind: string): Bucket {
 
 /**
  * Counts the rule units of a definition. Per stage: one pairing, one series, one scoring, one groups unit when the
- * stage splits into groups, one per rank step and one when the stage names a ruleset (a stored one or a rule
+ * stage splits into groups, one per team constraint, one for a calendar plus one per deadline policy, one for an
+ * end condition, one for a per-group repeat, one per rank step and one when the stage names a ruleset (a stored one or a rule
  * preset). Per advancement rule: one per selection, `checked` under the `admin_confirm` gate and `auto` otherwise.
- * Per combined standings view: one. Every rule card is an `honor` unit and every module a `legacy` unit.
+ * Per combined standings view: one. A rule counts by its kind's level (`rule.custom` is an `honor` unit, an unknown
+ * kind too), each attribute, list, relation, resource and metric is one unit by its kind's level, and every module
+ * is a `legacy` unit.
  * Locale-free; any value is safe.
  */
 export function computeCoverage(def: FormatDefinition): Coverage {
@@ -156,6 +178,17 @@ export function computeCoverage(def: FormatDefinition): Coverage {
     cov[levelOf('series.rule')] += 1;
     cov[levelOf('score.match')] += 1;
     if (isRec(entry.groups)) cov[levelOf('group.form')] += 1;
+    for (const constraint of listOf(entry.constraints)) {
+      if (isRec(constraint)) cov[levelOf(`constraint.${strOf(constraint, 'kind') ?? 'count'}`)] += 1;
+    }
+    if (isRec(entry.calendar)) {
+      cov[levelOf('time.schedule')] += 1;
+      for (const policy of listOf(entry.calendar.deadlines)) {
+        if (isRec(policy)) cov[levelOf('time.deadline_policy')] += 1;
+      }
+    }
+    if (isRec(entry.end_when)) cov[levelOf('stage.end_when')] += 1;
+    if (isRec(entry.foreach_group)) cov[levelOf('stage.foreach_group')] += 1;
     for (const step of listOf(entry.rank)) {
       if (isRec(step)) cov[levelOf(`rank.${strOf(step, 'kind') ?? 'manual'}`)] += 1;
     }
@@ -175,7 +208,17 @@ export function computeCoverage(def: FormatDefinition): Coverage {
     if (isRec(view)) cov[levelOf('standings.view')] += 1;
   }
   for (const rule of listOf(root.rules)) {
-    if (isRec(rule)) cov.honor += 1;
+    if (!isRec(rule)) continue;
+    const kind = strOf(rule, 'kind') ?? '';
+    cov[manifestEntry(kind)?.slot === 'rule' ? levelOf(kind) : 'honor'] += 1;
+  }
+  for (const [section, kind] of RUNTIME_SECTIONS) {
+    for (const entry of listOf(root[section])) {
+      if (isRec(entry)) cov[levelOf(kind)] += 1;
+    }
+  }
+  for (const entry of listOf(root.metrics)) {
+    if (isRec(entry)) cov[levelOf(strOf(entry, 'kind') ?? 'metric.define')] += 1;
   }
   for (const entry of listOf(root.modules)) {
     if (isRec(entry)) cov.legacy += 1;
@@ -270,7 +313,8 @@ function rankItem(step: Rec, c: Ctx): string | null {
       const direction = strOf(step, 'direction');
       if (metric === null || direction === null) return null;
       return c.p.dynamic('item.rank_metric', {
-        metric: c.p.dynamic(`metric.${metric}`, undefined, metric),
+        // A custom metric (`metric.define`, `score.placement`) has no catalog label: it shows its key.
+        metric: c.p.has(`metric.${metric}`) ? c.p.dynamic(`metric.${metric}`, undefined, metric) : metric,
         direction: c.p.dynamic(`option.direction_${direction}`, undefined, direction),
       });
     }
@@ -343,6 +387,16 @@ function edgesOf(def: unknown): Rec[] {
   return listOf(recOf(def).edges).filter(isRec);
 }
 
+function scheduleSentences(stage: Rec, c: Ctx): string[] {
+  const calendar = stage.calendar;
+  if (!isRec(calendar)) return [];
+  const policies = listOf(calendar.deadlines).filter(isRec);
+  return [
+    describe('time.schedule', calendar, c.locale),
+    ...policies.map((policy) => describe('time.deadline_policy', policy, c.locale)),
+  ];
+}
+
 function buildStage(def: unknown, stage: Rec, key: string, c: Ctx, plan: StagePlan | undefined): StageDescription {
   const name = textOf(stage.name, c.locale) ?? key;
   const steps = listOf(stage.rank).filter(isRec);
@@ -364,6 +418,12 @@ function buildStage(def: unknown, stage: Rec, key: string, c: Ctx, plan: StagePl
     expected: expectedSentence(plan, c),
     incoming: edges.filter((edge) => strOf(edge, 'to') === key).map((edge) => edgeSentence(edge, c)),
     outgoing: edges.filter((edge) => strOf(edge, 'from') === key).map((edge) => edgeSentence(edge, c)),
+    constraints: listOf(stage.constraints)
+      .filter(isRec)
+      .map((entry) => describe(`constraint.${strOf(entry, 'kind') ?? 'count'}`, entry, c.locale)),
+    schedule: scheduleSentences(stage, c),
+    endWhen: isRec(stage.end_when) ? describe('stage.end_when', stage.end_when, c.locale) : null,
+    foreachGroup: isRec(stage.foreach_group) ? describe('stage.foreach_group', stage.foreach_group, c.locale) : null,
   };
 }
 
@@ -401,6 +461,10 @@ export function describeStage(
     expected: null,
     incoming: [],
     outgoing: [],
+    constraints: [],
+    schedule: [],
+    endWhen: null,
+    foreachGroup: null,
   };
   return safe(() => buildStage(def, stage, stageKey, makeCtx(def, locale, opts), planByKey(opts).get(stageKey)), empty);
 }
@@ -434,6 +498,10 @@ function buildModule(entry: Rec, c: Ctx): ModuleDescription {
 }
 
 function buildRule(entry: Rec, c: Ctx): RuleCardDescription {
+  const kind = strOf(entry, 'kind') ?? 'rule.custom';
+  if (kind !== 'rule.custom') {
+    return { id: strOf(entry, 'id') ?? '', text: describe(kind, entry, c.locale), verify: '', when: '', visibleToPlayers: true };
+  }
   const verifyKey = `rule.verify_${strOf(entry, 'verify')}`;
   const whenKey = `rule.when_${strOf(entry, 'when')}`;
   const scope = recOf(entry.scope);
@@ -448,6 +516,19 @@ function buildRule(entry: Rec, c: Ctx): RuleCardDescription {
     when: squash(when.join(' ')),
     visibleToPlayers: entry.visible_to_players !== false,
   };
+}
+
+function buildRuntime(root: Rec, locale: Locale): string[] {
+  const lines: string[] = [];
+  for (const [section, kind] of RUNTIME_SECTIONS) {
+    for (const entry of listOf(root[section])) {
+      if (isRec(entry)) lines.push(describe(kind, entry, locale));
+    }
+  }
+  for (const entry of listOf(root.metrics)) {
+    if (isRec(entry)) lines.push(describe(strOf(entry, 'kind') ?? 'metric.define', entry, locale));
+  }
+  return lines;
 }
 
 function coverageSentence(cov: Coverage, locale: Locale): string {
@@ -520,6 +601,7 @@ export function describeDefinition(def: FormatDefinition, locale: Locale, opts?:
     ),
     rules: safe(() => listOf(root.rules).filter(isRec).map((rule) => buildRule(rule, c)), []),
     modules: safe(() => listOf(root.modules).filter(isRec).map((entry) => buildModule(entry, c)), []),
+    runtime: safe(() => buildRuntime(root, locale), []),
     sections: safe(
       () =>
         listOf(recOf(root.text).sections)
@@ -555,7 +637,17 @@ export function definitionToPlainText(d: DefinitionDescription): string {
     lines.push('', t('heading.stages'));
     for (const stage of d.stages) {
       lines.push(`- ${stage.summary}`);
-      for (const line of [stage.participants, stage.groups, stage.ruleset, stage.doubles, stage.expected]) {
+      for (const line of [
+        stage.participants,
+        stage.groups,
+        stage.ruleset,
+        stage.doubles,
+        stage.expected,
+        ...stage.constraints,
+        ...stage.schedule,
+        stage.endWhen,
+        stage.foreachGroup,
+      ]) {
         if (line !== null && line !== '') lines.push(`  ${line}`);
       }
     }
@@ -581,6 +673,10 @@ export function definitionToPlainText(d: DefinitionDescription): string {
       lines.push(`- ${entry.label}`, `  ${entry.summary}`);
       for (const fact of entry.facts) lines.push(`  ${fact.label}: ${fact.value}`);
     }
+  }
+  if (d.runtime.length > 0) {
+    lines.push('', t('heading.runtime'));
+    for (const line of d.runtime) lines.push(`- ${line}`);
   }
   if (d.sections.length > 0) {
     lines.push('', t('heading.sections'));

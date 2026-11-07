@@ -23,6 +23,10 @@ function lines(stage: StageDescription): string[] {
     stage.doubles,
     stage.rankChain,
     stage.expected,
+    ...stage.constraints,
+    ...stage.schedule,
+    stage.endWhen,
+    stage.foreachGroup,
   ];
   return all.filter((line): line is string => line !== null && line !== '');
 }

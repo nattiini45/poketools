@@ -25,6 +25,8 @@ src/lib/pkmn/
 ├── ruleset-preset-catalog.ts  The picker view of the catalog shared by both studios: entries, getRulesetPreset, isRulesetPresetId, search, grouping (client-safe)
 ├── preset-rules.ts            Shapes a preset resolves to (types only, client-safe)
 ├── preset-rules.server.ts     resolvePresetRules(id), resolveTourOverlay(id): per-mod resolution against the dex; memoised per process
+├── showdown-challenge.ts      toShowdownChallenge(resolved, lookup?): copyable custom-rules challenge string on the ruleset's own base format (client-safe)
+├── showdown-challenge.server.ts challengeSpeciesLookup(gen): the dex's cosmetic-forme and other-forme facts the challenge needs
 ├── known-ids.server.ts        knownIds(kind, gen, universe), presetKnownIds(preset, kind): the id sets behind the unknown_entry warning
 ├── seed-format-ids.ts         The frozen list of 88 ids POST /api/seed-rulesets creates site rulesets for
 ├── catalog-index(.server).ts  The entry catalog the pickers read (GET /api/pkmn/catalog/[kind])
@@ -34,6 +36,7 @@ src/lib/pkmn/
     ├── standard.ts            Move, item and ability bans of the ladder tier families, Little Cup, Monotype, 1v1, the National Dex family, doubles
     ├── draft.ts               Bans of the draft formats, tier bans (Gen 3 Draft bans the Uber tier), combination bans the app lists but does not model
     ├── champions.ts           The Champions roster by category, from the generated lists
+    ├── wichtelcup.ts          The approved Wichtelcup pools (141 exact species/forms) and item/ability bans
     ├── champions-roster.generated.ts   Written by scripts/ruleset-presets/generate-champions-roster.mjs
     └── tour-overlay.ts        Documented Smogon tournament extras per draft preset
 ```
@@ -46,6 +49,15 @@ A preset belongs to a **source** and a **family**, which is how the pickers grou
 |---|---|
 | Pokémon Showdown (`showdown`) | Singles, Doubles, National Dex, Other (Monotype, 1v1) |
 | Smogon draft leagues (`smogon-draft`) | Draft (generations 3 to 9), NatDex Draft (including NatDex LC Draft), Doubles Draft (6v6 and 4v4, also NatDex), Champions Draft (including NatDex and 4v4 doubles) |
+| PokéTools (`poketools`) | Community: organizer-owned formats such as the Wichtelcup |
+
+The per-player pools and weekly gift rules of the cup are the shipped format example `wichtelcup` (see [Format Kit](./format-kit.md#wichtelcup-example)), which names this preset as its stage ruleset.
+
+`gen9natdexwichtelcup` starts from a blank Gen 9 National Dex ruleset, not a tier: its allowlist is exactly the 64 normal, 30 junk, 23 premium and 24 New Year species/forms (141 total). It bans Light Clay, every Z-crystal and Mega Stone, Moody and Snow Cloak, and carries only Species, Item, Terastal and Mega Rayquaza clauses; it inherits no Sleep, OHKO, Evasion or tier bans.
+
+The pool entries are "base form" entries, so the team check closes the ways a pool species becomes a forme the pool does not list: the allowlist rejects a team member that is already such a forme (Rayquaza-Mega, Toxtricity-Low-Key), and the item and move bans close the item- or move-forced ones: Red Orb (Primal Groudon), Adamant Crystal and Lustrous Globe (the Origin formes), Ultranecrozium Z, the Mega Stones, and the move Dragon Ascent (Mega Rayquaza needs no stone). Banning Dragon Ascent also removes it as an attack for Rayquaza; the cup's rule is "no Mega", and the team check cannot see a battle action. A data-driven test (`wichtelcup-validation.server.test.ts`) fails when a forme outside the pool gets an item or Mega move that is not banned. The preset documents `minTeamSize: 6` and `pickedTeamSize: 6` ("exactly six"), like the other presets' team-size facts; the validator does not enforce a minimum team size. Toxtricity-Low-Key is not in the pool (the source says "standard species" for Toxtricity, "base form" for the others): whether it is allowed is the organizer's call. The Terastal Clause is informational at the ruleset layer (a set with a Tera type still passes `validateTeam`); the cup's no-Terastallization rule is enforced by the format example's `constraint.tera` `banned`, which the team check and the post-match audit read, and that rule exists only in a league that attaches the example.
+
+**Showdown challenge.** `toShowdownChallenge` writes `<format> @@@ <rules>` where the format is the least restrictive Showdown format with the ruleset's generation, universe and game type (`showdownChallengeFormat`: Anything Goes for Gen 6-9 standard, National Dex AG for Gen 9 National Dex, else the generation's Custom Game). Every entry is written with its kind (`+pokemon:rayquaza`, `-item:metronome`, `-move:metronome`) because Showdown refuses an id shared by a move and an item. A rule that names a base species covers all its formes in Showdown, so an allowlisted base species is followed by an explicit `-pokemon:<forme>` for every forme the allowlist does not list, and a cosmetic forme (Vivillon patterns, Deerling and Sawsbuck seasons, which Showdown cannot tell apart) is written as its base species. Those forme facts come from the dex through the `lookup` argument (`challengeSpeciesLookup`, server only; the rules page passes it). The pinned Showdown source is not a dependency, so the exact parser behaviour is the documented one, not a tested one. The challenge cannot carry level rules, team constraints or per-player pools, and the page says so.
 
 Draft presets are not on Showdown's ladder search (`searchShow: false`). **Only the 88 standard Showdown formats** of `SEED_FORMAT_IDS` become shared site rulesets (`POST /api/seed-rulesets`); the other presets are starting points: a league or admin makes its own ruleset from one. Seeding a new preset is a decision, made by adding its id to that list.
 

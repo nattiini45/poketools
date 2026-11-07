@@ -15,6 +15,12 @@ import type { MatchPrepAnalysis } from '@/types/game';
 
 interface MatchPrepClientProps {
   matchId: string;
+  /**
+   * The match's tournament and its season. The editor needs both: the live check resolves the round of this match from
+   * `match_id` + `tournament_id`, and the validation panel's pools card reads the season's kit league view.
+   */
+  tournamentId?: string | null;
+  seasonId?: string | null;
   rulesetId?: string;
   rulesetName?: string;
   /** Base format from the tournament's ruleset (e.g. 'gen9ou') */
@@ -34,6 +40,8 @@ interface MatchPrepClientProps {
 
 export default function MatchPrepClient({
   matchId,
+  tournamentId,
+  seasonId,
   rulesetId,
   rulesetName,
   baseFormat,
@@ -88,6 +96,8 @@ export default function MatchPrepClient({
           format={baseFormat ?? 'gen9ou'}
           generation={generation}
           matchId={matchId}
+          tournamentId={tournamentId}
+          seasonId={seasonId}
           initialPokemon={initialPokemon}
           locked={false}
           rulesetId={rulesetId}

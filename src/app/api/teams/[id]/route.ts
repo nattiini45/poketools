@@ -7,6 +7,9 @@ import { isCompletedMatchLocked } from '@/lib/team/completed-match-lock';
 import { resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
 import { toPublicTeam, type PublicTeam } from '@/lib/team/public-team';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
+import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
+import { roundOfMatch } from '@/lib/team/match-round';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet, Team, TeamImportSource } from '@/types/team';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -122,13 +125,43 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       return completedMatchResponse();
     }
 
+    // A kit league's stage constraints and the owner's resources: advice, never a refusal. The verdict reads the OWNER's
+    // gifts and pools (own-visibility resources whose giver is hidden), so only the owner gets it: a site admin
+    // editing another player's team would otherwise probe their holdings through `team_check`, as `validate-team`
+    // already withholds. An admin's rewrite of a match-linked roster is a correction (it may be a completed match's)
+    // and gets no advisory either, as the rules have moved on since.
+    let advisory: KitTeamAdvisory = {};
+    if (team.tournament_id && team.player_id === player.playerId && !(player.isAdmin && team.match_id)) {
+      const context = { tournamentId: team.tournament_id, playerId: team.player_id };
+      try {
+        // A team registered for a match is judged by the rules of that match's round; a planned team by the phase's
+        // current round. A match that cannot be read is no reason to refuse the save, and no reason to judge the team
+        // by another round: the advisory is reported unavailable.
+        const matchRound = team.match_id ? await roundOfMatch(team.match_id, team.tournament_id) : null;
+        const roundNumber = matchRound?.status === 'ok' ? matchRound.roundNumber : undefined;
+        if (matchRound && roundNumber === undefined) {
+          // The match (or its round) is gone or belongs to another tournament: never fall back to the phase's round.
+          logger.warn('api/team-check', 'Match round not found for the team advisory', { ...context, teamId: team.id });
+          advisory = { team_check: { status: 'unavailable' } };
+        } else {
+          advisory = await adviseKitTeam(
+            { tournament: team.tournament_id, playerId: team.player_id, pokemon: body.pokemon, ...(roundNumber !== undefined ? { roundNumber } : {}) },
+            context
+          );
+        }
+      } catch (roundError) {
+        logger.error('api/team-check', 'Match round could not be read for the team advisory', { ...context, teamId: team.id, error: roundError });
+        advisory = { team_check: { status: 'unavailable' } };
+      }
+    }
+
     // The database refuses a completed match's roster for any non-correction
     // write (a completion racing this request answers the same 409).
     const updated = await updateTeamPokemon(id, body.pokemon, body.import_source, body.name, {
       correction: player.isAdmin,
     });
     await expireItemUsageReads(updated, 'api/teams/[id]');
-    return NextResponse.json<ApiResult<PublicTeam>>({ success: true, data: toPublicTeam(updated) });
+    return NextResponse.json<ApiResult<PublicTeam>>({ success: true, data: toPublicTeam(updated), ...advisory });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update team');
   }

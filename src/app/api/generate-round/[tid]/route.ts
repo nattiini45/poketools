@@ -11,12 +11,11 @@ import {
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 import {
   getRoundsByTournament,
-  createRound,
-  updateRoundByePlayers,
+  createRoundWithMatches,
+  addMatchesToRound,
   updateRoundStatus,
 } from '@/lib/supabase/queries/rounds';
 import {
-  createMatchBatch,
   getCompletedMatchRecords,
   getMatchesByTournament,
   getPairedMatchRecords,
@@ -44,9 +43,23 @@ import { emitSocialEvent } from '@/lib/social/notify';
 import { triggerTournamentReport } from '@/lib/ai/trigger';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
-import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
-import type { ApiResult } from '@/types/api';
+import { kitPairsRounds, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
+import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-server';
+import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import {
+  announceKitRound,
+  assertMirroredGroupsPlayLegs,
+  assertNoOpenRoundBeforeNext,
+  assertPhaseGenerates,
+  assertPhaseOpenForRounds,
+  assertPhaseReadyForFirstRound,
+  fillKitRoundDeadline,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
+import { mirrorsLeagueGroups } from '@/lib/tournament/phase-week-plan';
+import type { ApiResult, ApiWarning } from '@/types/api';
 import type { Round } from '@/types/round';
 import type { Pairing } from '@/lib/tournament/types';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -85,12 +98,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    // A custom league without an attached format cannot start: refuse before any round is written. The season
-    // type is already joined onto the tournament, so every other league type takes no extra read.
-    if (tournament.season_format_type === 'custom' && tournament.season_id) {
-      await assertSeasonFormatAttached(tournament.season_id);
-    }
-
+    // A phase of a kit league pairs by its own stage: Swiss ranks by the stage's scoring and chain and stops after its
+    // rounds; a round robin plays its legs. Shadow and legacy leagues keep the legacy pairing. A custom league without
+    // an attached format cannot start: refused before any round is written.
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
+    const kit = kitPhase?.engine === 'kit' && kitPairsRounds(kitPhase.stage) ? kitPhase : null;
+    const warnings: ApiWarning[] = [];
+    // A manual stage is paired by hand and a challenge ladder takes its matches from accepted challenges: no generator
+    // may pair either.
+    assertPhaseGenerates(kitPhase);
     if (tournament.status === 'completed') {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Tournament is already completed', code: 'tournament_already_completed' },
@@ -102,6 +118,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     //    Round Robin pairings are deterministic (circle method) and don't
     //    depend on results, so rounds can be generated in advance.
     const existingRounds = await getRoundsByTournament(tid);
+
+    // A stage that ends on a condition is evaluated when a round finishes: no round is written ahead of one still in play,
+    // or the phase would complete with that round's matches stranded (a round robin writes rounds in advance). This read
+    // comes before the end check below on purpose: a match that completes in between is then seen by the end check, which
+    // refuses the round (`rounds_stage_ended`) when the condition holds on the finished state.
+    await assertNoOpenRoundBeforeNext(tid, kitPhase, existingRounds);
+    // A stage that reached its end_when takes no further round.
+    await assertPhaseOpenForRounds(tournament, kitPhase);
+    // The first round waits for the format's own set-up (a draw, the actions players owe); an admin may force it. The
+    // forced start is audited once the round is written (`announceKitRound`), not before the request can still be refused.
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
+    });
 
     const isElimination =
       tournament.bracket_type === 'single_elim' ||
@@ -173,9 +203,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin'
         ? await getPairedMatchRecords(tid)
         : [];
-    const groups = tournament.season_id
+    let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(tid);
+    // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
+    if (kit && tournament.season_id && groups.length === 0) {
+      groups = await ensureKitPhaseGroups({ seasonId: tournament.season_id, phaseId: tid, stage: kit.stage, seed: kit.seed });
+    } else if (kit && tournament.season_id) {
+      // Groups another request has inserted but not filled yet (409 groups_forming_in_progress, never an empty round).
+      assertKitGroupsFormed(groups, kit.stage);
+    }
+    // The league week plan has no legs: a multi-leg kit round robin on groups that mirror league groups is refused here,
+    // not silently played as one leg (generate-all-rounds refuses it the same way).
+    assertMirroredGroupsPlayLegs(kit ? roundRobinOf(kit.stage.pairing) : null, groups.length > 0 && mirrorsLeagueGroups(groups));
 
     // 5. Generate pairings (group-scoped if groups exist)
     const nextRoundNumber = tournament.current_round + 1;
@@ -211,8 +251,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // The week this call writes: the next one after `current_round`, except in a grouped round robin phase, where it
     // is the first planned week still to write (`pendingWeeks`), never derived from `current_round`.
     let roundNumber = nextRoundNumber;
+    // Swiss pairings of a kit stage that repeat an earlier pairing because no other pairing was left.
+    let rematches = 0;
+    // Pairs a stage filter rejected that the round could not avoid (Swiss) or dropped from the schedule (round robin).
+    let forbidden = 0;
+    // The pair filter and the bipartite sides of a kit stage; read only for those two pairing kinds.
+    const aidsFor = (round: number): Promise<PairingAids> =>
+      kit && tournament.season_id
+        ? loadPairingAids({ seasonId: tournament.season_id, stage: kit.stage, roundNumber: round, playerIds: participantIds })
+        : Promise.resolve({});
 
-    if (groups.length > 0 && tournament.bracket_type === 'round_robin') {
+    // A kit round robin pairs each of its own groups by the stage (legs included); groups that mirror league groups
+    // keep the league week plan with its cross-group weeks.
+    if (groups.length > 0 && tournament.bracket_type === 'round_robin' && !(kit && !mirrorsLeagueGroups(groups))) {
       // Grouped round robin: the week plan (group-schedule.ts). Each group plays its own round count inside the
       // shared weeks (rest weeks for a smaller group); groups that mirror league groups also get the cross-group
       // weeks, and a placement week is paired here from the group tables after the week before.
@@ -230,9 +281,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       const { resolved } = await resolveWeekPairings(tournament.season_id, context, [roundNumber]);
       allPairings = resolved[0].pairings;
       roundName = `Round ${roundNumber}`;
+      // A filter over a round robin on league groups drops the rejected pairs from the week plan.
+      const weekAids = await aidsFor(roundNumber);
+      if (weekAids.allowPair) {
+        const allow = weekAids.allowPair;
+        const kept = allPairings.filter((p) => allow(p.player_1_id, p.player_2_id));
+        forbidden += allPairings.length - kept.length;
+        allPairings = kept;
+      }
     } else if (groups.length > 0) {
       // Generate pairings within each group separately
       roundName = `Round ${nextRoundNumber}`;
+      const aids = await aidsFor(nextRoundNumber);
       for (const group of groups) {
         const groupPlayerIds = group.members.map((m) => m.player_id);
         const groupNames: Record<string, string> = {};
@@ -245,22 +305,86 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             groupPlayerIds.includes(m.player_2_id)
         );
 
+        const groupByes = byeHistory.filter((b) => groupPlayerIds.includes(b.player_id));
+        const groupPaired = pairedMatches.filter(
+          (m) => groupPlayerIds.includes(m.player_1_id) && groupPlayerIds.includes(m.player_2_id)
+        );
+        if (kit) {
+          const result = pairNextRound({
+            stage: kit.stage,
+            participantIds: groupPlayerIds,
+            participantNames: groupNames,
+            matches: groupMatches,
+            pairedMatches: groupPaired,
+            byeHistory: groupByes,
+            roundNumber: nextRoundNumber,
+            outcomes: kit.outcomes,
+            tableExtras: kit.tableExtras,
+            seed: kit.seed,
+            allowPair: aids.allowPair,
+            sides: aids.sides,
+          });
+          // A group that has played all its rounds rests while a larger one plays on.
+          if (result.kind !== 'round') continue;
+          allPairings.push(...result.round.pairings);
+          allByePlayerIds.push(...result.round.bye_player_ids);
+          rematches += result.round.rematches ?? 0;
+          forbidden += result.round.forbidden ?? 0;
+          continue;
+        }
         const generated = generateRound(
           tournament.bracket_type,
           groupPlayerIds,
           groupNames,
           groupMatches,
           nextRoundNumber,
-          {
-            startingBrackets,
-            byeHistory: byeHistory.filter((b) => groupPlayerIds.includes(b.player_id)),
-            pairedMatches: pairedMatches.filter(
-              (m) => groupPlayerIds.includes(m.player_1_id) && groupPlayerIds.includes(m.player_2_id)
-            ),
-          }
+          { startingBrackets, byeHistory: groupByes, pairedMatches: groupPaired }
         );
         allPairings.push(...generated.pairings);
         allByePlayerIds.push(...generated.bye_player_ids);
+      }
+      if (kit && allPairings.length === 0 && allByePlayerIds.length === 0) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'All rounds have already been generated', code: 'rounds_all_generated' },
+          { status: 400 }
+        );
+      }
+    } else if (kit) {
+      const aids = await aidsFor(nextRoundNumber);
+      const result = pairNextRound({
+        stage: kit.stage,
+        participantIds,
+        participantNames,
+        matches: matchHistory,
+        pairedMatches,
+        byeHistory,
+        roundNumber: nextRoundNumber,
+        outcomes: kit.outcomes,
+        tableExtras: kit.tableExtras,
+        seed: kit.seed,
+        allowPair: aids.allowPair,
+        sides: aids.sides,
+      });
+      if (result.kind !== 'round') {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'All rounds have already been generated', code: 'rounds_all_generated' },
+          { status: 400 }
+        );
+      }
+      allPairings = result.round.pairings;
+      allByePlayerIds = result.round.bye_player_ids;
+      roundName = result.round.round_name;
+      rematches = result.round.rematches ?? 0;
+      forbidden = result.round.forbidden ?? 0;
+      // A later leg repeats the first leg's pairings on purpose: the drift guard looks inside this round's leg only.
+      if (roundRobinOf(kit.stage.pairing) !== null) {
+        const leg = legRoundRange(participantIds.length, nextRoundNumber);
+        assertNoScheduleDrift(
+          roundName,
+          allPairings,
+          pairedMatches.filter((m) => m.round_number >= leg.first && m.round_number <= leg.last),
+          { ignoreRoundNumber: nextRoundNumber }
+        );
       }
     } else {
       // A round robin has a fixed number of rounds (circle method): past the last one there is nothing to pair.
@@ -315,41 +439,59 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // 6. Create round record (use bo_overrides if round name matches, else default)
+    // A round the admin completed while it was empty cannot take matches (`round_write` refuses it, which is meant for a
+    // completion that raced the write): refused here with the way out, instead of failing on every retry.
+    if (emptyRound?.status === 'completed') {
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: `${emptyRound.name} is already completed and holds no matches. Delete it to generate it again.`,
+          code: 'rounds_round_completed',
+          params: { round: emptyRound.name },
+        },
+        { status: 409 }
+      );
+    }
+
+    // 6. Write the round and its matches (use bo_overrides if round name matches, else default). One transaction under the
+    // phase row lock (`round_write`): a stage end that completed the phase after the guards above read it refuses the write
+    // (409 `rounds_phase_completed`, nothing left behind, not even an empty round), and one that comes later waits for it.
     const roundBestOf = tournament.bo_overrides[roundName] ?? tournament.best_of_default;
     // Swiss and round robin byes are stored on the round; an elimination bye is
     // structural (the bracket engine owns it) and stays out of the column.
     const storesByes =
       tournament.bracket_type === 'swiss' || tournament.bracket_type === 'round_robin';
+    const matchInputs = allPairings.map((pairing) => ({
+      player_1_id: pairing.player_1_id,
+      player_2_id: pairing.player_2_id,
+    }));
     let round: Round;
     if (emptyRound) {
       // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so a round
-      // reused by a retry carries them exactly like a freshly inserted one.
+      // reused by a retry carries them exactly like a freshly inserted one. The byes go in the same transaction as the
+      // matches (`round_write`), so a write the completed phase refuses leaves the round's stored byes as they were.
       const storedByes = emptyRound.bye_player_ids ?? [];
       const byesChanged =
         storesByes &&
         (storedByes.length !== allByePlayerIds.length ||
           storedByes.some((id) => !allByePlayerIds.includes(id)));
-      round = byesChanged ? await updateRoundByePlayers(emptyRound.id, allByePlayerIds) : emptyRound;
+      round = byesChanged ? { ...emptyRound, bye_player_ids: allByePlayerIds } : emptyRound;
+      // 7. Match stubs of the reused round
+      if (byesChanged) {
+        await addMatchesToRound(round, matchInputs, allByePlayerIds);
+      } else {
+        await addMatchesToRound(round, matchInputs);
+      }
     } else {
-      round = await createRound({
+      // 7. The new round carries its match stubs
+      round = await createRoundWithMatches({
         tournament_id: tid,
         name: roundName,
         round_number: roundNumber,
         best_of: roundBestOf,
         ...(storesByes ? { bye_player_ids: allByePlayerIds } : {}),
+        matches: matchInputs,
       });
-    }
-
-    // 7. Create match stubs
-    if (allPairings.length > 0) {
-      const matchInputs = allPairings.map((pairing) => ({
-        round_id: round.id,
-        tournament_id: tid,
-        player_1_id: pairing.player_1_id,
-        player_2_id: pairing.player_2_id,
-      }));
-      await createMatchBatch(matchInputs);
     }
 
     // 8. Update tournament to active and increment round (a grouped phase that filled an earlier week never moves
@@ -385,8 +527,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // A stage with a calendar gives the round its deadline (an admin's own deadline is never replaced).
+    round = await fillKitRoundDeadline(tournament, kitPhase, round);
+
     // The new pairings show on the next view of the public pages.
     expireTournamentReads(tid, tournament.season_id);
+
+    // A kit league's format reacts to the new round (stage_start for the first one, round_start, rematch checks). Best
+    // effort and logged inside: the hook never fails the write.
+    await announceKitRound(tournament, kitPhase, { roundNumber, rematches, forbidden }, tournament.status === 'upcoming', forcedStart);
 
     logAuditEvent({
       actor_id: admin.playerId,
@@ -401,8 +550,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         matches: allPairings.length,
         byes: allByePlayerIds.length,
         started,
+        ...(kit ? { engine: 'kit', rematches, ...(forbidden > 0 ? { forbidden } : {}) } : {}),
       },
     });
+    if (rematches > 0) warnings.push({ code: 'swiss_rematches', params: { count: rematches } });
+    if (forbidden > 0) warnings.push({ code: 'pairing_forbidden', params: { count: forbidden } });
 
     // Discord + social notification (fire-and-forget)
     const roundPayload = {
@@ -444,7 +596,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     return NextResponse.json<ApiResult<Round>>(
-      { success: true, data: round },
+      { success: true, data: round, ...(warnings.length > 0 ? { warnings } : {}) },
       { status: 201 }
     );
   } catch (err) {

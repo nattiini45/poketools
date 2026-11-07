@@ -72,6 +72,11 @@ vi.mock('@/lib/team/item-usage-cache', () => ({
   expireItemUsageReads: vi.fn(),
 }));
 
+vi.mock('@/lib/format-engine/runtime/team-server', () => ({
+  evaluateTeam: vi.fn(),
+  currentPhaseRound: vi.fn(),
+}));
+
 // --------------- imports (after mocks) ---------------
 
 import { GET, POST } from '@/app/api/match-prep/route';
@@ -85,6 +90,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getMatchPrepTeam, upsertMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { upsertTeamForMatch } from '@/lib/supabase/queries/teams';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
+import { currentPhaseRound, evaluateTeam } from '@/lib/format-engine/runtime/team-server';
 
 // --------------- helpers ---------------
 
@@ -476,5 +482,146 @@ describe('POST /api/match-prep', () => {
 
     expect(response.status).toBe(500);
     expect(payload.success).toBe(false);
+  });
+});
+
+
+// --------------- kit leagues ---------------
+
+describe('POST /api/match-prep in a kit league', () => {
+  const kitTournament = { ...tournament, season_format_type: 'custom' };
+  const REFUSED = {
+    applies: true,
+    result: {
+      valid: false,
+      issues: [],
+      team_issues: ['Team size: this league needs 6 to 6 Pokémon, found 2'],
+      team_issue_details: [{ issue: 'Team size: this league needs 6 to 6 Pokémon, found 2', code: 'kit_roster_size', params: { min: 6, max: 6, have: 2 } }],
+    },
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: P1_ID, name: 'Alice', isAdmin: false } as never);
+    vi.mocked(getMatchById).mockResolvedValue(match as never);
+    vi.mocked(isEvolutionPointBuy).mockReturnValue(false);
+    vi.mocked(getTournamentById).mockResolvedValue(kitTournament as never);
+    vi.mocked(getRoundById).mockResolvedValue({ id: match.round_id, round_number: 3 } as never);
+    vi.mocked(upsertMatchPrepTeam).mockResolvedValue({ match_id: MATCH_ID, player_id: P1_ID, pokemon } as never);
+    vi.mocked(upsertTeamForMatch).mockResolvedValue(undefined as never);
+    vi.mocked(evaluateTeam).mockResolvedValue(REFUSED as never);
+  });
+
+  it('saves a team that breaks the stage constraints and answers 200 with the verdict as team_check.status unmet', async () => {
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload).toMatchObject({
+      success: true,
+      team_check: { status: 'unmet', verdict: { valid: false, team_issue_details: [{ code: 'kit_roster_size' }] } },
+    });
+    expect(payload).not.toHaveProperty('code');
+    expect(evaluateTeam).toHaveBeenCalledWith({
+      seasonId: kitTournament.season_id,
+      phaseId: TOURNAMENT_ID,
+      playerId: P1_ID,
+      roundNumber: 3,
+      pokemon,
+    });
+    expect(upsertMatchPrepTeam).toHaveBeenCalledWith(MATCH_ID, P1_ID, pokemon, 'manual');
+    expect(upsertTeamForMatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives an admin saving for another player no team verdict (it would read the target private gifts)', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: '00000000-0000-4000-8000-000000000040', name: 'Admin', isAdmin: true } as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual', player_id: P2_ID }));
+
+    expect(response.status).toBe(200);
+    expect(upsertMatchPrepTeam).toHaveBeenCalledWith(MATCH_ID, P2_ID, pokemon, 'manual');
+    expect(await response.json()).not.toHaveProperty('team_check');
+    expect(evaluateTeam).not.toHaveBeenCalled();
+  });
+
+  it('still advises a participating admin who saves their own team, with their own player_id given', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: P1_ID, name: 'Alice', isAdmin: true } as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual', player_id: P1_ID }));
+
+    expect((await response.json()).team_check.status).toBe('unmet');
+    expect(evaluateTeam).toHaveBeenCalledWith(expect.objectContaining({ playerId: P1_ID }));
+  });
+
+  it('saves a team that passes', async () => {
+    vi.mocked(evaluateTeam).mockResolvedValue({ applies: true, result: { valid: true, issues: [], team_issues: [] } } as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(upsertMatchPrepTeam).toHaveBeenCalledWith(MATCH_ID, P1_ID, pokemon, 'manual');
+    expect(await response.json()).not.toHaveProperty('team_check');
+  });
+
+  it('saves when the phase has no kit rules to check', async () => {
+    vi.mocked(evaluateTeam).mockResolvedValue({ applies: false, result: { valid: true, issues: [], team_issues: [] } } as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty('team_check');
+  });
+
+  it('does not hold the rewrite of a completed match to the rules', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ playerId: '00000000-0000-4000-8000-000000000040', name: 'Admin', isAdmin: true } as never);
+    vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed' } as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty('team_check');
+    expect(evaluateTeam).not.toHaveBeenCalled();
+  });
+
+  it('leaves every other league untouched', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).not.toHaveProperty('team_check');
+    expect(evaluateTeam).not.toHaveBeenCalled();
+  });
+
+  it('saves the team and answers team_check.status unavailable when the check itself breaks', async () => {
+    vi.mocked(evaluateTeam).mockRejectedValue(new Error('runtime read failed'));
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, team_check: { status: 'unavailable' } });
+    expect(upsertMatchPrepTeam).toHaveBeenCalledTimes(1);
+  });
+
+  it('judges a match by the round of that match even when the phase has generated later rounds', async () => {
+    vi.mocked(currentPhaseRound).mockResolvedValue(4);
+    await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(getRoundById).toHaveBeenCalledWith(match.round_id);
+    expect(evaluateTeam).toHaveBeenCalledWith(expect.objectContaining({ roundNumber: 3 }));
+    expect(currentPhaseRound).not.toHaveBeenCalled();
+  });
+
+  it('saves the team and answers team_check.status unavailable when the round of the match cannot be read', async () => {
+    vi.mocked(getRoundById).mockRejectedValue(new Error('rounds read failed'));
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, team_check: { status: 'unavailable' } });
+    expect(evaluateTeam).not.toHaveBeenCalled();
+    expect(upsertMatchPrepTeam).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers team_check.status unavailable, not the current round, when the round row of the match is gone', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(null as never);
+    const response = await POST(makePostRequest({ match_id: MATCH_ID, pokemon, import_source: 'manual' }));
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, team_check: { status: 'unavailable' } });
+    expect(currentPhaseRound).not.toHaveBeenCalled();
+    expect(evaluateTeam).not.toHaveBeenCalled();
+    expect(upsertMatchPrepTeam).toHaveBeenCalledTimes(1);
   });
 });
