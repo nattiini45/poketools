@@ -15,8 +15,8 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isEntryPoint } from './lib/entry-point.mjs';
 
-/** Heap the type check and the page-data collection need (the same value CI's build step sets). */
-const BUILD_HEAP = '--max-old-space-size=4096';
+/** Heap the build's own type check needs: this build runs it, unlike CI's build step (`CI_SKIP_BUILD_TYPECHECK`), and 4 GB no longer fits it. */
+const BUILD_HEAP = '--max-old-space-size=8192';
 
 /**
  * The environment of the build: the caller's, with the example pack and a heap that fits.

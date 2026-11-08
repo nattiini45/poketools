@@ -7,8 +7,8 @@ describe('e2eBuildEnv', () => {
   });
 
   it('adds the heap the build needs, and keeps the caller options', () => {
-    expect(e2eBuildEnv({}).NODE_OPTIONS).toBe('--max-old-space-size=4096');
-    expect(e2eBuildEnv({ NODE_OPTIONS: '--trace-warnings' }).NODE_OPTIONS).toBe('--trace-warnings --max-old-space-size=4096');
+    expect(e2eBuildEnv({}).NODE_OPTIONS).toBe('--max-old-space-size=8192');
+    expect(e2eBuildEnv({ NODE_OPTIONS: '--trace-warnings' }).NODE_OPTIONS).toBe('--trace-warnings --max-old-space-size=8192');
   });
 
   it('leaves a heap the caller chose', () => {
