@@ -112,6 +112,11 @@ export function downstreamApproval(error: ApiErrorLike | null | undefined): Down
   return { count: typeof count === 'number' && Number.isFinite(count) ? count : matches.length, matches };
 }
 
+/** The later matches an approval covers: what the resend names, so a match played since the prompt is not reset unseen. */
+export function approvedMatchIds(approval: DownstreamApproval): string[] {
+  return approval.matches.map((match) => match.id);
+}
+
 /** One battle_stats row of an admin game edit, as `adminGameEditSchema` takes it. */
 export interface GameEditStatInput {
   player_id: string;
@@ -138,7 +143,7 @@ export interface GameEditPayload {
    * The admin approved resetting the played later bracket matches the edit affects (after the API refused the first
    * request with 409 `game_change_downstream_played`).
    */
-  confirmDownstream?: boolean;
+  confirmDownstream?: readonly string[];
 }
 
 /** The request of an admin game edit: the one place both editors build it. */
@@ -152,7 +157,7 @@ export function gameEditRequest(gameId: string, payload: GameEditPayload): { url
         winner_id: payload.winnerId,
         battle_stats: payload.battleStats,
         ...(payload.expectedUpdatedAt ? { expected_updated_at: payload.expectedUpdatedAt } : {}),
-        ...(payload.confirmDownstream ? { confirm_downstream: true } : {}),
+        ...(payload.confirmDownstream ? { confirm_downstream: payload.confirmDownstream } : {}),
       }),
     },
   };
@@ -161,7 +166,7 @@ export function gameEditRequest(gameId: string, payload: GameEditPayload): { url
 /** The request of an admin game delete. `confirmDownstream`: see `GameEditPayload`. */
 export function gameDeleteRequest(
   gameId: string,
-  payload: { reason: string; confirmDownstream?: boolean },
+  payload: { reason: string; confirmDownstream?: readonly string[] },
 ): { url: string; init: RequestInit } {
   return {
     url: `/api/admin/games/${gameId}`,
@@ -170,7 +175,7 @@ export function gameDeleteRequest(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         reason: payload.reason,
-        ...(payload.confirmDownstream ? { confirm_downstream: true } : {}),
+        ...(payload.confirmDownstream ? { confirm_downstream: payload.confirmDownstream } : {}),
       }),
     },
   };

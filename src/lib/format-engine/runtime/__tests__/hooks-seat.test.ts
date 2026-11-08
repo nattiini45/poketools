@@ -178,6 +178,26 @@ describe('a match completed after a substitution that left the player who left o
     expect(options?.ops).toEqual([{ op: 'set_track', track: 'milestones', player_id: 'in', step: 1 }]);
   });
 
+  it('takes back the step the seat earned before the substitution when the match is replayed, so one win does not climb twice', async () => {
+    // m-2 completed once while the seat was out's (logged for out), the seat moved to in with its step, the match is replayed.
+    vi.mocked(loadFreshKitContext).mockResolvedValue({
+      ...context(),
+      state: stateFor(def, { firedEventKeys: ['match_completed:m-2', 'seat_moved:out:in', 'match_reverted:m-2:0'], tracks: { in: { milestones: 1 } } }),
+    });
+    vi.mocked(getFormatRuntime).mockResolvedValue({
+      eventLog: [
+        { event_key: 'match_completed:m-2', event: 'match_completed', fired_at: '2026-11-08T10:00:00+00:00', payload: {}, ops: [{ op: 'set_track', track: 'milestones', player_id: 'out', step: 1 }] },
+        seatMoved('out', 'in', '2026-11-08T11:00:00+00:00'),
+      ],
+    } as never);
+
+    await onMatchCompleted(completedInput);
+
+    const [, event, , options] = vi.mocked(fireEvent).mock.calls[0];
+    expect(event).toMatchObject({ match_id: 'm-2:1' });
+    expect(options?.ops).toEqual([{ op: 'set_track', track: 'milestones', player_id: 'in', step: 1 }]);
+  });
+
   it('follows a chain of substitutions to the last holder', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context(), state: stateFor(def, { firedEventKeys: ['seat_moved:out:in', 'seat_moved:in:third'] }) });
     vi.mocked(getFormatRuntime).mockResolvedValue({

@@ -240,7 +240,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   changes the hash of an existing ruleset (see Added).
 - **Admin results, substitutions and rosters in custom-format leagues** (review round on the format studio PR).
   - Admin game edit or delete of a completed bracket match that already fed played later matches now asks for approval
-    and resets those matches as a cascading reset does (409 `game_change_downstream_played`; resend with
+    and resets those matches as a cascading reset does (409 `game_change_downstream_played`; resend naming the matches in
     `confirm_downstream`); a winner or battle stats of a player who is not in the match are refused before anything is
     reset. Regenerating the bracket of an already completed format phase is refused, and taking back a result in a
     completed format phase (match reset, reopen, game change, round delete) warns which players already advanced.

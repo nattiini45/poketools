@@ -656,12 +656,12 @@ export const matchResetSchema = cascadeActionSchema.extend({
 });
 
 /**
- * Optional body of an admin game delete. `confirm_downstream` is the admin's approval to reset the played later bracket
- * matches the delete affects (without it such a delete is refused with 409 `game_change_downstream_played`).
+ * Optional body of an admin game delete. `confirm_downstream` lists the played later bracket matches the admin approved
+ * resetting (a delete that would reset any other match is refused with 409 `game_change_downstream_played`).
  */
 export const gameDeleteSchema = z.object({
   reason: reasonSchema.optional(),
-  confirm_downstream: z.boolean().optional(),
+  confirm_downstream: z.array(z.string().uuid()).max(1024).optional(),
 });
 
 /** Paging of the per-match history; query-string values are coerced. */
@@ -1131,9 +1131,9 @@ export const adminGameEditSchema = z.object({
   }).optional(),
   // Optimistic concurrency: the game's updated_at as the editor loaded it (409 admin_game_edit_stale when it moved on).
   expected_updated_at: z.iso.datetime({ offset: true }).optional(),
-  // The admin's approval to reset the played later bracket matches the edit affects (without it such an edit is refused
-  // with 409 game_change_downstream_played, nothing written).
-  confirm_downstream: z.boolean().optional(),
+  // The ids of the played later bracket matches the admin approved resetting. An edit that would reset any other match is
+  // refused with 409 game_change_downstream_played, nothing written, and the admin is asked again.
+  confirm_downstream: z.array(z.string().uuid()).max(1024).optional(),
 });
 
 // ─── Utility Schemas ─────────────────────────────────────────────────

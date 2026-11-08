@@ -86,6 +86,8 @@ describe('assertFormatPhaseRosterOpen', () => {
   it('refuses a roster change of a started format phase, never reading the phases of an upcoming one', async () => {
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }))).toBe('format_phase_owned');
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'completed' }))).toBe('format_phase_owned');
+    // A force does not open a completed phase.
+    expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'completed' }, { force: true, reason: 'A valid reason' }))).toBe('format_phase_owned');
     vi.mocked(getKitPhases).mockClear();
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'upcoming' }))).toBeNull();
     expect(getKitPhases).not.toHaveBeenCalled();

@@ -316,11 +316,11 @@ describe('the approval request of a game change', () => {
   it('the edit request carries the confirm flag only once the admin approved', () => {
     const base = { winnerId: 'p1', battleStats: [STAT], expectedUpdatedAt: 'v1' };
     expect(JSON.parse(String(gameEditRequest('g1', base).init.body))).not.toHaveProperty('confirm_downstream');
-    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: false }).init.body))).not.toHaveProperty('confirm_downstream');
-    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: true }).init.body))).toMatchObject({
+    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: undefined }).init.body))).not.toHaveProperty('confirm_downstream');
+    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: ['m-1'] }).init.body))).toMatchObject({
       winner_id: 'p1',
       expected_updated_at: 'v1',
-      confirm_downstream: true,
+      confirm_downstream: ['m-1'],
     });
   });
 
@@ -329,9 +329,9 @@ describe('the approval request of a game change', () => {
     expect(first.url).toBe('/api/admin/games/g1');
     expect(first.init.method).toBe('DELETE');
     expect(JSON.parse(String(first.init.body))).toEqual({ reason: 'Wrong replay' });
-    expect(JSON.parse(String(gameDeleteRequest('g1', { reason: 'Wrong replay', confirmDownstream: true }).init.body))).toEqual({
+    expect(JSON.parse(String(gameDeleteRequest('g1', { reason: 'Wrong replay', confirmDownstream: ['m-1'] }).init.body))).toEqual({
       reason: 'Wrong replay',
-      confirm_downstream: true,
+      confirm_downstream: ['m-1'],
     });
   });
 

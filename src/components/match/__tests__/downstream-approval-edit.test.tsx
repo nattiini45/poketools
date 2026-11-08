@@ -104,7 +104,7 @@ describe('the admin edit page', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
     const second = bodyOf(fetchMock.mock.calls[1]);
-    expect(second).toMatchObject({ winner_id: 'p1', expected_updated_at: VERSION, confirm_downstream: true });
+    expect(second).toMatchObject({ winner_id: 'p1', expected_updated_at: VERSION, confirm_downstream: ['m-final'] });
     expect(second.battle_stats).toEqual(bodyOf(fetchMock.mock.calls[0]).battle_stats);
     await screen.findByText('Game updated successfully');
     expect(screen.getByText('1 later bracket match was reset.')).toBeTruthy();
@@ -169,7 +169,7 @@ describe('the inline editor on the match page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Reset them and apply the change' }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
-    expect(bodyOf(fetchMock.mock.calls[1])).toMatchObject({ expected_updated_at: VERSION, confirm_downstream: true });
+    expect(bodyOf(fetchMock.mock.calls[1])).toMatchObject({ expected_updated_at: VERSION, confirm_downstream: ['m-final'] });
     await screen.findByText('1 later bracket match was reset.');
     expect(onSaved).not.toHaveBeenCalled();
     expect(refresh).toHaveBeenCalled();

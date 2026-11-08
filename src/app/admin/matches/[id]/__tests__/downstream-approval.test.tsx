@@ -112,9 +112,27 @@ describe('deleting a game that affects the played part of the bracket', () => {
     const [url, second] = fetchMock.mock.calls[1] as [string, RequestInit];
     expect(url).toBe('/api/admin/games/g1');
     expect(second.method).toBe('DELETE');
-    expect(JSON.parse(second.body as string)).toEqual({ reason: 'Wrong replay', confirm_downstream: true });
+    expect(JSON.parse(second.body as string)).toEqual({ reason: 'Wrong replay', confirm_downstream: ['m-semi', 'm-final'] });
     await screen.findByText('2 later bracket matches were reset.');
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('asks again, with the new list, when a later match was played since the prompt', async () => {
+    const newer = [...LATER, { id: 'm-grand', round_name: 'Grand Finals', player_1_name: 'Ash', player_2_name: 'Lance', status: 'completed' as const }];
+    fetchMock
+      .mockResolvedValueOnce({ json: async () => refusal })
+      .mockResolvedValueOnce({ json: async () => ({ ...refusal, params: { count: 3, matches: encodeDownstreamMatches(newer) } }) });
+    const user = userEvent.setup();
+    render(withI18n(ui()));
+
+    await deleteGameWithReason(user, 'Wrong replay');
+    let dialog = await screen.findByRole('dialog', { name: 'This change affects the rest of the bracket' });
+    await user.click(within(dialog).getByRole('button', { name: 'Reset them and apply the change' }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    dialog = await screen.findByRole('dialog', { name: 'This change affects the rest of the bracket' });
+    await within(dialog).findByText(/Grand Finals/);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
   it('cancelling the approval sends nothing more', async () => {

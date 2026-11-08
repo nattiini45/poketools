@@ -19,6 +19,7 @@ import { enumMessages } from '@/i18n/messages/enums';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
 import DownstreamApprovalDialog from '@/components/match/DownstreamApprovalDialog';
 import {
+  approvedMatchIds,
   downstreamApproval,
   downstreamResetCount,
   gameChangeFailureHints,
@@ -386,16 +387,16 @@ export default function AdminMatchActions({
   /** The delete dialog's confirm: the first attempt, without the approval of later bracket matches. */
   function handleDeleteGame(reason: string) {
     if (!deleteGameId) return;
-    void deleteGame(deleteGameId, reason, false);
+    void deleteGame(deleteGameId, reason);
   }
 
   /** The approval prompt's confirm: the same delete again, now allowed to reset the later bracket matches. */
   function handleApprovedDelete() {
     if (!deleteApproval) return;
-    void deleteGame(deleteApproval.gameId, deleteApproval.reason, true);
+    void deleteGame(deleteApproval.gameId, deleteApproval.reason, approvedMatchIds(deleteApproval.approval));
   }
 
-  async function deleteGame(gameId: string, reason: string, confirmDownstream: boolean) {
+  async function deleteGame(gameId: string, reason: string, confirmDownstream?: readonly string[]) {
     setError(null);
     setSuccess(null);
     setWarnings([]);
@@ -410,7 +411,7 @@ export default function AdminMatchActions({
       const request = gameDeleteRequest(gameId, { reason, confirmDownstream });
       const result = await sendGameChange(request.url, request.init);
 
-      const needed = !result.ok && !confirmDownstream ? downstreamApproval(result.error) : null;
+      const needed = result.ok ? null : downstreamApproval(result.error);
       if (needed) {
         // Nothing was written: ask first, then send the same delete again with the approval.
         setDeleteGameId(null);

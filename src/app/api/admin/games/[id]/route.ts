@@ -141,7 +141,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     let result: DeleteGameResult | undefined;
     try {
       result = await deleteGame(id, player.playerId, {
-        confirmDownstream: parsedBody.data.confirm_downstream === true,
+        confirmDownstream: parsedBody.data.confirm_downstream,
         onDownstreamMatchReset: (matchId) => resetMatchIds.push(matchId),
       });
     } finally {
@@ -234,7 +234,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           expected_updated_at: body.expected_updated_at,
         },
         {
-          confirmDownstream: body.confirm_downstream === true,
+          confirmDownstream: body.confirm_downstream,
           onDownstreamMatchReset: (matchId) => resetMatchIds.push(matchId),
         }
       );

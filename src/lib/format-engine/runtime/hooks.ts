@@ -25,7 +25,7 @@ import { isKitCandidate, type HookTournament } from '../kit-candidate';
 import { fireEvent } from './fire';
 import { isFormatContextStale, type HookReport } from './stale';
 import { matchContext, playerContext } from './expr-env';
-import { currentHolder, revokesToCurrentHolders, SEAT_MOVED_EVENT, seatMovesOf } from './seat-succession';
+import { currentHolder, holderOfLoggedSeat, revokesToCurrentHolders, SEAT_MOVED_EVENT, seatMovesOf } from './seat-succession';
 import { envBaseOf, loadFreshKitContext, phaseById, phasesOfStageKey, type KitContext, type KitPhaseInfo } from './load';
 import { loadStageTable, playerRowsOf } from './stage-table';
 import { auditMatchTeams, type AuditRetry } from './team-audit-server';
@@ -91,7 +91,7 @@ function completionMatchId(matchId: string, generation: number): string {
  * The track steps as they were before the earlier completions of this match: a `set_track` those events logged is taken back
  * out of the state when the player stands exactly on the step it set (the step is only ever raised, so a revert cannot lower
  * it, and replaying the same match would otherwise climb one step more from the same win). A player who is on another step
- * got there some other way and is left alone. The earlier events are read from the event log (rare: a replayed match only).
+ * got there some other way and is left alone. A seat that moved since is looked up under its current holder. The earlier events are read from the event log (rare: a replayed match only).
  */
 async function tracksBeforeEarlierCompletions(
   seasonId: string,
@@ -101,6 +101,7 @@ async function tracksBeforeEarlierCompletions(
 ): Promise<KitRuntimeState['tracks']> {
   const { getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
   const runtime = await getFormatRuntime(seasonId);
+  const moves = seatMovesOf(runtime.eventLog);
   const keys = new Set(Array.from({ length: generation }, (_, n) => eventKey({ event: 'match_completed', match_id: completionMatchId(matchId, n) })));
   const out: Record<string, Record<string, number>> = {};
   for (const [player, steps] of Object.entries(tracks)) out[player] = { ...steps };
@@ -108,7 +109,8 @@ async function tracksBeforeEarlierCompletions(
     if (!keys.has(row.event_key) || !Array.isArray(row.ops)) continue;
     for (const entry of row.ops) {
       if (!isRecord(entry) || entry.op !== 'set_track' || typeof entry.player_id !== 'string' || typeof entry.track !== 'string' || typeof entry.step !== 'number') continue;
-      const held = out[entry.player_id];
+      // A substitution moved the step to the substitute while the log keeps naming the player who left.
+      const held = out[holderOfLoggedSeat(entry.player_id, row, moves)];
       if (held !== undefined && held[entry.track] === entry.step) held[entry.track] = entry.step - 1;
     }
   }

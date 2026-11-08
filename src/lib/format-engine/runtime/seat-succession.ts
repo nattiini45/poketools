@@ -85,6 +85,19 @@ export function currentHolder(playerId: string, since: number, moves: readonly S
 }
 
 /**
+ * The player who holds now the seat `playerId` held when `completion` was logged (only the moves after it apply). Throws when
+ * there are seat moves and the completion has no readable time (see `seatMovesOf`).
+ */
+export function holderOfLoggedSeat(playerId: string, completion: SeatLogRow, moves: readonly SeatMove[]): string {
+  if (moves.length === 0) return playerId;
+  const since = microsecondsOf(completion.fired_at);
+  if (since === null) {
+    throw new Error('the logged completion has no readable time, so the seat moves after it cannot be told');
+  }
+  return currentHolder(playerId, since, moves);
+}
+
+/**
  * `ops` (the inverse of a logged completion) with every revoke moved to the player who holds the seat now. `completion` is the
  * logged `match_completed` row the ops undo: only the moves after its `fired_at` apply, because a grant made after a move went
  * to the then current holder. Throws when there are seat moves and the completion has no readable time (see `seatMovesOf`).

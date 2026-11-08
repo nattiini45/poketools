@@ -100,7 +100,8 @@ export async function assertFormatPhaseRosterOpen(
   request: RosterOverrideRequest = { force: false },
 ): Promise<RosterOverride | null> {
   if (phase.status === 'upcoming' || !(await isFormatPhase(seasonId, phase.id))) return null;
-  if (!request.force) throw new FormatStudioError('format_phase_owned');
+  // A force is for a phase in play. A completed phase stays closed: its standings and who advanced from it are history.
+  if (!request.force || phase.status === 'completed') throw new FormatStudioError('format_phase_owned');
   const reason = reasonSchema.safeParse(request.reason);
   if (!reason.success) {
     throw new UserFacingError('Forcing a roster change on a started phase of the format needs a reason', {

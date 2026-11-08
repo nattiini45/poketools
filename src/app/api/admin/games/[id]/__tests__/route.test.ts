@@ -90,7 +90,7 @@ describe('DELETE /api/admin/games/[id]', () => {
 
     expect(body.success).toBe(true);
     expect(body.data.match_status).toBe('in_progress');
-    expect(deleteGame).toHaveBeenCalledWith('0fd91c32-fc35-40ed-8384-7e345468560c', 'player-1', expect.objectContaining({ confirmDownstream: false }));
+    expect(deleteGame).toHaveBeenCalledWith('0fd91c32-fc35-40ed-8384-7e345468560c', 'player-1', expect.objectContaining({ confirmDownstream: undefined }));
     expect(revalidateMatchPages).toHaveBeenCalledWith('tourn-1', 'match-1');
   });
 
@@ -258,7 +258,7 @@ describe('PATCH /api/admin/games/[id]', () => {
         battle_stats: undefined,
         admin_id: 'player-1',
       },
-      expect.objectContaining({ confirmDownstream: false }),
+      expect.objectContaining({ confirmDownstream: undefined }),
     );
   });
 
@@ -291,7 +291,7 @@ describe('PATCH /api/admin/games/[id]', () => {
         battle_stats: battleStats,
         admin_id: 'player-1',
       },
-      expect.objectContaining({ confirmDownstream: false }),
+      expect.objectContaining({ confirmDownstream: undefined }),
     );
   });
 
@@ -498,7 +498,7 @@ describe('admin game change that affects the played part of the bracket', () => 
 
     await DELETE({ json: async () => ({ reason: 'Wrong replay' }) } as NextRequest, routeParams);
 
-    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: false }));
+    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: undefined }));
     expect(safeErrorResponse).toHaveBeenCalledWith(refusal, 'Failed to delete game');
     expect(logAuditEvent).not.toHaveBeenCalled();
     expect(revalidateMatchPages).not.toHaveBeenCalled();
@@ -512,10 +512,10 @@ describe('admin game change that affects the played part of the bracket', () => 
       downstream_reset_match_ids: [lateMatch, 'match-late-2'],
     });
 
-    const res = await DELETE({ json: async () => ({ reason: 'Wrong replay', confirm_downstream: true }) } as NextRequest, routeParams);
+    const res = await DELETE({ json: async () => ({ reason: 'Wrong replay', confirm_downstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }) } as NextRequest, routeParams);
 
     expect(res.status).toBe(200);
-    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: true }));
+    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }));
     const [event] = vi.mocked(logAuditEvent).mock.calls[0];
     expect(event.action).toBe('game.delete');
     expect(event.metadata).toMatchObject({
@@ -528,7 +528,7 @@ describe('admin game change that affects the played part of the bracket', () => 
   it('DELETE without a cascade leaves cascade out of the audit', async () => {
     vi.mocked(deleteGame).mockResolvedValue({ match_status: 'in_progress', games_remaining: 1, evolution_events: [] });
 
-    await DELETE({ json: async () => ({ confirm_downstream: true }) } as NextRequest, routeParams);
+    await DELETE({ json: async () => ({ confirm_downstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }) } as NextRequest, routeParams);
 
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('cascade');
   });
@@ -540,7 +540,7 @@ describe('admin game change that affects the played part of the bracket', () => 
       throw failure;
     });
 
-    await DELETE({ json: async () => ({ confirm_downstream: true }) } as NextRequest, routeParams);
+    await DELETE({ json: async () => ({ confirm_downstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }) } as NextRequest, routeParams);
 
     expect(safeErrorResponse).toHaveBeenCalledWith(failure, 'Failed to delete game');
     expect(logAuditEvent).toHaveBeenCalledTimes(1);
@@ -562,7 +562,7 @@ describe('admin game change that affects the played part of the bracket', () => 
 
     await PATCH({ json: vi.fn().mockResolvedValue({ winner_id: P2_UUID }) } as unknown as NextRequest, routeParams);
 
-    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: false }));
+    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: undefined }));
     expect(safeErrorResponse).toHaveBeenCalledWith(refusal, 'Failed to edit game');
     expect(logAuditEvent).not.toHaveBeenCalled();
     expect(revalidateMatchPages).not.toHaveBeenCalled();
@@ -577,12 +577,12 @@ describe('admin game change that affects the played part of the bracket', () => 
     });
 
     const res = await PATCH(
-      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: true }) } as unknown as NextRequest,
+      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }) } as unknown as NextRequest,
       routeParams,
     );
 
     expect(res.status).toBe(200);
-    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: true }));
+    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }));
     const [event] = vi.mocked(logAuditEvent).mock.calls[0];
     expect(event.action).toBe('game.edit');
     expect(event.metadata).toMatchObject({ cascade: true, downstream_reset_match_ids: [lateMatch] });
@@ -596,7 +596,7 @@ describe('admin game change that affects the played part of the bracket', () => 
     });
 
     await PATCH(
-      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: true }) } as unknown as NextRequest,
+      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: ['9f1a2b3c-4d5e-4f60-8a7b-1c2d3e4f5a6b'] }) } as unknown as NextRequest,
       routeParams,
     );
 

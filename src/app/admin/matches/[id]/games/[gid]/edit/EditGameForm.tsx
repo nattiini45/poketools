@@ -12,6 +12,7 @@ import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
 import DownstreamApprovalDialog from '@/components/match/DownstreamApprovalDialog';
 import {
+  approvedMatchIds,
   downstreamApproval,
   downstreamResetCount,
   gameEditRequest,
@@ -167,11 +168,11 @@ export default function EditGameForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void save(false);
+    void save();
   }
 
-  /** `confirmDownstream`: the admin approved resetting the later bracket matches the first attempt reported. */
-  async function save(confirmDownstream: boolean) {
+  /** `confirmDownstream`: the later bracket matches the admin approved resetting (the last refusal listed them). */
+  async function save(confirmDownstream?: readonly string[]) {
     setError(null);
     setSuccess(false);
     setWarnings([]);
@@ -210,7 +211,7 @@ export default function EditGameForm({
       });
       const result = await sendGameChange(request.url, request.init);
 
-      if (!result.ok && !confirmDownstream) {
+      if (!result.ok) {
         const needed = downstreamApproval(result.error);
         if (needed) {
           // Nothing was written: ask first, then send the same edit again with the approval.
@@ -401,7 +402,7 @@ export default function EditGameForm({
 
       <DownstreamApprovalDialog
         approval={approval}
-        onApprove={() => void save(true)}
+        onApprove={() => void save(approval ? approvedMatchIds(approval) : undefined)}
         onCancel={() => setApproval(null)}
         loading={loading}
       />

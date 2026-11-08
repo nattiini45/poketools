@@ -1137,7 +1137,7 @@ export interface GameChangeOptions {
    * The admin approved resetting the played later bracket matches the change affects (the request carried the confirm
    * flag). Without it such a change is refused with nothing written (`GameChangeDownstreamPlayedError`).
    */
-  confirmDownstream?: boolean;
+  confirmDownstream?: readonly string[];
   /**
    * Called with the id of each later match right after its reset committed, so a caller can audit the cascade even when
    * a later step of the change fails.
@@ -1187,7 +1187,7 @@ async function summarizeDownstream(
 async function preflightGameChange(
   match: MatchWithPlayers,
   tournament: Tournament,
-  confirmDownstream: boolean
+  confirmDownstream: readonly string[] | undefined
 ): Promise<GameChangePlan> {
   if (match.status !== 'completed') return { participants: [], downstream: [] };
   const participants = await getParticipants(match.tournament_id);
@@ -1201,7 +1201,9 @@ async function preflightGameChange(
     [...new Set(resetMatches.flatMap((m) => [m.player_1_id, m.player_2_id]))],
     { excludeMatchIds: resetMatches.map((m) => m.id) }
   );
-  if (!confirmDownstream) {
+  // The approval covers the matches the admin was shown: one played since is not reset unseen, the admin is asked again.
+  const approved = new Set(confirmDownstream);
+  if (downstream.some((m) => !approved.has(m.id))) {
     throw new GameChangeDownstreamPlayedError(await summarizeDownstream(match.tournament_id, downstream));
   }
   return { participants, downstream };
@@ -1380,7 +1382,7 @@ export async function deleteGame(
   // Read before any mutation: a failed read aborts with nothing deleted.
   const round = await requireRound(match.round_id);
   const wasCompleted = match.status === 'completed';
-  const plan = await preflightGameChange(match, tournament, options.confirmDownstream === true);
+  const plan = await preflightGameChange(match, tournament, options.confirmDownstream);
   const { participants } = plan;
 
   // 0. An approved change first resets the played later bracket matches, deepest first, as a cascading reset does.
@@ -2058,7 +2060,7 @@ export async function editGame(input: EditGameInput, options: GameChangeOptions 
   // Every refusal that reads only (the rating plan, the played later bracket matches) comes BEFORE the lease claim: the
   // claim moves the game's version, and a refused edit must leave it where the editor loaded it, so that the editor's
   // resend with the approval of the later matches is not stale.
-  const plan = await preflightGameChange(match, tournament, options.confirmDownstream === true);
+  const plan = await preflightGameChange(match, tournament, options.confirmDownstream);
 
   // 0. Claim the edit lease at the version the editor loaded; a stale editor
   //    or a concurrent edit stops here with nothing written.

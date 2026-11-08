@@ -12,6 +12,7 @@ import type { ApiErrorLike } from '@/i18n/api-errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 import {
+  approvedMatchIds,
   downstreamApproval,
   downstreamResetCount,
   gameEditRequest,
@@ -211,11 +212,11 @@ export default function GameDetailEditForm({
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    void save(false);
+    void save();
   }
 
-  /** `confirmDownstream`: the admin approved resetting the later bracket matches the first attempt reported. */
-  async function save(confirmDownstream: boolean) {
+  /** `confirmDownstream`: the later bracket matches the admin approved resetting (the last refusal listed them). */
+  async function save(confirmDownstream?: readonly string[]) {
     if (saving || savedWarnings) return;
     setError(null);
 
@@ -256,7 +257,7 @@ export default function GameDetailEditForm({
       });
       const result = await sendGameChange(request.url, request.init);
       if (!result.ok) {
-        const needed = confirmDownstream ? null : downstreamApproval(result.error);
+        const needed = downstreamApproval(result.error);
         if (needed) {
           // Nothing was written: ask first, then send the same edit again with the approval.
           setApproval(needed);
@@ -511,7 +512,7 @@ export default function GameDetailEditForm({
 
       <DownstreamApprovalDialog
         approval={approval}
-        onApprove={() => void save(true)}
+        onApprove={() => void save(approval ? approvedMatchIds(approval) : undefined)}
         onCancel={() => setApproval(null)}
         loading={saving}
       />
