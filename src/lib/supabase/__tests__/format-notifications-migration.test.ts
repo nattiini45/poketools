@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { NOTIFICATION_KINDS } from '@/lib/format-engine/notifications/types';
 
 const dir = path.join(process.cwd(), 'supabase/migrations');
 const SQL = readFileSync(path.join(dir, '20261108090000_format_notifications.sql'), 'utf8');
@@ -19,6 +20,11 @@ describe('20261108090000_format_notifications.sql', () => {
     expect(SQL).toContain('REVOKE ALL ON TABLE public.format_notifications FROM PUBLIC, anon, authenticated;');
     expect(SQL).toContain('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.format_notifications TO service_role;');
     expect(SQL).not.toMatch(/CREATE POLICY/i);
+  });
+
+  it('allows exactly the kinds the inbox can show', () => {
+    const list = /format_notifications_kind_check CHECK \(\s*kind IN \(([^)]*)\)/.exec(SQL)?.[1] ?? '';
+    expect([...list.matchAll(/'([a-z_]+)'/g)].map((m) => m[1]).sort()).toEqual([...NOTIFICATION_KINDS].sort());
   });
 
   it('makes one notification per recipient and event', () => {

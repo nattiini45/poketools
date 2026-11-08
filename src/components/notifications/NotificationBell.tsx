@@ -183,6 +183,7 @@ export default function NotificationBell() {
     if (item.read) return;
     setItems((current) => current.map((row) => (row.id === item.id ? { ...row, read: true } : row)));
     setUnread((count) => Math.max(0, count - 1));
+    listGeneration.current += 1;
     countGeneration.current += 1;
     void markRead([item.id]).then((outcome) => {
       if (outcome.ok) setUnread(outcome.data.unread);
