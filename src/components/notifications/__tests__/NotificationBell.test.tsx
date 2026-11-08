@@ -264,12 +264,13 @@ describe('NotificationBell', () => {
     await waitFor(() => expect(document.activeElement).toBe(row));
   });
 
-  it('keeps a followed row read when a list read begun during the mark answers after it', async () => {
+  it('asks for the list again when a read began during the mark, and drops that read', async () => {
     let answerMark: (value: { ok: true; data: { unread: number } }) => void = () => undefined;
     let answerList: (value: ReturnType<typeof inbox>) => void = () => undefined;
     vi.mocked(loadInbox)
       .mockResolvedValueOnce(inbox([challenge], 1))
-      .mockImplementationOnce(() => new Promise((resolve) => { answerList = resolve; }));
+      .mockImplementationOnce(() => new Promise((resolve) => { answerList = resolve; }))
+      .mockResolvedValueOnce(inbox([{ ...challenge, read: true }, notice], 1));
     vi.mocked(markRead).mockImplementationOnce(() => new Promise((resolve) => { answerMark = resolve; }));
     const user = await openPanel();
     const link = await screen.findByRole('link', { name: /The challenge from Mara/ });
@@ -277,9 +278,11 @@ describe('NotificationBell', () => {
     await user.click(link);
     await user.click(screen.getByRole('button', { name: 'Notifications' }));
     await act(async () => answerMark({ ok: true, data: { unread: 0 } }));
-    await act(async () => answerList(inbox([challenge], 1)));
-    expect(screen.getByRole('button', { name: 'Notifications' })).not.toBeNull();
+    await act(async () => answerList(inbox([challenge], 9)));
+    expect(loadInbox).toHaveBeenCalledTimes(3);
+    expect(screen.getByRole('button', { name: 'Notifications, 1 unread' })).not.toBeNull();
     expect(screen.getByRole('link', { name: /The challenge from Mara/ }).textContent).not.toContain('Unread');
+    expect(screen.getByRole('link', { name: /The pool is open/ })).not.toBeNull();
   });
 
   it('drops a list answer that started before "mark all" landed', async () => {

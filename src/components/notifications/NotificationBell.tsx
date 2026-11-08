@@ -178,13 +178,18 @@ export default function NotificationBell() {
     };
   }, [open]);
 
-  /** Applies a mark the server confirmed. A list or count read still on its way describes the state before it. */
-  const settleMark = (unreadNow: number, marked: (row: NotificationView) => boolean) => {
+  /**
+   * Applies a mark the server confirmed. A list or count read still on its way describes the state before it. `sentAt` is the
+   * list generation when the mark was sent: a list read begun since may have seen either state, so it is asked for again.
+   */
+  const settleMark = (unreadNow: number, marked: (row: NotificationView) => boolean, sentAt: number) => {
+    const readSince = listGeneration.current !== sentAt;
     listGeneration.current += 1;
     countGeneration.current += 1;
     setLoad((current) => (current === 'loading' ? 'ready' : current));
     setItems((current) => current.map((row) => (marked(row) ? { ...row, read: true } : row)));
     setUnread(unreadNow);
+    if (readSince) void fetchPage(lastOffsetRef.current);
   };
 
   const follow = (item: NotificationView) => {
@@ -194,8 +199,9 @@ export default function NotificationBell() {
     setUnread((count) => Math.max(0, count - 1));
     listGeneration.current += 1;
     countGeneration.current += 1;
+    const sentAt = listGeneration.current;
     void markRead([item.id]).then((outcome) => {
-      if (outcome.ok) settleMark(outcome.data.unread, (row) => row.id === item.id);
+      if (outcome.ok) settleMark(outcome.data.unread, (row) => row.id === item.id, sentAt);
       // The row stays unread on the server, and the next read says so.
       else void refresh();
     });
@@ -203,12 +209,13 @@ export default function NotificationBell() {
 
   const markAll = async () => {
     setMarkFailed(false);
+    const sentAt = listGeneration.current;
     const outcome = await markRead('all');
     if (!outcome.ok) {
       setMarkFailed(true);
       return;
     }
-    settleMark(outcome.data.unread, () => true);
+    settleMark(outcome.data.unread, () => true, sentAt);
     // The button that was just pressed goes away with the last unread notification.
     titleRef.current?.focus();
   };
