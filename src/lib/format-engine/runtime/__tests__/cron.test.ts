@@ -24,6 +24,8 @@ vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   completeFormatForfeit: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn(), getMatchesByTournament: vi.fn() }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/phase-complete', () => ({ completePhaseAtStageEnd: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), listRoundStatusesByTournamentIds: vi.fn() }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ listTeamsByTournament: vi.fn() }));
 vi.mock('@/lib/match/finalize', () => ({ finalizeMatchCompletion: vi.fn(), stageAdminOutcome: vi.fn(), discardStagedAdminOutcome: vi.fn() }));
@@ -60,6 +62,8 @@ import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
 import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { completePhaseAtStageEnd } from '../phase-complete';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 
@@ -125,9 +129,39 @@ beforeEach(() => {
   vi.mocked(getMatchesByTournament).mockResolvedValue([match()] as never);
   vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: 'm-1', player_id: 'p1' }] as never);
   vi.mocked(completeFormatForfeit).mockResolvedValue(true);
+  vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'active' } as never);
   vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true } as never);
   vi.mocked(expireChallenges).mockResolvedValue(0);
   vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
+});
+
+describe('a stage whose reaction failed after its phases completed', () => {
+  it('repeats the reaction when every phase of the stage is completed and stage_end has not fired', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('completed');
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).toHaveBeenCalledWith(PHASE, 'cron_retry:swiss', []);
+  });
+
+  it('leaves a stage alone that is still running, and one whose stage_end fired', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_end:swiss'] }));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('counts a reaction that failed again as a failure of the pass', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('reaction_failed');
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe('time marks', () => {

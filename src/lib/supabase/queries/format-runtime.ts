@@ -318,6 +318,12 @@ export interface ApplyFormatAdjustmentInput {
   /** For kind `domain`: the actions whose lock forbids the amendment. */
   guardActions: readonly string[];
   /**
+   * For kind `domain`: the keys of the stages whose team constraints count the domain. The database refuses the amendment
+   * (`domain_in_use`) when the `stage_start` of any of them is in the event log, read under the lock the amendment holds, so a
+   * stage that started after the caller's snapshot is not missed. Omitted means none.
+   */
+  guardStages?: readonly string[];
+  /**
    * `season_formats.revision` of the format the adjustment was prepared from (`KitContext.revision`): its ops, its audit
    * row and, for a domain amendment, the amendment list it extends. The database refuses it with `format_context_stale`
    * when the format changed since.
@@ -340,6 +346,7 @@ export async function applyFormatAdjustment(input: ApplyFormatAdjustmentInput): 
     p_admin: nullable(input.adminId),
     p_ops: input.ops as unknown as Json,
     p_guard_actions: [...input.guardActions],
+    p_guard_stages: [...(input.guardStages ?? [])],
     p_expected_revision: input.revision,
   });
   if (error) {

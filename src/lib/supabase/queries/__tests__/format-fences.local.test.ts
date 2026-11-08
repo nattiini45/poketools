@@ -324,6 +324,31 @@ describe.skipIf(!optIn)('format fences (local stack)', () => {
       await expect(amend(['silver'])).resolves.toEqual(expect.any(String));
     });
 
+    it('refuses a domain amendment, an addition as well as a removal, once the stage_start of a guarded stage is logged, even when it committed after the application read the revision', async () => {
+      const { season } = await league({ resources });
+      const amend = (delta: Json, revision: number, guardStages: string[]) =>
+        rt.applyFormatAdjustment({
+          seasonId: season, kind: 'domain', target: { domain: 'gifts' }, delta, reason: 'amend', adminId: null,
+          ops: [], guardActions: [], guardStages, revision,
+        });
+      // The application's snapshot: no stage has started, so its own check passes and it names the stage that counts the domain.
+      const snapshot = await revisionOf(season);
+      // A stage_start commits afterwards. An event does not move the revision, so the revision check cannot see it.
+      await fire(season, [], 'stage_start:main');
+      expect(await revisionOf(season)).toBe(snapshot);
+
+      await expect(amend({ domain: 'gifts', add: ['ditto'] }, snapshot, ['main'])).rejects.toMatchObject({
+        name: 'FormatAdjustmentRefusedError', refusal: 'domain_in_use',
+      });
+      await expect(amend({ domain: 'gifts', remove: ['silver'] }, snapshot, ['side', 'main'])).rejects.toMatchObject({ refusal: 'domain_in_use' });
+      expect((await client.from('format_adjustments').select('id').eq('season_id', season)).data).toEqual([]);
+      expect((await client.from('season_formats').select('amendments').eq('season_id', season).single()).data?.amendments).toEqual([]);
+
+      // A stage that has not started, or none named, does not block it.
+      await expect(amend({ domain: 'gifts', add: ['ditto'] }, snapshot, ['side'])).resolves.toEqual(expect.any(String));
+      await expect(amend({ domain: 'gifts', add: ['mew'] }, await revisionOf(season), [])).resolves.toEqual(expect.any(String));
+    });
+
     it('takes no ops on a domain amendment (they would be applied after the season_formats row lock, with their locks taken late)', async () => {
       const { season } = await league({ resources });
       await expect(

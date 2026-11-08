@@ -122,11 +122,53 @@ describe('checkStageEnd: openInRound', () => {
       expect(check?.unfinishedMatchIds).toEqual(['m-2']);
     });
 
-    it('does not count completed matches of another round, nor a round that holds no match yet', async () => {
+    it('does not count completed matches of another round whose event fired, nor a round that holds no match yet', async () => {
       vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active', 'pending'));
       vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' })] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1', 'match_completed:m-2']), phase, 'r-1');
+      expect(check?.openInRound).toBe(0);
+    });
+
+    it('counts a completed match of another round whose match_completed event has not fired (its hook failed and waits for the heal)', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active', 'pending'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' })] as never);
+      // The caller is m-1 of round 1 and its event fired; m-2 of round 2 completed but its effects are missing.
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(1);
+    });
+
+    it('counts it in a round the admin completed by force too: the force settles unplayed matches, not missing effects', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('completed'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' }), open('m-3', 'r-2')] as never);
+      const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
+      expect(check?.openInRound).toBe(1);
+    });
+
+    it('follows the generation of a match of another round that was reverted and completed again', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' })] as never);
+      const fired = ['match_completed:m-1', 'match_completed:m-2', 'match_reverted:m-2:0'];
+      expect((await checkStageEnd(context(fired), phase, 'r-1'))?.openInRound).toBe(1);
+      expect((await checkStageEnd(context([...fired, 'match_completed:m-2:1']), phase, 'r-1'))?.openInRound).toBe(0);
+    });
+
+    it('does not wait for a completed match of another round that can never fire: a draw, or a winner who is not one of its players', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([
+        match('m-1'),
+        match('m-2', { round_id: 'r-2', winner_id: null }),
+        // The finalize refuses it (winner_not_participant) and the heal leaves it to an admin, so no event ever fires for it.
+        match('m-3', { round_id: 'r-2', winner_id: 'z' }),
+      ] as never);
       const check = await checkStageEnd(context(['match_completed:m-1']), phase, 'r-1');
       expect(check?.openInRound).toBe(0);
+    });
+
+    it('counts it for a caller that names the later round as well', async () => {
+      vi.mocked(getRoundsByTournament).mockResolvedValue(rounds('active'));
+      vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1'), match('m-2', { round_id: 'r-2' })] as never);
+      const check = await checkStageEnd(context(['match_completed:m-2']), phase, 'r-2');
+      expect(check?.openInRound).toBe(1);
     });
 
     it('counts every unfinished match of every other open round', async () => {
@@ -153,6 +195,11 @@ describe('checkStageEnd: openInRound', () => {
 
   it('does not wait for a completed match without a winner (the hook never fires for it)', async () => {
     vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1', { winner_id: null })] as never);
+    expect((await checkStageEnd(context([]), phase, 'r-1'))?.openInRound).toBe(0);
+  });
+
+  it('does not wait for a completed match whose winner is neither of its players (the finalize refuses it)', async () => {
+    vi.mocked(getMatchesByTournament).mockResolvedValue([match('m-1', { winner_id: 'z' })] as never);
     expect((await checkStageEnd(context([]), phase, 'r-1'))?.openInRound).toBe(0);
   });
 

@@ -49,7 +49,9 @@
 --                                            and for the two changes the ops would otherwise skip without a word:
 --                                            relation_has_links (a set_relation on a relation that has links),
 --                                            insufficient_holding (a revoke_item of more units than the player holds),
---                                            domain_in_use (a domain amendment removes an entry that is held) and
+--                                            domain_in_use (a domain amendment removes an entry that is held, or a stage
+--                                            whose team constraints count the domain, named in p_guard_stages, has fired its
+--                                            stage_start) and
 --                                            action_state_unchanged (an action already in the requested state), so a
 --                                            history row never records a change that did not happen. All four are decided under
 --                                            the locks the call holds, after the application's own check of a snapshot. Takes
@@ -590,17 +592,20 @@ BEGIN
 
     ELSIF v_kind = 'revoke_item' THEN
       -- Removes `amount` units, oldest rows first; a row holding more than is left to take keeps the rest. An inverse revoke
-      -- (the undo of a logged grant) carries that grant's source and source_ref: the rows it wrote are taken first, so a
-      -- revert never removes the units another source holds of the same item.
+      -- (the undo of a logged grant) carries that grant's source and source_ref and only ever takes rows with exactly that
+      -- source and source_ref, so a revert never removes the units another source holds of the same item; when the grant's
+      -- rows are gone it takes nothing (a strict caller then raises insufficient_holding). A revoke without a source takes
+      -- from any row of the holding. Every grant inserts its own row (format__insert_item does not merge) and a seat
+      -- substitution rewrites player_id only, so the rows of a logged grant keep their source and source_ref.
       v_left := (v_op ->> 'amount')::integer;
       FOR v_row IN
         SELECT id, amount FROM public.format_resource_items
          WHERE season_id = p_season_id AND resource_key = v_op ->> 'resource' AND player_id = (v_op ->> 'player_id')::uuid
            AND item_id IS NOT DISTINCT FROM (v_op ->> 'item_id')
-         ORDER BY (CASE WHEN v_op ->> 'source' IS NOT NULL
-                         AND format_resource_items.source IS NOT DISTINCT FROM (v_op ->> 'source')
-                         AND format_resource_items.source_ref IS NOT DISTINCT FROM (v_op ->> 'source_ref') THEN 0 ELSE 1 END),
-                  created_at, id
+           AND (v_op ->> 'source' IS NULL
+                OR (format_resource_items.source IS NOT DISTINCT FROM (v_op ->> 'source')
+                    AND format_resource_items.source_ref IS NOT DISTINCT FROM (v_op ->> 'source_ref')))
+         ORDER BY created_at, id
            FOR UPDATE
       LOOP
         EXIT WHEN v_left <= 0;
@@ -817,12 +822,13 @@ END $$;
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- Admin adjustments
--- The eight-argument form of an earlier revision of this file is dropped before the nine-argument one is created (a new argument
--- is an overload, not a replacement); nothing grants, revokes or comments on the old form.
+-- The eight- and nine-argument forms of earlier revisions of this file are dropped before the ten-argument one is created (a new
+-- argument is an overload, not a replacement); nothing grants, revokes or comments on the old forms.
 DROP FUNCTION IF EXISTS public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]);
+DROP FUNCTION IF EXISTS public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint);
 CREATE OR REPLACE FUNCTION public.format_apply_adjustment(
   p_season_id uuid, p_kind text, p_target jsonb, p_delta jsonb, p_reason text, p_admin uuid, p_ops jsonb, p_guard_actions text[],
-  p_expected_revision bigint
+  p_guard_stages text[], p_expected_revision bigint
 ) RETURNS uuid
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
@@ -882,6 +888,18 @@ BEGIN
       ) THEN
         RAISE EXCEPTION 'domain_in_use' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('domain', v_domain)::text;
       END IF;
+    END IF;
+    -- The second half of domain_in_use: a stage whose team constraints count the domain has started (its stage_start fired),
+    -- so teams were already checked against the old entries, whether the amendment adds or removes. The application names
+    -- those stages (p_guard_stages) from the snapshot it read; a stage_start that committed after that read does not move
+    -- the revision, but it is in the event log by now, because this call holds the season_formats row FOR UPDATE and every
+    -- event takes that row FOR SHARE before it logs its key. The key is the one eventKey builds: 'stage_start:<stage>'.
+    IF EXISTS (
+      SELECT 1 FROM public.format_event_log e
+       WHERE e.season_id = p_season_id
+         AND e.event_key IN (SELECT 'stage_start:' || g.k FROM unnest(coalesce(p_guard_stages, '{}'::text[])) AS g(k))
+    ) THEN
+      RAISE EXCEPTION 'domain_in_use' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('domain', v_domain)::text;
     END IF;
   ELSE
     -- Every other kind plans its ops (and its audit row) from the format the application loaded: refuse them against another
@@ -1043,7 +1061,7 @@ REVOKE ALL ON FUNCTION
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
-  public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint),
+  public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint),
   public.format_check_open(uuid, text, text, text, jsonb, bigint),
   public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
@@ -1064,7 +1082,7 @@ GRANT EXECUTE ON FUNCTION
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
-  public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint),
+  public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint),
   public.format_check_open(uuid, text, text, text, jsonb, bigint),
   public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
@@ -1100,8 +1118,8 @@ COMMENT ON FUNCTION public.format_action_save(uuid, text, uuid, uuid, jsonb, big
   'Saves a player action pick as a draft (a submitted pick becomes a draft again and its items are released). Raises action_locked when the action flag or the actor''s submission is locked, format_context_stale when the league''s format changed since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean) IS
   'Submits (and with p_lock locks) a player action pick, replacing the resource items the earlier submission granted. With p_only_if_unsubmitted an already submitted or locked pick is left alone: a submitted one raises action_already_submitted, a locked one action_locked (the lock check comes first). Raises action_locked, format_context_stale (p_expected_revision no longer matches season_formats.revision), resource_item_taken, resource_capacity_reached, action_already_submitted (the whole call rolls back).';
-COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint) IS
-  'Records an admin adjustment, applies its ops and, for kind domain, appends the delta to season_formats.amendments. Raises reason_required, format_context_stale (the league''s format changed since p_expected_revision was read), domain_amendment_locked. Returns the adjustment id.';
+COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint) IS
+  'Records an admin adjustment, applies its ops and, for kind domain, appends the delta to season_formats.amendments. Raises reason_required, format_context_stale (the league''s format changed since p_expected_revision was read), domain_amendment_locked, and for a domain amendment domain_in_use (it removes a held entry, or the stage_start of a stage in p_guard_stages is in the event log). Returns the adjustment id.';
 COMMENT ON FUNCTION public.format_check_open(uuid, text, text, text, jsonb, bigint) IS
   'Opens an assisted check; returns its id, or NULL when a check with that dedupe_key already exists. Raises format_context_stale (nothing inserted, the key stays free) when the league''s format changed or was detached since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint) IS

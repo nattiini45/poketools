@@ -65,6 +65,7 @@ import {
 import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 import { validateTransition } from '@/lib/tournament/match-state';
@@ -86,6 +87,7 @@ import { fireEvent, fireLockedActionEvents } from './fire';
 import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
 import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from './hooks';
 import { loadFreshKitContext, phaseById, rosterOf, type KitContext, type KitPhaseInfo } from './load';
+import { completePhaseAtStageEnd } from './phase-complete';
 import { planRandomPicks } from './random-pick';
 import { own } from './types';
 
@@ -591,6 +593,31 @@ interface BackfillBudget {
 }
 
 /**
+ * A stage whose phases are all completed but whose `stage_end` event never fired: the reaction failed right after the status
+ * flip, and its immediate retries too. The hold on the `auto` edges (`advanceAfterStageEnd`) ends with the reaction, so nothing
+ * else would ever move those players. `completePhaseAtStageEnd` repeats only the reaction and the held advance on a
+ * completed phase. Running leagues only, and only stages whose event is missing. Returns whether anything applied.
+ */
+async function retryFailedStageEnds(ctx: KitContext, summary: FormatCronSummary): Promise<boolean> {
+  const fired = new Set(ctx.state.firedEventKeys);
+  const stages = [...new Set(ctx.phases.map((phase) => phase.stage.key))].filter((stage) => !fired.has(eventKey({ event: 'stage_end', stage })));
+  let applied = false;
+  for (const stage of stages) {
+    const phases = ctx.phases.filter((phase) => phase.stage.key === stage);
+    const rows = await Promise.all(phases.map((phase) => getTournamentById(phase.id)));
+    if (rows.some((row) => row === null || row.status !== 'completed')) continue;
+    const outcome = await completePhaseAtStageEnd(phases[phases.length - 1].id, `cron_retry:${stage}`, []);
+    if (outcome === 'reaction_failed') {
+      summary.failures += 1;
+      logger.error(TAG, 'the reaction to a completed stage failed again; the next pass retries it', { seasonId: ctx.seasonId, stage });
+    } else {
+      applied = true;
+    }
+  }
+  return applied;
+}
+
+/**
  * The finalized matches of a league's phases whose `match_completed` event never fired: the hook ran while the league
  * was not (yet) on the kit engine, or its failure was only logged. `onMatchCompleted` is idempotent by event key, so a
  * match swept twice applies once. At most `FORMAT_CRON_BACKFILL_PER_LEAGUE` matches per league and what is left of the
@@ -758,6 +785,7 @@ async function repairLeague(ctx: KitContext, now: Date, summary: FormatCronSumma
     () => healPendingReverts(current, now, budget, summary, scanAll),
     () => backfillMatchCompleted(current, budget, summary),
     () => backfillRoundEnds(current, budget, summary),
+    () => retryFailedStageEnds(current, summary),
   ];
   for (const step of steps) {
     if (!(await step())) continue;

@@ -7213,6 +7213,7 @@ export type Database = {
           p_delta: Json
           p_expected_revision: number
           p_guard_actions: string[]
+          p_guard_stages: string[]
           p_kind: string
           p_ops: Json
           p_reason: string

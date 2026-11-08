@@ -215,6 +215,17 @@ describe('domain adjustments', () => {
     // Before the stage starts the same amendment is fine.
     vi.mocked(loadFreshKitContext).mockResolvedValue({ ...ctx, state: { ...ctx.state, firedEventKeys: [] } });
     await expect(applyAdjustment(request(amend))).resolves.toMatchObject({ ok: true });
+    // The database re-checks the stage under its row lock: the stages that count the domain go along, for an addition and a removal.
+    expect(vi.mocked(applyFormatAdjustment).mock.calls[0][0].guardStages).toEqual(['main']);
+    await applyAdjustment(request({ kind: 'domain', domain: 'pool', remove: ['garchomp'] }));
+    expect(vi.mocked(applyFormatAdjustment).mock.calls[1][0].guardStages).toEqual(['main']);
+  });
+
+  it('names no guarded stage when no stage counts the domain, and none for the other kinds', async () => {
+    await applyAdjustment(request(amend));
+    expect(vi.mocked(applyFormatAdjustment).mock.calls[0][0].guardStages).toEqual([]);
+    await applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'open' }));
+    expect(vi.mocked(applyFormatAdjustment).mock.calls[1][0].guardStages).toEqual([]);
   });
 });
 

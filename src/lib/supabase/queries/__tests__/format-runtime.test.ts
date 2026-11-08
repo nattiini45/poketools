@@ -211,16 +211,19 @@ describe('the RPC wrappers', () => {
     await expect(
       applyFormatAdjustment({
         seasonId: SEASON, kind: 'domain', target: { domain: 'gifts' }, delta: { add: ['x'] }, reason: 'typo', adminId: P1, ops, guardActions: ['pick'],
-        revision: 41,
+        guardStages: ['main'], revision: 41,
       }),
     ).resolves.toBe('adj-1');
     expect(state.rpcCalls[0]).toEqual({
       name: 'format_apply_adjustment',
       args: {
         p_season_id: SEASON, p_kind: 'domain', p_target: { domain: 'gifts' }, p_delta: { add: ['x'] }, p_reason: 'typo',
-        p_admin: P1, p_ops: ops, p_guard_actions: ['pick'], p_expected_revision: 41,
+        p_admin: P1, p_ops: ops, p_guard_actions: ['pick'], p_guard_stages: ['main'], p_expected_revision: 41,
       },
     });
+    // Callers that name no stage send an empty list, never an absent argument.
+    await applyFormatAdjustment({ seasonId: SEASON, kind: 'points', target: {}, delta: {}, reason: 'r', adminId: P1, ops: [], guardActions: [], revision: 42 });
+    expect(state.rpcCalls[1].args).toMatchObject({ p_guard_stages: [], p_expected_revision: 42 });
   });
 
   it.each(['relation_has_links', 'insufficient_holding'] as const)('applyFormatAdjustment turns the database refusal %s into a FormatAdjustmentRefusedError', async (code) => {
