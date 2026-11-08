@@ -363,7 +363,8 @@ async function unstageForfeit(
 
 /**
  * The forfeit of one match: the loser is the side without a team, the winner the other. The status write is a
- * compare-and-set on the status the match was read in, so a result that landed meanwhile wins.
+ * compare-and-set on the status and the players the match was read with, so a result or a re-pairing that landed
+ * meanwhile wins.
  */
 async function applyForfeit(
   job: PhaseJob,
@@ -416,6 +417,8 @@ async function applyForfeit(
       seasonId: job.cron.season_id,
       matchId: match.id,
       expectedStatus: status,
+      player1Id: match.player_1_id,
+      player2Id: match.player_2_id,
       winnerId: plan.winnerId,
       revision: job.revision,
     });
@@ -438,7 +441,7 @@ async function applyForfeit(
     throw error;
   }
   if (!applied) {
-    // The compare-and-set missed: a result landed meanwhile and owns the row; the forfeit never happened.
+    // The compare-and-set missed: a result or a re-pairing landed meanwhile and owns the row; the forfeit never happened.
     await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
     return;
   }

@@ -272,7 +272,7 @@ describe('match and team policies', () => {
   it('forfeits the side without a team and finalizes with a system forfeit outcome', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
-    expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
+    expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', player1Id: 'p1', player2Id: 'p2', winnerId: 'p1', revision: 1 });
     const input = vi.mocked(finalizeMatchCompletion).mock.calls[0][0];
     expect(input.winnerId).toBe('p1');
     expect(input.previousStatus).toBe('scheduled');
@@ -463,7 +463,7 @@ describe('match and team policies', () => {
       vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
       vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: null, player_id: 'p1' }] as never);
       const summary = await runFormatCronPass(AFTER_DEADLINE);
-      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
+      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', player1Id: 'p1', player2Id: 'p2', winnerId: 'p1', revision: 1 });
       expect(summary.forfeits).toBe(1);
     });
 
@@ -472,7 +472,7 @@ describe('match and team policies', () => {
       vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
       vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: null, player_id: 'p1' }, { match_id: 'm-9', player_id: 'p2' }] as never);
       const summary = await runFormatCronPass(AFTER_DEADLINE);
-      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
+      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', player1Id: 'p1', player2Id: 'p2', winnerId: 'p1', revision: 1 });
       expect(summary.forfeits).toBe(1);
     });
   });

@@ -7442,6 +7442,8 @@ export type Database = {
           p_expected_revision: number
           p_expected_status: Database["public"]["Enums"]["match_status"]
           p_match_id: string
+          p_player_1_id: string
+          p_player_2_id: string
           p_season_id: string
           p_winner_id: string
         }

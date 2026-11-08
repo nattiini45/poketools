@@ -1025,17 +1025,20 @@ END $$;
 
 -- The status write of a deadline forfeit. The forfeit was decided from a context of one format revision, so the revision,
 -- the engine and the compare-and-set on the match's status are one transaction: a format replaced or detached or a league
--- switched off the kit after the decision never gets a match completed by it. The fields are those of a completed match
+-- switched off the kit after the decision never gets a match completed by it, and the pairing it was decided for is part of
+-- the compare-and-set: a match re-paired since (still scheduled) is left alone, never completed with the old pairing's winner. The fields are those of a completed match
 -- in the application's status write; the league is part of the key. Locks follow seasons, season_formats, matches.
+DROP FUNCTION IF EXISTS public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint);
 CREATE OR REPLACE FUNCTION public.format_forfeit_complete(
-  p_season_id uuid, p_match_id uuid, p_expected_status public.match_status, p_winner_id uuid, p_expected_revision bigint
+  p_season_id uuid, p_match_id uuid, p_expected_status public.match_status, p_player_1_id uuid, p_player_2_id uuid,
+  p_winner_id uuid, p_expected_revision bigint
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   v_engine text;
   v_rows   integer;
 BEGIN
-  IF p_match_id IS NULL OR p_expected_status IS NULL OR p_winner_id IS NULL THEN
+  IF p_match_id IS NULL OR p_expected_status IS NULL OR p_player_1_id IS NULL OR p_player_2_id IS NULL OR p_winner_id IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'forfeit')::text;
   END IF;
   PERFORM public.format__assert_season_open(p_season_id);
@@ -1050,6 +1053,8 @@ BEGIN
          date_played = now(), confirmed_at = now(), auto_confirm_at = NULL
    WHERE m.id = p_match_id
      AND m.status = p_expected_status
+     AND m.player_1_id = p_player_1_id
+     AND m.player_2_id = p_player_2_id
      AND m.tournament_id IN (SELECT t.id FROM public.tournaments t WHERE t.season_id = p_season_id);
   GET DIAGNOSTICS v_rows = ROW_COUNT;
   RETURN v_rows > 0;
@@ -1097,7 +1102,7 @@ REVOKE ALL ON FUNCTION
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
   public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint),
   public.format_check_open(uuid, text, text, text, jsonb, bigint),
-  public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint),
+  public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, uuid, uuid, bigint),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
@@ -1119,7 +1124,7 @@ GRANT EXECUTE ON FUNCTION
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
   public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint),
   public.format_check_open(uuid, text, text, text, jsonb, bigint),
-  public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint),
+  public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, uuid, uuid, bigint),
   public.format_check_resolve(uuid, uuid, text, uuid, text)
   TO service_role;
 
@@ -1159,8 +1164,8 @@ COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, tex
   'Records an admin adjustment, applies its ops and, for kind domain, appends the delta to season_formats.amendments. Raises reason_required, format_context_stale (the league''s format changed since p_expected_revision was read), domain_amendment_locked, and for a domain amendment domain_in_use (it removes a held entry, or the stage_start of a stage in p_guard_stages is in the event log). Returns the adjustment id.';
 COMMENT ON FUNCTION public.format_check_open(uuid, text, text, text, jsonb, bigint) IS
   'Opens an assisted check; returns its id, or NULL when a check with that dedupe_key already exists. Raises format_context_stale (nothing inserted, the key stays free) when the league''s format changed or was detached since p_expected_revision was read.';
-COMMENT ON FUNCTION public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint) IS
-  'Completes a match of the league as a deadline forfeit, compare-and-set on its status, in one transaction with the revision and engine check. Returns false when the match no longer has that status (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read, format_season_closed (nothing written) when the league is completed or archived.';
+COMMENT ON FUNCTION public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, uuid, uuid, bigint) IS
+  'Completes a match of the league as a deadline forfeit, compare-and-set on its status and its two players, in one transaction with the revision and engine check. Returns false when the match no longer has that status or that pairing (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read, format_season_closed (nothing written) when the league is completed or archived.';
 COMMENT ON FUNCTION public.format_check_resolve(uuid, uuid, text, uuid, text) IS
   'Resolves an open check of the league to confirmed or rejected. Returns false when it was not open or belongs to another league.';
 

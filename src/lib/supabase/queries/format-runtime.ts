@@ -403,6 +403,9 @@ export interface CompleteFormatForfeitInput {
   matchId: string;
   /** The status the match was read in: the write is a compare-and-set on it. */
   expectedStatus: Database['public']['Enums']['match_status'];
+  /** The pairing the forfeit was decided for: a match re-paired since is not completed. */
+  player1Id: string;
+  player2Id: string;
   winnerId: string;
   /** The format revision the forfeit was decided from. */
   revision: number;
@@ -410,7 +413,7 @@ export interface CompleteFormatForfeitInput {
 
 /**
  * Completes a match as a deadline forfeit, in one transaction with the check that the league still runs that revision of
- * its format on the kit engine. False when the match no longer has `expectedStatus` (nothing written);
+ * its format on the kit engine. False when the match no longer has `expectedStatus` or no longer names the two players (nothing written);
  * `FormatRuntimeError('format_context_stale')` when the format changed or the league left the kit (nothing written).
  */
 export async function completeFormatForfeit(input: CompleteFormatForfeitInput): Promise<boolean> {
@@ -418,6 +421,8 @@ export async function completeFormatForfeit(input: CompleteFormatForfeitInput): 
     p_season_id: input.seasonId,
     p_match_id: input.matchId,
     p_expected_status: input.expectedStatus,
+    p_player_1_id: input.player1Id,
+    p_player_2_id: input.player2Id,
     p_winner_id: input.winnerId,
     p_expected_revision: input.revision,
   });
