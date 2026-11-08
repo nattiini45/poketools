@@ -90,7 +90,7 @@ function phase(engine: KitPhase['engine'] = 'kit'): KitPhase {
     rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
     columns: [],
   };
-  return { engine, seed: 'seed-0123456789', stage, outcomes: {}, tableExtras: {} };
+  return { engine, seed: 'seed-0123456789', revision: 3, stage, outcomes: {}, tableExtras: {} };
 }
 
 const tournament = (over: Record<string, unknown> = {}) =>

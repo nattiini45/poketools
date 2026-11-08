@@ -20,11 +20,14 @@
  * reopened, a game deleted or edited) whose current `match_completed` key is still the fired one, because the
  * `onMatchReverted` call of that moment failed and only reported it. Its grants and points would stand for a result that
  * no longer exists. The heal also visits the completed and archived kit leagues (`listKitIdleSeasonIds`), where an admin can
- * still reopen a match: only the heal runs there, never a phase, a deadline or a backfill, in a window of
- * `FORMAT_CRON_IDLE_LEAGUE_LIMIT` leagues per run that moves on with the clock, after the running leagues and within the same
- * revert budget and time budget. The limits of the repair: a match that was completed again before the retry finds the old key fired,
- * so its new completion applied nothing and the old effects stand (an admin sees the failed revert in the logs only), and a
- * match row that has been deleted cannot be reverted from here (the sweep reads matches).
+ * still reopen a match, in a window of `FORMAT_CRON_IDLE_LEAGUE_LIMIT` leagues per run that moves on with the clock, after the
+ * running leagues and within the same budgets and time budget. There the state-derived repairs of a running league run too
+ * (the lost `action_locked` events, the `match_completed` and `round_end` backfills), because a league completed or archived
+ * with one of them pending would keep it for ever; the calendar (marks, deadline policies, forfeits) never runs for them. The
+ * limits of the repair: a match that was completed again before the retry finds the old key fired,
+ * so its new completion applied nothing and the old effects stand (an admin sees the failed revert in the logs only), and the
+ * team audit and expression checks of that new completion meet the closed rows of the old generation and open nothing;
+ * a match row that has been deleted cannot be reverted from here (the sweep reads matches).
  *
  * Completed rounds whose `round_end` never fired (the hook of the completion failed or was deferred) are fired by a bounded
  * sweep too (`backfillRoundEnds`: `FORMAT_CRON_ROUND_END_LIMIT` per run, `FORMAT_CRON_ROUND_END_PER_LEAGUE` per league), after
@@ -59,6 +62,7 @@ import {
   listUncompletedMatches,
   type KitCronPhase,
 } from '@/lib/supabase/queries/format-cron';
+import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
@@ -176,15 +180,23 @@ interface PhaseJob {
   phase: KitPhaseInfo;
   calendar: StageCalendar;
   clock: CalendarClock;
+  /**
+   * The revision of the context the job's phase and calendar were read from. A mark or a policy is decided from that
+   * calendar, so it is fired only through a context of the same revision: after a format replace the next pass plans it
+   * again (a mark that is not due in the new calendar must not burn its `time:` key there).
+   */
+  revision: number;
 }
 
-async function openCheck(seasonId: string, plan: DeadlineCheckPlan, summary: FormatCronSummary): Promise<void> {
+/** Opens a deadline check under the revision of the context the policy was decided from (a stale one opens nothing). */
+async function openCheck(seasonId: string, plan: DeadlineCheckPlan, summary: FormatCronSummary, revision: number): Promise<void> {
   const id = await openFormatCheck({
     seasonId,
     source: plan.source,
     ruleId: plan.rule_id,
     dedupeKey: plan.dedupe_key,
     subject: plan.subject,
+    revision,
   });
   if (id !== null) {
     summary.checks += 1;
@@ -199,7 +211,17 @@ async function fireDueMarks(job: PhaseJob, ctx: KitContext, now: Date, summary: 
   for (const mark of dueMarks(job.calendar, job.clock, now)) {
     const event = { event: 'time' as const, stage, mark: mark.key };
     if (current.state.firedEventKeys.includes(eventKey(event))) continue;
-    const result = await fireEvent(current.seasonId, event, null);
+    if (current.revision !== job.revision) {
+      logger.warn(TAG, 'a calendar mark is not fired, the format changed since the pass read its calendar; the next pass retries', {
+        seasonId: current.seasonId,
+        stage,
+        mark: mark.key,
+      });
+      return current;
+    }
+    // Decided from `job.calendar` and `current`, written through `current`: the database refuses it (format_context_stale)
+    // when the format moved after `current` was loaded, instead of re-reading a context that may belong to another format.
+    const result = await fireEvent(current.seasonId, event, null, { context: current });
     if (result === null || !result.fired) continue;
     summary.marks += 1;
     for (const issue of result.issues) logger.warn(TAG, 'event effect skipped', { seasonId: current.seasonId, mark: mark.key, ...issue });
@@ -251,7 +273,7 @@ async function applyActionPolicy(
     const reviewPlan = planActionCheck(stage, index, actionId, player);
     if (known.has(reviewPlan.dedupe_key)) continue;
     if (policy.on_miss === 'admin_review') {
-      await openCheck(seasonId, reviewPlan, summary);
+      await openCheck(seasonId, reviewPlan, summary, ctx.revision);
       continue;
     }
     // A pick is drawn against the state as it is after the picks made before it (exclusive items taken meanwhile).
@@ -262,7 +284,7 @@ async function applyActionPolicy(
     if (fresh.state.submissions.some((s) => s.action === actionId && s.actor === player && s.status !== 'draft')) continue;
     const picks = planRandomPicks(fresh.def, actionId, player, fresh.state, rosterOf(fresh), fresh.seed);
     if (picks === null) {
-      await openCheck(seasonId, planActionCheck(stage, index, actionId, player, 'no_valid_pick'), summary);
+      await openCheck(seasonId, planActionCheck(stage, index, actionId, player, 'no_valid_pick'), summary, fresh.revision);
       continue;
     }
     // The draw was validated as the system (planRandomPicks), so the submit must be too: a domain visible to admins only
@@ -279,10 +301,13 @@ async function applyActionPolicy(
     } catch (error) {
       if (error instanceof FormatActionAlreadySubmittedError) continue;
       if (error instanceof FormatRuntimeError && error.code === 'action_locked') continue;
-      // The format changed (attached again, amended, switched) or a concurrent grant took the last free unit between the
-      // draw and the write: the draw was made for a state that no longer exists. The player is still waiting, so the next
-      // pass draws again against the new one; nothing is counted or audited now.
-      if (error instanceof FormatRuntimeError && (error.code === 'format_context_stale' || error.code === 'resource_capacity_reached')) {
+      // The format changed (attached again, amended, switched) or a concurrent grant took the last free unit or the exclusive
+      // item the draw picked, between the draw and the write: the draw was made for a state that no longer exists. The
+      // player is still waiting, so the next pass draws again against the new one; nothing is counted or audited now.
+      if (
+        error instanceof FormatRuntimeError &&
+        (error.code === 'format_context_stale' || error.code === 'resource_capacity_reached' || error.code === 'resource_item_taken')
+      ) {
         logger.warn(TAG, 'random pick skipped, the format or the holding changed meanwhile', { seasonId, action: actionId, code: error.code });
         continue;
       }
@@ -309,7 +334,7 @@ async function applyActionPolicy(
       continue;
     }
     logger.warn(TAG, 'random pick refused', { seasonId, action: actionId, issues: written.issues.map((issue) => issue.code) });
-    await openCheck(seasonId, planActionCheck(stage, index, actionId, player, written.issues[0]?.code ?? 'pick_refused'), summary);
+    await openCheck(seasonId, planActionCheck(stage, index, actionId, player, written.issues[0]?.code ?? 'pick_refused'), summary, fresh.revision);
   }
 }
 
@@ -355,6 +380,17 @@ async function applyForfeit(
     logger.warn(TAG, 'forfeit transition refused', { matchId: match.id, error: transition.error });
     return;
   }
+  // The forfeit is decided from the context the pass loaded and is not a database function that could carry its revision:
+  // read the league's head right before the first write, so a league taken off the kit (or whose format was replaced or
+  // amended) since the pass started is left alone and the next pass decides again.
+  const head = await getSeasonKitHead(job.cron.season_id);
+  if (head === null || head.engine !== 'kit' || head.revision !== job.revision) {
+    logger.warn(TAG, 'a deadline forfeit is not applied, the league left the kit engine or its format changed since the pass read it; the next pass retries', {
+      matchId: match.id,
+      seasonId: job.cron.season_id,
+    });
+    return;
+  }
   // The system's outcome row goes in BEFORE the status flip: a completed match must never lack the forfeit (the heal
   // would write a played row for it). A failed write leaves the match as it was; the next pass retries it.
   const adminOutcome = { kind: 'forfeit' as const, reason: plan.reason, setBy: null };
@@ -385,7 +421,13 @@ async function applyForfeit(
     await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
     return;
   }
-  await revalidateMatchPages(match.tournament_id, match.id);
+  // The status is committed: a cache expiry that throws (its tournament read failed) must not skip the finalize below, which
+  // the auto-confirm heal cannot repair once the ratings are missing.
+  try {
+    await revalidateMatchPages(match.tournament_id, match.id);
+  } catch (error) {
+    logger.error(TAG, 'could not expire the pages of a forfeited match; the finalize goes on', { matchId: match.id, error });
+  }
   logAuditEvent({
     actor_id: null,
     actor_name: 'System',
@@ -446,7 +488,7 @@ async function applyRoundPolicy(
         teamed,
       });
       if (plan.kind === 'check') {
-        if (!known.has(plan.check.dedupe_key)) await openCheck(ctx.seasonId, plan.check, summary);
+        if (!known.has(plan.check.dedupe_key)) await openCheck(ctx.seasonId, plan.check, summary, ctx.revision);
       } else {
         await applyForfeit(job, plan.forfeit, match, match.status, summary);
       }
@@ -467,6 +509,13 @@ async function runPhase(job: PhaseJob, ctx: KitContext, now: Date, summary: Form
   for (let index = 0; index < policies.length; index += 1) {
     const policy = policies[index];
     if (!active && policy.applies !== 'action') continue;
+    if (current.revision !== job.revision) {
+      logger.warn(TAG, 'deadline policies are not applied, the format changed since the pass read its calendar; the next pass retries', {
+        seasonId: current.seasonId,
+        stage: job.phase.stage.key,
+      });
+      break;
+    }
     const before = appliedCount(summary);
     let failed = false;
     try {
@@ -474,8 +523,18 @@ async function runPhase(job: PhaseJob, ctx: KitContext, now: Date, summary: Form
       else await applyRoundPolicy(job, current, policy, index, now, summary);
     } catch (error) {
       failed = true;
-      summary.failures += 1;
-      logger.error(TAG, 'deadline policy failed', { seasonId: current.seasonId, stage: job.phase.stage.key, policy: index, error });
+      if (isFormatContextStale(error)) {
+        // The format changed after this pass loaded it (a check was opened under the old revision): nothing was written,
+        // the next pass decides the policy again against the current format. Not a failure.
+        logger.warn(TAG, 'deadline policy skipped, the format changed meanwhile; the next pass retries it', {
+          seasonId: current.seasonId,
+          stage: job.phase.stage.key,
+          policy: index,
+        });
+      } else {
+        summary.failures += 1;
+        logger.error(TAG, 'deadline policy failed', { seasonId: current.seasonId, stage: job.phase.stage.key, policy: index, error });
+      }
     }
     // The next policy reads the state this one may have changed; a policy that applied nothing changed nothing.
     if (!failed && appliedCount(summary) === before) continue;
@@ -648,13 +707,37 @@ async function healPendingReverts(
 }
 
 /**
- * A completed or archived league: nothing runs there but the pending-revert heal (a match reopened after the season closed
- * whose revert failed would otherwise keep its grants and points for ever).
+ * The repairs that read the league's state, not its calendar, in the order that lets each use what the one before settled: the
+ * `action_locked` events a lost cascade or a manual lock left, the pending reverts, the `match_completed` backfill and the
+ * `round_end` backfill (a round deferred behind a missing `match_completed` is ready by then). The context is reloaded after
+ * a step that changed something; null when the league left the kit meanwhile.
+ */
+async function repairLeague(ctx: KitContext, now: Date, summary: FormatCronSummary, budget: BackfillBudget, scanAll: boolean): Promise<KitContext | null> {
+  let current = ctx;
+  const steps: Array<() => Promise<boolean>> = [
+    async () => (await fireLockedActionEvents(ctx.seasonId, null, { context: current })).length > 0,
+    () => healPendingReverts(current, now, budget, summary, scanAll),
+    () => backfillMatchCompleted(current, budget, summary),
+    () => backfillRoundEnds(current, budget, summary),
+  ];
+  for (const step of steps) {
+    if (!(await step())) continue;
+    const reloaded = await loadFreshKitContext(ctx.seasonId);
+    if (reloaded === null) return null;
+    current = reloaded;
+  }
+  return current;
+}
+
+/**
+ * A completed or archived league: the state-derived repairs only (`repairLeague`, the revert heal over every candidate). A
+ * match reopened after the season closed whose revert failed, or a `round_end` or lock event still pending when the season
+ * was completed, would otherwise keep its missing effects for ever.
  */
 async function runIdleLeague(seasonId: string, now: Date, summary: FormatCronSummary, budget: BackfillBudget): Promise<void> {
   const ctx = await loadFreshKitContext(seasonId);
   if (ctx === null) return;
-  await healPendingReverts(ctx, now, budget, summary, true);
+  await repairLeague(ctx, now, summary, budget, true);
 }
 
 async function runLeague(
@@ -664,35 +747,21 @@ async function runLeague(
   summary: FormatCronSummary,
   budget: BackfillBudget,
 ): Promise<void> {
-  let ctx = await loadFreshKitContext(seasonId);
+  const loaded = await loadFreshKitContext(seasonId);
+  if (loaded === null) return;
+  let ctx = await repairLeague(loaded, now, summary, budget, false);
   if (ctx === null) return;
-  // A lock whose `action_locked` event never fired (crash after the lock, a manual lock whose event failed).
-  if ((await fireLockedActionEvents(seasonId, null, { context: ctx })).length > 0) {
-    const reloaded = await loadFreshKitContext(seasonId);
-    if (reloaded === null) return;
-    ctx = reloaded;
-  }
-  if (await healPendingReverts(ctx, now, budget, summary)) {
-    const reloaded = await loadFreshKitContext(seasonId);
-    if (reloaded === null) return;
-    ctx = reloaded;
-  }
-  if (await backfillMatchCompleted(ctx, budget, summary)) {
-    const reloaded = await loadFreshKitContext(seasonId);
-    if (reloaded === null) return;
-    ctx = reloaded;
-  }
-  // After the match backfill: a round whose event was deferred behind a missing `match_completed` is ready now.
-  if (await backfillRoundEnds(ctx, budget, summary)) {
-    const reloaded = await loadFreshKitContext(seasonId);
-    if (reloaded === null) return;
-    ctx = reloaded;
-  }
   for (const cron of crons) {
     const phase = phaseById(ctx, cron.id);
     const stage: Stage | undefined = phase?.stage;
     if (phase === undefined || stage?.calendar === undefined) continue;
-    const job: PhaseJob = { cron, phase, calendar: stage.calendar, clock: { seasonStart: cron.season_start_date } };
+    const job: PhaseJob = {
+      cron,
+      phase,
+      calendar: stage.calendar,
+      clock: { seasonStart: cron.season_start_date, shiftSeconds: cron.clock_shift_seconds },
+      revision: ctx.revision,
+    };
     ctx = await runPhase(job, ctx, now, summary);
   }
 }
@@ -761,7 +830,7 @@ export async function runFormatCronPass(now: Date = new Date(), options: FormatC
   const idleStart = cronWindowStart(now, idle.length, FORMAT_CRON_IDLE_LEAGUE_LIMIT);
   const idleWindow = [...idle.slice(idleStart), ...idle.slice(0, idleStart)].slice(0, FORMAT_CRON_IDLE_LEAGUE_LIMIT);
   for (const seasonId of idleWindow) {
-    if (backfill.reverts <= 0 || clock() >= deadline) break;
+    if ((backfill.reverts <= 0 && backfill.left <= 0 && backfill.roundEnds <= 0) || clock() >= deadline) break;
     try {
       await runIdleLeague(seasonId, now, summary, backfill);
     } catch (error) {

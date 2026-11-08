@@ -6,7 +6,7 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../load')>()),
   loadFreshKitContext: vi.fn(),
 }));
-vi.mock('@/lib/format-engine/runtime/fire', () => ({ fireEvent: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/fire', () => ({ fireLockedActionEvents: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
   applyFormatAdjustment: vi.fn(),
@@ -17,7 +17,7 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 import { applyFormatAdjustment } from '@/lib/supabase/queries/format-runtime';
 import { logger } from '@/lib/logger';
 import { applyAdjustment, FORMAT_MAX_DOMAIN_AMENDMENTS, type AdjustmentRequest } from '../adjust';
-import { fireEvent } from '../fire';
+import { fireLockedActionEvents } from '../fire';
 import { generateRelationLinks, validateRelationLinks } from '../relations';
 import { loadFreshKitContext, type KitContext } from '../load';
 import type { KitRuntimeState } from '../types';
@@ -52,7 +52,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(loadFreshKitContext).mockResolvedValue(context());
   vi.mocked(applyFormatAdjustment).mockResolvedValue('adj-1');
-  vi.mocked(fireEvent).mockResolvedValue(null);
+  vi.mocked(fireLockedActionEvents).mockResolvedValue([]);
 });
 
 describe('the revision of the format', () => {
@@ -74,7 +74,7 @@ describe('the revision of the format', () => {
       code: 'format_context_stale',
       statusCode: 409,
     });
-    expect(fireEvent).not.toHaveBeenCalled();
+    expect(fireLockedActionEvents).not.toHaveBeenCalled();
   });
 });
 
@@ -221,9 +221,10 @@ describe('domain adjustments', () => {
 describe('action adjustments', () => {
   it('fires action_locked after a manual lock, not after an open', async () => {
     await applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'open' }));
-    expect(fireEvent).not.toHaveBeenCalled();
+    expect(fireLockedActionEvents).not.toHaveBeenCalled();
     await applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'locked' }));
-    expect(fireEvent).toHaveBeenCalledWith(SEASON, { event: 'action_locked', action: 'choose_gift' }, 'admin-1');
+    // Re-reads after the committed lock and fires only the locks the current format has (a format replaced in the gap burns no key).
+    expect(fireLockedActionEvents).toHaveBeenCalledWith(SEASON, 'admin-1');
   });
 
   it('refuses a lock on a locked action and an open on an open one (the history never records a change that did not happen)', async () => {
@@ -233,7 +234,7 @@ describe('action adjustments', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(withFlag('open'));
     await expect(applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'open' }))).resolves.toEqual({ ok: false, issue: 'action_state_unchanged' });
     expect(applyFormatAdjustment).not.toHaveBeenCalled();
-    expect(fireEvent).not.toHaveBeenCalled();
+    expect(fireLockedActionEvents).not.toHaveBeenCalled();
   });
 
   it('lets an action be locked while open, opened again after a lock, and opened before its window opens', async () => {
@@ -250,7 +251,7 @@ describe('action adjustments', () => {
   });
 
   it('keeps the adjustment when the follow-up event fails, and logs it for the cron pass', async () => {
-    vi.mocked(fireEvent).mockRejectedValue(new Error('db'));
+    vi.mocked(fireLockedActionEvents).mockRejectedValue(new Error('db'));
     await expect(applyAdjustment(request({ kind: 'action', action: 'choose_gift', state: 'locked' }))).resolves.toEqual({ ok: true, id: 'adj-1' });
     expect(logger.error).toHaveBeenCalled();
   });
@@ -341,7 +342,7 @@ describe('a change the database refuses under its lock (a concurrent adjustment 
     vi.mocked(applyFormatAdjustment).mockRejectedValue(new FormatAdjustmentRefusedError('relation_has_links'));
     await expect(applyAdjustment(request({ kind: 'relation', relation: 'santa', draw: true }))).resolves.toEqual({ ok: false, issue: 'relation_has_links' });
     expect(applyFormatAdjustment).toHaveBeenCalledTimes(1);
-    expect(fireEvent).not.toHaveBeenCalled();
+    expect(fireLockedActionEvents).not.toHaveBeenCalled();
   });
 
   it('answers insufficient_holding for a revoke whose snapshot showed enough units', async () => {

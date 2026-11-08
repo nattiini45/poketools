@@ -16,6 +16,7 @@ import {
   type FormatChallengeRow,
 } from '@/lib/supabase/queries/format-challenges';
 import { challengeOf } from './challenge';
+import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { loadFreshKitContext, phaseById } from './runtime/load';
 import { loadStageTable } from './runtime/stage-table';
 
@@ -29,12 +30,17 @@ export interface MakeChallengeInput {
 
 /**
  * Makes a challenge. Raises a `FormatChallengeError`: `challenge_not_ladder` (the phase is not a challenge stage, or the
- * league does not run a kit format), `challenge_phase_not_found`, `challenge_not_participant` (a player is not in the
+ * league has no format), `challenge_ladder_inactive` (a format is attached but its engine is not `kit`: the same answer the
+ * database gives an accept, and what the module header of `format-challenges` documents), `challenge_phase_not_found`, `challenge_not_participant` (a player is not in the
  * stage table), and the database's rules (`challenge_rank_range`, `challenge_max_open`, `challenge_cooldown`, ...).
  */
 export async function makeChallenge(input: MakeChallengeInput): Promise<FormatChallengeRow> {
   const ctx = await loadFreshKitContext(input.seasonId);
-  if (ctx === null) throw new FormatChallengeError('challenge_not_ladder');
+  if (ctx === null) {
+    // No context: no format, or an engine other than kit. Only the second is "not running at the moment".
+    const head = await getSeasonKitHead(input.seasonId);
+    throw new FormatChallengeError(head !== null && head.engine !== 'kit' ? 'challenge_ladder_inactive' : 'challenge_not_ladder');
+  }
   const phase = phaseById(ctx, input.phaseId);
   if (phase === undefined) throw new FormatChallengeError('challenge_phase_not_found');
   const config = challengeOf(phase.stage.pairing);

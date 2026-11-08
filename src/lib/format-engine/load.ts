@@ -1,6 +1,7 @@
 /**
- * Loads what a kit league's standings need (`KitStandingsData`) in seven reads: the attached format's engine and seed,
- * the phases it generated, then their matches, match outcomes, members, standings adjustments and game counts in parallel. A stage
+ * Loads what a kit league's standings need (`KitStandingsData`) in eight reads: the attached format's engine and seed,
+ * the phases it generated, then their matches, match outcomes, members, standings adjustments, game counts and (round
+ * robin stages) kills in parallel. A stage
  * that ranks by or shows a custom metric adds the spec and the runtime rows (`loadStageMetrics`). Server only: the season
  * seed is read here and turned into per-player coin flip draws, so it never reaches a client or a cached value.
  */
@@ -9,7 +10,6 @@ import 'server-only';
 import {
   getKitPhases,
   getOutcomesByPhases,
-  getPhaseBattleStats,
   getPhaseGameCounts,
   getPhaseMatchIds,
   getPhaseMembers,
@@ -19,6 +19,7 @@ import {
   type StandingAdjustmentRow,
 } from '@/lib/supabase/queries/format-engine';
 import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
+import { getPhaseKillTallies } from '@/lib/supabase/queries/games';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
@@ -65,6 +66,11 @@ export interface KitPhase {
   engine: 'kit' | 'shadow';
   /** Server-side only. */
   seed: string;
+  /**
+   * The `season_formats.revision` read before the phase's stage: a round or a check written from this phase hands it to the
+   * database, which refuses the write (`format_context_stale`) when the format was replaced, switched or detached since.
+   */
+  revision: number;
   stage: Stage;
   outcomes: Record<string, KitOutcome>;
   /**
@@ -89,7 +95,7 @@ export async function loadKitPhase(seasonId: string, phaseId: string): Promise<K
     seed: head.seed,
     playerIds: members.map((member) => member.player_id),
   });
-  return { engine: head.engine, seed: head.seed, stage, outcomes: kitOutcomesByMatch(outcomeRows), tableExtras };
+  return { engine: head.engine, seed: head.seed, revision: head.revision, stage, outcomes: kitOutcomesByMatch(outcomeRows), tableExtras };
 }
 
 export interface StageTableExtrasInput {
@@ -113,16 +119,16 @@ export interface StageTableExtrasInput {
  */
 export async function loadStageTableExtras(input: StageTableExtrasInput): Promise<StageTableExtras> {
   const { phase, stage, playerIds } = input;
-  const [adjustmentRows, gameCounts, battleStats] = await Promise.all([
+  const [adjustmentRows, gameCounts, kills] = await Promise.all([
     input.adjustmentRows ?? getStandingAdjustments(input.seasonId),
     getPhaseGameCounts([phase.id]),
     // Kills count in a round robin stage only, like the public table.
-    stageCountsKills(stage) ? getPhaseBattleStats([phase.id]) : Promise.resolve([]),
+    stageCountsKills(stage) ? getPhaseKillTallies([phase.id]) : Promise.resolve({}),
   ]);
   const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, new Map([[stage.key, phase.id]]));
   const out: StageTableExtras = {
     ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
-    ...(battleStats.length > 0 ? { battleStats } : {}),
+    ...(Object.keys(kills).length > 0 ? { kills } : {}),
     ...(adjustments[phase.id] !== undefined ? { pointAdjustments: adjustments[phase.id] } : {}),
     ...(manualOrder[phase.id] !== undefined ? { manualOrder: manualOrder[phase.id] } : {}),
   };
@@ -211,14 +217,7 @@ export async function loadKitStandingsData(
   const engine = head.engine === 'kit' ? 'kit' : 'shadow';
   const phases = await getKitPhases(seasonId);
   const ids = phases.map((phase) => phase.id);
-  const [matchRows, outcomeRows, members, adjustmentRows, gameCounts] = await Promise.all([
-    getPhaseMatchIds(ids),
-    getOutcomesByPhases(ids),
-    getPhaseMembers(ids),
-    getStandingAdjustments(seasonId),
-    getPhaseGameCounts(ids),
-  ]);
-
+  // The stage of each phase is parsed first: only a round robin stage counts kills, and nothing is read for the others.
   const stages: Record<string, KitStageRules> = {};
   const full: Stage[] = [];
   for (const phase of phases) {
@@ -226,6 +225,15 @@ export async function loadKitStandingsData(
     full.push(stage);
     stages[phase.id] = { key: stage.key, scoring: stage.scoring, rank: stage.rank };
   }
+  const killPhaseIds = phases.filter((_, i) => stageCountsKills(full[i])).map((phase) => phase.id);
+  const [matchRows, outcomeRows, members, adjustmentRows, gameCounts, kills] = await Promise.all([
+    getPhaseMatchIds(ids),
+    getOutcomesByPhases(ids),
+    getPhaseMembers(ids),
+    getStandingAdjustments(seasonId),
+    getPhaseGameCounts(ids),
+    killPhaseIds.length > 0 ? getPhaseKillTallies(killPhaseIds) : Promise.resolve({}),
+  ]);
 
   const stageOfMatch: Record<string, string> = {};
   for (const row of matchRows) stageOfMatch[row.id] = row.tournament_id;
@@ -259,6 +267,7 @@ export async function loadKitStandingsData(
     outcomes,
     coinFlips,
     ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
+    ...(Object.keys(kills).length > 0 ? { kills } : {}),
     ...(Object.keys(adjustments).length > 0 ? { adjustments } : {}),
     ...(Object.keys(manualOrder).length > 0 ? { manualOrder } : {}),
     ...(metrics !== undefined ? { metrics } : {}),

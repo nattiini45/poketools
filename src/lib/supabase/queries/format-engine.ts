@@ -13,7 +13,6 @@ import type { Json } from '@/types/database';
 import { isMatchOutcomeKind, type MatchOutcomeKind } from '@/types/match-outcome';
 import type { SeasonFormatEngine } from '@/lib/format-studio/library-types';
 import { isValidUuid } from '@/lib/utils/uuid';
-import type { TournamentBattleStat } from './games';
 
 /** Ids per `.in()` filter. */
 const IN_CHUNK = 100;
@@ -22,16 +21,20 @@ export interface SeasonKitHead {
   engine: SeasonFormatEngine;
   /** Server-side only: never hand it to a client. */
   seed: string;
+  /** `season_formats.revision`: what a write planned from this read hands to the database (a moved revision refuses it). */
+  revision: number;
+  /** `season_formats.clock_shift_seconds`: the time the league spent in the recycle bin (the stage calendar's clock shift). */
+  clockShiftSeconds: number;
 }
 
-/** The engine and seed of the league's attached format, or null when none is attached. */
+/** The engine, seed and revision of the league's attached format, or null when none is attached. */
 export async function getSeasonKitHead(seasonId: string): Promise<SeasonKitHead | null> {
   if (!isValidUuid(seasonId)) return null;
-  const { data, error } = await supabase.from('season_formats').select('engine, seed').eq('season_id', seasonId).maybeSingle();
+  const { data, error } = await supabase.from('season_formats').select('engine, seed, revision, clock_shift_seconds').eq('season_id', seasonId).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   const engine = data.engine === 'legacy' || data.engine === 'shadow' || data.engine === 'kit' ? data.engine : 'legacy';
-  return { engine, seed: data.seed };
+  return { engine, seed: data.seed, revision: data.revision, clockShiftSeconds: data.clock_shift_seconds };
 }
 
 export interface KitPhaseRow {
@@ -170,44 +173,6 @@ export async function getPhaseGameCounts(phaseIds: readonly string[]): Promise<R
     for (const row of rows) counts[row.match_id] = (counts[row.match_id] ?? 0) + 1;
   }
   return counts;
-}
-
-/**
- * The narrow battle_stats rows of the completed matches of the phases, with the round of each: what a table's
- * `kill_differential` sums (`StageStandingsInput.battleStats`). Only completed matches, like the match records a table is
- * computed from (a game of a match still open scores nothing). Callers read it for a round robin stage only
- * (`stageCountsKills`); the public pages do the same.
- */
-export async function getPhaseBattleStats(phaseIds: readonly string[]): Promise<TournamentBattleStat[]> {
-  const ids = [...new Set(phaseIds)];
-  const out: TournamentBattleStat[] = [];
-  for (let i = 0; i < ids.length; i += IN_CHUNK) {
-    const chunk = ids.slice(i, i + IN_CHUNK);
-    const rows = await readAllPages((from, to) =>
-      supabase
-        .from('battle_stats')
-        .select(
-          'id, game_id, player_id, pokemon_name, was_brought, was_lead, kos_dealt, was_koed, games!inner(matches!inner(tournament_id, status, rounds!inner(round_number)))',
-        )
-        .in('games.matches.tournament_id', chunk)
-        .eq('games.matches.status', 'completed')
-        .order('id', { ascending: true })
-        .range(from, to),
-    );
-    for (const row of rows) {
-      out.push({
-        game_id: row.game_id,
-        player_id: row.player_id,
-        pokemon_name: row.pokemon_name,
-        was_brought: row.was_brought,
-        was_lead: row.was_lead,
-        kos_dealt: row.kos_dealt,
-        was_koed: row.was_koed,
-        round_number: row.games.matches.rounds.round_number,
-      });
-    }
-  }
-  return out;
 }
 
 /** Who plays in each phase (`tournament_participants`). */

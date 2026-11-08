@@ -145,53 +145,64 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // best_of can only be changed on pending rounds
-    if (body.best_of) {
-      if (round.status !== 'pending') {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Can only change best_of on pending rounds', code: 'round_best_of_locked' },
-          { status: 400 }
-        );
-      }
-      round = await updateRoundBestOf(rid, body.best_of);
-    }
-
-    const statusBefore = round.status;
-    // Side effects of a completion belong to the one call that really made the transition. The claim gives overlapping
-    // submissions the same guarantee as a sequential repeat, and it counts the unfinished matches again under a lock on the
-    // round row: a challenge accepted since the read above is counted (the completion is refused, or forced and audited with
-    // the count), and one accepted after it finds the round completed. That refusal can follow the best_of write above (a
-    // match appeared after the read); nothing else of the request is written then, and a repeat converges.
+    // The writes below commit one by one and a later step can refuse or throw after an earlier one committed (best_of, then
+    // a completion that finds an unfinished match), so the public reads expire in a finally once a write committed, which also
+    // covers the match page that shows the deadline.
+    let wrote = false;
+    let statusBefore = round.status;
     let completedNow = false;
-    if (body.status === 'completed') {
-      if (round.status !== 'completed') {
-        const claimed = await completeRound(rid, { force: body.force === true });
-        if (claimed.outcome === 'unfinished') throw roundMatchesUnfinished(round.name, claimed.unfinished);
-        if (claimed.outcome === 'completed') {
-          round = claimed.round;
-          completedNow = true;
-          forcedOpenMatches = claimed.unfinished;
-        } else {
-          const current = await getRoundById(rid);
-          if (!current) {
-            return NextResponse.json<ApiResult<never>>(
-              { success: false, error: 'Round not found', code: 'round_not_found' },
-              { status: 404 }
-            );
-          }
-          round = current;
+    try {
+      // best_of can only be changed on pending rounds
+      if (body.best_of) {
+        if (round.status !== 'pending') {
+          return NextResponse.json<ApiResult<never>>(
+            { success: false, error: 'Can only change best_of on pending rounds', code: 'round_best_of_locked' },
+            { status: 400 }
+          );
         }
+        round = await updateRoundBestOf(rid, body.best_of);
+        wrote = true;
       }
-    } else if (body.status) {
-      round = await updateRoundStatus(rid, body.status);
-    }
 
-    // `undefined` leaves the deadline alone; `null` clears it.
-    if (body.deadline !== undefined) {
-      round = await updateRoundDeadline(rid, body.deadline);
+      statusBefore = round.status;
+      // Side effects of a completion belong to the one call that really made the transition. The claim gives overlapping
+      // submissions the same guarantee as a sequential repeat, and it counts the unfinished matches again under a lock on the
+      // round row: a challenge accepted since the read above is counted (the completion is refused, or forced and audited with
+      // the count), and one accepted after it finds the round completed. That refusal can follow the best_of write above (a
+      // match appeared after the read); nothing else of the request is written then, and a repeat converges.
+      if (body.status === 'completed') {
+        if (round.status !== 'completed') {
+          const claimed = await completeRound(rid, { force: body.force === true });
+          if (claimed.outcome === 'unfinished') throw roundMatchesUnfinished(round.name, claimed.unfinished);
+          if (claimed.outcome === 'completed') {
+            round = claimed.round;
+            wrote = true;
+            completedNow = true;
+            forcedOpenMatches = claimed.unfinished;
+          } else {
+            const current = await getRoundById(rid);
+            if (!current) {
+              return NextResponse.json<ApiResult<never>>(
+                { success: false, error: 'Round not found', code: 'round_not_found' },
+                { status: 404 }
+              );
+            }
+            round = current;
+          }
+        }
+      } else if (body.status) {
+        round = await updateRoundStatus(rid, body.status);
+        wrote = true;
+      }
+
+      // `undefined` leaves the deadline alone; `null` clears it.
+      if (body.deadline !== undefined) {
+        round = await updateRoundDeadline(rid, body.deadline);
+        wrote = true;
+      }
+    } finally {
+      if (wrote) expireTournamentReads(id, tournament?.season_id);
     }
-    // The public match page shows the deadline, so its reads expire too.
-    expireTournamentReads(id, tournament?.season_id);
 
     if (body.deadline !== undefined && !sameInstant(deadlineBefore, round.deadline)) {
       logAuditEvent({

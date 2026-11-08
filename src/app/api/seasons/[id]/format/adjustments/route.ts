@@ -29,16 +29,21 @@ interface RouteParams {
  * What the audit entry records of an adjustment: ids, keys and counts only. The reason lives in `format_adjustments`;
  * link pairs (a hidden giver/receiver mapping), domain entries and the item of a resource adjustment (what a player was
  * granted or lost, possibly a secret gift) are never copied into the audit log: every site admin reads it, and one may
- * face that player. The resource key, the player and the amount stay.
+ * face that player. The resource key, the player and the amount stay only for a resource everybody may see
+ * (`visibility: 'all'`): the history masks the holding of any other resource for a reader who plays, and the audit log
+ * must not hand that reader what the history hides.
  */
-function auditTarget(adjustment: AdjustmentBody['adjustment']): Record<string, string | number | boolean | null> {
+function auditTarget(
+  adjustment: AdjustmentBody['adjustment'],
+  resourceIsOpen: boolean,
+): Record<string, string | number | boolean | null> {
   switch (adjustment.kind) {
     case 'points':
       return { stage: adjustment.stage, player_id: adjustment.player_id };
     case 'rank':
       return { stage: adjustment.stage, players: adjustment.order.length };
     case 'resource':
-      return { resource: adjustment.resource, player_id: adjustment.player_id, amount: adjustment.amount };
+      return resourceIsOpen ? { resource: adjustment.resource, player_id: adjustment.player_id, amount: adjustment.amount } : {};
     case 'relation':
       return { relation: adjustment.relation, reveal: adjustment.reveal === true, draw: adjustment.draw === true, link_count: adjustment.links?.length ?? 0 };
     case 'action':
@@ -109,6 +114,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     });
     if (!result.ok) throw refuse(REFUSAL_OF_ISSUE[result.issue]);
 
+    // Whether the resource is one everybody sees; a context that cannot be read counts as not (the target is left out).
+    let resourceIsOpen = false;
+    if (adjustment.kind === 'resource') {
+      const resourceKey = adjustment.resource;
+      try {
+        const ctx = await loadFreshKitContext(seasonId);
+        resourceIsOpen = ctx?.def.resources?.some((resource) => resource.key === resourceKey && resource.visibility === 'all') === true;
+      } catch {
+        resourceIsOpen = false;
+      }
+    }
+
     logAuditEvent({
       action: 'season.format.adjustment',
       actor_id: admin.playerId,
@@ -118,7 +135,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       metadata: {
         adjustment_id: result.id,
         kind: adjustment.kind,
-        target: auditTarget(adjustment),
+        target: auditTarget(adjustment, resourceIsOpen),
         reason_length: Array.from(reason).length,
       },
     });

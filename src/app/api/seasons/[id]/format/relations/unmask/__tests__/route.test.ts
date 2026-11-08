@@ -139,6 +139,7 @@ describe('POST /api/seasons/[id]/format/relations/unmask', () => {
     const text = await response.text();
     const body = JSON.parse(text);
     expect(body.success).toBe(false);
+    expect(body.code).toBe('unmask_audit_unavailable');
     expect(body.data).toBeUndefined();
     expect(text).not.toContain(P1);
     expect(text).not.toContain(P2);

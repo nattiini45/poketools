@@ -52,6 +52,8 @@ export const FORMAT_ERROR_CODES = [
   'format_not_attached',
   'format_nothing_attached',
   'format_detach_blocked',
+  'format_phases_in_use',
+  'format_phase_owned',
   'format_runtime_has_data',
   'season_format_type_locked',
 ] as const satisfies readonly ApiErrorCode[];
@@ -90,6 +92,8 @@ export const FORMAT_ERROR_STATUS: { readonly [C in FormatErrorCode]: number } = 
   format_not_attached: 409,
   format_nothing_attached: 404,
   format_detach_blocked: 409,
+  format_phases_in_use: 409,
+  format_phase_owned: 409,
   format_runtime_has_data: 409,
   season_format_type_locked: 409,
 };

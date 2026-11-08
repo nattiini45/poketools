@@ -102,7 +102,8 @@ describe('FormatAttachPanel: confirm_clear', () => {
     await user.click(screen.getByRole('button', { name: 'Delete it and continue' }));
 
     await waitFor(() => expect(sent).toHaveLength(2));
-    expect(sent[1]).toEqual({ method: 'DELETE', body: { confirm_clear: true } });
+    // The confirmation names the counts the 409 showed (links 2, items 1, submissions 4), so a table that grew meanwhile is refused again.
+    expect(sent[1]).toEqual({ method: 'DELETE', body: { confirm_clear: true, confirmed_counts: { links: 2, items: 1, submissions: 4, adjustments: 0 } } });
     expect(await screen.findByText(/Format detached/)).toBeTruthy();
     expect(refresh).toHaveBeenCalled();
   });

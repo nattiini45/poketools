@@ -12,6 +12,7 @@ import {
   deleteGroupsByTournament,
   getGroupsByTournament,
 } from '@/lib/supabase/queries/tournament-groups';
+import { mapGroupWriteConflict } from '@/lib/format-engine/groups';
 import { computeStandingsFromContext, loadSeasonStandingsContext } from './season-standings';
 import { groupTablesUpToWeek } from './group-standings';
 import {
@@ -125,25 +126,32 @@ export async function ensurePhaseGroupsFromLeague(
     throw err;
   }
 
-  await deleteGroupsByTournament(phase.id);
-  const created = await createGroupBatch(
-    desired.map((group, index) => ({
-      tournament_id: phase.id,
-      name: group.name,
-      group_number: index + 1,
-      season_group_id: group.season_group_id,
-    })),
-  );
-  const idBySeasonGroup = new Map(created.map((group) => [group.season_group_id, group.id]));
-  await addGroupMembersBatch(
-    desired.flatMap((group) =>
-      group.memberIds.map((playerId, index) => ({
-        group_id: idBySeasonGroup.get(group.season_group_id)!,
-        player_id: playerId,
-        seed: index + 1,
+  // Two first-round generations (a double click, two admins) can rebuild at once: the unique key on (phase, group number)
+  // refuses the second insert, and a member insert can lose its group to the other's delete. Both answer the retryable
+  // 409 `groups_forming_in_progress` the kit forming answers (`mapGroupWriteConflict`), not a 500.
+  try {
+    await deleteGroupsByTournament(phase.id);
+    const created = await createGroupBatch(
+      desired.map((group, index) => ({
+        tournament_id: phase.id,
+        name: group.name,
+        group_number: index + 1,
+        season_group_id: group.season_group_id,
       })),
-    ),
-  );
+    );
+    const idBySeasonGroup = new Map(created.map((group) => [group.season_group_id, group.id]));
+    await addGroupMembersBatch(
+      desired.flatMap((group) =>
+        group.memberIds.map((playerId, index) => ({
+          group_id: idBySeasonGroup.get(group.season_group_id)!,
+          player_id: playerId,
+          seed: index + 1,
+        })),
+      ),
+    );
+  } catch (error) {
+    throw mapGroupWriteConflict(error);
+  }
   expireTournamentReads(phase.id, seasonId);
   return getGroupsByTournament(phase.id);
 }

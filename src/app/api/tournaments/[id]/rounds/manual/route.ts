@@ -6,13 +6,14 @@ import { manualRoundSchema, formatZodErrors } from '@/lib/validation';
 import {
   getTournamentById,
   getParticipants,
-  updateTournament,
 } from '@/lib/supabase/queries/tournaments';
+import { kitWriteFence } from '@/lib/format-engine/write-fence';
 import { getRoundsByTournament, createRoundWithMatches } from '@/lib/supabase/queries/rounds';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { assertLegacyEliminationRoundSettled } from '@/lib/tournament/previous-round-guard';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import {
   announceKitRound,
   assertNoOpenRoundBeforeNext,
@@ -235,42 +236,60 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         : [];
 
     // 6. Create round (a table phase of a grouped league mirrors the league groups first, see above)
-    if (tournament.season_id) {
-      await ensurePhaseGroupsFromLeague(tournament.season_id, tournament);
-    }
     const nextRoundNumber = tournament.current_round + 1;
     const roundName = body.name?.trim() || `Round ${nextRoundNumber}`;
     const roundBestOf =
       body.best_of ?? tournament.bo_overrides[roundName] ?? tournament.best_of_default;
 
-    // 7. The round and its match stubs are one transaction under the phase row lock (`round_write`): a stage end that
-    // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
-    // empty round behind.
-    let round = await createRoundWithMatches({
-      tournament_id: id,
-      name: roundName,
-      round_number: nextRoundNumber,
-      best_of: roundBestOf,
-      bye_player_ids: byePlayerIds,
-      matches: body.pairings.map((pairing) => ({
-        player_1_id: pairing.player_1_id,
-        player_2_id: pairing.player_2_id,
-      })),
-    });
+    // The mirrored groups and the round are separate commits, and a deadline write can fail after the round committed, so
+    // the public reads expire in a finally once something committed (a write the database refused expires nothing).
+    let round: Round;
+    let committed = false;
+    try {
+      if (tournament.season_id) {
+        await ensurePhaseGroupsFromLeague(tournament.season_id, tournament);
+        committed = true;
+      }
 
-    // 8. Update tournament status and round counter
-    if (tournament.status === 'upcoming') {
-      await updateTournament(id, {
-        status: 'active',
-        current_round: nextRoundNumber,
+      // 7. The round and its match stubs are one transaction under the phase row lock (`round_write`): a stage end that
+      // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
+      // empty round behind.
+      round = await createRoundWithMatches({
+        tournament_id: id,
+        name: roundName,
+        round_number: nextRoundNumber,
+        best_of: roundBestOf,
+        bye_player_ids: byePlayerIds,
+        matches: body.pairings.map((pairing) => ({
+          player_1_id: pairing.player_1_id,
+          player_2_id: pairing.player_2_id,
+        })),
+        ...kitWriteFence(kitPhase),
       });
-    } else {
-      await updateTournament(id, {
-        current_round: nextRoundNumber,
-      });
+
+      committed = true;
+
+      // 8. The phase status and round counter moved in the round's own transaction (`round_write`).
+      round = await fillKitRoundDeadline(tournament, kitPhase, round);
+    } finally {
+      if (committed) expireTournamentReads(id, tournament.season_id);
     }
-    round = await fillKitRoundDeadline(tournament, kitPhase, round);
-    expireTournamentReads(id, tournament.season_id);
+    logAuditEvent({
+      actor_id: admin.playerId,
+      actor_name: admin.name,
+      action: 'round.generate',
+      resource_type: 'round',
+      resource_id: round.id,
+      resource_name: round.name,
+      metadata: {
+        tournament_id: id,
+        round_number: nextRoundNumber,
+        matches: body.pairings.length,
+        byes: byePlayerIds.length,
+        manual: true,
+        ...(kitPhase ? { engine: 'kit' } : {}),
+      },
+    });
     await announceKitRound(tournament, kitPhase, { roundNumber: nextRoundNumber }, tournament.status === 'upcoming', forcedStart);
 
     return NextResponse.json<ApiResult<Round>>(

@@ -123,6 +123,16 @@ function legacyTable(league: LegacyInput, stage: LegacyStageInput, set: ResultSe
   });
 }
 
+/** The per-match kill tallies `getPhaseKillTallies` reads, from the legacy battle stats (the game id is `<match id>-g1`). */
+function killTallies(stats: readonly TournamentBattleStat[]): Record<string, Record<string, number>> {
+  const out: Record<string, Record<string, number>> = {};
+  for (const stat of stats) {
+    const byPlayer = (out[stat.game_id.replace(/-g1$/, '')] ??= {});
+    byPlayer[stat.player_id] = (byPlayer[stat.player_id] ?? 0) + stat.kos_dealt - (stat.was_koed ? 1 : 0);
+  }
+  return out;
+}
+
 function kitTable(described: Stage, league: LegacyInput, stage: LegacyStageInput, set: ResultSet): Standing[] {
   const kit: KitStandingsData = {
     engine: 'kit',
@@ -130,9 +140,10 @@ function kitTable(described: Stage, league: LegacyInput, stage: LegacyStageInput
     stageOfMatch: Object.fromEntries(set.matches.map((m) => [m.match_id as string, PHASE])),
     outcomes: set.outcomes,
     coinFlips: { [PHASE]: {} },
+    // The kills ride in the kit data (per match and player), as `loadKitStandingsData` builds them.
+    kills: killTallies(set.battleStats),
   };
   return computeStandingsForFormat('custom', set.ids, set.names, set.matches, {}, {
-    battleStats: set.battleStats,
     gamesByMatch: set.gamesByMatch,
     byes: legacyScoresByes(league, stage) ? set.byes : undefined,
   }, {}, { kit });

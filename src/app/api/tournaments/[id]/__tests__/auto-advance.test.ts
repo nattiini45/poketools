@@ -5,6 +5,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
+vi.mock('@/lib/format-studio/phase-guards', () => ({
+  assertSeasonPhasesFree: vi.fn(),
+  assertFormatPhaseDeletable: vi.fn(),
+  assertFormatPhaseUnchanged: vi.fn(),
+  assertFormatPhaseStatusUnchanged: vi.fn(),
+  assertFormatPhaseRosterOpen: vi.fn(),
+  assertSeasonRosterMembers: vi.fn(),
+}));
 vi.mock('@/lib/ruleset-studio/pin-change', () => ({ assertRulesetChangeAllowed: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({
@@ -74,6 +82,7 @@ beforeEach(() => {
   vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'p-1', name: 'Admin' } as never);
   vi.mocked(getTournamentById).mockResolvedValue(phase as never);
   vi.mocked(updateTournament).mockImplementation(async (_id, input) => ({ ...phase, ...input }) as never);
+  vi.mocked(onPhaseStatusChanged).mockResolvedValue(true);
 });
 
 describe('PATCH /api/tournaments/[id]: auto advance', () => {
@@ -123,13 +132,33 @@ describe('PATCH /api/tournaments/[id]: auto advance', () => {
     });
   });
 
-  it('tells the format runtime about a status change, and only a change', async () => {
+  it('tells the format runtime about a status change', async () => {
     vi.mocked(runAutoAdvance).mockResolvedValue([]);
     await patch({ status: 'completed' });
     expect(onPhaseStatusChanged).toHaveBeenCalledWith({ tournament: phase, from: 'active', to: 'completed' });
     vi.mocked(onPhaseStatusChanged).mockClear();
-    await patch({ status: 'active' });
+    await patch({ name: 'Renamed' });
     expect(onPhaseStatusChanged).not.toHaveBeenCalled();
+  });
+
+  it('replays the reaction when the same status is sent again (a first call whose reaction died after the commit)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ ...phase, status: 'completed' } as never);
+    await patch({ status: 'completed' });
+    expect(onPhaseStatusChanged).toHaveBeenCalledWith({ tournament: { ...phase, status: 'completed' }, from: 'active', to: 'completed' });
+    vi.mocked(onPhaseStatusChanged).mockClear();
+    vi.mocked(getTournamentById).mockResolvedValue(phase as never);
+    await patch({ status: 'active' });
+    expect(onPhaseStatusChanged).toHaveBeenCalledWith({ tournament: phase, from: 'upcoming', to: 'active' });
+    expect(runAutoAdvance).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed reaction as a warning and in the audit entry instead of dropping it', async () => {
+    vi.mocked(runAutoAdvance).mockResolvedValue([]);
+    vi.mocked(onPhaseStatusChanged).mockResolvedValue(false);
+    const res = await patch({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).warnings).toEqual([{ code: 'format_reaction_failed' }]);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ format_reaction_error: 'phase_status_hook_failed' });
   });
 
   it('runs nothing for another status, a phase already completed or another league type', async () => {

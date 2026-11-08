@@ -12,8 +12,10 @@ vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   fireFormatEvent: vi.fn(),
 }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 import { expireSeasonReads } from '@/lib/revalidation';
+import { logger } from '@/lib/logger';
 import { fireFormatEvent, FormatRuntimeError } from '@/lib/supabase/queries/format-runtime';
 import { eventNeedsRows, planEffects } from '../effects';
 import { fireEvent, fireLockedActionEvents, pendingLockEvents } from '../fire';
@@ -102,6 +104,25 @@ describe('the lock cascade', () => {
     expect(vi.mocked(fireFormatEvent).mock.calls.map((call) => call[0].eventKey)).toEqual(['stage_start:swiss', 'action_locked:give_gifts']);
   });
 
+  it('fires no action_locked for a lock the format the cascade reads does not have (a format replaced meanwhile)', async () => {
+    vi.mocked(planEffects).mockReturnValueOnce(plan([{ op: 'lock_action', action: 'give_gifts' }]) as never);
+    // The league holds another format now: its flag for the action is not locked, so no key is burnt there.
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context(), revision: 12 });
+    const result = await fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, { context: context() });
+    expect(result).toMatchObject({ fired: true, cascaded: [] });
+    expect(vi.mocked(fireFormatEvent).mock.calls.map((call) => call[0].eventKey)).toEqual(['stage_start:swiss']);
+  });
+
+  it('does not fail an event that committed when its cascade cannot run: it is logged and the cron pass fires it', async () => {
+    vi.mocked(planEffects).mockReturnValueOnce(plan([{ op: 'lock_action', action: 'give_gifts' }]) as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ flags: { 'action:give_gifts': 'locked' } }));
+    vi.mocked(fireFormatEvent).mockResolvedValueOnce(true).mockRejectedValueOnce(new Error('second transaction down'));
+    const result = await fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, { context: context() });
+    expect(result).toMatchObject({ fired: true, cascaded: [] });
+    expect(logger.error).toHaveBeenCalledWith('format-engine/fire', expect.stringContaining('lock cascade'), expect.objectContaining({ eventKey: 'stage_start:swiss' }));
+    expect(expireSeasonReads).toHaveBeenCalled();
+  });
+
   it('loses the cascade when the process stops after the first transaction, and a retry of the event repairs it', async () => {
     // The first transaction committed (the key is in the log, the flag is locked) but action_locked never fired.
     const committed = context({ firedEventKeys: ['stage_start:swiss'], flags: { 'action:give_gifts': 'locked' } });
@@ -129,5 +150,14 @@ describe('the lock cascade', () => {
   it('returns nothing for a league without a kit format', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(null);
     await expect(fireLockedActionEvents(SEASON, null)).resolves.toEqual([]);
+  });
+
+  it('fires through the context it decided from: the revision of the first fire is the one of the context passed in', async () => {
+    // A format replaced after the context was loaded makes the database refuse the fire (stale), instead of a fresh load
+    // quietly planning the event for the new format and burning its key there.
+    const locked = { ...context({ flags: { 'action:give_gifts': 'locked' } }), revision: 4 };
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...locked, revision: 9 });
+    await fireLockedActionEvents(SEASON, null, { context: locked });
+    expect(fireFormatEvent).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'action_locked:give_gifts', revision: 4 }));
   });
 });

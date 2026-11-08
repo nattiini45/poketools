@@ -259,6 +259,13 @@ describe('runBulkAction: confirm', () => {
     spy.mockRestore();
   });
 
+  it('reports a conflict, not a completed match, when it was reset after the completion (the reset owns the cleanup)', async () => {
+    vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: false, reason: 'match_changed', current_status: 'scheduled' });
+    const [outcome] = await runBulkAction(confirm(ID_1), mapOf(match()), ctx());
+    expect(outcome.result).toEqual({ id: ID_1, ok: false, code: 'match_bulk_conflict' });
+    expect(outcome.audit).toBeUndefined();
+  });
+
   it('reports a missing match as not found and keeps going', async () => {
     const outcomes = await runBulkAction(confirm(ID_2, ID_1), mapOf(match()), ctx());
     expect(outcomes.map((o) => o.result)).toEqual([

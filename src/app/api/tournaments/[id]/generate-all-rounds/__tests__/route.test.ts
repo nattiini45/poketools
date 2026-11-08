@@ -222,7 +222,8 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(json.success).toBe(true);
     expect(json.data).toHaveLength(3);
     expect(batches()).toHaveLength(3);
-    expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', expect.objectContaining({ status: 'active' }));
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
     // D37: the new pairings show on the next view.
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
   });
@@ -336,6 +337,31 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(addMatchesToRound).not.toHaveBeenCalled();
     expect(updateTournament).not.toHaveBeenCalled();
     expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('expires the public reads when a batch is refused part-way: the rounds it wrote stay, and are shown', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1' }, { id: 'p2' }, { id: 'p3' }, { id: 'p4' }] as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundRobinTotalRounds).mockReturnValue(3);
+    vi.mocked(generateRoundRobinRound).mockReturnValue({
+      pairings: [{ player_1_id: 'p1', player_2_id: 'p2' }],
+      bye_player_ids: [],
+    } as never);
+    vi.mocked(createRoundWithMatches)
+      .mockResolvedValueOnce({ id: 'r-1', round_number: 1, name: 'Round 1' } as never)
+      .mockRejectedValueOnce(
+        new UserFacingError('This phase was completed while the round was being created.', { code: 'rounds_phase_completed', status: 409 }),
+      );
+
+    const res = await POST({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(409);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(2);
+    expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
   });
 
   it('answers 409 rounds_phase_completed for a reused round whose byes changed: the byes are part of the refused write', async () => {
@@ -476,7 +502,8 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(createRoundWithMatches).toHaveBeenCalledWith(
       expect.objectContaining({ round_number: 3, matches: [{ player_1_id: 'p1', player_2_id: 'p4' }] }),
     );
-    expect(updateTournament).toHaveBeenCalledWith(mockTournament.id, expect.objectContaining({ current_round: 3 }));
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('refills the last round when only it was left without matches (no rounds_all_generated dead end)', async () => {
@@ -507,7 +534,8 @@ describe('POST /api/tournaments/[id]/generate-all-rounds', () => {
     expect(addMatchesToRound).toHaveBeenCalledWith(expect.objectContaining({ id: 'r-3-empty' }), [
       { player_1_id: 'p2', player_2_id: 'p3' },
     ]);
-    expect(updateTournament).toHaveBeenCalledWith(mockTournament.id, expect.objectContaining({ current_round: 3 }));
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('a standalone tournament with equal groups keeps the old rounds: every group round w in week w', async () => {
@@ -746,7 +774,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds — start_round and aud
     expect(res.status).toBe(201);
     expect(json.data.map((round: { status: string }) => round.status)).toEqual(['pending', 'pending', 'pending']);
     expect(logged).toHaveBeenCalled();
-    expect(updateTournament).toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ started_round_number: null });
     logged.mockRestore();
   });

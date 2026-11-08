@@ -6,6 +6,7 @@ import { FormatStudioError } from '../errors';
 import type { FormatDefinitionMeta, FormatVersion, SeasonFormatSummary } from '../library-types';
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
+vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   getFormatDefinitionMeta: vi.fn(),
   getFormatVersion: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('@/lib/format-kit/compile', async (importOriginal) => {
   return { ...actual, compile: vi.fn(actual.compile) };
 });
 
+import { expireSeasonReads } from '@/lib/revalidation';
 import { compile as compileSpy } from '@/lib/format-kit/compile';
 import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } from '@/lib/supabase/queries/format-definitions';
 import {
@@ -238,6 +240,18 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     vi.mocked(getFormatDefinitionMeta).mockResolvedValue(definitionMeta({ owner_id: OTHER, visibility: 'private' }));
     await attach({ actor: actor({ playerId: '33333333-3333-4333-8333-333333333333', isAdmin: true }) });
     expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a team that points at a phase the replace removes with format_phases_in_use, not the detach text, and discards the rulesets', async () => {
+    vi.mocked(attachSeasonFormat).mockRejectedValueOnce(new FormatStudioError('format_detach_blocked'));
+    expect(codeOf(await failure(attach()))).toBe('format_phases_in_use');
+    expect(discardMaterialised).toHaveBeenCalled();
+  });
+
+  it('expires the league reads right after the RPC commits, even when the summary read that follows throws', async () => {
+    vi.mocked(getSeasonFormatSummary).mockRejectedValue(new Error('boom'));
+    await expect(attach()).rejects.toThrow('boom');
+    expect(expireSeasonReads).toHaveBeenCalledWith(SEASON_ID, [STAGE_KNOCKOUT, STAGE_GROUPS]);
   });
 
   it('3. a definition with no published version answers format_not_published', async () => {
@@ -570,13 +584,13 @@ describe('detachFormatFromSeason', () => {
       removed_ruleset_ids: [OLD_RULESET],
       cleared,
     });
-    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, false);
+    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, false, null);
   });
 
   it('passes the confirmation to the function', async () => {
     vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [], removed_ruleset_ids: [], cleared: null });
     await detachFormatFromSeason(SEASON_ID, { confirmClear: true });
-    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, true);
+    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, true, null);
   });
 
   it('lets the refusal over runtime data through with its counts', async () => {

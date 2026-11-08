@@ -5,6 +5,7 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { updateRoundDeadline } from '@/lib/supabase/queries/rounds';
 import type { Stage } from '@/lib/format-kit/types';
 import type { Round } from '@/types/round';
@@ -24,8 +25,11 @@ export async function fillRoundDeadline(input: {
   const { stage, round } = input;
   if (stage.calendar === undefined || round.deadline !== null) return round;
   try {
-    const season = await getSeasonById(input.seasonId);
-    const deadline = roundDeadlineIso(stage.calendar, round.round_number, { seasonStart: season?.start_date ?? null });
+    const [season, head] = await Promise.all([getSeasonById(input.seasonId), getSeasonKitHead(input.seasonId)]);
+    const deadline = roundDeadlineIso(stage.calendar, round.round_number, {
+      seasonStart: season?.start_date ?? null,
+      shiftSeconds: head?.clockShiftSeconds ?? 0,
+    });
     if (deadline === null) {
       logger.warn(TAG, 'the stage calendar has no readable start: the round keeps no deadline', {
         seasonId: input.seasonId,

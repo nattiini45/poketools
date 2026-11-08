@@ -59,7 +59,7 @@ import {
   getMatchesByTournament,
   getPairedMatchRecords,
 } from '@/lib/supabase/queries/matches';
-import { addGroupMembersBatch, createGroupBatch, getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
+import { addGroupMembersBatch, createGroupBatch, deleteGroupsByTournament, getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getSeasonGroups, seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { generateRound } from '@/lib/tournament';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -111,7 +111,7 @@ function stage(pairing: Pairing): Stage {
 }
 
 function phase(pairing: Pairing, engine: KitPhase['engine'] = 'kit'): KitPhase {
-  return { engine, seed: 'seed-0123456789', stage: stage(pairing), outcomes: {}, tableExtras: {} };
+  return { engine, seed: 'seed-0123456789', revision: 3, stage: stage(pairing), outcomes: {}, tableExtras: {} };
 }
 
 const record = (p1: string, p2: string, winner: string | null, round: number) => ({
@@ -342,6 +342,32 @@ describe('generate-round on a kit phase', () => {
     ]);
     expect(writtenPairs().map((pair) => pair.split('-').sort().join('-')).sort()).toEqual(['p1-p4', 'p2-p3']);
     expect(generateRound).not.toHaveBeenCalled();
+  });
+
+  it('forms the groups again when the existing ones hold another roster than the enrolled players (no round written yet)', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(tournament('round_robin', 0) as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(getParticipants).mockResolvedValue(PLAYERS.map((id, i) => ({ id, name: id.toUpperCase(), seed: i + 1 })) as never);
+    const kitPhase = phase({ kind: 'round_robin', legs: 1, mirror_legs: true });
+    kitPhase.stage.groups = { count: 2, method: 'serpentine' };
+    vi.mocked(loadKitPhase).mockResolvedValue(kitPhase);
+    vi.mocked(seasonHasGroups).mockResolvedValue(false);
+    const stale = [{ id: 'old', group_number: 1, name: 'Group A', season_group_id: null, created_at: '2020-01-01T00:00:00.000Z', members: [{ player_id: 'gone', player_name: 'Gone', seed: 1 }] }];
+    const formed = [
+      { id: 'g1', group_number: 1, name: 'Group A', season_group_id: null, members: [{ player_id: 'p1', player_name: 'P1', seed: 1 }, { player_id: 'p4', player_name: 'P4', seed: 2 }] },
+      { id: 'g2', group_number: 2, name: 'Group B', season_group_id: null, members: [{ player_id: 'p2', player_name: 'P2', seed: 1 }, { player_id: 'p3', player_name: 'P3', seed: 2 }] },
+    ];
+    vi.mocked(getGroupsByTournament).mockResolvedValueOnce(stale as never).mockResolvedValueOnce(stale as never).mockResolvedValue(formed as never);
+    vi.mocked(createGroupBatch).mockResolvedValue([
+      { id: 'g1', group_number: 1 },
+      { id: 'g2', group_number: 2 },
+    ] as never);
+
+    const response = await POST(request, routeParams);
+
+    expect(response.status).toBe(201);
+    expect(deleteGroupsByTournament).toHaveBeenCalledWith(TID);
+    expect(writtenPairs().map((pair) => pair.split('-').sort().join('-')).sort()).toEqual(['p1-p4', 'p2-p3']);
   });
 
   it('answers 409 groups_forming_in_progress for groups another request has inserted but not filled yet', async () => {

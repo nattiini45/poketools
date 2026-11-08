@@ -62,4 +62,19 @@ describe('the pools of the player view', () => {
     if (!view.running) throw new Error('expected a running view');
     expect(view.pools.map((p) => p.key)).not.toContain('new_year');
   });
+
+  it('does not name an admins-only domain in the steps of an action either: no key, no label, no lock state', () => {
+    const hidden: FormatDefinition = { ...DEF, domains: (DEF.domains ?? []).map((d) => (d.key === 'premium' ? { ...d, visibility: 'admins' as const } : d)) };
+    const state = stateFor(hidden, { flags: { 'action:choose_gifts': 'open' }, links: [link('p1', 'p2'), link('p2', 'p3'), link('p3', 'p1')] });
+    const ctx: KitContext = { seasonId: 's-1', seed: SEED, revision: 1, def: hidden, state, tunableIssues: [], phases: [{ id: 'phase-1', stage: hidden.stages[0], members: PLAYERS }] };
+    const view = buildPlayerView(ctx, 'p1', NAMES, [], NOW);
+    if (!view.running) throw new Error('expected a running view');
+    const steps = view.actions.flatMap((action) => action.steps);
+    expect(steps.map((step) => step.domain)).toContain('junk');
+    expect(steps.map((step) => step.domain)).not.toContain('premium');
+    const placeholders = steps.filter((step) => step.domain === '');
+    expect(placeholders.length).toBeGreaterThan(0);
+    expect(placeholders.every((step) => step.unlocked === false && step.blocked.length === 0)).toBe(true);
+    expect(view.domains.map((d) => d.key)).not.toContain('premium');
+  });
 });

@@ -227,6 +227,7 @@ describe('POST /api/seasons/[id]/format', () => {
       definitionId: DEFINITION_ID,
       versionNo: 2,
       confirmClear: false,
+      confirmedCounts: null,
     });
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
 
@@ -359,7 +360,7 @@ describe('DELETE /api/seasons/[id]/format', () => {
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { removed_stage_ids: [STAGE_A, STAGE_B] } });
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: false });
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: false, confirmedCounts: null });
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
     expect(expired).toEqual(expect.arrayContaining([`season:${SEASON_ID}`, `tournament:${STAGE_A}`, `tournament:${STAGE_B}`]));
@@ -383,7 +384,7 @@ describe('DELETE /api/seasons/[id]/format', () => {
     vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [], cleared });
     const response = await DELETE(delWithBody({ confirm_clear: true }), params());
     expect(response.status).toBe(200);
-    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: true });
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: true, confirmedCounts: null });
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'season.format.detach', metadata: expect.objectContaining({ confirm_clear: true, cleared }) }),
     );

@@ -43,7 +43,6 @@ import {
   cancelFormatChallenge,
   createFormatChallenge,
   expireFormatChallenges,
-  getFormatChallenge,
   listFormatChallenges,
   mapFormatChallengeDbError,
   respondToFormatChallenge,
@@ -301,19 +300,6 @@ describe('the reads', () => {
     await expect(listFormatChallenges('nope')).resolves.toEqual([]);
     await expect(listFormatChallenges(SEASON, { phaseId: 'nope' })).resolves.toEqual([]);
     await expect(listFormatChallenges(SEASON, { playerId: 'nope' })).resolves.toEqual([]);
-    await expect(getFormatChallenge('nope')).resolves.toBeNull();
     expect(state.calls).toEqual([]);
-  });
-
-  it('reads one challenge by id and throws a failed read', async () => {
-    state.respond = () => ({ data: row() });
-    await expect(getFormatChallenge(CHALLENGE)).resolves.toMatchObject({ id: CHALLENGE });
-    expect(state.calls[0].table).toBe('format_challenges');
-    expect(stepsOf(state.calls[0], 'eq')).toEqual([['eq', 'id', CHALLENGE]]);
-
-    state.calls.length = 0;
-    const boom = { message: 'boom' };
-    state.respond = () => ({ error: boom });
-    await expect(getFormatChallenge(CHALLENGE)).rejects.toBe(boom);
   });
 });

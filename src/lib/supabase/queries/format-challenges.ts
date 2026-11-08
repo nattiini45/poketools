@@ -118,13 +118,6 @@ export async function listFormatChallenges(seasonId: string, filter: ListFormatC
   return rows;
 }
 
-export async function getFormatChallenge(challengeId: string): Promise<FormatChallengeRow | null> {
-  if (!isValidUuid(challengeId)) return null;
-  const { data, error } = await supabase.from('format_challenges').select('*').eq('id', challengeId).maybeSingle();
-  if (error) throw error;
-  return data;
-}
-
 // ---------------------------------------------------------------------------------------------------------------
 // Writes
 

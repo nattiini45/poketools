@@ -97,7 +97,7 @@ describe('scoringByeRecordsForStages (season-wide tables)', () => {
       ['rr-stage', [{ round_number: 1, bye_player_ids: ['d'] }]],
       ['untyped-stage', [{ round_number: 1, bye_player_ids: ['c'] }]],
     ]);
-    expect(scoringByeRecordsForStages(stages, roundsByStage)).toEqual([{ player_id: 'e', round_number: 1 }]);
+    expect(scoringByeRecordsForStages(stages, roundsByStage)).toEqual([{ player_id: 'e', round_number: 1, stage_id: 'swiss-stage' }]);
   });
 
   it('is empty for stages without rounds and for rounds without byes (legacy rounds hold {})', () => {

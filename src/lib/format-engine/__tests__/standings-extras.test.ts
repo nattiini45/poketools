@@ -114,27 +114,29 @@ describe('games_played counts the games of the completed matches', () => {
   });
 });
 
-describe('kill_differential reads the battle stats', () => {
-  const stat = (player_id: string, kos_dealt: number, was_koed: boolean, round_number = 1) => ({
-    game_id: `g-${player_id}-${round_number}`,
-    player_id,
-    pokemon_name: 'x',
-    was_brought: true,
-    was_lead: false,
-    kos_dealt,
-    was_koed,
-    round_number,
-  });
+describe('kill_differential reads the kill tallies', () => {
+  const rec = (match_id: string, p1: string, p2: string, winner: string, round_number = 1) => ({ match_id, player_1_id: p1, player_2_id: p2, winner_id: winner, round_number });
+  const matches = [rec('m1', 'a', 'b', 'a'), rec('m2', 'a', 'b', 'b', 2), rec('m3', 'c', 'd', 'c')];
   const kills = (rows: ReturnType<typeof table>) => Object.fromEntries(rows.map((r) => [r.player_id, r.kill_differential]));
+  // Per match id and player id: the kos a player dealt minus the Pokemon they lost.
+  const tallies = { m1: { a: 3, b: -1 }, m2: { a: 1 }, m3: { c: 2, d: 0 } };
 
-  it('sums the kills a player dealt minus the Pokemon they lost, honouring the round filter', () => {
-    const battleStats = [stat('a', 3, false), stat('b', 1, true), stat('a', 2, true, 2)];
-    expect(kills(table({ battleStats }))).toEqual({ a: 4, b: 0, c: 0, d: 0 });
-    expect(kills(table({ battleStats, maxRound: 1 }))).toEqual({ a: 3, b: 0, c: 0, d: 0 });
+  it('adds the tally of every match the table scores, honouring the round filter', () => {
+    expect(kills(table({ matches, kills: tallies }))).toEqual({ a: 4, b: -1, c: 2, d: 0 });
+    expect(kills(table({ matches, kills: tallies, maxRound: 1 }))).toEqual({ a: 3, b: -1, c: 2, d: 0 });
   });
 
-  it('is 0 for every player without the stats, which is why the loaders must pass them', () => {
-    expect(kills(table())).toEqual({ a: 0, b: 0, c: 0, d: 0 });
+  it('counts the kills of a scored match only: an unresolved match, or one the table does not hold, adds nothing', () => {
+    expect(kills(table({ matches, kills: { ...tallies, m1: { a: 9 }, m99: { b: 5 } }, outcomes: { m1: { kind: 'unresolved', p1_faints: null, p2_faints: null } } }))).toEqual({
+      a: 1,
+      b: 0,
+      c: 2,
+      d: 0,
+    });
+  });
+
+  it('is 0 for every player without the tallies, which is why the loaders must pass them', () => {
+    expect(kills(table({ matches }))).toEqual({ a: 0, b: 0, c: 0, d: 0 });
   });
 });
 
@@ -151,5 +153,41 @@ describe('stageCountsKills', () => {
   it('follows the base of a filter, as the legacy bracket type does', () => {
     expect(stageCountsKills({ pairing: { kind: 'filter', base: { kind: 'swiss' } } as never })).toBe(false);
     expect(stageCountsKills({ pairing: { kind: 'filter', base: { kind: 'round_robin' } } as never })).toBe(true);
+  });
+});
+
+describe('rows still tied after the chain take a canonical order', () => {
+  it('ranks them by player id whatever order the caller listed the participants in', () => {
+    const forward = computeStageStandings({ stage: { key: 'league', scoring: SCORING, rank: [] }, participantIds: ['c', 'a', 'b'], participantNames: names, matches: [] });
+    const backward = computeStageStandings({ stage: { key: 'league', scoring: SCORING, rank: [] }, participantIds: ['b', 'c', 'a'], participantNames: names, matches: [] });
+    expect(forward.map((r) => [r.player_id, r.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+    expect(backward.map((r) => [r.player_id, r.rank])).toEqual([['a', 1], ['b', 2], ['c', 3]]);
+    expect(forward.every((r) => r.tie_group === 1)).toBe(true);
+  });
+
+  it('puts the lower seed first when the input carries seeds', () => {
+    const rows = computeStageStandings({
+      stage: { key: 'league', scoring: SCORING, rank: [] },
+      participantIds: ['a', 'b', 'c'],
+      participantNames: names,
+      matches: [],
+      seeds: { a: 3, b: 1 },
+    });
+    expect(rows.map((r) => r.player_id)).toEqual(['b', 'a', 'c']);
+  });
+});
+
+describe('byePointsOf scores each bye by its own stage', () => {
+  it('uses the scoring of the stage that stored a bye when the table mixes stages, else the table scoring', () => {
+    const byes = [{ player_id: 'a', round_number: 1, stage_id: 's2' }, { player_id: 'b', round_number: 1 }];
+    const rows = computeStageStandings({
+      stage: { key: 'season', scoring: { win: 3, loss: 0, bye: 0 }, rank: [] },
+      participantIds: ids,
+      participantNames: names,
+      matches: [],
+      byes,
+      byePointsOf: (bye) => (bye.stage_id === 's2' ? 1 : 0),
+    });
+    expect(Object.fromEntries(rows.map((r) => [r.player_id, r.points]))).toMatchObject({ a: 1, b: 0 });
   });
 });

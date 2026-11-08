@@ -49,6 +49,7 @@ import {
   listMatchesNeedingFinalize,
   markMatchFinalized,
   updateMatchPlayers,
+  repairMatchPairing,
   resetMatchFields,
   hasDownstreamMatches,
   getCompletedMatchRecords,
@@ -653,6 +654,24 @@ describe('markMatchFinalized', () => {
     await expect(markMatchFinalized('m1')).resolves.toBe(false);
   });
 
+  it('binds the stamp to the completion it finalized: confirmed_at must still be the one the run read', async () => {
+    mockBuilder.select.mockResolvedValueOnce({ data: [{ id: 'm1' }], error: null });
+
+    const marked = await markMatchFinalized('m1', '2026-05-21T00:00:00.000Z', { confirmedAt: '2026-05-20T12:00:00.000Z' });
+
+    expect(marked).toBe(true);
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'completed');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('confirmed_at', '2026-05-20T12:00:00.000Z');
+  });
+
+  it('a completion without a confirmed_at (legacy row) matches null only', async () => {
+    mockBuilder.select.mockResolvedValueOnce({ data: [], error: null });
+
+    await expect(markMatchFinalized('m1', undefined, { confirmedAt: null })).resolves.toBe(false);
+
+    expect(mockBuilder.is).toHaveBeenCalledWith('confirmed_at', null);
+  });
+
   it('throws on error', async () => {
     mockBuilder.select.mockResolvedValueOnce({ data: null, error: new Error('mark err') });
     await expect(markMatchFinalized('m1')).rejects.toThrow('mark err');
@@ -670,9 +689,9 @@ describe('resetMatchFields', () => {
       auto_confirm_at: null,
       confirmed_at: null,
     };
-    mockBuilder.single.mockResolvedValue({ data: resetRow, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: resetRow, error: null });
 
-    const result = await resetMatchFields('m1');
+    const result = await resetMatchFields('m1', 'completed');
     expect(mockBuilder.update).toHaveBeenCalledWith({
       status: 'scheduled',
       winner_id: null,
@@ -682,13 +701,21 @@ describe('resetMatchFields', () => {
       confirmed_at: null,
       finalized_at: null,
     });
-    expect(result.status).toBe('scheduled');
-    expect(result.winner_id).toBeNull();
+    expect(result?.status).toBe('scheduled');
+    expect(result?.winner_id).toBeNull();
+    // A compare-and-set on the status the caller read.
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'completed');
+  });
+
+  it('writes nothing and answers null when the match no longer has the expected status', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    await expect(resetMatchFields('m1', 'pending_confirmation')).resolves.toBeNull();
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending_confirmation');
   });
 
   it('throws on error', async () => {
-    mockBuilder.single.mockResolvedValue({ data: null, error: new Error('reset err') });
-    await expect(resetMatchFields('m1')).rejects.toThrow('reset err');
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error('reset err') });
+    await expect(resetMatchFields('m1', 'completed')).rejects.toThrow('reset err');
   });
 });
 
@@ -955,9 +982,42 @@ describe('toMatchWithPlayers edge cases (via listAllMatches)', () => {
   });
 });
 
+describe('repairMatchPairing', () => {
+  const expected = { status: 'in_progress' as const, player_1_id: 'p1', player_2_id: 'p2' };
+
+  it('is a compare-and-set on the status and players the caller validated', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { ...MATCH_WITH_PLAYERS_ROW, status: 'scheduled' }, error: null });
+
+    const repaired = await repairMatchPairing('m1', 'p3', 'p4', expected);
+
+    expect(repaired?.status).toBe('scheduled');
+    expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({
+      player_1_id: 'p3',
+      player_2_id: 'p4',
+      winner_id: null,
+      status: 'scheduled',
+      finalized_at: null,
+    }));
+    expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'm1');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'in_progress');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('player_1_id', 'p1');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('player_2_id', 'p2');
+  });
+
+  it('answers null, with nothing written, when a result landed since the validation', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    await expect(repairMatchPairing('m1', 'p3', 'p4', expected)).resolves.toBeNull();
+  });
+
+  it('throws on error', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error('repair err') });
+    await expect(repairMatchPairing('m1', 'p3', 'p4', expected)).rejects.toThrow('repair err');
+  });
+});
+
 describe('updateMatchPlayers', () => {
   it('re-pairs the match as scheduled and clears the finalize marker with the status write', async () => {
-    mockBuilder.single.mockResolvedValueOnce({ data: MATCH_ROW, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: MATCH_ROW, error: null });
 
     await updateMatchPlayers('m1', 'p3', 'p4');
 
@@ -969,10 +1029,17 @@ describe('updateMatchPlayers', () => {
       finalized_at: null,
     });
     expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'm1');
+    // Only a scheduled match is re-paired: a result reported since must not be wiped by an id-only write.
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'scheduled');
+  });
+
+  it('answers null, with nothing written, when the match is no longer scheduled', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+    await expect(updateMatchPlayers('m1', 'p3', 'p4')).resolves.toBeNull();
   });
 
   it('throws on error', async () => {
-    mockBuilder.single.mockResolvedValueOnce({ data: null, error: new Error('players err') });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error('players err') });
     await expect(updateMatchPlayers('m1', 'p3', 'p4')).rejects.toThrow('players err');
   });
 });

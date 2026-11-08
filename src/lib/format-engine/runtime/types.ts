@@ -28,8 +28,11 @@ export type FormatOp =
       source: 'event' | 'adjustment';
       source_ref: string | null;
     }
-  /** Removes `amount` units of the matching rows, oldest first. */
-  | { op: 'revoke_item'; resource: string; player_id: string; item_id: string | null; amount: number }
+  /**
+   * Removes `amount` units of the matching rows, oldest first. An inverse of a logged grant carries that grant's `source` and
+   * `source_ref`: the rows it wrote are taken first.
+   */
+  | { op: 'revoke_item'; resource: string; player_id: string; item_id: string | null; amount: number; source?: string; source_ref?: string | null }
   | { op: 'set_attr'; player_id: string; attr: string; value: Json; source: string }
   | { op: 'adjust_points'; stage: string; player_id: string; points: number; reason: string }
   | { op: 'open_action'; action: string }

@@ -199,7 +199,7 @@ describe('currentPhaseRound', () => {
     beforeEach(() => {
       vi.mocked(getTournamentById).mockResolvedValue({ id: 'cup-1', ruleset_id: 'rs-1', season_id: 's-1' } as never);
       vi.mocked(getSeasonById).mockResolvedValue({ id: 's-1', start_date: '2026-03-23' } as never);
-      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED });
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
     });
 
     it('answers the calendar round when a later round was generated early', async () => {
@@ -242,9 +242,9 @@ describe('currentPhaseRound', () => {
     it('answers the latest round for a league that does not run on the kit engine, or a phase it did not generate', async () => {
       withCalendar();
       generated(1, 2, 3, 4);
-      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'legacy', seed: SEED });
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'legacy', seed: SEED, revision: 1, clockShiftSeconds: 0 });
       expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
-      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED });
+      vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
       vi.mocked(getKitPhases).mockResolvedValue([{ id: 'other', format_stage_key: 'x', stage_order: 0, stage_spec: null }] as never);
       expect(await currentPhaseRound('cup-1', asOf('2026-04-08T00:00:00Z'))).toBe(4);
     });

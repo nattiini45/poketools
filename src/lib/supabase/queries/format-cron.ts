@@ -17,6 +17,8 @@ export interface KitCronPhase {
   format_stage_key: string;
   /** `seasons.start_date`: what `start: season_start` of a calendar means. */
   season_start_date: string | null;
+  /** `season_formats.clock_shift_seconds`: the time the league spent in the recycle bin (the calendar's clock shift). */
+  clock_shift_seconds: number;
 }
 
 interface CronPhaseRow {
@@ -25,7 +27,16 @@ interface CronPhaseRow {
   status: string;
   format_stage_key: string | null;
   stage_spec: Json | null;
-  seasons: { start_date: string | null } | { start_date: string | null }[] | null;
+  seasons: CronSeasonEmbed | CronSeasonEmbed[] | null;
+}
+
+interface CronFormatEmbed {
+  clock_shift_seconds: number | null;
+}
+
+interface CronSeasonEmbed {
+  start_date: string | null;
+  season_formats?: CronFormatEmbed | CronFormatEmbed[] | null;
 }
 
 function hasCalendar(spec: Json | null): boolean {
@@ -45,7 +56,7 @@ export async function listKitCronPhases(): Promise<KitCronPhase[]> {
     (from, to) =>
       supabase
         .from('tournaments')
-        .select('id, season_id, status, format_stage_key, stage_spec, seasons!inner ( start_date, status, archived, season_formats!inner ( engine ) )')
+        .select('id, season_id, status, format_stage_key, stage_spec, seasons!inner ( start_date, status, archived, season_formats!inner ( engine, clock_shift_seconds ) )')
         .not('format_stage_key', 'is', null)
         .in('status', ['upcoming', 'active'])
         .in('seasons.status', ['upcoming', 'active'])
@@ -58,6 +69,8 @@ export async function listKitCronPhases(): Promise<KitCronPhase[]> {
   return rows.flatMap((row) => {
     if (row.season_id === null || row.format_stage_key === null || !hasCalendar(row.stage_spec)) return [];
     const season = Array.isArray(row.seasons) ? row.seasons[0] : row.seasons;
+    const embedded = season?.season_formats;
+    const format = Array.isArray(embedded) ? embedded[0] : embedded;
     return [
       {
         id: row.id,
@@ -65,6 +78,7 @@ export async function listKitCronPhases(): Promise<KitCronPhase[]> {
         status: row.status,
         format_stage_key: row.format_stage_key,
         season_start_date: season?.start_date ?? null,
+        clock_shift_seconds: format?.clock_shift_seconds ?? 0,
       },
     ];
   });

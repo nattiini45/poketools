@@ -1,4 +1,5 @@
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { MatchReopenDownstreamPlayedError, MatchStateChangedError } from '@/lib/match/state-errors';
 import {
   clearMatchSocialImage,
   getMatchById,
@@ -8,7 +9,7 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
 import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
 import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
-import { deleteMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { deleteMarkedOutcome, readOutcomeMark } from '@/lib/match/outcome-takeback';
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { canReopenMatch, validateTransition } from '@/lib/tournament/match-state';
 import {
@@ -24,40 +25,8 @@ import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import type { ReopenMatchResult, ReopenStep } from '@/lib/admin/match-detail';
 import type { ParticipantWithSeed } from '@/types/tournament';
 
-/**
- * The match left the status the admin saw (a player, the auto-confirm cron or
- * another admin moved it first), so nothing was written. HTTP 409. `status` is
- * the status the match has now, when it could be read again; the message is
- * the same one the confirm-match route gives.
- */
-export class MatchStateChangedError extends UserFacingError {
-  constructor(status?: string) {
-    super(
-      status
-        ? `The match changed to ${status} while you were editing it. Review it and try again.`
-        : 'The match changed while you were editing it; your change was not applied. Reload and review it.',
-      { code: 'match_state_changed', params: status ? { status } : undefined, status: 409 },
-    );
-    this.name = 'MatchStateChangedError';
-  }
-}
-
-/**
- * A later bracket match that this match's winner advanced into was already
- * played or is in progress. Reopening would orphan that bracket path, so the
- * admin resets those matches first. `count` = such later matches. HTTP 409.
- */
-export class MatchReopenDownstreamPlayedError extends UserFacingError {
-  constructor(count: number) {
-    super(
-      count === 1
-        ? 'This match cannot be reopened: 1 later bracket match was already played. Reset that match first.'
-        : `This match cannot be reopened: ${count} later bracket matches were already played. Reset those matches first.`,
-      { code: 'match_reopen_downstream_played', params: { count }, status: 409 },
-    );
-    this.name = 'MatchReopenDownstreamPlayedError';
-  }
-}
+// Shared with the admin game change (`game-pipeline.ts`, which this module imports), so they live apart from both.
+export { MatchReopenDownstreamPlayedError, MatchStateChangedError };
 
 /**
  * Reopen a completed, pending-confirmation or disputed match to in_progress
@@ -74,7 +43,9 @@ export class MatchReopenDownstreamPlayedError extends UserFacingError {
  *   3. one compare-and-set status write (`MatchStateChangedError` on a miss)
  *   4. post-commit steps. The outcome row goes for every status (an admin
  *      forfeit, or the unresolved row of a disputed replay tie, must not
- *      outlive the result it described); the rest only for a match that WAS
+ *      outlive the result it described), but only the row that was there
+ *      before the flip (`readOutcomeMark`, deleted by its `set_at`): a settle
+ *      that staged a new row for the reopened match in between keeps it; the rest only for a match that WAS
  *      completed (pending and disputed matches never finalized), starting
  *      with the format runtime taking back the effects of `match_completed`. Each step is
  *      isolated and logged; a failed one is reported in `failed_steps` and the
@@ -121,6 +92,8 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     }
   }
 
+  // Read before the flip: the delete below removes this row and nothing staged after the reopen.
+  const outcomeMark = await readOutcomeMark(matchId);
   const reopened = await transitionMatchStatus(matchId, {
     expectedStatus: fromStatus,
     status: 'in_progress',
@@ -151,7 +124,7 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     }
   };
 
-  await runStep('outcome', () => deleteMatchOutcome(matchId));
+  await runStep('outcome', () => deleteMarkedOutcome(matchId, outcomeMark));
 
   // A custom league's format takes back what the completion applied (`match_completed`), so every caller of the reopen
   // does, not only the admin route. A disputed match never completed, but its dispute (the unresolved replay tie) opened

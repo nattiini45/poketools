@@ -132,6 +132,11 @@ export default defineDe<typeof en>()({
   rounds_mirrored_groups_legs:
     'Diese Jeder-gegen-jeden-Phase spielt mehr als einen Durchgang, aber ihre Gruppen werden von der Liga verwaltet und folgen deren Wochenplan, der keine Durchgänge kennt. Nutze einen einzigen Durchgang oder entferne die Ligagruppen.',
   rounds_phase_completed: 'Diese Phase wurde abgeschlossen, während die Runde angelegt wurde, deshalb wurde keine Runde geschrieben. Es können keine weiteren Runden erzeugt werden.',
+  round_format_revert_failed:
+    'Die Runde wurde geändert, aber die Auswirkungen einiger nicht mehr geltender Ergebnisse auf das Format der Liga (Item-Vergaben, Punkte) konnten nicht zurückgenommen werden. Der Fehler wurde protokolliert. Prüfe die Anpassungen der Liga für die Punkte und Items dieser Ergebnisse.',
+  format_reaction_failed:
+    'Der Phasenstatus wurde gespeichert, aber die Reaktion des Ligaformats darauf (Stufenstart oder -ende, Gleichstand-Prüfungen) ist nicht gelaufen. Sende denselben Status erneut, um sie zu wiederholen.',
+  round_changed: 'Ein Match dieser Runde hat sich geändert, während sie gelöscht wurde, deshalb wurde nichts gelöscht. Lade die Runde neu und versuche es erneut.',
   rounds_round_completed: '{round} ist bereits abgeschlossen, deshalb wurden keine Matches hineingeschrieben. Lösche sie, um sie neu zu erzeugen.',
 
   // Resource admins

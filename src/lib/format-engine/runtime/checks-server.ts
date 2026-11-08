@@ -13,8 +13,12 @@ export interface OpenedCheck {
   id: string;
 }
 
-/** Opens `checks`; returns the ones that did not exist before. Failures stop at the first and propagate. */
-export async function openChecks(seasonId: string, checks: readonly CheckPlan[]): Promise<OpenedCheck[]> {
+/**
+ * Opens `checks`; returns the ones that did not exist before. Failures stop at the first and propagate. `revision` is the
+ * `season_formats.revision` of the context the checks were planned from: a format replaced, switched, detached or amended
+ * since raises `format_context_stale` (nothing opened, the dedupe key stays free), which the caller treats as retry-later.
+ */
+export async function openChecks(seasonId: string, checks: readonly CheckPlan[], revision: number): Promise<OpenedCheck[]> {
   const opened: OpenedCheck[] = [];
   for (const check of checks) {
     const id = await openFormatCheck({
@@ -23,6 +27,7 @@ export async function openChecks(seasonId: string, checks: readonly CheckPlan[])
       ruleId: check.rule_id,
       dedupeKey: check.dedupe_key,
       subject: check.subject,
+      revision,
     });
     if (id !== null) opened.push({ dedupe_key: check.dedupe_key, id });
   }

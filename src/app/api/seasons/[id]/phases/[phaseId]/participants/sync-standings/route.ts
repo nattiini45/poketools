@@ -6,6 +6,8 @@ import { syncStandingsSchema, formatZodErrors } from '@/lib/validation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { assertFormatPhaseRosterOpen } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { SyncStandingsResult } from '@/lib/tournament/enrollment-sync';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -29,12 +31,13 @@ async function assertPhaseInSeason(seasonId: string, phaseId: string) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, phaseId } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    await assertPhaseInSeason(id, phaseId);
+    // The roster of a format phase that has started is not synced here (409 format_phase_owned).
+    await assertFormatPhaseRosterOpen(id, await assertPhaseInSeason(id, phaseId));
 
     const rawBody = request.headers.get('content-length') === '0'
       ? {}
@@ -50,6 +53,23 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const result = await syncStandingsEnrollment(id, phaseId, parsed.data);
     expireTournamentReads(phaseId, id);
+
+    // A forced sync enrolls past the checks that guard a normal one: it leaves a trail.
+    if (parsed.data.force) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'phase.enrollment.sync',
+        resource_type: 'phase',
+        resource_id: phaseId,
+        metadata: {
+          season_id: id,
+          force: true,
+          source_phase: parsed.data.source_phase_id ?? result.source_phase_name,
+          enrolled_count: result.enrolled_count,
+        },
+      });
+    }
 
     return NextResponse.json<ApiResult<SyncStandingsResult>>({
       success: true,

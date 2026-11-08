@@ -706,10 +706,11 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
       expect(payload.params).toEqual({ round: 'Round 1', count: 1 });
       expect(updateRoundBestOf).toHaveBeenCalledWith(R_ID, 5);
       expect(completeRound).toHaveBeenCalledTimes(1);
-      // Neither the deadline nor the status, the cache expiry, the audit nor an event follows the refusal.
+      // Neither the deadline nor the status, the audit nor an event follows the refusal. The best_of write did commit, so its
+      // reads expire all the same.
       expect(updateRoundStatus).not.toHaveBeenCalled();
       expect(updateRoundDeadline).not.toHaveBeenCalled();
-      expect(revalidateTag).not.toHaveBeenCalled();
+      expect(revalidateTag).toHaveBeenCalled();
       expect(logAuditEvent).not.toHaveBeenCalled();
       expect(emitDiscordEvent).not.toHaveBeenCalled();
       expect(emitSocialEvent).not.toHaveBeenCalled();

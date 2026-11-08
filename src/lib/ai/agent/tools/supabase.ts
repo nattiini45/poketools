@@ -17,7 +17,7 @@ import {
   getCompletedMatchRecords,
   getUpcomingMatches as getUpcomingMatchesQuery,
 } from '@/lib/supabase/queries/matches';
-import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
 import { loadRankingContext } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import type { MatchWithPlayers } from '@/types/match';
@@ -160,7 +160,7 @@ export async function queryLeagueData(
     participants.map((p) => ({ id: p.id, name: p.name, avatar_url: p.avatar_url })),
     records,
     byes,
-    ranking,
+    rankingForPhase(ranking, scope.id),
   );
   const standings: StandingEntry[] = rows.map((r) => ({
     player_id: r.player_id,

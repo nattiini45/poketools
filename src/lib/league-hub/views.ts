@@ -12,6 +12,7 @@ import type { Round, RoundStatus } from '@/types/round';
 import type { TournamentStatus, TournamentWithDetails } from '@/types/tournament';
 import { stageKind } from './tabs';
 import { splitGroupTables } from '@/lib/tournament/group-standings';
+import { kitForPhase } from '@/lib/format-engine/context';
 
 /**
  * Pure view builders for the league hub tabs. Every input is a row the page
@@ -572,7 +573,7 @@ export function buildTableStage(input: TableStageInput): HubTableStage {
       avatars,
       options,
       { ...gymTypes },
-      { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder, kit: context.kit },
+      { evolutionPoints: context.evolutionPoints, tiebreakerOrder: context.tiebreakerOrder, kit: kitForPhase(context.kit, stage.id) },
     ).map((row) => (row.gym_type ? row : { ...row, gym_type: gymTypes[row.player_id] ?? null }));
     return {
       key,

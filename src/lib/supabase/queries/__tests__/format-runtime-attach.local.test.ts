@@ -66,7 +66,7 @@ async function fillRuntime(seasonId: string, tag: string): Promise<void> {
     ],
   });
   await rt.saveFormatAction({ seasonId, actionKey: 'other_pick', actorId: ids.p1, targetId: null, picks: [], revision: await revisionOf(seasonId) });
-  await rt.openFormatCheck({ seasonId, source: 'expr', ruleId: 'r', dedupeKey: `expr:${tag}`, subject: {} });
+  await rt.openFormatCheck({ seasonId, source: 'expr', ruleId: 'r', dedupeKey: `expr:${tag}`, subject: {}, revision: await revisionOf(seasonId) });
 }
 
 const sizes = async (seasonId: string) => {

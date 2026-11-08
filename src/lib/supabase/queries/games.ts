@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isUniqueViolationOf } from '../unique-violation';
+import { readAllPages } from '../read-all-pages';
 import type { Tables, TablesInsert } from '@/types/database';
 import type { Game, GameCreateInput, BattleStat, BattleStatInsert, AggregateScope } from '@/types/game';
 import type { PlayerBattleStatRow } from '@/types/profile';
@@ -584,6 +585,39 @@ export async function getBattleStatsForTournament(
     'getBattleStatsForTournament',
     `tournament ${tournamentId}`,
   );
+}
+
+/** Ids per `.in()` read of phases: keeps the request URL short. */
+const PHASE_KILLS_CHUNK = 100;
+
+/**
+ * The kills of the COMPLETED matches of the phases, per match id and player id: the player's `kos_dealt` minus the Pokemon
+ * of theirs that fainted, as a table's `kill_differential` sums them (`StageStandingsInput.kills`). Only completed matches,
+ * like the match records a table is computed from, so a game of a match still open adds nothing; the table itself adds the
+ * kills of the matches it scores (an unresolved outcome, a match outside the table or past its `maxRound` count nothing).
+ * Paged without a cap (unlike `getBattleStatsForTournament`, which feeds the kill ranking). Callers read it for a round
+ * robin stage only (`stageCountsKills`). The one place the kit's tables read their kills.
+ */
+export async function getPhaseKillTallies(phaseIds: readonly string[]): Promise<Record<string, Record<string, number>>> {
+  const ids = [...new Set(phaseIds)];
+  const out: Record<string, Record<string, number>> = {};
+  for (let i = 0; i < ids.length; i += PHASE_KILLS_CHUNK) {
+    const chunk = ids.slice(i, i + PHASE_KILLS_CHUNK);
+    const rows = await readAllPages((from, to) =>
+      supabase
+        .from('battle_stats')
+        .select('id, player_id, kos_dealt, was_koed, games!inner(match_id, matches!inner(tournament_id, status))')
+        .in('games.matches.tournament_id', chunk)
+        .eq('games.matches.status', 'completed')
+        .order('id', { ascending: true })
+        .range(from, to),
+    );
+    for (const row of rows) {
+      const byPlayer = (out[row.games.match_id] ??= {});
+      byPlayer[row.player_id] = (byPlayer[row.player_id] ?? 0) + row.kos_dealt - (row.was_koed ? 1 : 0);
+    }
+  }
+  return out;
 }
 
 /**

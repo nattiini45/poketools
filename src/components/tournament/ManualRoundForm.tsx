@@ -10,7 +10,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { commonMessages } from '@/i18n/messages/common';
-import { errorsTournaments } from '@/i18n/messages/errors';
+import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import { apiFailure, type UiError } from './ui-error';
@@ -49,7 +49,9 @@ export default function ManualRoundForm({
   const [loading, setLoading] = useState(true);
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
-  const errorText = useApiErrorText(errorsTournaments);
+  // errorsSeasons: the manual route of a grouped league's phase refuses with league-group codes (PHASE_PLAYER_WITHOUT_LEAGUE_GROUP,
+  // PHASE_GROUPS_STALE), the same set RoundManager resolves.
+  const errorText = useApiErrorText(errorsTournaments, errorsSeasons);
   const [error, setError] = useState<UiError<ManualRoundErrorKey> | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // Set when the server refused the first round with 409 `format_not_ready`: the dialog offers the audited force start.

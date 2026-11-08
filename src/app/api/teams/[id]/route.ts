@@ -10,6 +10,7 @@ import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
 import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
 import { roundOfMatch } from '@/lib/team/match-round';
 import { logger } from '@/lib/logger';
+import { teamWritesClosed } from '../team-writes-closed';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet, Team, TeamImportSource } from '@/types/team';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -27,6 +28,13 @@ async function linkedToCompletedMatch(team: Team): Promise<boolean> {
   if (!team.match_id) return false;
   const facts = await getTeamVisibilityFacts([team.id]);
   return isCompletedMatchLocked(facts.get(team.id)?.match_status);
+}
+
+function teamSubmissionClosedResponse(): NextResponse<ApiResult<never>> {
+  return NextResponse.json<ApiResult<never>>(
+    { success: false, error: 'Tournament is completed — team submission is closed', code: 'team_submission_closed' },
+    { status: 403 }
+  );
 }
 
 function completedMatchResponse(): NextResponse<ApiResult<never>> {
@@ -121,6 +129,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A completed or archived tournament or league takes no more team edits from its players.
+    if (!player.isAdmin && team.tournament_id && (await teamWritesClosed(team.tournament_id))) {
+      return teamSubmissionClosedResponse();
+    }
+
     if (!player.isAdmin && (await linkedToCompletedMatch(team))) {
       return completedMatchResponse();
     }
@@ -204,6 +217,11 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       }
       // For admin deletion of locked teams, bypass the lock check
       await requireAdmin();
+    }
+
+    // A completed or archived tournament or league takes no more team edits from its players.
+    if (!player.isAdmin && team.tournament_id && (await teamWritesClosed(team.tournament_id))) {
+      return teamSubmissionClosedResponse();
     }
 
     if (!player.isAdmin && (await linkedToCompletedMatch(team))) {

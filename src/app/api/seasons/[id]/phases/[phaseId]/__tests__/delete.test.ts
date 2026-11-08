@@ -8,12 +8,21 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { logger } from '@/lib/logger';
 
+vi.mock('@/lib/format-studio/phase-guards', () => ({
+  assertSeasonPhasesFree: vi.fn(),
+  assertFormatPhaseDeletable: vi.fn(),
+  assertFormatPhaseUnchanged: vi.fn(),
+  assertFormatPhaseStatusUnchanged: vi.fn(),
+  assertFormatPhaseRosterOpen: vi.fn(),
+  assertSeasonRosterMembers: vi.fn(),
+}));
 vi.mock('@/lib/auth/helpers', () => ({
   requireResourceAdmin: vi.fn(),
 }));
 
 vi.mock('@/lib/revalidation', () => ({
   expireTournamentReads: vi.fn(),
+  expireRatingReads: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/log', () => ({
@@ -49,6 +58,9 @@ import { deleteTournament, getParticipants, getTournamentById } from '@/lib/supa
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { rebuildAfterTournamentDelete } from '@/lib/reconcile/entity-delete-rebuild';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { assertFormatPhaseDeletable } from '@/lib/format-studio/phase-guards';
+import { FormatStudioError } from '@/lib/format-studio/errors';
+import { expireRatingReads } from '@/lib/revalidation';
 
 const SEASON_ID = '0d8a1a96-a0af-49df-8b1d-c58c2f5cec01';
 const PHASE_ID = 'd403b67d-0d81-45d9-87eb-9f931fc1c829';
@@ -82,6 +94,20 @@ beforeEach(() => {
 });
 
 describe('DELETE /api/seasons/[id]/phases/[phaseId]', () => {
+  it('refuses the phase of an attached format with its 409 and deletes nothing', async () => {
+    vi.mocked(assertFormatPhaseDeletable).mockRejectedValueOnce(new FormatStudioError('format_phase_owned'));
+    const response = await DELETE(request(), args());
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_phase_owned');
+    expect(assertFormatPhaseDeletable).toHaveBeenCalledWith(SEASON_ID, PHASE_ID);
+    expect(deleteTournament).not.toHaveBeenCalled();
+  });
+
+  it('expires the rating reads of the players again after the rebuild', async () => {
+    await DELETE(request(), args());
+    expect(expireRatingReads).toHaveBeenCalledWith(['p1', 'p2']);
+  });
+
   it('deletes a phase without rounds and reports no rebuild warning', async () => {
     const response = await DELETE(request(), args());
     const json = await response.json();

@@ -89,6 +89,8 @@ export default defineDe<typeof en>()({
     phase__reorder: 'Phasen neu sortiert',
     season__participant__substitute: 'Teilnehmer ersetzt',
     season__phase__groups__repair: 'Gruppen einer Phase repariert',
+    season__phase__advance: 'Spieler von Hand in die nächste Phase übernommen',
+    phase__enrollment__sync: 'Phasen-Anmeldung erzwungen abgeglichen',
     season__groups__replace: 'Ligagruppen geändert',
     season__group__rename: 'Ligagruppe umbenannt',
     season__group__member__place: 'Trainer einer Ligagruppe zugeordnet',

@@ -145,6 +145,14 @@ export default {
     'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
   // The phase completed (a stage end, or an admin) between the generator's checks and its write; nothing was written (409).
   rounds_phase_completed: 'This phase was completed while the round was being created, so no round was written. No more rounds can be generated.',
+  // A round delete, reset or bracket regenerate went through, but the league format could not take back the effects of a result that no longer stands (warning, 200).
+  round_format_revert_failed:
+    "The round was changed, but the league format's effects of some results that no longer stand (item grants, points) could not be taken back. The failure was logged. Check the league's adjustments for the points and items of those results.",
+  // A format could not react to a phase status change (warning, 200).
+  format_reaction_failed:
+    "The phase status was saved, but the league format's reaction to it (stage start or end, tie checks) did not run. Send the same status again to repeat it.",
+  // A match of the round changed (a result, an accepted challenge) between the admin's reset and the delete; nothing was deleted (409).
+  round_changed: 'A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.',
   // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
   rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
 

@@ -71,7 +71,7 @@ function phase(pairing: Pairing): KitPhase {
     rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
     columns: [],
   };
-  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {}, tableExtras: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', revision: 3, stage, outcomes: {}, tableExtras: {} };
 }
 
 /** The matches of each written round, in call order. */
@@ -141,9 +141,9 @@ describe('generate-all-rounds pairing aids', () => {
       expect(pairs[0]).not.toContain('p1');
     }
     expect(vi.mocked(openForbiddenPairingCheck).mock.calls.map((call) => call[0])).toEqual([
-      { seasonId: SEASON, stageKey: 'league', round: 1, forbidden: 1 },
-      { seasonId: SEASON, stageKey: 'league', round: 2, forbidden: 1 },
-      { seasonId: SEASON, stageKey: 'league', round: 3, forbidden: 1 },
+      { seasonId: SEASON, stageKey: 'league', round: 1, forbidden: 1, revision: 3 },
+      { seasonId: SEASON, stageKey: 'league', round: 2, forbidden: 1, revision: 3 },
+      { seasonId: SEASON, stageKey: 'league', round: 3, forbidden: 1, revision: 3 },
     ]);
     expect(revalidateTag).toHaveBeenCalledWith(`tournament:${ID}`, { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith(`season:${SEASON}`, { expire: 0 });

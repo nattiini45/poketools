@@ -114,6 +114,10 @@ export default defineDe<typeof en>()({
   format_nothing_attached: 'An diese Liga ist kein Format angehängt.',
   format_detach_blocked:
     'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
+  format_phases_in_use:
+    'Teams verweisen noch auf eine Phase, die diese Formatänderung entfernen würde. Entferne zuerst diese Teams.',
+  format_phase_owned:
+    'Diese Phase gehört zum Format der Liga, deshalb lässt sie sich nicht hinzufügen, löschen, umsortieren oder umbauen, und ihre Teilnehmer und ihr Status lassen sich über diese Anfrage nicht ändern. Ersetze das Format, ändere den Status in den Phaseneinstellungen oder nutze einen Ersatzspieler.',
   format_runtime_has_data:
     'Diese Liga hat bereits Daten ihres aktuellen Formats: {links} Verknüpfungen, {items} Gegenstände, {submissions} Abgaben und {adjustments} Anpassungen. Beim Ersetzen oder Abhängen des Formats wird alles gelöscht. Bestätige, um fortzufahren.',
   season_format_type_locked:
@@ -145,6 +149,8 @@ export default defineDe<typeof en>()({
   format_not_running: 'Diese Liga läuft gerade nicht mit einem eigenen Format.',
   format_not_participant: 'Du nimmst an dieser Liga nicht teil.',
   format_season_closed: 'Diese Liga ist abgeschlossen, deshalb sind keine Züge mehr möglich.',
+  unmask_audit_unavailable:
+    'Die verborgenen Beziehungen konnten nicht angezeigt werden, weil der Zugriff nicht protokolliert werden konnte. Versuche es gleich noch einmal.',
   format_action_unknown: 'Diese Aktion gibt es in dieser Liga nicht.',
   format_action_already_submitted: 'Du hast diese Aktion schon abgegeben. Gib sie erneut ab, um deine Auswahl zu ändern.',
   format_action_invalid: 'Deine Abgabe hat Probleme.',

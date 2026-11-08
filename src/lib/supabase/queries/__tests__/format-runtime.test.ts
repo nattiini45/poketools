@@ -246,9 +246,9 @@ describe('the RPC wrappers', () => {
 
   it('openFormatCheck returns null for a duplicate, resolveFormatCheck the boolean', async () => {
     state.rpcReply = { data: null };
-    await expect(openFormatCheck({ seasonId: SEASON, source: 'standings_tie', ruleId: 'tie', dedupeKey: 'tie:1', subject: {} })).resolves.toBeNull();
+    await expect(openFormatCheck({ seasonId: SEASON, source: 'standings_tie', ruleId: 'tie', dedupeKey: 'tie:1', subject: {}, revision: 4 })).resolves.toBeNull();
     state.rpcReply = { data: 'chk-1' };
-    await expect(openFormatCheck({ seasonId: SEASON, source: 'expr', ruleId: 'r', dedupeKey: 'r:1', subject: { a: 1 } })).resolves.toBe('chk-1');
+    await expect(openFormatCheck({ seasonId: SEASON, source: 'expr', ruleId: 'r', dedupeKey: 'r:1', subject: { a: 1 }, revision: 4 })).resolves.toBe('chk-1');
     state.rpcReply = { data: true };
     await expect(resolveFormatCheck({ seasonId: SEASON, checkId: 'chk-1', status: 'confirmed', adminId: null, note: null })).resolves.toBe(true);
     expect(state.rpcCalls.map((c) => c.name)).toEqual(['format_check_open', 'format_check_open', 'format_check_resolve']);

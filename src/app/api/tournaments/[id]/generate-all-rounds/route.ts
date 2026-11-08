@@ -5,8 +5,8 @@ import { logger } from '@/lib/logger';
 import {
   getTournamentById,
   getParticipants,
-  updateTournament,
 } from '@/lib/supabase/queries/tournaments';
+import { kitWriteFence } from '@/lib/format-engine/write-fence';
 import {
   getRoundsByTournament,
   createRoundWithMatches,
@@ -35,7 +35,7 @@ import {
   roundRobinOf,
 } from '@/lib/format-engine/pairing';
 import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-server';
-import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import {
   announceKitRound,
   assertBatchMayRunAhead,
@@ -167,17 +167,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(id);
-    // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
-    if (kitPairing && kitPhase && tournament.season_id && groups.length === 0) {
+    // A kit stage with groups forms them before its first round (league groups, when the league has any, win). Groups that
+    // already exist are checked too: another request's unfilled ones answer 409 groups_forming_in_progress (never an empty
+    // plan), and stale or empty ones of a phase without a round are formed again from the enrolled players.
+    if (kitPairing && kitPhase && tournament.season_id) {
       groups = await ensureKitPhaseGroups({
         seasonId: tournament.season_id,
         phaseId: id,
         stage: kitPhase.stage,
         seed: kitPhase.seed,
       });
-    } else if (kitPairing && kitPhase && tournament.season_id) {
-      // Groups another request has inserted but not filled yet (409 groups_forming_in_progress, never an empty plan).
-      assertKitGroupsFormed(groups, kitPhase.stage);
     }
     // A kit round robin plays each of its own groups as a round robin of the stage's legs; groups that mirror league
     // groups keep the league week plan (cross-group weeks, placement weeks).
@@ -287,57 +286,78 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const createdRounds: Round[] = [];
 
-    for (const { roundNumber, pairings: allPairings, byePlayerIds } of weeksToWrite) {
-      const roundName = `Round ${roundNumber}`;
-      const roundBestOf =
-        tournament.bo_overrides[roundName] ?? tournament.best_of_default;
-
-      // Each round and its matches are one transaction under the phase row lock (`round_write`): a stage end that
-      // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
-      // empty round behind. A batch that is refused part-way keeps the rounds it had written (each one whole, with its
-      // matches); generating again continues from there.
-      const matchInputs = allPairings.map((pairing) => ({
-        player_1_id: pairing.player_1_id,
-        player_2_id: pairing.player_2_id,
-      }));
-      // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so it carries
-      // them exactly like a freshly inserted one. The byes go in the same transaction as the matches (`round_write`), so
-      // a write the completed phase refuses leaves the round's stored byes as they were.
-      const reused = emptyRounds.get(roundNumber);
-      let round: Round;
-      if (reused) {
-        const storedByes = reused.bye_player_ids ?? [];
-        const byesChanged =
-          storedByes.length !== byePlayerIds.length || storedByes.some((pid) => !byePlayerIds.includes(pid));
-        round = byesChanged ? { ...reused, bye_player_ids: byePlayerIds } : reused;
-        if (byesChanged) {
-          await addMatchesToRound(round, matchInputs, byePlayerIds);
-        } else {
-          await addMatchesToRound(round, matchInputs);
-        }
-      } else {
-        round = await createRoundWithMatches({
-          tournament_id: id,
-          name: roundName,
-          round_number: roundNumber,
-          best_of: roundBestOf,
-          // Round robin byes are stored for display; they earn nothing in standings.
-          bye_player_ids: byePlayerIds,
-          matches: matchInputs,
-        });
+    // The format reacts to each written round, lowest first; the first of an upcoming phase also starts it. Best effort and
+    // logged inside announceKitRound.
+    const announceCreated = async () => {
+      const announced = [...createdRounds].sort((a, b) => a.round_number - b.round_number);
+      for (const [index, round] of announced.entries()) {
+        await announceKitRound(
+          tournament,
+          kitPhase,
+          { roundNumber: round.round_number, forbidden: forbiddenByRound.get(round.round_number) },
+          index === 0 && tournament.status === 'upcoming',
+          index === 0 ? forcedStart : null,
+        );
       }
+    };
 
-      createdRounds.push(round);
+    // Each round commits on its own, so the public reads expire as soon as one did, whether or not the batch gets to the end;
+    // a batch refused part-way announces the rounds it wrote (a retry skips them, so nothing else would).
+    try {
+      for (const { roundNumber, pairings: allPairings, byePlayerIds } of weeksToWrite) {
+        const roundName = `Round ${roundNumber}`;
+        const roundBestOf =
+          tournament.bo_overrides[roundName] ?? tournament.best_of_default;
+
+        // Each round and its matches are one transaction under the phase row lock (`round_write`): a stage end that
+        // completed the phase after the guards above read it refuses the write (409 `rounds_phase_completed`) and leaves no
+        // empty round behind. A batch that is refused part-way keeps the rounds it had written (each one whole, with its
+        // matches); generating again continues from there.
+        const matchInputs = allPairings.map((pairing) => ({
+          player_1_id: pairing.player_1_id,
+          player_2_id: pairing.player_2_id,
+        }));
+        // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so it carries
+        // them exactly like a freshly inserted one. The byes go in the same transaction as the matches (`round_write`), so
+        // a write the completed phase refuses leaves the round's stored byes as they were.
+        const reused = emptyRounds.get(roundNumber);
+        let round: Round;
+        if (reused) {
+          const storedByes = reused.bye_player_ids ?? [];
+          const byesChanged =
+            storedByes.length !== byePlayerIds.length || storedByes.some((pid) => !byePlayerIds.includes(pid));
+          round = byesChanged ? { ...reused, bye_player_ids: byePlayerIds } : reused;
+          const fenced = { ...round, ...kitWriteFence(kitPhase) };
+          if (byesChanged) {
+            await addMatchesToRound(fenced, matchInputs, byePlayerIds);
+          } else {
+            await addMatchesToRound(fenced, matchInputs);
+          }
+        } else {
+          round = await createRoundWithMatches({
+            tournament_id: id,
+            name: roundName,
+            round_number: roundNumber,
+            best_of: roundBestOf,
+            // Round robin byes are stored for display; they earn nothing in standings.
+            bye_player_ids: byePlayerIds,
+            matches: matchInputs,
+            ...kitWriteFence(kitPhase),
+          });
+        }
+
+        createdRounds.push(round);
+      }
+    } catch (err) {
+      if (createdRounds.length > 0) await announceCreated();
+      throw err;
+    } finally {
+      if (createdRounds.length > 0) expireTournamentReads(id, tournament.season_id);
     }
 
-    // Update tournament to the highest round number
-    // Never backwards: a call may fill an earlier week an interrupted call left without matches.
-    const highestRound = Math.max(tournament.current_round, ...weeksToWrite.map((week) => week.roundNumber));
-    const updates: Record<string, unknown> = { current_round: highestRound };
-    if (tournament.status === 'upcoming') {
-      updates.status = 'active';
-    }
-    await updateTournament(id, updates);
+    // The phase went active and current_round to the highest written week in the rounds' own transactions
+    // (`round_write`, never backwards: a call may fill an earlier week an interrupted call left without matches), so
+    // nothing is left to write here and a failure after the first round leaves the phase consistent with its rounds.
 
     // Start only the first new round, once every round and its matches are written. Best effort: the rounds exist
     // either way, and a round that is still pending shows the Start banner.
@@ -364,19 +384,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // The start, the deadlines and the new pairings are written: expire again for the status and deadline changes.
     expireTournamentReads(id, tournament.season_id);
 
-    // The format reacts to each written round, lowest first; the first of an upcoming phase also starts it.
-    const announced = [...createdRounds].sort((a, b) => a.round_number - b.round_number);
-    for (const [index, round] of announced.entries()) {
-      await announceKitRound(
-        tournament,
-        kitPhase,
-        { roundNumber: round.round_number, forbidden: forbiddenByRound.get(round.round_number) },
-        index === 0 && tournament.status === 'upcoming',
-        index === 0 ? forcedStart : null,
-      );
-    }
+    await announceCreated();
 
     logAuditEvent({
       actor_id: admin.playerId,

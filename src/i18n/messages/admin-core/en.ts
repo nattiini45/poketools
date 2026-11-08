@@ -70,6 +70,8 @@ const auditActions = {
   phase__reorder: 'Phases reordered',
   season__participant__substitute: 'Participant substituted',
   season__phase__groups__repair: 'Phase groups repaired',
+  season__phase__advance: 'Players advanced to the next phase by hand',
+  phase__enrollment__sync: 'Phase enrollment synced by force',
   season__groups__replace: 'League groups changed',
   season__group__rename: 'League group renamed',
   season__group__member__place: 'Trainer placed in a league group',

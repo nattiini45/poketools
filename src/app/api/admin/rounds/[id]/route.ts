@@ -3,8 +3,8 @@ import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
-import { getRoundById, deleteRound, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { deleteMatchesByRound, getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { deleteRoundWithMatches, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { getGamesByMatch } from '@/lib/supabase/queries/games';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
@@ -90,10 +90,11 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     }
 
     // Through the query layer: it releases the matches' team rows first, so a match-prep row never survives as a second
-    // planned row of its player. It reads the round's matches itself, in pages, and deletes on the round id.
-    await deleteMatchesByRound(id);
-
-    await deleteRound(id);
+    // planned row of its player, then deletes the round and its matches in one transaction that re-checks them under the
+    // round lock (a result or an accepted challenge that landed since is refused, not cascade-deleted unreset).
+    if (!(await deleteRoundWithMatches(id))) {
+      return NextResponse.json<ApiResult<never>>({ success: false, error: 'Round not found', code: 'round_not_found' }, { status: 404 });
+    }
 
     const remaining = allRounds.filter((r) => r.id !== id);
     if (remaining.length > 0) {

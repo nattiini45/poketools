@@ -197,6 +197,30 @@ describe('the classifier serves the player and the admin calls', () => {
     expect(classifyFormatRuntimeError({ code: 'format_adjust_not_allowed' }, 409).kind).toBe('invalid');
   });
 
+  it('classes a pick rejected for league state (an entry the domain dropped) and a refusal built from standings or roster as a conflict, so the view reloads', () => {
+    for (const code of ['domain_locked', 'item_outside_domain', 'where_false', 'capacity_exceeded'] as const) {
+      expect(classifyFormatRuntimeError({ code: 'format_action_invalid', issues: [{ code }] } as never, 422).kind, code).toBe('conflict');
+    }
+    expect(classifyFormatRuntimeError({ code: 'format_action_invalid', issues: [{ code: 'wrong_count' }] } as never, 422).kind).toBe('invalid');
+    for (const code of [
+      'challenge_rank_range',
+      'challenge_not_participant',
+      'challenge_phase_not_found',
+      'format_check_not_found',
+      'format_adjust_unknown_item',
+      'format_adjust_invalid_order',
+      'format_adjust_invalid_links',
+      'format_adjust_unknown_target',
+      'format_adjust_attr_missing',
+    ]) {
+      expect(classifyFormatRuntimeError({ code }).kind, code).toBe('conflict');
+    }
+    // A request that is wrong by its own shape stays invalid.
+    for (const code of ['format_adjust_invalid_amount', 'challenge_self', 'reason_required']) {
+      expect(classifyFormatRuntimeError({ code }).kind, code).toBe('invalid');
+    }
+  });
+
   it('reads status 0 as a network failure, 401 as unauthenticated and an unknown code as other', () => {
     expect(classifyFormatRuntimeError({ code: 'network_error' }, 0).kind).toBe('network');
     expect(classifyFormatRuntimeError({}, 401).kind).toBe('unauthenticated');

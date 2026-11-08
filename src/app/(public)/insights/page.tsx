@@ -18,7 +18,7 @@ import {
   DEFAULT_GLOBAL_META_FORMAT,
 } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
-import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
 import {
   formatScoresByes,
   groupRoundsByStage,
@@ -115,7 +115,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
         })),
         records,
         byes,
-        ranking,
+        rankingForPhase(ranking, scope.id),
       ),
     };
   }

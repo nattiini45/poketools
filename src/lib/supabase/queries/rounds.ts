@@ -226,6 +226,17 @@ function mapRoundWriteError(error: { code?: string; message?: string }, roundNam
   if (isRoundWriteSignal(error, 'tournament_not_found')) {
     return new UserFacingError('Tournament not found', { code: 'tournament_not_found', status: 404 });
   }
+  // A retry that reuses an empty round another admin deleted meanwhile.
+  if (isRoundWriteSignal(error, 'round_not_found')) {
+    return new UserFacingError('Round not found', { code: 'round_not_found', status: 404 });
+  }
+  // The round was paired from a kit format that was replaced, switched or detached since: nothing was written.
+  if (isRoundWriteSignal(error, 'format_context_stale')) {
+    return new UserFacingError('The league format changed while the round was being generated, so no round was written. Generate it again.', {
+      code: 'format_context_stale',
+      status: 409,
+    });
+  }
   return error;
 }
 
@@ -278,6 +289,12 @@ export interface RoundMatchInput {
  * for the write and finds its unfinished matches, so the phase stays active. `createRound` plus `createMatchBatch` are two
  * requests and cannot give either guarantee. A concurrent generation of the same number answers
  * `RoundAlreadyWrittenError`, a first round of a mirrored phase whose groups changed 409 `PHASE_GROUPS_STALE`.
+ *
+ * The same transaction takes the league's locks first (the season advisory lock and the seasons row FOR KEY SHARE, so a
+ * format attach, detach or league delete waits for the write and sees its round), moves an upcoming phase to `active` and
+ * raises `current_round` (callers no longer write them in a second request), and, with `expected_revision` (the revision
+ * of the kit phase the round was paired from), refuses a write planned from a format that was replaced since
+ * (`format_context_stale`, 409 through the format runtime error mapping; nothing is written).
  */
 export async function createRoundWithMatches(input: {
   tournament_id: string;
@@ -287,6 +304,8 @@ export async function createRoundWithMatches(input: {
   /** Players the pairing result gave a bye (Swiss / round robin); omitted for elimination. */
   bye_player_ids?: string[];
   matches: readonly RoundMatchInput[];
+  /** `season_formats.revision` of the kit phase the round was paired from; omitted for a phase the kit does not run. */
+  expected_revision?: number;
 }): Promise<Round> {
   const { data, error } = await supabase.rpc('round_write', {
     p_tournament_id: input.tournament_id,
@@ -296,6 +315,7 @@ export async function createRoundWithMatches(input: {
     p_best_of: input.best_of,
     p_bye_player_ids: input.bye_player_ids ?? [],
     p_matches: roundMatchesJson(input.matches),
+    ...(input.expected_revision === undefined ? {} : { p_expected_revision: input.expected_revision }),
   });
   if (error) throw mapRoundWriteError(error, input.name, 'createRoundWithMatches');
   return parseRoundWrite(data);
@@ -313,7 +333,10 @@ export async function createRoundWithMatches(input: {
  * exactly one writes.
  */
 export async function addMatchesToRound(
-  round: Pick<Round, 'id' | 'name' | 'tournament_id'>,
+  round: Pick<Round, 'id' | 'name' | 'tournament_id'> & {
+    /** `season_formats.revision` of the kit phase the matches were paired from (see `createRoundWithMatches`). */
+    expected_revision?: number;
+  },
   matches: readonly RoundMatchInput[],
   byePlayerIds?: readonly string[],
 ): Promise<void> {
@@ -326,6 +349,7 @@ export async function addMatchesToRound(
     p_best_of: NULL_ARG as number,
     p_bye_player_ids: byePlayerIds === undefined ? (NULL_ARG as string[]) : [...byePlayerIds],
     p_matches: roundMatchesJson(matches),
+    ...(round.expected_revision === undefined ? {} : { p_expected_revision: round.expected_revision }),
   });
   if (error) throw mapRoundWriteError(error, round.name, 'addMatchesToRound');
   parseRoundWrite(data);

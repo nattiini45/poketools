@@ -2,12 +2,16 @@
  * The ranked table of one phase of a kit league for the runtime (event targets that read `wins`, the tie checks at the
  * end of a stage). It scores completed matches, byes, outcomes and the league's adjustments like the public table does.
  * Games are counted (`games_played`) and, in a round robin stage, kills are read from the battle stats
- * (`kill_differential`), as the public table does; the advance route ranks the same way. Server only.
+ * (`kill_differential`), as the public table does; the advance route ranks the same way. `rank` is the place in the
+ * whole phase and `group_rank` the place inside the player's group (the phase's `tournament_groups`), as an advancement
+ * edge reads them. Server only.
  */
 import 'server-only';
 
 import { mappedBracketType } from '@/lib/format-kit/engine/plan';
-import { getOutcomesByPhases, getPhaseBattleStats, getPhaseGameCounts } from '@/lib/supabase/queries/format-engine';
+import { getOutcomesByPhases, getPhaseGameCounts } from '@/lib/supabase/queries/format-engine';
+import { getPhaseKillTallies } from '@/lib/supabase/queries/games';
+import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { scoringByeRecords } from '@/lib/tournament/byes';
@@ -21,18 +25,19 @@ import type { PlayerRow } from './types';
 export async function loadStageTable(ctx: KitContext, phaseId: string): Promise<KitStanding[] | null> {
   const phase = phaseById(ctx, phaseId);
   if (phase === undefined) return null;
-  const [matches, rounds, outcomeRows, gameCounts, battleStats, seedsAndRatings] = await Promise.all([
+  const [matches, rounds, outcomeRows, gameCounts, kills, groups, seedsAndRatings] = await Promise.all([
     getCompletedMatchRecords(phaseId),
     getRoundsByTournament(phaseId),
     getOutcomesByPhases([phaseId]),
     getPhaseGameCounts([phaseId]),
     // Kills count in a round robin stage only, like the public table.
-    stageCountsKills(phase.stage) ? getPhaseBattleStats([phaseId]) : Promise.resolve([]),
+    stageCountsKills(phase.stage) ? getPhaseKillTallies([phaseId]) : Promise.resolve({}),
+    getGroupsByTournament(phaseId),
     loadSeedsAndRatings([{ phaseId, stage: phase.stage, playerIds: phase.members }]),
   ]);
   const { adjustments, manualOrder } = standingAdjustments(ctx.state.adjustments, new Map([[phase.stage.key, phaseId]]));
   const metrics = stageMetricsFor(ctx.def, ctx.state, ctx.seed, phase.stage.key, phase.members);
-  return computeStageStandings({
+  const table = computeStageStandings({
     stage: phase.stage,
     participantIds: phase.members,
     participantNames: {},
@@ -40,7 +45,7 @@ export async function loadStageTable(ctx: KitContext, phaseId: string): Promise<
     outcomes: kitOutcomesByMatch(outcomeRows),
     // `games_played` counts the matches' games, like the public table.
     gameCounts,
-    battleStats,
+    kills,
     // Only a Swiss stage scores its byes, like the public table (`scoringByeRecords`).
     byes: scoringByeRecords(mappedBracketType(phase.stage.pairing), rounds),
     coinFlips: coinFlipDraws(ctx.seed, phase.stage.key, phase.members),
@@ -53,6 +58,24 @@ export async function loadStageTable(ctx: KitContext, phaseId: string): Promise<
       ? { metricDefs: metrics.defs, placements: metrics.placements, playerRefs: metrics.playerRefs, relations: metrics.relations }
       : {}),
   });
+  return withGroupRanks(table, groups);
+}
+
+/**
+ * Sets `group_rank` (the place among the players of the row's own group, as the advancement edge computes it) on every
+ * row; the phase-wide `rank` stays. A player in no group, or a phase without groups, ranks in the whole table.
+ */
+function withGroupRanks(table: KitStanding[], groups: readonly { id: string; members: readonly { player_id: string }[] }[]): KitStanding[] {
+  const groupOf = new Map<string, string>();
+  for (const group of groups) for (const member of group.members) groupOf.set(member.player_id, group.id);
+  const seen = new Map<string | null, number>();
+  for (const row of table) {
+    const group = groupOf.get(row.player_id) ?? null;
+    const place = (seen.get(group) ?? 0) + 1;
+    seen.set(group, place);
+    row.group_rank = place;
+  }
+  return table;
 }
 
 /**
@@ -85,6 +108,7 @@ export function playerRowsOf(table: readonly KitStanding[]): Record<string, Play
       losses: row.losses,
       games_played: row.games_played,
       rank: row.rank,
+      group_rank: row.group_rank ?? row.rank,
       faints_dealt: row.faints_dealt,
       faints_taken: row.faints_taken,
       kill_differential: row.kill_differential,

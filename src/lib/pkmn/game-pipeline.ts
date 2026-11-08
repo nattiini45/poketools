@@ -13,6 +13,7 @@ import {
 import {
   updateMatchStatus,
   getMatchById,
+  clearMatchSocialImage,
   resetMatchFields,
   hasDownstreamMatches,
   getMatchesByRound,
@@ -48,7 +49,9 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { MatchSubmitForbiddenError } from '@/lib/auth/match-access';
 import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay-reference';
 import { ReplayEngineTieError, resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
-import { deleteMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { readOutcomeMark, takeBackMarkedOutcome } from '@/lib/match/outcome-takeback';
+import { MatchReopenDownstreamPlayedError, MatchStateChangedError } from '@/lib/match/state-errors';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
@@ -285,7 +288,9 @@ async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGame
   // After the status, so a lost race leaves no outcome row behind.
   let outcomeRecorded = true;
   try {
-    await recordMatchOutcome({
+    // 'kept': an admin row (a staging whose request died) sits on the match and is not replaced, so the dispute has no
+    // `unresolved` row; reported in the audit event like a failed write.
+    const written = await recordMatchOutcome({
       matchId: match.id,
       kind: 'unresolved',
       p1Faints: null,
@@ -295,6 +300,10 @@ async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGame
       setBy: null,
       force: false,
     });
+    if (written !== 'written') {
+      outcomeRecorded = false;
+      logger.error('match/outcome', 'the unresolved outcome of a disputed match was kept out by an admin row', { matchId: match.id });
+    }
   } catch (err) {
     outcomeRecorded = false;
     logger.error('match/outcome', 'the unresolved outcome of a disputed match could not be recorded', { matchId: match.id, error: err });
@@ -1024,7 +1033,14 @@ async function recheckEpbAfterEdit(input: {
  * ALREADY committed and the concurrent writer's status is kept: overwriting
  * it could undo a completion without rolling its finalize back. The result
  * then carries the match's current status and `statusConflict: true`, so the
- * caller finishes its remaining steps and reports the partial state.
+ * caller finishes its remaining steps and reports the partial state. Every
+ * branch writes by compare-and-set, the reset to `scheduled` included.
+ *
+ * A match that leaves `completed` or `disputed` takes its outcome row with it (an admin forfeit, a played row with its
+ * faints, the dispute's `unresolved` row): none of them describes the match any more, and a stale admin row would be
+ * kept by the heal over the next completion's played result. The row is read before the status write and deleted by its
+ * `set_at` after it (`readOutcomeMark`), so a row an admin staged since survives; a failed delete is logged and does not
+ * undo the saved game change.
  */
 async function reevaluateMatchStatus(
   matchId: string,
@@ -1037,10 +1053,17 @@ async function reevaluateMatchStatus(
   const { player_1_wins, player_2_wins } = await getGameWinCounts(matchId);
   const totalGames = player_1_wins + player_2_wins;
 
+  // A match without games keeps no outcome row whatever its status was; a decided one never keeps its row.
+  const outcomeMark =
+    totalGames === 0 || previousStatus === 'completed' || previousStatus === 'disputed'
+      ? await readOutcomeMark(matchId)
+      : null;
+
   if (totalGames === 0) {
     // No games left → reset to scheduled
-    await resetMatchFields(matchId);
-    await deleteMatchOutcome(matchId);
+    const reset = await resetMatchFields(matchId, previousStatus);
+    if (!reset) return currentMatchStatusAfterConflict(matchId, previousStatus);
+    await takeBackMarkedOutcome(matchId, outcomeMark);
     return { status: 'scheduled', winnerId: null, statusConflict: false };
   }
 
@@ -1056,6 +1079,7 @@ async function reevaluateMatchStatus(
       autoConfirmAt: previousStatus === 'pending_confirmation' ? undefined : null,
     });
     if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
+    await takeBackMarkedOutcome(matchId, outcomeMark);
     return { status: 'pending_confirmation', winnerId, statusConflict: false };
   }
 
@@ -1068,6 +1092,7 @@ async function reevaluateMatchStatus(
     autoConfirmAt: null,
   });
   if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
+  await takeBackMarkedOutcome(matchId, outcomeMark);
   return { status: 'in_progress', winnerId: null, statusConflict: false };
 }
 
@@ -1101,6 +1126,45 @@ export async function preflightUncompleteRebuild(match: {
 }): Promise<void> {
   if (match.status !== 'completed') return;
   await planRatingRebuild([match.player_1_id, match.player_2_id], { excludeMatchIds: [match.id] });
+}
+
+/**
+ * Everything checked BEFORE an admin game change writes, on a match that may be completed: the rating preflight
+ * (`preflightUncompleteRebuild`) and, for a bracket match, that no later bracket match its winner advanced into was
+ * played. A game change of a completed match always takes it off `completed` (back to `pending_confirmation` or
+ * `in_progress`, or `scheduled` without games), exactly like a reopen, so it is refused the same way: with nothing
+ * written, 409 `match_reopen_downstream_played` (the admin resets those matches first). Returns the participants
+ * `dropCompletedResultEffects` needs; `[]` for a match that is not completed.
+ */
+async function preflightGameChange(
+  match: MatchWithPlayers,
+  tournament: Tournament
+): Promise<ParticipantWithSeed[]> {
+  await preflightUncompleteRebuild(match);
+  if (match.status !== 'completed') return [];
+  const participants = await getParticipants(match.tournament_id);
+  const playedDownstream = await collectPlayedDownstreamMatches(match, tournament, participants);
+  if (playedDownstream.length > 0) throw new MatchReopenDownstreamPlayedError(playedDownstream.length);
+  return participants;
+}
+
+/**
+ * What a COMPLETED match's result left behind outside ratings, once an admin game change took the match off `completed`
+ * (`reopenMatch` and `resetMatch` do the same): the bracket slots its winner (and, in a double elimination, its loser)
+ * advanced into are taken back, and the analyses, EPB snapshots and social image of the old result are dropped, as a
+ * re-confirmation builds them fresh (the analysis route serves a stored completed analysis, the heal skips the EPB hooks
+ * while snapshots exist). The round revert is the caller's (`revertRoundIfCompleted`). Errors propagate: the game change
+ * is saved, and the route reports the failure.
+ */
+async function dropCompletedResultEffects(
+  match: MatchWithPlayers,
+  tournament: Tournament,
+  participants: ParticipantWithSeed[]
+): Promise<void> {
+  await unpropagateBracketOnMatchReset(match, tournament, participants);
+  await Promise.all([deleteMatchAnalysis(match.id), deleteMatchPrepAnalysesByMatch(match.id)]);
+  await deleteMatchSnapshots(match.id);
+  await clearMatchSocialImage(match.id);
 }
 
 /**
@@ -1160,7 +1224,7 @@ export async function deleteGame(
   // Read before any mutation: a failed read aborts with nothing deleted.
   const round = await requireRound(match.round_id);
   const wasCompleted = match.status === 'completed';
-  await preflightUncompleteRebuild(match);
+  const participants = await preflightGameChange(match, tournament);
 
   // 1. Rollback aggregates + delete data (aggregates first for safety)
   await rollbackAndDeleteGame(gameId, match.tournament_id, tournament.season_id);
@@ -1173,6 +1237,11 @@ export async function deleteGame(
 
   // 3. Revert round if needed
   await revertRoundIfCompleted(match.round_id);
+
+  // 3a. A completed match that is no longer completed: take back its bracket slots and result-derived artifacts.
+  if (wasCompleted && status !== 'completed') {
+    await dropCompletedResultEffects(match, tournament, participants);
+  }
 
   // 3b. A completed match that is no longer completed: rebuild ratings,
   //     streaks and signatures so they stop counting it.
@@ -1457,15 +1526,25 @@ export async function resetMatch(
   const childrenCleanup = await cleanMatchChildren(matchId);
 
   // 3. Reset match fields — MOVED EARLIER so the rebuilds below see this match
-  //    as 'scheduled' (their status='completed' filters then exclude it).
-  await resetMatchFields(matchId);
+  //    as 'scheduled' (their status='completed' filters then exclude it). A
+  //    compare-and-set on the status read above: a completion that landed
+  //    meanwhile has run its finalize, and a blind reset would leave its
+  //    ratings and bracket slots applied with no rebuild (wasCompleted is
+  //    false). Answers 409; resetting again then sees the completed match.
+  const outcomeMark = await readOutcomeMark(matchId);
+  if (!(await resetMatchFields(matchId, match.status))) {
+    throw new MatchStateChangedError((await getMatchById(matchId).catch(() => null))?.status);
+  }
 
   // 4. Delete AI analyses (Professor Linden) + EPB snapshots so a
-  //    re-finalization rebuilds from fresh hooks.
+  //    re-finalization rebuilds from fresh hooks. The outcome row goes by the
+  //    `set_at` read before the flip and a failed delete is logged, not
+  //    thrown: the match is scheduled already, and a thrown error here would
+  //    skip the rebuilds below and leave a retry answering "already scheduled".
   await Promise.all([
     deleteMatchAnalysis(matchId),
     deleteMatchPrepAnalysesByMatch(matchId),
-    deleteMatchOutcome(matchId),
+    takeBackMarkedOutcome(matchId, outcomeMark),
   ]);
   await deleteMatchSnapshots(matchId);
 
@@ -1848,7 +1927,7 @@ async function editClaimedGame(
   round: Round
 ): Promise<EditGameResult> {
   const wasCompleted = match.status === 'completed';
-  await preflightUncompleteRebuild(match);
+  const participants = await preflightGameChange(match, tournament);
 
   // 1. Cancel any pending aggregate jobs for this game, then re-read it: the
   //    applied marker is only final after the cancel (readGameAfterJobCancel).
@@ -1914,6 +1993,14 @@ async function editClaimedGame(
     match.id, round.best_of, match.status,
     match.player_1_id, match.player_2_id, input.admin_id
   );
+
+  // 6a. A completed match the edit moved out of `completed`: its round is no
+  //     longer complete, and its bracket slots and result-derived artifacts
+  //     are taken back (as deleteGame, resetMatch and reopenMatch do).
+  if (wasCompleted && status !== 'completed') {
+    await revertRoundIfCompleted(match.round_id);
+    await dropCompletedResultEffects(match, tournament, participants);
+  }
 
   // 6b. A completed match the edit moved out of `completed` (to
   //     pending_confirmation, in_progress or scheduled): rebuild ratings,

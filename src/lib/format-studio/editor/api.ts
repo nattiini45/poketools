@@ -122,17 +122,36 @@ export function createFormatRequest(
  * league's runtime data (links, items, submissions, adjustments) answers 409 `format_runtime_has_data` unless
  * `confirmClear` is true: the admin has seen the counts and agreed to delete them.
  */
+/** The counts a `format_runtime_has_data` answer carries (what the admin was shown before confirming). */
+export interface RuntimeCounts {
+  links: number;
+  items: number;
+  submissions: number;
+  adjustments: number;
+}
+
+/** The counts of a `format_runtime_has_data` answer's `params`, or undefined when they are not all there. */
+export function runtimeCountsOf(params: unknown): RuntimeCounts | undefined {
+  if (typeof params !== 'object' || params === null) return undefined;
+  const { links, items, submissions, adjustments } = params as Record<string, unknown>;
+  const counts = [links, items, submissions, adjustments];
+  if (!counts.every((n) => typeof n === 'number' && Number.isInteger(n) && n >= 0)) return undefined;
+  return { links, items, submissions, adjustments } as RuntimeCounts;
+}
+
 export function attachFormatRequest(
   seasonId: string,
   definitionId: string,
   versionNo: number,
   f?: FetchLike,
   confirmClear = false,
+  confirmedCounts?: RuntimeCounts,
 ): Promise<ApiOutcome<SeasonFormatAttachResponse>> {
   return request(f, 'POST', `/api/seasons/${enc(seasonId)}/format`, {
     definition_id: definitionId,
     version_no: versionNo,
     ...(confirmClear ? { confirm_clear: true } : {}),
+    ...(confirmClear && confirmedCounts ? { confirmed_counts: confirmedCounts } : {}),
   });
 }
 
@@ -144,8 +163,14 @@ export function detachFormatRequest(
   seasonId: string,
   f?: FetchLike,
   confirmClear = false,
+  confirmedCounts?: RuntimeCounts,
 ): Promise<ApiOutcome<{ removed_stage_ids: string[] }>> {
-  return request(f, 'DELETE', `/api/seasons/${enc(seasonId)}/format`, confirmClear ? { confirm_clear: true } : undefined);
+  return request(
+    f,
+    'DELETE',
+    `/api/seasons/${enc(seasonId)}/format`,
+    confirmClear ? { confirm_clear: true, ...(confirmedCounts ? { confirmed_counts: confirmedCounts } : {}) } : undefined,
+  );
 }
 
 // ─── Error classes ───────────────────────────────────────────────────────────────────────────────
@@ -185,6 +210,8 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   format_not_attached: 'blocked',
   format_nothing_attached: 'not_found',
   format_detach_blocked: 'blocked',
+  format_phases_in_use: 'blocked',
+  format_phase_owned: 'blocked',
   format_runtime_has_data: 'blocked',
   season_format_type_locked: 'blocked',
 };

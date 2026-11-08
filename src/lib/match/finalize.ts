@@ -51,11 +51,12 @@ import type { EarnedAchievement } from '@/types/achievement';
  */
 
 export const FINALIZE_STEPS = [
-  'revalidate',
   'tournament',
-  'ratings',
+  // The outcome row comes first: a completed match is visible to the standings readers from the status flip on, and
+  // without its row it scores as a played match with unknown faints.
   'battle_stats',
   'outcome',
+  'ratings',
   'streaks',
   'signatures',
   'achievements',
@@ -64,6 +65,8 @@ export const FINALIZE_STEPS = [
   'epb_hooks',
   'bracket_propagation',
   'format_hook',
+  // Last write step: the caches expire after every write a reader can observe, not before the first one.
+  'revalidate',
   'mark_finalized',
 ] as const;
 
@@ -151,6 +154,11 @@ export interface FinalizeMatchCompletionResult {
   /** False when finalize did not run at all (see `reason`). */
   finalized: boolean;
   reason?: string;
+  /**
+   * With `reason: 'match_changed'`: the status the match has now (`'removed'` when it is gone). The match was reset,
+   * reopened or completed with another winner after the caller's status write; the change owns the cleanup.
+   */
+  current_status?: string;
   propagation_failed?: boolean;
   /**
    * Steps that failed, or could not run because a step they need failed.
@@ -678,13 +686,18 @@ function emitAnnouncements(input: {
   }
 }
 
-/** Stamp the marker; false when the match is no longer `completed` (reset meanwhile). */
-async function markFinalized(runner: StepRunner, matchId: string): Promise<boolean> {
-  const marked = await runner.run('mark_finalized', () => markMatchFinalized(matchId));
+/**
+ * Stamp the marker; false when the match is no longer the completion this run worked on (reset, or reopened and
+ * completed again, meanwhile): the stamp is bound to the `confirmed_at` the run started from.
+ */
+async function markFinalized(runner: StepRunner, matchId: string, confirmedAt: string | null): Promise<boolean> {
+  const marked = await runner.run('mark_finalized', () =>
+    markMatchFinalized(matchId, undefined, { confirmedAt })
+  );
   if (!marked.ok) return false;
   if (!marked.value) {
     console.error(
-      `[match-finalize] match ${matchId} is no longer completed; finalized_at not stamped`
+      `[match-finalize] match ${matchId} is no longer the completion this run finalized; finalized_at not stamped`
     );
   }
   return marked.value;
@@ -706,14 +719,23 @@ export async function finalizeMatchCompletion({
   const runner = new StepRunner(match.id, 'finalize');
   const loserId = winnerId === match.player_1_id ? match.player_2_id : match.player_1_id;
 
-  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
+  // The completion this run owns: the callers pass the row they read BEFORE their status write, so the token (the
+  // `confirmed_at` that write stamped) is read here. A match that is no longer completed was reset or reopened since, and
+  // finalizing it would rate a result that no longer stands. A failed read leaves the run without a token: the steps still
+  // run, the marker stays unset and the heal finishes the match.
+  let confirmedAt: string | null = null;
+  const completionStep = await runner.run('mark_finalized', () => getMatchById(match.id));
+  if (completionStep.ok) {
+    // The completion this run owns is this winner's: a match reopened and completed again with another winner is another
+    // completion (its own run finalizes it), and rating this winner under its token would stamp the wrong result.
+    if (completionStep.value?.status !== 'completed' || completionStep.value.winner_id !== winnerId) {
+      return { finalized: false, reason: 'match_changed', current_status: completionStep.value?.status ?? 'removed' };
+    }
+    confirmedAt = completionStep.value.confirmed_at;
+  }
 
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
-
-  const ratingsStep = await runner.run('ratings', () =>
-    updateRatings(winnerId, loserId, false, match.id)
-  );
 
   const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
   const statsByGame = statsStep.ok ? statsStep.value : null;
@@ -734,6 +756,10 @@ export async function finalizeMatchCompletion({
   } else {
     runner.blocked('outcome', 'battle_stats');
   }
+
+  const ratingsStep = await runner.run('ratings', () =>
+    updateRatings(winnerId, loserId, false, match.id)
+  );
 
   // Rebuilt from each player's whole history in one fenced write: two finalizations
   // sharing a player both end up counted, and a rerun lands on the same numbers.
@@ -837,19 +863,26 @@ export async function finalizeMatchCompletion({
   }
 
   // The format runtime reads the outcome row (faints, forfeit): without it the event would fire with 0 faints and burn
-  // its key, so a failed outcome step blocks it.
+  // its key, so a failed outcome step blocks it. It also decides the stage end (end_when) from the matches that exist: a
+  // bracket whose next-slot match was not created (propagation failed) looks finished, the phase would complete around the
+  // missing match and the heal's propagation would then insert it into a completed phase, so a failed propagation blocks it
+  // too (the heal runs the propagation before the hook).
   // (Without the tournament the league is unknown; that failed step already keeps the marker unset.)
   if (tournament && isKitCandidate(tournament)) {
-    if (outcomeRecorded) {
+    if (outcomeRecorded && !propagationFailed) {
       await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament));
     } else {
-      runner.blocked('format_hook', 'outcome');
+      runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
     }
   }
 
+  // After the last write: any reader that took a cache miss in between would have cached a half-written state, and
+  // nothing else expires a result without game rows (a forfeit, a no-show) afterwards.
+  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
+
   let complete = false;
   if (runner.failed.length === 0) {
-    complete = await markFinalized(runner, match.id);
+    complete = await markFinalized(runner, match.id, confirmedAt);
   }
 
   if (runner.failed.length > 0) {
@@ -893,8 +926,9 @@ export async function finalizeMatchCompletion({
  * The heal's outcome step. A row an admin wrote (the result route stages it before the completion) is the admin's
  * intent and is rewritten from itself: a forfeit or no-show is left as it is, a played result gets its faints
  * recomputed from the battle stats. Any other match gets the played row. The heal cannot tell a leftover staged row
- * from an admin's completed result; the finalize of a completion without admin intent replaces such a row itself, so
- * only a failure of that very write can leave one for the heal to keep.
+ * from an admin's completed result; the finalize of a completion without admin intent replaces such a row itself, and a
+ * game change, reopen or reset that takes the match off `completed` or `disputed` takes its row with it, so only a failure
+ * of one of those writes (or of the delete after it, which is logged) can leave one for the heal to keep.
  */
 async function healOutcome(match: MatchWithPlayers, statsByGame: Record<string, BattleStat[]>): Promise<void> {
   const existing = await getMatchOutcome(match.id);
@@ -929,6 +963,18 @@ export async function healMatchFinalization(
 
   const runner = new StepRunner(match.id, 'heal');
 
+  // The worklist row may be old by now (the cron heals up to a page of matches one after another): only the completion
+  // it names is healed. A match reset, or reopened and completed again with another winner, is left to its own finalize.
+  const current = await runner.run('mark_finalized', () => getMatchById(match.id));
+  if (!current.ok) return { healed: false, failed_steps: [...runner.failed] };
+  if (
+    current.value?.status !== 'completed' ||
+    current.value.winner_id !== winnerId ||
+    current.value.confirmed_at !== match.confirmed_at
+  ) {
+    return { healed: false, skipped: true, reason: 'not_completed', failed_steps: [] };
+  }
+
   // Verify ratings first and stop on any failure: the steps below assume the
   // match counted (streaks, signatures, EPB, bracket), and a match whose
   // ratings never verify would otherwise replay them on every cron run.
@@ -940,7 +986,6 @@ export async function healMatchFinalization(
     return { healed: false, needs_admin: true, reason: 'ratings_missing', failed_steps: ['ratings'] };
   }
 
-  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
 
@@ -993,24 +1038,29 @@ export async function healMatchFinalization(
         runner.blocked('epb_hooks', 'battle_stats');
       }
     }
+    let propagationFailed = false;
     if (isElimTournament(tournament)) {
-      await runner.run('bracket_propagation', () => runBracketStep(match, winnerId, tournament));
+      propagationFailed = !(await runner.run('bracket_propagation', () => runBracketStep(match, winnerId, tournament))).ok;
     }
-    // The retry of a hook that failed (or never ran) at completion: its event key makes a second call a no-op.
+    // The retry of a hook that failed (or never ran) at completion: its event key makes a second call a no-op. It runs
+    // after the propagation and never around a failed one (the stage end would complete the phase without the slot).
     if (isKitCandidate(tournament)) {
-      if (outcomeRecorded) {
+      if (outcomeRecorded && !propagationFailed) {
         await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament));
       } else {
-        runner.blocked('format_hook', 'outcome');
+        runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
       }
     }
   }
+
+  // After the last write, whatever failed before it: the writes that did land are visible to readers.
+  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
 
   if (runner.failed.length > 0) {
     return { healed: false, failed_steps: [...runner.failed] };
   }
 
-  const marked = await markFinalized(runner, match.id);
+  const marked = await markFinalized(runner, match.id, match.confirmed_at);
   if (!marked) {
     if (runner.failed.length > 0) {
       return { healed: false, failed_steps: [...runner.failed] };

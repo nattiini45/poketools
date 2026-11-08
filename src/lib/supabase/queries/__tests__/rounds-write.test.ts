@@ -239,10 +239,33 @@ describe('addMatchesToRound', () => {
     });
   });
 
-  it('does not word a refusal of the round that is gone as a phase refusal', async () => {
-    const gone = signal('round_not_found');
-    h.results.push({ data: null, error: gone });
+  it('maps a round another admin deleted meanwhile to 404 round_not_found, not a phase refusal and not a raw 500', async () => {
+    h.results.push({ data: null, error: signal('round_not_found') });
 
-    await expect(addMatchesToRound(round, matches)).rejects.toBe(gone);
+    await expect(addMatchesToRound(round, matches)).rejects.toMatchObject({ code: 'round_not_found', statusCode: 404 });
+  });
+
+  it('maps a kit format replaced since the round was paired to 409 format_context_stale, for a new round too', async () => {
+    h.results.push({ data: null, error: signal('format_context_stale') });
+    await expect(addMatchesToRound({ ...round, expected_revision: 4 }, matches)).rejects.toMatchObject({
+      code: 'format_context_stale',
+      statusCode: 409,
+    });
+
+    h.results.push({ data: null, error: signal('format_context_stale') });
+    await expect(
+      createRoundWithMatches({ tournament_id: 't-1', name: 'Round 2', round_number: 2, best_of: 3, matches, expected_revision: 4 }),
+    ).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+  });
+
+  it('hands the revision of the kit phase to round_write, and nothing for a phase the kit does not run', async () => {
+    h.results.push({ data: { round: roundRow, matches: 2 }, error: null });
+    await createRoundWithMatches({ tournament_id: 't-1', name: 'Round 2', round_number: 2, best_of: 3, matches, expected_revision: 7 });
+    h.results.push({ data: { round: roundRow, matches: 2 }, error: null });
+    await createRoundWithMatches({ tournament_id: 't-1', name: 'Round 2', round_number: 2, best_of: 3, matches });
+    h.results.push({ data: { round: roundRow, matches: 2 }, error: null });
+    await addMatchesToRound({ ...round, expected_revision: 9 }, matches);
+
+    expect(h.calls.map((call) => (call.args as { p_expected_revision?: unknown }).p_expected_revision)).toEqual([7, undefined, 9]);
   });
 });

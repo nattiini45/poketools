@@ -6,6 +6,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+vi.mock('@/lib/format-studio/phase-guards', () => ({
+  assertSeasonPhasesFree: vi.fn(),
+  assertFormatPhaseDeletable: vi.fn(),
+  assertFormatPhaseUnchanged: vi.fn(),
+  assertFormatPhaseStatusUnchanged: vi.fn(),
+  assertFormatPhaseRosterOpen: vi.fn(),
+  assertSeasonRosterMembers: vi.fn(),
+}));
 vi.mock('@/lib/auth/helpers', () => ({
   requireResourceAdmin: vi.fn(),
 }));
@@ -47,6 +55,8 @@ import * as roundQueries from '@/lib/supabase/queries/rounds';
 import { rebuildAfterTournamentDelete } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
+import { assertFormatPhaseStatusUnchanged, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
+import { FormatStudioError } from '@/lib/format-studio/errors';
 
 const {
   getTournamentById,
@@ -93,6 +103,25 @@ beforeEach(() => {
   updateTournament.mockResolvedValue({ id: PHASE_ID, name: 'Hinrunde', status: 'upcoming', bracket_type: 'swiss' } as never);
   getTournamentWithDetails.mockResolvedValue({ id: PHASE_ID, season_id: SEASON_ID } as never);
   getRoundsByTournament.mockResolvedValue([]);
+});
+
+describe('PATCH /api/seasons/[id]/phases/[phaseId]: a phase of the attached format of the league', () => {
+  it('asks the guard about the structural fields against the stored phase, and answers its 409 without writing', async () => {
+    vi.mocked(assertFormatPhaseUnchanged).mockRejectedValueOnce(new FormatStudioError('format_phase_owned'));
+    const response = await PATCH(request({ bracket_type: 'double_elim' }), args());
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_phase_owned');
+    expect(assertFormatPhaseUnchanged).toHaveBeenCalledWith(SEASON_ID, phaseRow('upcoming'), expect.objectContaining({ bracket_type: 'double_elim' }));
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
+
+  it('refuses a status change through this route (the tournament route runs the format reaction), writing nothing', async () => {
+    vi.mocked(assertFormatPhaseStatusUnchanged).mockRejectedValueOnce(new FormatStudioError('format_phase_owned'));
+    const response = await PATCH(request({ status: 'completed' }), args());
+    expect(response.status).toBe(409);
+    expect(assertFormatPhaseStatusUnchanged).toHaveBeenCalledWith(SEASON_ID, phaseRow('upcoming'), 'completed');
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /api/seasons/[id]/phases/[phaseId]: rename', () => {

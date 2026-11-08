@@ -3,12 +3,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormat: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', () => ({ getFormatRuntime: vi.fn() }));
+vi.mock('@/lib/supabase/queries/games', () => ({ getPhaseKillTallies: vi.fn() }));
 vi.mock('@/lib/supabase/queries/ratings', () => ({ getPlayerRatingsBatch: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getParticipantsBatch: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({
   getKitPhases: vi.fn(),
   getOutcomesByPhases: vi.fn(),
-  getPhaseBattleStats: vi.fn(),
   getPhaseGameCounts: vi.fn(),
   getSeasonKitHead: vi.fn(),
   getPhaseMatchIds: vi.fn(),
@@ -17,7 +17,8 @@ vi.mock('@/lib/supabase/queries/format-engine', () => ({
 }));
 
 import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
-import { getKitPhases, getOutcomesByPhases, getPhaseBattleStats, getPhaseGameCounts, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
+import { getKitPhases, getOutcomesByPhases, getPhaseGameCounts, getStandingAdjustments } from '@/lib/supabase/queries/format-engine';
+import { getPhaseKillTallies } from '@/lib/supabase/queries/games';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import type { Edge, RankStep, Stage } from '@/lib/format-kit/types';
@@ -72,7 +73,7 @@ function arrange(source: Stage, metrics: unknown[] = [], select: Edge['select'] 
   vi.mocked(getOutcomesByPhases).mockResolvedValue([]);
   vi.mocked(getStandingAdjustments).mockResolvedValue([]);
   vi.mocked(getPhaseGameCounts).mockResolvedValue({});
-  vi.mocked(getPhaseBattleStats).mockResolvedValue([]);
+  vi.mocked(getPhaseKillTallies).mockResolvedValue({});
   vi.mocked(getFormatRuntime).mockResolvedValue({
     relationLinks: [],
     resourceItems: [],
@@ -93,9 +94,9 @@ beforeEach(() => vi.clearAllMocks());
 describe('kitAdvancingPlayers ranks like the public table', () => {
   it('cuts by a custom metric the stage ranks by', async () => {
     const pointsMetric = { kind: 'metric.define', of: 'player', key: 'pts2', label: text('Points'), expr: { k: 'ref', name: 'points', t: 'number' } };
-    arrange(stage('groups', [{ kind: 'metric', metric: 'pts2', direction: 'desc' }]), [pointsMetric]);
-    // Without the metric the rank step is skipped and the cut falls back to participant order (d first).
-    expect(await pick()).toEqual(['a']);
+    arrange(stage('groups', [{ kind: 'metric', metric: 'pts2', direction: 'asc' }]), [pointsMetric]);
+    // Without the metric the rank step is skipped and the cut falls back to the player id order (a first).
+    expect(await pick()).toEqual(['d']);
   });
 
   it('counts the points an admin added to a player', async () => {
@@ -154,55 +155,45 @@ describe('kitAdvancingPlayers counts games like the public table', () => {
   });
 
   it('cuts by a games_played rank step', async () => {
-    // Without counts the step ties everybody and the cut falls back to participant order (d first).
-    arrange(stage('groups', [{ kind: 'metric', metric: 'games_played', direction: 'asc' }]));
+    // Without counts the step ties everybody and the cut falls back to the player id order (a first).
+    arrange(stage('groups', [{ kind: 'metric', metric: 'games_played', direction: 'desc' }]));
     vi.mocked(getPhaseGameCounts).mockResolvedValue(GAMES);
-    expect(await pick()).toEqual(['a']);
+    expect(await pick()).toEqual(['d']);
   });
 });
 
 describe('kitAdvancingPlayers counts kills like the public table', () => {
-  const stat = (game_id: string, player_id: string, kos_dealt: number, was_koed: boolean) => ({
-    game_id,
-    player_id,
-    pokemon_name: 'x',
-    was_brought: true,
-    was_lead: false,
-    kos_dealt,
-    was_koed,
-    round_number: 1,
-  });
-  /** a dealt 9 kills, d lost one Pokemon without a kill: a +9, b 0, c 0, d -1. */
-  const STATS = [stat('g1', 'a', 9, false), stat('g1', 'd', 0, true)];
+  /** d dealt 9 kills in m3, a lost one Pokemon without a kill in m1: d +9, b 0, c 0, a -1. (Ties fall back to player id: a first.) */
+  const TALLIES = { m3: { d: 9 }, m1: { a: -1 } };
   const killRank: RankStep[] = [{ kind: 'metric', metric: 'kill_differential', direction: 'desc' }];
   const killsAtLeast = (n: number): Edge['select'] => [
     { kind: 'threshold', when: { k: 'cmp', op: '>=', a: { k: 'ref', name: 'kill_differential', t: 'number' }, b: { k: 'num', v: n } } },
   ];
 
-  it('reads the battle stats of the source phase', async () => {
+  it('reads the kill tallies of the source phase', async () => {
     arrange(stage('groups', killRank));
-    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
+    vi.mocked(getPhaseKillTallies).mockResolvedValue(TALLIES);
     await pick();
-    expect(getPhaseBattleStats).toHaveBeenCalledWith(['src']);
+    expect(getPhaseKillTallies).toHaveBeenCalledWith(['src']);
   });
 
   it('cuts by a kill_differential rank step', async () => {
-    // Without the stats the step ties everybody and the cut falls back to participant order (d first).
+    // Without the kills the step ties everybody and the cut falls back to the player id order (a first).
     arrange(stage('groups', killRank));
-    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
-    expect(await pick()).toEqual(['a']);
+    vi.mocked(getPhaseKillTallies).mockResolvedValue(TALLIES);
+    expect(await pick()).toEqual(['d']);
   });
 
   it('advances the players whose kill_differential meets a threshold', async () => {
     arrange(stage('groups', [{ kind: 'metric', metric: 'points', direction: 'desc' }]), [], killsAtLeast(1));
-    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
-    expect(await pick()).toEqual(['a']);
+    vi.mocked(getPhaseKillTallies).mockResolvedValue(TALLIES);
+    expect(await pick()).toEqual(['d']);
   });
 
   it('does not count kills of a Swiss stage, which the public table does not either', async () => {
     arrange({ ...stage('groups', killRank), pairing: { kind: 'swiss', rounds: 'auto', avoid_repeats: true } });
-    vi.mocked(getPhaseBattleStats).mockResolvedValue(STATS);
-    expect(await pick()).toEqual(['d']);
-    expect(getPhaseBattleStats).not.toHaveBeenCalled();
+    vi.mocked(getPhaseKillTallies).mockResolvedValue(TALLIES);
+    expect(await pick()).toEqual(['a']);
+    expect(getPhaseKillTallies).not.toHaveBeenCalled();
   });
 });

@@ -56,7 +56,7 @@ import { actionFlagKey, findAction, isActionWindowOpen } from './actions';
 import { amendEntries, findDomainView } from './domains';
 import { eventKey } from './events';
 import { logger } from '@/lib/logger';
-import { fireEvent } from './fire';
+import { fireLockedActionEvents } from './fire';
 import { loadFreshKitContext, rosterOf, type KitContext } from './load';
 import { generateRelationLinks, validateRelationLinks } from './relations';
 import { own, type FormatOp } from './types';
@@ -160,7 +160,7 @@ export async function applyAdjustment(request: AdjustmentRequest): Promise<Adjus
   expireSeasonReads(request.seasonId, ctx.phases.map((phase) => phase.id));
   if (adjustment.kind === 'action' && adjustment.state === 'locked') {
     try {
-      await fireEvent(request.seasonId, { event: 'action_locked', action: adjustment.action }, request.adminId);
+      await fireLockedActionEvents(request.seasonId, request.adminId);
     } catch (error) {
       logger.error('format-engine/adjust', 'action_locked after a manual lock failed; the cron pass retries it', {
         seasonId: request.seasonId,

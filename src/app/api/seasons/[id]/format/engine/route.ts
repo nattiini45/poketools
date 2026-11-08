@@ -25,7 +25,9 @@ const ENGINE_LIMIT = { limit: 30, windowSeconds: 60 * 60 } as const;
  *
  * League admin (or site admin). Which engine runs the league's attached format: `legacy` (the code from before the
  * format kit), `shadow` (legacy tables, kit computed alongside for the admin diff) or `kit`. Allowed at any time,
- * also after the start: it changes how the next round pairs and how the tables rank, never a stored result.
+ * also after the start: it changes how the next round pairs and how the tables rank. Switching to `kit` also replays the league's finished matches
+ * through the format over the next cron runs (events, points, stage ends, auto advance), which can write phase status,
+ * enrollment and adjustments; switching away only stops new reactions. The legacy, shadow, kit diff is the safe way in.
  * 404 `season_not_found`, 404 `format_nothing_attached` (no format, or not a custom league).
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
@@ -45,15 +47,26 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
     const before = await getSeasonFormatSummary(id);
     if (before === null) throw new FormatStudioError('format_nothing_attached');
-    const summary = before.engine === parsed.data.engine ? before : await setSeasonFormatEngine(id, parsed.data.engine);
+    // The tables of the league (and the kit standings the public pages read) change with the engine, so the season tag
+    // expires as soon as the write was attempted, also on the idempotent retry of a switch whose first call died after the
+    // commit, and before any further read that can fail.
+    let summary: SeasonFormatSummary | null = before;
+    try {
+      if (before.engine !== parsed.data.engine) summary = await setSeasonFormatEngine(id, parsed.data.engine);
+    } finally {
+      expireSeasonReads(id);
+    }
     if (summary === null) throw new FormatStudioError('format_nothing_attached');
 
     if (before.engine !== summary.engine) {
-      const phases = await getKitPhases(id);
-      expireSeasonReads(
-        id,
-        phases.map((phase) => phase.id),
-      );
+      // The phases' own reads, best effort: the season tag above is already expired.
+      const phases = await getKitPhases(id).catch(() => []);
+      if (phases.length > 0) {
+        expireSeasonReads(
+          id,
+          phases.map((phase) => phase.id),
+        );
+      }
       logAuditEvent({
         action: 'season.format.engine',
         actor_id: admin.playerId,

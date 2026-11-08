@@ -227,7 +227,7 @@ describe('ActionCard: a pick the server refuses', () => {
         code: 'format_action_invalid',
         issues: [
           { code: 'wrong_count', step: 0 },
-          { code: 'where_false', step: 0, item_id: 'pikachu' },
+          { code: 'duplicate_item', step: 0, item_id: 'pikachu' },
         ],
       },
     });
@@ -239,7 +239,7 @@ describe('ActionCard: a pick the server refuses', () => {
     const alert = screen.getByRole('alert');
     expect(within(alert).getByText(t('issue.heading'))).toBeTruthy();
     expect(within(alert).getByText(t('issue.wrong_count'), { exact: false })).toBeTruthy();
-    expect(within(alert).getByText(t('issue.where_false'), { exact: false })).toBeTruthy();
+    expect(within(alert).getByText(t('issue.duplicate_item'), { exact: false })).toBeTruthy();
     expect(within(alert).getAllByText(t('issue.step', { number: 1 }), { exact: false }).length).toBe(2);
     expect(document.activeElement).toBe(alert);
     // A pick that is wrong in itself (422) says nothing about the league: no reload.
@@ -247,6 +247,20 @@ describe('ActionCard: a pick the server refuses', () => {
     // The picks are still there to correct.
     expect((box('Pikachu') as HTMLInputElement).checked).toBe(true);
   });
+
+  it.each(['item_outside_domain', 'domain_locked', 'where_false', 'capacity_exceeded'] as const)(
+    'a 422 pick refused for league state (%s: the domain or a resource moved) shows its reason and reloads the view',
+    async (issue) => {
+      mocks.submit.mockResolvedValue({ ok: false, status: 422, error: { code: 'format_action_invalid', issues: [{ code: issue, step: 0 }] } });
+      const { user, onReload, t } = setup();
+      await user.click(box('Pikachu'));
+      await user.click(box('Charizard'));
+      await user.click(screen.getByRole('button', { name: t('buttons.submit') }));
+
+      expect(screen.getByRole('alert')).toBeTruthy();
+      expect(onReload).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it.each([
     ['window_closed', 409],

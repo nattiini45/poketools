@@ -21,13 +21,12 @@ vi.mock('@/lib/supabase/queries/resource-admins', () => ({
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
-  deleteRound: vi.fn(),
   getRoundsByTournament: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchesByRound: vi.fn(),
-  deleteMatchesByRound: vi.fn(),
+  deleteRoundWithMatches: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/games', () => ({
@@ -56,8 +55,8 @@ vi.mock('@/lib/audit/log', () => ({
 
 import { DELETE } from '@/app/api/admin/rounds/[id]/route';
 import { requirePlayer } from '@/lib/auth/helpers';
-import { getRoundById, getRoundsByTournament, deleteRound } from '@/lib/supabase/queries/rounds';
-import { deleteMatchesByRound, getMatchesByRound } from '@/lib/supabase/queries/matches';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { deleteRoundWithMatches, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { updateTournament } from '@/lib/supabase/queries/tournaments';
@@ -87,6 +86,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(deleteRoundWithMatches).mockResolvedValue(true);
   });
 
   it('returns 404 with round_not_found when the round does not exist', async () => {
@@ -109,7 +109,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
 
     expect(res.status).toBe(403);
     expect(body).toEqual({ success: false, error: 'Admin access required', code: 'forbidden' });
-    expect(deleteRound).not.toHaveBeenCalled();
+    expect(deleteRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('refuses deleting an earlier round that has games, with round_delete_not_allowed', async () => {
@@ -127,7 +127,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect(res.status).toBe(400);
     expect(body.error).toBe('Only the latest round or rounds with zero games can be deleted');
     expect(body.code).toBe('round_delete_not_allowed');
-    expect(deleteRound).not.toHaveBeenCalled();
+    expect(deleteRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('refuses deleting a structure-generated elimination round', async () => {
@@ -147,7 +147,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect(body.success).toBe(false);
     expect(body.code).toBe('STRUCTURE_ELIM_ROUND_DELETE');
     expect(body.error).toContain('Regenerate Bracket');
-    expect(deleteRound).not.toHaveBeenCalled();
+    expect(deleteRoundWithMatches).not.toHaveBeenCalled();
     expect(resetMatch).not.toHaveBeenCalled();
     expect(rebuildAggregatesForScope).not.toHaveBeenCalled();
   });
@@ -166,8 +166,9 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect((await res.json()).success).toBe(true);
     expect(resetMatch).toHaveBeenCalledTimes(1);
     expect(resetMatch).toHaveBeenCalledWith('match-2', expect.anything());
-    expect(deleteMatchesByRound).toHaveBeenCalledWith('ccd1e4a6-92f3-48fe-8cb7-1fd927e0e38f');
-    expect(vi.mocked(deleteMatchesByRound).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(deleteRound).mock.invocationCallOrder[0]);
+    // One call: the matches and the round go in one transaction that re-checks them under the round lock.
+    expect(deleteRoundWithMatches).toHaveBeenCalledTimes(1);
+    expect(deleteRoundWithMatches).toHaveBeenCalledWith('ccd1e4a6-92f3-48fe-8cb7-1fd927e0e38f');
   });
 
   it('still deletes the round and reports format_revert_failed when a reset could not take back the format effects', async () => {
@@ -187,8 +188,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
 
     expect(body.success).toBe(true);
     expect(body.data).toEqual({ deleted: true, format_revert_failed: true });
-    expect(deleteMatchesByRound).toHaveBeenCalled();
-    expect(deleteRound).toHaveBeenCalled();
+    expect(deleteRoundWithMatches).toHaveBeenCalled();
     expect(vi.mocked(logAuditEvent).mock.calls.at(-1)?.[0].metadata).toMatchObject({ format_revert_failed: true });
   });
 
@@ -209,14 +209,41 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
     vi.mocked(getMatchesByRound).mockResolvedValue([{ id: 'match-1', status: 'scheduled' }] as never);
     vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
-    vi.mocked(deleteMatchesByRound).mockRejectedValueOnce(new Error('release failed'));
+    vi.mocked(deleteRoundWithMatches).mockRejectedValueOnce(new Error('release failed'));
     vi.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await DELETE({} as NextRequest, routeParams);
 
     expect(res.status).toBe(500);
     expect((await res.json()).success).toBe(false);
-    expect(deleteRound).not.toHaveBeenCalled();
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 round_changed and leaves the tournament alone when a match changed under the delete', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([{ id: 'match-1', status: 'scheduled' }] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+    const { UserFacingError } = await import('@/lib/api/user-facing-error');
+    vi.mocked(deleteRoundWithMatches).mockRejectedValueOnce(new UserFacingError('changed', { code: 'round_changed', status: 409 }));
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('round_changed');
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 when the round was deleted by someone else before the transaction', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([] as never);
+    vi.mocked(deleteRoundWithMatches).mockResolvedValueOnce(false);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(404);
     expect(updateTournament).not.toHaveBeenCalled();
   });
 
@@ -232,7 +259,7 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(deleteRound).toHaveBeenCalledWith('ccd1e4a6-92f3-48fe-8cb7-1fd927e0e38f');
+    expect(deleteRoundWithMatches).toHaveBeenCalledWith('ccd1e4a6-92f3-48fe-8cb7-1fd927e0e38f');
     expect(updateTournament).toHaveBeenCalledWith('tourn-1', { current_round: 0 });
     expect(revalidateMatchPages).toHaveBeenCalled();
     expect(logAuditEvent).toHaveBeenCalled();

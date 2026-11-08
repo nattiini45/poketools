@@ -40,6 +40,7 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({
 vi.mock('@/lib/tournament/group-rounds', () => ({
   ensurePhaseGroupsFromLeague: vi.fn(),
 }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 // ─── Imports (after mocks) ──────────────────────────────────────────
 
@@ -55,6 +56,7 @@ import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { ensurePhaseGroupsFromLeague } from '@/lib/tournament/group-rounds';
 import { revalidateTag } from 'next/cache';
+import { logAuditEvent } from '@/lib/audit/log';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // ─── Helpers ────────────────────────────────────────────────────────
@@ -285,6 +287,22 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
       expect(ensurePhaseGroupsFromLeague).not.toHaveBeenCalled();
     });
 
+    it('audits the manual round it wrote as round.generate', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(mockTournament as never);
+
+      const res = await POST(makeRequest(twoPairings), routeParams);
+
+      expect(res.status).toBe(201);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'round.generate',
+          actor_id: 'admin-1',
+          resource_id: 'round-1',
+          metadata: expect.objectContaining({ manual: true, matches: 2, byes: 0 }),
+        }),
+      );
+    });
+
     it('allows it in a round robin phase of a league without groups', async () => {
       vi.mocked(getTournamentById).mockResolvedValue({
         ...mockTournament,
@@ -372,7 +390,8 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
         { player_1_id: P3, player_2_id: P4 },
       ],
     ]);
-    expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', { current_round: 2 });
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
     expect(revalidateTag).toHaveBeenCalledWith('tournament:a5cb20ac-a127-482d-855d-d802e29185bc', { expire: 0 });
   });
 
@@ -622,9 +641,7 @@ describe('POST /api/tournaments/[id]/rounds/manual', () => {
     await res.json();
 
     expect(res.status).toBe(201);
-    expect(updateTournament).toHaveBeenCalledWith('a5cb20ac-a127-482d-855d-d802e29185bc', {
-      status: 'active',
-      current_round: 1,
-    });
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 });

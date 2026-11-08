@@ -111,7 +111,7 @@ async function calendarRoundOfPhase(phaseId: string, now: Date): Promise<number 
   const row = phaseRows.find((candidate) => candidate.id === phaseId);
   const calendar = row === undefined ? undefined : (await stageOf(row)).calendar;
   if (calendar === undefined) return null;
-  return calendarRoundAt(calendar, { seasonStart: season?.start_date ?? null }, now);
+  return calendarRoundAt(calendar, { seasonStart: season?.start_date ?? null, shiftSeconds: head.clockShiftSeconds }, now);
 }
 
 export interface EvaluateKitConstraintsInput {

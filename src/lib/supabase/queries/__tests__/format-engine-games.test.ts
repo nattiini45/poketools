@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/client', () => ({
   },
 }));
 
-import { getPhaseBattleStats, getPhaseGameCounts } from '../format-engine';
+import { getPhaseGameCounts } from '../format-engine';
 
 const stepsOf = (call: { steps: Step[] }, name: string) => call.steps.filter(([step]) => step === name);
 const game = (id: string, match_id: string) => ({ id, match_id });
@@ -78,54 +78,3 @@ describe('getPhaseGameCounts', () => {
   });
 });
 
-describe('getPhaseBattleStats', () => {
-  const row = (id: string, player_id: string, kos_dealt: number, was_koed: boolean, round_number = 1) => ({
-    id,
-    game_id: `g-${id}`,
-    player_id,
-    pokemon_name: 'x',
-    was_brought: true,
-    was_lead: false,
-    kos_dealt,
-    was_koed,
-    games: { matches: { tournament_id: 'p1', status: 'completed', rounds: { round_number } } },
-  });
-
-  it('reads the narrow stats of the completed matches with their round, in the shape the tables sum', async () => {
-    state.respond = (call) => ({ data: stepsOf(call, 'range')[0][1] === 0 ? [row('1', 'a', 3, false, 2), row('2', 'b', 0, true)] : [] });
-    await expect(getPhaseBattleStats(['p1', 'p2', 'p1'])).resolves.toEqual([
-      { game_id: 'g-1', player_id: 'a', pokemon_name: 'x', was_brought: true, was_lead: false, kos_dealt: 3, was_koed: false, round_number: 2 },
-      { game_id: 'g-2', player_id: 'b', pokemon_name: 'x', was_brought: true, was_lead: false, kos_dealt: 0, was_koed: true, round_number: 1 },
-    ]);
-    const [call] = state.calls;
-    expect(call.table).toBe('battle_stats');
-    expect(stepsOf(call, 'in')).toEqual([['in', 'games.matches.tournament_id', ['p1', 'p2']]]);
-    expect(stepsOf(call, 'eq')).toEqual([['eq', 'games.matches.status', 'completed']]);
-  });
-
-  it('answers an empty list without a request for no phases', async () => {
-    await expect(getPhaseBattleStats([])).resolves.toEqual([]);
-    expect(state.calls).toEqual([]);
-  });
-
-  it('walks every page, so a long phase is complete under max_rows', async () => {
-    const first = Array.from({ length: 1000 }, (_, i) => row(`a${i}`, 'a', 1, false));
-    state.respond = (call) => {
-      const from = stepsOf(call, 'range')[0][1];
-      return { data: from === 0 ? first : from === 1000 ? [row('b0', 'b', 1, false)] : [] };
-    };
-    await expect(getPhaseBattleStats(['p1'])).resolves.toHaveLength(1001);
-  });
-
-  it('splits a long phase list into several reads', async () => {
-    const phases = Array.from({ length: 150 }, (_, i) => `p${i}`);
-    await getPhaseBattleStats(phases);
-    const reads = state.calls.map((call) => (stepsOf(call, 'in')[0][2] as string[]).length);
-    expect(reads.filter((n) => n > 0)).toEqual(expect.arrayContaining([100, 50]));
-  });
-
-  it('throws a failed read', async () => {
-    state.respond = () => ({ data: null, error: new Error('boom') });
-    await expect(getPhaseBattleStats(['p1'])).rejects.toThrow('boom');
-  });
-});

@@ -34,6 +34,8 @@ vi.mock('@/lib/players/roster-access', () => ({
 // Next request scope, which a unit test does not have.
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
+vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipants: vi.fn() }));
+
 vi.mock('@/lib/revalidation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/revalidation')>()),
   expireTournamentReads: vi.fn(),
@@ -51,6 +53,7 @@ import {
   updateParticipantSeeds,
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -191,6 +194,20 @@ describe('POST /api/tournaments/[id]/participants', () => {
     expect(res.status).toBe(400);
     expect(json.error).toContain('player_id');
     expect(json.code).toBe('validation_failed');
+  });
+
+  it('enrols a player of a league phase only from the league roster (400 PHASE_ROSTER_REQUIRED otherwise)', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: '22222222-2222-4222-8222-222222222222', status: 'upcoming', season_id: 'season-1', bracket_type: 'swiss' } as never);
+    vi.mocked(getSeasonParticipants).mockResolvedValue([] as never);
+
+    const res = await POST(makeRequest({ player_id: PLAYER_1 }), routeParams);
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('PHASE_ROSTER_REQUIRED');
+    expect(addParticipant).not.toHaveBeenCalled();
+
+    vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: PLAYER_1 }] as never);
+    expect((await POST(makeRequest({ player_id: PLAYER_1 }), routeParams)).status).toBe(201);
   });
 
   it('adds a participant successfully', async () => {

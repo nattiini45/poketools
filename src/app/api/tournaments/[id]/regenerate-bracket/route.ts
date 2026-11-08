@@ -7,7 +7,17 @@ import {
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
 import { regenerateEliminationBracket } from '@/lib/tournament/bracket-generate';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expireTournamentReads, revalidateMatchPages } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
+import {
+  announceKitRound,
+  assertPhaseReadyForFirstRound,
+  isKitEnginePhase,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
+import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -38,6 +48,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A custom league without an attached format cannot start: refuse before anything is written (a phase of an unattached
+    // custom league would otherwise be started by hand, and the league could then neither attach a format nor activate).
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
+
     let rawBody: unknown = {};
     try {
       rawBody = await request.json();
@@ -54,11 +68,51 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const participants = await getParticipants(id);
-    const result = await regenerateEliminationBracket(tournament, participants, {
-      cascade: parsed.data.cascade === true,
-      adminId: admin.playerId,
+    const cascade = parsed.data.cascade === true;
+    // A bracket that has no round yet is the phase's first start: the format's set-up gate applies, like for a generated round.
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
     });
-    expireTournamentReads(id, tournament.season_id);
+    let result: Awaited<ReturnType<typeof regenerateEliminationBracket>> | undefined;
+    try {
+      result = await regenerateEliminationBracket(tournament, participants, { cascade, adminId: admin.playerId });
+    } finally {
+      // A cascade resets played matches one by one (ratings, aggregates, player reads), and the caller of a reset expires the
+      // pages: do it whatever the rest did, so a failure part-way leaves no rolled-back result on the public pages. Best effort.
+      expireTournamentReads(id, tournament.season_id);
+      if (cascade) {
+        await revalidateMatchPages(id).catch((error: unknown) => {
+          logger.error('regenerate-bracket', 'could not expire the pages of the reset matches', { tournamentId: id, error });
+        });
+      }
+      // Wiping a bracket leaves a trace for the other admins, also when a cascade stopped half way (`completed: false`).
+      if (cascade || result !== undefined) {
+        logAuditEvent({
+          actor_id: admin.playerId,
+          actor_name: admin.name,
+          action: 'bracket.generate',
+          resource_type: 'tournament',
+          resource_id: id,
+          resource_name: tournament.name,
+          metadata: {
+            regenerated: true,
+            cascade,
+            completed: result !== undefined,
+            ...(result !== undefined ? { rounds_created: result.rounds_created, matches_materialized: result.matches_materialized } : {}),
+            ...(result?.format_revert_failed ? { format_revert_failed: true } : {}),
+          },
+        });
+      }
+    }
+
+    // The format reacts to the opened phase like it does to a generated round (`stage_start`, `round_start` of the first
+    // round, the forced-start audit); idempotent by key, so a regenerate of a started phase repeats nothing.
+    if (isKitEnginePhase(kitPhase)) {
+      const rounds = await getRoundsByTournament(id);
+      const first = rounds.reduce((lowest, round) => Math.min(lowest, round.round_number), Number.POSITIVE_INFINITY);
+      await announceKitRound(tournament, kitPhase, { roundNumber: Number.isFinite(first) ? first : 1 }, tournament.status === 'upcoming', forcedStart);
+    }
 
     return NextResponse.json<ApiResult<typeof result>>({
       success: true,

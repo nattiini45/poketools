@@ -52,8 +52,11 @@ export function scoringByeRecords(
 export function scoringByeRecordsForStages(
   stages: readonly { id: string; bracket_type?: BracketType | null }[],
   roundsByStage: ReadonlyMap<string, readonly RoundByeSource[]>,
-): ByeRecord[] {
-  return stages.flatMap((stage) => scoringByeRecords(stage.bracket_type, roundsByStage.get(stage.id) ?? []));
+): (ByeRecord & { stage_id: string })[] {
+  // Each record carries its stage, so a season table scores a bye with the bye points of the stage it was given in.
+  return stages.flatMap((stage) =>
+    scoringByeRecords(stage.bracket_type, roundsByStage.get(stage.id) ?? []).map((bye) => ({ ...bye, stage_id: stage.id })),
+  );
 }
 
 /**

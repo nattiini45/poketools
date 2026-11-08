@@ -202,10 +202,17 @@ async function readShared(run: Run): Promise<Shared> {
 }
 
 /** Opens the planned checks; the count of the ones that did not exist before. */
-async function openPlanned(seasonId: string, checks: readonly TeamAuditCheck[]): Promise<number> {
+async function openPlanned(seasonId: string, checks: readonly TeamAuditCheck[], revision: number): Promise<number> {
   let opened = 0;
   for (const check of checks) {
-    const id = await openFormatCheck({ seasonId, source: check.source, ruleId: check.rule_id, dedupeKey: check.dedupe_key, subject: check.subject });
+    const id = await openFormatCheck({
+      seasonId,
+      source: check.source,
+      ruleId: check.rule_id,
+      dedupeKey: check.dedupe_key,
+      subject: check.subject,
+      revision,
+    });
     if (id !== null) opened += 1;
   }
   return opened;
@@ -244,7 +251,7 @@ async function reportOrRethrow(run: Run, playerIds: readonly string[], error: un
   const finished = Date.parse(match.confirmed_at ?? match.updated_at);
   if (retry === 'window' && (!Number.isFinite(finished) || Date.now() - finished <= AUDIT_RETRY_WINDOW_MS)) throw error;
   logger.error(TAG, 'team audit gave up after the retry window', { matchId: input.matchId, playerIds, error });
-  return openPlanned(input.tournament.season_id, planFor(run, playerIds.map((id) => unavailable(id, 'read_failed'))));
+  return openPlanned(input.tournament.season_id, planFor(run, playerIds.map((id) => unavailable(id, 'read_failed'))), input.context.revision);
 }
 
 /**
@@ -290,7 +297,7 @@ export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ op
   const errors: unknown[] = [];
   let opened = 0;
   try {
-    opened += await openPlanned(seasonId, planFor(run, sides));
+    opened += await openPlanned(seasonId, planFor(run, sides), input.context.revision);
   } catch (error) {
     errors.push(error);
   }

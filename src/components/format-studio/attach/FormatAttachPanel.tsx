@@ -22,6 +22,8 @@ import {
   classifyApiError,
   detachFormatRequest,
   loadFormatDetail,
+  runtimeCountsOf,
+  type RuntimeCounts,
   type SeasonFormatAttachResponse,
 } from '@/lib/format-studio/editor/api';
 import type { EngineGap } from '@/lib/format-studio/library-types';
@@ -410,7 +412,7 @@ export default function FormatAttachPanel({
     if (failure.code && REFRESH_AFTER_CODES.has(failure.code)) router.refresh();
   }
 
-  async function runAttach(confirmClear = false) {
+  async function runAttach(confirmClear = false, confirmedCounts?: RuntimeCounts) {
     if (preview.status !== 'ready' || !preview.preview.ok) return;
     const names: Record<string, string> = {};
     for (const stage of preview.preview.stages) names[stage.key] = stage.name;
@@ -419,7 +421,7 @@ export default function FormatAttachPanel({
     setBusy(true);
     setError(null);
     setOutcome(null);
-    const out = await attachFormatRequest(seasonId, preview.id, preview.versionNo, undefined, confirmClear);
+    const out = await attachFormatRequest(seasonId, preview.id, preview.versionNo, undefined, confirmClear, confirmedCounts);
     setBusy(false);
     if (!out.ok) {
       reportFailure(out.error, out.status, 'attach');
@@ -432,13 +434,13 @@ export default function FormatAttachPanel({
     router.refresh();
   }
 
-  async function runDetach(confirmClear = false) {
+  async function runDetach(confirmClear = false, confirmedCounts?: RuntimeCounts) {
     setConfirm(null);
     setClearPrompt(null);
     setBusy(true);
     setError(null);
     setOutcome(null);
-    const out = await detachFormatRequest(seasonId, undefined, confirmClear);
+    const out = await detachFormatRequest(seasonId, undefined, confirmClear, confirmedCounts);
     setBusy(false);
     if (!out.ok) {
       reportFailure(out.error, out.status, 'detach');
@@ -572,7 +574,11 @@ export default function FormatAttachPanel({
       <ConfirmDialog
         open={clearPrompt !== null}
         onClose={() => setClearPrompt(null)}
-        onConfirm={() => void (clearPrompt?.action === 'detach' ? runDetach(true) : runAttach(true))}
+        // The counts the dialog showed go back with the confirmation: rows that arrived since are not covered by it.
+        onConfirm={() => {
+          const counts = runtimeCountsOf(clearPrompt?.error.params);
+          void (clearPrompt?.action === 'detach' ? runDetach(true, counts) : runAttach(true, counts));
+        }}
         title={t('panel.clearTitle')}
         message={clearPrompt === null ? '' : errorText(clearPrompt.error)}
         confirmLabel={t('panel.clearConfirm')}

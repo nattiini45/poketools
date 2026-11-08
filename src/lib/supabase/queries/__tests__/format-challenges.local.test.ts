@@ -859,7 +859,7 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
 
       // A round of another phase of the league is not this phase's own: the function refuses it, nothing is written.
       const foreign = { id: ids.roundOpen, name: 'Round 2', tournament_id: ids.emptyPhase };
-      await expect(roundsQ.addMatchesToRound(foreign, pairs)).rejects.toMatchObject({ message: 'round_not_found' });
+      await expect(roundsQ.addMatchesToRound(foreign, pairs)).rejects.toMatchObject({ code: 'round_not_found', statusCode: 404 });
       expect((await client.from('matches').select('id').eq('tournament_id', ids.emptyPhase)).data).toEqual([]);
     });
 

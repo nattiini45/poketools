@@ -109,6 +109,25 @@ describe('PUT /api/seasons/[id]/format/engine', () => {
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
+  it('expires the league reads even when the phase read after the commit fails, and again on the retry', async () => {
+    vi.mocked(getKitPhases).mockRejectedValue(new Error('boom'));
+    const switched = await PUT(put({ engine: 'kit' }), params);
+    expect(switched.status).toBe(200);
+    expect(vi.mocked(revalidateTag).mock.calls.length).toBeGreaterThan(0);
+
+    vi.mocked(revalidateTag).mockClear();
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary('kit'));
+    await PUT(put({ engine: 'kit' }), params);
+    expect(setSeasonFormatEngine).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(revalidateTag).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('expires the league reads when the engine write itself throws', async () => {
+    vi.mocked(setSeasonFormatEngine).mockRejectedValueOnce(new Error('timeout'));
+    expect((await PUT(put({ engine: 'kit' }), params)).status).toBe(500);
+    expect(vi.mocked(revalidateTag).mock.calls.length).toBeGreaterThan(0);
+  });
+
   it('rejects an unknown engine and extra keys', async () => {
     expect((await PUT(put({ engine: 'turbo' }), params)).status).toBe(400);
     expect((await PUT(put({ engine: 'kit', seed: 'x' }), params)).status).toBe(400);

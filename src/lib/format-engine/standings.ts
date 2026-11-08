@@ -13,8 +13,9 @@
  * - a match without a winner is a draw worth `scoring.draw` (absent: 0). The compiler refuses draws today.
  * A stored bye scores `scoring.bye` and counts as a win in the record (the Swiss convention of the legacy table).
  *
- * Ranking: the rows start in participant order and the rank chain splits tied blocks step by step. A block still
- * tied after the chain keeps participant order. An empty chain (a bracket stage) ranks like the legacy table:
+ * Ranking: the rank chain splits tied blocks step by step. A block still tied after the chain is placed in a canonical
+ * order (seed when the input carries seeds, then player id), never in the order the caller listed the participants, so
+ * every consumer of the same stage gives the same places. An empty chain (a bracket stage) ranks like the legacy table:
  * points, KO differential, Buchholz, wins.
  */
 import { PLAYER_ROW_FIELDS } from '@/lib/format-kit/engine/runtime-names';
@@ -24,7 +25,6 @@ import { seededRand } from '@/lib/format-kit/expr/rand';
 import { forfeitScoringOf, perOpponentFaintOf } from '@/lib/format-kit/scoring';
 import { mappedBracketType } from '@/lib/format-kit/engine/plan';
 import type { RankStep, Scoring, Stage } from '@/lib/format-kit/types';
-import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
 import type { MatchOutcome } from '@/types/match-outcome';
 
@@ -44,7 +44,7 @@ export function kitOutcomesByMatch(rows: readonly (KitOutcome & { match_id: stri
 }
 
 export interface KitStanding extends Standing {
-  /** Place in the table, 1-based. Rows still tied after the whole chain have different places in participant order. */
+  /** Place in the table, 1-based. Rows still tied after the whole chain have different places (seed, then player id). */
   rank: number;
   /** Pokémon of the opponents that fainted (from `match_outcomes`). */
   faints_dealt: number;
@@ -59,7 +59,15 @@ export interface KitStanding extends Standing {
   tie_group: number | null;
   /** Custom metric values (`metric.define`, `score.placement`) by key; absent when the stage has none. */
   metrics?: Record<string, number>;
+  /**
+   * Place among the players of the row's own group, 1-based. Set by the runtime's stage table (`loadStageTable`) from the
+   * phase's groups; absent in a table nobody grouped (the group is then the whole table).
+   */
+  group_rank?: number;
 }
+
+/** A stored bye, with the phase whose stage scored it when the table mixes stages (a season-wide table). */
+export type StagedBye = ByeRecord & { stage_id?: string };
 
 /** A `metric.define` of a player: an expression over the standings row (player env), evaluated once per row. */
 export interface StandingsMetricDef {
@@ -83,13 +91,15 @@ export interface StageStandingsInput {
   matches: readonly MatchRecord[];
   /** Outcome rows by match id. */
   outcomes?: Readonly<Record<string, KitOutcome>>;
-  byes?: readonly ByeRecord[];
+  byes?: readonly StagedBye[];
   /**
-   * The battle stats of the completed matches' games (`kill_differential`). The public table passes them for a round
-   * robin stage only (`stageCountsKills`), and every kit consumer loads them with the stage's other extras
-   * (`getPhaseBattleStats`), so the table agrees everywhere.
+   * The kills of the completed matches' games per match id and player id: the player's `kos_dealt` minus the Pokemon of
+   * theirs that fainted (`kill_differential`). Only a round robin stage has them (`stageCountsKills`); the table adds
+   * them for the matches it scores, so a match that is open, unresolved, outside the table or past `maxRound` adds
+   * nothing. Every kit consumer reads them with the stage's other extras (`getPhaseKillTallies`), and the public data
+   * carries them (`KitStandingsData.kills`), so no caller can rank without them.
    */
-  battleStats?: readonly TournamentBattleStat[];
+  kills?: Readonly<Record<string, Readonly<Record<string, number>>>>;
   /** The games of a match as its game winners' ids (the legacy tables' shape); a match listed here wins over `gameCounts`. */
   gamesByMatch?: Readonly<Record<string, readonly string[]>>;
   /**
@@ -115,6 +125,8 @@ export interface StageStandingsInput {
   seed?: string | null;
   /** The scoring of one match when the table mixes stages (a season-wide table); defaults to `stage.scoring`. */
   scoringOf?: (match: MatchRecord) => Scoring;
+  /** The points of one stored bye when the table mixes stages (a season-wide table); defaults to `stage.scoring.bye`. */
+  byePointsOf?: (bye: StagedBye) => number;
   /** The admin's order of the players (`rank.manual`); unlisted players stay tied behind the listed ones. */
   manualOrder?: readonly string[];
   /**
@@ -148,13 +160,13 @@ export interface StageStandingsInput {
  */
 export type StageTableExtras = Pick<
   StageStandingsInput,
-  'pointAdjustments' | 'manualOrder' | 'metricDefs' | 'placements' | 'playerRefs' | 'relations' | 'seeds' | 'ratings' | 'gameCounts' | 'battleStats'
+  'pointAdjustments' | 'manualOrder' | 'metricDefs' | 'placements' | 'playerRefs' | 'relations' | 'seeds' | 'ratings' | 'gameCounts' | 'kills'
 >;
 
 /**
  * Whether a stage's table counts kills (`kill_differential`) from `battle_stats`. Only a round robin stage does, as in the
- * public tables (a Swiss table passes no battle stats); the loaders read them for those stages alone, so a threshold, a
- * rank step or a pairing on `kill_differential` sees the value the standings page shows, and nothing is read for the rest.
+ * public tables (a Swiss table counts none); the loaders read them for those stages alone, so a threshold, a rank step
+ * or a pairing on `kill_differential` sees the value the standings page shows, and nothing is read for the rest.
  */
 export function stageCountsKills(stage: Pick<Stage, 'pairing'>): boolean {
   return mappedBracketType(stage.pairing) === 'round_robin';
@@ -326,7 +338,9 @@ function splitBlock(block: KitStanding[], step: RankStep, ctx: RankContext): Kit
   }
 }
 
-/** Orders `rows` (participant order) by `chain` and writes rank, tie groups and the decision-match flag. */
+const seedOf = (row: KitStanding, input: Pick<StageStandingsInput, 'seeds'>): number => input.seeds?.[row.player_id] ?? UNSEEDED;
+
+/** Orders `rows` by `chain` and writes rank, tie groups and the decision-match flag. */
 function rankRows(rows: KitStanding[], chain: readonly RankStep[], ctx: RankContext): KitStanding[] {
   let blocks: KitStanding[][] = rows.length === 0 ? [] : [rows];
   let decision = false;
@@ -341,6 +355,8 @@ function rankRows(rows: KitStanding[], chain: readonly RankStep[], ctx: RankCont
   let tie = 0;
   for (const block of blocks) {
     const group = block.length > 1 ? (tie += 1) : null;
+    // Rows still tied take a canonical order, not the order the caller listed the participants in.
+    if (block.length > 1) block.sort((a, b) => seedOf(a, ctx.input) - seedOf(b, ctx.input) || (a.player_id < b.player_id ? -1 : a.player_id > b.player_id ? 1 : 0));
     for (const row of block) {
       row.rank = out.length + 1;
       row.tie_group = group;
@@ -372,6 +388,11 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
     scored.push({ match, points });
     s1.points += points.p1;
     s2.points += points.p2;
+    const kills = match.match_id === undefined ? undefined : input.kills?.[match.match_id];
+    if (kills !== undefined) {
+      s1.kill_differential += kills[match.player_1_id] ?? 0;
+      s2.kill_differential += kills[match.player_2_id] ?? 0;
+    }
     if (match.winner_id === match.player_1_id) {
       s1.wins += 1;
       s2.losses += 1;
@@ -405,7 +426,7 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
     const row = rows.get(bye.player_id);
     if (!row) continue;
     row.wins += 1;
-    row.points += stage.scoring.bye;
+    row.points += input.byePointsOf?.(bye) ?? stage.scoring.bye;
   }
 
   for (const { match } of scored) {
@@ -414,14 +435,6 @@ export function computeStageStandings(input: StageStandingsInput): KitStanding[]
     if (!s1 || !s2) continue;
     s1.buchholz += s2.points;
     s2.buchholz += s1.points;
-  }
-
-  for (const stat of input.battleStats ?? []) {
-    if (!inRound(stat.round_number)) continue;
-    const row = rows.get(stat.player_id);
-    if (!row) continue;
-    row.kill_differential += stat.kos_dealt;
-    if (stat.was_koed) row.kill_differential -= 1;
   }
 
   for (const [playerId, extra] of Object.entries(input.pointAdjustments ?? {})) {

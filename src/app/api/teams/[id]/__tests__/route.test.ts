@@ -4,6 +4,7 @@ import { makeSet } from '@/test/team-fixtures';
 
 // ─── Mocks ──────────────────────────────────────────────────────────
 
+vi.mock('@/app/api/teams/team-writes-closed', () => ({ teamWritesClosed: vi.fn().mockResolvedValue(false) }));
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
   requireAdmin: vi.fn(),
@@ -57,6 +58,7 @@ import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { expirePublicTags } from '@/lib/revalidation';
 import { adviseKitTeam } from '@/lib/team/kit-team-gate';
+import { teamWritesClosed } from '@/app/api/teams/team-writes-closed';
 import { REDACTED_POKEMON } from '@/lib/team/visibility';
 import { expectNoPrivateTeamData, teamRowWithShareSecrets } from '@/lib/team/__tests__/private-team-fields';
 import { TeamMatchCompletedError } from '@/lib/team/completed-match-lock';
@@ -263,6 +265,31 @@ describe('PATCH /api/teams/[id]', () => {
     expect(res.status).toBe(409);
     expect(json.error).toBe('Team is locked');
     expect(json.code).toBe('team_locked');
+  });
+
+  it('refuses the owner of a planned team with 403 team_submission_closed once the league or tournament is closed, and writes nothing', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
+    vi.mocked(teamWritesClosed).mockResolvedValueOnce(true);
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'pokepastes' }), routeParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('team_submission_closed');
+    expect(updateTeamPokemon).not.toHaveBeenCalled();
+    expect(teamWritesClosed).toHaveBeenCalledWith('tourney-1');
+  });
+
+  it('lets an admin correct a team of a closed league', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, isAdmin: true } as never);
+    vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
+    vi.mocked(teamWritesClosed).mockResolvedValueOnce(true);
+    vi.mocked(updateTeamPokemon).mockResolvedValue({ ...mockTeam, pokemon: [makeSet('Charizard')] } as never);
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Charizard')], import_source: 'pokepastes' }), routeParams);
+    expect(res.status).toBe(200);
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+    // Drop the unused closed answer so it does not reach the next test.
+    vi.mocked(teamWritesClosed).mockReset().mockResolvedValue(false);
   });
 
   it('updates team pokemon successfully', async () => {
@@ -568,6 +595,17 @@ describe('DELETE /api/teams/[id]', () => {
     expect(expirePublicTags).toHaveBeenCalledWith(['aggregates:all_time', 'aggregates:tournament:tourney-1']);
     expect(consoleError).toHaveBeenCalled();
     consoleError.mockRestore();
+  });
+
+  it('refuses the owner with 403 team_submission_closed once the league or tournament is closed, and deletes nothing', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue(mockTeam as never);
+    vi.mocked(teamWritesClosed).mockResolvedValueOnce(true);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('team_submission_closed');
+    expect(deleteTeam).not.toHaveBeenCalled();
   });
 
   it('deletes unlocked team for owner', async () => {

@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // The route expires public read-cache tags after its write (D37). Outside a
 // Next request `revalidateTag` throws, so record the calls instead.
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn(async () => []), getSeasonKitHead: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 import type { NextRequest } from 'next/server';
 
@@ -68,6 +69,7 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { logAuditEvent as _logAuditEvent } from '@/lib/audit/log';
 import { revalidateTag } from 'next/cache';
+import { getKitPhases } from '@/lib/supabase/queries/format-engine';
 
 // --------------- helpers ---------------
 
@@ -256,6 +258,47 @@ describe('PATCH /api/tournaments/[id]', () => {
 
 // --------------- DELETE ---------------
 
+describe('a phase of the attached format (tournaments/[id])', () => {
+  const ID = '22222222-2222-4222-8222-222222222222';
+  const owned = () => vi.mocked(getKitPhases).mockResolvedValue([{ id: ID, format_stage_key: 'swiss', stage_order: 1, stage_spec: null }]);
+
+  afterEach(() => {
+    vi.mocked(getKitPhases).mockResolvedValue([]);
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(mockAdmin as never);
+    vi.mocked(requireAdmin).mockResolvedValue(mockAdmin as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ ...baseTournament, status: 'upcoming', best_of_default: 3, bo_overrides: {}, stage_order: 1 } as never);
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([]);
+  });
+
+  it('refuses a changed bracket type with 409 format_phase_owned and writes nothing', async () => {
+    owned();
+    const response = await PATCH({ json: async () => ({ bracket_type: 'round_robin' }) } as unknown as NextRequest, routeParams(ID));
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_phase_owned');
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
+
+  it('lets the stored values and the other fields through', async () => {
+    owned();
+    vi.mocked(updateTournament).mockResolvedValue(baseTournament as never);
+    const response = await PATCH({ json: async () => ({ bracket_type: 'swiss', best_of_default: 3, name: 'Renamed' }) } as unknown as NextRequest, routeParams(ID));
+    expect(response.status).toBe(200);
+    expect(updateTournament).toHaveBeenCalled();
+  });
+
+  it('refuses the delete with 409 format_phase_owned', async () => {
+    owned();
+    const response = await DELETE({} as NextRequest, routeParams(ID));
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_phase_owned');
+    expect(deleteTournament).not.toHaveBeenCalled();
+  });
+});
+
 describe('DELETE /api/tournaments/[id]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -283,6 +326,23 @@ describe('DELETE /api/tournaments/[id]', () => {
 
     expect(response.status).toBe(403);
     expect(payload.success).toBe(false);
+  });
+
+  it('expires the rating reads of the participants again after the rebuild, which runs after the first expiry', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(baseTournament as never);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p-9' }] as never);
+    vi.mocked(deleteTournament).mockResolvedValue(undefined as never);
+    vi.mocked(rebuildAfterTournamentDelete).mockImplementation(async () => {
+      vi.mocked(revalidateTag).mockClear();
+      return { scope: 'tournament' } as never;
+    });
+
+    const response = await DELETE({} as NextRequest, routeParams('22222222-2222-4222-8222-222222222222'));
+
+    expect(response.status).toBe(200);
+    const tags = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+    expect(tags).toContain('ratings');
+    expect(tags).toContain('player:p-9');
   });
 
   it('deletes a tournament and returns success', async () => {

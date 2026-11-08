@@ -30,7 +30,7 @@ import {
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
 import {
   toDeleteRebuildWarning,
   type DeleteRebuildWarning,
@@ -43,6 +43,7 @@ import {
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import { AutoAdvanceError, runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
+import { assertFormatPhaseDeletable, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
 import type { TournamentUpdateInput } from '@/lib/validation';
@@ -160,6 +161,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     assertSeasonPhaseTournamentEditable(before, body);
+    // A phase the league's attached format created keeps its structure (409 format_phase_owned).
+    await assertFormatPhaseUnchanged(before.season_id, before, body);
 
     // The ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and a started league
     // phase moves it only through the pin route (a started standalone tournament is locked below). Resending the stored value
@@ -263,9 +266,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // A kit league's format reacts to a phase that starts or completes (stage_start, stage_end, standings tie checks).
-    // Best effort and logged inside: the hook never fails the status change.
-    if (body.status !== undefined && body.status !== before.status) {
-      await onPhaseStatusChanged({ tournament: before, from: before.status, to: body.status });
+    // Best effort and logged inside: the hook never fails the status change. A repeat of the same status replays the
+    // reaction (its events and checks are keyed, so it is a no-op once applied): a first call whose reaction failed or died
+    // after the status committed is repaired by sending it again. A failed reaction is reported, not dropped.
+    let formatReactionFailed = false;
+    if (body.status !== undefined && (body.status !== before.status || body.status === 'active' || body.status === 'completed')) {
+      const repeat = body.status === before.status;
+      const from = repeat ? (body.status === 'completed' ? 'active' : 'upcoming') : before.status;
+      formatReactionFailed = !(await onPhaseStatusChanged({ tournament: before, from, to: body.status }));
     }
 
     // Status, name and settings show on the next view of the public pages.
@@ -320,8 +328,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError
+          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || formatReactionFailed
             ? {
+                ...(formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
                 ...(autoAdvance.length > 0 || autoAdvanceError
                   ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
                   : {}),
@@ -357,6 +366,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json<ApiResult<typeof tournament>>({
       success: true,
       data: tournament,
+      ...(formatReactionFailed ? { warnings: [{ code: 'format_reaction_failed' }] } : {}),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update tournament');
@@ -370,6 +380,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
     const tournament = await getTournamentById(id);
+    // The phase of an attached format is removed by replacing or detaching the format, never one by one (409 format_phase_owned).
+    await assertFormatPhaseDeletable(tournament?.season_id ?? null, id);
     // Capture participants BEFORE the delete: the cascade removes the
     // participant rows, and they define whose ratings/streaks must be rebuilt.
     const participants = await getParticipants(id);
@@ -397,6 +409,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       // rating_history_incomplete) and kept in the audit record.
       rebuildWarning = toDeleteRebuildWarning(err);
     }
+    // The rebuild rewrote ratings and streaks after the expiry above (and a failed one may have rewritten part of them), so the
+    // rating reads of the players expire again now.
+    expireRatingReads(participants.map((p) => p.id));
 
     logAuditEvent({
       action: 'tournament.delete',

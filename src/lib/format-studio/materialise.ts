@@ -163,6 +163,14 @@ function foreachGroups(definition: FormatDefinition, stage: Stage): number[] {
   return Array.from({ length: count }, (_, i) => i + 1);
 }
 
+/**
+ * How many phases attaching `definition` creates: one per stage, or one per group of the source for a `foreach_group` stage
+ * (the same expansion `planStages` writes). The readiness checklist compares it with the phases the league holds.
+ */
+export function expectedPhaseCount(definition: FormatDefinition): number {
+  return definition.stages.reduce((sum, stage) => sum + Math.max(1, foreachGroups(definition, stage).length), 0);
+}
+
 /** Stages in graph order; a stage missing from the order is appended in declaration order. */
 function orderedStages(definition: FormatDefinition, graphOrder: readonly string[]): Stage[] {
   const byKey = new Map<string, Stage>();

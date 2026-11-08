@@ -54,7 +54,16 @@ const admin: SessionPlayer = {
   status: 'active',
 };
 
-const CTX = { seasonId: SEASON_ID } as KitContext;
+const CTX = {
+  seasonId: SEASON_ID,
+  def: {
+    resources: [
+      { key: 'tokens', visibility: 'all' },
+      { key: 'gifts', visibility: 'all' },
+      { key: 'premium_gift', visibility: 'own' },
+    ],
+  },
+} as unknown as KitContext;
 const PAGE: AdjustmentsPage = {
   allowed: ['points', 'rank'],
   targets: { stages: [], players: [{ id: P1, name: 'Mara' }], resources: [], relations: [], actions: [] },
@@ -235,7 +244,10 @@ describe('POST /api/seasons/[id]/format/adjustments', () => {
   it('never copies the item of a resource adjustment into the audit entry (what a player was granted may be a secret gift)', async () => {
     await POST(post(body({ kind: 'resource', resource: 'premium_gift', player_id: P1, item_id: 'rare_candy', amount: 1 })), params);
     const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
-    expect(entry.metadata).toMatchObject({ target: { resource: 'premium_gift', player_id: P1, amount: 1 } });
+    // A holding the history masks for a reader who plays is not in the audit log either: no resource, player or amount.
+    expect(entry.metadata).toMatchObject({ kind: 'resource', target: {} });
+    expect(JSON.stringify(entry)).not.toContain(P1);
+    expect(JSON.stringify(entry)).not.toContain('premium_gift');
     expect(JSON.stringify(entry)).not.toContain('rare_candy');
     expect(JSON.stringify(entry)).not.toContain('item_id');
   });

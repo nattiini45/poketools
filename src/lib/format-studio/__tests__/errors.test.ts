@@ -24,7 +24,7 @@ describe('code list', () => {
       'season_format_type_locked',
     ];
     expect([...FORMAT_ERROR_CODES].sort()).toEqual(fromCatalogs.sort());
-    expect(FORMAT_ERROR_CODES).toHaveLength(32);
+    expect(FORMAT_ERROR_CODES).toHaveLength(34);
     expect(FORMAT_ERROR_CODES).not.toContain('format_mismatch');
   });
 
@@ -77,6 +77,8 @@ describe('code list', () => {
       format_not_attached: 409,
       format_nothing_attached: 404,
       format_detach_blocked: 409,
+      format_phases_in_use: 409,
+      format_phase_owned: 409,
       format_runtime_has_data: 409,
       season_format_type_locked: 409,
     });

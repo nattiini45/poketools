@@ -146,16 +146,32 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     expect((await held('box', ids.p2)).map((r) => r.item_id)).toEqual(['eevee']);
   });
 
-  it('holds an exclusive item once and rolls the whole event back on a clash', async () => {
+  it('takes the rows of the logged grant first when an inverse revoke names its source', async () => {
+    // Two sources hold units of the same item; the older row belongs to the event. Undoing the manual grant must not eat it.
+    await fire([grant('wallet', ids.p3, null, { amount: 2, source: 'event' })]);
+    await fire([grant('wallet', ids.p3, null, { amount: 2, source: 'adjustment', source_ref: 'adj-1' })]);
+    await fire([{ op: 'revoke_item', resource: 'wallet', player_id: ids.p3, item_id: null, amount: 2, source: 'adjustment', source_ref: 'adj-1' }]);
+    expect((await held('wallet', ids.p3)).map((r) => [r.source, r.amount])).toEqual([['event', 2]]);
+    await fire([{ op: 'revoke_item', resource: 'wallet', player_id: ids.p3, item_id: null, amount: 2 }]);
+    expect(await held('wallet', ids.p3)).toEqual([]);
+  });
+
+  it('holds an exclusive item once: an event whose grant clashes skips that grant, applies the rest and records the skip', async () => {
     await fire([grant('rare', ids.p1, 'mew', { exclusive: true })]);
     const key = nextKey();
-    const clash = fire([{ op: 'set_flag', key: 'domain:after-clash', value: 'x' }, grant('rare', ids.p2, 'mew', { exclusive: true })], key);
-    await expect(clash).rejects.toMatchObject({ code: 'resource_item_taken' });
-    await expect(clash).rejects.toBeInstanceOf(rt.FormatRuntimeError);
+    // The planner read a snapshot in which mew was free; a concurrent writer took it. The event is not rolled back: its other
+    // ops land, its key is logged (it would otherwise never fire again) and the skipped grant is reported in the payload.
+    await expect(
+      fire([{ op: 'set_flag', key: 'domain:after-clash', value: 'x' }, grant('rare', ids.p2, 'mew', { exclusive: true })], key),
+    ).resolves.toBe(true);
 
-    expect((await rows('flags')).some((f) => f.key === 'domain:after-clash')).toBe(false);
-    expect((await rows('eventLog')).some((e) => e.event_key === key)).toBe(false);
+    expect((await rows('flags')).some((f) => f.key === 'domain:after-clash')).toBe(true);
+    const logged = (await rows('eventLog')).find((e) => e.event_key === key);
+    expect(logged?.payload).toMatchObject({ skipped_grants: [{ resource: 'rare', player_id: ids.p2, item_id: 'mew', reason: 'resource_item_taken' }] });
+    expect((await held('rare', ids.p1)).map((r) => r.item_id)).toEqual(['mew']);
     expect((await held('rare', ids.p2))).toEqual([]);
+    // A player's submit and an admin adjustment still refuse the clash (the caller can answer 'taken', whole call rolled back):
+    // see the exclusive-item tests of the player actions and the adjustments below.
     // The same item in another resource, or not exclusive, is free.
     await expect(fire([grant('other', ids.p2, 'mew', { exclusive: true })])).resolves.toBe(true);
   });
@@ -445,13 +461,17 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       await fire([grant('cap_pack', ids.p1, 'a')]);
       expect(await units('cap_pack', ids.p1)).toBe(1);
 
-      // An event: the whole event rolls back, its flag and its log row included.
+      // An event skips the grant that no longer fits (a concurrent writer took the units after the planner read its snapshot)
+      // and keeps the rest of the event: its flag lands, its log row says what was skipped, the holding is unchanged.
       const key = nextKey();
       await expect(
         fire([{ op: 'set_flag', key: 'domain:after-capacity', value: 'x' }, grant('cap_pack', ids.p1, 'b', { amount: 2 })], key),
-      ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'resource_capacity_reached', statusCode: 409 });
-      expect((await rows('flags')).some((f) => f.key === 'domain:after-capacity')).toBe(false);
-      expect((await rows('eventLog')).some((e) => e.event_key === key)).toBe(false);
+      ).resolves.toBe(true);
+      expect((await rows('flags')).some((f) => f.key === 'domain:after-capacity')).toBe(true);
+      expect((await rows('eventLog')).find((e) => e.event_key === key)?.payload).toMatchObject({
+        skipped_grants: [{ resource: 'cap_pack', player_id: ids.p1, item_id: 'b', reason: 'resource_capacity_reached' }],
+      });
+      expect(await units('cap_pack', ids.p1)).toBe(1);
 
       // A submission: two items on top of the one held, so the whole submission is refused, the first item included.
       const over = { ...base(), actionKey: 'cap_act', actorId: ids.p1, items: [item('cap_pack', 'c'), item('cap_pack', 'd')], lock: false };
@@ -489,10 +509,14 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
           fire([grant(resource, ids.p2, 'c')]),
           adjustGrant(resource, ids.p2, 'd'),
         ]);
-        expect(outcomes.filter((o) => o.status === 'fulfilled')).toHaveLength(1);
+        // The event (index 2) never rejects: a grant that loses the race is skipped and recorded, not a rollback. The two
+        // submits and the adjustment refuse, so at most one of them can have taken the unit.
+        expect([outcomes[0], outcomes[1], outcomes[3]].filter((o) => o.status === 'fulfilled').length).toBeLessThanOrEqual(1);
+        expect(outcomes[2].status).toBe('fulfilled');
         for (const outcome of outcomes) {
           if (outcome.status === 'rejected') expect(outcome.reason).toMatchObject({ code: 'resource_capacity_reached' });
         }
+        // Exactly one writer holds the unit, whichever path won.
         expect(await units(resource, ids.p2)).toBe(1);
       }
     });
@@ -692,7 +716,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
 
   describe('checks', () => {
     it('opens a check once per dedupe key and resolves it only from open', async () => {
-      const open = { seasonId: ids.season, source: 'standings_tie' as const, ruleId: 'tie', dedupeKey: 'tie:main:1', subject: { players: [ids.p1, ids.p2] } };
+      const open = { seasonId: ids.season, source: 'standings_tie' as const, ruleId: 'tie', dedupeKey: 'tie:main:1', subject: { players: [ids.p1, ids.p2] }, revision: await revisionOf() };
       const id = await rt.openFormatCheck(open);
       expect(id).toEqual(expect.any(String));
       await expect(rt.openFormatCheck(open)).resolves.toBeNull();
@@ -704,7 +728,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
 
       await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: randomUUID(), status: 'confirmed', adminId: null, note: null })).resolves.toBe(false);
       // A check of this league is not resolved through another league's id: the league is part of the key.
-      const foreign = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'foreign:1', subject: {} });
+      const foreign = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'foreign:1', subject: {}, revision: await revisionOf() });
       await expect(rt.resolveFormatCheck({ seasonId: randomUUID(), checkId: foreign as string, status: 'confirmed', adminId: null, note: null })).resolves.toBe(false);
       expect((await rows('checks')).find((c) => c.id === foreign)).toMatchObject({ status: 'open', resolved_at: null });
       await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: foreign as string, status: 'rejected', adminId: null, note: null })).resolves.toBe(true);
@@ -713,8 +737,8 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     });
 
     it('refuses an unknown source and an unknown status', async () => {
-      await expect(rt.openFormatCheck({ seasonId: ids.season, source: 'vibes' as never, ruleId: 'r', dedupeKey: 'k', subject: {} })).rejects.toBeTruthy();
-      const id = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'expr:1', subject: {} });
+      await expect(rt.openFormatCheck({ seasonId: ids.season, source: 'vibes' as never, ruleId: 'r', dedupeKey: 'k', subject: {}, revision: await revisionOf() })).rejects.toBeTruthy();
+      const id = await rt.openFormatCheck({ seasonId: ids.season, source: 'expr', ruleId: 'r', dedupeKey: 'expr:1', subject: {}, revision: await revisionOf() });
       await expect(rt.resolveFormatCheck({ seasonId: ids.season, checkId: id as string, status: 'open' as never, adminId: null, note: null })).rejects.toMatchObject({ message: 'invalid_op' });
     });
   });

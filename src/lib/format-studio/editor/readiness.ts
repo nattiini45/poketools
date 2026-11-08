@@ -12,6 +12,7 @@
 import { dueMarks, roundOpensAt } from '@/lib/format-engine/runtime/calendar';
 import { minRosterFor, type FormatDefinition } from '@/lib/format-kit/client';
 import type { LeagueAdminTab } from '@/lib/league-admin/tabs';
+import { expectedPhaseCount } from '../materialise';
 import type { SeasonFormatType } from '@/types/season';
 
 export type ReadinessItemId = 'format_attached' | 'phases_created' | 'roster_size' | 'rulesets' | 'calendar_start';
@@ -104,7 +105,8 @@ export function computeReadiness(input: ReadinessInput): ReadinessResult {
   if (attached === null) {
     items.push(item('phases_created', 'waiting'), item('roster_size', 'waiting'), item('rulesets', 'waiting'));
   } else {
-    const need = attached.spec.stages.length;
+    // One phase per stage, one per group for a foreach_group stage (the stage count alone undercounts those).
+    const need = expectedPhaseCount(attached.spec);
     const have = Math.max(0, input.phaseCount - input.manualPhaseCount);
     items.push(
       item(

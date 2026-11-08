@@ -12,7 +12,7 @@ import { wichtelcupDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
 import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
 import type { EngineGap } from '../library-types';
-import { STAGE_NAME_MAX_CHARS, engineGaps, groupPhaseName, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
+import { STAGE_NAME_MAX_CHARS, engineGaps, expectedPhaseCount, groupPhaseName, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
 const preset = (id: string): FormatDefinition => {
   const found = PRESETS.find((entry) => entry.id === id);
@@ -437,6 +437,11 @@ describe('foreach_group', () => {
 
   it('is deterministic', () => {
     expect(plan(doc).stages).toEqual(rows);
+  });
+
+  it('expectedPhaseCount is the number of phases planStages writes (a foreach_group stage counts once per group)', () => {
+    expect(expectedPhaseCount(doc)).toBe(rows.length);
+    expect(expectedPhaseCount(doc)).toBeGreaterThan(doc.stages.length);
   });
 
   it('keeps the group suffix when the stage name is cut', () => {

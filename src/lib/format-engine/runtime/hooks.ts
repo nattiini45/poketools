@@ -34,22 +34,41 @@ const TAG = 'format-engine/hooks';
 
 export { isKitCandidate, type HookTournament, type HookReport };
 
-/** Runs one hook step; true when it completed, false when it threw (logged with the original error). */
-async function guarded(step: string, meta: Record<string, unknown>, run: () => Promise<void>, report?: HookReport): Promise<boolean> {
-  try {
-    await run();
-    return true;
-  } catch (error) {
-    // The format was replaced or amended after this hook loaded it: nothing was written, and the caller's heal (or the
-    // next hook call) plans the step again against the current format. Not an error of the code.
-    if (isFormatContextStale(error)) {
-      if (report !== undefined) report.stale = true;
-      logger.warn(TAG, `format runtime hook skipped, the format changed meanwhile; it is retried: ${step}`, { ...meta });
+/**
+ * Runs one hook step; true when it completed, false when it threw (logged with the original error). `retry` runs the step a
+ * second time right away when the first attempt threw (the step loads its own context, so the second attempt plans against
+ * the format as it is then): for the steps that nothing repeats later (`stage_start`, `stage_end`, `round_start`, the dispute
+ * check, the stage end after a round). A step that has a heal or a cron backfill (`match_completed`, `match_reverted`,
+ * `round_end`) leaves the retry to it. Every step is idempotent by event or check key, so a second attempt repeats only
+ * what is missing.
+ */
+async function guarded(
+  step: string,
+  meta: Record<string, unknown>,
+  run: () => Promise<void>,
+  report?: HookReport,
+  retry: boolean = false,
+): Promise<boolean> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await run();
+      return true;
+    } catch (error) {
+      if (retry && attempt === 0) {
+        logger.warn(TAG, `format runtime hook step failed, trying once more: ${step}`, { ...meta, stale: isFormatContextStale(error) });
+        continue;
+      }
+      // The format was replaced or amended after this hook loaded it: nothing was written. A hook with a heal or a cron
+      // backfill is planned again against the current format by that; the others have just tried twice. Not an error of the code.
+      if (isFormatContextStale(error)) {
+        if (report !== undefined) report.stale = true;
+        logger.warn(TAG, `format runtime hook skipped, the format changed meanwhile: ${step}`, { ...meta });
+        return false;
+      }
+      if (report !== undefined) report.failed = true;
+      logger.error(TAG, `format runtime hook failed: ${step}`, { ...meta, error });
       return false;
     }
-    if (report !== undefined) report.failed = true;
-    logger.error(TAG, `format runtime hook failed: ${step}`, { ...meta, error });
-    return false;
   }
 }
 
@@ -67,8 +86,37 @@ function completionMatchId(matchId: string, generation: number): string {
   return generation === 0 ? matchId : `${matchId}:${generation}`;
 }
 
-async function open(seasonId: string, checks: readonly CheckPlan[]): Promise<void> {
-  if (checks.length > 0) await openChecks(seasonId, checks);
+/**
+ * The track steps as they were before the earlier completions of this match: a `set_track` those events logged is taken back
+ * out of the state when the player stands exactly on the step it set (the step is only ever raised, so a revert cannot lower
+ * it, and replaying the same match would otherwise climb one step more from the same win). A player who is on another step
+ * got there some other way and is left alone. The earlier events are read from the event log (rare: a replayed match only).
+ */
+async function tracksBeforeEarlierCompletions(
+  seasonId: string,
+  matchId: string,
+  generation: number,
+  tracks: KitRuntimeState['tracks'],
+): Promise<KitRuntimeState['tracks']> {
+  const { getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
+  const runtime = await getFormatRuntime(seasonId);
+  const keys = new Set(Array.from({ length: generation }, (_, n) => eventKey({ event: 'match_completed', match_id: completionMatchId(matchId, n) })));
+  const out: Record<string, Record<string, number>> = {};
+  for (const [player, steps] of Object.entries(tracks)) out[player] = { ...steps };
+  for (const row of runtime.eventLog) {
+    if (!keys.has(row.event_key) || !Array.isArray(row.ops)) continue;
+    for (const entry of row.ops) {
+      if (!isRecord(entry) || entry.op !== 'set_track' || typeof entry.player_id !== 'string' || typeof entry.track !== 'string' || typeof entry.step !== 'number') continue;
+      const held = out[entry.player_id];
+      if (held !== undefined && held[entry.track] === entry.step) held[entry.track] = entry.step - 1;
+    }
+  }
+  return out;
+}
+
+/** Opens the planned checks under the revision of the context they were planned from (a stale one opens nothing). */
+async function open(seasonId: string, checks: readonly CheckPlan[], revision: number): Promise<void> {
+  if (checks.length > 0) await openChecks(seasonId, checks, revision);
 }
 
 export interface MatchCompletedInput {
@@ -129,9 +177,12 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
       }),
     }));
 
-    const tracks = planTrackProgress(ctx.def, { stage: phase.stage.key, players: sides }, ctx.state);
-    for (const issue of tracks.issues) logger.warn(TAG, 'track step could not be evaluated', { matchId: input.matchId, ...issue });
     const generation = completionGeneration(ctx.state.firedEventKeys, input.matchId);
+    // A replay of a match that completed before must not climb a track a second time for the same match: the earlier
+    // completions' steps stay (the database only raises a step), so the steps they set are taken out of the state the plan reads.
+    const trackState = generation === 0 ? ctx.state : { tracks: await tracksBeforeEarlierCompletions(tournament.season_id, input.matchId, generation, ctx.state.tracks) };
+    const tracks = planTrackProgress(ctx.def, { stage: phase.stage.key, players: sides }, trackState);
+    for (const issue of tracks.issues) logger.warn(TAG, 'track step could not be evaluated', { matchId: input.matchId, ...issue });
     const fired = await fireEvent(
       tournament.season_id,
       {
@@ -165,7 +216,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
     });
     for (const issue of exprChecks.issues) logger.warn(TAG, 'check expression failed', { matchId: input.matchId, ...issue });
     checks.push(...exprChecks.checks);
-    await open(tournament.season_id, checks);
+    await open(tournament.season_id, checks, ctx.revision);
   }, input.report);
   const ready = loaded.value;
   let audited = true;
@@ -203,13 +254,25 @@ export interface InverseOps {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
+/** Whether `payload.skipped_grants` (the grants `format_fire_event` skipped in a race) lists this grant: it was never applied. */
+function wasSkipped(payload: Json | undefined, grant: { resource: string; player_id: string; item_id: string | null }): boolean {
+  const skipped = isRecord(payload) ? payload.skipped_grants : undefined;
+  return (
+    Array.isArray(skipped) &&
+    skipped.some((entry) => isRecord(entry) && entry.resource === grant.resource && entry.player_id === grant.player_id && (entry.item_id ?? null) === grant.item_id)
+  );
+}
+
 /**
  * What undoes the ops an event logged (`format_event_log.ops`): a granted item is revoked, awarded points are taken back
- * with a negative adjustment. Every other op overwrote state whose earlier value is not logged (a flag, an attribute, a
- * relation, an action's state) or only ever moves one way (a track step), so it is listed as irreversible and left as
- * it is: re-firing the event sets it again. Pure.
+ * with a negative adjustment. A grant the event's own transaction skipped (`payload.skipped_grants`, a concurrent writer took
+ * the item or the capacity first) was never applied and is not revoked. A revoke names the grant it undoes (`source`,
+ * `source_ref`), so a database that honours them takes back that row rather than another source's. Every other op overwrote
+ * state whose earlier value is not logged (a flag, an attribute, a relation, an action's state) or only ever moves one way
+ * (a track step: a replay of the same match does not climb it again, see `tracksBeforeEarlierCompletions`), so it is listed as
+ * irreversible and left as it is. Pure.
  */
-export function inverseOps(logged: Json | undefined): InverseOps {
+export function inverseOps(logged: Json | undefined, payload?: Json): InverseOps {
   const out: InverseOps = { ops: [], irreversible: [] };
   if (!Array.isArray(logged)) return out;
   for (const entry of logged) {
@@ -221,7 +284,16 @@ export function inverseOps(logged: Json | undefined): InverseOps {
       (typeof entry.item_id === 'string' || entry.item_id === null) &&
       typeof entry.amount === 'number'
     ) {
-      out.ops.push({ op: 'revoke_item', resource: entry.resource, player_id: entry.player_id, item_id: entry.item_id, amount: entry.amount });
+      if (wasSkipped(payload, { resource: entry.resource, player_id: entry.player_id, item_id: entry.item_id })) continue;
+      const revoke = {
+        op: 'revoke_item' as const,
+        resource: entry.resource,
+        player_id: entry.player_id,
+        item_id: entry.item_id,
+        amount: entry.amount,
+        ...(typeof entry.source === 'string' ? { source: entry.source, source_ref: typeof entry.source_ref === 'string' ? entry.source_ref : null } : {}),
+      };
+      out.ops.push(revoke);
     } else if (
       entry.op === 'adjust_points' &&
       typeof entry.stage === 'string' &&
@@ -289,6 +361,46 @@ function hasMatchChecks(checks: KitRuntimeState['checks'], matchId: string, gene
 }
 
 /**
+ * A league that left the `kit` engine keeps its runtime rows, so a match completed under the kit still has its effects
+ * applied when it is reset under another engine, and nothing takes them back (the hook has no kit context). Throws, so the
+ * caller reports the failed step, when the format is attached and the current `match_completed` key of the match is fired.
+ */
+async function assertNoAppliedCompletionOffKit(seasonId: string, matchId: string): Promise<void> {
+  const { getSeasonFormat } = await import('@/lib/supabase/queries/season-formats');
+  const format = await getSeasonFormat(seasonId);
+  if (format === null) return;
+  const { getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
+  const keys = (await getFormatRuntime(seasonId)).eventLog.map((row) => row.event_key);
+  const generation = completionGeneration(keys, matchId);
+  if (!keys.includes(eventKey({ event: 'match_completed', match_id: completionMatchId(matchId, generation) }))) return;
+  throw new Error(
+    `the effects of the completion of match ${matchId} are still applied: the league runs the ${format.engine} engine, so they cannot be taken back until it is switched back to kit`,
+  );
+}
+
+/**
+ * A revert that finds the match disputed after a replay tie (an unresolved outcome) opens its dispute check under the new
+ * generation: the dispute was opened while the revert was pending, under the generation the revert has just closed.
+ */
+async function reopenDisputeCheck(seasonId: string, matchId: string, generation: number, ctx: KitContext): Promise<void> {
+  try {
+    const { getMatchById } = await import('@/lib/supabase/queries/matches');
+    const [match, outcome] = await Promise.all([getMatchById(matchId), getMatchOutcome(matchId)]);
+    if (match === null || match.status !== 'disputed' || outcome?.kind !== 'unresolved') return;
+    const plan = planChecks(ctx.def, {
+      source: 'unresolved_outcome',
+      matchId,
+      players: [match.player_1_id, match.player_2_id],
+      generation,
+    });
+    await open(seasonId, plan.checks, ctx.revision);
+  } catch (error) {
+    // The revert itself applied; failing it now would send the heal after a generation that has already advanced.
+    logger.error(TAG, 'the dispute check of a match reverted while disputed could not be opened again', { seasonId, matchId, error });
+  }
+}
+
+/**
  * A completed match left `completed` (reset, reopened, a game deleted or edited): take back what its `match_completed`
  * event applied (`inverseOps`) and log `match_reverted:<id>:<n>` in the same transaction, which makes the next
  * completion of the match a new event (`onMatchCompleted`). A match that never fired the event has nothing to take back,
@@ -301,6 +413,15 @@ function hasMatchChecks(checks: KitRuntimeState['checks'], matchId: string, gene
  * that never completed (a disputed one that is reopened) has no such key, so the cron never revisits it: its stale open
  * check stays until the call is repeated or an admin resolves the check by hand. This call is idempotent per key, so the
  * cron's call and the original one cannot apply twice.
+ *
+ * The revert is not one transaction: the checks are closed first and the generation advances after. Until it does (a failed
+ * revert waiting for the heal), a result entered again completes under the OLD generation: its effects do not apply (the key
+ * is fired) and its team audit and expression checks meet the closed rows of that generation, so they open nothing. A
+ * replay that ends in a tie in that window opens its dispute check under the old generation too, which the heal then closes
+ * with the rest: a revert that finds the match disputed with an unresolved outcome therefore opens the dispute check again
+ * under the new generation. The league's runtime rows outlive an engine switch, so a league that is not on the `kit` engine
+ * any more fails the revert (reported to the caller) when the match's completion is still applied: switch the engine back
+ * and reset the match again, or let the cron heal it.
  */
 export async function onMatchReverted(input: MatchRevertedInput): Promise<boolean> {
   const { tournament } = input;
@@ -308,7 +429,10 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
   const auditsClosed = { value: true };
   const reverted = await guarded('match reverted', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
     const ctx = await loadFreshKitContext(tournament.season_id);
-    if (ctx === null) return;
+    if (ctx === null) {
+      await assertNoAppliedCompletionOffKit(tournament.season_id, input.matchId);
+      return;
+    }
     const generation = completionGeneration(ctx.state.firedEventKeys, input.matchId);
     // Before the early return below: the audit can have succeeded while the `match_completed` fire failed. A check that
     // stays open ends the call: advancing the generation would leave it without a retry (the cron heal only looks at
@@ -335,12 +459,13 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
           revision: ctx.revision,
         });
         expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
+        await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx);
       }
       return;
     }
     const runtime = await getFormatRuntime(tournament.season_id);
     const logged = runtime.eventLog.find((row) => row.event_key === completedKey);
-    const inverse = inverseOps(logged?.ops);
+    const inverse = inverseOps(logged?.ops, logged?.payload);
     await fireFormatEvent({
       seasonId: tournament.season_id,
       eventKey: `match_reverted:${input.matchId}:${generation + 1}`,
@@ -351,6 +476,7 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
       revision: ctx.revision,
     });
     expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
+    await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx);
     if (inverse.irreversible.length > 0) {
       logger.warn(TAG, 'match_completed effects that cannot be taken back stay in place', {
         matchId: input.matchId,
@@ -377,10 +503,14 @@ async function endStageIfDone(
   phase: KitPhaseInfo,
   roundId: string,
   report?: HookReport,
+  retry: boolean = false,
 ): Promise<boolean> {
   return guarded('stage end', { tournamentId: tournament.id }, async () => {
     const { checkStageEnd } = await import('./stage-end-server');
-    const ctx = (await loadFreshKitContext(stale.seasonId)) ?? stale;
+    // A null context means the league left the kit engine (or lost its format) since the hook loaded `stale`: a kit-only
+    // `end_when` must not end a phase of a league that no longer runs the kit, so nothing is evaluated from the old context.
+    const ctx = await loadFreshKitContext(stale.seasonId);
+    if (ctx === null) return;
     const check = await checkStageEnd(ctx, phaseById(ctx, phase.id) ?? phase, roundId);
     if (check === null || check.openInRound > 0) return;
     if (check.issue !== undefined) {
@@ -392,7 +522,7 @@ async function endStageIfDone(
     const result = await completePhaseAtStageEnd(tournament.id, `end_when:${phase.stage.key}`, check.unfinishedMatchIds);
     // The phase is completed but its reaction did not apply: a failed step, so the heal's re-run repeats the reaction.
     if (result === 'reaction_failed') throw new Error('the stage end reaction of the completed phase did not apply');
-  }, report);
+  }, report, retry);
 }
 
 export interface RoundCompletedInput {
@@ -450,8 +580,10 @@ async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { 
  * Resolves true when the event and the stage end applied or there was nothing to apply, false when a step failed (logged)
  * or the event is deferred behind a missing `match_completed` (not a failure: nothing is set in `report`). A false is
  * repaired by the format cron (`backfillRoundEnds`): it finds the completed round whose event has not fired and calls this
- * again, which repeats only what is missing. A stage end that failed after the event fired has no such trigger: it is logged
- * as an error, and the next completed match or an admin completing the phase by hand settles it.
+ * again, which repeats only what is missing. A stage end that failed after the event fired has no such trigger (the key is
+ * used up): it is tried twice right away, then logged as an error, and the next completed match or an admin completing the
+ * phase by hand settles it. A lock cascade that fails after the event committed does not fail the event (`fireEvent`), so it
+ * never skips the stage end.
  */
 export async function onRoundCompleted(input: RoundCompletedInput): Promise<boolean> {
   const { tournament } = input;
@@ -477,7 +609,8 @@ export async function onRoundCompleted(input: RoundCompletedInput): Promise<bool
   let stageEnded = true;
   const { phase, ctx } = outcome;
   if (applied && phase !== null && ctx !== null && phase.stage.end_when !== undefined) {
-    stageEnded = await endStageIfDone(tournament, ctx, phase, input.roundId, input.report);
+    // Nothing repeats this step later (the event key is used up), so it is tried twice here.
+    stageEnded = await endStageIfDone(tournament, ctx, phase, input.roundId, input.report, true);
     if (!stageEnded) {
       logger.error(TAG, 'the stage end after a completed round did not apply: the next completed match or an admin completing the phase settles it', {
         roundId: input.roundId,
@@ -503,8 +636,8 @@ export async function onMatchUnresolved(input: { tournament: HookTournament; mat
       players: [input.player1Id, input.player2Id],
       generation,
     });
-    await open(tournament.season_id, plan.checks);
-  });
+    await open(tournament.season_id, plan.checks, ctx.revision);
+  }, undefined, true);
 }
 
 export interface RoundGeneratedInput {
@@ -521,16 +654,17 @@ export interface RoundGeneratedInput {
  *
  * The first-round gate (`firstRoundGap`) treats a relation as drawn when a `stage_start` effect draws it right after the
  * round (only while the relation has no link yet), and it never looks again once the round exists, so a `stage_start`
- * that failed would leave the relation undrawn
- * with nothing to retry it. The start is therefore tried twice (the event is idempotent by key); if it still fails, that
- * is logged as an error that names the way out (a manual `draw` adjustment of the relation), and the round goes on.
+ * that failed would leave the relation undrawn with nothing to retry it. Every step here is therefore tried twice (each
+ * loads its own context and is idempotent by key); if one still fails, that is logged as an error (for the start it names
+ * the way out, a manual `draw` adjustment of the relation), and the round goes on. The rematch check is a step of its own:
+ * a failed `round_start` does not drop it.
  */
 export async function onRoundGenerated(input: RoundGeneratedInput): Promise<void> {
   const { tournament } = input;
   if (!isKitCandidate(tournament)) return;
   if (input.startsPhase) {
     const start = { tournament, from: 'upcoming', to: 'active' } as const;
-    if (!(await onPhaseStatusChanged(start)) && !(await onPhaseStatusChanged(start))) {
+    if (!(await onPhaseStatusChanged(start))) {
       logger.error(
         TAG,
         'stage_start did not apply for the first round: relations its rules draw stay undrawn until an admin draws them with a manual relation adjustment',
@@ -538,17 +672,22 @@ export async function onRoundGenerated(input: RoundGeneratedInput): Promise<void
       );
     }
   }
-  await guarded('round generated', { tournamentId: tournament.id, round: input.roundNumber }, async () => {
+  await guarded('round start', { tournamentId: tournament.id, round: input.roundNumber }, async () => {
     const ctx = await loadFreshKitContext(tournament.season_id);
     const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
     if (ctx === null || phase === undefined) return;
     const fired = await fireEvent(tournament.season_id, { event: 'round_start', stage: phase.stage.key, round: input.roundNumber }, null, { context: ctx });
     for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { tournamentId: tournament.id, ...issue });
-    if (input.rematches > 0) {
+  }, undefined, true);
+  if (input.rematches > 0) {
+    await guarded('rematch check', { tournamentId: tournament.id, round: input.roundNumber }, async () => {
+      const ctx = await loadFreshKitContext(tournament.season_id);
+      const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
+      if (ctx === null || phase === undefined) return;
       const plan = planChecks(ctx.def, { source: 'pairing_rematch', stage: phase.stage.key, round: input.roundNumber, rematches: input.rematches });
-      await open(tournament.season_id, plan.checks);
-    }
-  });
+      await open(tournament.season_id, plan.checks, ctx.revision);
+    }, undefined, true);
+  }
 }
 
 /** Whether every phase of the stage is completed: always for an ordinary stage, the phase itself being completed. */
@@ -602,8 +741,8 @@ export async function onPhaseStatusChanged(input: PhaseStatusInput): Promise<boo
       subjects: table.map((row) => ({ id: row.player_id, ctx: playerContext(base, row.player_id, rows[row.player_id], table.length) })),
     });
     for (const issue of players.issues) logger.warn(TAG, 'check expression failed', { tournamentId: tournament.id, ...issue });
-    await open(tournament.season_id, [...ties.checks, ...players.checks]);
-  });
+    await open(tournament.season_id, [...ties.checks, ...players.checks], ctx.revision);
+  }, undefined, true);
 }
 
 /**

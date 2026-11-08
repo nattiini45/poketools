@@ -81,12 +81,16 @@ describe('format_fire_event and format_apply_adjustment revision check', () => {
     const keys = body.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
     const check = body.indexOf('PERFORM public.format__check_revision(p_season_id, p_expected_revision)');
     const insert = body.indexOf('INSERT INTO public.format_event_log');
-    const apply = body.indexOf('PERFORM public.format__apply_ops(');
+    const apply = body.indexOf('public.format__apply_ops(');
     expect(keys).toBeGreaterThan(-1);
     // A stale event raises before its key is inserted, so the key stays free for the new format's event.
     expect(check).toBeGreaterThan(keys);
     expect(insert).toBeGreaterThan(check);
     expect(apply).toBeGreaterThan(insert);
+    // An event applies its ops tolerantly (a grant a concurrent writer made impossible is skipped and recorded, not a rollback
+    // of the whole event), and records what it skipped in the payload under the same transaction.
+    expect(body).toContain("coalesce(p_ops, '[]'::jsonb), false, true)");
+    expect(body).toContain("jsonb_build_object('skipped_grants', v_skipped)");
   });
 
   it('checks it in an adjustment before the history row, with the locks in the order of a submit (action lock, then the row)', () => {

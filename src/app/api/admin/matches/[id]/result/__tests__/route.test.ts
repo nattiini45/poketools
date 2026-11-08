@@ -485,6 +485,17 @@ describe('POST /api/admin/matches/[id]/result', () => {
       expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'match.admin_result' }));
     });
 
+    it('answers 409 match_state_changed when the match was reset after the status flip', async () => {
+      vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: false, reason: 'match_changed', current_status: 'scheduled' });
+
+      const res = await POST(request(validBody), routeParams);
+      const body = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body.code).toBe('match_state_changed');
+      expect(body.params).toEqual({ status: 'scheduled' });
+    });
+
     it('fails loudly when finalize did not run at all', async () => {
       vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: false, reason: 'winner_not_participant' });
 

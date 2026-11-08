@@ -37,6 +37,8 @@ vi.mock('@/lib/social/notify', () => ({
   emitSocialEvent: vi.fn(),
 }));
 
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
+
 import { POST } from '../route';
 import { requireResourceAdmin, AuthError } from '@/lib/auth/helpers';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
@@ -47,6 +49,7 @@ import {
 } from '@/lib/tournament/enrollment-sync';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
+import { logAuditEvent } from '@/lib/audit/log';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 import { revalidateTag } from 'next/cache';
 
@@ -153,6 +156,23 @@ describe('POST /api/seasons/[id]/advance', () => {
     expect(payload.code).toBe('validation_failed');
     expect(payload.params).toEqual({ issues: payload.error });
     expect(syncStandingsEnrollment).not.toHaveBeenCalled();
+  });
+
+  it('audits a forced advance and a hand-picked list, but not an unforced advance', async () => {
+    const id = '0d8a1a96-a0af-49df-8b1d-c58c2f5cec01';
+    await POST(makeRequest({}) as NextRequest, { params: makeParams({ id }) });
+    expect(logAuditEvent).not.toHaveBeenCalled();
+
+    const picked = ['2f4b7b0e-3d0c-4d66-9a44-0f6f3f3f0a01'];
+    await POST(makeRequest({ force: true, manual_list: picked }) as NextRequest, { params: makeParams({ id }) });
+    expect(logAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'season.phase.advance',
+        actor_id: 'admin-1',
+        resource_id: 'stage-2',
+        metadata: expect.objectContaining({ season_id: id, source_phase: 'stage-1', force: true, manual_list_count: 1, enrolled_count: 8 }),
+      }),
+    );
   });
 
   it('delegates to syncStandingsEnrollment', async () => {

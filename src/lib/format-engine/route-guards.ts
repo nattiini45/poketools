@@ -383,6 +383,7 @@ export async function announceKitRound(
       stageKey: kitPhase.stage.key,
       round: round.roundNumber,
       forbidden: round.forbidden ?? 0,
+      revision: kitPhase.revision,
     });
   }
 }

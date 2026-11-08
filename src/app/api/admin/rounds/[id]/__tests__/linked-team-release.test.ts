@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 /**
- * DELETE /api/admin/rounds/[id] with the real `deleteMatchesByRound` and `releaseTeamsFromMatches`, mocked one layer
+ * DELETE /api/admin/rounds/[id] with the real `deleteRoundWithMatches` and `releaseTeamsFromMatches`, mocked one layer
  * down: an in-memory service-role client holding `matches` and `teams`. `teams.match_id` follows the schema's
  * `ON DELETE SET NULL`, so a match-prep row that is not released first survives its match as a second planned row.
  */
@@ -95,7 +95,16 @@ vi.mock('@/lib/supabase/client', () => {
     };
     return builder;
   }
-  return { supabase: { from: (table: 'matches' | 'teams') => chain(table) } };
+  // round_delete: the matches and the round in one transaction (`teams.match_id` follows the schema's ON DELETE SET NULL).
+  const rpc = (name: string, args: { p_round_id: string }) => {
+    if (name !== 'round_delete') return Promise.resolve({ data: null, error: { message: `unexpected rpc ${name}` } });
+    db.log.push('delete:matches');
+    const gone = new Set(db.matches.filter((row) => row.round_id === args.p_round_id).map((row) => row.id));
+    db.matches = db.matches.filter((row) => !gone.has(row.id));
+    for (const team of db.teams) if (team.match_id && gone.has(team.match_id)) team.match_id = null;
+    return Promise.resolve({ data: { outcome: 'deleted', matches: gone.size }, error: null });
+  };
+  return { supabase: { from: (table: 'matches' | 'teams') => chain(table), rpc } };
 });
 
 vi.mock('@/lib/auth/helpers', () => {
@@ -107,7 +116,6 @@ vi.mock('@/lib/auth/helpers', () => {
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
-  deleteRound: vi.fn(),
   getRoundsByTournament: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', async (importOriginal) => ({
@@ -123,7 +131,7 @@ vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 import { DELETE } from '@/app/api/admin/rounds/[id]/route';
 import { requirePlayer } from '@/lib/auth/helpers';
-import { deleteRound, getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { getGamesByMatch } from '@/lib/supabase/queries/games';
 
@@ -168,7 +176,6 @@ describe('DELETE /api/admin/rounds/[id] with a linked team row', () => {
       tournament_id: null,
       match_id: null,
     });
-    expect(deleteRound).toHaveBeenCalledWith(ROUND_ID);
   });
 
   it('linked team release: a prep row with no planned sibling becomes the planned row instead of vanishing', async () => {

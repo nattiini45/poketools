@@ -172,6 +172,13 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
     db.rounds.push(row);
     if (db.failMatches) throw new Error('connection reset (secret detail)');
     db.matches.push(...(input.matches as Array<Record<string, unknown>>));
+    // `round_write` moves the phase in the same transaction: upcoming becomes active, current_round never goes backwards.
+    if (db.tournament) {
+      Object.assign(db.tournament, {
+        status: db.tournament.status === 'upcoming' ? 'active' : db.tournament.status,
+        current_round: Math.max(Number(db.tournament.current_round ?? 0), Number(input.round_number)),
+      });
+    }
     return row;
   }),
   addMatchesToRound: vi.fn(),

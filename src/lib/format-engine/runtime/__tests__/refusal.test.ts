@@ -58,9 +58,12 @@ describe('classifyFormatRuntimeError', () => {
   it('reads the dispositions of the design', () => {
     expect(classifyFormatRuntimeError({ code: 'challenge_cooldown' }).kind).toBe('conflict');
     expect(classifyFormatRuntimeError({ code: 'action_locked' }).kind).toBe('conflict');
-    expect(classifyFormatRuntimeError({ code: 'format_adjust_invalid_order' }).kind).toBe('invalid');
+    // Built from roster or domain state: the view is stale, so it reloads (a conflict). A wrong amount is wrong by its shape.
+    expect(classifyFormatRuntimeError({ code: 'format_adjust_invalid_order' }).kind).toBe('conflict');
+    expect(classifyFormatRuntimeError({ code: 'format_adjust_invalid_amount' }).kind).toBe('invalid');
     expect(classifyFormatRuntimeError({ code: 'format_not_participant' }).kind).toBe('forbidden');
-    expect(classifyFormatRuntimeError({ code: 'format_check_not_found' }).kind).toBe('not_found');
+    expect(classifyFormatRuntimeError({ code: 'format_check_not_found' }).kind).toBe('conflict');
+    expect(classifyFormatRuntimeError({ code: 'INVALID_CHECK_ID' }).kind).toBe('not_found');
     expect(classifyFormatRuntimeError({ code: 'format_request_too_large' }).kind).toBe('too_large');
     expect(classifyFormatRuntimeError({ code: 'rate_limited', params: { seconds: 3 } })).toEqual({ kind: 'rate_limited', retryAfter: 3 });
   });

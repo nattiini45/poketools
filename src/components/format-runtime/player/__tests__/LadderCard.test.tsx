@@ -92,8 +92,16 @@ describe('LadderCard: the table', () => {
     expect(onReload).toHaveBeenCalledTimes(1);
   });
 
-  it('a bad request shows the reason and does not reload', async () => {
+  it('a rank range the standings moved out of shows the reason and reloads, so the button of a target out of range goes', async () => {
     mocks.make.mockResolvedValue({ ok: false, status: 400, error: { code: 'challenge_rank_range' } });
+    const { user, onReload, t } = setup();
+    await user.click(screen.getByRole('button', { name: t('ladder.challengeAria', { name: 'Anna' }) }));
+    expect(screen.getByRole('alert')).toBeTruthy();
+    expect(onReload).toHaveBeenCalledTimes(1);
+  });
+
+  it('a bad request shows the reason and does not reload', async () => {
+    mocks.make.mockResolvedValue({ ok: false, status: 400, error: { code: 'challenge_self' } });
     const { user, onReload, t } = setup();
     await user.click(screen.getByRole('button', { name: t('ladder.challengeAria', { name: 'Anna' }) }));
     expect(screen.getByRole('alert')).toBeTruthy();

@@ -6,8 +6,8 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
   getTournamentById,
   getParticipants,
-  updateTournament,
 } from '@/lib/supabase/queries/tournaments';
+import { kitWriteFence } from '@/lib/format-engine/write-fence';
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
 import {
   getRoundsByTournament,
@@ -46,7 +46,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import { kitPairsRounds, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
 import { loadPairingAids, type PairingAids } from '@/lib/format-engine/pairing-server';
-import { assertKitGroupsFormed, ensureKitPhaseGroups } from '@/lib/format-engine/groups';
+import { ensureKitPhaseGroups } from '@/lib/format-engine/groups';
 import {
   announceKitRound,
   assertMirroredGroupsPlayLegs,
@@ -206,12 +206,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     let groups = tournament.season_id
       ? await ensurePhaseGroupsFromLeague(tournament.season_id, tournament)
       : await getGroupsByTournament(tid);
-    // A kit stage with groups forms them before its first round (league groups, when the league has any, win).
-    if (kit && tournament.season_id && groups.length === 0) {
+    // A kit stage with groups forms them before its first round (league groups, when the league has any, win). Groups that
+    // already exist are checked too: another request's unfilled ones answer 409 groups_forming_in_progress (never an empty
+    // round), and stale or empty ones of a phase without a round are formed again from the enrolled players.
+    if (kit && tournament.season_id) {
       groups = await ensureKitPhaseGroups({ seasonId: tournament.season_id, phaseId: tid, stage: kit.stage, seed: kit.seed });
-    } else if (kit && tournament.season_id) {
-      // Groups another request has inserted but not filled yet (409 groups_forming_in_progress, never an empty round).
-      assertKitGroupsFormed(groups, kit.stage);
     }
     // The league week plan has no legs: a multi-leg kit round robin on groups that mirror league groups is refused here,
     // not silently played as one leg (generate-all-rounds refuses it the same way).
@@ -416,15 +415,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // A round and its matches are two writes, and `current_round` moves only after both. A retry after an interrupted
-    // call finds that call's round at this number: without matches it is filled (never a second round with the same
-    // number); with matches the week is already written and only the counter lags, so nothing is written twice.
+    // A round and its matches are written in one transaction (`round_write`), which also moves the phase to active and
+    // `current_round` up, so a round with matches is a whole week: the answer below is final (generating it again means
+    // deleting it first). Only a round written by an older version can have no matches (an interrupted two-step write):
+    // a retry finds it at this number and fills it (never a second round with the same number).
     if (!emptyRound) {
       const written = existingRounds.filter((round) => round.round_number === roundNumber);
       if (written.length > 0) {
         const withMatches = new Set((await getMatchesByTournament(tid)).map((match) => match.round_id));
         const filled = written.find((round) => withMatches.has(round.id));
         if (filled) {
+          // That round is committed (an earlier call may have died before it expired the reads).
+          expireTournamentReads(tid, tournament.season_id);
           return NextResponse.json<ApiResult<never>>(
             {
               success: false,
@@ -466,72 +468,70 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       player_2_id: pairing.player_2_id,
     }));
     let round: Round;
-    if (emptyRound) {
-      // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so a round
-      // reused by a retry carries them exactly like a freshly inserted one. The byes go in the same transaction as the
-      // matches (`round_write`), so a write the completed phase refuses leaves the round's stored byes as they were.
-      const storedByes = emptyRound.bye_player_ids ?? [];
-      const byesChanged =
-        storesByes &&
-        (storedByes.length !== allByePlayerIds.length ||
-          storedByes.some((id) => !allByePlayerIds.includes(id)));
-      round = byesChanged ? { ...emptyRound, bye_player_ids: allByePlayerIds } : emptyRound;
-      // 7. Match stubs of the reused round
-      if (byesChanged) {
-        await addMatchesToRound(round, matchInputs, allByePlayerIds);
+    let started = false;
+    // Everything after the write can fail once the round committed (the league status, the start, the deadline), so the public
+    // reads expire in a finally: the committed round shows on the next view whatever happens after it. A write the database
+    // refused (a completed phase, a round another call wrote first) committed nothing and expires nothing.
+    let committed = false;
+    try {
+      if (emptyRound) {
+        // A reused round (an interrupted call wrote it without matches) is brought to this call's byes, so a round
+        // reused by a retry carries them exactly like a freshly inserted one. The byes go in the same transaction as the
+        // matches (`round_write`), so a write the completed phase refuses leaves the round's stored byes as they were.
+        const storedByes = emptyRound.bye_player_ids ?? [];
+        const byesChanged =
+          storesByes &&
+          (storedByes.length !== allByePlayerIds.length ||
+            storedByes.some((id) => !allByePlayerIds.includes(id)));
+        round = byesChanged ? { ...emptyRound, bye_player_ids: allByePlayerIds } : emptyRound;
+        // 7. Match stubs of the reused round
+        const fenced = { ...round, ...kitWriteFence(kitPhase) };
+        if (byesChanged) {
+          await addMatchesToRound(fenced, matchInputs, allByePlayerIds);
+        } else {
+          await addMatchesToRound(fenced, matchInputs);
+        }
       } else {
-        await addMatchesToRound(round, matchInputs);
+        // 7. The new round carries its match stubs
+        round = await createRoundWithMatches({
+          tournament_id: tid,
+          name: roundName,
+          round_number: roundNumber,
+          best_of: roundBestOf,
+          ...(storesByes ? { bye_player_ids: allByePlayerIds } : {}),
+          matches: matchInputs,
+          ...kitWriteFence(kitPhase),
+        });
       }
-    } else {
-      // 7. The new round carries its match stubs
-      round = await createRoundWithMatches({
-        tournament_id: tid,
-        name: roundName,
-        round_number: roundNumber,
-        best_of: roundBestOf,
-        ...(storesByes ? { bye_player_ids: allByePlayerIds } : {}),
-        matches: matchInputs,
-      });
-    }
+      committed = true;
 
-    // 8. Update tournament to active and increment round (a grouped phase that filled an earlier week never moves
-    // current_round back).
-    const currentRound = Math.max(tournament.current_round, roundNumber);
-    if (tournament.status === 'upcoming') {
-      await updateTournament(tid, {
-        status: 'active',
-        current_round: currentRound,
-      });
-
-      // Bubble up: if parent league is still upcoming, transition it to active
-      if (tournament.season_id) {
+      // 8. The phase went active and its round counter up in the round's own transaction (`round_write`: an upcoming phase
+      // becomes active, a grouped phase that filled an earlier week never moves current_round back), so a request that
+      // dies here leaves no phase `upcoming` with committed matches, and a completion by an admin is never overwritten
+      // by a status written from this request's stale read. Only the league is left to move.
+      if (tournament.status === 'upcoming' && tournament.season_id) {
+        // Bubble up: if parent league is still upcoming, transition it to active
         const season = await getSeasonById(tournament.season_id);
         if (season && season.status === 'upcoming') {
           await updateSeason(season.id, { status: 'active' });
         }
       }
-    } else {
-      await updateTournament(tid, {
-        current_round: currentRound,
-      });
-    }
-    // Start the round when asked, once the tournament itself has moved. Best effort: the round and its matches are written, so a failed start must not
-    // hide them; the round stays pending and the round manager offers Start.
-    let started = false;
-    if (options.startRound) {
-      try {
-        round = await updateRoundStatus(round.id, 'active');
-        started = true;
-      } catch (startErr) {
-        logger.error('generate-round', 'Failed to start the new round', { tournamentId: tid, roundId: round.id, error: startErr });
+      // Start the round when asked, once the tournament itself has moved. Best effort: the round and its matches are written, so a failed start must not
+      // hide them; the round stays pending and the round manager offers Start.
+      if (options.startRound) {
+        try {
+          round = await updateRoundStatus(round.id, 'active');
+          started = true;
+        } catch (startErr) {
+          logger.error('generate-round', 'Failed to start the new round', { tournamentId: tid, roundId: round.id, error: startErr });
+        }
       }
+
+      // A stage with a calendar gives the round its deadline (an admin's own deadline is never replaced).
+      round = await fillKitRoundDeadline(tournament, kitPhase, round);
+    } finally {
+      if (committed) expireTournamentReads(tid, tournament.season_id);
     }
-
-    // A stage with a calendar gives the round its deadline (an admin's own deadline is never replaced).
-    round = await fillKitRoundDeadline(tournament, kitPhase, round);
-
-    // The new pairings show on the next view of the public pages.
-    expireTournamentReads(tid, tournament.season_id);
 
     // A kit league's format reacts to the new round (stage_start for the first one, round_start, rematch checks). Best
     // effort and logged inside: the hook never fails the write.

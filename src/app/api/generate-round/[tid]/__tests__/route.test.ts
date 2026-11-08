@@ -290,7 +290,8 @@ describe('POST /api/generate-round/[tid]', () => {
       })
     );
     expect(addMatchesToRound).not.toHaveBeenCalled();
-    expect(updateTournament).toHaveBeenCalledWith('ae13bc20-d43b-42b5-8de0-4944cb4025e3', { current_round: 2 });
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
     // D37: the pairings show on the tournament and league pages' next view.
     expect(revalidateTag).toHaveBeenCalledWith('tournament:ae13bc20-d43b-42b5-8de0-4944cb4025e3', { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith('season:s-1', { expire: 0 });
@@ -321,10 +322,8 @@ describe('POST /api/generate-round/[tid]', () => {
     const request = {} as NextRequest;
     await POST(request, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
 
-    expect(updateTournament).toHaveBeenCalledWith('ae13bc20-d43b-42b5-8de0-4944cb4025e3', {
-      status: 'active',
-      current_round: 1,
-    });
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('bubbles up season status from upcoming to active', async () => {
@@ -343,6 +342,19 @@ describe('POST /api/generate-round/[tid]', () => {
     await POST(request, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
 
     expect(updateSeason).toHaveBeenCalledWith('s-1', { status: 'active' });
+  });
+
+  it('expires the public reads when the league status write fails after the round committed', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ ...baseTournament, status: 'upcoming', current_round: 0 } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(getSeasonById).mockResolvedValue({ id: 's-1', status: 'upcoming' } as never);
+    vi.mocked(updateSeason).mockRejectedValueOnce(new Error('connection reset'));
+
+    const response = await POST({} as NextRequest, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
+
+    expect(response.status).toBe(500);
+    expect(createRoundWithMatches).toHaveBeenCalledTimes(1);
+    expect(revalidateTag).toHaveBeenCalledWith('tournament:ae13bc20-d43b-42b5-8de0-4944cb4025e3', { expire: 0 });
   });
 
   it('does NOT update season when season is already active', async () => {
@@ -554,7 +566,8 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(response.status).toBe(201);
       expect(vi.mocked(createRoundWithMatches)).toHaveBeenCalledWith(expect.objectContaining({ round_number: 4 }));
       expect(vi.mocked(createRoundWithMatches)).not.toHaveBeenCalledWith(expect.objectContaining({ round_number: 2 }));
-      expect(vi.mocked(updateTournament)).toHaveBeenCalledWith(baseTournament.id, expect.objectContaining({ current_round: 4 }));
+      // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
     });
   });
 
@@ -579,7 +592,8 @@ describe('POST /api/generate-round/[tid]', () => {
         { player_1_id: 'p1', player_2_id: 'p2' },
         { player_1_id: 'p3', player_2_id: 'p4' },
       ]);
-      expect(updateTournament).toHaveBeenCalledWith(tid, { current_round: 2 });
+      // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
     });
 
     it('refuses (409, nothing written) when the round at that number already has its matches', async () => {
@@ -1283,7 +1297,7 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(payload.data.id).toBe('r-2');
       expect(payload.data.status).toBe('pending');
       expect(logged).toHaveBeenCalled();
-      expect(updateTournament).toHaveBeenCalled();
+      expect(updateTournament).not.toHaveBeenCalled();
       expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ started: false });
       logged.mockRestore();
     });

@@ -114,6 +114,25 @@ describe('loadPlayerView', () => {
     expect(ladder.challenges).toHaveLength(1);
   });
 
+  it('counts a player enrolled in a phase but not on the season roster as a participant (a reserve a phase substitution enrolled)', async () => {
+    const ctx = context();
+    ctx.phases = [{ ...ctx.phases[0], members: [...PLAYERS, 'reserve'] }];
+    ctx.state = stateFor(ctx.def, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2'), link('reserve', 'p1')] });
+    vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
+    vi.mocked(resolvePlayerNames).mockResolvedValue({ reserve: 'Reserve' });
+    const view = await loadPlayerView(SEASON, 'reserve', NOW);
+    expect(resolvePlayerNames).toHaveBeenCalledWith(['reserve']);
+    if (!view.running) throw new Error('running');
+    // The roster the action checks use accepts the reserve, so the view does not show the action as out of reach for them.
+    expect(view.actions.every((action) => action.accessible)).toBe(true);
+  });
+
+  it('reads no extra names when every enrolled player is on the season roster', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context());
+    await loadPlayerView(SEASON, 'p1', NOW);
+    expect(resolvePlayerNames).not.toHaveBeenCalled();
+  });
+
   it('has no targets and no round when every round is completed', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(true));
     vi.mocked(loadStageTable).mockResolvedValue([{ player_id: 'p1', rank: 1 }, { player_id: 'p2', rank: 2 }] as never);
@@ -139,6 +158,17 @@ describe('the admin loaders', () => {
     expect(listFormatChallenges).toHaveBeenCalledWith(SEASON, { status: 'open' });
     expect(overview).toMatchObject({ running: true, open_challenges: 1 });
     expect(overview.relations[0]).toMatchObject({ masked: true, links: [] });
+  });
+
+  it('does not count the open challenge of a player who left the phase (it stays open until the next create or respond cancels it)', async () => {
+    vi.mocked(listFormatChallenges).mockResolvedValue([
+      challengeRow(),
+      challengeRow({ id: 'c-2', challenger_id: 'gone-player' }),
+      challengeRow({ id: 'c-3', defender_id: 'gone-player' }),
+      challengeRow({ id: 'c-4', phase_id: 'phase-unknown' }),
+    ] as never);
+    const overview = await loadAdminOverview(context(), 'admin-1', NOW);
+    expect(overview).toMatchObject({ running: true, open_challenges: 1 });
   });
 
   it('unmasks through the same participants read', async () => {

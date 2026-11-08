@@ -58,7 +58,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     } catch (auditError) {
       // No audit row, no data: `unmasked` is dropped here and the generic 503 carries nothing from it.
-      return safeErrorResponse(auditError, 'The hidden relations could not be shown because the read could not be recorded', 503);
+      return safeErrorResponse(
+        auditError,
+        'The hidden relations could not be shown because the read could not be recorded',
+        503,
+        'unmask_audit_unavailable',
+      );
     }
 
     return NextResponse.json<ApiResult<AdminUnmasked>>({ success: true, data: unmasked }, noStore());

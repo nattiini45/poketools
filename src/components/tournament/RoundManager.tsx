@@ -28,6 +28,7 @@ import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { bestOfChoices } from '@/lib/tournament/best-of';
+import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
 import { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
@@ -37,6 +38,37 @@ import { useParticipantsSummary } from './useParticipantsSummary';
 
 /** The reason's length limit on the round PATCH (`reasonSchema`). */
 const FORCE_REASON_MAX_LENGTH = 500;
+
+/**
+ * Refusals that say the round list this view holds is out of date (another admin generated, deleted or completed a round, a
+ * result came in, a phase ended): the list is read again, so the refusal text points at what is on screen.
+ */
+const ROUND_STATE_CODES: ReadonlySet<string> = new Set([
+  'rounds_round_already_written',
+  'rounds_round_completed',
+  'rounds_phase_completed',
+  'rounds_stage_ended',
+  'rounds_end_when_round_open',
+  'round_best_of_locked',
+  'round_changed',
+  'round_not_found',
+  'tournament_not_found',
+  'groups_forming_in_progress',
+  'PHASE_GROUPS_STALE',
+  'ENROLLMENT_SYNC_CONFLICT',
+  'bracket_already_generated',
+  'format_context_stale',
+]);
+
+/**
+ * What a saved round delete, reset or bracket regenerate tells the admin: the league format could not take back the effects of a
+ * result that no longer stands (`format_revert_failed` of the response; the matches may be gone, so nothing retries it).
+ */
+function savedChangeWarnings(data: unknown): ApiWarning[] {
+  return gameChangeWarnings(data).flatMap((warning) =>
+    warning.code === 'admin_game_format_revert_failed' ? [{ code: 'round_format_revert_failed' }] : [],
+  );
+}
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
 
@@ -440,6 +472,21 @@ export default function RoundManager({
   const isLegacyElim =
     isElimination && isLegacyElimBracketData(rounds);
 
+  /** Reads the round list again after a refusal that says it is stale (see `ROUND_STATE_CODES`). */
+  async function reloadRoundsIfStale(result: { code?: string }) {
+    if (result.code === undefined || !ROUND_STATE_CODES.has(result.code)) return;
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/rounds`);
+      const json: ApiResult<Round[]> = await res.json();
+      if (!json.success) return;
+      setRounds(json.data);
+      setMatchesByRound({});
+      checkedRounds.current.clear();
+    } catch {
+      // The refusal text is already on screen; the next action reads again.
+    }
+  }
+
   async function generateBracket() {
     setGeneratingBracket(true);
     setError(null);
@@ -451,6 +498,7 @@ export default function RoundManager({
       const result = await res.json();
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
       const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
@@ -467,6 +515,7 @@ export default function RoundManager({
     setRegeneratingBracket(true);
     setError(null);
     setRepairInfo(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/tournaments/${tournament.id}/regenerate-bracket`, {
         method: 'POST',
@@ -481,11 +530,14 @@ export default function RoundManager({
           return;
         }
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setConfirmRegenerate(false);
         setRegenNeedsCascade(false);
         setRegenCascadeMessage(null);
         return;
       }
+      // The round delete inside a regenerate can fail to take back the league format's effects of a played result.
+      setGenerateWarnings(savedChangeWarnings(result.data));
       const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
       const roundsJson: ApiResult<Round[]> = await roundsRes.json();
       if (roundsJson.success) {
@@ -561,14 +613,18 @@ export default function RoundManager({
     if (!deleteRoundId) return;
     setDeletingRound(true);
     setError(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/admin/rounds/${deleteRoundId}`, { method: 'DELETE' });
       const result = await res.json();
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setDeleteRoundId(null);
         return;
       }
+      // The round is gone either way; a result's format effects that could not be taken back are for the admin to know.
+      setGenerateWarnings(savedChangeWarnings(result.data));
       setRounds((prev) => prev.filter((r) => r.id !== deleteRoundId));
       setMatchesByRound((prev) => {
         const next = { ...prev };
@@ -605,6 +661,7 @@ export default function RoundManager({
         const reasons = formatNotReadyReasons(result);
         if (reasons !== null && !force) setForceStart({ kind: 'next', reasons });
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
@@ -636,6 +693,7 @@ export default function RoundManager({
         const reasons = formatNotReadyReasons(result);
         if (reasons !== null && !force) setForceStart({ kind: 'all', reasons });
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
@@ -669,6 +727,7 @@ export default function RoundManager({
       if (!result.success) {
         setBoFeedback(null);
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
@@ -720,6 +779,7 @@ export default function RoundManager({
 
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         if (result.code === 'round_matches_unfinished') {
           // The list this control was built on is out of date: read it again.
           checkedRounds.current.delete(roundId);
@@ -803,6 +863,7 @@ export default function RoundManager({
     if (!resetRoundId) return;
     setResettingRound(true);
     setError(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/admin/rounds/${resetRoundId}/reset`, {
         method: 'POST',
@@ -825,10 +886,12 @@ export default function RoundManager({
         setExpandedRound(null);
         setResetRoundId(null);
         setResetNeedsCascade(false);
+        setGenerateWarnings(savedChangeWarnings(result.data));
       } else if (result.code === 'DOWNSTREAM_PLAYED' && !resetNeedsCascade) {
         setResetNeedsCascade(true);
       } else {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setResetRoundId(null);
         setResetNeedsCascade(false);
       }

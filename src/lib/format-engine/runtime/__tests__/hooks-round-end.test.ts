@@ -212,6 +212,18 @@ describe('onRoundCompleted', () => {
       expect(report.failed).toBe(true);
       expect(fireEvent).toHaveBeenCalledTimes(1);
       expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('stage end after a completed round'), expect.objectContaining({ roundId: 'r-2' }));
+      // Nothing repeats it later, so it was tried twice.
+      expect(completePhaseAtStageEnd).toHaveBeenCalledTimes(2);
+    });
+
+    it('tries the stage end a second time, so a transient failure after the event fired does not strand the phase', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(withEnd(settled));
+      vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: [] });
+      vi.mocked(completePhaseAtStageEnd).mockRejectedValueOnce(new Error('blip')).mockResolvedValueOnce('completed');
+      const report = newHookReport();
+      await expect(onRoundCompleted({ ...input, report })).resolves.toBe(true);
+      expect(report).toEqual({ stale: false, failed: false });
+      expect(completePhaseAtStageEnd).toHaveBeenCalledTimes(2);
     });
   });
 

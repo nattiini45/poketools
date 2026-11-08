@@ -20,6 +20,7 @@ import {
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { assertPhaseEditable } from '@/lib/tournament/league-phase';
+import { assertFormatPhaseRosterOpen, assertSeasonRosterMembers } from '@/lib/format-studio/phase-guards';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
@@ -38,19 +39,6 @@ async function assertPhaseInSeason(seasonId: string, phaseId: string) {
     });
   }
   return phase;
-}
-
-async function assertRosterMembers(seasonId: string, playerIds: string[]) {
-  const roster = await getSeasonParticipants(seasonId);
-  const rosterIds = new Set(roster.map((p) => p.id));
-  for (const pid of playerIds) {
-    if (!rosterIds.has(pid)) {
-      throw new UserFacingError(
-        'All enrollees must be league roster members',
-        { code: 'PHASE_ROSTER_REQUIRED', status: 400 }
-      );
-    }
-  }
 }
 
 /**
@@ -87,6 +75,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (invalidPhaseId) return invalidPhaseId;
     const phase = await assertPhaseInSeason(id, phaseId);
     assertPhaseEditable(phase, 'participants');
+    // The roster of a format phase that has started is not edited here (409 format_phase_owned).
+    await assertFormatPhaseRosterOpen(id, phase);
 
     const rawBody = await request.json();
     const bulkParsed = phaseParticipantBulkSchema.safeParse(rawBody);
@@ -96,7 +86,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         ? roster.map((p) => p.id)
         : bulkParsed.data.player_ids ?? [];
 
-      await assertRosterMembers(id, playerIds);
+      await assertSeasonRosterMembers(id, playerIds);
 
       const existing = await getParticipants(phaseId);
       const enrolledIds = new Set(existing.map((p) => p.id));
@@ -125,7 +115,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await assertRosterMembers(id, [singleParsed.data.player_id]);
+    await assertSeasonRosterMembers(id, [singleParsed.data.player_id]);
     await addParticipant(phaseId, singleParsed.data.player_id);
     expireTournamentReads(phaseId, id);
     return NextResponse.json<ApiResult<null>>(
@@ -147,6 +137,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (invalidPhaseId) return invalidPhaseId;
     const phase = await assertPhaseInSeason(id, phaseId);
     assertPhaseEditable(phase, 'participants');
+    // The roster of a format phase that has started is not edited here (409 format_phase_owned).
+    await assertFormatPhaseRosterOpen(id, phase);
 
     const rawBody = await request.json();
     const parsed = seasonParticipantRemoveSchema.safeParse(rawBody);
@@ -176,6 +168,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     if (invalidPhaseId) return invalidPhaseId;
     const phase = await assertPhaseInSeason(id, phaseId);
     assertPhaseEditable(phase, 'participants');
+    // The roster of a format phase that has started is not edited here (409 format_phase_owned).
+    await assertFormatPhaseRosterOpen(id, phase);
 
     const rawBody = await request.json();
     const parsed = tournamentParticipantSeedsSchema.safeParse(rawBody);

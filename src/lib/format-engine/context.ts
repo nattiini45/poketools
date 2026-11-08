@@ -13,6 +13,7 @@ import {
   computeStageStandings,
   type KitOutcome,
   type KitStanding,
+  type StagedBye,
   type StandingsMetricDef,
   type StandingsPlacement,
 } from './standings';
@@ -48,6 +49,12 @@ export interface KitStandingsData {
    * results, and needed by every bracket type: a Swiss table counts games exactly as a round robin one does.
    */
   gameCounts?: Record<string, number>;
+  /**
+   * Kills per completed match id and player id (`kills` of `StageStandingsInput`): the `kill_differential` of every round
+   * robin stage. Public like the match results. Carried here, not passed by the caller, so every table of the league
+   * (the stage page, the hub, the league tab, profile, reports, previews, the runtime) counts the same kills.
+   */
+  kills?: Record<string, Record<string, number>>;
   /** Coin flip draws per phase id and player id. */
   coinFlips: Record<string, Record<string, number>>;
   /** An admin's order of the players per phase id (`rank.manual`); absent until one is set. */
@@ -77,6 +84,7 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
   const stageOfMatch: Record<string, string> = {};
   const outcomes: Record<string, KitOutcome> = {};
   const gameCounts: Record<string, number> = {};
+  const kills: Record<string, Record<string, number>> = {};
   for (const [matchId, phase] of Object.entries(kit.stageOfMatch)) {
     if (phase !== phaseId) continue;
     stageOfMatch[matchId] = phase;
@@ -84,6 +92,8 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
     if (outcome) outcomes[matchId] = outcome;
     const games = kit.gameCounts?.[matchId];
     if (games !== undefined) gameCounts[matchId] = games;
+    const matchKills = kit.kills?.[matchId];
+    if (matchKills !== undefined) kills[matchId] = matchKills;
   }
   return {
     engine: kit.engine,
@@ -91,6 +101,7 @@ export function kitForPhase(kit: KitStandingsData | null | undefined, phaseId: s
     stageOfMatch,
     outcomes,
     ...(Object.keys(gameCounts).length > 0 ? { gameCounts } : {}),
+    ...(Object.keys(kills).length > 0 ? { kills } : {}),
     coinFlips: { [phaseId]: kit.coinFlips[phaseId] ?? {} },
     ...(kit.manualOrder?.[phaseId] ? { manualOrder: { [phaseId]: kit.manualOrder[phaseId] } } : {}),
     ...(kit.adjustments?.[phaseId] ? { adjustments: { [phaseId]: kit.adjustments[phaseId] } } : {}),
@@ -110,7 +121,11 @@ function seasonAdjustments(kit: KitStandingsData): Record<string, number> | unde
   return total;
 }
 
-/** The phase a list of matches belongs to, or null when it mixes phases (a season-wide table) or says nothing. */
+/**
+ * The phase a list of matches belongs to, or null when it mixes phases (a season-wide table) or says nothing. A caller
+ * that ranks ONE phase passes `kitForPhase(kit, phaseId)`: a phase with no completed match yet (or one the cached
+ * `stageOfMatch` does not know) cannot be told from the season by its matches, and would fall back to the season table.
+ */
 export function phaseOfMatches(kit: KitStandingsData, matches: readonly MatchRecord[]): string | null {
   const phases = new Set<string>();
   for (const match of matches) {
@@ -150,7 +165,9 @@ export function kitStandings(
     matches,
     outcomes: kit.outcomes,
     byes: options.byes,
-    battleStats: options.battleStats,
+    // Kills come from the kit data, never from `options.battleStats` (the legacy tables' input, which counts games of open
+    // and unresolved matches and is capped): every caller of a kit table sees the same kills.
+    kills: kit.kills,
     gamesByMatch: options.gamesByMatch,
     gameCounts: kit.gameCounts,
     maxRound: options.maxRound,
@@ -176,10 +193,13 @@ export function kitStandings(
     const own = match.match_id === undefined ? undefined : kit.stageOfMatch[match.match_id];
     return (own === undefined ? undefined : kit.stages[own]?.scoring) ?? fallback;
   };
+  // A bye carrying its phase (`stage_id`) scores that stage's `bye` points; one without (or of an unknown phase) the first stage's.
+  const byePointsOf = (bye: StagedBye): number => (bye.stage_id === undefined ? undefined : kit.stages[bye.stage_id]?.scoring.bye) ?? fallback.bye;
   return computeStageStandings({
     ...common,
     stage: { key: 'season', scoring: fallback, rank: [...SEASON_RANK] },
     scoringOf,
+    byePointsOf,
     pointAdjustments: seasonAdjustments(kit),
   });
 }

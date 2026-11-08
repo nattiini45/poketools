@@ -28,9 +28,14 @@ vi.mock('@/lib/tournament/bracket-generate', () => ({
   generateEliminationBracket: vi.fn(),
 }));
 
-vi.mock('@/lib/format-studio/attach', () => ({
-  assertSeasonFormatAttached: vi.fn(),
+vi.mock('@/lib/format-engine/route-guards', () => ({
+  loadKitPhaseOfTournament: vi.fn(),
+  assertPhaseReadyForFirstRound: vi.fn(),
+  announceKitRound: vi.fn(),
+  wantsForcedStart: vi.fn(),
+  isKitEnginePhase: (phase: { engine?: string } | null) => phase?.engine === 'kit',
 }));
+vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn() }));
 
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/discord/notify', () => ({ emitDiscordEvent: vi.fn() }));
@@ -42,8 +47,10 @@ import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tourn
 import { logAuditEvent } from '@/lib/audit/log';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
+import { revalidateTag } from 'next/cache';
 import { generateEliminationBracket } from '@/lib/tournament/bracket-generate';
-import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
+import { announceKitRound, assertPhaseReadyForFirstRound, loadKitPhaseOfTournament, wantsForcedStart } from '@/lib/format-engine/route-guards';
+import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { FormatStudioError } from '@/lib/format-studio/errors';
 
 const tournamentId = '00000000-0000-4000-8000-000000000001';
@@ -69,6 +76,9 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(requireResourceAdmin).mockResolvedValue({ playerId: 'admin-1', name: 'Admin' } as never);
+    vi.mocked(loadKitPhaseOfTournament).mockResolvedValue(null);
+    vi.mocked(assertPhaseReadyForFirstRound).mockResolvedValue(null);
+    vi.mocked(wantsForcedStart).mockReturnValue(false);
   });
 
   it('requires tournament resource admin first', async () => {
@@ -231,6 +241,7 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
     const tournamentOf = (seasonFormatType: string | undefined) =>
       ({
         id: tournamentId,
+        name: 'Spring Open',
         bracket_type: 'single_elim',
         status: 'upcoming',
         season_id: seasonId,
@@ -239,14 +250,13 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
 
     it('refuses a custom league without an attached format with 409 format_not_attached, before any write', async () => {
       vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
-      vi.mocked(assertSeasonFormatAttached).mockRejectedValue(new FormatStudioError('format_not_attached'));
+      vi.mocked(loadKitPhaseOfTournament).mockRejectedValue(new FormatStudioError('format_not_attached'));
 
       const response = await POST(request(), params);
       const payload = await response.json();
 
       expect(response.status).toBe(409);
       expect(payload.code).toBe('format_not_attached');
-      expect(assertSeasonFormatAttached).toHaveBeenCalledWith(seasonId);
       expect(getParticipants).not.toHaveBeenCalled();
       expect(generateEliminationBracket).not.toHaveBeenCalled();
       expect(updateSeason).not.toHaveBeenCalled();
@@ -254,7 +264,6 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
 
     it('generates the bracket of a custom league whose format is attached', async () => {
       vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
-      vi.mocked(assertSeasonFormatAttached).mockResolvedValue(undefined);
       vi.mocked(getParticipants).mockResolvedValue(twoPlayers as never);
       vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds: 3 } as never);
       vi.mocked(getSeasonById).mockResolvedValue({ id: seasonId, status: 'active' } as never);
@@ -265,8 +274,21 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
       expect(generateEliminationBracket).toHaveBeenCalledTimes(1);
     });
 
+    it('expires the public reads when the league write fails after the bracket was written', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(tournamentOf('custom'));
+      vi.mocked(getParticipants).mockResolvedValue(twoPlayers as never);
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds: 3 } as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: seasonId, status: 'upcoming' } as never);
+      vi.mocked(updateSeason).mockRejectedValueOnce(new Error('connection reset'));
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(500);
+      expect(vi.mocked(revalidateTag)).toHaveBeenCalledWith(`tournament:${tournamentId}`, { expire: 0 });
+    });
+
     it.each(['singles', 'doubles', 'draft', 'evolution_point_buy', undefined])(
-      'does not look at the format of a %s league',
+      'announces nothing for a %s league (it has no kit phase)',
       async (formatType) => {
         vi.mocked(getTournamentById).mockResolvedValue(tournamentOf(formatType));
         vi.mocked(getParticipants).mockResolvedValue(twoPlayers as never);
@@ -276,7 +298,8 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
         const response = await POST(request(), params);
 
         expect(response.status).toBe(201);
-        expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
+        expect(announceKitRound).not.toHaveBeenCalled();
+        expect(getRoundsByTournament).not.toHaveBeenCalled();
       },
     );
 
@@ -288,7 +311,82 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
       const response = await POST(request(), params);
 
       expect(response.status).toBe(201);
-      expect(assertSeasonFormatAttached).not.toHaveBeenCalled();
+      expect(announceKitRound).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('a bracket stage of a kit league', () => {
+    const seasonId = '00000000-0000-4000-8000-0000000000aa';
+    const kitTournament = {
+      id: tournamentId,
+      name: 'Finals',
+      bracket_type: 'single_elim',
+      status: 'upcoming',
+      season_id: seasonId,
+      season_format_type: 'custom',
+      current_round: 0,
+    } as never;
+    const kitPhase = { engine: 'kit', stage: { key: 'finals' }, revision: 4 } as never;
+    const twoPlayers = [
+      { id: 'p1', name: 'Player 1', seed: 1 },
+      { id: 'p2', name: 'Player 2', seed: 2 },
+    ];
+
+    beforeEach(() => {
+      vi.mocked(getTournamentById).mockResolvedValue(kitTournament);
+      vi.mocked(getParticipants).mockResolvedValue(twoPlayers as never);
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds_created: 2, matches_materialized: 1 });
+      vi.mocked(getSeasonById).mockResolvedValue({ id: seasonId, status: 'active' } as never);
+      vi.mocked(loadKitPhaseOfTournament).mockResolvedValue(kitPhase);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([
+        { id: 'r2', round_number: 2 },
+        { id: 'r1', round_number: 1 },
+      ] as never);
+    });
+
+    it('checks the first-round gate before anything is written, and writes nothing when the league is not ready', async () => {
+      vi.mocked(assertPhaseReadyForFirstRound).mockRejectedValue(new UserFacingError('not ready', { code: 'format_not_ready', status: 409 }));
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(409);
+      expect((await response.json()).code).toBe('format_not_ready');
+      expect(generateEliminationBracket).not.toHaveBeenCalled();
+      expect(announceKitRound).not.toHaveBeenCalled();
+    });
+
+    it('hands the force flag and the admin to the gate', async () => {
+      vi.mocked(wantsForcedStart).mockReturnValue(true);
+
+      await POST(request(), params);
+
+      expect(assertPhaseReadyForFirstRound).toHaveBeenCalledWith(kitTournament, kitPhase, { force: true, actor: { id: 'admin-1', name: 'Admin' } });
+    });
+
+    it('announces the first round after the write: stage_start for a phase that was upcoming, with the forced start to audit', async () => {
+      const forced = { tournamentId, seasonId } as never;
+      vi.mocked(assertPhaseReadyForFirstRound).mockResolvedValue(forced);
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(201);
+      expect(announceKitRound).toHaveBeenCalledWith(kitTournament, kitPhase, { roundNumber: 1 }, true, forced);
+      expect(vi.mocked(generateEliminationBracket).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(announceKitRound).mock.invocationCallOrder[0]);
+    });
+
+    it('does not announce when the bracket refuses to generate', async () => {
+      vi.mocked(generateEliminationBracket).mockRejectedValue(new UserFacingError('Bracket already generated', { code: 'bracket_already_generated', status: 409 }));
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(409);
+      expect(announceKitRound).not.toHaveBeenCalled();
+    });
+
+    it('leaves the response shape as it was', async () => {
+      const response = await POST(request(), params);
+
+      expect((await response.json()).data).toEqual({ rounds_created: 2, matches_materialized: 1 });
     });
   });
 });

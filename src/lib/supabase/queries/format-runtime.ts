@@ -170,7 +170,7 @@ export function mapFormatRuntimeDbError(error: unknown): unknown {
 }
 
 /** The changes `format_apply_adjustment` refuses instead of recording them as done (the ops would skip them silently). */
-export const FORMAT_ADJUSTMENT_REFUSALS = ['relation_has_links', 'insufficient_holding'] as const;
+export const FORMAT_ADJUSTMENT_REFUSALS = ['relation_has_links', 'insufficient_holding', 'domain_in_use', 'action_state_unchanged'] as const;
 export type FormatAdjustmentRefusal = (typeof FORMAT_ADJUSTMENT_REFUSALS)[number];
 
 /**
@@ -357,6 +357,12 @@ export interface OpenFormatCheckInput {
   ruleId: string;
   dedupeKey: string;
   subject: Json;
+  /**
+   * The `season_formats.revision` of the context the check was planned from. A format replaced, switched, detached or
+   * amended since raises `format_context_stale` (nothing is opened, the dedupe key stays free): callers treat it as
+   * retry-later, like an event.
+   */
+  revision: number;
 }
 
 /** Opens a check. The new id, or null when a check with that dedupe key already exists. */
@@ -367,6 +373,7 @@ export async function openFormatCheck(input: OpenFormatCheckInput): Promise<stri
     p_rule_id: input.ruleId,
     p_dedupe_key: input.dedupeKey,
     p_subject: input.subject,
+    p_expected_revision: input.revision,
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return (data as string | null) ?? null;

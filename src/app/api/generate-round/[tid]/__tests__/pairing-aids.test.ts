@@ -93,7 +93,7 @@ function stage(pairing: Pairing): Stage {
 }
 
 function phase(pairing: Pairing): KitPhase {
-  return { engine: 'kit', seed: 'seed-0123456789', stage: stage(pairing), outcomes: {}, tableExtras: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', revision: 3, stage: stage(pairing), outcomes: {}, tableExtras: {} };
 }
 
 function tournament(bracket_type: 'swiss' | 'round_robin', current_round: number, formatType = 'custom') {
@@ -152,7 +152,7 @@ describe('generate-round pairing aids', () => {
     expect(writtenPairs()[0]).not.toContain('p1');
     expect(body.warnings).toEqual([{ code: 'pairing_forbidden', params: { count: 1 } }]);
     expect(openForbiddenPairingCheck).toHaveBeenCalledTimes(1);
-    expect(openForbiddenPairingCheck).toHaveBeenCalledWith({ seasonId: SEASON, stageKey: 'main', round: 2, forbidden: 1 });
+    expect(openForbiddenPairingCheck).toHaveBeenCalledWith({ seasonId: SEASON, stageKey: 'main', round: 2, forbidden: 1, revision: 3 });
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ engine: 'kit', forbidden: 1 });
     expect(revalidateTag).toHaveBeenCalledWith(`tournament:${TID}`, { expire: 0 });
     expect(revalidateTag).toHaveBeenCalledWith(`season:${SEASON}`, { expire: 0 });

@@ -182,6 +182,8 @@ describe('finalizeMatchCompletion', () => {
     vi.mocked(updateSignatures).mockResolvedValue([]);
     vi.mocked(checkAchievements).mockResolvedValue([]);
     vi.mocked(markMatchFinalized).mockResolvedValue(true);
+    // The completion the run owns: a completed row whose `confirmed_at` is the token the marker is bound to.
+    vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', confirmed_at: null });
     vi.mocked(getParticipants).mockResolvedValue([]);
     vi.mocked(propagateBracketOnMatchComplete).mockResolvedValue();
     vi.mocked(runEpbMatchdayHooks).mockResolvedValue();
@@ -207,7 +209,7 @@ describe('finalizeMatchCompletion', () => {
     expect(updateRatings).toHaveBeenCalledWith('player-1', 'player-2', false, 'match-1');
     expect(updateSignatures).toHaveBeenCalledTimes(2);
     expect(emitDiscordEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'match_confirmed' }));
-    expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+    expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
@@ -249,6 +251,7 @@ describe('finalizeMatchCompletion', () => {
     it.each(['forfeit', 'no_show'] as const)('writes an admin %s with force and no faints, even without battle stats', async (kind) => {
       vi.mocked(getBattleStatsByMatch).mockRejectedValue(new Error('stats read failed'));
 
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', winner_id: 'player-2', confirmed_at: null });
       const result = await finalizeMatchCompletion({
         match,
         winnerId: 'player-2',
@@ -272,6 +275,7 @@ describe('finalizeMatchCompletion', () => {
     it('gives an admin played result the faint tally of the recorded games', async () => {
       vi.mocked(getBattleStatsByMatch).mockResolvedValue({ 'game-1': [stat('player-1', true), stat('player-2', false)] });
 
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', winner_id: 'player-2', confirmed_at: null });
       await finalizeMatchCompletion({
         match,
         winnerId: 'player-2',
@@ -287,6 +291,7 @@ describe('finalizeMatchCompletion', () => {
     it('still rewrites the row with its own admin played outcome when the battle-stats read failed (a concurrent staging may have replaced it)', async () => {
       vi.mocked(getBattleStatsByMatch).mockRejectedValue(new Error('stats read failed'));
 
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', winner_id: 'player-2', confirmed_at: null });
       const result = await finalizeMatchCompletion({
         match,
         winnerId: 'player-2',
@@ -320,6 +325,7 @@ describe('finalizeMatchCompletion', () => {
     });
 
     it('never forces the played row on the admin path: the admin outcome is the only forced write there', async () => {
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', winner_id: 'player-2', confirmed_at: null });
       await finalizeMatchCompletion({
         match,
         winnerId: 'player-2',
@@ -688,7 +694,7 @@ describe('finalizeMatchCompletion', () => {
     expect(result).toEqual({ finalized: true, complete: true, failed_steps: [] });
     expect(emitDiscordEvent).not.toHaveBeenCalledWith(expect.objectContaining({ event_type: 'rating_milestone' }));
     expect(emitDiscordEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'match_confirmed' }));
-    expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+    expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
   });
 
   it('emits the rating milestone when the rating step crosses a threshold', async () => {
@@ -855,6 +861,106 @@ describe('finalizeMatchCompletion', () => {
     expect(markMatchFinalized).not.toHaveBeenCalled();
   });
 
+  describe('the completion a run owns', () => {
+    const COMPLETION_A = '2026-11-08T10:00:00.000Z';
+
+    it('binds the marker to the confirmed_at of the completion it started from', async () => {
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', confirmed_at: COMPLETION_A });
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(result).toEqual({ finalized: true, complete: true, failed_steps: [] });
+      expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: COMPLETION_A });
+    });
+
+    it('does not stamp when the match was reopened and completed again meanwhile (the stamp misses its token)', async () => {
+      // The database answers false for a row whose confirmed_at is no longer the one the run read.
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', confirmed_at: COMPLETION_A });
+      vi.mocked(markMatchFinalized).mockResolvedValue(false);
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(result.complete).toBe(false);
+      expect(result.failed_steps).toEqual([]);
+    });
+
+    it.each(['in_progress', 'scheduled', 'pending_confirmation'] as const)(
+      'runs nothing when the match is %s by the time it starts (a reset or reopen got there first)',
+      async (status) => {
+        vi.mocked(getMatchById).mockResolvedValue({ ...match, status });
+
+        const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+        expect(result).toEqual({ finalized: false, reason: 'match_changed', current_status: status });
+        expect(updateRatings).not.toHaveBeenCalled();
+        expect(recordMatchOutcome).not.toHaveBeenCalled();
+        expect(onMatchCompleted).not.toHaveBeenCalled();
+        expect(markMatchFinalized).not.toHaveBeenCalled();
+      }
+    );
+
+    it('runs nothing when the match was completed again with another winner (a different completion, its own run)', async () => {
+      vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'completed', winner_id: 'player-2', confirmed_at: COMPLETION_A });
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(result).toEqual({ finalized: false, reason: 'match_changed', current_status: 'completed' });
+      expect(updateRatings).not.toHaveBeenCalled();
+      expect(markMatchFinalized).not.toHaveBeenCalled();
+    });
+
+    it('still runs its steps when the completion read fails, and leaves the marker unset for the heal', async () => {
+      vi.mocked(getMatchById).mockRejectedValue(new Error('read failed'));
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(updateRatings).toHaveBeenCalled();
+      expect(result).toEqual({ finalized: true, complete: false, failed_steps: ['mark_finalized'] });
+      expect(markMatchFinalized).not.toHaveBeenCalled();
+    });
+
+    it('writes the outcome row before anything slower: a completed match is visible to the standings from the flip on', async () => {
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      const outcomeAt = vi.mocked(recordMatchOutcome).mock.invocationCallOrder[0];
+      expect(outcomeAt).toBeLessThan(vi.mocked(updateRatings).mock.invocationCallOrder[0]);
+      expect(outcomeAt).toBeLessThan(vi.mocked(recomputeStreaks).mock.invocationCallOrder[0]);
+    });
+
+    it('expires the caches after the last write step and before the marker, not before the first write', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        id: 'tournament-1',
+        name: 'Cup',
+        season_id: null,
+        bracket_type: 'single_elim',
+      } as never);
+
+      await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      const revalidateAt = vi.mocked(revalidateMatchPages).mock.invocationCallOrder[0];
+      for (const written of [
+        vi.mocked(updateRatings),
+        vi.mocked(recordMatchOutcome),
+        vi.mocked(recomputeStreaks),
+        vi.mocked(propagateBracketOnMatchComplete),
+      ]) {
+        expect(written.mock.invocationCallOrder[0]).toBeLessThan(revalidateAt);
+      }
+      expect(revalidateAt).toBeLessThan(vi.mocked(markMatchFinalized).mock.invocationCallOrder[0]);
+      expect(revalidateMatchPages).toHaveBeenCalledTimes(1);
+    });
+
+    it('expires the caches even when a step failed (the writes that did land are visible), leaving the marker unset', async () => {
+      vi.mocked(recomputeStreaks).mockRejectedValue(new Error('streaks failed'));
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(result.failed_steps).toEqual(['streaks']);
+      expect(revalidateMatchPages).toHaveBeenCalledWith('tournament-1', 'match-1');
+      expect(markMatchFinalized).not.toHaveBeenCalled();
+    });
+  });
+
   describe('the format runtime step', () => {
     const customLeague = { id: 'tournament-1', name: 'Weekly', season_id: 'season-1', season_format_type: 'custom' };
 
@@ -880,6 +986,20 @@ describe('finalizeMatchCompletion', () => {
         expect.objectContaining({ matchId: 'match-1', roundId: 'round-1', player1Id: 'player-1', player2Id: 'player-2', winnerId: 'player-1' })
       );
       expect(result).toEqual({ finalized: true, complete: true, failed_steps: [] });
+    });
+
+    it('does not fire the hook after a failed bracket propagation: the stage end must not complete the phase around the missing next-slot match', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({ ...customLeague, bracket_type: 'single_elim' } as never);
+      vi.mocked(getParticipants).mockResolvedValue([]);
+      vi.mocked(propagateBracketOnMatchComplete).mockRejectedValue(new Error('boom'));
+
+      const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+
+      expect(onMatchCompleted).not.toHaveBeenCalled();
+      expect(result.propagation_failed).toBe(true);
+      // The propagation failed and the hook is blocked behind it (reported like any blocked step); the marker stays unset.
+      expect(result.failed_steps).toEqual(['bracket_propagation', 'format_hook']);
+      expect(markMatchFinalized).not.toHaveBeenCalled();
     });
 
     it('does not run for a league that is not a custom league', async () => {
@@ -1137,7 +1257,7 @@ describe('finalizeMatchCompletion', () => {
       expect(checkAchievements).not.toHaveBeenCalled();
       expect(emitDiscordEvent).not.toHaveBeenCalled();
       expect(emitSocialEvent).not.toHaveBeenCalled();
-      expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+      expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
       // The played outcome is rewritten without force, so an admin row survives the heal.
       expect(recordMatchOutcome).toHaveBeenCalledWith(expect.objectContaining({ kind: 'played', force: false }));
       expect(logAuditEvent).toHaveBeenCalledWith(
@@ -1147,6 +1267,59 @@ describe('finalizeMatchCompletion', () => {
           metadata: expect.objectContaining({ not_rerun: ['achievements', 'announcements'] }),
         })
       );
+    });
+
+    describe('the completion it heals', () => {
+      const HEALED_AT = '2026-11-08T10:00:00.000Z';
+      const snapshot: MatchWithPlayers = { ...completed, confirmed_at: HEALED_AT };
+
+      it('stamps the marker bound to the confirmed_at of the worklist row', async () => {
+        vi.mocked(getMatchById).mockResolvedValue({ ...snapshot });
+
+        const result = await healMatchFinalization(snapshot);
+
+        expect(result).toEqual({ healed: true, failed_steps: [] });
+        expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: HEALED_AT });
+      });
+
+      it.each([
+        ['reopened and completed again (another confirmed_at)', { confirmed_at: '2026-11-08T11:00:00.000Z' }],
+        ['completed again with the other winner', { winner_id: 'player-2' }],
+        ['reopened', { status: 'in_progress' as const }],
+        ['reset', { status: 'scheduled' as const }],
+      ])('heals nothing when the match was %s since the worklist read', async (_label, change) => {
+        vi.mocked(getMatchById).mockResolvedValue({ ...snapshot, ...change });
+
+        const result = await healMatchFinalization(snapshot);
+
+        expect(result).toEqual({ healed: false, skipped: true, reason: 'not_completed', failed_steps: [] });
+        expect(recomputeStreaks).not.toHaveBeenCalled();
+        expect(recordMatchOutcome).not.toHaveBeenCalled();
+        expect(propagateBracketOnMatchComplete).not.toHaveBeenCalled();
+        expect(onMatchCompleted).not.toHaveBeenCalled();
+        expect(markMatchFinalized).not.toHaveBeenCalled();
+      });
+
+      it('keeps the match on the worklist when the completion read fails', async () => {
+        vi.mocked(getMatchById).mockRejectedValue(new Error('read failed'));
+
+        const result = await healMatchFinalization(snapshot);
+
+        expect(result).toEqual({ healed: false, failed_steps: ['mark_finalized'] });
+        expect(recomputeStreaks).not.toHaveBeenCalled();
+      });
+
+      it('expires the caches after the last write, also when a step failed', async () => {
+        vi.mocked(recomputeStreaks).mockRejectedValue(new Error('streaks failed'));
+
+        const result = await healMatchFinalization(completed);
+
+        expect(result).toEqual({ healed: false, failed_steps: ['streaks'] });
+        expect(revalidateMatchPages).toHaveBeenCalledTimes(1);
+        expect(vi.mocked(revalidateMatchPages).mock.invocationCallOrder[0]).toBeGreaterThan(
+          vi.mocked(updateSignatures).mock.invocationCallOrder[0]
+        );
+      });
     });
 
     it('stops at a ratings verify with missing history: needs an admin, re-runs nothing else', async () => {
@@ -1287,7 +1460,7 @@ describe('finalizeMatchCompletion', () => {
 
       expect(result).toEqual({ healed: true, failed_steps: [] });
       expect(getRatingHistoryByMatch).not.toHaveBeenCalled();
-      expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+      expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
     });
 
     it('propagates a failed rating-scope read as a failed ratings verify (retried next run)', async () => {
@@ -1314,7 +1487,7 @@ describe('finalizeMatchCompletion', () => {
 
         expect(result).toEqual({ healed: true, failed_steps: [] });
         expect(onMatchCompleted).toHaveBeenCalledWith(expect.objectContaining({ matchId: 'match-1', winnerId: 'player-1' }));
-        expect(markMatchFinalized).toHaveBeenCalledWith('match-1');
+        expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
       });
 
       it('keeps the match on the worklist while the hook keeps failing', async () => {
@@ -1333,6 +1506,39 @@ describe('finalizeMatchCompletion', () => {
 
         expect(onMatchCompleted).not.toHaveBeenCalled();
         expect(result.failed_steps).toEqual(['outcome', 'format_hook']);
+      });
+
+      it('does not call the hook after a failed bracket propagation: the stage end must not complete the phase around the missing slot', async () => {
+        vi.mocked(getTournamentById).mockResolvedValue({
+          id: 'tournament-1',
+          name: 'Cup',
+          season_id: 'season-1',
+          season_format_type: 'custom',
+          bracket_type: 'single_elim',
+        } as never);
+        vi.mocked(propagateBracketOnMatchComplete).mockRejectedValue(new Error('boom'));
+
+        const result = await healMatchFinalization(completed);
+
+        expect(onMatchCompleted).not.toHaveBeenCalled();
+        expect(result).toEqual({ healed: false, failed_steps: ['bracket_propagation', 'format_hook'] });
+        expect(markMatchFinalized).not.toHaveBeenCalled();
+      });
+
+      it('runs the propagation before the hook', async () => {
+        vi.mocked(getTournamentById).mockResolvedValue({
+          id: 'tournament-1',
+          name: 'Cup',
+          season_id: 'season-1',
+          season_format_type: 'custom',
+          bracket_type: 'single_elim',
+        } as never);
+
+        await healMatchFinalization(completed);
+
+        expect(vi.mocked(propagateBracketOnMatchComplete).mock.invocationCallOrder[0]).toBeLessThan(
+          vi.mocked(onMatchCompleted).mock.invocationCallOrder[0]
+        );
       });
     });
 

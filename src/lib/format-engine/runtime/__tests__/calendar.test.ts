@@ -27,6 +27,21 @@ function calendar(overrides: Partial<StageCalendar> = {}): StageCalendar {
 const clock = { timeZone: 'Europe/Berlin', seasonStart: null };
 const iso = (date: Date | null): string | null => date?.toISOString() ?? null;
 
+describe('the clock shift of a restored league', () => {
+  it('moves every instant the calendar computes by the time the league spent in the recycle bin, so nothing is due on restore', () => {
+    const away = { ...clock, shiftSeconds: 20 * 86_400 };
+    const gifts = calendar({ marks: [{ key: 'open', round: 1, offset_hours: 0 }] });
+    expect(iso(roundOpensAt(calendar(), 1, clock))).toBe('2026-03-23T17:00:00.000Z');
+    expect(iso(roundOpensAt(calendar(), 1, away))).toBe('2026-04-12T17:00:00.000Z');
+    expect(iso(roundDeadlineAt(calendar(), 1, away))).toBe('2026-04-19T17:00:00.000Z');
+    // A mark that fell due at 2026-03-23 17:00 is not due again 5 days after, with the shift: it falls due 20 days later.
+    const fiveDaysAfter = new Date('2026-03-28T00:00:00Z');
+    expect(dueMarks(gifts, clock, fiveDaysAfter).map((m) => m.key)).toEqual(['open']);
+    expect(dueMarks(gifts, away, fiveDaysAfter)).toEqual([]);
+    expect(dueMarks(gifts, away, new Date('2026-04-13T00:00:00Z')).map((m) => m.key)).toEqual(['open']);
+  });
+});
+
 describe('roundOpensAt', () => {
   it('opens round 1 at the wall time of the start date', () => {
     expect(iso(roundOpensAt(calendar(), 1, clock))).toBe('2026-03-23T17:00:00.000Z');

@@ -264,6 +264,8 @@ const standingsPreview = cache((kind: 'league' | 'tournament', id: string, limit
       tags: [
         kind === 'league' ? publicTags.season(id) : publicTags.tournament(id),
         publicTags.players,
+        // A custom league's table embeds the global ratings (a rating tiebreak or column).
+        publicTags.ratings,
       ],
       ttl: PUBLIC_LIST_TTL_S,
     },
@@ -378,10 +380,11 @@ const seasonFormatRules = cache((seasonId: string) =>
 
 /**
  * A custom league's kit standings data (`loadKitStandingsData`), null when its format does not rank. Holds no seed:
- * the coin flips arrive as draws. Throws on a failed read.
+ * the coin flips arrive as draws. Throws on a failed read. It embeds the players' global ratings (a stage that ranks by or
+ * shows `rating`), which change with matches of OTHER leagues, so it also carries the ratings tag.
  */
 const seasonKitStandings = cache((seasonId: string) =>
-  cachedRead(seasonSpec('season-kit-standings', seasonId), async () => (await loadKitStandingsData(seasonId)) ?? null),
+  cachedRead(seasonSpec('season-kit-standings', seasonId, [publicTags.ratings]), async () => (await loadKitStandingsData(seasonId)) ?? null),
 );
 
 /** The narrow battle_stats rows of every stage of a league (kill rankings). */
@@ -420,7 +423,12 @@ const seasonMatchRecords = cache((seasonId: string) =>
  */
 function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
   const listId = preload.league.point_buy_list_id;
-  const extraTags = [publicTags.players, ...(listId ? [publicTags.pointBuyList(listId)] : [])];
+  // A custom league's tables embed the global ratings (kit standings data): a rating change expires them.
+  const extraTags = [
+    publicTags.players,
+    ...(preload.league.format_type === 'custom' ? [publicTags.ratings] : []),
+    ...(listId ? [publicTags.pointBuyList(listId)] : []),
+  ];
   return cachedRead(seasonSpec('world-route-data-public-v6', seasonId, extraTags), () =>
     buildWorldRouteData(seasonId, preload),
   );
@@ -435,7 +443,8 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
  * stored tiebreaker order; `-v5` retires entries cached before a kit league's tables ranked by its format.
  */
 function leagueSchedule(seasonId: string, preload: LeagueSchedulePreload) {
-  return cachedRead(seasonSpec('league-schedule-public-v5', seasonId, [publicTags.players]), () =>
+  const tags = [publicTags.players, ...(preload.context?.formatType === 'custom' ? [publicTags.ratings] : [])];
+  return cachedRead(seasonSpec('league-schedule-public-v5', seasonId, tags), () =>
     getLeagueSchedule(seasonId, preload),
   );
 }

@@ -8,6 +8,7 @@ import { assertEnrollmentSyncAllowed, syncStandingsEnrollment } from '@/lib/tour
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { expireSeasonReads } from '@/lib/revalidation';
+import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -24,7 +25,7 @@ interface RouteParams {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
 
@@ -86,6 +87,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       manual_list: parsed.data.manual_list,
     });
     expireSeasonReads(id, [sourceStage.id, targetStage.id]);
+
+    // A forced advance or a hand-picked list moves players outside the format's own selection: it leaves a trail.
+    if (parsed.data.force || parsed.data.manual_list) {
+      logAuditEvent({
+        actor_id: admin.playerId,
+        actor_name: admin.name,
+        action: 'season.phase.advance',
+        resource_type: 'phase',
+        resource_id: targetStage.id,
+        resource_name: targetStage.name,
+        metadata: {
+          season_id: id,
+          source_phase: sourceStage.id,
+          force: parsed.data.force ?? false,
+          manual_list_count: parsed.data.manual_list?.length ?? 0,
+          enrolled_count: result.enrolled_count,
+        },
+      });
+    }
 
     const summary = `Enrolled ${result.enrolled_count} players from ${result.source_phase_name ?? sourceStage.name}`;
 

@@ -114,20 +114,45 @@ describe('20261105090000 format runtime', () => {
       keys.indexOf("pg_advisory_xact_lock(hashtextextended('format_relation:'"),
     );
     expect(keys).toMatch(/ORDER BY action_key/);
+    // The sorted holding and exclusive-key locks are one helper: holdings (resource, player) first, then the exclusive keys
+    // (resource, item), each ORDER BY, so a grant, a revoke and the release of an earlier submission never wait in a cycle.
+    const grants = text.slice(text.indexOf('FUNCTION public.format__lock_grants('), text.indexOf('FUNCTION public.format__resource_capacity('));
+    const holdingLoop = grants.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, v_lock.player_id)');
+    const exclusiveLoop = grants.indexOf('format__lock_exclusive(p_season_id, v_lock.resource_key, v_lock.item_id)');
+    expect(holdingLoop).toBeGreaterThan(-1);
+    expect(exclusiveLoop).toBeGreaterThan(holdingLoop);
+    expect(grants.slice(0, holdingLoop)).toMatch(/ORDER BY resource_key, player_id/);
+    expect(grants.slice(holdingLoop, exclusiveLoop)).toMatch(/ORDER BY resource_key, item_id/);
+    // The exclusive key is part of the lock order: format__insert_item takes it too (a no-op after the pre-pass).
+    expect(insert).toMatch(/IF p_exclusive AND p_item IS NOT NULL THEN\s+PERFORM public\.format__lock_exclusive\(p_season_id, p_resource, p_item\)/);
+
     const ops = text.slice(text.indexOf('FUNCTION public.format__apply_ops('), text.indexOf('FUNCTION public.format_fire_event('));
     const actionLocks = ops.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
-    const holdingLocks = ops.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, v_lock.player_id)');
+    const holdingLocks = ops.indexOf('PERFORM public.format__lock_grants(p_season_id');
     expect(actionLocks).toBeGreaterThan(-1);
     expect(holdingLocks).toBeGreaterThan(actionLocks);
     expect(holdingLocks).toBeLessThan(ops.indexOf('FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP'));
-    expect(ops.slice(0, holdingLocks)).toMatch(/ORDER BY resource_key, player_id/);
+    // A revoke takes the holding lock too (a grant of the same holding and another removal are serialised with it).
+    expect(ops.slice(holdingLocks, ops.indexOf('FOR v_op IN SELECT value FROM jsonb_array_elements(p_ops) LOOP'))).toMatch(
+      /o ->> 'op' IN \('grant_item', 'revoke_item'\)/,
+    );
+
+    // An inverse revoke names the grant's source: its rows are taken before another source's, then oldest first.
+    const revoke = ops.slice(ops.indexOf("ELSIF v_kind = 'revoke_item' THEN"), ops.indexOf("ELSIF v_kind = 'set_attr' THEN"));
+    expect(revoke).toMatch(/ORDER BY \(CASE WHEN v_op ->> 'source' IS NOT NULL[\s\S]*source_ref IS NOT DISTINCT FROM \(v_op ->> 'source_ref'\)[\s\S]*THEN 0 ELSE 1 END\),\s+created_at, id/);
 
     const submit = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_action_submit('), text.indexOf('FUNCTION public.format_apply_adjustment('));
-    const submitLocks = submit.indexOf('format__lock_holding(p_season_id, v_lock.resource_key, coalesce(p_target, p_actor))');
+    const submitLocks = submit.indexOf('PERFORM public.format__lock_grants(p_season_id');
     expect(submitLocks).toBeGreaterThan(submit.indexOf('format__check_revision'));
-    expect(submit.slice(0, submitLocks)).toMatch(/ORDER BY resource_key/);
+    // The new items and the items the earlier submission granted (deleted below) are locked together.
+    expect(submit.slice(submitLocks, submit.indexOf('DELETE FROM public.format_resource_items'))).toMatch(/UNION ALL[\s\S]*o\.source_ref = v_row\.id::text/);
     expect(submitLocks).toBeLessThan(submit.indexOf('DELETE FROM public.format_resource_items'));
     expect(submitLocks).toBeLessThan(submit.indexOf('PERFORM public.format__insert_item('));
+
+    // A save releases the items of a submitted pick under the same locks.
+    const save = text.slice(text.indexOf('FUNCTION public.format_action_save('), text.indexOf('FUNCTION public.format_action_submit('));
+    expect(save.indexOf('format__lock_grants(p_season_id')).toBeGreaterThan(-1);
+    expect(save.indexOf('format__lock_grants(p_season_id')).toBeLessThan(save.indexOf('DELETE FROM public.format_resource_items'));
   });
 
   it('releases the items and the submitted_at of a submitted pick that a save turns into a draft', () => {
@@ -159,9 +184,21 @@ describe('20261105090000 format runtime', () => {
     // A lost race writes nothing: the roster and the source change only after the comparison.
     expect(body.indexOf('RETURN false')).toBeLessThan(body.indexOf('DELETE FROM public.tournament_participants'));
     expect(body.indexOf('DELETE FROM public.tournament_participants')).toBeLessThan(body.indexOf('INSERT INTO public.tournament_participants'));
-    expect(body.indexOf('INSERT INTO public.tournament_participants')).toBeLessThan(body.indexOf('UPDATE public.tournaments SET enrollment_source'));
-    expect(text).toContain('REVOKE ALL ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text) FROM PUBLIC, anon, authenticated;');
-    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text) TO service_role;');
+    expect(body.indexOf('INSERT INTO public.tournament_participants')).toBeLessThan(body.search(/UPDATE public\.tournaments\s+SET enrollment_source/));
+    // "Not frozen, no rounds" is decided under the row lock (not from the application's earlier read) unless the sync is forced,
+    // before anything is deleted, and the stored frozen flag is the one kept.
+    const frozen = body.indexOf("RAISE EXCEPTION 'enrollment_frozen'");
+    const rounds = body.indexOf("RAISE EXCEPTION 'enrollment_rounds_exist'");
+    expect(frozen).toBeGreaterThan(compare);
+    expect(rounds).toBeGreaterThan(frozen);
+    expect(rounds).toBeLessThan(body.indexOf('DELETE FROM public.tournament_participants'));
+    expect(body).toContain('IF NOT coalesce(p_force, false) THEN');
+    expect(body).toMatch(/jsonb_build_object\('frozen', coalesce\(v_current ->> 'frozen', 'false'\) = 'true'\)/);
+    expect(text).toContain('REVOKE ALL ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text, boolean) FROM PUBLIC, anon, authenticated;');
+    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.tournament_enrollment_replace(uuid, jsonb, jsonb, text, boolean) TO service_role;');
+    // The freeze is one atomic jsonb update under the same row lock, service-role only.
+    expect(text).toMatch(/UPDATE public\.tournaments\s+SET enrollment_source = jsonb_set\(enrollment_source, '\{frozen\}', 'true'::jsonb\)/);
+    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.tournament_enrollment_freeze(uuid) TO service_role;');
   });
 
   it('keeps the internal helpers service-role only', () => {
@@ -185,9 +222,37 @@ describe('20261105120000 attach and detach', () => {
   const attach = text.slice(text.indexOf('FUNCTION public.format_attach_season('), text.indexOf('FUNCTION public.format_detach_season('));
   const detach = text.slice(text.indexOf('FUNCTION public.format_detach_season('));
 
-  it('clears the runtime tables when an attach replaces a format and on detach', () => {
-    expect(attach).toMatch(/IF v_replaced THEN[\s\S]*PERFORM public\.format__clear_runtime\(p_season_id\)/);
+  it('clears the runtime tables on every attach (a first one too: rows without a format belong to none) and on detach', () => {
+    expect(attach).toMatch(/PERFORM public\.format__clear_runtime\(p_season_id\)/);
+    // The confirmation guard only covers a replace; a first attach clears silently.
+    expect(attach).toMatch(/IF v_replaced THEN\s+v_cleared := public\.format__guard_runtime_clear\([^;]*;\s+END IF;/);
     expect(detach).toMatch(/PERFORM public\.format__clear_runtime\(p_season_id\)/);
+  });
+
+  it('locks every phase row of the league FOR UPDATE, after the seasons row and before the started check, in attach and detach', () => {
+    const helper = text.slice(text.indexOf('FUNCTION public.format__lock_phases('), text.indexOf('FUNCTION public.format__guard_runtime_clear('));
+    expect(helper).toMatch(/FROM public\.tournaments t WHERE t\.season_id = p_season_id ORDER BY t\.id FOR UPDATE/);
+    for (const [name, body] of [['attach', attach], ['detach', detach]] as const) {
+      const seasons = body.indexOf('FOR UPDATE');
+      const phases = body.indexOf('PERFORM public.format__lock_phases(p_season_id)');
+      const started = body.indexOf('public.format_season_started(p_season_id)');
+      expect(seasons, name).toBeGreaterThan(-1);
+      expect(phases, name).toBeGreaterThan(seasons);
+      expect(started, name).toBeGreaterThan(phases);
+    }
+  });
+
+  it('binds a confirmed clear to the counts the admin saw: a table that grew since raises the signal again', () => {
+    const guard = text.slice(text.indexOf('FUNCTION public.format__guard_runtime_clear('), text.indexOf('FUNCTION public.format_attach_season('));
+    expect(guard).toMatch(/p_confirmed_counts jsonb DEFAULT NULL/);
+    expect(guard).toMatch(/IF p_confirm AND p_confirmed_counts IS NOT NULL[\s\S]*v_links > coalesce\(\(p_confirmed_counts ->> 'links'\)::integer, 0\)[\s\S]*RAISE EXCEPTION 'FORMAT_RUNTIME_HAS_DATA'/);
+    expect(attach).toMatch(/p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL\)/);
+    expect(detach).toMatch(/p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL\) RETURNS jsonb/);
+  });
+
+  it('refuses to change format_type from or to custom under a format or after the start, in the database', () => {
+    expect(text).toMatch(/CREATE TRIGGER trg_seasons_guard_format_type BEFORE UPDATE OF format_type ON public\.seasons/);
+    expect(text).toMatch(/OLD\.format_type = 'custom' OR NEW\.format_type = 'custom'[\s\S]*season_formats f WHERE f\.season_id = OLD\.id[\s\S]*format_season_started\(OLD\.id\)[\s\S]*RAISE EXCEPTION 'season_format_type_locked'/);
   });
 
   it('refuses a replace and a detach over runtime data unless the caller confirms, before anything is deleted', () => {
@@ -206,39 +271,43 @@ describe('20261105120000 attach and detach', () => {
     expect(guard).toMatch(/SET search_path = public, pg_temp/);
     expect(guard).not.toMatch(/SECURITY DEFINER/);
 
-    expect(attach).toMatch(/p_confirm_clear boolean DEFAULT false\)/);
+    expect(attach).toMatch(/p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL\)/);
     expect(attach).toMatch(
-      /IF v_replaced THEN\s+v_cleared := public\.format__guard_runtime_clear\(p_season_id, coalesce\(p_confirm_clear, false\)\);\s+PERFORM public\.format__clear_runtime\(p_season_id\)/,
+      /IF v_replaced THEN\s+v_cleared := public\.format__guard_runtime_clear\(p_season_id, coalesce\(p_confirm_clear, false\), p_confirmed_counts\);\s+END IF;/,
     );
     expect(attach).toMatch(/'removed_ruleset_ids', to_jsonb\(v_removed_rulesets\),\s+'cleared', v_cleared\)/);
-    expect(detach).toMatch(/format_detach_season\(p_season_id uuid, p_confirm_clear boolean DEFAULT false\)/);
+    expect(detach).toMatch(/format_detach_season\(p_season_id uuid, p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL\)/);
     expect(detach).toMatch(
-      /v_cleared := public\.format__guard_runtime_clear\(p_season_id, coalesce\(p_confirm_clear, false\)\);[\s\S]*DELETE FROM public\.tournaments[\s\S]*PERFORM public\.format__clear_runtime\(p_season_id\)/,
+      /v_cleared := public\.format__guard_runtime_clear\(p_season_id, coalesce\(p_confirm_clear, false\), p_confirmed_counts\);[\s\S]*DELETE FROM public\.tournaments[\s\S]*PERFORM public\.format__clear_runtime\(p_season_id\)/,
     );
     expect(detach).toMatch(/'removed_ruleset_ids', to_jsonb\(v_removed_rulesets\),\s+'cleared', v_cleared\)/);
   });
 
   it('drops the two old signatures before it defines the new ones (a new argument is an overload)', () => {
     expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_attach_season\(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb\);/);
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_attach_season\(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean\);/);
     expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_detach_season\(uuid\);/);
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.format_detach_season\(uuid, boolean\);/);
     expect(text.indexOf('DROP FUNCTION IF EXISTS public.format_attach_season(')).toBeLessThan(text.indexOf('CREATE OR REPLACE FUNCTION public.format_attach_season('));
     expect(text.indexOf('DROP FUNCTION IF EXISTS public.format_detach_season(')).toBeLessThan(text.indexOf('CREATE OR REPLACE FUNCTION public.format_detach_season('));
   });
 
   it('keeps the guard and both functions service-role only, on their new signatures', () => {
     expect(text).toContain(
-      'REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated;',
+      'REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean, jsonb) FROM PUBLIC, anon, authenticated;',
     );
     expect(text).toContain(
-      'GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) TO service_role;',
+      'GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean, jsonb) TO service_role;',
     );
-    expect(text).toContain('REVOKE ALL ON FUNCTION public.format_detach_season(uuid, boolean) FROM PUBLIC, anon, authenticated;');
-    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.format_detach_season(uuid, boolean) TO service_role;');
-    expect(text).toContain('REVOKE ALL ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) FROM PUBLIC, anon, authenticated;');
-    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) TO service_role;');
-    // No grant of the old, one-argument detach or the eight-argument attach survives.
+    expect(text).toContain('REVOKE ALL ON FUNCTION public.format_detach_season(uuid, boolean, jsonb) FROM PUBLIC, anon, authenticated;');
+    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.format_detach_season(uuid, boolean, jsonb) TO service_role;');
+    expect(text).toContain('REVOKE ALL ON FUNCTION public.format__guard_runtime_clear(uuid, boolean, jsonb) FROM PUBLIC, anon, authenticated;');
+    expect(text).toContain('GRANT EXECUTE ON FUNCTION public.format__guard_runtime_clear(uuid, boolean, jsonb) TO service_role;');
+    // No grant of an older detach or attach signature survives.
     expect(text).not.toMatch(/(?:GRANT|REVOKE)[^;]*format_detach_season\(uuid\)/);
+    expect(text).not.toMatch(/(?:GRANT|REVOKE)[^;]*format_detach_season\(uuid, boolean\)/);
     expect(text).not.toMatch(/(?:GRANT|REVOKE)[^;]*format_attach_season\(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb\)[^,]/);
+    expect(text).not.toMatch(/(?:GRANT|REVOKE)[^;]*format_attach_season\(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean\)[^,]/);
   });
 });
 
@@ -352,10 +421,10 @@ describe('20261106090000 challenges', () => {
     expect(fn).toMatch(/p_known_unfinished IS NULL THEN\s+RAISE EXCEPTION 'invalid_op'/);
   });
 
-  it('writes a round and its matches in one function that reads the phase status FOR SHARE before the first insert', () => {
+  it('writes a round and its matches in one function that reads the phase status FOR NO KEY UPDATE before the first insert', () => {
     const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_write(');
     const fn = text.slice(start, text.indexOf('END $$;', start));
-    const lock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR SHARE;/);
+    const lock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR NO KEY UPDATE;/);
     const refusal = fn.indexOf("RAISE EXCEPTION 'rounds_phase_completed'");
     const roundInsert = fn.indexOf('INSERT INTO public.rounds');
     const matchInsert = fn.indexOf('INSERT INTO public.matches');
@@ -367,7 +436,8 @@ describe('20261106090000 challenges', () => {
     expect(roundInsert).toBeGreaterThan(refusal);
     expect(matchInsert).toBeGreaterThan(roundInsert);
     expect(fn.slice(lock, refusal)).toMatch(/IF NOT FOUND THEN\s+RAISE EXCEPTION 'tournament_not_found'[\s\S]*IF v_status = 'completed' THEN\s+$/);
-    expect(fn).not.toMatch(/FOR KEY SHARE/);
+    // The phase row is never read FOR KEY SHARE (it would not conflict with a status UPDATE); the seasons row is, on purpose.
+    expect(fn).not.toMatch(/FROM public\.tournaments[^;]*FOR KEY SHARE/);
     // a round that already exists (an interrupted call left it empty) gets the matches under the same lock, and must be the phase's own
     expect(fn).toMatch(/SELECT \* INTO v_round FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id FOR UPDATE;\s+IF NOT FOUND THEN\s+RAISE EXCEPTION 'round_not_found'/);
     expect(fn.search(/p_round_id IS NULL THEN\s+INSERT INTO public\.rounds/)).toBeGreaterThan(refusal);
@@ -380,7 +450,7 @@ describe('20261106090000 challenges', () => {
   it('locks an existing round FOR UPDATE after the phase and re-checks it under the lock before any match goes in', () => {
     const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_write(');
     const fn = text.slice(start, text.indexOf('END $$;', start));
-    const phaseLock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR SHARE;/);
+    const phaseLock = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR NO KEY UPDATE;/);
     const roundLock = fn.search(/FROM public\.rounds r WHERE r\.id = p_round_id AND r\.tournament_id = p_tournament_id FOR UPDATE;/);
     const completed = fn.indexOf("RAISE EXCEPTION 'rounds_round_completed'");
     const filled = fn.search(/IF EXISTS \(SELECT 1 FROM public\.matches m WHERE m\.round_id = v_round\.id\) THEN\s+RAISE EXCEPTION 'rounds_round_already_written'/);
@@ -416,7 +486,8 @@ describe('20261106090000 challenges', () => {
     const decline = respond.indexOf("SET status = 'declined'");
     const refusal = respond.indexOf("RAISE EXCEPTION 'challenge_ladder_inactive'");
     const matchInsert = respond.indexOf('INSERT INTO public.matches');
-    expect(respond).toMatch(/IF p_accept THEN\s+v_engine := public\.format__lock_engine\(p_season_id\);\s+END IF;/);
+    // A decline needs no engine, but it takes the seasons row FOR KEY SHARE (a league delete waits for it).
+    expect(respond).toMatch(/IF p_accept THEN\s+v_engine := public\.format__lock_engine\(p_season_id\);\s+ELSE\s+PERFORM 1 FROM public\.seasons s WHERE s\.id = p_season_id FOR KEY SHARE;\s+END IF;/);
     // engine lock before the challenge row; a decline returns before the engine check (it only closes the challenge); the
     // refusal comes before the phase lock and the match insert
     expect(respondEngine).toBeGreaterThan(-1);
@@ -443,9 +514,54 @@ describe('20261106090000 challenges', () => {
     expect(text).not.toMatch(/CREATE TRIGGER[^;]*ON public\.(rounds|matches)/);
   });
 
-  it('grants round_write to service_role only', () => {
-    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb\)\s+FROM PUBLIC, anon, authenticated;/);
-    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb\)\s+TO service_role;/);
+  it('grants round_write and round_delete to service_role only', () => {
+    expect(text).toMatch(/REVOKE ALL ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb, bigint\),\s+public\.round_delete\(uuid\)\s+FROM PUBLIC, anon, authenticated;/);
+    expect(text).toMatch(/GRANT EXECUTE ON FUNCTION[\s\S]*public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb, bigint\),\s+public\.round_delete\(uuid\)\s+TO service_role;/);
+    // The seven-argument form is dropped, never granted.
+    expect(text).toMatch(/DROP FUNCTION IF EXISTS public\.round_write\(uuid, uuid, text, integer, integer, uuid\[\], jsonb\);/);
+  });
+
+  it('takes the league locks before any phase lock in round_write: advisory lock, seasons KEY SHARE, then the revision, then the phase', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_write(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const advisory = fn.indexOf('pg_advisory_xact_lock(hashtext(v_season::text))');
+    const seasons = fn.indexOf('FROM public.seasons s WHERE s.id = v_season FOR KEY SHARE');
+    const revision = fn.indexOf('PERFORM public.format__check_revision(v_season, p_expected_revision)');
+    const phase = fn.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR NO KEY UPDATE;/);
+    expect(advisory).toBeGreaterThan(-1);
+    expect(seasons).toBeGreaterThan(advisory);
+    expect(revision).toBeGreaterThan(seasons);
+    expect(phase).toBeGreaterThan(revision);
+    // The phase moves with its first round, in the same transaction, after the matches are in.
+    expect(fn.indexOf('INSERT INTO public.matches')).toBeLessThan(fn.search(/UPDATE public\.tournaments t\s+SET status = CASE WHEN t\.status = 'upcoming'/));
+    expect(fn).toMatch(/current_round = GREATEST\(t\.current_round, v_round\.round_number\)/);
+  });
+
+  it('takes the seasons row FOR KEY SHARE in round_delete before the challenge, phase and round locks (league_trash_delete locks rounds before phases)', () => {
+    const start = text.indexOf('CREATE OR REPLACE FUNCTION public.round_delete(');
+    const fn = text.slice(start, text.indexOf('END $$;', start));
+    const seasons = fn.indexOf('FROM public.seasons s WHERE s.id = v_season FOR KEY SHARE');
+    const challenges = fn.indexOf('FROM public.format_challenges c WHERE c.phase_id = v_phase');
+    const phase = fn.indexOf('FROM public.tournaments t WHERE t.id = v_phase FOR SHARE');
+    const round = fn.indexOf('FROM public.rounds r WHERE r.id = p_round_id FOR UPDATE');
+    expect(seasons).toBeGreaterThan(-1);
+    expect(challenges).toBeGreaterThan(seasons);
+    expect(phase).toBeGreaterThan(challenges);
+    expect(round).toBeGreaterThan(phase);
+  });
+
+  it('locks challenge rows in id order in every bulk sweep, and clears format_challenges with the other runtime tables', () => {
+    const create = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_create('), text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenge_respond('));
+    expect(create.match(/ORDER BY x\.id FOR UPDATE\) ids/g)).toHaveLength(2);
+    const expire = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_challenges_expire('), text.indexOf('CREATE OR REPLACE FUNCTION public.format__clear_runtime('));
+    expect(expire).toMatch(/ORDER BY c\.season_id/);
+    expect(expire).toMatch(/FROM public\.seasons s WHERE s\.id = v_season FOR KEY SHARE;[\s\S]*ORDER BY x\.id FOR UPDATE\) ids/);
+    expect(text).toMatch(/CREATE OR REPLACE FUNCTION public\.format__clear_runtime\(p_season_id uuid\)[\s\S]*DELETE FROM public\.format_challenges\s+WHERE season_id = p_season_id;/);
+  });
+
+  it('shifts the stage calendar of a restored league through season_formats.clock_shift_seconds', () => {
+    expect(text).toMatch(/p_rel = 'season_formats' THEN[\s\S]*jsonb_set\(r, '\{clock_shift_seconds\}'/);
+    expect(text).toMatch(/IF p\.rel IN \([^)]*'season_formats'\) THEN/);
   });
 
   it('grants the two completion functions to service_role only', () => {

@@ -625,6 +625,17 @@ describe('rows of the history', () => {
       expect(toCheckView(audit({ team_source: 'none', team_id: null, issues: [], off_team: [] }), new Map(), NAMES).subject).toMatchObject({ team_source: 'none' });
     });
 
+    it('redacts a match-linked team once its check is closed: a reset match unlinks the team and closes the check without touching its subject', () => {
+      for (const status of ['rejected', 'confirmed']) {
+        const view = toCheckView({ ...audit({ team_source: 'match' }), status }, new Map(), NAMES, undefined, { id: 'admin-1' });
+        expect(view.subject).toMatchObject({ team_id: null, off_team: [], off_team_count: 2, team_hidden: true });
+        expect(JSON.stringify(view)).not.toMatch(/Mewtwo|Dragonite|Snorlax|team-9/);
+      }
+      // A site admin and the owner of the team still read it.
+      expect(toCheckView({ ...audit({ team_source: 'match' }), status: 'rejected' }, new Map(), NAMES, undefined, { id: 'a', siteAdmin: true }).subject).toMatchObject({ team_id: 'team-9' });
+      expect(toCheckView({ ...audit({ team_source: 'match' }), status: 'rejected' }, new Map(), NAMES, undefined, { id: 'p2' }).subject).toMatchObject({ team_id: 'team-9' });
+    });
+
     it('survives a subject of an unexpected shape', () => {
       expect(toCheckView(audit({ issues: 'nope', off_team: 7 }), new Map(), NAMES).subject).toMatchObject({ issues: [], off_team: [], off_team_count: 0, team_hidden: true });
       expect(toCheckView({ ...audit(), subject: 'text' }, new Map(), NAMES).subject).toBe('text');

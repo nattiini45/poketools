@@ -211,6 +211,12 @@ export interface AttachRpcInput {
    * needs it.
    */
   confirmClear?: boolean;
+  /**
+   * The counts of the `format_runtime_has_data` answer the admin confirmed. A confirmed replace that finds more rows than
+   * these (players kept saving picks while the dialog was open) is refused again with the fresh counts. Omitted: the
+   * confirmation is blanket.
+   */
+  confirmedCounts?: RuntimeCleared | null;
 }
 
 export interface AttachRpcResult {
@@ -256,6 +262,7 @@ export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachR
     p_stages: input.stages as unknown as Json,
     p_preset_rulesets: input.presetRulesets as unknown as Json,
     p_confirm_clear: input.confirmClear === true,
+    ...(input.confirmedCounts ? { p_confirmed_counts: input.confirmedCounts as unknown as Json } : {}),
   });
   if (error) throw mapFormatDbError(error);
   const result = (data ?? {}) as {
@@ -293,10 +300,15 @@ export interface DetachRpcResult {
  * Remove the attached format, the phases created from it and the rulesets it created, one transaction. Refused with
  * `format_runtime_has_data` while the league holds links, items, submissions or adjustments, unless `confirmClear`.
  */
-export async function detachSeasonFormat(seasonId: string, confirmClear = false): Promise<DetachRpcResult> {
+export async function detachSeasonFormat(
+  seasonId: string,
+  confirmClear = false,
+  confirmedCounts: RuntimeCleared | null = null,
+): Promise<DetachRpcResult> {
   const { data, error } = await supabase.rpc('format_detach_season', {
     p_season_id: seasonId,
     p_confirm_clear: confirmClear === true,
+    ...(confirmedCounts ? { p_confirmed_counts: confirmedCounts as unknown as Json } : {}),
   });
   if (error) throw mapFormatDbError(error);
   const result = (data ?? {}) as { removed_stage_ids?: unknown; removed_ruleset_ids?: unknown; cleared?: unknown };

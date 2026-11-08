@@ -16,7 +16,7 @@ import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { challengeOf, challengeTargets, type ChallengeRecord } from '../challenge';
 import type { PageRequest } from './client-api-admin';
-import { loadFreshKitContext, loadMaskContext, type KitContext } from './load';
+import { loadFreshKitContext, loadMaskContext, phaseById, rosterOf, type KitContext } from './load';
 import { loadStageTable } from './stage-table';
 import {
   allowedAdjustments,
@@ -35,10 +35,19 @@ import {
 } from './views';
 import type { AdjustmentsPage, AdminOverview, AdminUnmasked, ChecksPage, PlayerFormatView } from './view-types';
 
-/** The public names of the league's current participants. */
-export async function loadParticipantNames(seasonId: string): Promise<NameMap> {
+/**
+ * The public names of the league's current participants: the season roster, plus (with `ctx`) the players enrolled in a
+ * phase who are not on it. A reserve a phase-scope substitution enrolled, or a player added straight to a phase, plays and is
+ * accepted by the action and cron checks (`rosterOf`), so the views must count them as participants too.
+ */
+export async function loadParticipantNames(seasonId: string, ctx?: Pick<KitContext, 'phases'>): Promise<NameMap> {
   const participants = await getPublicSeasonParticipants(seasonId);
-  return new Map(participants.map((p) => [p.id, p.name]));
+  const names = new Map(participants.map((p) => [p.id, p.name]));
+  const missing = ctx === undefined ? [] : rosterOf(ctx).filter((id) => !names.has(id));
+  if (missing.length > 0) {
+    for (const [id, name] of Object.entries(await resolvePlayerNames(missing))) names.set(id, name);
+  }
+  return names;
 }
 
 /** Participant names plus the names of `extraIds` (admins who wrote a row) that are not participants. */
@@ -70,7 +79,7 @@ export async function loadPlayerView(seasonId: string, playerId: string, now: Da
     return config === null ? [] : [{ phase, config }];
   });
   const [names, ladders] = await Promise.all([
-    loadParticipantNames(seasonId),
+    loadParticipantNames(seasonId, ctx),
     Promise.all(
       ladderPhases.map(async ({ phase, config }): Promise<LadderInput> => {
         // The viewer's own challenges are all the history the targets need (cap, open pair and cooldown are theirs).
@@ -92,22 +101,30 @@ export async function loadPlayerView(seasonId: string, playerId: string, now: Da
   return buildPlayerView(ctx, playerId, names, ladders, now);
 }
 
-/** Open challenges that are still live (not past their accept window), counted for the overview. */
-async function countOpenChallenges(seasonId: string, now: Date): Promise<number> {
-  const open = await listFormatChallenges(seasonId, { status: 'open' });
-  return open.filter((row) => new Date(row.expires_at).getTime() > now.getTime()).length;
+/**
+ * Open challenges that are still live (not past their accept window and with both players still enrolled in the phase),
+ * counted for the overview. A removed or swapped player's challenge stays `open` in the table until the next create or
+ * respond cancels it, so it is not counted here.
+ */
+async function countOpenChallenges(ctx: KitContext, now: Date): Promise<number> {
+  const open = await listFormatChallenges(ctx.seasonId, { status: 'open' });
+  return open.filter((row) => {
+    if (new Date(row.expires_at).getTime() <= now.getTime()) return false;
+    const members = phaseById(ctx, row.phase_id)?.members ?? [];
+    return members.includes(row.challenger_id) && members.includes(row.defender_id);
+  }).length;
 }
 
 /** The admin overview (relations masked); a league that does not run a kit format is the "not running" overview. */
 export async function loadAdminOverview(ctx: KitContext | null, adminId: string, now: Date = new Date()): Promise<AdminOverview> {
   if (ctx === null) return NOT_RUNNING_OVERVIEW;
-  const [names, openChallenges] = await Promise.all([loadParticipantNames(ctx.seasonId), countOpenChallenges(ctx.seasonId, now)]);
+  const [names, openChallenges] = await Promise.all([loadParticipantNames(ctx.seasonId, ctx), countOpenChallenges(ctx, now)]);
   return buildAdminOverview(ctx, adminId, names, { openChallenges });
 }
 
 /** The explicit, audited read: relations with their hidden sides and the submission states and targets per action. */
 export async function loadUnmasked(ctx: KitContext, adminId: string): Promise<AdminUnmasked> {
-  return buildUnmasked(ctx, adminId, await loadParticipantNames(ctx.seasonId));
+  return buildUnmasked(ctx, adminId, await loadParticipantNames(ctx.seasonId, ctx));
 }
 
 /**

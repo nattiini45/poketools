@@ -5,6 +5,7 @@ import { readBoundedPages } from '@/lib/supabase/read-bounded-pages';
 import { readAllPages } from '@/lib/supabase/read-all-pages';
 import { compareReplayOrder } from '@/lib/rating/replay-order';
 import { releaseTeamsFromMatches } from './teams';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
 import type { MatchRecord } from '@/lib/tournament/types';
@@ -1315,11 +1316,16 @@ export async function createMatchBatch(
   return recoverMatchBatch(matches);
 }
 
+/**
+ * Names the bracket slot's players on a match, only while it is still `scheduled` (the bracket materializer reads that
+ * before it calls, and a result reported since must not be wiped by an id-only write). Null when the row is no longer
+ * scheduled (or gone): nothing is written, and the next propagation run finds the slot as it is then.
+ */
 export async function updateMatchPlayers(
   id: string,
   player1Id: string,
   player2Id: string
-): Promise<Match> {
+): Promise<Match | null> {
   const { data, error } = await supabase
     .from('matches')
     .update({
@@ -1331,11 +1337,12 @@ export async function updateMatchPlayers(
       finalized_at: null,
     })
     .eq('id', id)
+    .eq('status', 'scheduled')
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return toMatch(data);
+  return data ? toMatch(data) : null;
 }
 
 /**
@@ -1348,6 +1355,40 @@ export async function deleteMatchesByIds(ids: string[]): Promise<void> {
   await releaseTeamsFromMatches(ids);
   const { error } = await supabase.from('matches').delete().in('id', ids);
   if (error) throw error;
+}
+
+/**
+ * Deletes a round and its matches in ONE transaction (`round_delete`, 20261106090000_format_challenges.sql), after the
+ * matches' team rows were released here. The database re-checks under the round lock that every match is still
+ * `scheduled`: a result that landed after the caller's own reset, or a match an accepted challenge inserted since, answers
+ * 409 `round_changed` (nothing deleted; the admin tries again) instead of cascade-deleting a played match without its
+ * rollback, and the challenges that point at a deleted match are cancelled with it. Returns false when the round is gone.
+ */
+export async function deleteRoundWithMatches(roundId: string): Promise<boolean> {
+  assertValidUuid(roundId);
+  const { rows, truncated } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('matches')
+        .select('id')
+        .eq('round_id', roundId)
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `deleteRoundWithMatches ${roundId}` },
+  );
+  if (truncated) throw new Error(`deleteRoundWithMatches: round ${roundId} has more matches than one bounded read holds`);
+  if (rows.length > 0) await releaseTeamsFromMatches(rows.map((row) => row.id));
+  const { data, error } = await supabase.rpc('round_delete', { p_round_id: roundId });
+  if (error) {
+    if (error.code === 'P0001' && error.message === 'round_changed') {
+      throw new UserFacingError('A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.', {
+        code: 'round_changed',
+        status: 409,
+      });
+    }
+    throw error;
+  }
+  return (data as { outcome?: unknown } | null)?.outcome === 'deleted';
 }
 
 /**
@@ -1427,9 +1468,11 @@ export async function updateMatchStatus(
 }
 
 /**
- * Resets a match to its initial state: scheduled, no winner, no submitter, no date.
+ * Resets a match to its initial state: scheduled, no winner, no submitter, no date. A compare-and-set on
+ * `expectedStatus`, the status the caller read and decided on (a completion that landed since has run its finalize, which
+ * a blind reset would leave applied): null, nothing written, when the row no longer has it.
  */
-export async function resetMatchFields(id: string): Promise<Match> {
+export async function resetMatchFields(id: string, expectedStatus: MatchStatus): Promise<Match | null> {
   const { data, error } = await supabase
     .from('matches')
     .update({
@@ -1442,11 +1485,12 @@ export async function resetMatchFields(id: string): Promise<Match> {
       finalized_at: null,
     })
     .eq('id', id)
+    .eq('status', expectedStatus)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return toMatch(data);
+  return data ? toMatch(data) : null;
 }
 
 /**
@@ -1465,14 +1509,18 @@ export async function clearMatchSocialImage(matchId: string): Promise<void> {
 }
 
 /**
- * Re-pair a scheduled/in-progress match and clear any result fields.
+ * Re-pair a scheduled/in-progress match and clear any result fields, only while the row is still as the caller
+ * validated it (`expected`: its status and players): an admin result, a forfeit or a confirmation that landed since would
+ * otherwise be wiped back to `scheduled` with its effects (ratings, outcome row, bracket slots) still applied. Null,
+ * nothing written, when the row changed.
  * Caller is responsible for validating admin access and participant eligibility.
  */
 export async function repairMatchPairing(
   id: string,
   player1Id: string,
-  player2Id: string
-): Promise<MatchWithPlayers> {
+  player2Id: string,
+  expected: { status: MatchStatus; player_1_id: string; player_2_id: string }
+): Promise<MatchWithPlayers | null> {
   const { data, error } = await supabase
     .from('matches')
     .update({
@@ -1488,11 +1536,14 @@ export async function repairMatchPairing(
       status: 'scheduled' as MatchStatus,
     })
     .eq('id', id)
+    .eq('status', expected.status)
+    .eq('player_1_id', expected.player_1_id)
+    .eq('player_2_id', expected.player_2_id)
     .select(MATCH_WITH_PLAYERS_SELECT)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return toMatchWithPlayers(data as MatchWithPlayersRow);
+  return data ? toMatchWithPlayers(data as MatchWithPlayersRow) : null;
 }
 
 /** What `repairScheduledMatchPairing` did. */
@@ -1741,19 +1792,28 @@ export async function listMatchesNeedingFinalize(
  * Stamp `finalized_at` once every finalize step succeeded. Conditional on the
  * match still being `completed`: if an admin reset it meanwhile, nothing is
  * written and false is returned (the reset already cleared the marker).
+ *
+ * `completion` binds the stamp to the completion the caller finalized: every completion writes a fresh `confirmed_at`
+ * (`updateMatchStatus`) and every reopen or reset clears it, so a match that was reopened and completed AGAIN since
+ * (another winner, its own finalize still to run) no longer carries the token and is not stamped by the stale run. A
+ * match completed without a `confirmed_at` (legacy rows) carries null, which matches null only.
  */
 export async function markMatchFinalized(
   id: string,
-  finalizedAt = new Date().toISOString()
+  finalizedAt = new Date().toISOString(),
+  completion?: { confirmedAt: string | null }
 ): Promise<boolean> {
   assertValidUuid(id, 'match id');
 
-  const { data, error } = await supabase
+  let query = supabase
     .from('matches')
     .update({ finalized_at: finalizedAt })
     .eq('id', id)
-    .eq('status', 'completed')
-    .select('id');
+    .eq('status', 'completed');
+  if (completion) {
+    query = completion.confirmedAt === null ? query.is('confirmed_at', null) : query.eq('confirmed_at', completion.confirmedAt);
+  }
+  const { data, error } = await query.select('id');
 
   if (error) throw error;
   return data.length > 0;

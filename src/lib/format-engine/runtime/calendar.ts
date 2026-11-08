@@ -21,6 +21,12 @@ export interface CalendarClock {
   timeZone?: string;
   /** `seasons.start_date` (YYYY-MM-DD, a longer ISO text is cut to its date); what `start: season_start` means. */
   seasonStart: string | null;
+  /**
+   * `season_formats.clock_shift_seconds`: the time the league spent in the recycle bin. Every instant the calendar computes
+   * moves by it (the stage calendar is made of absolute dates, so a restore has no stored instant to move), which keeps
+   * "nothing is due the moment the league comes back" true for marks, action policies and calendar-derived round policies.
+   */
+  shiftSeconds?: number;
 }
 
 interface Day {
@@ -52,7 +58,7 @@ export function roundOpensAt(calendar: StageCalendar, round: number, clock: Cale
   if (start === null || time === null || !Number.isInteger(round) || round < 1) return null;
   const days = (round - 1) * calendar.every * (calendar.cadence === 'weekly' ? 7 : 1);
   const day = new Date(Date.UTC(start.y, start.m - 1, start.d + days));
-  return zonedWallTimeToUtc(
+  const opens = zonedWallTimeToUtc(
     {
       year: day.getUTCFullYear(),
       month: day.getUTCMonth() + 1,
@@ -63,6 +69,8 @@ export function roundOpensAt(calendar: StageCalendar, round: number, clock: Cale
     },
     clock.timeZone ?? LEAGUE_TIME_ZONE,
   );
+  const shift = clock.shiftSeconds ?? 0;
+  return opens === null || shift === 0 ? opens : new Date(opens.getTime() + shift * 1000);
 }
 
 /** The highest round `calendarRoundAt` answers: the round number the API accepts. */

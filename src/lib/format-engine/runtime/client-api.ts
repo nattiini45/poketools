@@ -134,7 +134,9 @@ export type FormatRuntimeApiCode =
 
 /**
  * The class of every code: `conflict` = refresh the view, then retry; `invalid` = the request itself is wrong; `forbidden`;
- * `not_found`; `too_large`.
+ * `not_found`; `too_large`. A refusal whose precondition is league state (a rank range that moved with the standings, a
+ * player removed from the phase, an item or order the roster or domain no longer matches, a check or phase that is gone) is
+ * a `conflict` even where it is a 400/404/422: the view the player or admin holds is stale, and a reload is harmless.
  */
 const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorKind>> = {
   // refresh the view, then retry
@@ -158,6 +160,15 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   format_not_running: 'conflict',
   format_action_already_submitted: 'conflict',
   format_season_closed: 'conflict',
+  challenge_rank_range: 'conflict',
+  challenge_not_participant: 'conflict',
+  challenge_phase_not_found: 'conflict',
+  format_check_not_found: 'conflict',
+  format_adjust_unknown_target: 'conflict',
+  format_adjust_invalid_links: 'conflict',
+  format_adjust_invalid_order: 'conflict',
+  format_adjust_unknown_item: 'conflict',
+  format_adjust_attr_missing: 'conflict',
   format_adjust_insufficient_holding: 'conflict',
   format_adjust_amendment_limit: 'conflict',
   format_adjust_relation_has_links: 'conflict',
@@ -166,19 +177,11 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   // the request itself is wrong
   format_action_invalid: 'invalid',
   format_adjust_not_allowed: 'invalid',
-  format_adjust_unknown_target: 'invalid',
   format_adjust_invalid_amount: 'invalid',
-  format_adjust_invalid_links: 'invalid',
-  format_adjust_invalid_order: 'invalid',
-  format_adjust_unknown_item: 'invalid',
   format_adjust_item_required: 'invalid',
   format_adjust_item_not_allowed: 'invalid',
-  format_adjust_attr_missing: 'invalid',
   format_adjust_domain_too_large: 'invalid',
   challenge_self: 'invalid',
-  challenge_rank_range: 'invalid',
-  challenge_not_participant: 'invalid',
-  challenge_phase_not_found: 'not_found',
   reason_required: 'invalid',
   reason_too_long: 'invalid',
   // not allowed for this viewer
@@ -187,7 +190,6 @@ const FORMAT_RUNTIME_CODE_KINDS: Readonly<Record<FormatRuntimeApiCode, ApiErrorK
   challenge_not_challenger: 'forbidden',
   // not there
   format_action_unknown: 'not_found',
-  format_check_not_found: 'not_found',
   INVALID_SEASON_ID: 'not_found',
   INVALID_CHALLENGE_ID: 'not_found',
   INVALID_CHECK_ID: 'not_found',
@@ -209,9 +211,13 @@ const classifyByCode = makeClassifier({
 /**
  * The statuses under which a rejected pick (`format_action_invalid`) says the league changed, not that the pick is wrong
  * (`actionRejectedStatus`): 404 the action is gone, 403 the player lost their link, 409 the format is not running, the
- * window closed or an item was taken meanwhile. Only a 422 is a pick that is wrong in itself.
+ * window closed or an item was taken meanwhile. A 422 is a pick that is wrong in itself, unless an issue says the league's
+ * state moved under it (`STALE_PICK_ISSUES`).
  */
 const STALE_PICK_STATUSES: ReadonlySet<number> = new Set([403, 404, 409]);
+
+/** The issues of a 422 pick that come from league state: an entry removed from the domain, a domain locked, a `where` that no longer holds, a full resource. */
+const STALE_PICK_ISSUES: ReadonlySet<string> = new Set(['domain_locked', 'item_outside_domain', 'where_false', 'capacity_exceeded']);
 
 /**
  * Sorts an API error of a live-format route into a class the UI reacts to (a refresh-and-retry hint, a sign-in prompt, ...).
@@ -219,6 +225,10 @@ const STALE_PICK_STATUSES: ReadonlySet<number> = new Set([403, 404, 409]);
  * `conflict` (the player view is reloaded, the draft stays), a 422 stays `invalid`.
  */
 export function classifyFormatRuntimeError(error: ApiErrorLike, status?: number): ClassifiedError {
-  if (error.code === 'format_action_invalid' && status !== undefined && STALE_PICK_STATUSES.has(status)) return { kind: 'conflict' };
+  if (error.code === 'format_action_invalid') {
+    if (status !== undefined && STALE_PICK_STATUSES.has(status)) return { kind: 'conflict' };
+    const { issues } = error as ActionApiError;
+    if (issues?.some((issue) => STALE_PICK_ISSUES.has(issue.code))) return { kind: 'conflict' };
+  }
   return classifyByCode(error, status);
 }

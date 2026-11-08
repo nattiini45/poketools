@@ -32,8 +32,18 @@ const ATTACH_LIMIT = { limit: 30, windowSeconds: 60 * 60 } as const;
  * runtime data (relation links such as a Secret Santa draw, items such as gifts, submissions, adjustments). Without it
  * such a replace or detach answers 409 `format_runtime_has_data` with the counts.
  */
-const attachBodySchema = seasonFormatAttachSchema.extend({ confirm_clear: z.boolean().optional() });
-const detachBodySchema = z.strictObject({ confirm_clear: z.boolean().optional() });
+/** The counts of the `format_runtime_has_data` answer the admin confirmed; a clear that finds more is refused again. */
+const confirmedCountsSchema = z.strictObject({
+  links: z.number().int().min(0),
+  items: z.number().int().min(0),
+  submissions: z.number().int().min(0),
+  adjustments: z.number().int().min(0),
+});
+const attachBodySchema = seasonFormatAttachSchema.extend({
+  confirm_clear: z.boolean().optional(),
+  confirmed_counts: confirmedCountsSchema.optional(),
+});
+const detachBodySchema = z.strictObject({ confirm_clear: z.boolean().optional(), confirmed_counts: confirmedCountsSchema.optional() });
 
 export interface SeasonFormatState {
   /** `not_custom`: the league uses a legacy type; `unattached`: custom without a format; `attached`. */
@@ -120,6 +130,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       definitionId: parsed.data.definition_id,
       versionNo: parsed.data.version_no,
       confirmClear: parsed.data.confirm_clear === true,
+      confirmedCounts: parsed.data.confirmed_counts ?? null,
     });
     expireSeasonReads(id, outcome.touched_stage_ids);
     if (outcome.rulesets_changed) revalidatePath('/admin/rulesets');
@@ -175,7 +186,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
     const confirmClear = parsed.data.confirm_clear === true;
-    const { removed_stage_ids, removed_ruleset_ids, cleared } = await detachFormatFromSeason(id, { confirmClear });
+    const { removed_stage_ids, removed_ruleset_ids, cleared } = await detachFormatFromSeason(id, { confirmClear, confirmedCounts: parsed.data.confirmed_counts ?? null });
     expireSeasonReads(id, removed_stage_ids);
     if (removed_ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
 

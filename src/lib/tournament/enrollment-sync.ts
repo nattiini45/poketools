@@ -359,7 +359,13 @@ async function syncStandingsEnrollmentOnce(
     ...(contributions ? { contributions } : {}),
   };
 
-  const written = await replacePhaseEnrollment(phaseId, entries, enrollmentSource, phase.enrollment_source?.synced_at ?? null);
+  const written = await replacePhaseEnrollment(
+    phaseId,
+    entries,
+    enrollmentSource,
+    phase.enrollment_source?.synced_at ?? null,
+    options.force ?? false,
+  );
   if (!written) return null;
 
   return {

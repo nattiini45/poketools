@@ -112,7 +112,7 @@ export const DERIVED_SPECS: readonly TableSpec[] = [
 /**
  * Columns that legitimately differ after a delete + restore: shifted clocks, the aggregate marker, the freeze, and the
  * revision of the attached format (the restore inserts the row again and the trigger draws a fresh number, so a write
- * that was validated before the delete is refused as stale).
+ * that was validated before the delete is refused as stale) and the clock shift of its calendar (the time away).
  */
 const EXCLUDED: Readonly<Record<string, readonly string[]>> = {
   draft_pools: ['paused_at', 'paused_by', 'pause_reason', 'state_version', 'updated_at', 'submission_deadline_at', 'token_purchase_closes_at'],
@@ -121,7 +121,7 @@ const EXCLUDED: Readonly<Record<string, readonly string[]>> = {
   rounds: ['deadline'],
   match_proposals: ['expires_at'],
   format_challenges: ['expires_at'],
-  season_formats: ['revision'],
+  season_formats: ['revision', 'clock_shift_seconds'],
   games: ['aggregate_applied_at'],
 };
 

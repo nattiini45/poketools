@@ -66,3 +66,57 @@ describe('stageHasCustomMetrics', () => {
     expect(stageHasCustomMetrics(placed, 'swiss')).toBe(false);
   });
 });
+
+describe('stageMetricsFor ships what the metric reads, and nothing else', () => {
+  const attrRef: Expr = { k: 'ref', name: 'attr.team', t: 'number' };
+  const defReading = (expr: Expr): FormatDefinition => {
+    const def = wichtelDef();
+    return {
+      ...def,
+      attributes: [
+        { key: 'team', label: text('Team'), on: 'player', type: 'number', assign: { kind: 'random_seeded', min: 1, max: 9 } },
+        { key: 'secret_team', label: text('Secret team'), on: 'player', type: 'number', assign: { kind: 'random_seeded', min: 1, max: 9 } },
+      ] as unknown as FormatDefinition['attributes'],
+      metrics: [{ kind: 'metric.define', of: 'player', key: 'm', label: text('M'), expr }],
+    };
+  };
+
+  it('puts only the refs the expressions name into the public player refs', () => {
+    const def = defReading({ k: 'arith', op: '+', a: attrRef, b: { k: 'ref', name: 'points', t: 'number' } });
+    const metrics = stageMetricsFor(def, stateFor(def), SEED, 'swiss', ['a', 'b']);
+    const names = Object.values(metrics?.playerRefs ?? {}).flatMap((refs) => Object.keys(refs));
+    expect(names.length).toBeGreaterThan(0);
+    expect(new Set(names)).toEqual(new Set(['attr.team']));
+    expect(JSON.stringify(metrics)).not.toContain('secret_team');
+  });
+
+  it('ships no refs for a metric that reads none', () => {
+    const def = defReading({ k: 'ref', name: 'points', t: 'number' });
+    const metrics = stageMetricsFor(def, stateFor(def), SEED, 'swiss', ['a']);
+    expect(metrics?.playerRefs).toEqual({ a: {} });
+  });
+});
+
+describe('stageMetricsFor turns a seeded draw into a per-player value', () => {
+  const draw: Expr = { k: 'rand', key: 'luck' };
+  const defDrawing = (): FormatDefinition => ({
+    ...wichtelDef(),
+    metrics: [{ kind: 'metric.define', of: 'player', key: 'luck', label: text('Luck'), expr: draw }],
+  });
+  const rank = [{ kind: 'metric' as const, metric: 'luck', direction: 'desc' as const }];
+  const players = ['a', 'b', 'c', 'd'];
+
+  it('ranks the public table (no seed) like the server (with the seed), and ships no rand node', () => {
+    const def = defDrawing();
+    const metrics = stageMetricsFor(def, stateFor(def), SEED, 'swiss', players);
+    expect(JSON.stringify(metrics?.defs)).not.toContain('"rand"');
+    const base = { stage: { key: 'swiss', scoring: { win: 1, loss: 0, bye: 0 }, rank }, participantIds: players, participantNames: {}, matches: [], metricDefs: metrics?.defs, playerRefs: metrics?.playerRefs };
+    const publicTable = computeStageStandings(base);
+    const serverTable = computeStageStandings({ ...base, seed: SEED });
+    expect(publicTable.map((r) => [r.player_id, r.metrics?.luck])).toEqual(serverTable.map((r) => [r.player_id, r.metrics?.luck]));
+    // The draws are the seeded ones, not the seedless fallback: they differ per player and per season seed.
+    const other = stageMetricsFor(def, stateFor(def), 'another-seed-0123456789', 'swiss', players);
+    expect(computeStageStandings({ ...base, playerRefs: other?.playerRefs }).map((r) => r.metrics?.luck)).not.toEqual(publicTable.map((r) => r.metrics?.luck));
+    expect(new Set(publicTable.map((r) => r.metrics?.luck)).size).toBe(players.length);
+  });
+});

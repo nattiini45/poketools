@@ -17,6 +17,7 @@ vi.mock('@/lib/supabase/queries/format-cron', () => ({
   listUncompletedMatches: vi.fn(),
 }));
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onMatchCompleted: vi.fn(), onRoundCompleted: vi.fn(), revertMatchCompletion: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getSeasonKitHead: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
   openFormatCheck: vi.fn(),
@@ -53,6 +54,8 @@ import { discardStagedAdminOutcome, finalizeMatchCompletion, stageAdminOutcome }
 import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
+import { revalidateMatchPages } from '@/lib/revalidation';
+import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
@@ -85,7 +88,7 @@ function context(cal: StageCalendar, patch: Parameters<typeof stateFor>[1] = {})
   return { seasonId: SEASON, seed: SEED, revision: 1, def, state: stateFor(def, patch), tunableIssues: [], phases: [{ id: PHASE, stage, members: PLAYERS }] };
 }
 
-const cronPhase = (status = 'active') => ({ id: PHASE, season_id: SEASON, status, format_stage_key: 'swiss', season_start_date: '2026-06-01' });
+const cronPhase = (status = 'active') => ({ id: PHASE, season_id: SEASON, status, format_stage_key: 'swiss', season_start_date: '2026-06-01', clock_shift_seconds: 0 });
 const match = (over: Record<string, unknown> = {}) => ({
   id: 'm-1',
   tournament_id: PHASE,
@@ -123,6 +126,7 @@ beforeEach(() => {
   vi.mocked(updateMatchStatus).mockResolvedValue({ id: 'm-1' } as never);
   vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true } as never);
   vi.mocked(expireChallenges).mockResolvedValue(0);
+  vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
 });
 
 describe('time marks', () => {
@@ -145,6 +149,27 @@ describe('time marks', () => {
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(vi.mocked(fireEvent).mock.calls.map((call) => (call[1] as { mark: string }).mark)).toEqual(['gifts_open', 'gifts_close']);
     expect(summary.marks).toBe(2);
+  });
+
+  it('fires a due mark through the context it decided from (the database refuses it when the format moved since)', async () => {
+    const decided = context(calendar([], marks));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(decided);
+    await runFormatCronPass(BEFORE_DEADLINE);
+    expect(fireEvent).toHaveBeenCalledWith(SEASON, { event: 'time', stage: 'swiss', mark: 'kickoff' }, null, { context: expect.objectContaining({ revision: decided.revision }) });
+  });
+
+  it('stops firing marks when the format changed since the pass read its calendar: a mark that is not due in the new one never burns its key', async () => {
+    const gifts = [
+      { key: 'gifts_open', round: 1, offset_hours: 0 },
+      { key: 'gifts_close', round: 1, offset_hours: 24 },
+    ];
+    const before = context(calendar([], gifts));
+    // The reload after the first fire belongs to another format (a replace landed meanwhile): revision 2 instead of 1.
+    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(before).mockResolvedValue({ ...before, revision: before.revision + 1 });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(vi.mocked(fireEvent).mock.calls.map((call) => (call[1] as { mark: string }).mark)).toEqual(['gifts_open']);
+    expect(summary.marks).toBe(1);
+    expect(summary.failures).toBe(0);
   });
 
   it('skips a mark whose event key already fired', async () => {
@@ -195,6 +220,28 @@ describe('match and team policies', () => {
     expect(input.adminOutcome).toMatchObject({ kind: 'forfeit', setBy: null });
     expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ actor_id: null, actor_name: 'System', metadata: expect.objectContaining({ loser_id: 'p2' }) }));
     expect(summary.forfeits).toBe(1);
+  });
+
+  it.each([
+    ['a league taken off the kit engine', { engine: 'shadow', seed: SEED, revision: 1, clockShiftSeconds: 0 }],
+    ['a format replaced or amended since the pass read it', { engine: 'kit', seed: SEED, revision: 2, clockShiftSeconds: 0 }],
+    ['a league whose format was detached', null],
+  ] as const)('forfeits nothing in %s: the head is read again right before the first write', async (_label, head) => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
+    vi.mocked(getSeasonKitHead).mockResolvedValue(head as never);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(stageAdminOutcome).not.toHaveBeenCalled();
+    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
+  });
+
+  it('finalizes the forfeit even when the cache expiry throws after the status flip', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
+    vi.mocked(revalidateMatchPages).mockRejectedValue(new Error('tournament read failed'));
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(finalizeMatchCompletion).toHaveBeenCalledTimes(1);
+    expect(summary).toMatchObject({ forfeits: 1, failures: 0 });
+    expect(logger.error).toHaveBeenCalledWith('format-engine/cron', expect.stringContaining('expire the pages'), expect.objectContaining({ matchId: 'm-1' }));
   });
 
   it('stored round deadlines win over the calendar', async () => {
@@ -367,6 +414,16 @@ describe('action policies', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([lock]), { links, firedEventKeys: ['time:swiss:deadline:swiss:0'] }));
     await runFormatCronPass(AFTER_DEADLINE);
     expect(fireEvent).not.toHaveBeenCalled();
+  });
+
+  it('counts no failure when the lock of a policy is refused as stale (the format changed since the pass loaded it): the next pass retries', async () => {
+    const lock: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'auto_lock' };
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([lock]), { links }));
+    vi.mocked(fireEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary).toMatchObject({ locks: 0, failures: 0 });
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/cron', expect.stringContaining('the format changed meanwhile'), expect.objectContaining({ policy: 0 }));
   });
 
   it('admin_review opens a check per player without a submission', async () => {
@@ -562,7 +619,7 @@ describe('action policies', () => {
     expect(openFormatCheck).not.toHaveBeenCalled();
   });
 
-  it.each(['format_context_stale', 'resource_capacity_reached'] as const)(
+  it.each(['format_context_stale', 'resource_capacity_reached', 'resource_item_taken'] as const)(
     'skips a draw the database refused as %s (the format or the holding changed meanwhile), retries it next pass and still draws for the others',
     async (code) => {
       const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
@@ -581,10 +638,10 @@ describe('action policies', () => {
     },
   );
 
-  it('still fails the policy on a refusal that is not a lock (resource_item_taken)', async () => {
+  it('still fails the policy on a refusal a concurrent writer cannot have caused (domain_amendment_locked)', async () => {
     const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick]), { links, flags: OPEN_FLAGS }));
-    vi.mocked(submitAction).mockRejectedValue(new FormatRuntimeError('resource_item_taken'));
+    vi.mocked(submitAction).mockRejectedValue(new FormatRuntimeError('domain_amendment_locked'));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(summary.failures).toBeGreaterThan(0);
     expect(summary.picks).toBe(0);
@@ -913,7 +970,7 @@ describe('pending match_reverted in completed or archived leagues', () => {
   const open = (id: string) => ({ id, tournament_id: PHASE, status: 'in_progress' });
   const withFired = (fired: string[]) => context(calendar([]), { firedEventKeys: fired });
 
-  it('retries a failed revert of a match reopened after the season completed, and runs nothing else there', async () => {
+  it('retries a failed revert of a match reopened after the season completed, and runs no calendar work there', async () => {
     vi.mocked(listKitCronPhases).mockResolvedValue([]);
     vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
     vi.mocked(loadFreshKitContext).mockResolvedValue({ ...withFired(['match_completed:m-1']), seasonId: 's-done' });
@@ -922,11 +979,27 @@ describe('pending match_reverted in completed or archived leagues', () => {
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(loadFreshKitContext).toHaveBeenCalledWith('s-done');
     expect(revertMatchCompletion).toHaveBeenCalledWith({ tournamentId: PHASE, matchId: 'm-1', report: { stale: false, failed: false } });
-    // the heal only: no lost-lock repair, no backfill, no calendar work; the league is not a running one
-    expect(fireLockedActionEvents).not.toHaveBeenCalled();
-    expect(listFinalizedMatches).not.toHaveBeenCalled();
+    // the state-derived repairs, no calendar work; the league is not a running one
+    expect(fireLockedActionEvents).toHaveBeenCalledWith('s-done', null, expect.objectContaining({ context: expect.objectContaining({ seasonId: 's-done' }) }));
     expect(fireEvent).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ leagues: 0, failures: 0 });
+  });
+
+  it('repairs the pending events of a league that was completed with them missing: the lost lock, the match_completed and the round_end', async () => {
+    vi.mocked(listKitCronPhases).mockResolvedValue([]);
+    vi.mocked(listKitIdleSeasonIds).mockResolvedValue(['s-done']);
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...withFired([]), seasonId: 's-done' });
+    vi.mocked(fireLockedActionEvents).mockResolvedValue(['action_locked:give_gifts']);
+    vi.mocked(listFinalizedMatches).mockResolvedValue([
+      { id: 'm-1', tournament_id: PHASE, round_id: 'r-1', player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1' },
+    ] as never);
+    vi.mocked(listRoundStatusesByTournamentIds).mockResolvedValue([{ id: 'r-1', tournament_id: PHASE, round_number: 1, status: 'completed' }]);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(onMatchCompleted).toHaveBeenCalledWith(expect.objectContaining({ matchId: 'm-1', tournament: expect.objectContaining({ season_id: 's-done' }) }));
+    expect(onRoundCompleted).toHaveBeenCalledWith(expect.objectContaining({ roundId: 'r-1', tournament: expect.objectContaining({ season_id: 's-done' }) }));
+    expect(summary).toMatchObject({ completions_backfilled: 1, leagues: 0, failures: 0 });
+    // no calendar work: no mark, no policy
+    expect(fireEvent).not.toHaveBeenCalled();
   });
 
   it('scans every currently-completed match of a completed league, not a slot-keyed window, so no part of a large league is skipped', async () => {
@@ -965,13 +1038,17 @@ describe('pending match_reverted in completed or archived leagues', () => {
     await runFormatCronPass(AFTER_DEADLINE);
     // 2 running leagues take 10 each; the idle one only gets what is left of the run's 25
     expect(revertMatchCompletion).toHaveBeenCalledTimes(FORMAT_CRON_REVERT_LIMIT);
-    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id).at(-1)).toBe('s-done');
+    const visited = vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id);
+    expect(visited.indexOf('s-done')).toBeGreaterThanOrEqual(2);
+    expect(visited.lastIndexOf('s-2')).toBeLessThan(visited.indexOf('s-done'));
 
-    // with three running leagues the budget is spent before the idle one is reached
+    // with three running leagues the revert budget is spent before the idle one is reached: it is visited for the repairs
+    // that have budget left, and reverts nothing more
     vi.mocked(loadFreshKitContext).mockClear();
+    vi.mocked(revertMatchCompletion).mockClear();
     vi.mocked(listKitCronPhases).mockResolvedValue(['s-1', 's-2', 's-3'].map((id, i) => ({ ...cronPhase(), id: `t-${i}`, season_id: id })));
     await runFormatCronPass(AFTER_DEADLINE);
-    expect(vi.mocked(loadFreshKitContext).mock.calls.map(([id]) => id)).not.toContain('s-done');
+    expect(revertMatchCompletion).toHaveBeenCalledTimes(FORMAT_CRON_REVERT_LIMIT);
   });
 
   it('checks a bounded window of them per run that moves on, so every one is reached', async () => {

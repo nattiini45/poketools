@@ -24,6 +24,17 @@
 -- p_confirm_clear = true. A first attach and a league without such rows are unaffected. The new argument is a new
 -- signature, so the two old ones are dropped first (format__guard_runtime_clear is the shared check).
 --
+-- The confirmation names what the admin saw: p_confirmed_counts is the {links, items, submissions, adjustments} of the
+-- FORMAT_RUNTIME_HAS_DATA answer the admin confirmed. Players keep saving picks while the dialog is open, so a confirmed clear
+-- that finds MORE rows than that raises FORMAT_RUNTIME_HAS_DATA again with the fresh counts (the admin confirms again). NULL
+-- keeps the blanket meaning of p_confirm_clear for callers that never showed a count.
+--
+-- Race with the generators and the status writers: attach and detach lock the seasons row FOR UPDATE and then every phase
+-- (tournaments) row of the league FOR UPDATE, in id order, BEFORE they decide format_season_started. A round write
+-- (round_write takes seasons KEY SHARE first), a plain status UPDATE of a phase and the foreign-key lock of any round insert all
+-- conflict with those locks, so the started check sees every committed round and status, and nothing can start the league
+-- between the check and the DELETE/upsert that follows. (A STABLE snapshot read alone would miss a round that is committing.)
+--
 -- What the clear deleted: the guard always counts the four tables and returns {links, items, submissions, adjustments},
 -- confirmed or not. A replace (not a first attach) and a detach return them as `cleared`, so the audit entry of a
 -- confirmed clear can say how much was destroyed (the adjustment rows carry the reasons, and they go with the clear).
@@ -52,13 +63,25 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_tournament_groups_tournament_group_number
   ON public.tournament_groups (tournament_id, group_number);
 
 DROP FUNCTION IF EXISTS public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb);
+DROP FUNCTION IF EXISTS public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean);
 DROP FUNCTION IF EXISTS public.format_detach_season(uuid);
+DROP FUNCTION IF EXISTS public.format_detach_season(uuid, boolean);
+DROP FUNCTION IF EXISTS public.format__guard_runtime_clear(uuid, boolean);
+
+-- Internal: locks the seasons row (done by the caller) then every phase row of the league FOR UPDATE, in id order, so the
+-- started check that follows reads a state no writer can still change (see the header).
+CREATE OR REPLACE FUNCTION public.format__lock_phases(p_season_id uuid)
+RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  PERFORM 1 FROM public.tournaments t WHERE t.season_id = p_season_id ORDER BY t.id FOR UPDATE;
+END $$;
 
 -- Internal. Returns the four counts {links, items, submissions, adjustments} of the runtime rows a clear would delete
 -- and refuses (FORMAT_RUNTIME_HAS_DATA, DETAIL = the same counts) when there are any and the caller has not confirmed.
 -- Counts only the rows a person or a draw produced (links, items, submissions, adjustments); flags, events, checks,
 -- attributes and track progress follow from them or are rebuilt by the new spec.
-CREATE OR REPLACE FUNCTION public.format__guard_runtime_clear(p_season_id uuid, p_confirm boolean)
+CREATE OR REPLACE FUNCTION public.format__guard_runtime_clear(p_season_id uuid, p_confirm boolean, p_confirmed_counts jsonb DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE plpgsql STABLE SET search_path = public, pg_temp AS $$
 DECLARE
@@ -77,12 +100,20 @@ BEGIN
   IF NOT p_confirm AND v_links + v_items + v_submissions + v_adjustments > 0 THEN
     RAISE EXCEPTION 'FORMAT_RUNTIME_HAS_DATA' USING ERRCODE = 'P0001', DETAIL = v_counts::text;
   END IF;
+  -- Confirmed, but only what the admin was shown: a table that grew since is not covered by the confirmation.
+  IF p_confirm AND p_confirmed_counts IS NOT NULL AND jsonb_typeof(p_confirmed_counts) = 'object' AND (
+       v_links > coalesce((p_confirmed_counts ->> 'links')::integer, 0)
+    OR v_items > coalesce((p_confirmed_counts ->> 'items')::integer, 0)
+    OR v_submissions > coalesce((p_confirmed_counts ->> 'submissions')::integer, 0)
+    OR v_adjustments > coalesce((p_confirmed_counts ->> 'adjustments')::integer, 0)) THEN
+    RAISE EXCEPTION 'FORMAT_RUNTIME_HAS_DATA' USING ERRCODE = 'P0001', DETAIL = v_counts::text;
+  END IF;
   RETURN v_counts;
 END $$;
 
 CREATE OR REPLACE FUNCTION public.format_attach_season(
   p_season_id uuid, p_definition_id uuid, p_version_no integer, p_spec jsonb, p_spec_hash text, p_seed text, p_stages jsonb,
-  p_preset_rulesets jsonb DEFAULT '{}'::jsonb, p_confirm_clear boolean DEFAULT false)
+  p_preset_rulesets jsonb DEFAULT '{}'::jsonb, p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL)
 RETURNS jsonb
 LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
@@ -108,6 +139,7 @@ BEGIN
   IF v_format <> 'custom' THEN
     RAISE EXCEPTION 'FORMAT_SEASON_NOT_CUSTOM' USING ERRCODE = 'P0001';
   END IF;
+  PERFORM public.format__lock_phases(p_season_id);
   IF public.format_season_started(p_season_id) THEN
     RAISE EXCEPTION 'FORMAT_SEASON_STARTED' USING ERRCODE = 'P0001';
   END IF;
@@ -121,9 +153,11 @@ BEGIN
   SELECT f.preset_rulesets INTO v_previous FROM public.season_formats f WHERE f.season_id = p_season_id;
   v_replaced := FOUND;
   IF v_replaced THEN
-    v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false));
-    PERFORM public.format__clear_runtime(p_season_id);
+    v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false), p_confirmed_counts);
   END IF;
+  -- A first attach clears too: runtime rows without a season_formats row belong to no format (a ghost check or an event of a
+  -- format that was detached, written by a writer that raced the detach), and would otherwise be inherited by the new one.
+  PERFORM public.format__clear_runtime(p_season_id);
   INSERT INTO public.season_formats AS f (season_id, definition_id, version_no, spec, spec_hash, seed, preset_rulesets)
   VALUES (p_season_id, p_definition_id, p_version_no, p_spec, p_spec_hash, p_seed, p_preset_rulesets)
   ON CONFLICT (season_id) DO UPDATE
@@ -131,8 +165,9 @@ BEGIN
         spec_hash = EXCLUDED.spec_hash, seed = EXCLUDED.seed, tunables = '{}'::jsonb,
         amendments = '[]'::jsonb, preset_rulesets = EXCLUDED.preset_rulesets, frozen_at = now();
 
-  -- Phases whose (stage, group) left the spec are removed. The started check above proves they are upcoming and have
-  -- no rounds.
+  -- Phases whose (stage, group) left the spec are removed. The started check above, taken under the seasons row and every
+  -- phase row (format__lock_phases), proves they are upcoming and have no rounds, and no writer can change that before this
+  -- statement.
   WITH wanted AS (
     SELECT x.key, coalesce(x.format_group, 0) AS format_group
       FROM jsonb_to_recordset(p_stages) AS x(key text, format_group integer)),
@@ -176,7 +211,7 @@ END $$;
 
 -- Detach: one transaction. Returns {removed_stage_ids, removed_ruleset_ids, cleared} (cleared: the counts the clear deleted).
 --   FORMAT_SEASON_NOT_FOUND / FORMAT_NOTHING_ATTACHED / FORMAT_SEASON_STARTED / FORMAT_RUNTIME_HAS_DATA
-CREATE OR REPLACE FUNCTION public.format_detach_season(p_season_id uuid, p_confirm_clear boolean DEFAULT false) RETURNS jsonb
+CREATE OR REPLACE FUNCTION public.format_detach_season(p_season_id uuid, p_confirm_clear boolean DEFAULT false, p_confirmed_counts jsonb DEFAULT NULL) RETURNS jsonb
 LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   v_removed          uuid[];
@@ -192,10 +227,11 @@ BEGIN
   IF NOT FOUND THEN
     RAISE EXCEPTION 'FORMAT_NOTHING_ATTACHED' USING ERRCODE = 'P0001';
   END IF;
+  PERFORM public.format__lock_phases(p_season_id);
   IF public.format_season_started(p_season_id) THEN
     RAISE EXCEPTION 'FORMAT_SEASON_STARTED' USING ERRCODE = 'P0001';
   END IF;
-  v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false));
+  v_cleared := public.format__guard_runtime_clear(p_season_id, coalesce(p_confirm_clear, false), p_confirmed_counts);
   -- A teams row that points at a stage raises 23503 here and rolls everything back.
   WITH gone AS (
     DELETE FROM public.tournaments t
@@ -209,14 +245,44 @@ BEGIN
                             'cleared', v_cleared);
 END $$;
 
-REVOKE ALL ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) TO service_role;
-REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean) TO service_role;
-REVOKE ALL ON FUNCTION public.format_detach_season(uuid, boolean) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.format_detach_season(uuid, boolean) TO service_role;
+REVOKE ALL ON FUNCTION public.format__guard_runtime_clear(uuid, boolean, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format__guard_runtime_clear(uuid, boolean, jsonb) TO service_role;
+REVOKE ALL ON FUNCTION public.format__lock_phases(uuid) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format__lock_phases(uuid) TO service_role;
+REVOKE ALL ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format_attach_season(uuid, uuid, integer, jsonb, text, text, jsonb, jsonb, boolean, jsonb) TO service_role;
+REVOKE ALL ON FUNCTION public.format_detach_season(uuid, boolean, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format_detach_season(uuid, boolean, jsonb) TO service_role;
 
-COMMENT ON FUNCTION public.format__guard_runtime_clear(uuid, boolean) IS
-  'Internal: returns {links, items, submissions, adjustments} for the league and raises FORMAT_RUNTIME_HAS_DATA (same DETAIL) when it has such runtime rows and the clear is not confirmed.';
+COMMENT ON FUNCTION public.format__guard_runtime_clear(uuid, boolean, jsonb) IS
+  'Internal: returns {links, items, submissions, adjustments} for the league and raises FORMAT_RUNTIME_HAS_DATA (same DETAIL) when it has such runtime rows and the clear is not confirmed, or when a confirmed clear finds more rows than the counts the admin confirmed (p_confirmed_counts, optional).';
+COMMENT ON FUNCTION public.format__lock_phases(uuid) IS
+  'Internal: locks every phase (tournaments) row of the league FOR UPDATE in id order, so the started check of an attach or a detach cannot be outrun by a round write or a status update.';
+
+-- A custom league's format_type may not change under an attached format or after the league started. PATCH
+-- /api/seasons/[id] checks the same in the application (assertFormatTypeChangeAllowed) from an unlocked read, so an attach
+-- or a first round that commits between that read and the UPDATE would leave a league that is not `custom` with a
+-- season_formats row and keyed phases (format_attach_season refuses it: NOT_CUSTOM). The trigger decides under the row lock
+-- the UPDATE holds; the attach locks the seasons row FOR UPDATE, so of the two exactly one goes first and the second sees it.
+-- A change between the legacy types is untouched, a league without a format that has not started may switch freely.
+CREATE OR REPLACE FUNCTION public.seasons__guard_format_type()
+RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF NEW.format_type IS DISTINCT FROM OLD.format_type AND (OLD.format_type = 'custom' OR NEW.format_type = 'custom') THEN
+    IF EXISTS (SELECT 1 FROM public.season_formats f WHERE f.season_id = OLD.id) OR public.format_season_started(OLD.id) THEN
+      RAISE EXCEPTION 'season_format_type_locked' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+  RETURN NEW;
+END $$;
+
+DROP TRIGGER IF EXISTS trg_seasons_guard_format_type ON public.seasons;
+CREATE TRIGGER trg_seasons_guard_format_type BEFORE UPDATE OF format_type ON public.seasons
+  FOR EACH ROW EXECUTE FUNCTION public.seasons__guard_format_type();
+
+REVOKE ALL ON FUNCTION public.seasons__guard_format_type() FROM PUBLIC, anon, authenticated;
+COMMENT ON FUNCTION public.seasons__guard_format_type() IS
+  'Refuses (season_format_type_locked) a switch to or from custom while a format is attached or after the league started; the database half of assertFormatTypeChangeAllowed.';
 
 COMMIT;

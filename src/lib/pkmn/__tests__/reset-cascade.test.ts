@@ -12,6 +12,8 @@ vi.mock('@/lib/supabase/queries/games', () => ({
   deleteUncountedGameRow: vi.fn(async () => 'deleted'),
   updateGameWinner: vi.fn(),
   setGameStatsLocked: vi.fn(),
+  claimGameEditLease: vi.fn(async () => 'claimed'),
+  releaseGameEditLease: vi.fn(async () => true),
 }));
 
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
@@ -33,7 +35,8 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   updateMatchStatus: vi.fn(),
   transitionMatchStatus: vi.fn(),
   getMatchById: vi.fn(),
-  resetMatchFields: vi.fn(async () => {}),
+  resetMatchFields: vi.fn(async () => ({}) as never),
+  clearMatchSocialImage: vi.fn(async () => {}),
   hasDownstreamMatches: vi.fn(async () => false),
   getMatchesByRound: vi.fn(async () => []),
   getMatchesByTournament: vi.fn(async () => []),
@@ -74,6 +77,7 @@ vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
 
 vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
   deleteMatchOutcome: vi.fn(async () => 0),
+  getMatchOutcome: vi.fn(async () => null),
   recordMatchOutcome: vi.fn(async () => 'written'),
 }));
 
@@ -154,7 +158,9 @@ vi.mock('@/lib/tournament/bracket-propagation', async (importOriginal) => {
   };
 });
 
-import { resetMatch } from '../game-pipeline';
+import { deleteGame, editGame, resetMatch } from '../game-pipeline';
+import { getGameById, deleteUncountedGameRow } from '@/lib/supabase/queries/games';
+import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { planRatingRebuild } from '@/lib/rating/updateRatings';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
@@ -406,7 +412,7 @@ describe('resetMatch cascade', () => {
 
     await resetMatch('m-legacy', 'admin-1', false);
 
-    expect(resetMatchFields).toHaveBeenCalledWith('m-legacy');
+    expect(resetMatchFields).toHaveBeenCalledWith('m-legacy', 'completed');
     expect(hasDownstreamMatches).toHaveBeenCalledWith(
       'm-legacy',
       expect.objectContaining({ winner_id: 'p1', round_id: 'round-1' })
@@ -430,6 +436,34 @@ describe('resetMatch cascade', () => {
       'm-finals',
       expect.objectContaining({ winner_id: 'p1', round_id: 'round-2' })
     );
+  });
+
+  describe('an admin game change of the completed origin match', () => {
+    // A game change takes a completed match off `completed` exactly like a reopen, so a played later bracket match refuses
+    // it the same way (409 match_reopen_downstream_played) before anything is written.
+    beforeEach(() => {
+      vi.mocked(getGameById).mockResolvedValue({ id: 'g-origin', match_id: 'm-r1', updated_at: '2026-01-01T00:00:00.000Z' } as never);
+    });
+
+    it('deleteGame refuses while the finals it advanced into were played, with nothing deleted', async () => {
+      const rejection = deleteGame('g-origin', 'admin-1');
+
+      await expect(rejection).rejects.toMatchObject({
+        code: 'match_reopen_downstream_played',
+        statusCode: 409,
+        params: { count: 1 },
+      });
+      expect(deleteUncountedGameRow).not.toHaveBeenCalled();
+      expect(resetMatchFields).not.toHaveBeenCalled();
+    });
+
+    it('editGame refuses the same way, with nothing written', async () => {
+      const rejection = editGame({ game_id: 'g-origin', admin_id: 'admin-1', winner_id: 'p4' });
+
+      await expect(rejection).rejects.toMatchObject({ code: 'match_reopen_downstream_played', statusCode: 409 });
+      expect(resetMatchFields).not.toHaveBeenCalled();
+      expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    });
   });
 
   it('throws UserFacingError so API routes can surface DOWNSTREAM_PLAYED', async () => {

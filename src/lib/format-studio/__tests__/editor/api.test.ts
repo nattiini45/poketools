@@ -293,6 +293,8 @@ describe('classifyApiError', () => {
     format_not_attached: 'blocked',
     format_nothing_attached: 'not_found',
     format_detach_blocked: 'blocked',
+    format_phases_in_use: 'blocked',
+    format_phase_owned: 'blocked',
     format_runtime_has_data: 'blocked',
     season_format_type_locked: 'blocked',
   };

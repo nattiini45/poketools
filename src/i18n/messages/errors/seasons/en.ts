@@ -131,6 +131,11 @@ export default {
     'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
   format_nothing_attached: 'No format is attached to this league.',
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
+  // A replace removes a phase that teams still point to (409).
+  format_phases_in_use: 'Teams still point to a phase that this format change would remove. Remove those teams first.',
+  // A phase created from the league's format, or a hand-made one on a format league, is changed outside the format (409).
+  format_phase_owned:
+    'This phase belongs to the format of this league, so it cannot be added, deleted, reordered or restructured, and its roster and status cannot be changed through this request. Replace the format, change the status in the phase settings, or use a substitute for a player.',
   format_runtime_has_data:
     'This league already has data from its current format: {links} links, {items} items, {submissions} submissions and {adjustments} adjustments. Replacing or detaching the format deletes all of it. Confirm to continue.',
   season_format_type_locked:
@@ -168,6 +173,8 @@ export default {
   format_not_running: 'This league is not running a custom format right now.',
   format_not_participant: 'You are not a participant of this league.',
   format_season_closed: 'This league is closed, so no more moves can be made.',
+  // The audit write of an unmask failed, so nothing was shown (503, retry).
+  unmask_audit_unavailable: 'The hidden relations could not be shown because the read could not be recorded. Try again in a moment.',
   format_action_unknown: 'This action does not exist in this league.',
   format_action_already_submitted: 'You have already submitted this action. Submit again to change your pick.',
   format_action_invalid: 'The submission has problems.',

@@ -45,7 +45,7 @@ function kit(overrides: Partial<KitStandingsData> = {}): KitStandingsData {
 
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'legacy', seed: 'secret-seed' });
+  vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'legacy', seed: 'secret-seed', revision: 1, clockShiftSeconds: 0 });
   vi.mocked(loadKitStandingsData).mockResolvedValue(kit());
   vi.mocked(getStagesBySeasonId).mockResolvedValue([
     { id: PHASE, name: 'League', bracket_type: 'round_robin' } as TournamentWithDetails,

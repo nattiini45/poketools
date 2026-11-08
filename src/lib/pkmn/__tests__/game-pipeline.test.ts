@@ -54,7 +54,8 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
     player_1_name: 'Alice', player_2_name: 'Bob',
     games: [],
   })),
-  resetMatchFields: vi.fn(async () => {}),
+  resetMatchFields: vi.fn(async () => ({}) as never),
+  clearMatchSocialImage: vi.fn(async () => {}),
   hasDownstreamMatches: vi.fn(async () => false),
   getMatchesByRound: vi.fn(async () => []),
   getMatchesByTournament: vi.fn(async () => []),
@@ -96,6 +97,11 @@ vi.mock('@/lib/supabase/queries/match-prep-analyses', () => ({
   deleteMatchPrepAnalysesByMatch: vi.fn(async () => {}),
 }));
 
+vi.mock('@/lib/tournament/bracket-propagation', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/tournament/bracket-propagation')>();
+  return { ...actual, unpropagateBracketOnMatchReset: vi.fn(async () => []) };
+});
+
 vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
   deleteMatchSnapshots: vi.fn(async () => {}),
 }));
@@ -103,6 +109,7 @@ vi.mock('@/lib/supabase/queries/match-snapshots', () => ({
 vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
   recordMatchOutcome: vi.fn(async () => 'written'),
   deleteMatchOutcome: vi.fn(async () => 0),
+  getMatchOutcome: vi.fn(async () => null),
 }));
 
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({
@@ -206,7 +213,7 @@ import {
   GameEditInProgressError, GameEditStaleError, GameNotFoundError, GameRecountedConcurrentlyError, MatchResetPartialError,
 } from '../game-pipeline';
 import {
-  getMatchById, getMatchesByRound, hasDownstreamMatches, resetMatchFields,
+  clearMatchSocialImage, getMatchById, getMatchesByRound, hasDownstreamMatches, resetMatchFields,
   transitionMatchStatus, updateMatchStatus,
 } from '@/lib/supabase/queries/matches';
 import { getRoundById, updateRoundStatus } from '@/lib/supabase/queries/rounds';
@@ -242,7 +249,12 @@ import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
-import { deleteMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { deleteMatchOutcome, getMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { MatchStateChangedError } from '@/lib/match/state-errors';
+import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
+import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
+import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
+import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { onMatchReverted, onMatchUnresolved } from '@/lib/format-engine/runtime/hooks';
@@ -406,6 +418,20 @@ describe('recordGameResult: replay binding', () => {
 
       expect(revalidateMatchPages).toHaveBeenCalledWith('tourney-1', 'match-1');
       expect(onMatchUnresolved).toHaveBeenCalledWith(expect.objectContaining({ matchId: 'match-1' }));
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'match.replay_unresolved',
+          metadata: expect.objectContaining({ outcome_recorded: false }),
+        })
+      );
+    });
+
+    it('reports a dispute whose unresolved row was kept out by an admin row like a failed write', async () => {
+      vi.mocked(recordMatchOutcome).mockResolvedValueOnce('kept');
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(recordGameResult(tieInput())).rejects.toMatchObject({ code: 'match_replay_unresolved', statusCode: 409 });
+
       expect(logAuditEvent).toHaveBeenCalledWith(
         expect.objectContaining({
           action: 'match.replay_unresolved',
@@ -1007,7 +1033,8 @@ describe('resetMatch', () => {
 
     const result = await resetMatch('match-1', 'admin-1');
 
-    expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1');
+    // No outcome row existed before the flip: nothing to take back.
+    expect(deleteMatchOutcome).not.toHaveBeenCalled();
     expect(cleanMatchChildren).toHaveBeenCalledTimes(1);
     expect(cleanMatchChildren).toHaveBeenCalledWith('match-1');
     // The cleanup summary is forwarded on the result.
@@ -2799,6 +2826,202 @@ describe('deleteGame / editGame on a COMPLETED match: ratings, streaks and signa
     expect(result.match_status_conflict).toBe(true);
     expect(rebuildRatingsForPlayers).not.toHaveBeenCalled();
     expect(result).not.toHaveProperty('ratings_rebuilt');
+  });
+});
+
+describe('an admin game change on a COMPLETED match takes back what the result left behind', () => {
+  const OUTCOME_SET_AT = '2026-11-01T10:00:00.000Z';
+  const oneGameLeft = () =>
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 1, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getGamesByMatch).mockResolvedValue([]);
+    vi.mocked(getMatchOutcome).mockResolvedValue(null);
+  });
+
+  it('deleteGame: the bracket slots, the analyses, snapshots and social image of the old result go, and the round reopens', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+    oneGameLeft();
+    vi.mocked(getRoundById)
+      .mockResolvedValueOnce(round())
+      .mockResolvedValueOnce(round({ status: 'completed' }));
+
+    const result = await deleteGame('game-1', 'admin-1');
+
+    expect(result.match_status).toBe('in_progress');
+    expect(unpropagateBracketOnMatchReset).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'match-1' }),
+      expect.objectContaining({ id: 'tourney-1' }),
+      []
+    );
+    expect(deleteMatchAnalysis).toHaveBeenCalledWith('match-1');
+    expect(deleteMatchPrepAnalysesByMatch).toHaveBeenCalledWith('match-1');
+    expect(deleteMatchSnapshots).toHaveBeenCalledWith('match-1');
+    expect(clearMatchSocialImage).toHaveBeenCalledWith('match-1');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    // After the status moved, so a failed take-back never leaves a completed match.
+    expect(vi.mocked(transitionMatchStatus).mock.invocationCallOrder[0])
+      .toBeLessThan(vi.mocked(unpropagateBracketOnMatchReset).mock.invocationCallOrder[0]);
+  });
+
+  it('editGame: a completed match the edit moves off completed reopens its round and takes back the same effects', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 2, player_ids: ['p1', 'p2'] });
+    vi.mocked(hasReachedBoThreshold).mockReturnValueOnce({ reached: true, winner_id_index: 2 });
+    vi.mocked(getRoundById)
+      .mockResolvedValueOnce(round())
+      .mockResolvedValueOnce(round({ status: 'completed' }));
+
+    const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1', winner_id: 'player-2' });
+
+    expect(result.match_status).toBe('pending_confirmation');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    expect(unpropagateBracketOnMatchReset).toHaveBeenCalledTimes(1);
+    expect(deleteMatchAnalysis).toHaveBeenCalledWith('match-1');
+    expect(deleteMatchPrepAnalysesByMatch).toHaveBeenCalledWith('match-1');
+    expect(deleteMatchSnapshots).toHaveBeenCalledWith('match-1');
+    expect(clearMatchSocialImage).toHaveBeenCalledWith('match-1');
+  });
+
+  it.each(['pending_confirmation', 'in_progress'])('deleteGame / editGame: a %s match has no completed result to take back', async (status) => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus(status));
+    oneGameLeft();
+    await deleteGame('game-1', 'admin-1');
+
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus(status));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 1, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+    await editGame({ game_id: 'game-1', admin_id: 'admin-1' });
+
+    expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    expect(deleteMatchSnapshots).not.toHaveBeenCalled();
+    expect(clearMatchSocialImage).not.toHaveBeenCalled();
+  });
+
+  it('a concurrent writer that kept the match completed leaves the bracket and artifacts alone', async () => {
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce(matchWithStatus('completed'))
+      .mockResolvedValueOnce(matchWithStatus('completed'));
+    oneGameLeft();
+    vi.mocked(transitionMatchStatus).mockResolvedValueOnce(null);
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await deleteGame('game-1', 'admin-1');
+
+    expect(result.match_status_conflict).toBe(true);
+    expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    expect(deleteMatchSnapshots).not.toHaveBeenCalled();
+    expect(deleteMatchOutcome).not.toHaveBeenCalled();
+  });
+
+  describe('the outcome row leaves with the status', () => {
+    it.each(['completed', 'disputed'])(
+      'deleteGame: a %s match that moves on loses its row, deleted by the set_at read before the flip',
+      async (status) => {
+        vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+        vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus(status));
+        oneGameLeft();
+
+        await deleteGame('game-1', 'admin-1');
+
+        expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1', { onlyIfSetAt: OUTCOME_SET_AT });
+        expect(vi.mocked(getMatchOutcome).mock.invocationCallOrder[0])
+          .toBeLessThan(vi.mocked(transitionMatchStatus).mock.invocationCallOrder[0]);
+        expect(vi.mocked(transitionMatchStatus).mock.invocationCallOrder[0])
+          .toBeLessThan(vi.mocked(deleteMatchOutcome).mock.invocationCallOrder[0]);
+      }
+    );
+
+    it('editGame: a completed match edited back to pending_confirmation loses its (admin) row', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+      vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 2, player_ids: ['p1', 'p2'] });
+      vi.mocked(hasReachedBoThreshold).mockReturnValueOnce({ reached: true, winner_id_index: 2 });
+
+      await editGame({ game_id: 'game-1', admin_id: 'admin-1', winner_id: 'player-2' });
+
+      expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1', { onlyIfSetAt: OUTCOME_SET_AT });
+    });
+
+    it('deleteGame: a pending_confirmation match keeps whatever row it has (nothing decided it)', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('pending_confirmation'));
+      oneGameLeft();
+
+      await deleteGame('game-1', 'admin-1');
+
+      expect(deleteMatchOutcome).not.toHaveBeenCalled();
+    });
+
+    it('deleteGame: a failed outcome delete is logged and does not fail the saved game change', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(deleteMatchOutcome).mockRejectedValueOnce(new Error('delete failed'));
+      vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+      oneGameLeft();
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(deleteGame('game-1', 'admin-1')).resolves.toMatchObject({ match_status: 'in_progress' });
+      expect(rebuildRatingsForPlayers).toHaveBeenCalled();
+    });
+  });
+
+  describe('the reset to scheduled (the last game goes) is a compare-and-set', () => {
+    it('writes with the status the caller read and removes the row it saw', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('pending_confirmation'));
+      vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+
+      const result = await deleteGame('game-1', 'admin-1');
+
+      expect(result.match_status).toBe('scheduled');
+      expect(resetMatchFields).toHaveBeenCalledWith('match-1', 'pending_confirmation');
+      expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1', { onlyIfSetAt: OUTCOME_SET_AT });
+    });
+
+    it('a confirmation that completed the match first wins: the match stays completed, flagged, and keeps its row', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWithStatus('pending_confirmation'))
+        .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as never);
+      vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+      vi.mocked(resetMatchFields).mockResolvedValueOnce(null);
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      const result = await deleteGame('game-1', 'admin-1');
+
+      expect(result).toMatchObject({ match_status: 'completed', match_status_conflict: true });
+      expect(deleteMatchOutcome).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('resetMatch', () => {
+    it('answers 409 match_state_changed when the match moved since it was read, and rebuilds nothing', async () => {
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWithStatus('pending_confirmation'))
+        .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as never);
+      vi.mocked(resetMatchFields).mockResolvedValueOnce(null);
+
+      const rejection = resetMatch('match-1', 'admin-1');
+
+      await expect(rejection).rejects.toBeInstanceOf(MatchStateChangedError);
+      await expect(rejection).rejects.toMatchObject({ code: 'match_state_changed', statusCode: 409, params: { status: 'completed' } });
+      expect(resetMatchFields).toHaveBeenCalledWith('match-1', 'pending_confirmation');
+      expect(deleteMatchOutcome).not.toHaveBeenCalled();
+      expect(rebuildRatingsForPlayers).not.toHaveBeenCalled();
+    });
+
+    it('a failed outcome delete is logged and the rebuilds, format revert and round revert still run', async () => {
+      vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
+      vi.mocked(deleteMatchOutcome).mockRejectedValueOnce(new Error('delete failed'));
+      vi.mocked(getMatchById).mockResolvedValue(matchWithStatus('completed'));
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+
+      await expect(resetMatch('match-1', 'admin-1')).resolves.toBeDefined();
+
+      expect(deleteMatchOutcome).toHaveBeenCalledWith('match-1', { onlyIfSetAt: OUTCOME_SET_AT });
+      expect(rebuildRatingsForPlayers).toHaveBeenCalledWith(['player-1', 'player-2']);
+      expect(unpropagateBracketOnMatchReset).toHaveBeenCalledTimes(1);
+    });
   });
 });
 

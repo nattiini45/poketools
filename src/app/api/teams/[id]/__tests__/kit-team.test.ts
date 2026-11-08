@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import { makeSet } from '@/test/team-fixtures';
 
+vi.mock('@/app/api/teams/team-writes-closed', () => ({ teamWritesClosed: vi.fn().mockResolvedValue(false) }));
 vi.mock('@/lib/auth/helpers', () => ({ requirePlayer: vi.fn(), requireAdmin: vi.fn() }));
 vi.mock('@/lib/supabase/queries/teams', () => ({
   getTeamById: vi.fn(),

@@ -11,6 +11,8 @@ vi.mock('@/lib/format-engine/runtime/team-audit-server', () => ({ auditMatchTeam
 vi.mock('@/lib/format-engine/runtime/stage-table', () => ({ loadStageTable: vi.fn(), playerRowsOf: vi.fn(() => ({})) }));
 vi.mock('@/lib/supabase/queries/match-outcomes', () => ({ getMatchOutcome: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonFormat: vi.fn() }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/stage-end-server', () => ({ checkStageEnd: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/phase-complete', () => ({ completePhaseAtStageEnd: vi.fn() }));
@@ -31,6 +33,8 @@ import { loadFreshKitContext, type KitContext } from '../load';
 import { loadStageTable } from '../stage-table';
 import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getMatchById } from '@/lib/supabase/queries/matches';
+import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { logger } from '@/lib/logger';
 import { fireFormatEvent, FormatRuntimeError, getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
@@ -74,6 +78,9 @@ beforeEach(() => {
   vi.mocked(auditMatchTeams).mockResolvedValue({ opened: 0 });
   vi.mocked(getRoundById).mockResolvedValue({ id: 'r-1', round_number: 3 } as never);
   vi.mocked(getMatchOutcome).mockResolvedValue(null as never);
+  vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [] } as never);
+  vi.mocked(getMatchById).mockResolvedValue(null as never);
+  vi.mocked(getSeasonFormat).mockResolvedValue(null as never);
 });
 
 describe('isKitCandidate', () => {
@@ -109,7 +116,7 @@ describe('onMatchCompleted', () => {
   it('opens an unresolved check for an unresolved outcome', async () => {
     vi.mocked(getMatchOutcome).mockResolvedValue({ kind: 'unresolved' } as never);
     await onMatchCompleted(input);
-    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-1:0' })]);
+    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-1:0' })], 1);
   });
 
   it('keys the match-level checks by the completion generation', async () => {
@@ -126,6 +133,39 @@ describe('onMatchCompleted', () => {
     );
     await onMatchCompleted(input);
     expect(vi.mocked(openChecks).mock.calls[0][1].map((check) => check.dedupe_key)).toEqual(['unresolved:m-1:1', 'expr:won_it:m-1:1']);
+  });
+
+  describe('a replayed match and the track steps', () => {
+    const wonStep = (ops: unknown) => (ops as Array<{ op: string; player_id: string; step: number }>).map((op) => [op.player_id, op.step]);
+
+    it('does not climb a second step from the same win: the step the reverted completion set is taken out of the state', async () => {
+      // p1 holds step 1 of `milestones` from the first completion of this match (reverted since); the second step needs round 3,
+      // which this match is (the round of the mock): without the rewind the replay would reach step 2 from one win.
+      vi.mocked(loadFreshKitContext).mockResolvedValue(
+        context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1', 'match_reverted:m-1:1'], tracks: { p1: { milestones: 1 } } }) }),
+      );
+      vi.mocked(getFormatRuntime).mockResolvedValue({
+        eventLog: [{ event_key: 'match_completed:m-1', ops: [{ op: 'set_track', track: 'milestones', player_id: 'p1', step: 1 }] }],
+      } as never);
+      await onMatchCompleted(input);
+      expect(wonStep(vi.mocked(fireEvent).mock.calls[0][3]?.ops)).toEqual([['p1', 1]]);
+    });
+
+    it('leaves a player who stands on another step alone, and reads no log for a first completion', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(
+        context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1', 'match_reverted:m-1:1'], tracks: { p1: { milestones: 1 } } }) }),
+      );
+      vi.mocked(getFormatRuntime).mockResolvedValue({
+        eventLog: [{ event_key: 'match_completed:m-1', ops: [{ op: 'set_track', track: 'milestones', player_id: 'p1', step: 2 }] }],
+      } as never);
+      await onMatchCompleted(input);
+      expect(wonStep(vi.mocked(fireEvent).mock.calls[0][3]?.ops)).toEqual([['p1', 2]]);
+
+      vi.mocked(getFormatRuntime).mockClear();
+      vi.mocked(loadFreshKitContext).mockResolvedValue(context());
+      await onMatchCompleted(input);
+      expect(getFormatRuntime).not.toHaveBeenCalled();
+    });
   });
 
   it('never throws into the caller, reports the failure, and logs the original error', async () => {
@@ -269,11 +309,25 @@ describe('inverseOps', () => {
     ];
     expect(inverseOps(logged as never)).toEqual({
       ops: [
-        { op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1 },
+        // The revoke names the grant it undoes, so a database that honours it takes back that row.
+        { op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, source: 'event', source_ref: null },
         { op: 'adjust_points', stage: 'main', player_id: 'p1', points: -3, reason: 'reverted: win bonus' },
       ],
       irreversible: ['set_track', 'set_flag', 'revoke_item', 'grant_item'],
     });
+  });
+
+  it('does not revoke a grant the event skipped in a race (it never held the item)', () => {
+    const logged = [
+      { op: 'grant_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, exclusive: true, source: 'event', source_ref: 'r:e' },
+      { op: 'grant_item', resource: 'picks', player_id: 'p2', item_id: 'garchomp', amount: 1, exclusive: true, source: 'event', source_ref: 'r:e' },
+      { op: 'grant_item', resource: 'picks', player_id: 'p3', item_id: null, amount: 2, exclusive: false, source: 'event', source_ref: 'r:e' },
+    ];
+    const payload = { skipped_grants: [{ resource: 'picks', player_id: 'p2', item_id: 'garchomp', reason: 'resource_item_taken' }] };
+    expect(inverseOps(logged as never, payload as never).ops).toEqual([
+      { op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, source: 'event', source_ref: 'r:e' },
+      { op: 'revoke_item', resource: 'picks', player_id: 'p3', item_id: null, amount: 2, source: 'event', source_ref: 'r:e' },
+    ]);
   });
 
   it('keeps the reason within the 500 characters the table allows', () => {
@@ -324,7 +378,7 @@ describe('onMatchReverted', () => {
       eventKey: 'match_reverted:m-1:1',
       event: 'match_reverted',
       payload: { match_id: 'm-1', reverts: 'match_completed:m-1' },
-      ops: [{ op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1 }],
+      ops: [{ op: 'revoke_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, source: 'event', source_ref: null }],
       firedBy: null,
       // The revert is planned from the log of the format the context was loaded from: the database refuses it for another.
       revision: 7,
@@ -360,6 +414,75 @@ describe('onMatchReverted', () => {
     );
     await onMatchReverted(input);
     expect(fireFormatEvent).not.toHaveBeenCalled();
+  });
+
+  it('passes the skipped grants of the logged event to the inverse, so a revert never revokes what was not granted', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
+    vi.mocked(getFormatRuntime).mockResolvedValue({
+      eventLog: [
+        {
+          ...logRow('match_completed:m-1', [{ op: 'grant_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, exclusive: true, source: 'event', source_ref: null }]),
+          payload: { skipped_grants: [{ resource: 'picks', player_id: 'p1', item_id: 'garchomp', reason: 'resource_item_taken' }] },
+        },
+      ],
+    } as never);
+    await expect(onMatchReverted(input)).resolves.toBe(true);
+    expect(fireFormatEvent).toHaveBeenCalledWith(expect.objectContaining({ eventKey: 'match_reverted:m-1:1', ops: [] }));
+  });
+
+  describe('a league that is not on the kit engine', () => {
+    const attached = { engine: 'shadow' } as never;
+
+    it('fails the revert when the match completion is still applied: the effects cannot be taken back from here, and the caller is told', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+      vi.mocked(getSeasonFormat).mockResolvedValue(attached);
+      vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', [])] } as never);
+      const report = newHookReport();
+      await expect(onMatchReverted({ ...input, report })).resolves.toBe(false);
+      expect(report.failed).toBe(true);
+      expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('match reverted'), expect.objectContaining({ matchId: 'm-1' }));
+      expect(fireFormatEvent).not.toHaveBeenCalled();
+    });
+
+    it('is a no-op when the completion never applied, was already reverted, or the league has no format', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+      vi.mocked(getSeasonFormat).mockResolvedValue(attached);
+      vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [] } as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', []), logRow('match_reverted:m-1:1', [])] } as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      vi.mocked(getSeasonFormat).mockResolvedValue(null as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+    });
+  });
+
+  describe('a dispute that was opened while the revert was pending', () => {
+    it('opens the dispute check again under the new generation when the match is disputed with an unresolved outcome', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(
+        context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'], checks: [{ id: 'c-1', source: 'unresolved_outcome', rule_id: 'r', dedupe_key: 'unresolved:m-1:0', subject: {}, status: 'open', note: null }] as never }) }),
+      );
+      vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', [])] } as never);
+      vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'disputed', player_1_id: 'p1', player_2_id: 'p2' } as never);
+      vi.mocked(getMatchOutcome).mockResolvedValue({ kind: 'unresolved' } as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      expect(vi.mocked(resolveCheck).mock.calls.map(([request]) => request.checkId)).toEqual(['c-1']);
+      expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-1:1' })], 1);
+    });
+
+    it('opens nothing for a match that is not disputed by a replay tie, and does not fail the revert when the read fails', async () => {
+      vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { firedEventKeys: ['match_completed:m-1'] }) }));
+      vi.mocked(getFormatRuntime).mockResolvedValue({ eventLog: [logRow('match_completed:m-1', [])] } as never);
+      vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'scheduled', player_1_id: 'p1', player_2_id: 'p2' } as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'disputed', player_1_id: 'p1', player_2_id: 'p2' } as never);
+      vi.mocked(getMatchOutcome).mockResolvedValue({ kind: 'played' } as never);
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      expect(openChecks).not.toHaveBeenCalled();
+
+      vi.mocked(getMatchById).mockRejectedValue(new Error('read down'));
+      await expect(onMatchReverted(input)).resolves.toBe(true);
+      expect(logger.error).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('dispute check'), expect.objectContaining({ matchId: 'm-1' }));
+    });
   });
 
   describe('per-match checks (unresolved outcome, match-level expression)', () => {
@@ -413,7 +536,7 @@ describe('onMatchReverted', () => {
       // The replay ties again: the dispute check reads the advanced generation, so its key is a new one.
       vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state: stateFor(def, { checks: decided as never, firedEventKeys: [reverted] }) }));
       await onMatchUnresolved({ tournament: TOURNAMENT, matchId: 'm-1', player1Id: 'p1', player2Id: 'p2' });
-      expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-1:1' })]);
+      expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-1:1' })], 1);
     });
 
     it('does not fire the revert when a check cannot be closed, so the retry (the cron heal) finds the completion still fired', async () => {
@@ -575,7 +698,14 @@ describe('onMatchReverted', () => {
 describe('onMatchUnresolved', () => {
   it('opens the unresolved check', async () => {
     await onMatchUnresolved({ tournament: TOURNAMENT, matchId: 'm-9', player1Id: 'p1', player2Id: 'p2' });
-    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-9:0', source: 'unresolved_outcome' })]);
+    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'unresolved:m-9:0', source: 'unresolved_outcome' })], 1);
+  });
+
+  it('tries once more when the check could not be opened or the format changed meanwhile: no heal sees a disputed match', async () => {
+    vi.mocked(openChecks).mockRejectedValueOnce(new FormatRuntimeError('format_context_stale'));
+    await onMatchUnresolved({ tournament: TOURNAMENT, matchId: 'm-9', player1Id: 'p1', player2Id: 'p2' });
+    expect(openChecks).toHaveBeenCalledTimes(2);
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });
 
@@ -586,7 +716,7 @@ describe('onRoundGenerated', () => {
     expect(openChecks).not.toHaveBeenCalled();
 
     await onRoundGenerated({ tournament: TOURNAMENT, roundNumber: 3, rematches: 2, startsPhase: false });
-    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'rematch:main:3' })]);
+    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'rematch:main:3' })], 1);
   });
 
   it('fires stage_start before round_start for the first round', async () => {
@@ -598,8 +728,7 @@ describe('onRoundGenerated', () => {
     vi.mocked(fireEvent).mockRejectedValueOnce(new Error('db blip'));
     await onRoundGenerated({ tournament: TOURNAMENT, roundNumber: 1, rematches: 0, startsPhase: true });
     expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1].event)).toEqual(['stage_start', 'stage_start', 'round_start']);
-    expect(logger.error).toHaveBeenCalledTimes(1);
-    expect(logger.error).not.toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('stage_start did not apply'), expect.anything());
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   it('logs how to recover when stage_start fails twice, and still fires round_start', async () => {
@@ -613,10 +742,25 @@ describe('onRoundGenerated', () => {
     );
   });
 
-  it('does not retry anything for a round that does not start the phase', async () => {
+  it('tries round_start once more when it failed, and a format that changed meanwhile is planned again against the current one', async () => {
+    vi.mocked(fireEvent).mockRejectedValueOnce(new FormatRuntimeError('format_context_stale'));
+    await onRoundGenerated({ tournament: TOURNAMENT, roundNumber: 2, rematches: 0, startsPhase: false });
+    expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1].event)).toEqual(['round_start', 'round_start']);
+    expect(vi.mocked(loadFreshKitContext)).toHaveBeenCalledTimes(2);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('does not start a phase for a round that does not, and gives up after one more try', async () => {
     vi.mocked(fireEvent).mockRejectedValue(new Error('down'));
     await onRoundGenerated({ tournament: TOURNAMENT, roundNumber: 2, rematches: 0, startsPhase: false });
-    expect(vi.mocked(fireEvent)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1].event)).toEqual(['round_start', 'round_start']);
+    expect(logger.error).toHaveBeenCalledTimes(1);
+  });
+
+  it('opens the rematch check even when round_start failed, as a step of its own', async () => {
+    vi.mocked(fireEvent).mockRejectedValue(new Error('down'));
+    await onRoundGenerated({ tournament: TOURNAMENT, roundNumber: 3, rematches: 2, startsPhase: false });
+    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'rematch:main:3' })], 1);
   });
 });
 
@@ -635,15 +779,32 @@ describe('onPhaseStatusChanged', () => {
   it('resolves true when it applied and false, without throwing, when a step failed', async () => {
     vi.mocked(loadStageTable).mockResolvedValue([] as never);
     await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' })).resolves.toBe(true);
-    vi.mocked(fireEvent).mockRejectedValueOnce(new Error('fire down'));
+    vi.mocked(fireEvent).mockRejectedValue(new Error('fire down'));
     await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' })).resolves.toBe(false);
+    vi.mocked(fireEvent).mockResolvedValue(fired as never);
     vi.mocked(loadStageTable).mockResolvedValue([
       { player_id: 'p1', needs_decision_match: true, tie_group: 1 },
       { player_id: 'p2', needs_decision_match: true, tie_group: 1 },
     ] as never);
-    vi.mocked(openChecks).mockRejectedValueOnce(new Error('checks down'));
+    vi.mocked(openChecks).mockRejectedValue(new Error('checks down'));
     await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' })).resolves.toBe(false);
     await expect(onPhaseStatusChanged({ tournament: { ...TOURNAMENT, season_format_type: null }, from: 'active', to: 'completed' })).resolves.toBe(true);
+  });
+
+  it('tries a failed stage_end once more (nothing repeats it later), planning it against the format as it is then', async () => {
+    vi.mocked(loadStageTable).mockResolvedValue([] as never);
+    vi.mocked(fireEvent).mockRejectedValueOnce(new FormatRuntimeError('format_context_stale'));
+    await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' })).resolves.toBe(true);
+    expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1].event)).toEqual(['stage_end', 'stage_end']);
+    expect(logger.error).not.toHaveBeenCalled();
+  });
+
+  it('reports a format that stays stale after the second try as a skipped step: a warning, not an error', async () => {
+    vi.mocked(fireEvent).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    await expect(onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'upcoming', to: 'active' })).resolves.toBe(false);
+    expect(fireEvent).toHaveBeenCalledTimes(2);
+    expect(logger.error).not.toHaveBeenCalled();
+    expect(logger.warn).toHaveBeenCalledWith('format-engine/hooks', expect.stringContaining('the format changed meanwhile'), expect.anything());
   });
 
   it('fires stage_end on completion and opens a check per tied group', async () => {
@@ -654,7 +815,7 @@ describe('onPhaseStatusChanged', () => {
     ] as never);
     await onPhaseStatusChanged({ tournament: TOURNAMENT, from: 'active', to: 'completed' });
     expect(vi.mocked(fireEvent).mock.calls.map((c) => c[1])).toEqual([{ event: 'stage_end', stage: 'main' }]);
-    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'tie:main:p1,p2' })]);
+    expect(openChecks).toHaveBeenCalledWith('s-1', [expect.objectContaining({ dedupe_key: 'tie:main:p1,p2' })], 1);
   });
 
   describe('a stage that repeats per group', () => {
@@ -714,6 +875,16 @@ describe('onMatchCompleted: end_when', () => {
     vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: ['m-8', 'm-9'] });
     await onMatchCompleted(input);
     expect(completePhaseAtStageEnd).toHaveBeenCalledWith('t-1', 'end_when:main', ['m-8', 'm-9']);
+  });
+
+  it('does not end a phase when the league left the kit engine since the hook loaded its context', async () => {
+    // The hook loaded the kit context; the admin switched the engine meanwhile, so the fresh read answers null. The kit-only
+    // end_when must not be evaluated from the old context and complete a phase of a league that no longer runs the kit.
+    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(withEnd()).mockResolvedValue(null);
+    vi.mocked(checkStageEnd).mockResolvedValue({ met: true, facts, openInRound: 0, unfinishedMatchIds: [] });
+    await onMatchCompleted(input);
+    expect(checkStageEnd).not.toHaveBeenCalled();
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
   });
 
   it('waits while the round still has open matches or the condition is unmet', async () => {

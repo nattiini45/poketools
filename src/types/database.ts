@@ -5423,6 +5423,7 @@ export type Database = {
       season_formats: {
         Row: {
           amendments: Json
+          clock_shift_seconds: number
           definition_id: string | null
           engine: string
           frozen_at: string
@@ -5437,6 +5438,7 @@ export type Database = {
         }
         Insert: {
           amendments?: Json
+          clock_shift_seconds?: number
           definition_id?: string | null
           engine?: string
           frozen_at?: string
@@ -5451,6 +5453,7 @@ export type Database = {
         }
         Update: {
           amendments?: Json
+          clock_shift_seconds?: number
           definition_id?: string | null
           engine?: string
           frozen_at?: string
@@ -7069,8 +7072,13 @@ export type Database = {
         Returns: boolean
       }
       format__apply_ops: {
-        Args: { p_ops: Json; p_season_id: string }
-        Returns: undefined
+        Args: {
+          p_ops: Json
+          p_season_id: string
+          p_strict?: boolean
+          p_tolerant?: boolean
+        }
+        Returns: Json
       }
       format__check_revision: {
         Args: { p_expected_revision: number; p_season_id: string }
@@ -7085,7 +7093,11 @@ export type Database = {
         Returns: undefined
       }
       format__guard_runtime_clear: {
-        Args: { p_confirm: boolean; p_season_id: string }
+        Args: {
+          p_confirm: boolean
+          p_confirmed_counts?: Json
+          p_season_id: string
+        }
         Returns: Json
       }
       format__insert_item: {
@@ -7106,6 +7118,14 @@ export type Database = {
         Returns: undefined
       }
       format__lock_engine: { Args: { p_season_id: string }; Returns: string }
+      format__lock_exclusive: {
+        Args: { p_item: string; p_resource: string; p_season_id: string }
+        Returns: undefined
+      }
+      format__lock_grants: {
+        Args: { p_rows: Json; p_season_id: string }
+        Returns: undefined
+      }
       format__lock_holding: {
         Args: { p_player: string; p_resource: string; p_season_id: string }
         Returns: undefined
@@ -7114,6 +7134,7 @@ export type Database = {
         Args: { p_ops: Json; p_season_id: string }
         Returns: undefined
       }
+      format__lock_phases: { Args: { p_season_id: string }; Returns: undefined }
       format__open_round: {
         Args: { p_phase_id: string }
         Returns: {
@@ -7203,6 +7224,7 @@ export type Database = {
       format_attach_season: {
         Args: {
           p_confirm_clear?: boolean
+          p_confirmed_counts?: Json
           p_definition_id: string
           p_preset_rulesets?: Json
           p_season_id: string
@@ -7303,6 +7325,7 @@ export type Database = {
       format_check_open: {
         Args: {
           p_dedupe_key: string
+          p_expected_revision: number
           p_rule_id: string
           p_season_id: string
           p_source: string
@@ -7325,7 +7348,11 @@ export type Database = {
         Returns: string[]
       }
       format_detach_season: {
-        Args: { p_confirm_clear?: boolean; p_season_id: string }
+        Args: {
+          p_confirm_clear?: boolean
+          p_confirmed_counts?: Json
+          p_season_id: string
+        }
         Returns: Json
       }
       format_fire_event: {
@@ -7599,10 +7626,12 @@ export type Database = {
         Args: { p_force: boolean; p_round_id: string }
         Returns: Json
       }
+      round_delete: { Args: { p_round_id: string }; Returns: Json }
       round_write: {
         Args: {
           p_best_of: number
           p_bye_player_ids: string[]
+          p_expected_revision?: number
           p_matches: Json
           p_name: string
           p_round_id: string
@@ -7675,10 +7704,15 @@ export type Database = {
         }
         Returns: boolean
       }
+      tournament_enrollment_freeze: {
+        Args: { p_tournament_id: string }
+        Returns: boolean
+      }
       tournament_enrollment_replace: {
         Args: {
           p_entries: Json
           p_expected_synced_at: string
+          p_force?: boolean
           p_source: Json
           p_tournament_id: string
         }

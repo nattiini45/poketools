@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
 import { LEAGUE_ADMIN_TABS } from '@/lib/league-admin/tabs';
+import { expectedPhaseCount } from '../../materialise';
+import { wichtelcupDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
 import { computeReadiness, type ReadinessInput, type ReadinessItem } from '../../editor/readiness';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
@@ -96,6 +98,17 @@ describe('phases_created', () => {
 
   it('does not block the Active status', () => {
     expect(computeReadiness(ready({ phaseCount: 0 })).blockedReason).toBeNull();
+  });
+});
+
+describe('phases_created with a foreach_group stage', () => {
+  it('needs one phase per group, not one per stage', () => {
+    const doc = wichtelcupDoc() as unknown as FormatDefinition;
+    const need = expectedPhaseCount(doc);
+    expect(need).toBeGreaterThan(doc.stages.length);
+    const input = (phaseCount: number) => ready({ attached: { version_no: 1, spec: doc }, phaseCount });
+    expect(item(input(doc.stages.length), 'phases_created')).toMatchObject({ state: 'unmet', params: { have: doc.stages.length, need } });
+    expect(item(input(need), 'phases_created').state).toBe('met');
   });
 });
 

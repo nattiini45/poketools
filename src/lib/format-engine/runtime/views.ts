@@ -189,6 +189,21 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
     const domainDef = (def.domains ?? []).find((d) => d.key === step.domain);
     const domainView = findDomainView(def, step.domain, state.flags, state.amendments);
     const blocked: BlockedEntry[] = [];
+    // A domain a player may not know of (`admins`, unlisted in `pools`) is not named by its step either: no key, no label,
+    // no lock state, and nothing to pick.
+    if (domainView?.visibility === 'admins') {
+      return {
+        index,
+        resource: step.resource,
+        resource_label: labelOf(resource?.label, step.resource),
+        domain: '',
+        domain_label: ltext('en', ''),
+        count: step.count,
+        distinct_attr: step.distinct_attr ?? null,
+        unlocked: false,
+        blocked,
+      };
+    }
     if (actionable && domainView !== null) {
       const entries = visibleEntries(domainView, false);
       if (entries.length > 0) domains.add(step.domain);
@@ -622,11 +637,14 @@ const isRecord = (value: Json | undefined): value is { [key: string]: Json | und
  * of the violated constraints, the species the replay shows off the team and the team id would show it. Left out: the
  * issue details (the codes and Pokémon slots stay), `off_team` (its count stays) and `team_id`; `team_hidden` says so.
  * A team that was linked to the match (`team_source: 'match'`) is public after the match, and a side without a team
- * has nothing to hide.
+ * has nothing to hide. That holds only while the check is open: the link is not frozen in the subject, and a match that is
+ * reset unlinks its teams (a planned team again, hidden) and closes its open checks without changing their subject, so a
+ * closed check is redacted like a planned team whatever `team_source` it carries.
  */
 function redactHiddenTeam(row: CheckRecordLike, viewer: CheckViewer): Json {
   const subject = row.subject;
-  if (row.source !== 'team_audit' || viewer.siteAdmin === true || !isRecord(subject) || subject.team_source !== 'planned') return subject;
+  if (row.source !== 'team_audit' || viewer.siteAdmin === true || !isRecord(subject)) return subject;
+  if (subject.team_source !== 'planned' && !(row.status !== 'open' && subject.team_source === 'match')) return subject;
   if (viewer.id !== undefined && subject.player_id === viewer.id) return subject;
   const { issues, off_team: offTeam, team_id: _teamId, ...rest } = subject;
   return {

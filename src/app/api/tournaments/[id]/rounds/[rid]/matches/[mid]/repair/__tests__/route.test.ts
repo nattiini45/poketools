@@ -14,6 +14,11 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   repairMatchPairing: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  getMatchOutcome: vi.fn(),
+  deleteMatchOutcome: vi.fn(),
+}));
+
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
 }));
@@ -38,6 +43,7 @@ import { PATCH } from '@/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/rep
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getMatchById, repairMatchPairing } from '@/lib/supabase/queries/matches';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { deleteMatchOutcome, getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/match-proposals';
 import { getParticipants } from '@/lib/supabase/queries/tournaments';
 import { revalidateMatchPages } from '@/lib/revalidation';
@@ -90,6 +96,8 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair', () => 
       status: 'scheduled',
     } as never);
     vi.mocked(cancelPendingMatchProposalsForMatch).mockResolvedValue([]);
+    vi.mocked(getMatchOutcome).mockResolvedValue(null);
+    vi.mocked(deleteMatchOutcome).mockResolvedValue(0);
   });
 
   it('repairs a scheduled pairing and records the audit diff', async () => {
@@ -98,7 +106,12 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair', () => 
 
     expect(body.success).toBe(true);
     expect(requireResourceAdmin).toHaveBeenCalledWith('tournament', tournamentId);
-    expect(repairMatchPairing).toHaveBeenCalledWith(matchId, repairedPlayerOneId, repairedPlayerTwoId);
+    // A compare-and-set on the status and players validated above.
+    expect(repairMatchPairing).toHaveBeenCalledWith(matchId, repairedPlayerOneId, repairedPlayerTwoId, {
+      status: 'scheduled',
+      player_1_id: originalPlayerOneId,
+      player_2_id: originalPlayerTwoId,
+    });
     expect(cancelPendingMatchProposalsForMatch).toHaveBeenCalledWith(matchId);
     expect(revalidateMatchPages).toHaveBeenCalledWith(tournamentId, matchId);
     expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({
@@ -108,6 +121,32 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair', () => 
         player_2_id: { before: originalPlayerTwoId, after: repairedPlayerTwoId },
       }),
     }));
+  });
+
+  it('answers 409 and changes nothing when a result landed between the check and the write', async () => {
+    vi.mocked(repairMatchPairing).mockResolvedValueOnce(null);
+
+    const res = await PATCH(request({ player_1_id: repairedPlayerOneId, player_2_id: repairedPlayerTwoId }), params);
+    const body = await res.json();
+
+    expect(res.status).toBe(409);
+    expect(body.code).toBe('repair_match_status_locked');
+    expect(deleteMatchOutcome).not.toHaveBeenCalled();
+    expect(cancelPendingMatchProposalsForMatch).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('takes back the outcome row a dead settle request left on the old pairing, by the set_at read before the write', async () => {
+    vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: '2026-11-01T10:00:00.000Z' } as never);
+
+    const res = await PATCH(request({ player_1_id: repairedPlayerOneId, player_2_id: repairedPlayerTwoId }), params);
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(deleteMatchOutcome).toHaveBeenCalledWith(matchId, { onlyIfSetAt: '2026-11-01T10:00:00.000Z' });
+    expect(vi.mocked(getMatchOutcome).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(repairMatchPairing).mock.invocationCallOrder[0]
+    );
   });
 
   it('rejects pairings when a selected player is not a participant', async () => {

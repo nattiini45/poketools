@@ -16,7 +16,10 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/match-analyses', () => ({ deleteMatchAnalysis: vi.fn() }));
 vi.mock('@/lib/supabase/queries/match-prep-analyses', () => ({ deleteMatchPrepAnalysesByMatch: vi.fn() }));
 vi.mock('@/lib/supabase/queries/match-snapshots', () => ({ deleteMatchSnapshots: vi.fn() }));
-vi.mock('@/lib/supabase/queries/match-outcomes', () => ({ deleteMatchOutcome: vi.fn(async () => 0) }));
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  deleteMatchOutcome: vi.fn(async () => 0),
+  getMatchOutcome: vi.fn(async () => null),
+}));
 
 vi.mock('@/lib/tournament/bracket-propagation', () => ({
   unpropagateBracketOnMatchReset: vi.fn(),
@@ -60,7 +63,7 @@ import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tourn
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
 import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
 import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
-import { deleteMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
+import { deleteMatchOutcome, getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import {
   collectPlayedDownstreamMatches,
@@ -75,6 +78,7 @@ import * as gameQueries from '@/lib/supabase/queries/games';
 import { deleteGame, editGame, resetMatch } from '@/lib/pkmn/game-pipeline';
 
 const MATCH_ID = 'match-1';
+const OUTCOME_SET_AT = '2026-11-01T10:00:00.000Z';
 const games = [
   { id: 'g1', game_number: 1, winner_id: 'p1', replay_url: '', source: 'manual', stats_locked: false },
   { id: 'g2', game_number: 2, winner_id: 'p1', replay_url: '', source: 'manual', stats_locked: false },
@@ -108,6 +112,8 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {});
 
   vi.mocked(getMatchById).mockResolvedValue(makeMatch('completed') as never);
+  // The outcome row the reopen takes back: read before the flip, deleted by its set_at.
+  vi.mocked(getMatchOutcome).mockResolvedValue({ set_at: OUTCOME_SET_AT } as never);
   vi.mocked(getTournamentById).mockResolvedValue(tournament as never);
   vi.mocked(getParticipants).mockResolvedValue([] as never);
   vi.mocked(collectPlayedDownstreamMatches).mockResolvedValue([]);
@@ -142,7 +148,7 @@ describe('reopenMatch of a completed match', () => {
       failed_steps: [],
     });
     expect(revertRoundIfCompleted).toHaveBeenCalledWith('round-1');
-    expect(deleteMatchOutcome).toHaveBeenCalledWith(MATCH_ID);
+    expect(deleteMatchOutcome).toHaveBeenCalledWith(MATCH_ID, { onlyIfSetAt: OUTCOME_SET_AT });
     expect(unpropagateBracketOnMatchReset).toHaveBeenCalledTimes(1);
     expect(deleteMatchAnalysis).toHaveBeenCalledWith(MATCH_ID);
     expect(deleteMatchPrepAnalysesByMatch).toHaveBeenCalledWith(MATCH_ID);
@@ -387,7 +393,37 @@ describe('reopenMatch of a match that never finalized', () => {
     expect(recheckEvolutions).not.toHaveBeenCalled();
     expect(deleteMatchAnalysis).not.toHaveBeenCalled();
     // The unresolved row of a disputed replay tie goes with the dispute.
-    expect(deleteMatchOutcome).toHaveBeenCalledWith(MATCH_ID);
+    expect(deleteMatchOutcome).toHaveBeenCalledWith(MATCH_ID, { onlyIfSetAt: OUTCOME_SET_AT });
+  });
+
+  it('deletes only the outcome row that existed before the flip, never one staged after it', async () => {
+    // The row is read before the status write; a settle that stages a new row afterwards carries another set_at, so the
+    // set_at-guarded delete leaves it alone.
+    const order: string[] = [];
+    vi.mocked(getMatchOutcome).mockImplementation(async () => {
+      order.push('read');
+      return { set_at: OUTCOME_SET_AT } as never;
+    });
+    vi.mocked(transitionMatchStatus).mockImplementation(async () => {
+      order.push('write');
+      return { id: MATCH_ID, status: 'in_progress' } as never;
+    });
+    vi.mocked(deleteMatchOutcome).mockImplementation(async () => {
+      order.push('delete');
+      return 0;
+    });
+
+    await reopenMatch(MATCH_ID, 'admin-1');
+
+    expect(order).toEqual(['read', 'write', 'delete']);
+  });
+
+  it('deletes nothing when the match had no outcome row to take back', async () => {
+    vi.mocked(getMatchOutcome).mockResolvedValue(null);
+
+    await reopenMatch(MATCH_ID, 'admin-1');
+
+    expect(deleteMatchOutcome).not.toHaveBeenCalled();
   });
 
   it('a compare-and-set miss still throws MatchStateChangedError and keeps the outcome row', async () => {

@@ -542,6 +542,22 @@ describe('public read cache — the catalogue and player write routes expire exa
     expect(fakeNextCache.reads[0].tags).toEqual([publicTags.season('season-unbound'), publicTags.players]);
   });
 
+  it('a rating change expires the reads that embed global ratings: the kit standings, the preview and a custom league payload', async () => {
+    // League S is not a custom league in the sample: its world payload and schedule embed no kit data, so they stay cached.
+    const missed = await missedAfterTags([publicTags.ratings]);
+    expect(missed).toEqual(expect.arrayContaining(['seasonKitStandings', 'standingsPreview', 'ratingLeaderboard']));
+    expect(missed).not.toContain('worldRouteData');
+    expect(missed).not.toContain('leagueSchedule');
+  });
+
+  it('carries the ratings tag on the world payload and the schedule of a custom league only', async () => {
+    await publicReads.worldRouteData('season-custom', { ...PRELOAD, league: { ...PRELOAD.league, id: 'season-custom', format_type: 'custom', point_buy_list_id: null } } as never);
+    await publicReads.worldRouteData('season-plain', { ...PRELOAD, league: { ...PRELOAD.league, id: 'season-plain', format_type: 'singles', point_buy_list_id: null } } as never);
+    await publicReads.leagueSchedule('season-custom', { context: { formatType: 'custom' } } as never);
+    await publicReads.leagueSchedule('season-plain', { context: { formatType: 'singles' } } as never);
+    expect(fakeNextCache.reads.map((r) => r.tags.includes(publicTags.ratings))).toEqual([true, false, true, false]);
+  });
+
   it(`a player write (PATCH/DELETE /api/players/${P}, avatar) expires every read that embeds a player, and ${P}'s own`, async () => {
     expect(await missedAfterTags([publicTags.players, publicTags.player(P)])).toEqual(
       [

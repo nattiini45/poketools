@@ -1,4 +1,4 @@
-import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
+import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
 import { getCompletedMatchRecords, getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
@@ -89,7 +89,7 @@ export async function getStandingsPreview(
       })),
       records,
       byes,
-      ranking,
+      rankingForPhase(ranking, id),
     );
     return toPreviewRows(standings, limit);
   }

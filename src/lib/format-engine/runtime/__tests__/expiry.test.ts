@@ -1,8 +1,9 @@
 /**
  * Cache expiry of the format runtime's write orchestrators. The route walk of `src/lib/__tests__/write-route-tags.test.ts`
  * accepts a write handler that calls one of these orchestrators instead of an expiry helper, because each of them expires
- * the league's public reads itself. That is only sound while these tests hold: a write expires the reads once it has
- * happened, and a refused or failed write expires nothing.
+ * the league's public reads itself. That is only sound while these tests hold: a write expires the reads once it
+ * may have committed. A write the database refused (a refusal raised before it) or that failed without committing expires
+ * nothing; a lock-time refusal (`FormatAdjustmentRefusedError`) still expires, because the state it read is stale.
  *
  * (`answerChallenge` is covered by `format-engine/__tests__/challenge-server.test.ts`.)
  */
@@ -13,7 +14,7 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
   ...(await importOriginal<typeof import('../load')>()),
   loadFreshKitContext: vi.fn(),
 }));
-vi.mock('@/lib/format-engine/runtime/fire', () => ({ fireEvent: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/fire', () => ({ fireEvent: vi.fn(), fireLockedActionEvents: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
   saveFormatAction: vi.fn(),

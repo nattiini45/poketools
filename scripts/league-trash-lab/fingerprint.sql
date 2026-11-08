@@ -17,6 +17,10 @@ BEGIN
       WHEN 'rounds' THEN ARRAY['deadline']
       WHEN 'match_proposals' THEN ARRAY['expires_at']
       WHEN 'games' THEN ARRAY['aggregate_applied_at']
+      -- season_formats: a restore re-inserts the row, so its trigger draws a new revision, and the time away goes into
+      -- clock_shift_seconds. format_challenges: the accept window of an open challenge is shifted like every deadline.
+      WHEN 'season_formats' THEN ARRAY['revision','clock_shift_seconds']
+      WHEN 'format_challenges' THEN ARRAY['expires_at']
       ELSE ARRAY[]::text[] END;
     RETURN QUERY EXECUTE format('SELECT %L::text, count(*), coalesce(md5(string_agg((to_jsonb(t) - $2)::text, ''|'' ORDER BY (to_jsonb(t) - $2)::text)), ''-'') FROM public.%I t WHERE %s',
       r.rel, r.rel, public.league_trash__x(r.pred)) USING p_season, v_excl;

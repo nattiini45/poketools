@@ -18,8 +18,8 @@
  * with `format_runtime_has_data` (the counts in `params`) unless the caller passes `confirmClear`: the draw and the gifts
  * of a Secret Santa live in a phase that counts as not started. A first attach never needs it.
  *
- * The caller (the route) expires the read cache and writes the audit event after the RPC commits; this module
- * returns the stage ids to expire.
+ * The read cache is expired right after the RPC commits (here, before any further read can fail); the route writes the
+ * audit event and expires again with the returned stage ids.
  */
 import 'server-only';
 
@@ -42,6 +42,7 @@ import {
   type RuntimeCleared,
 } from '@/lib/supabase/queries/season-formats';
 import { isSeasonStarted } from '@/lib/season/season-started';
+import { expireSeasonReads } from '@/lib/revalidation';
 import type { SessionPlayer } from '@/types/auth';
 import type { BracketType } from '@/types/tournament';
 import type { SeasonFormatType } from '@/types/season';
@@ -59,6 +60,8 @@ export interface AttachInput {
   versionNo?: number;
   /** The admin confirmed that a replace may delete the league's runtime data (see the module header). */
   confirmClear?: boolean;
+  /** The counts the admin was shown when they confirmed; a clear that finds more is refused again (see `confirmClear`). */
+  confirmedCounts?: RuntimeCleared | null;
 }
 
 export interface AttachedStage {
@@ -192,11 +195,19 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
       stages: planned.stages,
       presetRulesets: Object.fromEntries(ensured.definitionIds),
       confirmClear: input.confirmClear === true,
+      ...(input.confirmedCounts ? { confirmedCounts: input.confirmedCounts } : {}),
     });
   } catch (err) {
     await discardMaterialised(ensured.created);
-    throw err;
+    // The database maps a team that still points at a phase to `format_detach_blocked`; here the phase is one a replace
+    // would remove, and the admin is not detaching.
+    throw err instanceof FormatStudioError && err.code === 'format_detach_blocked' ? new FormatStudioError('format_phases_in_use') : err;
   }
+
+  // The attach is committed: expire the league's reads now, before the summary read below (which can throw) and with the
+  // ids only this function knows. The route expires again after it, which costs nothing.
+  const touched = [...result.stages.map((s) => s.id), ...result.removed_stage_ids];
+  expireSeasonReads(seasonId, touched);
 
   const rowByKey = new Map(planned.stages.map((row) => [row.key, row]));
   const stages: AttachedStage[] = [];
@@ -219,7 +230,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
     definition: { id: meta.id, slug: meta.slug },
     version_no: version.version_no,
     spec_hash: version.content_hash,
-    touched_stage_ids: [...result.stages.map((s) => s.id), ...result.removed_stage_ids],
+    touched_stage_ids: touched,
     rulesets_changed: ensured.created.length > 0 || result.removed_ruleset_ids.length > 0,
     cleared: result.cleared,
   };
@@ -232,9 +243,9 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
  */
 export async function detachFormatFromSeason(
   seasonId: string,
-  options: { confirmClear?: boolean } = {},
+  options: { confirmClear?: boolean; confirmedCounts?: RuntimeCleared | null } = {},
 ): Promise<{ removed_stage_ids: string[]; removed_ruleset_ids: string[]; cleared: RuntimeCleared | null }> {
-  const result = await detachSeasonFormat(seasonId, options.confirmClear === true);
+  const result = await detachSeasonFormat(seasonId, options.confirmClear === true, options.confirmedCounts ?? null);
   return {
     removed_stage_ids: result.removed_stage_ids,
     removed_ruleset_ids: result.removed_ruleset_ids,

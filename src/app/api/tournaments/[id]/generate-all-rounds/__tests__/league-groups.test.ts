@@ -159,7 +159,8 @@ describe('generate-all-rounds — league groups', () => {
     expect(written).toEqual(Array.from({ length: firstPlacement - 1 }, (_, i) => i + 1));
     // Week 1: 3 + 3 in-group matches and the two byes meet across groups.
     expect(batches()[0]).toHaveLength(7);
-    expect(updateTournament).toHaveBeenCalledWith(PHASE_ID, { current_round: firstPlacement - 1, status: 'active' });
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('refuses the placement week while a match before it is open: 409, nothing written', async () => {

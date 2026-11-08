@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 vi.mock('@/lib/revalidation', () => ({ expireTournamentReads: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/load', () => ({ loadFreshKitContext: vi.fn(), phaseById: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/stage-table', () => ({ loadStageTable: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getSeasonKitHead: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-challenges', () => {
   class FormatChallengeError extends Error {
     readonly code: string;
@@ -30,6 +31,7 @@ vi.mock('@/lib/supabase/queries/format-challenges', () => {
 import { expireTournamentReads } from '@/lib/revalidation';
 import { loadFreshKitContext, phaseById } from '@/lib/format-engine/runtime/load';
 import { loadStageTable } from '@/lib/format-engine/runtime/stage-table';
+import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import {
   FormatChallengeError,
   cancelFormatChallenge,
@@ -103,10 +105,20 @@ describe('makeChallenge', () => {
     });
   });
 
-  it('refuses a league that does not run a kit format, without reading a table', async () => {
+  it('refuses a league without a format as not a ladder, without reading a table', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+    vi.mocked(getSeasonKitHead).mockResolvedValue(null);
 
     await expect(makeChallenge(input())).rejects.toMatchObject({ code: 'challenge_not_ladder' });
+    expect(loadStageTable).not.toHaveBeenCalled();
+    expect(createFormatChallenge).not.toHaveBeenCalled();
+  });
+
+  it.each(['legacy', 'shadow'] as const)('answers challenge_ladder_inactive (the documented code) for a format on the %s engine', async (engine) => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+    vi.mocked(getSeasonKitHead).mockResolvedValue({ engine, seed: 's', revision: 1, clockShiftSeconds: 0 });
+
+    await expect(makeChallenge(input())).rejects.toMatchObject({ code: 'challenge_ladder_inactive' });
     expect(loadStageTable).not.toHaveBeenCalled();
     expect(createFormatChallenge).not.toHaveBeenCalled();
   });

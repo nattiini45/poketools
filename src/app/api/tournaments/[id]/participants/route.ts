@@ -22,6 +22,7 @@ import {
 } from '@/lib/players/public-player';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
+import { assertSeasonRosterMembers } from '@/lib/format-studio/phase-guards';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { BracketType } from '@/types/tournament';
@@ -112,6 +113,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A league phase enrols roster members only, like the league's own phase route (a player outside the roster is refused
+    // by every format route, yet would sit in the stage table).
+    if (tournament.season_id) await assertSeasonRosterMembers(tournament.season_id, [zodResult.data.player_id]);
     await assertBracketParticipantMutable(id);
     await addParticipant(id, zodResult.data.player_id);
     expireTournamentReads(id, tournament.season_id);

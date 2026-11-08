@@ -93,7 +93,7 @@ function phase(pairing: Pairing, endWhen?: EndWhen): KitPhase {
     columns: [],
     ...(endWhen === undefined ? {} : { end_when: endWhen }),
   };
-  return { engine: 'kit', seed: 'seed-0123456789', stage, outcomes: {}, tableExtras: {} };
+  return { engine: 'kit', seed: 'seed-0123456789', revision: 3, stage, outcomes: {}, tableExtras: {} };
 }
 
 const group = (id: string, n: number, players: string[], seasonGroupId: string | null = null) => ({

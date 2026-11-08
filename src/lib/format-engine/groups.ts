@@ -3,8 +3,11 @@
  * (`formKitGroups`) before its first round. Server only.
  *
  * League groups win: a phase of a league with groups mirrors them (`ensurePhaseGroupsFromLeague`) and this forms
- * nothing. A phase that already has groups (formed earlier, or built by an admin in the phase editor) or rounds
- * keeps them, and a `manual` spec forms nothing: the admin places the players.
+ * nothing. A phase with rounds keeps its groups, and a `manual` spec forms nothing: the admin places the players.
+ * Before the first round the groups must still match the enrolled players (every one in exactly one group): groups formed
+ * for an earlier roster (a retry after players were added or removed, or a write that died between the groups and their
+ * members and left them empty) are deleted and formed again. Groups an admin arranged keep their arrangement as long as
+ * they hold the same players.
  *
  * Two first-round generations of one phase can run at once (a double click, two admins). The database holds a unique
  * index on (tournament, group number) (`uq_tournament_groups_tournament_group_number`), so the second insert fails with
@@ -23,6 +26,7 @@ import {
   addGroupMembersBatch,
   createGroupBatch,
   deleteGroup,
+  deleteGroupsByTournament,
   getGroupsByTournament,
 } from '@/lib/supabase/queries/tournament-groups';
 import { getParticipants } from '@/lib/supabase/queries/tournaments';
@@ -42,10 +46,7 @@ export interface KitGroupsInput {
 export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<TournamentGroupWithMembers[]> {
   const existing = await getGroupsByTournament(input.phaseId);
   const spec = input.stage.groups;
-  if (existing.length > 0) {
-    assertKitGroupsFormed(existing, input.stage);
-    return existing;
-  }
+  if (existing.length > 0) assertKitGroupsFormed(existing, input.stage);
   if (spec === undefined || spec.method === 'manual') return existing;
   const [leagueGroups, rounds, participants] = await Promise.all([
     seasonHasGroups(input.seasonId),
@@ -53,6 +54,11 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
     getParticipants(input.phaseId),
   ]);
   if (leagueGroups || rounds.length > 0) return existing;
+  if (existing.length > 0) {
+    if (groupsHoldRoster(existing, participants.map((participant) => participant.id))) return existing;
+    // Stale groups of an earlier roster (or empty ones nobody filled): form them again from the enrolled players.
+    await deleteGroupsByTournament(input.phaseId);
+  }
 
   // Seed order (unseeded players last, in enrollment order): serpentine and straight deal by it.
   const ordered = participants
@@ -60,7 +66,7 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
     .sort((a, b) => a.seed - b.seed || a.index - b.index)
     .map((participant) => participant.id);
   const formed = formKitGroups(ordered, spec, { seed: input.seed, stageKey: input.stage.key });
-  if (formed.length === 0) return existing;
+  if (formed.length === 0) return existing.length > 0 ? [] : existing;
 
   let created: Awaited<ReturnType<typeof createGroupBatch>>;
   try {
@@ -72,26 +78,35 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
       })),
     );
   } catch (error) {
-    // A unique key on (phase, group number), where the database has one, refused the second of two concurrent inserts.
-    if ((error as { code?: unknown } | null)?.code === '23505') throw formingInProgress();
-    throw error;
+    throw mapGroupWriteConflict(error);
   }
   const mine = new Set(created.map((group) => group.id));
   if (await settleGroups(input.phaseId, mine)) throw formingInProgress();
   const idByNumber = new Map(created.map((group) => [group.group_number, group.id]));
-  await addGroupMembersBatch(
-    formed.flatMap((group) =>
-      group.members.map((member) => ({
-        group_id: idByNumber.get(group.group_number)!,
-        player_id: member.player_id,
-        seed: member.seed,
-      })),
-    ),
-  );
+  try {
+    await addGroupMembersBatch(
+      formed.flatMap((group) =>
+        group.members.map((member) => ({
+          group_id: idByNumber.get(group.group_number)!,
+          player_id: member.player_id,
+          seed: member.seed,
+        })),
+      ),
+    );
+  } catch (error) {
+    throw mapGroupWriteConflict(error);
+  }
   // The other call may have inserted after the first check: settle again once the members are in.
   if (await settleGroups(input.phaseId, mine)) throw formingInProgress();
   expireTournamentReads(input.phaseId, input.seasonId);
   return getGroupsByTournament(input.phaseId);
+}
+
+/** Whether the groups hold exactly the enrolled players, each in one group. */
+function groupsHoldRoster(groups: readonly Pick<TournamentGroupWithMembers, 'members'>[], enrolledIds: readonly string[]): boolean {
+  const grouped = groups.flatMap((group) => group.members.map((member) => member.player_id));
+  const enrolled = new Set(enrolledIds);
+  return grouped.length === enrolled.size && new Set(grouped).size === grouped.length && grouped.every((id) => enrolled.has(id));
 }
 
 /** Groups that are all empty and were inserted within this window may still be filled by the call that inserted them. */
@@ -113,6 +128,18 @@ export function assertKitGroupsFormed(
   if (groups.some((group) => group.members.length > 0)) return;
   const newest = Math.max(...groups.map((group) => Date.parse(group.created_at)));
   if (Number.isFinite(newest) && now - newest < KIT_GROUPS_FORMING_WINDOW_MS) throw formingInProgress();
+}
+
+/**
+ * The error a write of a phase's groups throws, with the two races of concurrent writers mapped to the one retryable 409
+ * (`groups_forming_in_progress`): a unique violation on (phase, group number) when the other writer inserted first (23505),
+ * and a foreign key violation on the members when the other deleted the groups meanwhile (23503). Any other error is
+ * returned as it is. Every writer of a phase's groups that can meet another one (kit forming, the league mirror rebuild)
+ * throws `mapGroupWriteConflict(error)`.
+ */
+export function mapGroupWriteConflict(error: unknown): unknown {
+  const code = (error as { code?: unknown } | null)?.code;
+  return code === '23505' || code === '23503' ? formingInProgress() : error;
 }
 
 function formingInProgress(): UserFacingError<'groups_forming_in_progress'> {

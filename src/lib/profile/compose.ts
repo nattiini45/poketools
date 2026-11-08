@@ -6,6 +6,7 @@ import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
 import { listTournamentsByIds, getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByesBatch } from '@/lib/tournament/scoring-byes';
+import { kitForPhase } from '@/lib/format-engine/context';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
@@ -226,7 +227,9 @@ async function loadParticipationStandings(
       const participantNames: Record<string, string> = {};
       for (const p of participants) participantNames[p.id] = p.name;
 
-      const context = (t.season_id ? seasonContexts?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
+      const seasonContext = (t.season_id ? seasonContexts?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
+      // This tournament's own table: a stage with no completed match yet still ranks by its own stage rules.
+      const context = seasonContext.kit ? { ...seasonContext, kit: kitForPhase(seasonContext.kit, t.id) } : seasonContext;
       const byes = byesByTournament?.get(t.id) ?? [];
       const standings = computeStandingsFromContext(
         context,

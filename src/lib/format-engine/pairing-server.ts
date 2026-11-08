@@ -14,6 +14,7 @@ import { openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { memoisedPlayerAttrs, pairContext, playerAttrValue } from './runtime/expr-env';
 import { envBaseOf, loadFreshKitContext } from './runtime/load';
 import { planForbiddenPairingCheck } from './runtime/pairing-checks';
+import { isFormatContextStale } from './runtime/stale';
 
 const TAG = 'format-engine/pairing';
 
@@ -102,7 +103,14 @@ export async function loadPairingAids(input: PairingAidsInput): Promise<PairingA
  * `pairing_forbidden` check so an admin sees it. One check per stage and round. Best effort: the round is written, so a
  * failed write is logged with its error and does not fail the call.
  */
-export async function openForbiddenPairingCheck(input: { seasonId: string; stageKey: string; round: number; forbidden: number }): Promise<void> {
+export async function openForbiddenPairingCheck(input: {
+  seasonId: string;
+  stageKey: string;
+  round: number;
+  forbidden: number;
+  /** The `season_formats.revision` of the kit phase the round was paired from (a stale one opens nothing). */
+  revision: number;
+}): Promise<void> {
   const plan = planForbiddenPairingCheck(input.stageKey, input.round, input.forbidden);
   if (plan === null) return;
   try {
@@ -112,8 +120,17 @@ export async function openForbiddenPairingCheck(input: { seasonId: string; stage
       ruleId: plan.rule_id,
       dedupeKey: plan.dedupe_key,
       subject: plan.subject,
+      revision: input.revision,
     });
   } catch (error) {
+    if (isFormatContextStale(error)) {
+      logger.warn(TAG, 'the format changed since the round was paired; the forbidden pairing check was not opened', {
+        seasonId: input.seasonId,
+        stage: input.stageKey,
+        round: input.round,
+      });
+      return;
+    }
     logger.error(TAG, 'could not open the forbidden pairing check', { seasonId: input.seasonId, stage: input.stageKey, round: input.round, error });
   }
 }

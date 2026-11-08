@@ -1,9 +1,17 @@
 import { computeStandings, computeStandingsForFormat } from '@/lib/tournament/standings';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
-import { ranksWithKit } from '@/lib/format-engine/context';
+import { kitForPhase, ranksWithKit } from '@/lib/format-engine/context';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
+
+/**
+ * The context of ONE phase's table: its kit data narrowed to that phase, so a phase with no completed match yet ranks by
+ * its own stage and not by the season-wide fallback (`kitForPhase`). Any other context is returned as it is.
+ */
+export function rankingForPhase(ranking: SeasonStandingsContext | undefined, phaseId: string): SeasonStandingsContext | undefined {
+  return ranking?.kit ? { ...ranking, kit: kitForPhase(ranking.kit, phaseId) } : ranking;
+}
 
 /**
  * Build standings table rows from completed match records and participants.
