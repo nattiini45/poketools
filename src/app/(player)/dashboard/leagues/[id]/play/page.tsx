@@ -5,7 +5,7 @@ import Alert from '@/components/ui/Alert';
 import PlayerFormatView from '@/components/format-runtime/player/PlayerFormatView';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { loadPlayerView } from '@/lib/format-engine/runtime/views-server';
-import { getSeasonParticipantRow, getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
+import { getSeasonWithDetails, isSeasonPlayer } from '@/lib/supabase/queries/seasons';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getT } from '@/i18n/server';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
@@ -64,8 +64,8 @@ export default async function PlayPage({ params }: PageProps) {
   if (league.format_type !== 'custom') return shell(<Alert variant="info">{t('page.notCustom')}</Alert>);
 
   // Same rule as requireSeasonMember: a player out of good standing is refused before the participant read.
-  const membership = inGoodStanding ? await getSeasonParticipantRow(seasonId, player.playerId) : null;
-  if (membership === null) return shell(<Alert variant="info">{t('page.notMember')}</Alert>);
+  const isMember = inGoodStanding && (await isSeasonPlayer(seasonId, player.playerId));
+  if (!isMember) return shell(<Alert variant="info">{t('page.notMember')}</Alert>);
 
   const view = await loadPlayerView(seasonId, player.playerId);
   if (!view.running) return shell(<Alert variant="info">{t('page.notRunning')}</Alert>);

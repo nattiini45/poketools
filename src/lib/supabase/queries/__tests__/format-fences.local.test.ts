@@ -162,6 +162,46 @@ describe.skipIf(!optIn)('format fences (local stack)', () => {
     });
   });
 
+  describe('a closed league takes no player move, decided under the lock', () => {
+    const closed = async (patch: { status?: 'completed'; archived?: boolean }) => {
+      const { season, phase } = await league({}, true);
+      const revision = await revisionOf(season);
+      await must('close', client.from('seasons').update(patch).eq('id', season));
+      return { season, phase: phase as string, revision };
+    };
+
+    it.each([[{ status: 'completed' as const }], [{ archived: true }]])('refuses a saved action in a league closed since the check: %j', async (patch) => {
+      const { season, revision } = await closed(patch);
+      await expect(
+        rt.saveFormatAction({ seasonId: season, actionKey: 'a', actorId: players.p1, targetId: null, picks: [], revision }),
+      ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'format_season_closed' });
+    });
+
+    it('refuses a new challenge in a closed league', async () => {
+      const { season, phase } = await closed({ status: 'completed' });
+      const { error } = await client.rpc('format_challenge_create', {
+        p_season_id: season, p_phase_id: phase, p_challenger: players.p1, p_defender: players.p2,
+        p_challenger_rank: 2, p_defender_rank: 1, p_rank_range: 2, p_max_open: 2, p_cooldown_rounds: 0, p_accept_window_hours: 24,
+      });
+      expect(error?.message).toBe('format_season_closed');
+    });
+  });
+
+  describe('isSeasonPlayer', () => {
+    it('is true for the roster and for a player enrolled in a phase only, false for anyone else', async () => {
+      const { isSeasonPlayer } = await import('@/lib/supabase/queries/seasons');
+      const { season, phase } = await league({}, true);
+      await must('roster', client.from('season_participants').insert({ season_id: season, player_id: players.p1 }));
+      await must('enrolled', client.from('tournament_participants').insert({ tournament_id: phase as string, player_id: players.p2 }));
+      await expect(isSeasonPlayer(season, players.p1)).resolves.toBe(true);
+      await expect(isSeasonPlayer(season, players.p2)).resolves.toBe(true);
+      await expect(isSeasonPlayer(season, players.p3)).resolves.toBe(false);
+      // A completed phase keeps a replaced player's enrollment; it does not keep them a member.
+      await must('complete', client.from('tournaments').update({ status: 'completed' }).eq('id', phase as string));
+      await expect(isSeasonPlayer(season, players.p2)).resolves.toBe(false);
+    });
+  });
+
   describe('format_forfeit_complete decides the format and the status in one transaction', () => {
     const forfeitMatch = async (engine: 'kit' | 'shadow' = 'kit') => {
       const { season, phase } = await league({}, true);

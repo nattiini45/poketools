@@ -208,6 +208,8 @@ BEGIN
   -- One writer per phase at a time: max_open and the cooldown are counts over the phase's challenges.
   PERFORM pg_advisory_xact_lock(hashtextextended('format_challenge:' || p_phase_id::text, 0));
 
+  PERFORM public.format__assert_season_open(p_season_id);
+
   -- The ladder runs on the kit engine only (see the header): the engine is read here, under the lock, because the
   -- application's check happened in another request. An unknown league stays a missing phase.
   v_engine := public.format__lock_engine(p_season_id);
@@ -321,6 +323,7 @@ BEGIN
   IF p_accept IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'challenge')::text;
   END IF;
+  PERFORM public.format__assert_season_open(p_season_id);
   -- An accept makes a match, which only a running ladder may do: the engine row is locked FOR SHARE first (before the
   -- challenge row, the lock order of format__check_revision), so a switch away from 'kit' either commits before this
   -- read and is seen below, or waits for the match. A decline closes the challenge and needs no engine.
@@ -409,6 +412,10 @@ RETURNS public.format_challenges
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_challenges;
 BEGIN
+  -- A player's withdrawal is a move; the system's (p_player NULL) is housekeeping and runs in a closed league too.
+  IF p_player IS NOT NULL THEN
+    PERFORM public.format__assert_season_open(p_season_id);
+  END IF;
   PERFORM 1 FROM public.seasons s WHERE s.id = p_season_id FOR KEY SHARE;
   SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;
   IF NOT FOUND THEN

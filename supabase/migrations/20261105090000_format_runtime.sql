@@ -336,6 +336,23 @@ BEGIN
   END IF;
 END $$;
 
+-- The write gate of a player's move, decided under the lock: the application's check (assertSeasonOpenForPlay) ran in
+-- another request. The seasons row FOR SHARE conflicts with the UPDATE that closes the league (FOR KEY SHARE would not), so
+-- a close either commits first and is seen here, or waits for this move. It comes before format__check_revision: seasons
+-- first, then season_formats.
+CREATE OR REPLACE FUNCTION public.format__assert_season_open(p_season_id uuid)
+RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_status   public.season_status;
+  v_archived boolean;
+BEGIN
+  SELECT s.status, s.archived INTO v_status, v_archived FROM public.seasons s WHERE s.id = p_season_id FOR SHARE;
+  IF FOUND AND (v_status = 'completed' OR v_archived) THEN
+    RAISE EXCEPTION 'format_season_closed' USING ERRCODE = 'P0001';
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------------------------------------------------------------
 -- Holdings. What a player holds of one resource is capped by the resource's `capacity` in the attached spec. Every
 -- writer of the holding takes the same transaction lock first and reads the held units under it, so two grants (a
@@ -715,6 +732,7 @@ LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_action_submissions;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
@@ -759,6 +777,7 @@ DECLARE
   v_item jsonb;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
@@ -1050,6 +1069,7 @@ REVOKE ALL ON FUNCTION
   public.format__lock_action(uuid, text),
   public.format__check_revision(uuid, bigint),
   public.format__check_revision_for_update(uuid, bigint),
+  public.format__assert_season_open(uuid),
   public.format__lock_op_keys(uuid, jsonb),
   public.format__lock_holding(uuid, text, uuid),
   public.format__lock_exclusive(uuid, text, text),
@@ -1071,6 +1091,7 @@ GRANT EXECUTE ON FUNCTION
   public.format__lock_action(uuid, text),
   public.format__check_revision(uuid, bigint),
   public.format__check_revision_for_update(uuid, bigint),
+  public.format__assert_season_open(uuid),
   public.format__lock_op_keys(uuid, jsonb),
   public.format__lock_holding(uuid, text, uuid),
   public.format__lock_exclusive(uuid, text, text),
@@ -1096,6 +1117,8 @@ COMMENT ON FUNCTION public.format__check_revision(uuid, bigint) IS
   'Internal: raises format_context_stale unless season_formats.revision of the league equals the expected one (the row is share-locked until the transaction ends).';
 COMMENT ON FUNCTION public.format__check_revision_for_update(uuid, bigint) IS
   'Internal: format__check_revision for a writer that updates the season_formats row itself (a domain amendment): the row is locked FOR UPDATE, not FOR SHARE.';
+COMMENT ON FUNCTION public.format__assert_season_open(uuid) IS
+  'Internal: share-locks the seasons row and raises format_season_closed when the league is completed or archived, so a player move and the close of the league cannot both win.';
 COMMENT ON FUNCTION public.format__lock_op_keys(uuid, jsonb) IS
   'Internal: takes the transaction-scoped advisory locks of the relations a set_relation op draws and of the actions a lock_action op locks, sorted. An event and an adjustment take them before their revision check.';
 COMMENT ON FUNCTION public.format__lock_holding(uuid, text, uuid) IS

@@ -305,7 +305,7 @@ async function applyActionPolicy(
       // player is still waiting, so the next pass draws again against the new one; nothing is counted or audited now.
       if (
         error instanceof FormatRuntimeError &&
-        (error.code === 'format_context_stale' || error.code === 'resource_capacity_reached' || error.code === 'resource_item_taken')
+        (error.code === 'format_context_stale' || error.code === 'format_season_closed' || error.code === 'resource_capacity_reached' || error.code === 'resource_item_taken')
       ) {
         logger.warn(TAG, 'random pick skipped, the format or the holding changed meanwhile', { seasonId, action: actionId, code: error.code });
         continue;

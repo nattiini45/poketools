@@ -7080,6 +7080,10 @@ export type Database = {
         }
         Returns: Json
       }
+      format__assert_season_open: {
+        Args: { p_season_id: string }
+        Returns: undefined
+      }
       format__check_revision: {
         Args: { p_expected_revision: number; p_season_id: string }
         Returns: undefined
