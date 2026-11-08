@@ -1485,6 +1485,15 @@ export async function resetMatch(
     }
   }
 
+  // Re-read before anything is destroyed: the preflight and the cascade above can take seconds, and a result that landed
+  // meanwhile must answer 409 with its games intact. The compare-and-set in step 3 still decides; if a completion slips into
+  // the short gap between this read and that write, the 409 tells the admin to try again, and that retry finishes the reset
+  // (it sees the completed match, so it rebuilds the ratings).
+  const latestBeforeDelete = await getMatchById(matchId);
+  if (latestBeforeDelete && latestBeforeDelete.status !== match.status) {
+    throw new MatchStateChangedError(latestBeforeDelete.status);
+  }
+
   // 1. Delete all games (aggregates rolled back per game). Parallel is safe:
   //    each rollback is one transaction under its own game row lock, its
   //    decrements are relative updates under the aggregate row locks, and

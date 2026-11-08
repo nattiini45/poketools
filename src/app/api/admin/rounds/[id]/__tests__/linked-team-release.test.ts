@@ -10,6 +10,7 @@ import type { NextRequest } from 'next/server';
 interface MatchRow {
   id: string;
   round_id: string;
+  status: string;
 }
 interface TeamRow {
   id: string;
@@ -152,11 +153,23 @@ beforeEach(() => {
   vi.mocked(getRoundsByTournament).mockResolvedValue([round] as never);
   vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
   db.log = [];
-  db.matches = [{ id: 'match-1', round_id: ROUND_ID }];
+  db.matches = [{ id: 'match-1', round_id: ROUND_ID, status: 'scheduled' }];
   vi.mocked(getMatchesByRound).mockResolvedValue([{ id: 'match-1', status: 'scheduled' }] as never);
 });
 
 describe('DELETE /api/admin/rounds/[id] with a linked team row', () => {
+  it('linked team release: a match that left scheduled refuses the delete before any team link is released', async () => {
+    db.matches = [{ id: 'match-1', round_id: ROUND_ID, status: 'completed' }];
+    db.teams = [{ id: 'match-prep', player_id: 'p1', tournament_id: 'tourn-1', match_id: 'match-1' }];
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('round_changed');
+    expect(db.log).toEqual([]);
+    expect(db.teams[0].match_id).toBe('match-1');
+  });
+
   it('linked team release: releases the scheduled match team row before the matches delete and leaves the player one planned team row', async () => {
     db.teams = [
       { id: 'planned', player_id: 'p1', tournament_id: 'tourn-1', match_id: null },

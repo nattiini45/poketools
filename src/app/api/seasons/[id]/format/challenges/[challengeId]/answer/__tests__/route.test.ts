@@ -61,7 +61,7 @@ const row = (over: Record<string, unknown> = {}) =>
     status: 'accepted',
     round: 3,
     created_at: '2026-11-05T10:00:00.000Z',
-    expires_at: '2026-11-08T10:00:00.000Z',
+    expires_at: '2099-01-01T10:00:00.000Z',
     responded_at: '2026-11-05T11:00:00.000Z',
     match_id: MATCH_ID,
     ...over,

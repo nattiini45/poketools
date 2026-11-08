@@ -1363,6 +1363,10 @@ export async function deleteMatchesByIds(ids: string[]): Promise<void> {
  * `scheduled`: a result that landed after the caller's own reset, or a match an accepted challenge inserted since, answers
  * 409 `round_changed` (nothing deleted; the admin tries again) instead of cascade-deleting a played match without its
  * rollback, and the challenges that point at a deleted match are cancelled with it. Returns false when the round is gone.
+ *
+ * The release cannot join that transaction (`clearTeamsMatchPointer` merges rows in application code), so the same refusal
+ * runs on this read first: a match that already moved keeps its team links. Only a result landing between this read and
+ * the RPC can still lose its link.
  */
 export async function deleteRoundWithMatches(roundId: string): Promise<boolean> {
   assertValidUuid(roundId);
@@ -1370,25 +1374,28 @@ export async function deleteRoundWithMatches(roundId: string): Promise<boolean> 
     (from, to) =>
       supabase
         .from('matches')
-        .select('id')
+        .select('id, status')
         .eq('round_id', roundId)
         .order('id', { ascending: true })
         .range(from, to),
     { label: `deleteRoundWithMatches ${roundId}` },
   );
   if (truncated) throw new Error(`deleteRoundWithMatches: round ${roundId} has more matches than one bounded read holds`);
+  if (rows.some((row) => row.status !== 'scheduled')) throw roundChangedError();
   if (rows.length > 0) await releaseTeamsFromMatches(rows.map((row) => row.id));
   const { data, error } = await supabase.rpc('round_delete', { p_round_id: roundId });
   if (error) {
-    if (error.code === 'P0001' && error.message === 'round_changed') {
-      throw new UserFacingError('A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.', {
-        code: 'round_changed',
-        status: 409,
-      });
-    }
+    if (error.code === 'P0001' && error.message === 'round_changed') throw roundChangedError();
     throw error;
   }
   return (data as { outcome?: unknown } | null)?.outcome === 'deleted';
+}
+
+function roundChangedError(): UserFacingError {
+  return new UserFacingError('A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.', {
+    code: 'round_changed',
+    status: 409,
+  });
 }
 
 /**

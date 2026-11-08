@@ -983,6 +983,11 @@ describe('deleteGame', () => {
   });
 });
 
+/** resetMatch reads the match twice: at the start, and again right before it deletes the games. */
+function mockResetReads(row: Awaited<ReturnType<typeof getMatchById>>) {
+  vi.mocked(getMatchById).mockResolvedValueOnce(row).mockResolvedValueOnce(row);
+}
+
 describe('resetMatch', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1043,7 +1048,7 @@ describe('resetMatch', () => {
 
   it('for an EPB completed match calls repairSeasonEvolution (not the inverse path) and rebuildRatingsForPlayers([p1,p2])', async () => {
     // EPB season: season_id set + season_format_type 'evolution_point_buy'.
-    vi.mocked(getMatchById).mockResolvedValueOnce({
+    mockResetReads({
       id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
       player_1_id: 'player-1', player_2_id: 'player-2',
       status: 'completed', winner_id: 'player-1',
@@ -1076,7 +1081,7 @@ describe('resetMatch', () => {
   it('for an EPB completed match surfaces an itemized recalculation summary (spec §24)', async () => {
     // EPB repair returns a non-trivial RepairResult so the summary can be
     // asserted against the actual projected values (not just the mocked zeros).
-    vi.mocked(getMatchById).mockResolvedValueOnce({
+    mockResetReads({
       id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
       player_1_id: 'player-1', player_2_id: 'player-2',
       status: 'completed', winner_id: 'player-1',
@@ -1188,7 +1193,7 @@ describe('resetMatch', () => {
     // before the ratings/streak/evolution rebuilds run, so their
     // status='completed' filters exclude this match. Capture call order via
     // mock.invocationCallOrder.
-    vi.mocked(getMatchById).mockResolvedValueOnce({
+    mockResetReads({
       id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
       player_1_id: 'player-1', player_2_id: 'player-2',
       status: 'completed', winner_id: 'player-1',
@@ -1223,7 +1228,7 @@ describe('resetMatch', () => {
     }) as ResetMatchRow;
 
   it('plans the rating rebuild before any write, excluding the match being reset', async () => {
-    vi.mocked(getMatchById).mockResolvedValueOnce(completedMatch());
+    mockResetReads(completedMatch());
 
     await resetMatch('match-1', 'admin-1');
 
@@ -1269,7 +1274,7 @@ describe('resetMatch', () => {
   });
 
   it('lists every player the rating batch rebuilt, including players added to heal gaps', async () => {
-    vi.mocked(getMatchById).mockResolvedValueOnce(completedMatch());
+    mockResetReads(completedMatch());
     vi.mocked(rebuildRatingsForPlayers).mockResolvedValueOnce([
       { playerId: 'player-3', addedToBatch: true, matchesReplayed: 4, ratingBefore: 1500, ratingAfter: 1510, unratedMatchIds: [], changed: true },
       { playerId: 'player-1', addedToBatch: false, matchesReplayed: 3, ratingBefore: 1500, ratingAfter: 1490, unratedMatchIds: [], changed: true },
@@ -1286,7 +1291,7 @@ describe('resetMatch', () => {
   it('for a legacy (non-EPB) season still calls recheckEvolutions (checkPlayerEvolutions path)', async () => {
     // Legacy: season_id set but season_format_type is NOT 'evolution_point_buy'
     // (default tournament mock has no season_format_type → legacy path).
-    vi.mocked(getMatchById).mockResolvedValueOnce({
+    mockResetReads({
       id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
       player_1_id: 'player-1', player_2_id: 'player-2',
       status: 'completed', winner_id: 'player-1',
@@ -1366,7 +1371,7 @@ describe('resetRound', () => {
       player_1_name: 'A', player_2_name: 'B',
     };
     vi.mocked(getMatchesByRound).mockResolvedValueOnce([completed] as Awaited<ReturnType<typeof getMatchesByRound>>);
-    vi.mocked(getMatchById).mockResolvedValueOnce(completed as never);
+    mockResetReads(completed as never);
     vi.mocked(getGamesByMatch).mockResolvedValue([]);
     vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 'tourney-1', season_id: 'season-1', name: 'T', best_of_default: 3, season_format_type: 'custom' } as never);
     vi.mocked(onMatchReverted).mockResolvedValueOnce(false);
@@ -2995,7 +3000,20 @@ describe('an admin game change on a COMPLETED match takes back what the result l
   });
 
   describe('resetMatch', () => {
+    it('answers 409 before deleting anything when the match moved during the preflight', async () => {
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWithStatus('pending_confirmation'))
+        .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as never);
+
+      const rejection = resetMatch('match-1', 'admin-1');
+
+      await expect(rejection).rejects.toMatchObject({ code: 'match_state_changed', statusCode: 409, params: { status: 'completed' } });
+      expect(getGamesByMatch).not.toHaveBeenCalled();
+      expect(resetMatchFields).not.toHaveBeenCalled();
+    });
+
     it('answers 409 match_state_changed when the match moved since it was read, and rebuilds nothing', async () => {
+      vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('pending_confirmation'));
       vi.mocked(getMatchById)
         .mockResolvedValueOnce(matchWithStatus('pending_confirmation'))
         .mockResolvedValueOnce({ ...matchWithStatus('completed'), winner_id: 'player-1' } as never);
