@@ -24,6 +24,8 @@ vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   completeFormatForfeit: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn(), getMatchesByTournament: vi.fn() }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: vi.fn() }));
+vi.mock('@/lib/format-engine/runtime/phase-complete', () => ({ completePhaseAtStageEnd: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), listRoundStatusesByTournamentIds: vi.fn() }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ listTeamsByTournament: vi.fn() }));
 vi.mock('@/lib/match/finalize', () => ({ finalizeMatchCompletion: vi.fn(), stageAdminOutcome: vi.fn(), discardStagedAdminOutcome: vi.fn() }));
@@ -61,6 +63,8 @@ import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitS
 import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { purgeFormatNotifications } from '@/lib/supabase/queries/format-notifications';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { completePhaseAtStageEnd } from '../phase-complete';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 
@@ -128,9 +132,60 @@ beforeEach(() => {
   vi.mocked(getMatchesByTournament).mockResolvedValue([match()] as never);
   vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: 'm-1', player_id: 'p1' }] as never);
   vi.mocked(completeFormatForfeit).mockResolvedValue(true);
+  vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'active' } as never);
   vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true } as never);
   vi.mocked(expireChallenges).mockResolvedValue(0);
   vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
+});
+
+describe('a stage whose reaction failed after its phases completed', () => {
+  it('repeats the reaction when every phase of the stage is completed and stage_end has not fired', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('completed');
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).toHaveBeenCalledWith(PHASE, 'cron_retry:swiss', []);
+  });
+
+  it('leaves a stage alone that is still running, and one whose stage_end fired', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss', 'stage_end:swiss'] }));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('leaves a stage alone that never started on the kit, or that still has a match owing its effects', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getMatchesByTournament).mockResolvedValue([match({ status: 'completed', winner_id: 'p1' })] as never);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('does not count a reaction refused because the format changed during the pass', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('reaction_failed');
+    vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 2, clockShiftSeconds: 0 });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBe(0);
+  });
+
+  it('counts a reaction that failed again as a failure of the pass', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('reaction_failed');
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBeGreaterThanOrEqual(1);
+  });
 });
 
 describe('time marks', () => {
@@ -557,6 +612,33 @@ describe('action policies', () => {
       expect(entry.metadata).toEqual({ via: 'seeded_random_pick', action_id: 'give_gifts', pick_count: 1, giver_hidden: true });
       expect(JSON.stringify(entry)).not.toMatch(/p1|p3/);
     }
+  });
+
+  it('a late pass applies a seeded pick due before the closing mark first, so the mark cannot lock it out', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
+    const marks = [{ key: 'gifts_close', round: 1, offset_hours: 24 }];
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick], marks), { links, flags: OPEN_FLAGS }));
+    vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {}, giverHidden: false } as never);
+    vi.mocked(fireEvent).mockResolvedValue(FIRED as never);
+
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(summary.picks).toBe(2);
+    expect(summary.marks).toBe(1);
+    const lastPick = Math.max(...vi.mocked(submitAction).mock.invocationCallOrder);
+    expect(lastPick).toBeLessThan(vi.mocked(fireEvent).mock.invocationCallOrder[0]);
+  });
+
+  it('a late pass fires a mark due before the pick first', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 48, on_miss: 'seeded_random_pick' };
+    const marks = [{ key: 'gifts_open', round: 1, offset_hours: 0 }];
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick], marks), { links, flags: OPEN_FLAGS }));
+    vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {}, giverHidden: false } as never);
+    vi.mocked(fireEvent).mockResolvedValue(FIRED as never);
+
+    await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(vi.mocked(fireEvent).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(submitAction).mock.invocationCallOrder[0]);
   });
 
   it('stops drawing, submits nothing and opens no check when the format changed since the pass read the policy', async () => {

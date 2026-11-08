@@ -42,6 +42,11 @@ vi.mock('@/lib/audit/log', () => ({
 vi.mock('@/lib/format-engine/auto-advance', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/format-engine/auto-advance')>()),
   runAutoAdvance: vi.fn(),
+  autoAdvanceTargets: vi.fn(),
+}));
+vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format-engine/runtime/load')>()),
+  loadFreshKitContext: vi.fn(async () => null),
 }));
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({ onPhaseStatusChanged: vi.fn() }));
 
@@ -49,7 +54,7 @@ import { PATCH } from '@/app/api/tournaments/[id]/route';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
-import { AutoAdvanceError, runAutoAdvance } from '@/lib/format-engine/auto-advance';
+import { AutoAdvanceError, autoAdvanceTargets, runAutoAdvance } from '@/lib/format-engine/auto-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 
@@ -83,6 +88,7 @@ beforeEach(() => {
   vi.mocked(getTournamentById).mockResolvedValue(phase as never);
   vi.mocked(updateTournament).mockImplementation(async (_id, input) => ({ ...phase, ...input }) as never);
   vi.mocked(onPhaseStatusChanged).mockResolvedValue(true);
+  vi.mocked(autoAdvanceTargets).mockResolvedValue([]);
 });
 
 describe('PATCH /api/tournaments/[id]: auto advance', () => {
@@ -167,6 +173,59 @@ describe('PATCH /api/tournaments/[id]: auto advance', () => {
     await patch({ status: 'completed' });
     vi.mocked(getTournamentById).mockResolvedValue({ ...phase, season_format_type: 'singles' } as never);
     await patch({ status: 'completed' });
+    expect(runAutoAdvance).not.toHaveBeenCalled();
+  });
+});
+
+describe('PATCH /api/tournaments/[id]: the advance follows the format reaction', () => {
+  const holdingTarget = {
+    id: TARGET,
+    season_id: SEASON,
+    status: 'upcoming' as const,
+    enrollment_source: { type: 'standings', source_phase_id: ID, synced_at: 'x', frozen: false, contributions: [{ source_phase_id: ID, player_ids: ['a'] }] },
+  };
+
+  it('runs the stage_end reaction before it picks the players who move on', async () => {
+    vi.mocked(runAutoAdvance).mockResolvedValue([]);
+    await patch({ status: 'completed' });
+    expect(vi.mocked(onPhaseStatusChanged).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(runAutoAdvance).mock.invocationCallOrder[0]);
+  });
+
+  it('holds the advance back when the reaction failed: warning and response unchanged, the hold recorded in the audit entry', async () => {
+    vi.mocked(onPhaseStatusChanged).mockResolvedValue(false);
+    const res = await patch({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).warnings).toEqual([{ code: 'format_reaction_failed' }]);
+    expect(runAutoAdvance).not.toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({
+      format_reaction_error: 'phase_status_hook_failed',
+      auto_advance_held: true,
+    });
+  });
+
+  it('runs the held advance when the same status is sent again and the replayed reaction applies', async () => {
+    vi.mocked(getTournamentById).mockImplementation((async (id: string) =>
+      id === TARGET ? { ...holdingTarget, enrollment_source: null } : { ...phase, status: 'completed' }) as never);
+    vi.mocked(autoAdvanceTargets).mockResolvedValue([TARGET]);
+    vi.mocked(runAutoAdvance).mockResolvedValue([{ target_phase_id: TARGET, enrolled_count: 8 }]);
+
+    const res = await patch({ status: 'completed' });
+
+    expect(res.status).toBe(200);
+    expect(runAutoAdvance).toHaveBeenCalledWith(SEASON, ID);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toEqual({
+      auto_advance_repeated: true,
+      auto_advance: [{ target_phase_id: TARGET, enrolled_count: 8 }],
+      auto_advance_error: null,
+    });
+  });
+
+  it('does not run the advance a second time when the same status is sent again after it happened', async () => {
+    vi.mocked(getTournamentById).mockImplementation((async (id: string) => (id === TARGET ? holdingTarget : { ...phase, status: 'completed' })) as never);
+    vi.mocked(autoAdvanceTargets).mockResolvedValue([TARGET]);
+
+    await patch({ status: 'completed' });
+
     expect(runAutoAdvance).not.toHaveBeenCalled();
   });
 });

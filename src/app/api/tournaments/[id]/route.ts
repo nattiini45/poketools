@@ -41,7 +41,8 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
-import { AutoAdvanceError, runAutoAdvance, type AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
+import type { AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
+import { advanceAfterStageEnd, stageEndFired } from '@/lib/format-engine/runtime/stage-end-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { assertFormatPhaseDeletable, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
@@ -240,31 +241,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    // A kit league phase that completes runs the `auto` edges out of it. Best effort: the status change stands, and a
-    // failed advance is logged, recorded in the audit entry and left to the admin's Advance button.
-    let autoAdvance: AutoAdvanceResult[] = [];
-    let autoAdvanceError: string | null = null;
-    if (
-      body.status === 'completed' &&
-      before.status !== 'completed' &&
-      before.season_id &&
-      before.season_format_type === 'custom'
-    ) {
-      try {
-        autoAdvance = await runAutoAdvance(before.season_id, id);
-      } catch (err) {
-        logger.error('api/tournaments', 'auto advance failed after phase completion', { tournamentId: id, error: err });
-        if (err instanceof AutoAdvanceError) {
-          // The targets that did advance still get their cache expiry and their audit entry.
-          autoAdvance = err.results;
-          autoAdvanceError = err.code ?? 'auto_advance_failed';
-        } else {
-          autoAdvanceError = err instanceof UserFacingError && err.code ? err.code : 'auto_advance_failed';
-        }
-      }
-      for (const entry of autoAdvance) expireTournamentReads(entry.target_phase_id, before.season_id);
-    }
-
     // A kit league's format reacts to a phase that starts or completes (stage_start, stage_end, standings tie checks).
     // Best effort and logged inside: the hook never fails the status change. A repeat of the same status replays the
     // reaction (its events and checks are keyed, so it is a no-op once applied): a first call whose reaction failed or died
@@ -274,6 +250,30 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       const repeat = body.status === before.status;
       const from = repeat ? (body.status === 'completed' ? 'active' : 'upcoming') : before.status;
       formatReactionFailed = !(await onPhaseStatusChanged({ tournament: before, from, to: body.status }));
+    }
+
+    // A kit league phase that completes runs the `auto` edges out of it, after the reaction above: a format can adjust stage
+    // points on stage_end, and the players who move on are picked from the standings as they are then. A reaction that
+    // failed holds the advance back (recorded in the audit entry; sending the same status again replays the reaction and,
+    // once it applies, the advance). Best effort: the status change stands, and a failed advance is logged, recorded in the
+    // audit entry and left to the admin's Advance button. A repeat of `completed` runs the advance only while no target holds
+    // this phase's players yet (the advance rewrites a target's enrollment from the current standings).
+    let autoAdvance: AutoAdvanceResult[] = [];
+    let autoAdvanceError: string | null = null;
+    let autoAdvanceHeld = false;
+    // A repeat that ran the held advance changes no field, but the advance must still leave an audit entry.
+    let autoAdvanceRepeated = false;
+    if (body.status === 'completed' && before.season_id && before.season_format_type === 'custom') {
+      // Only a reaction that failed before its event fired holds it back: after that the standings are final.
+      if (formatReactionFailed && !(await stageEndFired(before.season_id, id))) {
+        autoAdvanceHeld = true;
+      } else {
+        const retry = before.status === 'completed';
+        const advance = await advanceAfterStageEnd({ seasonId: before.season_id, phaseId: id, retry });
+        autoAdvance = advance.results;
+        autoAdvanceError = advance.error;
+        autoAdvanceRepeated = retry && advance.ran;
+      }
     }
 
     // Status, name and settings show on the next view of the public pages.
@@ -318,7 +318,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     ) {
       changes.bo_overrides = { before: before.bo_overrides ?? {}, after: body.bo_overrides };
     }
-    if (Object.keys(changes).length > 0) {
+    if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'tournament.update',
         actor_id: admin.playerId,
@@ -328,9 +328,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || formatReactionFailed
+          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || autoAdvanceHeld || formatReactionFailed || autoAdvanceRepeated
             ? {
                 ...(formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
+                ...(autoAdvanceHeld ? { auto_advance_held: true } : {}),
+                ...(autoAdvanceRepeated ? { auto_advance_repeated: true } : {}),
                 ...(autoAdvance.length > 0 || autoAdvanceError
                   ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
                   : {}),

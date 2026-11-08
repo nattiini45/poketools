@@ -53,7 +53,7 @@ const withEnd = (fired: string[] = []) =>
   context({ phases: [{ id: 't-1', stage: { ...stage, end_when: { kind: 'rounds', rounds: 2 } }, members: PLAYERS }] }, fired);
 
 const round = (over: Record<string, unknown> = {}) => ({ id: 'r-2', tournament_id: 't-1', round_number: 2, status: 'completed', ...over });
-const match = (id: string, over: Record<string, unknown> = {}) => ({ id, round_id: 'r-2', status: 'completed', winner_id: 'p1', ...over });
+const match = (id: string, over: Record<string, unknown> = {}) => ({ id, round_id: 'r-2', status: 'completed', winner_id: 'p1', player_1_id: 'p1', player_2_id: 'p2', ...over });
 const fired = { eventKey: 'x', fired: true, ops: [], notifications: [], issues: [], cascaded: [] };
 
 beforeEach(() => {

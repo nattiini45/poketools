@@ -156,6 +156,20 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
     expect(await held('wallet', ids.p3)).toEqual([]);
   });
 
+  it('takes nothing from another source when the rows of the logged grant are gone', async () => {
+    // The event row is the only one left: the revert of an adjustment grant that was already removed must leave it alone.
+    await fire([grant('keep_wallet', ids.p1, null, { amount: 3, source: 'event', source_ref: 'rule:evt' })]);
+    await fire([{ op: 'revoke_item', resource: 'keep_wallet', player_id: ids.p1, item_id: null, amount: 2, source: 'adjustment', source_ref: 'adj-gone' }]);
+    expect((await held('keep_wallet', ids.p1)).map((r) => [r.source, r.source_ref, r.amount])).toEqual([['event', 'rule:evt', 3]]);
+    // A source_ref that differs, or a null one against a set one, is another grant too.
+    await fire([{ op: 'revoke_item', resource: 'keep_wallet', player_id: ids.p1, item_id: null, amount: 2, source: 'event', source_ref: 'rule:other' }]);
+    await fire([{ op: 'revoke_item', resource: 'keep_wallet', player_id: ids.p1, item_id: null, amount: 2, source: 'event', source_ref: null }]);
+    expect((await held('keep_wallet', ids.p1)).map((r) => r.amount)).toEqual([3]);
+    // The exact source and source_ref take back the units, and a partial row keeps the rest.
+    await fire([{ op: 'revoke_item', resource: 'keep_wallet', player_id: ids.p1, item_id: null, amount: 2, source: 'event', source_ref: 'rule:evt' }]);
+    expect((await held('keep_wallet', ids.p1)).map((r) => r.amount)).toEqual([1]);
+  });
+
   it('holds an exclusive item once: an event whose grant clashes skips that grant, applies the rest and records the skip', async () => {
     await fire([grant('rare', ids.p1, 'mew', { exclusive: true })]);
     const key = nextKey();
@@ -413,6 +427,19 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       expect((await held('rare', ids.p3)).map((r) => [r.item_id, r.source])).toEqual([['jirachi', 'adjustment']]);
     });
 
+    it('rolls an adjustment back when its revoke names a source whose rows are gone, instead of taking the units of another source', async () => {
+      await fire([grant('strict_wallet', ids.p2, null, { amount: 2, source: 'event', source_ref: 'rule:evt' })]);
+      const before = (await rows('adjustments')).length;
+      await expect(
+        adjust({
+          kind: 'resource', target: { resource: 'strict_wallet', player_id: ids.p2, item_id: null }, delta: { amount: -1 },
+          ops: [{ op: 'revoke_item', resource: 'strict_wallet', player_id: ids.p2, item_id: null, amount: 1, source: 'adjustment', source_ref: null }],
+        }),
+      ).rejects.toMatchObject({ name: 'FormatAdjustmentRefusedError', refusal: 'insufficient_holding' });
+      expect((await rows('adjustments')).length).toBe(before);
+      expect((await held('strict_wallet', ids.p2)).map((r) => r.amount)).toEqual([2]);
+    });
+
     it('appends a domain amendment unless a guarded action is locked (flag or submission)', async () => {
       await adjust({ kind: 'domain', target: { domain: 'gifts' }, delta: { add: ['ditto'] }, guardActions: ['unrelated'] });
       expect(await amendments()).toEqual([{ add: ['ditto'] }]);
@@ -614,7 +641,7 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       expect(event.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
       const adjustment = await client.rpc('format_apply_adjustment', {
         p_season_id: ids.season, p_kind: 'points', p_target: {}, p_delta: {}, p_reason: 'r', p_admin: null as unknown as string, p_ops: [],
-        p_guard_actions: [], p_expected_revision: null as unknown as number,
+        p_guard_actions: [], p_guard_stages: [], p_expected_revision: null as unknown as number,
       });
       expect(adjustment.error).toMatchObject({ code: 'P0001', message: 'invalid_op' });
       expect((await rows('eventLog')).some((e) => e.event_key === 'rev_c_event')).toBe(false);

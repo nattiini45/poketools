@@ -20,7 +20,7 @@ import type { Tournament } from '@/types/tournament';
 import type { KitRuntimeState } from './types';
 import { planChecks, type CheckPlan } from './checks';
 import { openChecks, resolveCheck } from './checks-server';
-import { currentCompletionKeyOf, eventKey } from './events';
+import { awaitsCompletionEffects, currentCompletionKeyOf, eventKey } from './events';
 import { isKitCandidate, type HookTournament } from '../kit-candidate';
 import { fireEvent } from './fire';
 import { isFormatContextStale, type HookReport } from './stale';
@@ -517,8 +517,8 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
  * through the same sequence as an admin's status change. Loaded on demand, so a stage without `end_when` costs nothing.
  *
  * The facts are read from a context loaded now, after this match's `match_completed` event fired: its points count, and
- * the round's other matches count as open until their own event fired (`StageEndCheck.openInRound`), so the phase never
- * ends while a sibling's `match_completed` effects are still missing. That sibling's own hook (or the heal's re-run of
+ * the phase's other matches count as open until their own event fired (`StageEndCheck.openInRound`), in every round, so the
+ * phase never ends while any `match_completed` effects are still missing. That match's own hook (or the heal's re-run of
  * it) evaluates `end_when` again once its event is in.
  */
 async function endStageIfDone(
@@ -581,7 +581,7 @@ async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { 
       roundId = peerRound.id;
     }
     const matches = await getMatchesByTournament(peer.id);
-    const awaiting = matches.some((match) => match.round_id === roundId && match.status === 'completed' && match.winner_id !== null && !fired.has(keyOf(match.id)));
+    const awaiting = matches.some((match) => match.round_id === roundId && awaitsCompletionEffects(match, fired, keyOf));
     if (awaiting) return 'deferred';
   }
   return waiting ? 'waiting' : 'ready';
@@ -715,7 +715,7 @@ export async function onRoundGenerated(input: RoundGeneratedInput): Promise<void
 }
 
 /** Whether every phase of the stage is completed: always for an ordinary stage, the phase itself being completed. */
-async function stageEnded(ctx: KitContext, phase: KitPhaseInfo): Promise<boolean> {
+export async function stageEnded(ctx: KitContext, phase: KitPhaseInfo): Promise<boolean> {
   if (phase.stage.foreach_group === undefined) return true;
   const siblings = ctx.phases.filter((other) => other.stage.key === phase.stage.key && other.id !== phase.id);
   const rows = await Promise.all(siblings.map((sibling) => getTournamentById(sibling.id)));

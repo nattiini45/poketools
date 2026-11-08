@@ -21,6 +21,18 @@ describe('format_apply_adjustment domain guard', () => {
     expect(body.lastIndexOf("IF p_kind = 'domain' THEN", lock)).toBeGreaterThan(-1);
   });
 
+  it('refuses a started guarded stage under the season_formats row lock, for an addition as for a removal, before the history row', () => {
+    const rowLock = body.indexOf('PERFORM public.format__check_revision_for_update(p_season_id, p_expected_revision)');
+    const guard = body.indexOf("'stage_start:' || g.k");
+    const insert = body.indexOf('INSERT INTO public.format_adjustments');
+    expect(guard).toBeGreaterThan(rowLock);
+    expect(guard).toBeLessThan(insert);
+    // Not inside the removal-only branch: the application's rule counts a stage start whatever the amendment does.
+    const removal = body.indexOf("jsonb_typeof(p_delta -> 'remove') = 'array'");
+    expect(guard).toBeGreaterThan(body.indexOf('END IF;\n    END IF;', removal));
+    expect(body.slice(guard - 200, guard + 400)).toMatch(/format_event_log e[\s\S]*RAISE EXCEPTION 'domain_in_use'/);
+  });
+
   it('locks before it inserts the adjustment or appends the amendment', () => {
     const lock = body.indexOf('format__lock_action');
     expect(lock).toBeLessThan(body.indexOf('INSERT INTO public.format_adjustments'));
@@ -95,7 +107,7 @@ describe('format_fire_event and format_apply_adjustment revision check', () => {
 
   it('checks it in an adjustment before the history row, with the locks in the order of a submit (action lock, then the row)', () => {
     const body = slice('CREATE OR REPLACE FUNCTION public.format_apply_adjustment(', '-- Checks');
-    expect(body).toContain('p_guard_actions text[],\n  p_expected_revision bigint\n) RETURNS uuid');
+    expect(body).toContain('p_guard_actions text[],\n  p_guard_stages text[], p_expected_revision bigint\n) RETURNS uuid');
     const insert = body.indexOf('INSERT INTO public.format_adjustments');
     const other = body.indexOf('-- Every other kind plans its ops');
     const keys = body.indexOf('PERFORM public.format__lock_op_keys(p_season_id, p_ops)');
@@ -132,7 +144,12 @@ describe('format_fire_event and format_apply_adjustment revision check', () => {
     const adjDrop = sql.indexOf(
       'DROP FUNCTION IF EXISTS public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[]);',
     );
+    const adjDropNine = sql.indexOf(
+      'DROP FUNCTION IF EXISTS public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint);',
+    );
     const adjCreate = sql.indexOf('CREATE OR REPLACE FUNCTION public.format_apply_adjustment(');
+    expect(adjDropNine).toBeGreaterThan(-1);
+    expect(adjCreate).toBeGreaterThan(adjDropNine);
     expect(fireDrop).toBeGreaterThan(-1);
     expect(fireCreate).toBeGreaterThan(fireDrop);
     expect(adjDrop).toBeGreaterThan(-1);
@@ -141,11 +158,12 @@ describe('format_fire_event and format_apply_adjustment revision check', () => {
 
   it('grants and comments only the new signatures (the old overloads are dropped, never granted)', () => {
     expect(sql).toContain('public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint)');
-    expect(sql).toContain('public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], bigint)');
+    expect(sql).toContain('public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint)');
     const statements = sql.split(';').filter((st) => !/^\s*DROP FUNCTION/m.test(st) && /(?:REVOKE|GRANT|COMMENT ON FUNCTION)/.test(st));
     const text = statements.join(';');
     expect(text).not.toMatch(/format_fire_event\(uuid, text, text, jsonb, jsonb, uuid\)/);
     expect(text).not.toMatch(/format_apply_adjustment\(uuid, text, jsonb, jsonb, text, uuid, jsonb, text\[\]\)/);
+    expect(text).not.toMatch(/format_apply_adjustment\(uuid, text, jsonb, jsonb, text, uuid, jsonb, text\[\], bigint\)/);
   });
 });
 

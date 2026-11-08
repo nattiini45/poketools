@@ -137,9 +137,13 @@ describe('20261105090000 format runtime', () => {
       /o ->> 'op' IN \('grant_item', 'revoke_item'\)/,
     );
 
-    // An inverse revoke names the grant's source: its rows are taken before another source's, then oldest first.
+    // An inverse revoke names the grant's source: it only takes rows with that source and source_ref (never another source's),
+    // oldest first. A revoke without a source stays unrestricted.
     const revoke = ops.slice(ops.indexOf("ELSIF v_kind = 'revoke_item' THEN"), ops.indexOf("ELSIF v_kind = 'set_attr' THEN"));
-    expect(revoke).toMatch(/ORDER BY \(CASE WHEN v_op ->> 'source' IS NOT NULL[\s\S]*source_ref IS NOT DISTINCT FROM \(v_op ->> 'source_ref'\)[\s\S]*THEN 0 ELSE 1 END\),\s+created_at, id/);
+    expect(revoke).toMatch(
+      /AND \(v_op ->> 'source' IS NULL\s+OR \(format_resource_items\.source IS NOT DISTINCT FROM \(v_op ->> 'source'\)\s+AND format_resource_items\.source_ref IS NOT DISTINCT FROM \(v_op ->> 'source_ref'\)\)\)\s+ORDER BY created_at, id/,
+    );
+    expect(revoke).not.toMatch(/ORDER BY \(CASE/);
 
     const submit = text.slice(text.indexOf('CREATE OR REPLACE FUNCTION public.format_action_submit('), text.indexOf('FUNCTION public.format_apply_adjustment('));
     const submitLocks = submit.indexOf('PERFORM public.format__lock_grants(p_season_id');

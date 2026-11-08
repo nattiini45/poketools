@@ -27,7 +27,10 @@
  * - `domain`: an amendment (`{ domain, add?, remove? }`) appended to the format's amendments; refused while an action
  *   that uses the domain is locked (`domain_amendment_locked`; an action uses it as a step's domain or through a step's
  *   resource that holds it), when it removes an entry a player holds, and when a started stage counts the domain in a
- *   team constraint (`domain_in_use`). The amended domain holds at most `MAX_DOMAIN_ENTRIES` entries
+ *   team constraint (`domain_in_use`, for an addition as for a removal). Those two `domain_in_use` refusals are decided
+ *   twice, like the others: against the context loaded here, and again inside `format_apply_adjustment` under the
+ *   `season_formats` row lock (the stage keys go along as `guardStages`), so a `stage_start` that commits while the
+ *   amendment waits for that lock is still seen. The amended domain holds at most `MAX_DOMAIN_ENTRIES` entries
  *   (`domain_too_large`), at most `FORMAT_MAX_DOMAIN_AMENDMENTS` amendments are stored (`amendment_limit`), and an added
  *   entry carries the attribute an action step over the domain asks to be distinct in (`attr_missing`);
  * - `outcome`: recorded only. The match result itself changes through the match result route.
@@ -115,6 +118,8 @@ interface Prepared {
   delta: Json;
   ops: FormatOp[];
   guardActions: string[];
+  /** Keys of the stages whose team constraints count the domain of a `domain` amendment; the database re-checks their `stage_start`. */
+  guardStages: string[];
 }
 
 /** The adjustments are authorised by the format: some `adjust.manual` rule must allow the kind. */
@@ -146,6 +151,7 @@ export async function applyAdjustment(request: AdjustmentRequest): Promise<Adjus
       adminId: request.adminId,
       ops: prepared.ops,
       guardActions: prepared.guardActions,
+      guardStages: prepared.guardStages,
       revision: ctx.revision,
     });
   } catch (error) {
@@ -227,7 +233,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
         target: { stage: adjustment.stage, player_id: adjustment.playerId },
         delta: { points: adjustment.points },
         ops: [],
-        guardActions: [],
+        guardActions: [], guardStages: [],
       };
     }
     case 'rank': {
@@ -240,7 +246,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
       if (listed.size !== adjustment.order.length || listed.size !== members.size || adjustment.order.some((id) => !members.has(id))) {
         return 'invalid_order';
       }
-      return { target: { stage: adjustment.stage }, delta: { order: [...adjustment.order] }, ops: [], guardActions: [] };
+      return { target: { stage: adjustment.stage }, delta: { order: [...adjustment.order] }, ops: [], guardActions: [], guardStages: [] };
     }
     case 'resource': {
       const resource = (def.resources ?? []).find((r) => r.key === adjustment.resource);
@@ -278,7 +284,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
         target: { resource: resource.key, player_id: adjustment.playerId, item_id: item },
         delta: { amount: adjustment.amount },
         ops: [op],
-        guardActions: [],
+        guardActions: [], guardStages: [],
       };
     }
     case 'relation': {
@@ -324,7 +330,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
           ...(links !== undefined ? { link_count: links.length, ...(draw ? { draw: true } : {}) } : {}),
         },
         ops,
-        guardActions: [],
+        guardActions: [], guardStages: [],
       };
     }
     case 'action': {
@@ -339,7 +345,7 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
         target: { action: adjustment.action },
         delta: { state: adjustment.state },
         ops: [adjustment.state === 'open' ? { op: 'open_action', action: adjustment.action } : { op: 'lock_action', action: adjustment.action }],
-        guardActions: [],
+        guardActions: [], guardStages: [],
       };
     }
     case 'domain': {
@@ -371,9 +377,11 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
         },
         ops: [],
         guardActions,
+        // The database repeats the started-stage refusal of `domainInUse` under its row lock, for additions and removals alike.
+        guardStages: def.stages.filter((stage) => stageCountsDomain(stage, adjustment.domain)).map((stage) => stage.key),
       };
     }
     case 'outcome':
-      return { target: { match_id: adjustment.matchId }, delta: {}, ops: [], guardActions: [] };
+      return { target: { match_id: adjustment.matchId }, delta: {}, ops: [], guardActions: [], guardStages: [] };
   }
 }

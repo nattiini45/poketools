@@ -65,17 +65,18 @@ import {
 import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 import { validateTransition } from '@/lib/tournament/match-state';
-import type { DeadlinePolicy, Stage, StageCalendar } from '@/lib/format-kit/types';
+import type { CalendarMark, DeadlinePolicy, Stage, StageCalendar } from '@/lib/format-kit/types';
 import type { MatchWithPlayers } from '@/types/match';
 import { NOTIFICATION_RETENTION_DAYS } from '../notifications/types';
 import { purgeFormatNotifications } from '@/lib/supabase/queries/format-notifications';
 import { expireChallenges } from '../challenge-server';
 import { submitAction } from './actions-server';
 import { actionFlagKey, findAction } from './actions';
-import { actionPolicyAt, dueMarks, roundPolicyAt, type CalendarClock } from './calendar';
+import { actionPolicyAt, dueMarks, markAt, roundPolicyAt, type CalendarClock } from './calendar';
 import {
   planActionCheck,
   planMatchPolicy,
@@ -83,11 +84,12 @@ import {
   type DeadlineCheckPlan,
   type ForfeitPlan,
 } from './deadline-policy';
-import { currentCompletionKeyOf, eventKey, unfiredRoundEnds } from './events';
+import { awaitsCompletionEffects, currentCompletionKeyOf, eventKey, unfiredRoundEnds } from './events';
 import { fireEvent, fireLockedActionEvents } from './fire';
 import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
 import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from './hooks';
 import { loadFreshKitContext, phaseById, rosterOf, type KitContext, type KitPhaseInfo } from './load';
+import { completePhaseAtStageEnd } from './phase-complete';
 import { planRandomPicks } from './random-pick';
 import { own } from './types';
 
@@ -207,32 +209,17 @@ async function openCheck(seasonId: string, plan: DeadlineCheckPlan, summary: For
   }
 }
 
-/** The calendar marks that are due and have not fired. The context is reloaded after any fire. */
-async function fireDueMarks(job: PhaseJob, ctx: KitContext, now: Date, summary: FormatCronSummary): Promise<KitContext> {
-  const stage = job.phase.stage.key;
-  let current = ctx;
-  for (const mark of dueMarks(job.calendar, job.clock, now)) {
-    const event = { event: 'time' as const, stage, mark: mark.key };
-    if (current.state.firedEventKeys.includes(eventKey(event))) continue;
-    if (current.revision !== job.revision) {
-      logger.warn(TAG, 'a calendar mark is not fired, the format changed since the pass read its calendar; the next pass retries', {
-        seasonId: current.seasonId,
-        stage,
-        mark: mark.key,
-      });
-      return current;
-    }
-    // Decided from `job.calendar` and `current`, written through `current`: the database refuses it (format_context_stale)
-    // when the format moved after `current` was loaded, instead of re-reading a context that may belong to another format.
-    const result = await fireEvent(current.seasonId, event, null, { context: current });
-    if (result === null || !result.fired) continue;
-    summary.marks += 1;
-    for (const issue of result.issues) logger.warn(TAG, 'event effect skipped', { seasonId: current.seasonId, mark: mark.key, ...issue });
-    const reloaded = await loadFreshKitContext(current.seasonId);
-    if (reloaded === null) return current;
-    current = reloaded;
-  }
-  return current;
+/** One due calendar mark that has not fired. The context is reloaded after a fire; null when the league has no format any more. */
+async function fireMark(job: PhaseJob, current: KitContext, mark: CalendarMark, summary: FormatCronSummary): Promise<KitContext | null> {
+  const event = { event: 'time' as const, stage: job.phase.stage.key, mark: mark.key };
+  if (current.state.firedEventKeys.includes(eventKey(event))) return current;
+  // Decided from `job.calendar` and `current`, written through `current`: the database refuses it (format_context_stale)
+  // when the format moved after `current` was loaded, instead of re-reading a context that may belong to another format.
+  const result = await fireEvent(current.seasonId, event, null, { context: current });
+  if (result === null || !result.fired) return current;
+  summary.marks += 1;
+  for (const issue of result.issues) logger.warn(TAG, 'event effect skipped', { seasonId: current.seasonId, mark: mark.key, ...issue });
+  return loadFreshKitContext(current.seasonId);
 }
 
 /**
@@ -527,23 +514,53 @@ async function applyRoundPolicy(
 /** How much a pass has changed so far: the context only needs a reload when this moved (or a policy threw). */
 const appliedCount = (summary: FormatCronSummary): number => summary.marks + summary.forfeits + summary.checks + summary.locks + summary.picks;
 
+type PassStep = { kind: 'mark'; mark: CalendarMark } | { kind: 'policy'; index: number };
+
+/**
+ * What one pass does, in order. The due marks and the due action policies run by their own time, so a pass that runs late
+ * does what passes on time would have done: a closing mark locks its action, and a seeded pick due before that mark (the
+ * compiler requires it to be) has to land first. Round, match and team policies follow; they need
+ * rounds, so they wait until the phase is active, while an action window can sit before round 1 in a phase that stays
+ * `upcoming` until it has a round (a gift phase). The index stays the policy's position in the whole list: it is part of
+ * every check and lock key.
+ */
+function passSteps(job: PhaseJob, ctx: KitContext, now: Date): PassStep[] {
+  const timed: { at: number; step: PassStep }[] = dueMarks(job.calendar, job.clock, now).flatMap((mark) => {
+    const at = markAt(job.calendar, mark, job.clock);
+    return at === null ? [] : [{ at: at.getTime(), step: { kind: 'mark' as const, mark } }];
+  });
+  job.calendar.deadlines.forEach((policy, index) => {
+    if (policy.applies !== 'action' || policy.action === undefined) return;
+    const rule = findAction(ctx.def, policy.action);
+    const at = rule === null ? null : actionPolicyAt(job.calendar, policy, rule, job.clock);
+    if (at !== null && at.getTime() <= now.getTime()) timed.push({ at: at.getTime(), step: { kind: 'policy', index } });
+  });
+  // The sort is stable: marks keep the order `dueMarks` gave them, policies their position in the list.
+  const ordered = timed.sort((x, y) => x.at - y.at).map((entry) => entry.step);
+  if (job.cron.status !== 'active') return ordered;
+  const rest = job.calendar.deadlines.flatMap((policy, index): PassStep[] => (policy.applies === 'action' ? [] : [{ kind: 'policy', index }]));
+  return [...ordered, ...rest];
+}
+
 async function runPhase(job: PhaseJob, ctx: KitContext, now: Date, summary: FormatCronSummary): Promise<KitContext> {
-  let current = await fireDueMarks(job, ctx, now, summary);
-  // An action window can sit before round 1, in a phase that stays `upcoming` until it has a round (a gift phase). Its
-  // policies therefore run for an upcoming phase too; match, team and round policies need rounds and wait until the phase
-  // is active. The index stays the policy's position in the whole list: it is part of every check and lock key.
-  const active = job.cron.status === 'active';
-  const policies = job.calendar.deadlines;
-  for (let index = 0; index < policies.length; index += 1) {
-    const policy = policies[index];
-    if (!active && policy.applies !== 'action') continue;
+  let current = ctx;
+  const stage = job.phase.stage.key;
+  for (const step of passSteps(job, ctx, now)) {
     if (current.revision !== job.revision) {
-      logger.warn(TAG, 'deadline policies are not applied, the format changed since the pass read its calendar; the next pass retries', {
+      logger.warn(TAG, 'marks and deadline policies are not applied, the format changed since the pass read its calendar; the next pass retries', {
         seasonId: current.seasonId,
-        stage: job.phase.stage.key,
+        stage,
       });
       break;
     }
+    if (step.kind === 'mark') {
+      const reloaded = await fireMark(job, current, step.mark, summary);
+      if (reloaded === null) break;
+      current = reloaded;
+      continue;
+    }
+    const { index } = step;
+    const policy = job.calendar.deadlines[index];
     const before = appliedCount(summary);
     let failed = false;
     try {
@@ -556,15 +573,15 @@ async function runPhase(job: PhaseJob, ctx: KitContext, now: Date, summary: Form
         // the next pass decides the policy again against the current format. Not a failure.
         logger.warn(TAG, 'deadline policy skipped, the format changed meanwhile; the next pass retries it', {
           seasonId: current.seasonId,
-          stage: job.phase.stage.key,
+          stage,
           policy: index,
         });
       } else {
         summary.failures += 1;
-        logger.error(TAG, 'deadline policy failed', { seasonId: current.seasonId, stage: job.phase.stage.key, policy: index, error });
+        logger.error(TAG, 'deadline policy failed', { seasonId: current.seasonId, stage, policy: index, error });
       }
     }
-    // The next policy reads the state this one may have changed; a policy that applied nothing changed nothing.
+    // The next step reads the state this one may have changed; a policy that applied nothing changed nothing.
     if (!failed && appliedCount(summary) === before) continue;
     const reloaded = await loadFreshKitContext(current.seasonId);
     if (reloaded !== null) current = reloaded;
@@ -577,6 +594,43 @@ interface BackfillBudget {
   left: number;
   reverts: number;
   roundEnds: number;
+}
+
+/**
+ * A stage that ran on the kit (`stage_start` fired) with every phase completed and no `stage_end`: its reaction failed right
+ * after the status flip, and its immediate retries too. The advance it held (`advanceAfterStageEnd`) has no other trigger.
+ * `completePhaseAtStageEnd` repeats only the reaction and the held advance on a completed phase. A stage is left alone while
+ * a completed match still owes its effects (the event would be planned without them, and its key is used once), and one that
+ * never started on the kit (finished before a switch of the engine) has nothing to repair. Returns whether anything applied.
+ */
+async function retryFailedStageEnds(ctx: KitContext, summary: FormatCronSummary): Promise<boolean> {
+  const fired = new Set(ctx.state.firedEventKeys);
+  const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
+  const stages = [...new Set(ctx.phases.map((phase) => phase.stage.key))].filter(
+    (stage) => fired.has(eventKey({ event: 'stage_start', stage })) && !fired.has(eventKey({ event: 'stage_end', stage })),
+  );
+  let applied = false;
+  for (const stage of stages) {
+    const phases = ctx.phases.filter((phase) => phase.stage.key === stage);
+    const rows = await Promise.all(phases.map((phase) => getTournamentById(phase.id)));
+    if (rows.some((row) => row === null || row.status !== 'completed')) continue;
+    const matches = (await Promise.all(phases.map((phase) => getMatchesByTournament(phase.id)))).flat();
+    if (matches.some((match) => awaitsCompletionEffects(match, fired, keyOf))) continue;
+    const outcome = await completePhaseAtStageEnd(phases[phases.length - 1].id, `cron_retry:${stage}`, []);
+    if (outcome !== 'reaction_failed') {
+      applied = true;
+      continue;
+    }
+    // A format changed during the pass answers the same as a real failure, and the next pass applies it cleanly.
+    const head = await getSeasonKitHead(ctx.seasonId);
+    if (head?.revision !== ctx.revision) {
+      logger.warn(TAG, 'the stage end is retried next pass, the format changed meanwhile', { seasonId: ctx.seasonId, stage });
+    } else {
+      summary.failures += 1;
+      logger.error(TAG, 'the reaction to a completed stage failed again; the next pass retries it', { seasonId: ctx.seasonId, stage });
+    }
+  }
+  return applied;
 }
 
 /**
@@ -747,6 +801,7 @@ async function repairLeague(ctx: KitContext, now: Date, summary: FormatCronSumma
     () => healPendingReverts(current, now, budget, summary, scanAll),
     () => backfillMatchCompleted(current, budget, summary),
     () => backfillRoundEnds(current, budget, summary),
+    () => retryFailedStageEnds(current, summary),
   ];
   for (const step of steps) {
     if (!(await step())) continue;

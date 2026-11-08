@@ -111,3 +111,20 @@ export function unfiredRoundEnds(
     .sort((a, b) => a.round.round_number - b.round.round_number || a.stage.localeCompare(b.stage))
     .map((entry) => entry.round);
 }
+
+/**
+ * Whether a completed match still owes its `match_completed` effects: it has a winner who played it (a winner who is neither
+ * player never reaches the hook, so it would wait for ever) and its current key has not fired. `keyOf` is `currentCompletionKeyOf`.
+ */
+export function awaitsCompletionEffects(
+  match: { id: string; status: string; winner_id: string | null; player_1_id: string; player_2_id: string },
+  fired: ReadonlySet<string>,
+  keyOf: (matchId: string) => string,
+): boolean {
+  return (
+    match.status === 'completed' &&
+    match.winner_id !== null &&
+    (match.winner_id === match.player_1_id || match.winner_id === match.player_2_id) &&
+    !fired.has(keyOf(match.id))
+  );
+}

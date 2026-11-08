@@ -11,7 +11,7 @@ src/lib/team/
 ├── completed-match-lock.ts  # Teams linked to a completed match are immutable for non-admins
 ├── item-usage-cache.ts  # Expires the public cached reads built from a team roster
 ├── kit-team-gate.ts  # Advisory verdict of a kit league's team rules (adviseKitTeam, kitTeamVerdict); never refuses a team
-├── match-round.ts  # The round a match-bound team is judged at (match round, else the phase's current round)
+├── match-round.ts  # The round a match-bound team is judged at (the match's round, never the phase's current one)
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
 ├── showdown-set.ts  # Showdown paste text (always English)
