@@ -214,6 +214,7 @@ describe('PATCH /api/tournaments/[id]: the advance follows the format reaction',
     expect(res.status).toBe(200);
     expect(runAutoAdvance).toHaveBeenCalledWith(SEASON, ID);
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toEqual({
+      auto_advance_repeated: true,
       auto_advance: [{ target_phase_id: TARGET, enrolled_count: 8 }],
       auto_advance_error: null,
     });

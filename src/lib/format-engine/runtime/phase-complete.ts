@@ -14,7 +14,7 @@ import { expireTournamentReads } from '@/lib/revalidation';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { completeTournamentIfActive, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { isKitCandidate, onPhaseStatusChanged } from './hooks';
-import { advanceAfterStageEnd } from './stage-end-advance';
+import { advanceAfterStageEnd, stageEndFired } from './stage-end-advance';
 
 const TAG = 'format-engine/stage-end';
 
@@ -43,7 +43,7 @@ export async function completePhaseAtStageEnd(
   if (before.status === 'completed') {
     // A reaction that failed after the flip left nothing else to run it: every later call lands here.
     const reacted = await onPhaseStatusChanged({ tournament: before, from: 'active', to: 'completed' });
-    if (!reacted) return 'reaction_failed';
+    if (!reacted && !(await stageEndFired(before.season_id, tournamentId))) return 'reaction_failed';
     // The advance the failed reaction held back (it does nothing when the advance already happened).
     const advance = await advanceAfterStageEnd({ seasonId: before.season_id, phaseId: tournamentId, retry: true });
     if (advance.ran) {
@@ -57,7 +57,7 @@ export async function completePhaseAtStageEnd(
         metadata: { via: 'stage_end_retry', reason, auto_advanced: advance.results.length, auto_advance_error: advance.error },
       });
     }
-    return 'skipped';
+    return reacted ? 'skipped' : 'reaction_failed';
   }
   if (before.status !== 'active') return 'skipped';
 
@@ -75,9 +75,10 @@ export async function completePhaseAtStageEnd(
   const tournament = claim.tournament;
 
   // The reaction first: it may adjust stage points, and the players who move on are picked from the standings after it. A
-  // reaction that failed holds the advance back (the caller retries the reaction, and the retry runs the advance).
+  // reaction that failed before its event fired holds the advance back (the caller retries it, and the retry runs the advance).
   const reacted = await onPhaseStatusChanged({ tournament: before, from: before.status, to: 'completed' });
-  const advance = reacted
+  const mayAdvance = reacted || (await stageEndFired(before.season_id, tournamentId));
+  const advance = mayAdvance
     ? await advanceAfterStageEnd({ seasonId: before.season_id, phaseId: tournamentId, retry: false })
     : { ran: false, results: [], error: null };
   expireTournamentReads(tournamentId, before.season_id);
@@ -95,7 +96,7 @@ export async function completePhaseAtStageEnd(
       reason,
       auto_advanced: advance.results.length,
       auto_advance_error: advance.error,
-      auto_advance_held: !reacted,
+      auto_advance_held: !mayAdvance,
     },
   });
 

@@ -11,6 +11,7 @@ import { logger } from '@/lib/logger';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { AutoAdvanceError, autoAdvanceTargets, runAutoAdvance, type AutoAdvanceResult } from '../auto-advance';
+import { eventKey } from './events';
 import { stageEnded } from './hooks';
 import { loadFreshKitContext, phaseById } from './load';
 
@@ -43,6 +44,21 @@ export interface StageEndAdvanceInput {
 function holdsBlockOf(phaseId: string, target: Awaited<ReturnType<typeof getTournamentById>>): boolean {
   const source = target?.enrollment_source;
   return source?.contributions?.some((block) => block.source_phase_id === phaseId) === true;
+}
+
+/**
+ * Whether the phase's `stage_end` event fired. A reaction can fail after it did (the tie and expression checks run later): the
+ * points it adjusts are in the standings then, so that failure is no reason to hold the advance. A failed read answers false.
+ */
+export async function stageEndFired(seasonId: string, phaseId: string): Promise<boolean> {
+  try {
+    const ctx = await loadFreshKitContext(seasonId);
+    const phase = ctx === null ? undefined : phaseById(ctx, phaseId);
+    return ctx !== null && phase !== undefined && ctx.state.firedEventKeys.includes(eventKey({ event: 'stage_end', stage: phase.stage.key }));
+  } catch (error) {
+    logger.error(TAG, 'could not read whether the stage end fired; the advance stays held', { phaseId, error });
+    return false;
+  }
 }
 
 function failureCode(error: unknown): string {

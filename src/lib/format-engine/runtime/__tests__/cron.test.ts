@@ -137,7 +137,7 @@ beforeEach(() => {
 
 describe('a stage whose reaction failed after its phases completed', () => {
   it('repeats the reaction when every phase of the stage is completed and stage_end has not fired', async () => {
-    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
     vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
     vi.mocked(completePhaseAtStageEnd).mockResolvedValue('completed');
     await runFormatCronPass(AFTER_DEADLINE);
@@ -150,13 +150,34 @@ describe('a stage whose reaction failed after its phases completed', () => {
     expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
 
     vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
-    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_end:swiss'] }));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss', 'stage_end:swiss'] }));
     await runFormatCronPass(AFTER_DEADLINE);
     expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
   });
 
-  it('counts a reaction that failed again as a failure of the pass', async () => {
+  it('leaves a stage alone that never started on the kit, or that still has a match owing its effects', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([])));
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getMatchesByTournament).mockResolvedValue([match({ status: 'completed', winner_id: 'p1' })] as never);
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(completePhaseAtStageEnd).not.toHaveBeenCalled();
+  });
+
+  it('does not count a reaction refused because the format changed during the pass', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
+    vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
+    vi.mocked(completePhaseAtStageEnd).mockResolvedValue('reaction_failed');
+    vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 2, clockShiftSeconds: 0 });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(summary.failures).toBe(0);
+  });
+
+  it('counts a reaction that failed again as a failure of the pass', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([]), { firedEventKeys: ['stage_start:swiss'] }));
     vi.mocked(getTournamentById).mockResolvedValue({ id: PHASE, status: 'completed' } as never);
     vi.mocked(completePhaseAtStageEnd).mockResolvedValue('reaction_failed');
     const summary = await runFormatCronPass(AFTER_DEADLINE);

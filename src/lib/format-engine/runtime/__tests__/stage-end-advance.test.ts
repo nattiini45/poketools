@@ -19,7 +19,7 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { autoAdvanceTargets, runAutoAdvance } from '../../auto-advance';
 import { stageEnded } from '../hooks';
 import { loadFreshKitContext } from '../load';
-import { advanceAfterStageEnd } from '../stage-end-advance';
+import { advanceAfterStageEnd, stageEndFired } from '../stage-end-advance';
 
 const group = (id: string) => ({ id, stage: { key: 'groups', foreach_group: {} } });
 const ctx = { phases: [group('g-1'), group('g-2')] } as never;
@@ -68,5 +68,16 @@ describe('advanceAfterStageEnd in a stage that repeats per group', () => {
     await advanceAfterStageEnd({ seasonId: 's-1', phaseId: 'p-1', retry: false });
     expect(vi.mocked(runAutoAdvance).mock.calls.map((call) => call[1])).toEqual(['p-1']);
     expect(stageEnded).not.toHaveBeenCalled();
+  });
+});
+
+describe('stageEndFired', () => {
+  it('answers from the event log of the stage, and false when the read fails', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ phases: [group('g-1')], state: { firedEventKeys: ['stage_end:groups'] } } as never);
+    await expect(stageEndFired('s-1', 'g-1')).resolves.toBe(true);
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ phases: [group('g-1')], state: { firedEventKeys: [] } } as never);
+    await expect(stageEndFired('s-1', 'g-1')).resolves.toBe(false);
+    vi.mocked(loadFreshKitContext).mockRejectedValue(new Error('db'));
+    await expect(stageEndFired('s-1', 'g-1')).resolves.toBe(false);
   });
 });

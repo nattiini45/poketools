@@ -42,7 +42,7 @@ import {
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import type { AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
-import { advanceAfterStageEnd } from '@/lib/format-engine/runtime/stage-end-advance';
+import { advanceAfterStageEnd, stageEndFired } from '@/lib/format-engine/runtime/stage-end-advance';
 import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
 import { assertFormatPhaseDeletable, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
@@ -264,7 +264,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // A repeat that ran the held advance changes no field, but the advance must still leave an audit entry.
     let autoAdvanceRepeated = false;
     if (body.status === 'completed' && before.season_id && before.season_format_type === 'custom') {
-      if (formatReactionFailed) {
+      // Only a reaction that failed before its event fired holds it back: after that the standings are final.
+      if (formatReactionFailed && !(await stageEndFired(before.season_id, id))) {
         autoAdvanceHeld = true;
       } else {
         const retry = before.status === 'completed';
@@ -317,7 +318,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     ) {
       changes.bo_overrides = { before: before.bo_overrides ?? {}, after: body.bo_overrides };
     }
-    if (Object.keys(changes).length > 0 || autoAdvanceRepeated) {
+    if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'tournament.update',
         actor_id: admin.playerId,
@@ -327,10 +328,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || autoAdvanceHeld || formatReactionFailed
+          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || autoAdvanceHeld || formatReactionFailed || autoAdvanceRepeated
             ? {
                 ...(formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
                 ...(autoAdvanceHeld ? { auto_advance_held: true } : {}),
+                ...(autoAdvanceRepeated ? { auto_advance_repeated: true } : {}),
                 ...(autoAdvance.length > 0 || autoAdvanceError
                   ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
                   : {}),

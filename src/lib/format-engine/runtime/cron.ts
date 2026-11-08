@@ -82,7 +82,7 @@ import {
   type DeadlineCheckPlan,
   type ForfeitPlan,
 } from './deadline-policy';
-import { currentCompletionKeyOf, eventKey, unfiredRoundEnds } from './events';
+import { awaitsCompletionEffects, currentCompletionKeyOf, eventKey, unfiredRoundEnds } from './events';
 import { fireEvent, fireLockedActionEvents } from './fire';
 import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
 import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from './hooks';
@@ -593,25 +593,37 @@ interface BackfillBudget {
 }
 
 /**
- * A stage whose phases are all completed but whose `stage_end` event never fired: the reaction failed right after the status
- * flip, and its immediate retries too. The hold on the `auto` edges (`advanceAfterStageEnd`) ends with the reaction, so nothing
- * else would ever move those players. `completePhaseAtStageEnd` repeats only the reaction and the held advance on a
- * completed phase. Running leagues only, and only stages whose event is missing. Returns whether anything applied.
+ * A stage that ran on the kit (`stage_start` fired) with every phase completed and no `stage_end`: its reaction failed right
+ * after the status flip, and its immediate retries too. The advance it held (`advanceAfterStageEnd`) has no other trigger.
+ * `completePhaseAtStageEnd` repeats only the reaction and the held advance on a completed phase. A stage is left alone while
+ * a completed match still owes its effects (the event would be planned without them, and its key is used once), and one that
+ * never started on the kit (finished before a switch of the engine) has nothing to repair. Returns whether anything applied.
  */
 async function retryFailedStageEnds(ctx: KitContext, summary: FormatCronSummary): Promise<boolean> {
   const fired = new Set(ctx.state.firedEventKeys);
-  const stages = [...new Set(ctx.phases.map((phase) => phase.stage.key))].filter((stage) => !fired.has(eventKey({ event: 'stage_end', stage })));
+  const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
+  const stages = [...new Set(ctx.phases.map((phase) => phase.stage.key))].filter(
+    (stage) => fired.has(eventKey({ event: 'stage_start', stage })) && !fired.has(eventKey({ event: 'stage_end', stage })),
+  );
   let applied = false;
   for (const stage of stages) {
     const phases = ctx.phases.filter((phase) => phase.stage.key === stage);
     const rows = await Promise.all(phases.map((phase) => getTournamentById(phase.id)));
     if (rows.some((row) => row === null || row.status !== 'completed')) continue;
+    const matches = (await Promise.all(phases.map((phase) => getMatchesByTournament(phase.id)))).flat();
+    if (matches.some((match) => awaitsCompletionEffects(match, fired, keyOf))) continue;
     const outcome = await completePhaseAtStageEnd(phases[phases.length - 1].id, `cron_retry:${stage}`, []);
-    if (outcome === 'reaction_failed') {
+    if (outcome !== 'reaction_failed') {
+      applied = true;
+      continue;
+    }
+    // A format changed during the pass answers the same as a real failure, and the next pass applies it cleanly.
+    const head = await getSeasonKitHead(ctx.seasonId);
+    if (head?.revision !== ctx.revision) {
+      logger.warn(TAG, 'the stage end is retried next pass, the format changed meanwhile', { seasonId: ctx.seasonId, stage });
+    } else {
       summary.failures += 1;
       logger.error(TAG, 'the reaction to a completed stage failed again; the next pass retries it', { seasonId: ctx.seasonId, stage });
-    } else {
-      applied = true;
     }
   }
   return applied;

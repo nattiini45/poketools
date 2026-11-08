@@ -1,3 +1,4 @@
+import { loadFreshKitContext } from '../load';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
@@ -33,6 +34,16 @@ beforeEach(() => {
   vi.mocked(completeTournamentIfActive).mockResolvedValue({ outcome: 'completed', tournament: { ...active, status: 'completed' } } as never);
   vi.mocked(onPhaseStatusChanged).mockResolvedValue(true);
   vi.mocked(autoAdvanceTargets).mockResolvedValue([]);
+});
+
+describe('a reaction that failed after its stage_end event fired', () => {
+  it('still advances: the standings are final, only the later checks failed', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValueOnce({ phases: [{ id: 't-1', stage: { key: 'main' } }], state: { firedEventKeys: ['stage_end:main'] } } as never);
+    vi.mocked(onPhaseStatusChanged).mockResolvedValue(false);
+    vi.mocked(runAutoAdvance).mockResolvedValue([]);
+    await expect(completePhaseAtStageEnd('t-1', 'r', [])).resolves.toBe('reaction_failed');
+    expect(runAutoAdvance).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe('completePhaseAtStageEnd', () => {
