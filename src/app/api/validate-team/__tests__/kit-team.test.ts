@@ -146,11 +146,13 @@ describe('POST /api/validate-team for a team built for a match', () => {
     expect(evaluateTeam).toHaveBeenCalledWith(expect.objectContaining({ roundNumber: 3 }));
   });
 
-  it('falls back to the current round of the phase when the round of the match is gone', async () => {
+  it('answers 404 when the round of the match is gone, and never judges the team by the current round of the phase', async () => {
     vi.mocked(getRoundById).mockResolvedValue(null);
-    await post({ match_id: MATCH_ID });
-    expect(currentPhaseRound).toHaveBeenCalledWith(TOURNAMENT_ID);
-    expect(evaluateTeam).toHaveBeenCalledWith(expect.objectContaining({ roundNumber: 2 }));
+    const response = await post({ match_id: MATCH_ID });
+    expect(response.status).toBe(404);
+    expect((await response.json()).code).toBe('match_not_found');
+    expect(currentPhaseRound).not.toHaveBeenCalled();
+    expect(evaluateTeam).not.toHaveBeenCalled();
   });
 
   it('lets player two of the match check their own team', async () => {

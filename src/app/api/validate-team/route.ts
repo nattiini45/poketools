@@ -118,6 +118,13 @@ export async function POST(request: NextRequest) {
         }
         stageRulesApply = false;
       }
+      // The round was deleted since the match was read: the verdict must not fall back to the phase's current round.
+      if (stageRulesApply && found.roundNumber === undefined) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Match not found', code: 'match_not_found' },
+          { status: 404 }
+        );
+      }
       roundNumber = found.roundNumber;
     }
 

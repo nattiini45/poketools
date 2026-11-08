@@ -556,6 +556,33 @@ describe('action policies', () => {
     }
   });
 
+  it('a late pass applies a seeded pick due before the closing mark first, so the mark cannot lock it out', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
+    const marks = [{ key: 'gifts_close', round: 1, offset_hours: 24 }];
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick], marks), { links, flags: OPEN_FLAGS }));
+    vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {}, giverHidden: false } as never);
+    vi.mocked(fireEvent).mockResolvedValue(FIRED as never);
+
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(summary.picks).toBe(2);
+    expect(summary.marks).toBe(1);
+    const lastPick = Math.max(...vi.mocked(submitAction).mock.invocationCallOrder);
+    expect(lastPick).toBeLessThan(vi.mocked(fireEvent).mock.invocationCallOrder[0]);
+  });
+
+  it('a late pass fires a mark due before the pick first', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 48, on_miss: 'seeded_random_pick' };
+    const marks = [{ key: 'gifts_open', round: 1, offset_hours: 0 }];
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([pick], marks), { links, flags: OPEN_FLAGS }));
+    vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {}, giverHidden: false } as never);
+    vi.mocked(fireEvent).mockResolvedValue(FIRED as never);
+
+    await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(vi.mocked(fireEvent).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(submitAction).mock.invocationCallOrder[0]);
+  });
+
   it('stops drawing, submits nothing and opens no check when the format changed since the pass read the policy', async () => {
     const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
     const before = context(calendar([pick]), { links, flags: OPEN_FLAGS });
