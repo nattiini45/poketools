@@ -28,7 +28,7 @@ describe('20261108090000_format_notifications.sql', () => {
   });
 
   it('makes one notification per recipient and event', () => {
-    expect(SQL).toContain('CONSTRAINT format_notifications_dedupe UNIQUE (player_id, dedupe_key)');
+    expect(SQL).toContain('CONSTRAINT format_notifications_dedupe UNIQUE (season_id, player_id, dedupe_key)');
     expect(SQL.match(/ON CONFLICT ON CONSTRAINT format_notifications_dedupe DO NOTHING/g)).toHaveLength(2);
   });
 

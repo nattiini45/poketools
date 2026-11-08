@@ -264,6 +264,24 @@ describe('NotificationBell', () => {
     await waitFor(() => expect(document.activeElement).toBe(row));
   });
 
+  it('keeps a followed row read when a list read begun during the mark answers after it', async () => {
+    let answerMark: (value: { ok: true; data: { unread: number } }) => void = () => undefined;
+    let answerList: (value: ReturnType<typeof inbox>) => void = () => undefined;
+    vi.mocked(loadInbox)
+      .mockResolvedValueOnce(inbox([challenge], 1))
+      .mockImplementationOnce(() => new Promise((resolve) => { answerList = resolve; }));
+    vi.mocked(markRead).mockImplementationOnce(() => new Promise((resolve) => { answerMark = resolve; }));
+    const user = await openPanel();
+    const link = await screen.findByRole('link', { name: /The challenge from Mara/ });
+    link.addEventListener('click', (event) => event.preventDefault());
+    await user.click(link);
+    await user.click(screen.getByRole('button', { name: 'Notifications' }));
+    await act(async () => answerMark({ ok: true, data: { unread: 0 } }));
+    await act(async () => answerList(inbox([challenge], 1)));
+    expect(screen.getByRole('button', { name: 'Notifications' })).not.toBeNull();
+    expect(screen.getByRole('link', { name: /The challenge from Mara/ }).textContent).not.toContain('Unread');
+  });
+
   it('drops a list answer that started before "mark all" landed', async () => {
     let answer: (value: ReturnType<typeof inbox>) => void = () => undefined;
     vi.mocked(loadInbox)

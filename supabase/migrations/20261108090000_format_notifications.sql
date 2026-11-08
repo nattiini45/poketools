@@ -6,7 +6,7 @@
 -- row is read, through the same masks as the player views.
 --
 -- Delivery is written in the transaction of the event it reports, so an event cannot be applied without its notifications
--- or the other way round. `UNIQUE (player_id, dedupe_key)` with ON CONFLICT DO NOTHING makes every path idempotent:
+-- or the other way round. `UNIQUE (season_id, player_id, dedupe_key)` with ON CONFLICT DO NOTHING makes every path idempotent:
 --
 --   format_fire_event_notify(...)    format_fire_event, then one row per recipient of each planned `notify`, only when the
 --                                    event had not fired. Key `rule:<revision>:<event key>:<rule id>:<effect index>`. The
@@ -41,11 +41,10 @@ CREATE TABLE public.format_notifications (
   CONSTRAINT format_notifications_kind_check CHECK (
     kind IN ('rule_notice', 'challenge_created', 'challenge_accepted', 'challenge_declined', 'challenge_expired', 'challenge_cancelled')
   ),
-  CONSTRAINT format_notifications_dedupe UNIQUE (player_id, dedupe_key)
+  CONSTRAINT format_notifications_dedupe UNIQUE (season_id, player_id, dedupe_key)
 );
 CREATE INDEX idx_format_notifications_inbox ON public.format_notifications (player_id, created_at DESC, id DESC);
 CREATE INDEX idx_format_notifications_unread ON public.format_notifications (player_id) WHERE read_at IS NULL;
-CREATE INDEX idx_format_notifications_season ON public.format_notifications (season_id);
 CREATE INDEX idx_format_notifications_created ON public.format_notifications (created_at);
 
 ALTER TABLE public.format_notifications ENABLE ROW LEVEL SECURITY;

@@ -178,6 +178,15 @@ export default function NotificationBell() {
     };
   }, [open]);
 
+  /** Applies a mark the server confirmed. A list or count read still on its way describes the state before it. */
+  const settleMark = (unreadNow: number, marked: (row: NotificationView) => boolean) => {
+    listGeneration.current += 1;
+    countGeneration.current += 1;
+    setLoad((current) => (current === 'loading' ? 'ready' : current));
+    setItems((current) => current.map((row) => (marked(row) ? { ...row, read: true } : row)));
+    setUnread(unreadNow);
+  };
+
   const follow = (item: NotificationView) => {
     setOpen(false);
     if (item.read) return;
@@ -186,7 +195,7 @@ export default function NotificationBell() {
     listGeneration.current += 1;
     countGeneration.current += 1;
     void markRead([item.id]).then((outcome) => {
-      if (outcome.ok) setUnread(outcome.data.unread);
+      if (outcome.ok) settleMark(outcome.data.unread, (row) => row.id === item.id);
       // The row stays unread on the server, and the next read says so.
       else void refresh();
     });
@@ -199,12 +208,7 @@ export default function NotificationBell() {
       setMarkFailed(true);
       return;
     }
-    // A list or count read still on its way describes the state before this mark.
-    listGeneration.current += 1;
-    countGeneration.current += 1;
-    setLoad((current) => (current === 'loading' ? 'ready' : current));
-    setItems((current) => current.map((row) => ({ ...row, read: true })));
-    setUnread(outcome.data.unread);
+    settleMark(outcome.data.unread, () => true);
     // The button that was just pressed goes away with the last unread notification.
     titleRef.current?.focus();
   };
