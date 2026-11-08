@@ -1025,6 +1025,7 @@ BEGIN
   IF p_match_id IS NULL OR p_expected_status IS NULL OR p_winner_id IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'forfeit')::text;
   END IF;
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   SELECT f.engine INTO v_engine FROM public.season_formats f WHERE f.season_id = p_season_id;
   IF v_engine IS DISTINCT FROM 'kit' THEN
@@ -1146,7 +1147,7 @@ COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, tex
 COMMENT ON FUNCTION public.format_check_open(uuid, text, text, text, jsonb, bigint) IS
   'Opens an assisted check; returns its id, or NULL when a check with that dedupe_key already exists. Raises format_context_stale (nothing inserted, the key stays free) when the league''s format changed or was detached since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint) IS
-  'Completes a match of the league as a deadline forfeit, compare-and-set on its status, in one transaction with the revision and engine check. Returns false when the match no longer has that status (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read.';
+  'Completes a match of the league as a deadline forfeit, compare-and-set on its status, in one transaction with the revision and engine check. Returns false when the match no longer has that status (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read, format_season_closed (nothing written) when the league is completed or archived.';
 COMMENT ON FUNCTION public.format_check_resolve(uuid, uuid, text, uuid, text) IS
   'Resolves an open check of the league to confirmed or rejected. Returns false when it was not open or belongs to another league.';
 

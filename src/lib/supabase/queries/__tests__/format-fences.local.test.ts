@@ -250,6 +250,15 @@ describe.skipIf(!optIn)('format fences (local stack)', () => {
       expect((await rowOf(detached.match)).status).toBe('scheduled');
     });
 
+    it('writes nothing in a league that closed since the forfeit was decided', async () => {
+      const { season, match, revision } = await forfeitMatch();
+      await must('close', client.from('seasons').update({ status: 'completed' }).eq('id', season));
+      await expect(
+        rt.completeFormatForfeit({ seasonId: season, matchId: match, expectedStatus: 'scheduled', winnerId: players.p1, revision }),
+      ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'format_season_closed' });
+      expect((await rowOf(match)).status).toBe('scheduled');
+    });
+
     it('answers false and writes nothing when the status moved or the match is of another league', async () => {
       const { season, match, revision } = await forfeitMatch();
       await expect(rt.completeFormatForfeit({ seasonId: season, matchId: match, expectedStatus: 'in_progress', winnerId: players.p1, revision })).resolves.toBe(false);

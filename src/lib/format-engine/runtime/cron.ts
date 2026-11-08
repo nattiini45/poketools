@@ -416,10 +416,16 @@ async function applyForfeit(
       revision: job.revision,
     });
   } catch (error) {
-    // The database refused it under the league's locks (the format changed or the league left the kit): nothing was written,
-    // so the staged row goes whatever the match's status is now. The next pass decides again (runPhase: not a failure).
-    if (isFormatContextStale(error)) {
+    // The database refused it under the league's locks (the format changed, the league left the kit or it closed): nothing was
+    // written, so the staged row goes whatever the match's status is now. A stale format is for the next pass to decide
+    // (runPhase: not a failure); a closed league takes no forfeit at all.
+    const closed = error instanceof FormatRuntimeError && error.code === 'format_season_closed';
+    if (closed || isFormatContextStale(error)) {
       await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
+      if (closed) {
+        logger.info(TAG, 'no deadline forfeit, the league closed since the pass read it', { matchId: match.id });
+        return;
+      }
       throw error;
     }
     // The write threw, so it may have committed: a completed match may be this pass's own, whose row stays.
