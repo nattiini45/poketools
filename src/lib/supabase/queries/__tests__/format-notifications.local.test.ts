@@ -80,7 +80,6 @@ const clearChallenges = async () => {
   await run('clear challenges', client.from('format_challenges').delete().eq('season_id', ids.season));
   await run('clear events', client.from('format_event_log').delete().eq('season_id', ids.season));
   await run('clear other notifications', client.from('format_notifications').delete().eq('season_id', ids.otherSeason));
-  await run('clear other events', client.from('format_event_log').delete().eq('season_id', ids.otherSeason));
 };
 
 const seed = async () => {
@@ -89,7 +88,6 @@ const seed = async () => {
   await run('seasons', client.from('seasons').insert({ id: ids.season, name: `Notify ${RUN}`, format_type: 'custom' }));
   await run('season_formats', client.from('season_formats').insert({ season_id: ids.season, version_no: 1, spec: {}, spec_hash: '0'.repeat(64), seed: `notify-${RUN}`, engine: 'kit' }));
   await run('other season', client.from('seasons').insert({ id: ids.otherSeason, name: `Notify ${RUN} Other`, format_type: 'custom' }));
-  await run('other season_formats', client.from('season_formats').insert({ season_id: ids.otherSeason, version_no: 1, spec: {}, spec_hash: '0'.repeat(64), seed: `notify-${RUN}-other`, engine: 'kit' }));
   await run('tournaments', client.from('tournaments').insert({ id: ids.phase, name: `Notify ${RUN} Ladder`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' }));
   await run('participants', client.from('tournament_participants').insert(PLAYERS.map((player_id) => ({ tournament_id: ids.phase, player_id }))));
   await run('rounds', client.from('rounds').insert({ id: ids.round, tournament_id: ids.phase, name: 'Round 1', round_number: 1, best_of: 1, status: 'pending' }));
@@ -124,8 +122,6 @@ describe.skipIf(!optIn)('format notifications (local stack)', () => {
     await client.from('season_formats').delete().eq('season_id', ids.season);
     await client.from('seasons').delete().eq('id', ids.season);
     await client.from('format_notifications').delete().eq('season_id', ids.otherSeason);
-    await client.from('format_event_log').delete().eq('season_id', ids.otherSeason);
-    await client.from('season_formats').delete().eq('season_id', ids.otherSeason);
     await client.from('seasons').delete().eq('id', ids.otherSeason);
     await client.from('players').delete().in('id', PLAYERS);
     await deleteLocalRuleset(client, ids.ruleset);
@@ -203,25 +199,13 @@ describe.skipIf(!optIn)('format notifications (local stack)', () => {
     ]);
   });
 
-  it('tells a player of the same rule in two leagues on the same format', async () => {
-    const revision = await revisionNow();
-    const message = { base: 'en' as const, en: { v: 'Pool open', s: 'human' as const } };
-    const fire = (seasonId: string) =>
-      runtime.fireFormatEvent({
-        seasonId,
-        eventKey: 'time:main:open',
-        event: 'time',
-        payload: {},
-        ops: [],
-        firedBy: null,
-        revision,
-        notifications: [{ message, players: [ids.defender], rule: 'open_note', effect: 0 }],
-      });
-    expect(await fire(ids.season)).toBe(true);
-    expect(await fire(ids.otherSeason)).toBe(true);
-    const { data, error } = await client.from('format_notifications').select('season_id').eq('player_id', ids.defender).eq('kind', 'rule_notice');
-    expect(error).toBeNull();
-    expect(data?.map((row) => row.season_id).sort()).toEqual([ids.season, ids.otherSeason].sort());
+  it('keeps the idempotency key per league', async () => {
+    // Revisions come from one sequence, so two leagues share one only at 0 (rows from before the runtime): written directly.
+    const row = (season_id: string) => ({ season_id, player_id: ids.defender, kind: 'rule_notice', dedupe_key: 'rule:0:time:main:open:open_note:0', payload: {} });
+    await run('first league', client.from('format_notifications').insert(row(ids.season)));
+    await run('second league', client.from('format_notifications').insert(row(ids.otherSeason)));
+    const again = await client.from('format_notifications').insert(row(ids.season));
+    expect(again.error?.code).toBe('23505');
   });
 
   it('reads, counts, marks and purges the inbox of one player only', async () => {
