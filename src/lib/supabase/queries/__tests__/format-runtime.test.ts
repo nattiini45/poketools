@@ -128,7 +128,7 @@ describe('the RPC wrappers', () => {
 
   it('fireFormatEvent passes a completion fence alongside the notifications', async () => {
     state.rpcReply = { data: true };
-    const notifications = [{ rule: 'r1', effect: 0, players: [P1], message: { en: 'hi', de: 'hallo' } }];
+    const notifications = [{ rule: 'r1', effect: 0, players: [P1], message: { base: 'en' as const, en: { v: 'hi', s: 'human' as const } } }];
     await fireFormatEvent({
       seasonId: SEASON, eventKey: 'match_completed:m1', event: 'match_completed', payload: {}, ops: [], firedBy: null, revision: 41,
       notifications, matchFence: { matchId: 'm1', confirmedAt: '2026-11-08T12:00:00.000Z' },
