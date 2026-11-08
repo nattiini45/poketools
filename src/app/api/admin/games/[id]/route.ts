@@ -68,6 +68,41 @@ function isAuthError(resolved: { game: Game; match: MatchWithPlayers } | Resolve
   return 'error' in resolved;
 }
 
+/**
+ * The audit fields of an approved cascade: the game change reset the played later bracket matches (`confirm_downstream`).
+ * Empty when it reset none.
+ */
+function cascadeMetadata(matchIds: readonly string[] | undefined): Record<string, unknown> {
+  return matchIds && matchIds.length > 0 ? { cascade: true, downstream_reset_match_ids: [...matchIds] } : {};
+}
+
+/**
+ * An approved game change that failed AFTER it had reset some later matches leaves those resets behind: they are audited
+ * all the same (`completed: false`), as the regenerate-bracket route audits a cascade that stopped half way.
+ */
+function auditAbandonedCascade(
+  action: 'game.delete' | 'game.edit',
+  player: { playerId: string; name: string },
+  resolved: { game: Game; match: MatchWithPlayers },
+  gameId: string,
+  matchIds: readonly string[]
+): void {
+  logAuditEvent({
+    actor_id: player.playerId,
+    actor_name: player.name,
+    action,
+    resource_type: 'game',
+    resource_id: gameId,
+    resource_name: `${resolved.match.player_1_name} vs ${resolved.match.player_2_name} game ${resolved.game.game_number}`,
+    metadata: {
+      match_id: resolved.match.id,
+      tournament_id: resolved.match.tournament_id,
+      completed: false,
+      ...cascadeMetadata(matchIds),
+    },
+  });
+}
+
 /** DELETE /api/admin/games/[id] — delete a single game */
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
@@ -100,7 +135,20 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const result = await deleteGame(id, player.playerId);
+    // An approved change resets the played later bracket matches first (the delete is otherwise refused with nothing
+    // written, 409 game_change_downstream_played); each reset is noted as it commits.
+    const resetMatchIds: string[] = [];
+    let result: DeleteGameResult | undefined;
+    try {
+      result = await deleteGame(id, player.playerId, {
+        confirmDownstream: parsedBody.data.confirm_downstream,
+        onDownstreamMatchReset: (matchId) => resetMatchIds.push(matchId),
+      });
+    } finally {
+      if (result === undefined && resetMatchIds.length > 0) {
+        auditAbandonedCascade('game.delete', player, resolved, id, resetMatchIds);
+      }
+    }
 
     await revalidateMatchPages(resolved.match.tournament_id, resolved.match.id);
 
@@ -120,6 +168,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         games_remaining: result.games_remaining,
         ...(parsedBody.data.reason ? { reason: parsedBody.data.reason } : {}),
         ...(result.match_status_conflict ? { match_status_conflict: true } : {}),
+        ...cascadeMetadata(result.downstream_reset_match_ids),
+        ...(result.stage_already_ended ? { stage_already_ended: true } : {}),
       },
     });
 
@@ -170,13 +220,29 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const result = await editGame({
-      game_id: id,
-      winner_id: body.winner_id,
-      battle_stats: body.battle_stats,
-      admin_id: player.playerId,
-      expected_updated_at: body.expected_updated_at,
-    });
+    // An approved change resets the played later bracket matches first (the edit is otherwise refused with nothing
+    // written, 409 game_change_downstream_played); each reset is noted as it commits.
+    const resetMatchIds: string[] = [];
+    let result: EditGameResult | undefined;
+    try {
+      result = await editGame(
+        {
+          game_id: id,
+          winner_id: body.winner_id,
+          battle_stats: body.battle_stats,
+          admin_id: player.playerId,
+          expected_updated_at: body.expected_updated_at,
+        },
+        {
+          confirmDownstream: body.confirm_downstream,
+          onDownstreamMatchReset: (matchId) => resetMatchIds.push(matchId),
+        }
+      );
+    } finally {
+      if (result === undefined && resetMatchIds.length > 0) {
+        auditAbandonedCascade('game.edit', player, resolved, id, resetMatchIds);
+      }
+    }
 
     await revalidateMatchPages(resolved.match.tournament_id, resolved.match.id);
 
@@ -197,6 +263,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         match_status: result.match_status,
         match_winner_id: result.match_winner_id,
         ...(result.match_status_conflict ? { match_status_conflict: true } : {}),
+        ...cascadeMetadata(result.downstream_reset_match_ids),
+        ...(result.stage_already_ended ? { stage_already_ended: true } : {}),
       },
     });
 

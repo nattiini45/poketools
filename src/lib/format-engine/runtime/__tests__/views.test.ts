@@ -124,6 +124,14 @@ describe('the action card', () => {
     expect(action(viewOf('p1', context(), names))).toMatchObject({ accessible: false, actionable: false });
   });
 
+  it('is not accessible for a giver who holds a link but is no longer enrolled in the league, like the submit refuses them', () => {
+    // p1 still has a name (an admin could have kept them on the season roster) and the link p1 -> p2, but is in no phase.
+    const ctx = context({ players: PLAYERS.filter((id) => id !== 'p1') });
+    expect(action(viewOf('p1', ctx))).toMatchObject({ accessible: false, actionable: false });
+    // Whoever is enrolled with a link is unaffected.
+    expect(action(viewOf('p2', ctx))).toMatchObject({ accessible: true, actionable: true });
+  });
+
   it('shows only the viewer’s own submission, and a locked one is not actionable', () => {
     const submissions: RuntimeSubmission[] = [
       { id: 'sub-1', action: 'choose_gift', actor: 'p1', target: 'p2', status: 'submitted', picks: [{ step: 0, item_id: 'garchomp' }, { step: 0, item_id: 'blissey' }] },
@@ -351,6 +359,21 @@ describe('players who left', () => {
   });
 });
 
+describe('the admin overview counts of a giver who left the league', () => {
+  it('leaves a giver who holds a link but is in no phase out of the actors, and keeps what they gave on the table', () => {
+    const submissions: RuntimeSubmission[] = [
+      { id: 'a', action: 'choose_gift', actor: 'p1', target: 'p2', status: 'submitted', picks: [] },
+      { id: 'b', action: 'choose_gift', actor: 'p2', target: 'p3', status: 'submitted', picks: [] },
+    ];
+    // p1 is still a named participant, holds the link p1 -> p2, but an admin took them out of every phase.
+    const ctx = context({ state: { submissions }, players: PLAYERS.filter((id) => id !== 'p1') });
+    const card = buildAdminOverview(ctx, 'admin-1', NAMES, { openChallenges: 0 }).actions[0];
+    expect(card).toMatchObject({ id: 'choose_gift', actors: 2, counts: { missing: 1, draft: 0, submitted: 1, locked: 0 } });
+    // p2 (submitted) and p3 (missing) are the givers who can still act; p1's submission is not counted, but it stays in the state.
+    expect(ctx.state.submissions.map((row) => row.actor)).toContain('p1');
+  });
+});
+
 describe('the challenge ladder', () => {
   const ladderContext = (): KitContext => {
     const base = context();
@@ -460,14 +483,34 @@ describe('admin builders', () => {
       {
         action: 'choose_gift',
         rows: [
-          { player: { id: 'p1', name: 'Name p1' }, state: 'draft', target: { id: 'p2', name: 'Name p2' } },
-          { player: { id: 'p2', name: 'Name p2' }, state: 'locked', target: { id: 'p3', name: 'Name p3' } },
+          { player: { id: 'p1', name: 'Name p1' }, state: 'draft', target: { id: 'p2', name: 'Name p2' }, involves_viewer: false },
+          { player: { id: 'p2', name: 'Name p2' }, state: 'locked', target: { id: 'p3', name: 'Name p3' }, involves_viewer: false },
         ],
       },
     ]);
     const json = JSON.stringify(unmasked);
     expect(json).not.toContain('picks');
     expect(json).not.toContain('garchomp');
+  });
+
+  it('marks the links and submission rows that involve the reading admin, and none for an admin who does not play', () => {
+    const marks = (viewer: string) => {
+      const unmasked = buildUnmasked(ctx, viewer, NAMES);
+      return {
+        links: unmasked.relations[0].links.map((l) => `${l.from?.id}>${l.to?.id}:${l.involves_viewer}`),
+        rows: unmasked.submissions[0].rows.map((r) => `${r.player.id}>${r.target?.id}:${r.involves_viewer}`),
+      };
+    };
+    // p1 gives to p2 and receives from p3; p1 acts on a, and p2 acts on b (p3 is b's target).
+    expect(marks('p1')).toEqual({ links: ['p1>p2:true', 'p2>p3:false', 'p3>p1:true'], rows: ['p1>p2:true', 'p2>p3:false'] });
+    // The recipient of an action row is marked too: the row would tell p2 who sends to them.
+    expect(marks('p2')).toEqual({ links: ['p1>p2:true', 'p2>p3:true', 'p3>p1:false'], rows: ['p1>p2:true', 'p2>p3:true'] });
+    expect(marks('p3')).toEqual({ links: ['p1>p2:false', 'p2>p3:true', 'p3>p1:true'], rows: ['p1>p2:false', 'p2>p3:true'] });
+    // A player who is in no link and no row (p4 draws nothing here) and an admin who does not play: nothing is marked.
+    expect(marks('p4')).toEqual({ links: ['p1>p2:false', 'p2>p3:false', 'p3>p1:false'], rows: ['p1>p2:false', 'p2>p3:false'] });
+    expect(marks('admin-1')).toEqual(marks('p4'));
+    // Marking never removes a row: the audited read still sends everything.
+    expect(buildUnmasked(ctx, 'p1', NAMES).relations[0].links).toHaveLength(3);
   });
 
   it('offers the form targets: stage rosters, players, the entries a resource holds, relations and actions', () => {

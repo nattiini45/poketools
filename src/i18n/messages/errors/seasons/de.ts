@@ -193,4 +193,19 @@ export default defineDe<typeof en>()({
     'Die Anfrage hat zu lange gedauert, das Ergebnis ist daher unbekannt. Lade die Seite neu, um zu sehen, ob es geklappt hat.',
   LEAGUE_TRASH_REBUILD_PENDING:
     'Statistiken und Ratings dieser gelöschten Liga wurden noch nicht neu aufgebaut. Führe zuerst den ausstehenden Neuaufbau aus und stelle die Liga danach wieder her.',
+  format_substitute_links_collide:
+    'Der Ersatzspieler hat in diesem Format bereits eine Verknüpfung, die mit der des ausscheidenden Spielers kollidiert, deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  format_substitute_items_collide:
+    'Der Ersatzspieler hält bereits Gegenstände einer Ressource, deren Grenze die Gegenstände des ausscheidenden Spielers überschreiten würden, deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  format_substitute_submissions_collide:
+    'Der Ersatzspieler hat für eine Aktion bereits gewählt, für die auch der ausscheidende Spieler gewählt hat (oder beide haben füreinander gewählt), deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  format_substitute_attrs_collide:
+    'Der Ersatzspieler hat bereits ein Formatattribut, das auch der ausscheidende Spieler hat, deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  format_substitute_tracks_collide:
+    'Der Ersatzspieler hat bereits Fortschritt auf einer Strecke, auf der auch der ausscheidende Spieler ist, deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  format_substitute_challenges_collide:
+    'Der Ersatzspieler hat bereits eine offene Herausforderung, die mit einer des ausscheidenden Spielers kollidiert, deshalb lassen sich die Formatdaten nicht übertragen. Es wurde nichts geändert.',
+  substitute_format_seat_kept:
+    'Der ausscheidende Spieler bleibt in {phases}, deshalb bleiben seine Formatdaten (Verknüpfungen, Gegenstände, Wahlen, Attribute, Fortschritt) bei ihm. Sie wechseln, sobald er aus der letzten dieser Phasen ausgewechselt wird.',
+  PHASE_ROSTER_REASON_REQUIRED: 'Eine erzwungene Änderung der Teilnehmerliste einer gestarteten Phase des Formats braucht eine Begründung mit 1 bis 500 Zeichen.',
 });

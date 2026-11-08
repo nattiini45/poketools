@@ -12,7 +12,9 @@ import {
   assertFormatPhaseUnchanged,
   assertSeasonPhasesFree,
   assertSeasonRosterMembers,
+  isFormatManagedPhase,
 } from '../phase-guards';
+import { rosterOverrideOf } from '../roster-override';
 
 const SEASON = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
 const OWNED = '11111111-1111-4111-8111-111111111111';
@@ -84,10 +86,48 @@ describe('assertFormatPhaseRosterOpen', () => {
   it('refuses a roster change of a started format phase, never reading the phases of an upcoming one', async () => {
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }))).toBe('format_phase_owned');
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'completed' }))).toBe('format_phase_owned');
+    // A force does not open a completed phase.
+    expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'completed' }, { force: true, reason: 'A valid reason' }))).toBe('format_phase_owned');
     vi.mocked(getKitPhases).mockClear();
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'upcoming' }))).toBeNull();
     expect(getKitPhases).not.toHaveBeenCalled();
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: HAND_MADE, status: 'active' }))).toBeNull();
+  });
+
+  it('lets a started format phase through with force and a reason, and hands the trimmed reason back for the audit', async () => {
+    const request = rosterOverrideOf({ force: true, reason: '  Added by mistake  ' });
+    expect(await assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }, request)).toEqual({ reason: 'Added by mistake' });
+  });
+
+  it('answers 400 PHASE_ROSTER_REASON_REQUIRED for force without a usable reason', async () => {
+    for (const reason of [undefined, '', '   ', 'x'.repeat(501), 42, null]) {
+      const request = rosterOverrideOf({ force: true, reason });
+      expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }, request)), String(reason)).toBe('PHASE_ROSTER_REASON_REQUIRED');
+    }
+  });
+
+  it('still refuses 409 when force is anything but the boolean true, and forces nothing where nothing is locked', async () => {
+    for (const force of ['true', 1, 'yes', null, undefined]) {
+      expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }, rosterOverrideOf({ force, reason: 'r' })))).toBe('format_phase_owned');
+    }
+    // An upcoming phase and a phase the format does not own need no override: nothing is overridden, so nothing is audited.
+    expect(await assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'upcoming' }, rosterOverrideOf({ force: true, reason: 'r' }))).toBeNull();
+    expect(await assertFormatPhaseRosterOpen(SEASON, { id: HAND_MADE, status: 'active' }, rosterOverrideOf({ force: true, reason: 'r' }))).toBeNull();
+  });
+});
+
+describe('rosterOverrideOf', () => {
+  it('reads force and reason from an object body only', () => {
+    expect(rosterOverrideOf({ force: true, reason: 'r' })).toEqual({ force: true, reason: 'r' });
+    expect(rosterOverrideOf({ reason: 'r' })).toEqual({ force: false, reason: 'r' });
+    for (const body of [null, undefined, 'force', 7, [true]]) expect(rosterOverrideOf(body)).toEqual({ force: false });
+  });
+});
+
+describe('isFormatManagedPhase', () => {
+  it('is true for a phase the format created only', async () => {
+    expect(await isFormatManagedPhase(SEASON, OWNED)).toBe(true);
+    expect(await isFormatManagedPhase(SEASON, HAND_MADE)).toBe(false);
   });
 });
 

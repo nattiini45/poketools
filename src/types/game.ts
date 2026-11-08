@@ -2,6 +2,7 @@ import type { Enums } from './database';
 import type { EvolutionEvent } from './evolution';
 import type { ImpossibleLineup } from '@/lib/reconcile/evolution-rebuild';
 import type { MatchChildrenCleanup } from '@/lib/match/match-children';
+import type { StageEndedWarning } from '@/lib/match/stage-ended-warning';
 
 export type GameSource = Enums<'game_source'>;
 export type AggregateScope = Enums<'aggregate_scope'>;
@@ -251,6 +252,16 @@ export interface DeleteGameResult {
    */
   format_revert_failed?: boolean;
   /**
+   * The ids of the played later bracket matches the change reset because the admin approved it
+   * (`confirm_downstream`), deepest first. Absent when no later match was reset.
+   */
+  downstream_reset_match_ids?: string[];
+  /**
+   * Set when the change took back a result in a format phase whose stage had already ended: nothing is reopened, and
+   * this says which players advanced to the next phase (catalogue warning `admin_game_stage_already_ended`).
+   */
+  stage_already_ended?: StageEndedWarning;
+  /**
    * Impossible lineups surfaced by the EPB evolution rebuild
    * (`repairSeasonEvolution`). Present only for evolution_point_buy seasons;
    * legacy seasons leave this undefined.
@@ -281,6 +292,11 @@ export interface ResetMatchResult {
    */
   format_revert_failed?: boolean;
   /**
+   * Set when the reset took back a result in a format phase whose stage had already ended: nothing is reopened, and
+   * this says which players advanced to the next phase (catalogue warning `admin_game_stage_already_ended`).
+   */
+  stage_already_ended?: StageEndedWarning;
+  /**
    * Per-type summary of the match-derived children cleaned by
    * `cleanMatchChildren` (prep teams, proposals, moments, animation views,
    * cleared pointers, social image). Present on every reset.
@@ -309,6 +325,8 @@ export interface ResetRoundResult {
   evolution_recheck_failed?: boolean;
   /** True when any reset match reported `format_revert_failed`. */
   format_revert_failed?: boolean;
+  /** Set when a reset match took back a result in a format phase whose stage had already ended (see `ResetMatchResult`). */
+  stage_already_ended?: StageEndedWarning;
 }
 
 export interface EditGameInput {
@@ -365,6 +383,10 @@ export interface EditGameResult {
    * `admin_game_format_revert_failed`.
    */
   format_revert_failed?: boolean;
+  /** The played later bracket matches the change reset because the admin approved it (see `DeleteGameResult`). */
+  downstream_reset_match_ids?: string[];
+  /** Set when the change took back a result in a format phase whose stage had already ended (see `DeleteGameResult`). */
+  stage_already_ended?: StageEndedWarning;
 }
 
 // ─── Match Analysis (AI) ────────────────────────────────────────────

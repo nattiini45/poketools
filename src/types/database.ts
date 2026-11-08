@@ -7428,6 +7428,16 @@ export type Database = {
         }
         Returns: boolean
       }
+      format_forfeit_complete: {
+        Args: {
+          p_expected_revision: number
+          p_expected_status: Database["public"]["Enums"]["match_status"]
+          p_match_id: string
+          p_season_id: string
+          p_winner_id: string
+        }
+        Returns: boolean
+      }
       format_publish_version: {
         Args: {
           p_actor: string
@@ -7444,6 +7454,17 @@ export type Database = {
         }[]
       }
       format_season_started: { Args: { p_season_id: string }; Returns: boolean }
+      format_substitute_seat: {
+        Args: {
+          p_dry_run?: boolean
+          p_in: string
+          p_league_scope: boolean
+          p_out: string
+          p_phase_ids: string[]
+          p_season_id: string
+        }
+        Returns: Json
+      }
       get_item_usage_for_pokemon: {
         Args: {
           p_limit?: number

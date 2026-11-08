@@ -12,7 +12,7 @@ import 'server-only';
 
 import { supabase } from '../client';
 import { readBoundedPages } from '../read-bounded-pages';
-import type { Json, Tables } from '@/types/database';
+import type { Database, Json, Tables } from '@/types/database';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { mapFormatDbError } from '@/lib/format-studio/errors';
@@ -381,6 +381,33 @@ export async function openFormatCheck(input: OpenFormatCheckInput): Promise<stri
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return (data as string | null) ?? null;
+}
+
+export interface CompleteFormatForfeitInput {
+  seasonId: string;
+  matchId: string;
+  /** The status the match was read in: the write is a compare-and-set on it. */
+  expectedStatus: Database['public']['Enums']['match_status'];
+  winnerId: string;
+  /** The format revision the forfeit was decided from. */
+  revision: number;
+}
+
+/**
+ * Completes a match as a deadline forfeit, in one transaction with the check that the league still runs that revision of
+ * its format on the kit engine. False when the match no longer has `expectedStatus` (nothing written);
+ * `FormatRuntimeError('format_context_stale')` when the format changed or the league left the kit (nothing written).
+ */
+export async function completeFormatForfeit(input: CompleteFormatForfeitInput): Promise<boolean> {
+  const { data, error } = await supabase.rpc('format_forfeit_complete', {
+    p_season_id: input.seasonId,
+    p_match_id: input.matchId,
+    p_expected_status: input.expectedStatus,
+    p_winner_id: input.winnerId,
+    p_expected_revision: input.revision,
+  });
+  if (error) throw mapFormatRuntimeDbError(error);
+  return data === true;
 }
 
 export interface ResolveFormatCheckInput {

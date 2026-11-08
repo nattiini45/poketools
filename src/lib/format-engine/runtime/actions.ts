@@ -14,7 +14,13 @@
  * that is still locked) is answered with `domain_locked` ALONE and no per-pick check at all: a pick is never told that
  * it is, or is not, a member of a hidden pool (`item_outside_domain`, `where_false`, `resource_item_taken` and the rest
  * would otherwise let a player probe the pool id by id). The system (the deadline pick of the cron, which draws from the
- * full list) passes `audience: 'system'` and gets the full per-pick checks. Pure and client-safe.
+ * full list) passes `audience: 'system'` and gets the full per-pick checks.
+ *
+ * Who may act (`actorAccess`, the one rule the submit path, the cron's deadline pick and the player and admin views share):
+ * an action `via` a relation needs the actor's link AND a place in the league (enrolled in a phase of the format); one
+ * without `via` needs the roster. A player who is no longer in the league and still holds a link stops acting
+ * (`actor_not_in_league`): their submissions are refused, the cron draws nothing for them, and what they already gave
+ * stays. The recipient they leave is the admin's to handle. Pure and client-safe.
  */
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import type { DomainEntry, FormatDefinition, PlayerActionRule } from '@/lib/format-kit/types';
@@ -28,6 +34,7 @@ export type ActionIssueCode =
   | 'action_unknown'
   | 'window_closed'
   | 'actor_without_link'
+  | 'actor_not_in_league'
   | 'step_unknown'
   | 'wrong_count'
   | 'resource_unknown'
@@ -81,6 +88,29 @@ export function resolveActionTarget(
   return link === undefined ? { ok: false } : { ok: true, target: link.to };
 }
 
+export type ActorAccess = { ok: true; target: string | null } | { ok: false; code: 'actor_without_link' | 'actor_not_in_league' };
+
+/**
+ * May `actorId` act on `rule`, and for whom. `roster` is the players enrolled in the format's phases (`rosterOf`).
+ * - an action without `via`: the actor is on the roster (an empty roster, before anybody is enrolled, lets everybody in);
+ * - an action `via` a relation: the actor holds a link of it (`actor_without_link` otherwise) and is on the roster
+ *   (`actor_not_in_league` otherwise, even with a link: a removed or substituted player keeps their link, not their turn).
+ * The target is the `to` side of the link, null for a self action.
+ */
+export function actorAccess(
+  rule: PlayerActionRule,
+  actorId: string,
+  state: Pick<KitRuntimeState, 'links'>,
+  roster: readonly string[],
+): ActorAccess {
+  if (rule.via === undefined) {
+    return roster.length > 0 && !roster.includes(actorId) ? { ok: false, code: 'actor_without_link' } : { ok: true, target: null };
+  }
+  const access = resolveActionTarget(rule, actorId, state);
+  if (!access.ok) return { ok: false, code: 'actor_without_link' };
+  return roster.includes(actorId) ? access : { ok: false, code: 'actor_not_in_league' };
+}
+
 /** Who is picking: a `player` sees what `visibleEntries` lets them, the `system` (a deadline pick) the whole list. */
 export type ActionAudience = 'player' | 'system';
 
@@ -104,8 +134,8 @@ export function validateActionSubmission(
   if (rule === null) return { ok: false, issues: [{ code: 'action_unknown' }] };
   const issues: ActionIssue[] = [];
   if (!isActionWindowOpen(rule, state)) issues.push({ code: 'window_closed' });
-  const access = resolveActionTarget(rule, actorId, state);
-  if (!access.ok || (rule.via === undefined && roster.length > 0 && !roster.includes(actorId))) issues.push({ code: 'actor_without_link' });
+  const access = actorAccess(rule, actorId, state, roster);
+  if (!access.ok) issues.push({ code: access.code });
   const target = access.ok ? access.target : null;
   const beneficiary = target ?? actorId;
 

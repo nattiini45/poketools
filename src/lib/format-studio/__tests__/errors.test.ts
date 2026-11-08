@@ -24,7 +24,7 @@ describe('code list', () => {
       'season_format_type_locked',
     ];
     expect([...FORMAT_ERROR_CODES].sort()).toEqual(fromCatalogs.sort());
-    expect(FORMAT_ERROR_CODES).toHaveLength(34);
+    expect(FORMAT_ERROR_CODES).toHaveLength(40);
     expect(FORMAT_ERROR_CODES).not.toContain('format_mismatch');
   });
 
@@ -80,6 +80,12 @@ describe('code list', () => {
       format_phases_in_use: 409,
       format_phase_owned: 409,
       format_runtime_has_data: 409,
+      format_substitute_links_collide: 409,
+      format_substitute_items_collide: 409,
+      format_substitute_submissions_collide: 409,
+      format_substitute_attrs_collide: 409,
+      format_substitute_tracks_collide: 409,
+      format_substitute_challenges_collide: 409,
       season_format_type_locked: 409,
     });
   });

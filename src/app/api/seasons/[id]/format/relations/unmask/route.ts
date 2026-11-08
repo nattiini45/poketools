@@ -23,8 +23,11 @@ interface RouteParams {
  *
  * League admin (or site admin). The explicit, audited read of the hidden relation sides: every relation with both sides
  * and, per action, the state and target of each current participant (never the picks). A POST because it has a side
- * effect (the audit entry); a GET could be fired by a link or a prefetch. The panel's default view stays masked, so an
- * admin who also plays is not shown their own game. Never cached.
+ * effect (the audit entry); a GET could be fired by a link or a prefetch. The panel's default view stays masked, and every
+ * link and submission row carries `involves_viewer` (the reading admin is its giver, recipient, actor or target). The
+ * route sends all rows regardless: the panel leaves the admin's own rows out of its lists until they choose to show
+ * them, so an admin who also plays and looks at something else is not spoiled. The marker is for the display, not a
+ * filter, and it is not stored. An admin who does not play is in no row. Never cached.
  *
  * Fail-closed: the audit entry is written and AWAITED (`logAuditEventStrict`) BEFORE the body is returned, and the
  * body is only built into a response once that write succeeded. When the write fails the answer is a 503 with no data

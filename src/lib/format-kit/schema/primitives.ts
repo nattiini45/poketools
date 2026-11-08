@@ -606,7 +606,6 @@ export const playerActionRuleSchema = z.strictObject({
     .strictObject({ opens_on: eventSpecSchema.optional(), closes_on: eventSpecSchema.optional() })
     .default(() => ({})),
   steps: boundedArray(actionStepSchema, 1, MAX_ACTION_STEPS),
-  review: z.boolean().default(true),
   lock: z.enum(['on_submit', 'on_close']).default('on_submit'),
 });
 

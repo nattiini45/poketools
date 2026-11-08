@@ -20,6 +20,7 @@ import {
   revertRoundIfCompleted,
 } from '@/lib/pkmn/game-pipeline';
 import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
+import { loadStageEndedWarning } from '@/lib/match/stage-ended';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import type { ReopenMatchResult, ReopenStep } from '@/lib/admin/match-detail';
@@ -51,6 +52,8 @@ export { MatchReopenDownstreamPlayedError, MatchStateChangedError };
  *      isolated and logged; a failed one is reported in `failed_steps` and the
  *      others still run. Achievements are permanent and
  *      a Discord / social announcement already sent cannot be retracted.
+ *   5. a completed match of a format phase whose stage already ended is still reopened (nothing reopens the phase): the
+ *      result carries `stage_already_ended`, the players who advanced on the strength of the old result.
  */
 export async function reopenMatch(matchId: string, adminId: string): Promise<ReopenMatchResult> {
   const match = await getMatchById(matchId);
@@ -173,6 +176,11 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     const recheck = await recheckEvolutions(tournament.season_id, match.player_1_id, match.player_2_id);
     if (recheck.failed) throw new Error('Evolution recheck reported a failure');
   });
+
+  // The stage of an ended format phase is not reopened by this: the admin is told who advanced on the strength of the
+  // result that was taken back. Never throws (a failed read is logged and reported as an unreadable advancement).
+  const stageEnded = await loadStageEndedWarning(tournament, true);
+  if (stageEnded) result.stage_already_ended = stageEnded;
 
   return result;
 }

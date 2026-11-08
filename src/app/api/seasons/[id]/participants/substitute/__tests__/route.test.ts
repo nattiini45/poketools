@@ -66,6 +66,15 @@ function post(dryRun: boolean) {
   );
 }
 
+const FORMAT_ROWS = {
+  relation_links: 1,
+  resource_items: 2,
+  action_submissions: 1,
+  player_attrs: 0,
+  track_progress: 0,
+  challenges: 0,
+};
+
 const previewSummary = {
   roster_swapped: true,
   phases: [],
@@ -145,6 +154,83 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
     expect(getStagesBySeasonId).not.toHaveBeenCalled();
   });
 
+  describe('the seat of a league with a custom format', () => {
+    const withFormat = {
+      ...previewSummary,
+      format: { moved: true, total: 4, rows: FORMAT_ROWS, kept_phase_ids: [] },
+    };
+
+    it('answers a preview with the format summary and writes no audit entry', async () => {
+      vi.mocked(substituteParticipant).mockResolvedValue(withFormat);
+
+      const res = await post(true);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json.data.format).toEqual({ moved: true, total: 4, rows: FORMAT_ROWS, kept_phase_ids: [] });
+      expect(logAuditEvent).not.toHaveBeenCalled();
+    });
+
+    it('says in the response and in the audit entry that format data moved and how many rows', async () => {
+      vi.mocked(substituteParticipant).mockResolvedValue(withFormat);
+
+      const res = await post(false);
+      const json = await res.json();
+
+      expect(json.data.format).toEqual({ moved: true, total: 4, rows: FORMAT_ROWS, kept_phase_ids: [] });
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({
+            format: { moved: true, total: 4, rows: FORMAT_ROWS, kept_phase_ids: [] },
+          }),
+        }),
+      );
+    });
+
+    it('returns the warning of a seat that stayed, and audits it as not moved', async () => {
+      const kept = {
+        ...previewSummary,
+        format: { moved: false, total: 0, rows: { ...FORMAT_ROWS, relation_links: 0, resource_items: 0, action_submissions: 0 }, kept_phase_ids: [STAGE_2_ID] },
+        warnings: [{ code: 'substitute_format_seat_kept', params: { phases: 'Finals' } }],
+      };
+      vi.mocked(substituteParticipant).mockResolvedValue(kept as never);
+
+      const res = await post(false);
+      const json = await res.json();
+
+      expect(json.data.warnings).toEqual([{ code: 'substitute_format_seat_kept', params: { phases: 'Finals' } }]);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          metadata: expect.objectContaining({ format: expect.objectContaining({ moved: false, total: 0 }) }),
+        }),
+      );
+    });
+
+    it('adds no format entry to the audit of a league without a format', async () => {
+      await post(false);
+
+      const metadata = vi.mocked(logAuditEvent).mock.calls[0][0].metadata as Record<string, unknown>;
+      expect(metadata).not.toHaveProperty('format');
+    });
+
+    it('answers a collision with its own 409 code and nothing written (a refused preview too)', async () => {
+      const collision = new UserFacingError('The incoming player already has a link in this format that would collide with the outgoing player\'s, so the format data cannot move. Nothing was changed.', {
+        code: 'format_substitute_links_collide',
+        status: 409,
+      });
+      vi.mocked(substituteParticipant).mockRejectedValue(collision);
+
+      const apply = await post(false);
+      expect(apply.status).toBe(409);
+      expect(await apply.json()).toMatchObject({ success: false, code: 'format_substitute_links_collide', partial: null });
+      expect(logAuditEvent).not.toHaveBeenCalled();
+
+      const preview = await post(true);
+      expect(preview.status).toBe(409);
+      expect(await preview.json()).toMatchObject({ code: 'format_substitute_links_collide' });
+    });
+  });
+
   describe('a failed apply', () => {
     it("expires the season and every stage's reads, then returns the substitution's error", async () => {
       vi.mocked(substituteParticipant).mockRejectedValue(slotChangedError());
@@ -174,6 +260,7 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
     it('records the steps that landed before the failure as a partial substitution, with the step it stopped at', async () => {
       vi.mocked(substituteParticipant).mockImplementation(async (input: SubstituteInput) => {
         const log = input.log!;
+        log.format_moved = { total: 4, rows: FORMAT_ROWS };
         log.proposals_cancelled.push('match-1');
         log.matches_repaired.push('match-1');
         log.groups_handed_over.push({ phase_id: STAGE_1_ID, group_id: 'group-1' });
@@ -195,6 +282,7 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
         code: 'GROUP_SLOT_CHANGED',
         partial: {
           written: {
+            format_moved: { total: 4, rows: FORMAT_ROWS },
             proposals_cancelled: ['match-1'],
             matches_repaired: ['match-1'],
             matches_skipped: [],
@@ -223,6 +311,7 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
           failure_code: 'GROUP_SLOT_CHANGED',
           phase_ids: [STAGE_1_ID, STAGE_2_ID],
           written: {
+            format_moved: { total: 4, rows: FORMAT_ROWS },
             proposals_cancelled: ['match-1'],
             matches_repaired: ['match-1'],
             matches_skipped: [],
@@ -257,6 +346,7 @@ describe('POST /api/seasons/[id]/participants/substitute', () => {
         error: 'Failed to substitute participant',
         partial: {
           written: {
+            format_moved: null,
             proposals_cancelled: ['match-1'],
             matches_repaired: [],
             matches_skipped: [],

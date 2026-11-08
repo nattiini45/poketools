@@ -52,6 +52,8 @@ vi.mock('@/lib/reconcile/evolution-rebuild', () => ({
 
 vi.mock('@/lib/format-engine/runtime/hooks', () => ({ revertMatchCompletion: vi.fn() }));
 
+vi.mock('@/lib/match/stage-ended', () => ({ loadStageEndedWarning: vi.fn(async () => null) }));
+
 import { MatchReopenDownstreamPlayedError, MatchStateChangedError, reopenMatch } from '../reopen';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
@@ -74,6 +76,7 @@ import {
 } from '@/lib/pkmn/game-pipeline';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
 import { revertMatchCompletion } from '@/lib/format-engine/runtime/hooks';
+import { loadStageEndedWarning } from '@/lib/match/stage-ended';
 import * as gameQueries from '@/lib/supabase/queries/games';
 import { deleteGame, editGame, resetMatch } from '@/lib/pkmn/game-pipeline';
 
@@ -465,5 +468,54 @@ describe('reopenMatch refusals', () => {
     vi.mocked(getMatchById).mockResolvedValue(makeMatch('completed') as never);
     vi.mocked(getTournamentById).mockResolvedValue(null);
     await expect(reopenMatch(MATCH_ID, 'admin-1')).rejects.toThrow('Tournament not found');
+  });
+});
+
+describe('reopenMatch in a format phase whose stage already ended', () => {
+  const endedPhase = { ...tournament, season_format_type: 'custom', status: 'completed' };
+  const notice = {
+    phase_id: 'tourn-1',
+    phase_name: 'Group stage',
+    advanced: [{ phase_id: 'phase-2', phase_name: 'Playoffs', players: [{ id: 'p1', name: 'Ash' }] }],
+  };
+
+  beforeEach(() => {
+    vi.mocked(getTournamentById).mockResolvedValue(endedPhase as never);
+    // The read itself is tested apart (`stage-ended.test.ts`): here it answers only for a result that was taken back.
+    vi.mocked(loadStageEndedWarning).mockImplementation(async (_phase, resultTakenBack) => (resultTakenBack ? notice : null));
+  });
+
+  it('still reopens the match, nothing reopens the phase, and the result says who advanced', async () => {
+    const result = await reopenMatch(MATCH_ID, 'admin-1');
+
+    expect(result.stage_already_ended).toEqual(notice);
+    expect(result.failed_steps).toEqual([]);
+    expect(loadStageEndedWarning).toHaveBeenCalledWith(expect.objectContaining({ id: 'tourn-1', status: 'completed' }), true);
+    expect(transitionMatchStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it('still carries the notice when a follow-up step failed', async () => {
+    vi.mocked(deleteMatchSnapshots).mockRejectedValueOnce(new Error('snapshots'));
+
+    const result = await reopenMatch(MATCH_ID, 'admin-1');
+
+    expect(result.failed_steps).toEqual(['cleanup']);
+    expect(result.stage_already_ended).toEqual(notice);
+  });
+
+  it.each(['pending_confirmation', 'disputed'])('has no result to take back for a %s match, so no notice', async (status) => {
+    vi.mocked(getMatchById).mockResolvedValue(makeMatch(status) as never);
+
+    const result = await reopenMatch(MATCH_ID, 'admin-1');
+
+    expect(result).not.toHaveProperty('stage_already_ended');
+    expect(loadStageEndedWarning).not.toHaveBeenCalled();
+  });
+
+  it('writes nothing and warns of nothing when the reopen is refused', async () => {
+    vi.mocked(transitionMatchStatus).mockResolvedValueOnce(null as never);
+
+    await expect(reopenMatch(MATCH_ID, 'admin-1')).rejects.toBeInstanceOf(MatchStateChangedError);
+    expect(loadStageEndedWarning).not.toHaveBeenCalled();
   });
 });

@@ -9,8 +9,10 @@
 import 'server-only';
 
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { FormatAdjustmentRow, FormatCheckRow } from './format-runtime';
+import type { FiredEventRecord } from '@/lib/format-engine/runtime/late-joiners';
 
 /** The largest page a list read returns. */
 export const FORMAT_LIST_MAX_LIMIT = 100;
@@ -94,6 +96,28 @@ export async function listFormatAdjustments(seasonId: string, page: FormatListPa
   }
   if (error) throw error;
   return { rows: data ?? [], total: count ?? data?.length ?? 0 };
+}
+
+/**
+ * The league's event log without the per-match events (`match_completed`, one row per completed match): the key, kind,
+ * payload and applied ops of every one-time event (stage and round starts and ends, locks, calendar marks), oldest first.
+ * The admin overview reads it to list the late joiners; a league without a format or a malformed id answers empty.
+ */
+export async function listFiredFormatEvents(seasonId: string): Promise<FiredEventRecord[]> {
+  if (!isValidUuid(seasonId)) return [];
+  const { rows } = await readBoundedPages<FiredEventRecord>(
+    (from, to) =>
+      supabase
+        .from('format_event_log')
+        .select('event_key, event, payload, ops')
+        .eq('season_id', seasonId)
+        .neq('event', 'match_completed')
+        .order('fired_at')
+        .order('event_key')
+        .range(from, to),
+    { label: 'format-runtime fired events' },
+  );
+  return rows;
 }
 
 export interface SeasonPlayState {

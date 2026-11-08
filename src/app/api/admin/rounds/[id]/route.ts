@@ -7,6 +7,7 @@ import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/roun
 import { deleteRoundWithMatches, getMatchesByRound } from '@/lib/supabase/queries/matches';
 import { getGamesByMatch } from '@/lib/supabase/queries/games';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
+import type { StageEndedWarning } from '@/lib/match/stage-ended-warning';
 import { rebuildAggregatesForScope } from '@/lib/match/aggregate-rebuild';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { updateTournament } from '@/lib/supabase/queries/tournaments';
@@ -83,10 +84,14 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     // A kit league's format effects of a completed result are taken back inside `resetMatch`. When that fails it is
     // reported, not thrown, and the format cron cannot retry it once the match row is gone (it sweeps `matches`), so
     // the delete goes ahead and the admin is told through the response (`admin_game_format_revert_failed`).
+    // A result taken back in a format phase whose stage already ended keeps the players it advanced; the first such notice
+    // of the round is returned (like the round reset does), so the admin learns who stayed advanced.
     let formatRevertFailed = false;
+    let stageEnded: StageEndedWarning | null = null;
     for (const match of nonScheduled) {
       const reset = await resetMatch(match.id, player.playerId);
       if (reset?.format_revert_failed) formatRevertFailed = true;
+      stageEnded ??= reset?.stage_already_ended ?? null;
     }
 
     // Through the query layer: it releases the matches' team rows first, so a match-prep row never survives as a second
@@ -126,12 +131,17 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       metadata: {
         tournament_id: round.tournament_id,
         ...(formatRevertFailed ? { format_revert_failed: true } : {}),
+        ...(stageEnded ? { stage_already_ended: true } : {}),
       },
     });
 
-    return NextResponse.json<ApiResult<{ deleted: true; format_revert_failed?: boolean }>>({
+    return NextResponse.json<ApiResult<{ deleted: true; format_revert_failed?: boolean; stage_already_ended?: StageEndedWarning }>>({
       success: true,
-      data: { deleted: true, ...(formatRevertFailed ? { format_revert_failed: true } : {}) },
+      data: {
+        deleted: true,
+        ...(formatRevertFailed ? { format_revert_failed: true } : {}),
+        ...(stageEnded ? { stage_already_ended: stageEnded } : {}),
+      },
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to delete round');

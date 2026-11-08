@@ -51,7 +51,10 @@ import { normalizeReplayUrlOrId } from '@/lib/pkmn/replay-reference';
 import { ReplayEngineTieError, resultFromBoundReplay, type BoundReplay } from '@/lib/pkmn/replay-binding';
 import { recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { readOutcomeMark, takeBackMarkedOutcome } from '@/lib/match/outcome-takeback';
-import { MatchReopenDownstreamPlayedError, MatchStateChangedError } from '@/lib/match/state-errors';
+import { GameChangeDownstreamPlayedError, MatchStateChangedError } from '@/lib/match/state-errors';
+import type { DownstreamMatchSummary } from '@/lib/match/downstream-matches';
+import { loadStageEndedWarning } from '@/lib/match/stage-ended';
+import type { StageEndedWarning } from '@/lib/match/stage-ended-warning';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
@@ -1128,24 +1131,178 @@ export async function preflightUncompleteRebuild(match: {
   await planRatingRebuild([match.player_1_id, match.player_2_id], { excludeMatchIds: [match.id] });
 }
 
+/** Options of an admin game edit or delete. */
+export interface GameChangeOptions {
+  /**
+   * The admin approved resetting the played later bracket matches the change affects (the request carried the confirm
+   * flag). Without it such a change is refused with nothing written (`GameChangeDownstreamPlayedError`).
+   */
+  confirmDownstream?: readonly string[];
+  /**
+   * Called with the id of each later match right after its reset committed, so a caller can audit the cascade even when
+   * a later step of the change fails.
+   */
+  onDownstreamMatchReset?: (matchId: string) => void;
+}
+
+/** What `preflightGameChange` found for a game change of a completed match (empty for any other match). */
+interface GameChangePlan {
+  /** The participants `dropCompletedResultEffects` needs. */
+  participants: ParticipantWithSeed[];
+  /** The played later bracket matches the approved change resets, deepest first. */
+  downstream: MatchWithPlayers[];
+}
+
+/** The later matches as the refusal and the approval prompt name them: round, both players, status. */
+async function summarizeDownstream(
+  tournamentId: string,
+  matches: readonly MatchWithPlayers[]
+): Promise<DownstreamMatchSummary[]> {
+  const rounds = await getRoundsByTournament(tournamentId);
+  const roundNameById = new Map(rounds.map((round) => [round.id, round.name]));
+  return matches.map((child) => ({
+    id: child.id,
+    round_name: roundNameById.get(child.round_id) ?? '',
+    player_1_name: child.player_1_name,
+    player_2_name: child.player_2_name,
+    status: child.status,
+  }));
+}
+
 /**
- * Everything checked BEFORE an admin game change writes, on a match that may be completed: the rating preflight
- * (`preflightUncompleteRebuild`) and, for a bracket match, that no later bracket match its winner advanced into was
- * played. A game change of a completed match always takes it off `completed` (back to `pending_confirmation` or
- * `in_progress`, or `scheduled` without games), exactly like a reopen, so it is refused the same way: with nothing
- * written, 409 `match_reopen_downstream_played` (the admin resets those matches first). Returns the participants
- * `dropCompletedResultEffects` needs; `[]` for a match that is not completed.
+ * Everything checked BEFORE an admin game change writes, on a match that may be completed (read-only): the rating
+ * preflight and, for a bracket match, which later bracket matches its winner advanced into were played. A game change of
+ * a completed match always takes it off `completed` (back to `pending_confirmation` or `in_progress`, or `scheduled`
+ * without games), exactly like a reopen, and so orphans that played bracket path. The change is therefore refused with
+ * nothing written (409 `game_change_downstream_played`, listing those matches) until the admin approves resetting them
+ * (`confirmDownstream`); an approved change resets them as a cascading `resetMatch` does (`resetPlayedDownstream`).
+ *
+ * The rating plan is the one `resetMatch` makes for a cascade: the players of this match and of every later match the
+ * approved change resets, with all those matches left out. It runs before the refusal, so an admin is never asked to
+ * approve a cascade whose rating history no rebuild order can fill (`RatingHistoryIntegrityError`, 409).
+ *
+ * Read-only on purpose, so `editGame` runs it BEFORE it claims the game's edit lease: the claim moves the game's
+ * `updated_at`, and a refused edit that had claimed it would make the editor's resend with the confirm flag stale.
  */
 async function preflightGameChange(
   match: MatchWithPlayers,
-  tournament: Tournament
-): Promise<ParticipantWithSeed[]> {
-  await preflightUncompleteRebuild(match);
-  if (match.status !== 'completed') return [];
+  tournament: Tournament,
+  confirmDownstream: readonly string[] | undefined
+): Promise<GameChangePlan> {
+  if (match.status !== 'completed') return { participants: [], downstream: [] };
   const participants = await getParticipants(match.tournament_id);
-  const playedDownstream = await collectPlayedDownstreamMatches(match, tournament, participants);
-  if (playedDownstream.length > 0) throw new MatchReopenDownstreamPlayedError(playedDownstream.length);
-  return participants;
+  const downstream = await collectPlayedDownstreamMatches(match, tournament, participants);
+  if (downstream.length === 0) {
+    await preflightUncompleteRebuild(match);
+    return { participants, downstream };
+  }
+  const resetMatches = [match, ...downstream];
+  await planRatingRebuild(
+    [...new Set(resetMatches.flatMap((m) => [m.player_1_id, m.player_2_id]))],
+    { excludeMatchIds: resetMatches.map((m) => m.id) }
+  );
+  // The approval covers the matches the admin was shown: one played since is not reset unseen, the admin is asked again.
+  const approved = new Set(confirmDownstream);
+  if (downstream.some((m) => !approved.has(m.id))) {
+    throw new GameChangeDownstreamPlayedError(await summarizeDownstream(match.tournament_id, downstream));
+  }
+  return { participants, downstream };
+}
+
+/**
+ * The refusals of an admin game edit that need only the match: a winner who is not one of its two players, and battle stats of
+ * a player who is not. They come BEFORE the preflight, the lease and every write, because the later steps cannot be taken
+ * back: an approved cascade resets the later bracket matches first, and a winner or stats row that names an unknown player
+ * would fail on its foreign key only after that and after the game's aggregates were rolled back. The winner is checked only
+ * when it changes (a resend of the stored winner writes nothing); the stats are replaced as a whole, so each row is checked.
+ */
+function assertEditNamesMatchPlayers(input: EditGameInput, game: Game, match: MatchWithPlayers): void {
+  const players = new Set([match.player_1_id, match.player_2_id]);
+  if (input.winner_id && input.winner_id !== game.winner_id && !players.has(input.winner_id)) {
+    throw new UserFacingError('Winner must be one of the match participants', { code: 'match_winner_not_participant', status: 400 });
+  }
+  if (input.battle_stats?.some((stat) => !players.has(stat.player_id))) {
+    throw new UserFacingError('Battle stats must belong to the two players of the match', {
+      code: 'admin_game_stats_player_not_participant',
+      status: 400,
+    });
+  }
+}
+
+/** What `resetPlayedDownstream` reset, and what its resets reported. */
+interface DownstreamReset {
+  matchIds: string[];
+  formatRevertFailed: boolean;
+  evolutionRecheckFailed: boolean;
+  stageEnded: StageEndedWarning | null;
+}
+
+/**
+ * Reset the played later bracket matches of `collectPlayedDownstreamMatches`, in its order (deepest first, so children go
+ * before parents), each as a cascading `resetMatch` does: the shared step of a cascading reset and of an approved game
+ * change. A match another request reset meanwhile is skipped. Stops at the first failure; the matches reset before it
+ * stay reset and were reported through `onReset`.
+ */
+async function resetPlayedDownstream(
+  playedDownstream: readonly MatchWithPlayers[],
+  adminId: string,
+  onReset?: (matchId: string) => void
+): Promise<DownstreamReset> {
+  const outcome: DownstreamReset = {
+    matchIds: [],
+    formatRevertFailed: false,
+    evolutionRecheckFailed: false,
+    stageEnded: null,
+  };
+  for (const child of playedDownstream) {
+    const latest = await getMatchById(child.id);
+    if (!latest || latest.status === 'scheduled') continue;
+    try {
+      const reset = await resetMatch(child.id, adminId, true);
+      outcome.matchIds.push(child.id);
+      onReset?.(child.id);
+      if (reset.format_revert_failed) outcome.formatRevertFailed = true;
+      if (reset.evolution_recheck_failed) outcome.evolutionRecheckFailed = true;
+      outcome.stageEnded ??= reset.stage_already_ended ?? null;
+    } catch (err) {
+      // Reset by a concurrent request between the read above and this call.
+      if (err instanceof MatchAlreadyScheduledError) continue;
+      throw err;
+    }
+  }
+  return outcome;
+}
+
+/**
+ * The approved part of an admin game change: reset the played later bracket matches (`resetPlayedDownstream`), then make
+ * sure the changed match is still the one the preflight read. The resets can take seconds, and a result that landed
+ * meanwhile must answer 409 with the game intact (the compare-and-set of the status write still decides).
+ */
+async function resetDownstreamForGameChange(
+  match: MatchWithPlayers,
+  plan: GameChangePlan,
+  adminId: string,
+  options: GameChangeOptions
+): Promise<DownstreamReset | null> {
+  if (plan.downstream.length === 0) return null;
+  const reset = await resetPlayedDownstream(plan.downstream, adminId, options.onDownstreamMatchReset);
+  const latest = await getMatchById(match.id);
+  if (latest && latest.status !== match.status) throw new MatchStateChangedError(latest.status);
+  return reset;
+}
+
+/** The result fields the approved cascade of a game change adds to `DeleteGameResult` / `EditGameResult`. */
+function downstreamResetFields(reset: DownstreamReset | null): {
+  downstream_reset_match_ids?: string[];
+  format_revert_failed?: true;
+  evolution_recheck_failed?: true;
+} {
+  if (reset === null || reset.matchIds.length === 0) return {};
+  return {
+    downstream_reset_match_ids: reset.matchIds,
+    ...(reset.formatRevertFailed ? { format_revert_failed: true as const } : {}),
+    ...(reset.evolutionRecheckFailed ? { evolution_recheck_failed: true as const } : {}),
+  };
 }
 
 /**
@@ -1215,7 +1372,8 @@ export async function revertRoundIfCompleted(roundId: string): Promise<void> {
  */
 export async function deleteGame(
   gameId: string,
-  adminId: string
+  adminId: string,
+  options: GameChangeOptions = {}
 ): Promise<DeleteGameResult> {
   const game = await getGameById(gameId);
   if (!game) throw new GameNotFoundError();
@@ -1224,7 +1382,11 @@ export async function deleteGame(
   // Read before any mutation: a failed read aborts with nothing deleted.
   const round = await requireRound(match.round_id);
   const wasCompleted = match.status === 'completed';
-  const participants = await preflightGameChange(match, tournament);
+  const plan = await preflightGameChange(match, tournament, options.confirmDownstream);
+  const { participants } = plan;
+
+  // 0. An approved change first resets the played later bracket matches, deepest first, as a cascading reset does.
+  const downstreamReset = await resetDownstreamForGameChange(match, plan, adminId, options);
 
   // 1. Rollback aggregates + delete data (aggregates first for safety)
   await rollbackAndDeleteGame(gameId, match.tournament_id, tournament.season_id);
@@ -1288,13 +1450,21 @@ export async function deleteGame(
   // for legacy seasons where no whole-season rebuild runs).
   const summaryImpossibleLineups = impossibleLineups ?? [];
 
+  // The stage of an ended format phase is not reopened: the admin is told who advanced on the strength of the old result.
+  const stageEnded =
+    (await loadStageEndedWarning(tournament, wasCompleted && status !== 'completed')) ??
+    downstreamReset?.stageEnded ??
+    null;
+
   return {
     match_status: status,
     ...(statusConflict ? { match_status_conflict: true } : {}),
     games_remaining: remaining.length,
     evolution_events: evolutionEvents,
+    ...downstreamResetFields(downstreamReset),
     ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
     ...(formatReverted ? {} : { format_revert_failed: true }),
+    ...(stageEnded ? { stage_already_ended: stageEnded } : {}),
     impossibleLineups,
     recalculation: {
       gamesDeleted: 1,
@@ -1471,19 +1641,9 @@ export async function resetMatch(
     );
   }
 
-  if (playedDownstream.length > 0) {
-    for (const child of playedDownstream) {
-      const latest = await getMatchById(child.id);
-      if (!latest || latest.status === 'scheduled') continue;
-      try {
-        await resetMatch(child.id, adminId, true);
-      } catch (err) {
-        // Reset by a concurrent request between the read above and this call.
-        if (err instanceof MatchAlreadyScheduledError) continue;
-        throw err;
-      }
-    }
-  }
+  // The later matches go first, deepest first (`resetPlayedDownstream`, shared with an approved admin game change). What
+  // their resets reported (a failed format revert, a failed evolution recheck) is part of this reset's result.
+  const downstreamReset = await resetPlayedDownstream(playedDownstream, adminId);
 
   // Re-read before anything is destroyed: the preflight and the cascade above can take seconds, and a result that landed
   // meanwhile must answer 409 with its games intact. The compare-and-set in step 3 still decides; if a completion slips into
@@ -1625,12 +1785,16 @@ export async function resetMatch(
   // for legacy seasons where no whole-season rebuild runs).
   const summaryImpossibleLineups = impossibleLineups ?? [];
 
+  // The stage of an ended format phase is not reopened: the admin is told who advanced on the strength of the old result.
+  const stageEnded = (await loadStageEndedWarning(tournament, wasCompleted)) ?? downstreamReset.stageEnded;
+
   return {
     games_deleted: games.length,
     has_downstream_matches: downstream,
     evolution_events: evolutionEvents,
-    ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
-    ...(formatReverted ? {} : { format_revert_failed: true }),
+    ...(evolutionRecheckFailed || downstreamReset.evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
+    ...(formatReverted && !downstreamReset.formatRevertFailed ? {} : { format_revert_failed: true }),
+    ...(stageEnded ? { stage_already_ended: stageEnded } : {}),
     childrenCleanup,
     impossibleLineups,
     recalculation: {
@@ -1693,6 +1857,7 @@ export async function resetRound(
   const allEvolutionEvents: EvolutionEvent[] = [];
   let evolutionRecheckFailed = false;
   let formatRevertFailed = false;
+  let stageEnded: StageEndedWarning | null = null;
 
   // Cascade can touch shared downstream matches, so stay sequential.
   // Without cascade, keep the existing bounded parallel chunks.
@@ -1703,6 +1868,7 @@ export async function resetRound(
       allEvolutionEvents.push(...result.evolution_events);
       if (result.evolution_recheck_failed) evolutionRecheckFailed = true;
       if (result.format_revert_failed) formatRevertFailed = true;
+      stageEnded ??= result.stage_already_ended ?? null;
     }
   } else {
     const CHUNK_SIZE = 4;
@@ -1716,6 +1882,7 @@ export async function resetRound(
         allEvolutionEvents.push(...result.evolution_events);
         if (result.evolution_recheck_failed) evolutionRecheckFailed = true;
         if (result.format_revert_failed) formatRevertFailed = true;
+        stageEnded ??= result.stage_already_ended ?? null;
       }
     }
   }
@@ -1729,6 +1896,7 @@ export async function resetRound(
     evolution_events: allEvolutionEvents,
     ...(evolutionRecheckFailed ? { evolution_recheck_failed: true } : {}),
     ...(formatRevertFailed ? { format_revert_failed: true } : {}),
+    ...(stageEnded ? { stage_already_ended: stageEnded } : {}),
   };
 }
 
@@ -1858,8 +2026,8 @@ async function requeueAfterFailedChange(
  * Edit a game's winner and/or battle stats.
  * Rolls back old aggregates, applies changes, re-applies new aggregates.
  *
- * Concurrency: before anything else the edit claims the game's edit lease
- * together with the version the editor loaded (`input.expected_updated_at`,
+ * Concurrency: after its read-only preflight (`preflightGameChange`: it must not move the version) and before anything
+ * is written, the edit claims the game's edit lease together with the version the editor loaded (`input.expected_updated_at`,
  * else the version this request read first) in ONE conditional UPDATE
  * (`claimGameEditLease`). The claim needs both the editor's version and no
  * other running edit:
@@ -1881,13 +2049,18 @@ async function requeueAfterFailedChange(
  * them re-queues the game (`requeueAfterFailedChange`) so the queue restores
  * its count.
  */
-export async function editGame(input: EditGameInput): Promise<EditGameResult> {
+export async function editGame(input: EditGameInput, options: GameChangeOptions = {}): Promise<EditGameResult> {
   const before = await getGameById(input.game_id);
   if (!before) throw new GameNotFoundError();
 
   const { match, tournament } = await getMatchContext(before.match_id);
   // Read before any mutation: a failed read aborts with nothing changed.
   const round = await requireRound(match.round_id);
+  assertEditNamesMatchPlayers(input, before, match);
+  // Every refusal that reads only (the rating plan, the played later bracket matches) comes BEFORE the lease claim: the
+  // claim moves the game's version, and a refused edit must leave it where the editor loaded it, so that the editor's
+  // resend with the approval of the later matches is not stale.
+  const plan = await preflightGameChange(match, tournament, options.confirmDownstream);
 
   // 0. Claim the edit lease at the version the editor loaded; a stale editor
   //    or a concurrent edit stops here with nothing written.
@@ -1898,7 +2071,7 @@ export async function editGame(input: EditGameInput): Promise<EditGameResult> {
   if (claim === 'stale') throw new GameEditStaleError();
 
   try {
-    return await editClaimedGame(input, match, tournament, round);
+    return await editClaimedGame(input, match, tournament, round, plan, options);
   } finally {
     await releaseEditLease(input.game_id, leaseToken);
   }
@@ -1933,10 +2106,15 @@ async function editClaimedGame(
   input: EditGameInput,
   match: Awaited<ReturnType<typeof getMatchContext>>['match'],
   tournament: Awaited<ReturnType<typeof getMatchContext>>['tournament'],
-  round: Round
+  round: Round,
+  plan: GameChangePlan,
+  options: GameChangeOptions
 ): Promise<EditGameResult> {
   const wasCompleted = match.status === 'completed';
-  const participants = await preflightGameChange(match, tournament);
+  const { participants } = plan;
+
+  // 0b. An approved change first resets the played later bracket matches, deepest first, as a cascading reset does.
+  const downstreamReset = await resetDownstreamForGameChange(match, plan, input.admin_id, options);
 
   // 1. Cancel any pending aggregate jobs for this game, then re-read it: the
   //    applied marker is only final after the cancel (readGameAfterJobCancel).
@@ -2038,13 +2216,21 @@ async function editClaimedGame(
       })
     : await recheckEvolutions(tournament.season_id, match.player_1_id, match.player_2_id);
 
+  // The stage of an ended format phase is not reopened: the admin is told who advanced on the strength of the old result.
+  const stageEnded =
+    (await loadStageEndedWarning(tournament, wasCompleted && status !== 'completed')) ??
+    downstreamReset?.stageEnded ??
+    null;
+
   return {
     match_status: status,
     match_winner_id: winnerId,
     ...(statusConflict ? { match_status_conflict: true } : {}),
     ...(rebuiltRatingPlayerIds.length > 0 ? { ratings_rebuilt: rebuiltRatingPlayerIds } : {}),
     evolution_events: recheck.events,
+    ...downstreamResetFields(downstreamReset),
     ...(recheck.failed ? { evolution_recheck_failed: true } : {}),
     ...(formatReverted ? {} : { format_revert_failed: true }),
+    ...(stageEnded ? { stage_already_ended: stageEnded } : {}),
   };
 }

@@ -135,6 +135,8 @@ export default {
     calendar_invalid: 'The calendar of stage {stage} is not valid: {reason}.',
     deadline_policy_invalid: 'A deadline in the calendar of stage {stage} is not valid: {reason}.',
     foreach_group_invalid: 'Stage {stage} cannot repeat for the groups of stage {from_stage}: {reason}.',
+    public_expr_reads_hidden_relation:
+      '{owner} reads the relation {relation} in {context}. The result is public, so it can reveal who is linked in a relation that is meant to stay hidden. Take the relation out of the condition, or make the relation public.',
   },
   fixes: {
     use_lower_odd: 'Use best of {best_of}',
@@ -221,6 +223,7 @@ export default {
     pair_filter: 'a pairing filter',
     team_constraint: 'a team rule condition',
     stage_end: 'a stage end condition',
+    threshold: 'an advancement threshold',
   },
   exprIssues: {
     expr_shape: 'it is not a well-formed expression',

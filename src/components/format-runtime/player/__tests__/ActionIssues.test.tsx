@@ -17,6 +17,7 @@ const CODES = {
   action_unknown: 1,
   window_closed: 1,
   actor_without_link: 1,
+  actor_not_in_league: 1,
   step_unknown: 1,
   wrong_count: 1,
   resource_unknown: 1,

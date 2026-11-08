@@ -25,6 +25,7 @@ import { isKitCandidate, type HookTournament } from '../kit-candidate';
 import { fireEvent } from './fire';
 import { isFormatContextStale, type HookReport } from './stale';
 import { matchContext, playerContext } from './expr-env';
+import { currentHolder, holderOfLoggedSeat, revokesToCurrentHolders, SEAT_MOVED_EVENT, seatMovesOf } from './seat-succession';
 import { envBaseOf, loadFreshKitContext, phaseById, phasesOfStageKey, type KitContext, type KitPhaseInfo } from './load';
 import { loadStageTable, playerRowsOf } from './stage-table';
 import { auditMatchTeams, type AuditRetry } from './team-audit-server';
@@ -90,7 +91,7 @@ function completionMatchId(matchId: string, generation: number): string {
  * The track steps as they were before the earlier completions of this match: a `set_track` those events logged is taken back
  * out of the state when the player stands exactly on the step it set (the step is only ever raised, so a revert cannot lower
  * it, and replaying the same match would otherwise climb one step more from the same win). A player who is on another step
- * got there some other way and is left alone. The earlier events are read from the event log (rare: a replayed match only).
+ * got there some other way and is left alone. A seat that moved since is looked up under its current holder. The earlier events are read from the event log (rare: a replayed match only).
  */
 async function tracksBeforeEarlierCompletions(
   seasonId: string,
@@ -100,6 +101,7 @@ async function tracksBeforeEarlierCompletions(
 ): Promise<KitRuntimeState['tracks']> {
   const { getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
   const runtime = await getFormatRuntime(seasonId);
+  const moves = seatMovesOf(runtime.eventLog);
   const keys = new Set(Array.from({ length: generation }, (_, n) => eventKey({ event: 'match_completed', match_id: completionMatchId(matchId, n) })));
   const out: Record<string, Record<string, number>> = {};
   for (const [player, steps] of Object.entries(tracks)) out[player] = { ...steps };
@@ -107,7 +109,8 @@ async function tracksBeforeEarlierCompletions(
     if (!keys.has(row.event_key) || !Array.isArray(row.ops)) continue;
     for (const entry of row.ops) {
       if (!isRecord(entry) || entry.op !== 'set_track' || typeof entry.player_id !== 'string' || typeof entry.track !== 'string' || typeof entry.step !== 'number') continue;
-      const held = out[entry.player_id];
+      // A substitution moved the step to the substitute while the log keeps naming the player who left.
+      const held = out[holderOfLoggedSeat(entry.player_id, row, moves)];
       if (held !== undefined && held[entry.track] === entry.step) held[entry.track] = entry.step - 1;
     }
   }
@@ -117,6 +120,20 @@ async function tracksBeforeEarlierCompletions(
 /** Opens the planned checks under the revision of the context they were planned from (a stale one opens nothing). */
 async function open(seasonId: string, checks: readonly CheckPlan[], revision: number): Promise<void> {
   if (checks.length > 0) await openChecks(seasonId, checks, revision);
+}
+
+/**
+ * The players who hold the seats of `playerIds` now. A substitution leaves a match that has games (or that changed) with the
+ * player who left on its row, and the format data of that seat belongs to the substitute (`seat-succession.ts`): when such a
+ * match completes, its effects (grants, points, track steps, the player scope of its checks) are planned for the holder, not for
+ * a player who has no seat. The event log is read only when it holds a seat move, so a league that never substituted pays nothing.
+ * A seat move the log cannot place throws, so the caller reports a failed step and the heal plans it again.
+ */
+async function seatHoldersNow(seasonId: string, firedKeys: readonly string[], playerIds: readonly string[]): Promise<string[]> {
+  if (!firedKeys.some((key) => key.startsWith(`${SEAT_MOVED_EVENT}:`))) return [...playerIds];
+  const { getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
+  const moves = seatMovesOf((await getFormatRuntime(seasonId)).eventLog);
+  return playerIds.map((id) => currentHolder(id, 0, moves));
 }
 
 export interface MatchCompletedInput {
@@ -161,15 +178,18 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
     const roundNumber = round?.round_number ?? 0;
     const forfeit = outcome?.kind === 'forfeit' || outcome?.kind === 'no_show';
     const base = envBaseOf(ctx, `match:${input.matchId}`);
+    // The sides are the players who hold the seats now (a substitute for a player who left): the match row may still name the
+    // one who left. Who won and who lost is read from the row's own ids.
+    const [holder1, holder2] = await seatHoldersNow(tournament.season_id, ctx.state.firedEventKeys, [input.player1Id, input.player2Id]);
     const sides = [
-      { playerId: input.player1Id, opponent: input.player2Id, dealt: outcome?.p2_faints, taken: outcome?.p1_faints },
-      { playerId: input.player2Id, opponent: input.player1Id, dealt: outcome?.p1_faints, taken: outcome?.p2_faints },
+      { playerId: holder1, opponent: holder2, won: input.winnerId === input.player1Id, dealt: outcome?.p2_faints, taken: outcome?.p1_faints },
+      { playerId: holder2, opponent: holder1, won: input.winnerId === input.player2Id, dealt: outcome?.p1_faints, taken: outcome?.p2_faints },
     ].map((side) => ({
       playerId: side.playerId,
       ctx: matchContext(base, side.playerId, {
         round: roundNumber,
-        won: input.winnerId === side.playerId,
-        lost: input.winnerId !== side.playerId,
+        won: side.won,
+        lost: !side.won,
         forfeit,
         faints_dealt: side.dealt ?? 0,
         faints_taken: side.taken ?? 0,
@@ -190,7 +210,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
         stage: phase.stage.key,
         round: roundNumber,
         match_id: completionMatchId(input.matchId, generation),
-        players: [input.player1Id, input.player2Id],
+        players: [holder1, holder2],
       },
       null,
       { context: ctx, ops: tracks.ops },
@@ -203,7 +223,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
         ...planChecks(ctx.def, {
           source: 'unresolved_outcome',
           matchId: input.matchId,
-          players: [input.player1Id, input.player2Id],
+          players: [holder1, holder2],
           generation,
         }).checks,
       );
@@ -390,7 +410,7 @@ async function reopenDisputeCheck(seasonId: string, matchId: string, generation:
     const plan = planChecks(ctx.def, {
       source: 'unresolved_outcome',
       matchId,
-      players: [match.player_1_id, match.player_2_id],
+      players: await seatHoldersNow(seasonId, ctx.state.firedEventKeys, [match.player_1_id, match.player_2_id]),
       generation,
     });
     await open(seasonId, plan.checks, ctx.revision);
@@ -407,7 +427,8 @@ async function reopenDisputeCheck(seasonId: string, matchId: string, generation:
  * but when its audit, its unresolved outcome or a match-level expression already opened checks the generation advances
  * all the same (the new completion or dispute opens its checks afresh). The still-open per-match checks of the old
  * generation are rejected first; when one cannot be closed the revert event does not fire (the generation stays, and a
- * retry closes what is left: the close is idempotent). Best effort and logged inside; resolves false when it failed (the
+ * retry closes what is left: the close is idempotent). A substitution since the completion moved the seat's items to the
+ * substitute, so the revokes follow the seat to its current holder (`revokesToCurrentHolders`). Best effort and logged inside; resolves false when it failed (the
  * callers report it as a failed `format` step). A failed revert is retried by the format cron (`healPendingReverts`) only
  * for a match that completed: the match is not completed while its current `match_completed` key is still fired. A match
  * that never completed (a disputed one that is reopened) has no such key, so the cron never revisits it: its stale open
@@ -466,12 +487,15 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
     const runtime = await getFormatRuntime(tournament.season_id);
     const logged = runtime.eventLog.find((row) => row.event_key === completedKey);
     const inverse = inverseOps(logged?.ops, logged?.payload);
+    // A substitution after the completion moved the seat's items to the substitute (`seat-succession.ts`): the revokes land
+    // on the player who holds the seat now. A seat move the log cannot place throws, so the caller sees a failed revert.
+    const revokes = revokesToCurrentHolders(inverse.ops, logged, seatMovesOf(runtime.eventLog));
     await fireFormatEvent({
       seasonId: tournament.season_id,
       eventKey: `match_reverted:${input.matchId}:${generation + 1}`,
       event: 'match_reverted',
       payload: { match_id: input.matchId, reverts: completedKey },
-      ops: inverse.ops,
+      ops: revokes,
       firedBy: null,
       revision: ctx.revision,
     });
@@ -633,7 +657,7 @@ export async function onMatchUnresolved(input: { tournament: HookTournament; mat
     const plan = planChecks(ctx.def, {
       source: 'unresolved_outcome',
       matchId: input.matchId,
-      players: [input.player1Id, input.player2Id],
+      players: await seatHoldersNow(tournament.season_id, ctx.state.firedEventKeys, [input.player1Id, input.player2Id]),
       generation,
     });
     await open(tournament.season_id, plan.checks, ctx.revision);

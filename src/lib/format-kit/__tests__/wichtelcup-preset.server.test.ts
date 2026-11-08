@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveTeamMembers } from '@/lib/format-engine/runtime/team-server';
 import { toID } from '@/lib/pkmn/i18n/id';
 import {
+  WICHTELCUP_ENTRY_FORMES,
   WICHTELCUP_JUNK,
   WICHTELCUP_JUNK_ROLES,
   WICHTELCUP_NEW_YEAR,
@@ -12,9 +13,12 @@ import {
 } from '@/lib/pkmn/preset-data/wichtelcup';
 import { resolvePresetRules } from '@/lib/pkmn/preset-rules.server';
 import { makeSet } from '@/test/team-fixtures';
+import { emptyRuntimeState, type RuntimeItem } from '@/lib/format-engine/runtime/types';
+import { evaluateConstraints } from '@/lib/format-engine/runtime/team';
 import { compile } from '../compile';
 import { CURRENT_ENV } from '../engine/env';
 import { PRESETS, wichtelcup } from '../presets';
+import type { FormatDefinition } from '../types';
 
 // team-server reads the season from the database; only its dex-based member resolution is used here.
 vi.mock('@/lib/team/check.server', () => ({ checkTeam: vi.fn() }));
@@ -85,9 +89,10 @@ describe('the four pools', () => {
     if (preset === null) throw new Error('the Wichtelcup rule preset is missing');
     expect(preset.pokemon.mode).toBe('allow');
     const union = [...new Set(POOLS.flatMap(idsOf))].sort();
-    expect(union).toEqual(preset.pokemon.ids);
     expect(union).toHaveLength(141);
     expect(union).toEqual(WICHTELCUP_SPECIES.map(toID).sort());
+    // The preset's exact-id allowlist is the pools plus the formes an unpinned entry admits (Toxtricity-Low-Key).
+    expect(preset.pokemon.ids).toEqual([...union, ...WICHTELCUP_ENTRY_FORMES.map(toID)].sort());
   });
 
   it('are pairwise disjoint', () => {
@@ -112,6 +117,73 @@ describe('the four pools', () => {
       const hits = pools.filter((pool) => pool.ids.has(member.species) || pool.ids.has(member.baseSpecies)).map((pool) => pool.key);
       expect(hits, `${WICHTELCUP_SPECIES[i]} (${member.species} / ${member.baseSpecies})`).toHaveLength(1);
     });
+  });
+});
+
+describe('Toxtricity-Low-Key in the team check', () => {
+  // The pool check compares a member by its species id OR its base species id, so the Low-Key forme of the pool entry
+  // `toxtricity` is in the New Year pool, and a gift of `toxtricity` covers both formes.
+  const compiled = compile(wichtelcup);
+  if (compiled.definition === null) throw new Error('the Wichtelcup example does not compile');
+  const def = compiled.definition as FormatDefinition;
+  const cup = def.stages.find((stage) => stage.key === 'cup')?.constraints ?? [];
+  // Indexes into the stage's constraint list (document order): the closed New Year pool before week 4, its cap of two from week 4.
+  const NEW_YEAR_CLOSED = 7;
+  const NEW_YEAR_CAP = 8;
+  const normal = idsOf('normal');
+  const gift = (resource: 'junk_gifts' | 'premium_gift', itemId: string): RuntimeItem => ({
+    id: `i-${itemId}`,
+    resource,
+    player_id: 'p1',
+    item_id: itemId,
+    amount: 1,
+    exclusive: false,
+    source: 'event',
+    source_ref: null,
+  });
+  const own = [gift('junk_gifts', 'bergmite'), gift('junk_gifts', 'delibird'), gift('premium_gift', 'glastrier')];
+
+  const issues = (round: number, species: string[], items: readonly RuntimeItem[] = own) =>
+    evaluateConstraints({
+      constraints: cup,
+      def,
+      state: { ...emptyRuntimeState(), items: [...items] },
+      seed: 'seed-0123456789',
+      playerId: 'p1',
+      round,
+      members: resolveTeamMembers(species.map((name) => makeSet(name, { moves: ['Protect'] })), 9, true),
+    });
+
+  it('reads the constraints at the indexes used here', () => {
+    expect(cup.map((c) => c.kind)).toHaveLength(9);
+    expect(cup[NEW_YEAR_CLOSED]).toMatchObject({ kind: 'count', max: 0, source: { kind: 'domain', domain: 'new_year' } });
+    expect(cup[NEW_YEAR_CAP]).toMatchObject({ kind: 'count', max: 2, source: { kind: 'domain', domain: 'new_year' } });
+  });
+
+  it('resolves the forme to species toxtricitylowkey with base species toxtricity', () => {
+    const [member] = resolveTeamMembers([makeSet('Toxtricity-Low-Key', { moves: ['Protect'] })], 9, true);
+    expect([member.species, member.baseSpecies]).toEqual(['toxtricitylowkey', 'toxtricity']);
+  });
+
+  it('is accepted in week 4 like the standard forme, and counts toward the cap of two New Year Pokémon', () => {
+    const team = ['Bergmite', 'Delibird', 'Glastrier', 'Toxtricity-Low-Key', normal[0], normal[1]];
+    expect(issues(4, team)).toEqual([]);
+    const withTwo = issues(4, ['Bergmite', 'Glastrier', 'Toxtricity-Low-Key', 'Jirachi', normal[0], normal[1]]);
+    expect(withTwo).toEqual([]);
+    const withThree = issues(4, ['Glastrier', 'Toxtricity-Low-Key', 'Jirachi', 'Victini', normal[0], normal[1]]);
+    expect(withThree.map((i) => `${i.code}#${i.constraint_index}`)).toEqual([`kit_count_max#${NEW_YEAR_CAP}`]);
+  });
+
+  it('counts as the held gift when the player holds the Toxtricity entry as the premium gift', () => {
+    // A hypothetical gift `toxtricity`: the Low-Key forme satisfies the mandatory premium gift of week 4 through its base species.
+    const gifted = [own[0], own[1], gift('premium_gift', 'toxtricity')];
+    expect(issues(4, ['Bergmite', 'Delibird', 'Toxtricity-Low-Key', normal[0], normal[1], normal[2]], gifted)).toEqual([]);
+    expect(issues(4, ['Bergmite', 'Delibird', 'Toxtricity', normal[0], normal[1], normal[2]], gifted)).toEqual([]);
+  });
+
+  it('is closed with the rest of the New Year pool before week 4', () => {
+    const early = issues(3, ['Bergmite', 'Delibird', 'Glastrier', 'Toxtricity-Low-Key', normal[0], normal[1]]);
+    expect(early.map((i) => `${i.code}#${i.constraint_index}`)).toEqual([`kit_count_max#${NEW_YEAR_CLOSED}`]);
   });
 });
 

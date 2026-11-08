@@ -106,6 +106,8 @@ export default defineDe<typeof en>()({
   bracket_already_generated: 'Der Turnierbaum wurde bereits erstellt.',
   bracket_regenerate_elim_only:
     'Den Turnierbaum neu erstellen geht nur im K.-o.-System und im Doppel-K.-o.',
+  bracket_regenerate_phase_completed:
+    'Diese Phase ist bereits beendet, deshalb kann ihr Turnierbaum nicht neu erstellt werden. Öffne die Phase zuerst wieder und erstelle den Turnierbaum danach neu.',
   bracket_repair_elim_only: 'Den Turnierbaum reparieren geht nur im K.-o.-System und im Doppel-K.-o.',
 
   // Re-pairing one match

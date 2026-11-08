@@ -35,6 +35,7 @@ vi.mock('@/lib/players/roster-access', () => ({
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipants: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn(), getSeasonKitHead: vi.fn() }));
 
 vi.mock('@/lib/revalidation', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/revalidation')>()),
@@ -54,6 +55,7 @@ import {
 } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getKitPhases } from '@/lib/supabase/queries/format-engine';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -606,6 +608,122 @@ describe('PATCH /api/tournaments/[id]/participants — audit', () => {
     const conflict = await PATCH(makeRequest({ seeds: [{ player_id: PLAYER_1, seed: 1 }] }), routeParams);
     expect(conflict.status).toBe(409);
 
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+});
+
+describe('roster writes on a started phase of the attached format', () => {
+  const TID = '22222222-2222-4222-8222-222222222222';
+  const SEASON = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const REASON = 'Took the wrong player in, swap them';
+
+  const phase = (status: 'upcoming' | 'active' | 'completed', extra: Record<string, unknown> = {}) =>
+    ({ id: TID, season_id: SEASON, status, name: 'Groups', bracket_type: 'swiss', ...extra }) as never;
+  const formatOwns = () => vi.mocked(getKitPhases).mockResolvedValue([{ id: TID, format_stage_key: 'groups', stage_order: 1, stage_spec: null }]);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireResourceAdmin).mockResolvedValue(ADMIN as never);
+    vi.mocked(getTournamentById).mockResolvedValue(phase('active'));
+    vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: PLAYER_1 }] as never);
+    vi.mocked(getParticipants).mockResolvedValue(mockParticipants as never);
+    vi.mocked(getKitPhases).mockResolvedValue([]);
+    formatOwns();
+  });
+
+  const attempt = (force?: { force: unknown; reason?: unknown }) => [
+    () => POST(makeRequest({ player_id: PLAYER_1, ...force }), routeParams),
+    () => DELETE(makeRequest({ player_id: PLAYER_1, ...force }), routeParams),
+    () => PATCH(makeRequest({ seeds: [{ player_id: PLAYER_1, seed: 1 }], ...force }), routeParams),
+  ];
+
+  const nothingWritten = () => {
+    expect(addParticipant).not.toHaveBeenCalled();
+    expect(removeParticipant).not.toHaveBeenCalled();
+    expect(updateParticipantSeeds).not.toHaveBeenCalled();
+  };
+
+  it('refuses add, remove and seeds with 409 format_phase_owned, like the league phase route', async () => {
+    for (const run of attempt()) {
+      const res = await run();
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('format_phase_owned');
+    }
+    nothingWritten();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('makes the change with force and a reason, and audits it with the reason', async () => {
+    for (const [run, change] of [
+      [attempt({ force: true, reason: REASON })[0], 'add'],
+      [attempt({ force: true, reason: REASON })[1], 'remove'],
+      [attempt({ force: true, reason: REASON })[2], 'seeds'],
+    ] as const) {
+      vi.mocked(logAuditEvent).mockClear();
+      const res = await run();
+      expect([200, 201], change).toContain(res.status);
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'phase.roster.force',
+          actor_id: ADMIN.playerId,
+          resource_id: TID,
+          metadata: expect.objectContaining({ season_id: SEASON, change, reason: REASON }),
+        }),
+      );
+    }
+    expect(addParticipant).toHaveBeenCalledWith(TID, PLAYER_1);
+    expect(removeParticipant).toHaveBeenCalledWith(TID, PLAYER_1);
+    expect(updateParticipantSeeds).toHaveBeenCalledWith(TID, [{ player_id: PLAYER_1, seed: 1 }]);
+    expect(expireTournamentReads).toHaveBeenCalledWith(TID, SEASON);
+  });
+
+  it('refuses force without a reason with 400 PHASE_ROSTER_REASON_REQUIRED and writes nothing', async () => {
+    for (const run of attempt({ force: true, reason: '  ' })) {
+      const res = await run();
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('PHASE_ROSTER_REASON_REQUIRED');
+    }
+    nothingWritten();
+  });
+
+  it('keeps the seat count of a generated elimination bracket fixed, force or not', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(phase('active', { bracket_type: 'single_elim' }));
+    vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'round-1' }] as never);
+
+    for (const run of attempt({ force: true, reason: REASON })) {
+      const res = await run();
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('BRACKET_LOCKED_USE_SUBSTITUTE');
+    }
+    nothingWritten();
+  });
+
+  it('keeps the plain 400 lock for a completed format phase and for a started phase the format does not own', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(phase('completed'));
+    for (const [run, code] of [
+      [attempt({ force: true, reason: REASON })[0], 'tournament_participant_add_locked'],
+      [attempt({ force: true, reason: REASON })[1], 'tournament_participant_remove_locked'],
+      [attempt({ force: true, reason: REASON })[2], 'tournament_seeding_locked'],
+    ] as const) {
+      const res = await run();
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe(code);
+    }
+
+    vi.mocked(getTournamentById).mockResolvedValue(phase('active'));
+    vi.mocked(getKitPhases).mockResolvedValue([]);
+    const res = await attempt({ force: true, reason: REASON })[0]();
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('tournament_participant_add_locked');
+    nothingWritten();
+  });
+
+  it('audits no override for an upcoming format phase', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(phase('upcoming'));
+
+    const res = await attempt({ force: true, reason: REASON })[0]();
+
+    expect(res.status).toBe(201);
     expect(logAuditEvent).not.toHaveBeenCalled();
   });
 });

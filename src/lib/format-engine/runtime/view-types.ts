@@ -202,6 +202,31 @@ export type AdjustKind = (typeof ADJUST_KINDS)[number];
 export type SubmittableAdjustKind = Exclude<AdjustKind, 'outcome'>;
 export const SUBMITTABLE_ADJUST_KINDS = ['points', 'resource', 'relation', 'action', 'domain', 'rank'] as const satisfies readonly SubmittableAdjustKind[];
 
+/** What a one-time event did for the roster it fired with: a grant, a points change, an attribute or a relation draw. */
+export interface MissedEffect {
+  kind: 'grant_resource' | 'adjust_points' | 'set_attr' | 'generate_relation';
+  /** The resource, stage, attribute or relation key. */
+  key: string;
+  label: LText | null;
+}
+
+/** A one-time event that fired before a player joined their stage (see `late-joiners.ts`). */
+export interface MissedEvent {
+  event: 'stage_start' | 'stage_end' | 'round_start' | 'round_end' | 'action_locked' | 'time';
+  stage: string | null;
+  stage_label: LText | null;
+  round: number | null;
+  action: string | null;
+  mark: string | null;
+  effects: MissedEffect[];
+}
+
+/** A player added after one-time events fired, with the events that did nothing for them (nothing automatic follows). */
+export interface LateJoinerView {
+  player: PlayerRef;
+  missed: MissedEvent[];
+}
+
 export interface AdminOverview {
   /** `false`: the engine is not `kit` or the league has no format. */
   running: boolean;
@@ -212,15 +237,31 @@ export interface AdminOverview {
   open_checks: number;
   open_challenges: number;
   allowed_adjustments: SubmittableAdjustKind[];
+  /** Players added after one-time events fired, and what they missed. Masked like the rest of the overview. */
+  late_joiners: LateJoinerView[];
+}
+
+/**
+ * A link of the unmasked read. `involves_viewer`: the admin who reads is its giver or its recipient (an admin who also
+ * plays). The route still sends the row; the panel hides such rows until the admin chooses to show them, so an admin who
+ * debugs something else is not spoiled. It is a marker for the display, not a privacy boundary.
+ */
+export interface UnmaskedLinkView extends RelationLinkView {
+  involves_viewer: boolean;
+}
+
+export interface UnmaskedRelationView extends AdminRelationView {
+  links: UnmaskedLinkView[];
 }
 
 /** The response of `POST .../relations/unmask` (an audited, explicit admin read). No picks, no item rows. */
 export interface AdminUnmasked {
   /** `masked: false`. */
-  relations: AdminRelationView[];
+  relations: UnmaskedRelationView[];
   submissions: {
     action: string;
-    rows: { player: PlayerRef; state: SubmissionState; target: PlayerRef | null }[];
+    /** `involves_viewer`: the reading admin's own submission, or one that names them as its target. */
+    rows: { player: PlayerRef; state: SubmissionState; target: PlayerRef | null; involves_viewer: boolean }[];
   }[];
 }
 

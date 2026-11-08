@@ -8,7 +8,14 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useLocale, useT } from '@/i18n/client';
 import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin';
 import { applyAdjustmentRequest, unmaskRelationsRequest } from '@/lib/format-engine/runtime/client-api-admin';
-import type { AdminActionView, AdminRelationView, AdminUnmasked, PlayerRef } from '@/lib/format-engine/runtime/view-types';
+import type {
+  AdminActionView,
+  AdminRelationView,
+  AdminUnmasked,
+  PlayerRef,
+  RelationLinkView,
+  UnmaskedRelationView,
+} from '@/lib/format-engine/runtime/view-types';
 import { BUTTON_TOUCH, labelText } from './admin-shared';
 import ScrollRegion from '../ScrollRegion';
 import ReasonDialog from './ReasonDialog';
@@ -36,10 +43,18 @@ function isRevealed(relation: AdminRelationView): boolean {
   return relation.link_count > 0 && relation.links.length === relation.link_count && relation.links.every((link) => link.revealed);
 }
 
+/** The link is the reading admin's own (their giver or their recipient): only an unmasked link carries the marker. */
+function involvesViewer(link: RelationLinkView): boolean {
+  return 'involves_viewer' in link && link.involves_viewer === true;
+}
+
 /**
  * The relations of the format (Secret Santa, a ladder pairing, ...) as an ordinary player sees them: masked. "Show hidden
  * sides" is an explicit, audited read (the admin may also play, and the sides stay hidden from the players), after which
- * the unmasked links and the state and target of each player's submission per action are listed in this island. Reveal
+ * the unmasked links and the state and target of each player's submission per action are listed in this island. An admin
+ * who also plays is not spoiled by it: the rows that involve them (their own giver, recipient or submission) are left out
+ * of the lists until they press "Show my rows". That is a display choice for this one view (it is dropped with the
+ * snapshot, never stored); the audited route still sends every row. Reveal
  * records a `relation` adjustment that makes both sides of every link public. Draw records the `relation` adjustment that
  * makes the links of a relation that has none (the Secret Santa): the server draws them from the league seed, so the
  * admin never sees the mapping being made. The draw cannot be redone, so its dialog shows who is in it (the roster and
@@ -53,6 +68,9 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
   const draw = useAdminRequest();
   const { statusRef, focusNow, focusOnClose, onCloseAutoFocus } = useStatusFocus();
   const [unmasked, setUnmasked] = useState<AdminUnmasked | null>(null);
+  // The snapshot whose own rows the admin chose to show. Bound to that one object, so a new read, Hide again and a page
+  // refresh all start hidden again without anything having to reset it.
+  const [ownShownFor, setOwnShownFor] = useState<AdminUnmasked | null>(null);
   const [confirmUnmask, setConfirmUnmask] = useState(false);
   const [revealing, setRevealing] = useState<AdminRelationView | null>(null);
   const [revealed, setRevealed] = useState<string | null>(null);
@@ -68,7 +86,13 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
     setUnmasked(null);
   }
 
-  const shown: readonly AdminRelationView[] = unmasked?.relations ?? relations;
+  const shown: readonly (AdminRelationView | UnmaskedRelationView)[] = unmasked?.relations ?? relations;
+  const showOwn = unmasked !== null && ownShownFor === unmasked;
+  const hiddenOwn =
+    unmasked === null
+      ? 0
+      : unmasked.relations.reduce((sum, relation) => sum + relation.links.filter(involvesViewer).length, 0) +
+        unmasked.submissions.reduce((sum, entry) => sum + entry.rows.filter((row) => row.involves_viewer).length, 0);
   const refName = (ref: PlayerRef | null): string => (ref === null ? t('relations.hiddenSide') : (ref.name ?? t('formerPlayer')));
   const actionName = (id: string): string => labelText(actions.find((action) => action.id === id)?.label, locale, id);
 
@@ -149,9 +173,23 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
         )}
       </div>
       {unmask.errorMessage !== null && <Alert variant="error">{unmask.errorMessage}</Alert>}
+      {unmasked !== null && hiddenOwn > 0 && (
+        <div className="flex flex-wrap items-center gap-2" data-own-rows>
+          <p className="text-sm text-poke-text-secondary">
+            {showOwn ? t('relations.ownShown') : t('relations.ownHidden', { count: hiddenOwn })}
+          </p>
+          {/* One button for both states, so a keyboard user keeps their focus when it toggles. */}
+          <Button variant="secondary" size="sm" className={BUTTON_TOUCH} onClick={() => setOwnShownFor(showOwn ? null : unmasked)}>
+            {showOwn ? t('relations.ownHide') : t('relations.ownShow')}
+          </Button>
+        </div>
+      )}
 
       <ul className="space-y-3">
-        {shown.map((relation) => (
+        {shown.map((relation) => {
+          const links = showOwn ? relation.links : relation.links.filter((link) => !involvesViewer(link));
+          const ownHiddenHere = relation.links.length - links.length;
+          return (
           <li key={relation.key} className="space-y-3 rounded-poke-md border border-poke-border bg-poke-surface p-4" data-relation-key={relation.key}>
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{labelText(relation.label, locale, relation.key)}</h3>
@@ -159,9 +197,15 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
               <span className="text-xs text-poke-text-muted">{t('relations.linkCount', { count: relation.link_count })}</span>
               {isRevealed(relation) && <Badge variant="green">{t('relations.publicBadge')}</Badge>}
             </div>
-            {relation.links.length === 0 ? (
+            {links.length === 0 ? (
               <p className="text-sm text-poke-text-muted">
-                {relation.link_count === 0 ? t('relations.noLinks') : relation.masked ? t('relations.noneVisible') : t('relations.noLinks')}
+                {ownHiddenHere > 0
+                  ? t('relations.ownHiddenNote')
+                  : relation.link_count === 0
+                    ? t('relations.noLinks')
+                    : relation.masked
+                      ? t('relations.noneVisible')
+                      : t('relations.noLinks')}
               </p>
             ) : (
               <ScrollRegion label={t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })}>
@@ -174,7 +218,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-poke-border">
-                    {relation.links.map((link, index) => (
+                    {links.map((link, index) => (
                       <tr key={index}>
                         <td className="px-3 py-2 text-poke-text-primary">{refName(link.from)}</td>
                         <td className="px-3 py-2 text-poke-text-primary">{refName(link.to)}</td>
@@ -207,17 +251,22 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
               </Button>
             )}
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       {unmasked !== null && unmasked.submissions.length > 0 && (
         <div className="space-y-3" data-live-submissions>
           <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('relations.submissionsHeading')}</h3>
-          {unmasked.submissions.map((entry) => (
+          {unmasked.submissions.map((entry) => {
+            const rows = showOwn ? entry.rows : entry.rows.filter((row) => !row.involves_viewer);
+            return (
             <div key={entry.action} className="space-y-2">
               <h4 className="text-sm text-poke-text-secondary">{actionName(entry.action)}</h4>
-              {entry.rows.length === 0 ? (
-                <p className="text-sm text-poke-text-muted">{t('relations.noSubmissions')}</p>
+              {rows.length === 0 ? (
+                <p className="text-sm text-poke-text-muted">
+                  {entry.rows.length > 0 ? t('relations.ownHiddenNote') : t('relations.noSubmissions')}
+                </p>
               ) : (
                 <ScrollRegion label={t('relations.submissionsCaption', { action: actionName(entry.action) })}>
                   <table className="w-full min-w-[24rem] text-left text-sm">
@@ -230,7 +279,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-poke-border">
-                      {entry.rows.map((row) => (
+                      {rows.map((row) => (
                         <tr key={row.player.id}>
                           <td className="px-3 py-2 text-poke-text-primary">{row.player.name ?? t('formerPlayer')}</td>
                           <td className="px-3 py-2 text-poke-text-secondary">{t(`relations.submission.${row.state}`)}</td>
@@ -242,7 +291,8 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                 </ScrollRegion>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

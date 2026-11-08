@@ -36,6 +36,8 @@ import type { LText } from '@/lib/studio-core/ltext';
 import { ltext } from '@/lib/studio-core/ltext';
 import type { Json } from '@/types/database';
 import { challengeOf } from '../challenge';
+import { actorAccess } from './actions';
+import { buildLateJoiners, type FiredEventRecord } from './late-joiners';
 import { domainView, findDomainView, visibleEntries, type DomainView } from './domains';
 import { entryContext, type EnvBase } from './expr-env';
 import type { KitContext } from './load';
@@ -71,6 +73,7 @@ import {
   type SubmissionView,
   type StepView,
   type SubmittableAdjustKind,
+  type UnmaskedRelationView,
   type ActionWindow,
   type AdjustKind,
 } from './view-types';
@@ -162,10 +165,11 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
   const submissionRow = submissionOf(state, rule.id, viewer);
   const submission = submissionRow === undefined ? null : toSubmissionView(submissionRow);
 
-  // Access, exactly the rule of `validateActionSubmission`: a link when the action is `via` a relation, else the roster;
-  // plus: the viewer is a current participant.
+  // Access, exactly the rule of `validateActionSubmission` (`actorAccess`): a link AND a place on the roster when the action
+  // is `via` a relation, else the roster; plus: the viewer is a current participant. A player who left the league keeps
+  // their link and stops being able to act, here as on the server.
   const ownLink = rule.via === undefined ? undefined : state.links.find((l) => l.relation === rule.via && l.from === viewer);
-  const hasAccess = rule.via === undefined ? roster.length === 0 || roster.includes(viewer) : ownLink !== undefined;
+  const hasAccess = actorAccess(rule, viewer, state, roster).ok;
   const accessible = hasAccess && names.has(viewer);
   const actionable = accessible && window === 'open' && submission?.state !== 'locked';
 
@@ -417,12 +421,16 @@ export function buildPlayerView(
 
 // ─── Admin ──────────────────────────────────────────────────────────────────────────────────────
 
-/** Players who CAN act on an action: current participants with a link (`via`) or on the roster. */
+/**
+ * Players who CAN act on an action: current participants on the roster, with a link when the action is `via` a relation.
+ * A giver who left the league still holds their link, but they are no actor (`actorAccess`), as for the cron.
+ */
 function actorsOf(ctx: KitContext, rule: PlayerActionRule, names: NameMap): string[] {
+  const roster = rosterOfPhases(ctx);
   const pool =
     rule.via === undefined
-      ? rosterOfPhases(ctx)
-      : [...new Set(ctx.state.links.filter((l) => l.relation === rule.via).map((l) => l.from))].sort();
+      ? roster
+      : [...new Set(ctx.state.links.filter((l) => l.relation === rule.via).map((l) => l.from))].sort().filter((id) => roster.includes(id));
   return pool.filter((id) => names.has(id));
 }
 
@@ -457,7 +465,7 @@ export function buildAdminOverview(
   ctx: KitContext,
   adminId: string,
   names: NameMap,
-  extra: { openChallenges: number },
+  extra: { openChallenges: number; /** The league's event log (without per-match events); omitted: no late-joiner list. */ events?: readonly FiredEventRecord[] },
 ): AdminOverview {
   const { def, state } = ctx;
   const labels = new Map((def.domains ?? []).map((d) => [d.key, d.label] as const));
@@ -477,6 +485,9 @@ export function buildAdminOverview(
     open_checks: state.checks.filter((check) => check.status === 'open').length,
     open_challenges: extra.openChallenges,
     allowed_adjustments: allowedAdjustments(def),
+    // The players added after one-time events fired, and what those events did for the others: masked like the relations
+    // above for an admin who also plays (`buildLateJoiners`).
+    late_joiners: buildLateJoiners(ctx, extra.events ?? [], names, { id: adminId, plays: takesPart(ctx, adminId) }),
   };
 }
 
@@ -489,19 +500,27 @@ export const NOT_RUNNING_OVERVIEW: AdminOverview = {
   open_checks: 0,
   open_challenges: 0,
   allowed_adjustments: [],
+  late_joiners: [],
 };
 
 /**
  * The explicit, audited admin read: relations with their hidden sides, and the state and target of each player's
- * submission per action. No picks and no item rows.
+ * submission per action. No picks and no item rows. Every link and submission row carries `involves_viewer` (the admin
+ * who reads is its giver, its recipient or its actor, or is named as its target), which the panel uses to keep an admin
+ * who also plays from being spoiled: their own rows are hidden until they choose to show them. An admin who does not
+ * play is in no row, so nothing is marked.
  */
 export function buildUnmasked(ctx: KitContext, adminId: string, names: NameMap): AdminUnmasked {
   const { def, state } = ctx;
-  const relations: AdminRelationView[] = (def.relations ?? []).map((relation) => ({
-    ...relationView(relation, state.links, { playerId: adminId, admin: true }, names),
-    masked: false,
-    link_count: state.links.filter((l) => l.relation === relation.key).length,
-  }));
+  const relations: UnmaskedRelationView[] = (def.relations ?? []).map((relation) => {
+    const view = relationView(relation, state.links, { playerId: adminId, admin: true }, names);
+    return {
+      ...view,
+      links: view.links.map((link) => ({ ...link, involves_viewer: link.from?.id === adminId || link.to?.id === adminId })),
+      masked: false,
+      link_count: state.links.filter((l) => l.relation === relation.key).length,
+    };
+  });
   const submissions = actionRules(def).map((rule) => ({
     action: rule.id,
     rows: state.submissions
@@ -511,6 +530,7 @@ export function buildUnmasked(ctx: KitContext, adminId: string, names: NameMap):
         player: refOf(names, s.actor),
         state: toSubmissionView(s).state,
         target: s.target === null ? null : refOf(names, s.target),
+        involves_viewer: s.actor === adminId || s.target === adminId,
       })),
   }));
   return { relations, submissions };
@@ -581,7 +601,7 @@ const NO_ACTIONS: ReadonlySet<string> = new Set();
 /**
  * The actions whose giver is hidden right now: the action runs through a relation whose `from` side is `hidden` and
  * not yet revealed. It depends on the relation alone, never on who asks, so the WRITERS of the audit log (the submit
- * route and the cron auto-pick, whose giver may have been removed from every phase after the draw) use it to decide
+ * route and the cron auto-pick) use it to decide
  * whether the entry may name the giver. The reader gate lives in `giverHiddenActions`.
  */
 export function hiddenGiverActions(ctx: Pick<MaskContext, 'def' | 'state'>): ReadonlySet<string> {

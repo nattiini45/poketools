@@ -162,6 +162,65 @@ describe.skipIf(!optIn)('format fences (local stack)', () => {
     });
   });
 
+  describe('format_forfeit_complete decides the format and the status in one transaction', () => {
+    const forfeitMatch = async (engine: 'kit' | 'shadow' = 'kit') => {
+      const { season, phase } = await league({}, true);
+      await must('engine', client.from('season_formats').update({ engine }).eq('season_id', season));
+      const round = randomUUID();
+      const match = randomUUID();
+      await must('round', client.from('rounds').insert({ id: round, tournament_id: phase as string, name: 'Round 1', round_number: 1, best_of: 1 }));
+      await must('match', client.from('matches').insert({ id: match, round_id: round, tournament_id: phase as string, player_1_id: players.p1, player_2_id: players.p2 }));
+      return { season, match, revision: await revisionOf(season) };
+    };
+    const rowOf = async (match: string) => {
+      const { data, error } = await client.from('matches').select('status, winner_id, confirmed_at, date_played, auto_confirm_at, finalized_at').eq('id', match).single();
+      if (error) throw new Error(JSON.stringify(error));
+      return data;
+    };
+
+    it('completes the match with the fields of a completed status write', async () => {
+      const { season, match, revision } = await forfeitMatch();
+      await expect(rt.completeFormatForfeit({ seasonId: season, matchId: match, expectedStatus: 'scheduled', winnerId: players.p1, revision })).resolves.toBe(true);
+      const row = await rowOf(match);
+      expect(row).toMatchObject({ status: 'completed', winner_id: players.p1, auto_confirm_at: null, finalized_at: null });
+      expect(row.confirmed_at).not.toBeNull();
+      expect(row.date_played).not.toBeNull();
+    });
+
+    it('writes nothing for a stale revision, a league off the kit, or a detached format', async () => {
+      const stale = await forfeitMatch();
+      await bumpRevision(stale.season);
+      await expect(
+        rt.completeFormatForfeit({ seasonId: stale.season, matchId: stale.match, expectedStatus: 'scheduled', winnerId: players.p1, revision: stale.revision }),
+      ).rejects.toMatchObject({ name: 'FormatRuntimeError', code: 'format_context_stale' });
+      expect((await rowOf(stale.match)).status).toBe('scheduled');
+
+      const off = await forfeitMatch('shadow');
+      await expect(
+        rt.completeFormatForfeit({ seasonId: off.season, matchId: off.match, expectedStatus: 'scheduled', winnerId: players.p1, revision: off.revision }),
+      ).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect((await rowOf(off.match)).status).toBe('scheduled');
+
+      const detached = await forfeitMatch();
+      // format_detach_season refuses a league with rounds; what the forfeit must survive is the missing row itself.
+      await must('detach', client.from('season_formats').delete().eq('season_id', detached.season));
+      await expect(
+        rt.completeFormatForfeit({ seasonId: detached.season, matchId: detached.match, expectedStatus: 'scheduled', winnerId: players.p1, revision: detached.revision }),
+      ).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect((await rowOf(detached.match)).status).toBe('scheduled');
+    });
+
+    it('answers false and writes nothing when the status moved or the match is of another league', async () => {
+      const { season, match, revision } = await forfeitMatch();
+      await expect(rt.completeFormatForfeit({ seasonId: season, matchId: match, expectedStatus: 'in_progress', winnerId: players.p1, revision })).resolves.toBe(false);
+      expect((await rowOf(match)).status).toBe('scheduled');
+
+      const other = await forfeitMatch();
+      await expect(rt.completeFormatForfeit({ seasonId: other.season, matchId: match, expectedStatus: 'scheduled', winnerId: players.p1, revision: other.revision })).resolves.toBe(false);
+      expect((await rowOf(match)).status).toBe('scheduled');
+    });
+  });
+
   describe('round_write', () => {
     const pairs = [{ player_1_id: players.p1, player_2_id: players.p2 }];
 

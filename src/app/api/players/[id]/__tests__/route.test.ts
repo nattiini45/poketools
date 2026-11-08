@@ -27,6 +27,10 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   getPlayerCompetitiveRefs: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/player-format-leagues', () => ({
+  listUnfinishedFormatLeaguesOfPlayer: vi.fn(),
+}));
+
 const { authAdminDeleteUser } = vi.hoisted(() => ({ authAdminDeleteUser: vi.fn() }));
 
 vi.mock('@/lib/supabase/client', () => ({
@@ -54,6 +58,7 @@ import {
   deletePlayer,
   getPlayerCompetitiveRefs,
 } from '@/lib/supabase/queries/players';
+import { listUnfinishedFormatLeaguesOfPlayer } from '@/lib/supabase/queries/player-format-leagues';
 import { expectNoPrivatePlayerData, fullPlayerRow } from '@/lib/players/__tests__/private-player-fields';
 
 /** The tags a player write expires (D37): every read embedding a player, and this player's own. */
@@ -674,8 +679,77 @@ describe('DELETE /api/players/[id]', () => {
     // Default happy path: player exists and has no competitive references.
     vi.mocked(getPlayerById).mockResolvedValue(mockPlayer);
     vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 0, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
+    vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockResolvedValue([]);
     vi.mocked(resolveSuperadminPlayerId).mockResolvedValue(null);
     vi.mocked(isSuperadminNow).mockResolvedValue(false);
+  });
+
+  describe('a player enrolled in an unfinished league that runs a format', () => {
+    const PLAYER_ID = '51541de2-cef5-42ee-8563-d412cf4563a2';
+
+    it('is refused with a coded 409 that names the league, and nothing is deleted, expired or audited', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockResolvedValue([{ id: 'season-1', name: 'Winter Cup' }]);
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(PLAYER_ID));
+      const body = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(body).toMatchObject({ success: false, code: 'player_in_format_league', params: { count: 1, league: 'Winter Cup' } });
+      expect(body.error).toContain('"Winter Cup"');
+      expect(listUnfinishedFormatLeaguesOfPlayer).toHaveBeenCalledWith(PLAYER_ID);
+      expect(deletePlayer).not.toHaveBeenCalled();
+      expect(authAdminDeleteUser).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('counts several leagues and names the first', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockResolvedValue([
+        { id: 'season-1', name: 'Autumn League' },
+        { id: 'season-2', name: 'Winter Cup' },
+      ]);
+
+      const body = await (await DELETE({} as unknown as NextRequest, makeRouteArgs(PLAYER_ID))).json();
+
+      expect(body.params).toEqual({ count: 2, league: 'Autumn League' });
+      expect(body.error).toContain('2 unfinished leagues');
+      expect(body.error).toContain('"Autumn League"');
+    });
+
+    it('is refused before the match-history answer, which an admin cannot act on first', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockResolvedValue([{ id: 'season-1', name: 'Winter Cup' }]);
+      vi.mocked(getPlayerCompetitiveRefs).mockResolvedValue({ matches: 4, proposals: 0, leagueHistory: 0, activeDrafts: 0, trashedLeagues: 0 });
+
+      const body = await (await DELETE({} as unknown as NextRequest, makeRouteArgs(PLAYER_ID))).json();
+
+      expect(body.code).toBe('player_in_format_league');
+    });
+
+    it('does not block a player whose leagues are all finished (the read answers none) and still deletes them', async () => {
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockResolvedValue([]);
+      vi.mocked(deletePlayer).mockResolvedValue(undefined);
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(PLAYER_ID));
+
+      expect(response.status).toBe(200);
+      expect(deletePlayer).toHaveBeenCalledWith(PLAYER_ID);
+    });
+
+    it('fails closed when the enrollment cannot be read (no delete)', async () => {
+      const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+      vi.mocked(requireAdmin).mockResolvedValue(adminSession.player);
+      vi.mocked(listUnfinishedFormatLeaguesOfPlayer).mockRejectedValue(new Error('db down'));
+
+      const response = await DELETE({} as unknown as NextRequest, makeRouteArgs(PLAYER_ID));
+
+      expect(response.status).toBe(500);
+      expect(deletePlayer).not.toHaveBeenCalled();
+      consoleError.mockRestore();
+    });
   });
 
   describe('the superadmin row', () => {

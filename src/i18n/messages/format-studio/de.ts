@@ -125,6 +125,8 @@ export default defineDe<typeof en>()({
     calendar_invalid: 'Der Kalender von Stage {stage} ist ungültig: {reason}.',
     deadline_policy_invalid: 'Eine Frist im Kalender von Stage {stage} ist ungültig: {reason}.',
     foreach_group_invalid: 'Stage {stage} kann nicht für die Gruppen von Stage {from_stage} wiederholt werden: {reason}.',
+    public_expr_reads_hidden_relation:
+      '{owner} liest die Beziehung {relation} bei {context}. Das Ergebnis ist öffentlich und kann deshalb verraten, wer in einer Beziehung verbunden ist, die verborgen bleiben soll. Nimm die Beziehung aus der Bedingung oder mach sie öffentlich.',
   },
   fixes: {
     use_lower_odd: 'Best of {best_of} verwenden',
@@ -211,6 +213,7 @@ export default defineDe<typeof en>()({
     pair_filter: 'einem Paarungsfilter',
     team_constraint: 'der Bedingung einer Teamregel',
     stage_end: 'einer Endbedingung einer Stage',
+    threshold: 'einer Weiterkommens-Schwelle',
   },
   exprIssues: {
     expr_shape: 'er ist kein wohlgeformter Ausdruck',

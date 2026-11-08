@@ -310,3 +310,67 @@ describe('POST /api/admin/matches/[id]/reopen', () => {
     });
   });
 });
+
+describe('POST /api/admin/matches/[id]/reopen in a phase whose stage already ended', () => {
+  const notice = {
+    phase_id: 'tourn-1',
+    phase_name: 'Group stage',
+    advanced: [{ phase_id: 'phase-2', phase_name: 'Playoffs', players: [{ id: 'p1', name: 'Ash' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requirePlayer).mockResolvedValue(siteAdmin as never);
+    vi.mocked(getMatchById).mockResolvedValue(completedMatch as never);
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true } as never);
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+  });
+
+  it('a successful reopen answers 200 with the notice in its data and marks the audit event', async () => {
+    vi.mocked(reopenMatch).mockResolvedValue({
+      from_status: 'completed',
+      ratings_rebuilt_players: 2,
+      bracket_matches_removed: 0,
+      failed_steps: [],
+      stage_already_ended: notice,
+    });
+
+    const res = await POST(request({ reason: 'typo' }), routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.data.stage_already_ended).toEqual(notice);
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ stage_already_ended: true });
+  });
+
+  it('an incomplete reopen carries the notice as flat params, because an error has no data', async () => {
+    vi.mocked(reopenMatch).mockResolvedValue({
+      from_status: 'completed',
+      ratings_rebuilt_players: 0,
+      bracket_matches_removed: 0,
+      failed_steps: ['round'],
+      stage_already_ended: notice,
+    });
+
+    const res = await POST(request({ reason: 'typo' }), routeParams);
+    const body = await res.json();
+
+    expect(res.status).toBe(500);
+    expect(body.code).toBe('match_reopen_incomplete');
+    expect(body.params).toEqual({ count: 1, stage_phase: 'Group stage', stage_advanced: 'Playoffs: Ash' });
+  });
+
+  it('an ordinary reopen has neither the field nor the params', async () => {
+    vi.mocked(reopenMatch).mockResolvedValue({
+      from_status: 'completed',
+      ratings_rebuilt_players: 0,
+      bracket_matches_removed: 0,
+      failed_steps: ['round'],
+    });
+
+    const body = await (await POST(request({ reason: 'typo' }), routeParams)).json();
+
+    expect(body.params).toEqual({ count: 1 });
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('stage_already_ended');
+  });
+});

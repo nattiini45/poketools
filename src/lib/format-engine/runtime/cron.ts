@@ -63,8 +63,8 @@ import {
   type KitCronPhase,
 } from '@/lib/supabase/queries/format-cron';
 import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
-import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
-import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
+import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 import { validateTransition } from '@/lib/tournament/match-state';
@@ -89,7 +89,6 @@ import { isFormatContextStale, isStaleOnly, newHookReport } from './stale';
 import { onMatchCompleted, onRoundCompleted, revertMatchCompletion } from './hooks';
 import { loadFreshKitContext, phaseById, rosterOf, type KitContext, type KitPhaseInfo } from './load';
 import { planRandomPicks } from './random-pick';
-import { hiddenGiverActions } from './views';
 import { own } from './types';
 
 const TAG = 'format-engine/cron';
@@ -236,10 +235,16 @@ async function fireDueMarks(job: PhaseJob, ctx: KitContext, now: Date, summary: 
   return current;
 }
 
-/** The players an action is for: those with a link of its relation, else the roster of the league. */
+/**
+ * The players an action is for: those on the roster of the league, with a link of its relation when the action is `via`
+ * one. A giver who is no longer in the league keeps their link but is no actor (`actorAccess`): nothing is drawn or
+ * reviewed for them, what they already gave stays, and the recipient they leave is the admin's to handle.
+ */
 function actionActors(ctx: KitContext, via: string | undefined): string[] {
-  if (via === undefined) return rosterOf(ctx);
-  return [...new Set(ctx.state.links.filter((link) => link.relation === via).map((link) => link.from))].sort();
+  const roster = rosterOf(ctx);
+  if (via === undefined) return roster;
+  const members = new Set(roster);
+  return [...new Set(ctx.state.links.filter((link) => link.relation === via && members.has(link.from)).map((link) => link.from))].sort();
 }
 
 async function applyActionPolicy(
@@ -283,12 +288,18 @@ async function applyActionPolicy(
     // A pick is drawn against the state as it is after the picks made before it (exclusive items taken meanwhile).
     const fresh = await loadFreshKitContext(seasonId);
     if (fresh === null) return;
+    // The policy (deadline, on_miss) belongs to the format this pass read: a draw against any other format would apply the
+    // old deadline to the new action. The next pass decides again against the format then attached.
+    if (fresh.revision !== job.revision) {
+      logger.warn(TAG, 'random picks stopped, the format changed since the pass read its calendar; the next pass retries', { seasonId, action: actionId });
+      return;
+    }
     // The player may have submitted since the pass started (a pick before the close is legal with a negative offset): a
     // draw must never replace a choice the player made, so a player who now has a non-draft submission is left alone.
     if (fresh.state.submissions.some((s) => s.action === actionId && s.actor === player && s.status !== 'draft')) continue;
     const picks = planRandomPicks(fresh.def, actionId, player, fresh.state, rosterOf(fresh), fresh.seed);
     if (picks === null) {
-      await openCheck(seasonId, planActionCheck(stage, index, actionId, player, 'no_valid_pick'), summary, fresh.revision);
+      await openCheck(seasonId, planActionCheck(stage, index, actionId, player, 'no_valid_pick'), summary, job.revision);
       continue;
     }
     // The draw was validated as the system (planRandomPicks), so the submit must be too: a domain visible to admins only
@@ -297,11 +308,12 @@ async function applyActionPolicy(
     // then left alone like one who was seen submitted: no count, no audit entry, no check. A pick that was submitted AND
     // locked (`lock: 'on_submit'`) or an action locked meanwhile answers `action_locked` instead (the function checks the
     // lock first): the same case, the choice stands or the action is closed, so the loop goes on with the other players.
-    // The submit carries the revision of the format it validated against, so a draw never lands in a format an admin
-    // replaced or amended meanwhile (`format_context_stale`, retried by the next pass).
+    // `expectedRevision` is the format the policy and the draw belong to: `submitAction` validates and writes under that one
+    // or refuses, so a draw never lands in a format an admin replaced or amended meanwhile (`format_context_stale`, retried
+    // by the next pass).
     let written: Awaited<ReturnType<typeof submitAction>>;
     try {
-      written = await submitAction({ seasonId, actionId, actorId: player, picks, audience: 'system', onlyIfUnsubmitted: true });
+      written = await submitAction({ seasonId, actionId, actorId: player, picks, audience: 'system', onlyIfUnsubmitted: true, expectedRevision: job.revision });
     } catch (error) {
       if (error instanceof FormatActionAlreadySubmittedError) continue;
       if (error instanceof FormatRuntimeError && error.code === 'action_locked') continue;
@@ -321,7 +333,7 @@ async function applyActionPolicy(
       summary.picks += 1;
       // A pick the cron drew is indistinguishable from the player's own in the submission row, so it is recorded here. Like
       // the player's own submit, it names no giver when a relation still hides them (every site admin reads this log).
-      const giverHidden = hiddenGiverActions(fresh).has(actionId);
+      const { giverHidden } = written;
       logAuditEvent({
         actor_id: null,
         actor_name: 'System',
@@ -338,7 +350,7 @@ async function applyActionPolicy(
       continue;
     }
     logger.warn(TAG, 'random pick refused', { seasonId, action: actionId, issues: written.issues.map((issue) => issue.code) });
-    await openCheck(seasonId, planActionCheck(stage, index, actionId, player, written.issues[0]?.code ?? 'pick_refused'), summary, fresh.revision);
+    await openCheck(seasonId, planActionCheck(stage, index, actionId, player, written.issues[0]?.code ?? 'pick_refused'), summary, job.revision);
   }
 }
 
@@ -384,9 +396,9 @@ async function applyForfeit(
     logger.warn(TAG, 'forfeit transition refused', { matchId: match.id, error: transition.error });
     return;
   }
-  // The forfeit is decided from the context the pass loaded and is not a database function that could carry its revision:
-  // read the league's head right before the first write, so a league taken off the kit (or whose format was replaced or
-  // amended) since the pass started is left alone and the next pass decides again.
+  // The forfeit is decided from the context the pass loaded. The status write below decides that for good, in one
+  // transaction; this read only spares a league that already left the kit (or whose format was replaced or amended) the
+  // staging of an outcome that would be taken back at once. The next pass decides again.
   const head = await getSeasonKitHead(job.cron.season_id);
   if (head === null || head.engine !== 'kit' || head.revision !== job.revision) {
     logger.warn(TAG, 'a deadline forfeit is not applied, the league left the kit engine or its format changed since the pass read it; the next pass retries', {
@@ -411,16 +423,28 @@ async function applyForfeit(
     logger.error(TAG, 'could not write the forfeit outcome; the match stays as it is', { matchId: match.id, error });
     return;
   }
-  let updated: Awaited<ReturnType<typeof updateMatchStatus>>;
+  let applied: boolean;
   try {
-    updated = await updateMatchStatus(match.id, 'completed', plan.winnerId, undefined, undefined, status);
+    applied = await completeFormatForfeit({
+      seasonId: job.cron.season_id,
+      matchId: match.id,
+      expectedStatus: status,
+      winnerId: plan.winnerId,
+      revision: job.revision,
+    });
   } catch (error) {
+    // The database refused it under the league's locks (the format changed or the league left the kit): nothing was written,
+    // so the staged row goes whatever the match's status is now. The next pass decides again (runPhase: not a failure).
+    if (isFormatContextStale(error)) {
+      await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
+      throw error;
+    }
     // The write threw, so it may have committed: a completed match may be this pass's own, whose row stays.
     const current = await getMatchById(match.id).catch(() => null);
     await unstageForfeit(match.id, current, current?.status === 'completed' ? null : staged);
     throw error;
   }
-  if (updated === null) {
+  if (!applied) {
     // The compare-and-set missed: a result landed meanwhile and owns the row; the forfeit never happened.
     await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
     return;

@@ -8,8 +8,9 @@
  *  5. structure checks, 6. stage graph, 7. plan, 8. stage checks, 9. edge checks (expression type checks),
  *  10. runtime-section checks (attributes, domains, relations, resources, metrics, tunables, events, actions),
  *  11. Phase 4 stage-field checks (bipartite and filtered pairings, constraints, calendar, end_when, foreach_group),
- *  12. translation coverage, 13. capabilities;
- *  14. sort the diagnostics, deep-freeze the result and store it.
+ *  12. privacy warnings (a public expression reading a relation with a hidden side),
+ *  13. translation coverage, 14. capabilities;
+ *  15. sort the diagnostics, deep-freeze the result and store it.
  *
  * Compile is pure: no clock, no randomness, no I/O. The result carries codes and params only, never localized
  * text, so a cached result is locale-free; `render.ts` produces sentences after the read.
@@ -21,6 +22,7 @@ import type { FormatDefinition } from '../types';
 import { deriveCapabilities } from './capabilities';
 import { checkEdges } from './checks-edge';
 import { checkPhase4 } from './checks-phase4';
+import { checkPublicRelationReads } from './checks-privacy';
 import { checkRuntime } from './checks-runtime';
 import { checkStages } from './checks-stage';
 import { checkLTextCoverage, checkStructure } from './checks-structure';
@@ -80,7 +82,7 @@ export interface Analysis {
   capabilities: FormatCapabilities;
 }
 
-/** Steps 5 to 13 on an already valid definition. Exported so the checks can be exercised without a validator. */
+/** Steps 5 to 14 on an already valid definition. Exported so the checks can be exercised without a validator. */
 export function analyzeDefinition(def: FormatDefinition, env: CompileEnv): Analysis {
   const diagnostics: Diagnostic[] = [...checkStructure(def, env)];
   const graphBuild = buildStageGraph(def);
@@ -91,6 +93,7 @@ export function analyzeDefinition(def: FormatDefinition, env: CompileEnv): Analy
   diagnostics.push(...checkEdges(def, env, graphBuild, planBuild));
   diagnostics.push(...checkRuntime(def, env));
   diagnostics.push(...checkPhase4(def, env, planBuild.byKey));
+  diagnostics.push(...checkPublicRelationReads(def));
   diagnostics.push(...checkLTextCoverage(def));
   return {
     diagnostics,

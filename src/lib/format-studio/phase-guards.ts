@@ -15,6 +15,9 @@
  *   runs the format's reaction (stage start and end, checks, auto advance); the league's phase route writes none of that.
  * - `assertFormatPhaseRosterOpen`: a format phase that has started takes no roster change here (the draw, the groups and
  *   the one-shot grants of its stage start were made for the roster it started with; a player is replaced with a substitute).
+ *   An admin can force the change with `force: true` and a `reason` (the way a round with unfinished matches is completed);
+ *   the guard then hands the reason back, and the route writes the audit entry (`auditRosterOverride`, `roster-override.ts`). A forced change
+ *   gives the added player nothing automatic: the admin overview lists the one-time events they missed.
  * - `assertSeasonRosterMembers`: every enrollee is on the league roster (the format routes refuse everybody else).
  */
 import 'server-only';
@@ -22,7 +25,9 @@ import 'server-only';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getKitPhases, getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { reasonSchema } from '@/lib/validation';
 import { FormatStudioError } from './errors';
+import type { RosterOverride, RosterOverrideRequest } from './roster-override';
 
 /** The columns the frozen stage fixes: a changed value would put the row out of step with `tournaments.stage_spec`. */
 export const FORMAT_STRUCTURAL_PHASE_FIELDS = [
@@ -78,9 +83,33 @@ export async function assertFormatPhaseStatusUnchanged(
   }
 }
 
-/** 409 `format_phase_owned` for a roster change (add, remove, seeds, sync) of a format phase that has left `upcoming`. */
-export async function assertFormatPhaseRosterOpen(seasonId: string, phase: { id: string; status: string }): Promise<void> {
-  if (phase.status !== 'upcoming' && (await isFormatPhase(seasonId, phase.id))) throw new FormatStudioError('format_phase_owned');
+/** Whether the format of the league created the phase (its roster is the format's to keep). */
+export async function isFormatManagedPhase(seasonId: string, phaseId: string): Promise<boolean> {
+  return isFormatPhase(seasonId, phaseId);
+}
+
+/**
+ * 409 `format_phase_owned` for a roster change (add, remove, seeds, sync) of a format phase that has left `upcoming`,
+ * unless the request forces it. A forced request needs a reason (400 `PHASE_ROSTER_REASON_REQUIRED` without one) and
+ * the guard returns it, so the route can audit it once the change is made. `null`: nothing was overridden (an upcoming
+ * phase, or a phase the format does not own).
+ */
+export async function assertFormatPhaseRosterOpen(
+  seasonId: string,
+  phase: { id: string; status: string },
+  request: RosterOverrideRequest = { force: false },
+): Promise<RosterOverride | null> {
+  if (phase.status === 'upcoming' || !(await isFormatPhase(seasonId, phase.id))) return null;
+  // A force is for a phase in play. A completed phase stays closed: its standings and who advanced from it are history.
+  if (!request.force || phase.status === 'completed') throw new FormatStudioError('format_phase_owned');
+  const reason = reasonSchema.safeParse(request.reason);
+  if (!reason.success) {
+    throw new UserFacingError('Forcing a roster change on a started phase of the format needs a reason', {
+      code: 'PHASE_ROSTER_REASON_REQUIRED',
+      status: 400,
+    });
+  }
+  return { reason: reason.data };
 }
 
 /** 400 `PHASE_ROSTER_REQUIRED` unless every player is on the league roster. */

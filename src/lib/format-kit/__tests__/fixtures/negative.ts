@@ -647,7 +647,12 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   ]), { params: { stage: 'per_group', from_stage: 'houses', reason: 'no_groups' } }),
   fx('error', 'foreach-group-unknown-stage', 'ref_unknown_stage', '/stages/4/foreach_group/from', mutate(W, [
     { op: 'replace', path: '/stages/4/foreach_group/from', value: 'nowhere' },
-  ]), { params: { key: 'nowhere', where: 'foreach_group' } }),];
+  ]), { params: { key: 'nowhere', where: 'foreach_group' } }),
+  // The Wichtelcup fixture keeps gift givers away from their recipients: a pairing filter over the hidden Secret Santa.
+  fx('warning', 'public-pairing-reads-hidden-relation', 'public_expr_reads_hidden_relation', '/stages/0/pairing/allow', mutate(W, []), {
+    params: { relation: 'santa', context: 'pair_filter', owner_kind: 'stage', owner: 'cup' },
+  }),
+];
 
 /** The diagnostics a fixture is meant to produce: through `compile`, or straight from the engine for `engineOnly`. */
 export function fixtureDiagnostics(fixture: NegativeFixture): readonly Diagnostic[] {

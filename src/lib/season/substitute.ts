@@ -14,6 +14,11 @@ import { getSeasonGroupOfPlayer, seasonGroupHasDraftingPool } from '@/lib/supaba
 import { seasonHasLiveLegacyDraft } from '@/lib/supabase/queries/drafts';
 import { DraftRuleError } from '@/lib/draft/errors';
 import {
+  moveFormatSeat,
+  type FormatSeatMove,
+  type FormatSeatRows,
+} from '@/lib/supabase/queries/format-substitute';
+import {
   getParticipants,
   getStagesBySeasonId,
   swapTournamentParticipant,
@@ -58,6 +63,26 @@ export interface SubstitutePhaseUpdate {
   group: { id: string; name: string } | null;
 }
 
+/**
+ * What a substitution does with the seat's data in a league that runs a custom format. The format rows (links, items, picks,
+ * attributes, track steps, open challenges) are keyed by player: the incoming player inherits them (`moved`, `total` rows
+ * in `rows`; a preview counts the same statements and rolls them back). A phase-scope substitution of a player who stays in
+ * another phase that is not completed moves nothing (`moved: false`, the phases in `kept_phase_ids`, and the warning
+ * `substitute_format_seat_kept`). The event log, adjustments and checks stay with the player who left.
+ */
+export interface SubstituteFormatMove {
+  moved: boolean;
+  total: number;
+  rows: FormatSeatRows;
+  kept_phase_ids: string[];
+}
+
+/** A warning of the substitution response: a catalog code (`errors/seasons`) with its params. */
+export interface SubstituteWarning {
+  code: 'substitute_format_seat_kept';
+  params: { phases: string };
+}
+
 export interface SubstituteSummary {
   roster_swapped: boolean;
   phases: SubstitutePhaseUpdate[];
@@ -65,10 +90,14 @@ export interface SubstituteSummary {
   matches_repaired: number;
   /** Planned matches the apply did not repair (always empty in a dry run). */
   matches_skipped: SubstituteSkippedMatch[];
+  /** Present only in a league with an attached custom format (see `SubstituteFormatMove`). */
+  format?: SubstituteFormatMove;
+  /** Present only when there is one. */
+  warnings?: SubstituteWarning[];
 }
 
 /** The apply step that was running when an apply stopped. */
-export type SubstituteApplyStep = 'proposals' | 'match' | 'group' | 'enrollment' | 'roster';
+export type SubstituteApplyStep = 'format' | 'proposals' | 'match' | 'group' | 'enrollment' | 'roster';
 
 /**
  * What an apply wrote, filled as it runs so the caller can record it after a
@@ -79,6 +108,11 @@ export type SubstituteApplyStep = 'proposals' | 'match' | 'group' | 'enrollment'
  * it) is left out, so an apply that wrote nothing logs nothing.
  */
 export interface SubstituteApplyLog {
+  /**
+   * The seat's format rows moved to the incoming player (the first write of an apply, one transaction): the rows per table,
+   * null when nothing moved (no format, a seat that stays, or nothing held).
+   */
+  format_moved: { total: number; rows: FormatSeatRows } | null;
   /** Matches that had pending proposals, now cancelled. */
   proposals_cancelled: string[];
   /** Matches re-paired to the incoming player. */
@@ -106,6 +140,7 @@ export interface SubstituteApplyLog {
 
 export function emptySubstituteApplyLog(): SubstituteApplyLog {
   return {
+    format_moved: null,
     proposals_cancelled: [],
     matches_repaired: [],
     matches_skipped: [],
@@ -120,6 +155,7 @@ export function emptySubstituteApplyLog(): SubstituteApplyLog {
 /** True when the apply wrote anything before it stopped. */
 export function substituteApplyWrote(log: SubstituteApplyLog): boolean {
   return (
+    log.format_moved !== null ||
     log.proposals_cancelled.length > 0 ||
     log.matches_repaired.length > 0 ||
     log.groups_handed_over.length > 0 ||
@@ -198,13 +234,39 @@ function toAffectedMatch(
   };
 }
 
+/** The league's stages, and the ones this substitution can reach (not completed, in scope). */
 async function resolveTargetPhases(seasonId: string, scope: 'league' | string) {
   const stages = await getStagesBySeasonId(seasonId);
-  return stages.filter(
-    (stage) =>
-      ACTIVE_PHASE_STATUSES.has(stage.status) &&
-      isPhaseInScope(stage.id, scope),
-  );
+  return {
+    stages,
+    targets: stages.filter(
+      (stage) =>
+        ACTIVE_PHASE_STATUSES.has(stage.status) &&
+        isPhaseInScope(stage.id, scope),
+    ),
+  };
+}
+
+/**
+ * The summary's `format` and `warnings` from the database's answer. Absent when the league has no attached format. The
+ * phases a seat stays in are named from the league's stages.
+ */
+function describeFormatMove(
+  move: FormatSeatMove,
+  stages: ReadonlyArray<{ id: string; name: string }>,
+): Pick<SubstituteSummary, 'format' | 'warnings'> {
+  if (!move.attached) return {};
+  const format: SubstituteFormatMove = {
+    moved: move.moved,
+    total: move.total,
+    rows: move.rows,
+    kept_phase_ids: move.kept_phase_ids,
+  };
+  if (move.kept_phase_ids.length === 0) return { format };
+  const phases = move.kept_phase_ids
+    .map((id) => stages.find((stage) => stage.id === id)?.name ?? id)
+    .join(', ');
+  return { format, warnings: [{ code: 'substitute_format_seat_kept', params: { phases } }] };
 }
 
 /**
@@ -362,7 +424,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     throw new UserFacingError('Incoming player not found', { code: 'IN_PLAYER_NOT_FOUND' });
   }
 
-  const targetPhases = await resolveTargetPhases(seasonId, scope);
+  const { stages, targets: targetPhases } = await resolveTargetPhases(seasonId, scope);
   /** Each target phase's enrollment, read once. */
   const enrollment = new Map<string, ParticipantWithSeed[]>();
 
@@ -460,7 +522,21 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     matches_skipped: [],
   };
 
+  const handedOverPhaseIds = phaseUpdates.map((phase) => phase.phase_id);
+  const moveSeat = (dry: boolean) =>
+    moveFormatSeat({
+      seasonId,
+      outPlayerId,
+      inPlayerId,
+      leagueScope: isLeagueScope,
+      phaseIds: handedOverPhaseIds,
+      dryRun: dry,
+    });
+
   if (dryRun) {
+    // The same statements as the apply, rolled back: the preview shows what moves, and refuses a collision (409) before the
+    // admin confirms.
+    Object.assign(summary, describeFormatMove(await moveSeat(true), stages));
     return summary;
   }
 
@@ -475,6 +551,11 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
   // The writes are not one transaction, so they run in an order a re-run can
   // resume from after a failure at any step: the planning above reads the
   // current state, and a step that already ran is not planned again.
+  //   - The seat's format rows move first, in one transaction of their own
+  //     (`format_substitute_seat`): a collision with rows of the incoming
+  //     player refuses it before anything else was written, and a re-run after
+  //     a later failure finds nothing left to move (the outgoing player holds no
+  //     rows, so the call is a no-op that does not collide).
   //   - Per phase, each scheduled match first has its pending proposals
   //     cancelled, then its pairing repaired: until the repair lands the
   //     match still names the outgoing player, so a re-run retries both. The
@@ -491,6 +572,11 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
   //     league-scope re-run passes the roster checks.
   // A second apply racing this one finds its rows gone and stops with a 409
   // (`ENROLLMENT_CHANGED`, `ROSTER_CHANGED`, `GROUP_SLOT_CHANGED`).
+  at('format', null);
+  const seat = await moveSeat(false);
+  Object.assign(summary, describeFormatMove(seat, stages));
+  if (seat.moved && seat.total > 0) applyLog.format_moved = { total: seat.total, rows: seat.rows };
+
   for (const phase of phaseUpdates) {
     for (const match of affectedMatches.filter((m) => m.tournament_id === phase.phase_id)) {
       const next = {

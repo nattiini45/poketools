@@ -22,10 +22,11 @@ import {
 } from '@/lib/players/public-player';
 import { canViewAdminRoster } from '@/lib/players/roster-access';
 import { expireTournamentReads } from '@/lib/revalidation';
-import { assertSeasonRosterMembers } from '@/lib/format-studio/phase-guards';
+import { assertFormatPhaseRosterOpen, assertSeasonRosterMembers, isFormatManagedPhase } from '@/lib/format-studio/phase-guards';
+import { auditRosterOverride, rosterOverrideOf, type RosterOverride } from '@/lib/format-studio/roster-override';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
-import type { BracketType } from '@/types/tournament';
+import type { BracketType, Tournament } from '@/types/tournament';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -46,6 +47,26 @@ async function assertBracketParticipantMutable(tournamentId: string): Promise<vo
       { code: 'BRACKET_LOCKED_USE_SUBSTITUTE' }
     );
   }
+}
+
+/**
+ * How a roster write meets the lock of a tournament that has left `upcoming`. `{ locked: false }`: the write may go on,
+ * with the override a forced change used (`null` when nothing was overridden). `{ locked: true }`: the caller answers its
+ * legacy 400 for the started tournament.
+ *
+ * A phase the league's attached format created and that is `active` is the format's to keep: its roster changes are
+ * refused 409 `format_phase_owned` (like the league's phase route), unless the request forces them with a reason. A
+ * completed phase, and every other tournament, keeps the plain lock.
+ */
+async function rosterLockOf(
+  tournament: Tournament,
+  rawBody: unknown,
+): Promise<{ locked: false; override: RosterOverride | null } | { locked: true }> {
+  if (tournament.status === 'upcoming') return { locked: false, override: null };
+  if (tournament.status !== 'active' || !tournament.season_id || !(await isFormatManagedPhase(tournament.season_id, tournament.id))) {
+    return { locked: true };
+  }
+  return { locked: false, override: await assertFormatPhaseRosterOpen(tournament.season_id, tournament, rosterOverrideOf(rawBody)) };
 }
 
 /**
@@ -84,7 +105,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
 
@@ -95,14 +116,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
-    if (tournament.status !== 'upcoming') {
+    const rawBody = await request.json();
+    const lock = await rosterLockOf(tournament, rawBody);
+    if (lock.locked) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Cannot add participants after the tournament has started', code: 'tournament_participant_add_locked' },
         { status: 400 }
       );
     }
-
-    const rawBody = await request.json();
     const zodResult = seasonParticipantAddSchema.safeParse(rawBody);
 
     if (!zodResult.success) {
@@ -119,6 +140,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     await assertBracketParticipantMutable(id);
     await addParticipant(id, zodResult.data.player_id);
     expireTournamentReads(id, tournament.season_id);
+    if (lock.override && tournament.season_id) {
+      auditRosterOverride(admin, tournament.season_id, tournament, lock.override, 'add', { player_id: zodResult.data.player_id });
+    }
     return NextResponse.json<ApiResult<null>>(
       { success: true, data: null },
       { status: 201 }
@@ -132,7 +156,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
-    await requireResourceAdmin('tournament', id);
+    const admin = await requireResourceAdmin('tournament', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
 
@@ -143,14 +167,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
-    if (tournament.status !== 'upcoming') {
+    const rawBody = await request.json();
+    const lock = await rosterLockOf(tournament, rawBody);
+    if (lock.locked) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Cannot remove participants after the tournament has started', code: 'tournament_participant_remove_locked' },
         { status: 400 }
       );
     }
-
-    const rawBody = await request.json();
     const zodResult = seasonParticipantRemoveSchema.safeParse(rawBody);
 
     if (!zodResult.success) {
@@ -164,6 +188,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     await assertBracketParticipantMutable(id);
     await removeParticipant(id, zodResult.data.player_id);
     expireTournamentReads(id, tournament.season_id);
+    if (lock.override && tournament.season_id) {
+      auditRosterOverride(admin, tournament.season_id, tournament, lock.override, 'remove', { player_id: zodResult.data.player_id });
+    }
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to remove participant');
@@ -197,7 +224,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
-    if (tournament.status !== 'upcoming') {
+    const lock = await rosterLockOf(tournament, rawBody);
+    if (lock.locked) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Seeding is locked — the tournament has already started', code: 'tournament_seeding_locked' },
         { status: 400 }
@@ -248,6 +276,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
     expireTournamentReads(id, tournament.season_id);
+    if (lock.override && tournament.season_id) {
+      auditRosterOverride(admin, tournament.season_id, tournament, lock.override, 'seeds', { seeded: nonNullSeeds.length });
+    }
     logAuditEvent({
       actor_id: admin.playerId,
       actor_name: admin.name,

@@ -470,7 +470,6 @@ export default defineDe<typeof en>()({
     window: 'Zeitfenster',
     opens_on: 'Öffnet, wenn',
     closes_on: 'Schließt, wenn',
-    review: 'Prüfung nötig',
     lock: 'Sperrt',
     distinct_attr: 'Muss sich unterscheiden in',
     source: 'Quelle',

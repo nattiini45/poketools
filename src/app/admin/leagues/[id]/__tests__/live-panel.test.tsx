@@ -48,6 +48,7 @@ vi.mock('@/components/format-runtime/admin/ActionsOverview', () => stub('Actions
 vi.mock('@/components/format-runtime/admin/RelationsAdmin', () => stub('RelationsAdmin'));
 vi.mock('@/components/format-runtime/admin/AdminLadders', () => stub('AdminLadders'));
 vi.mock('@/components/format-runtime/admin/DomainsSummary', () => stub('DomainsSummary'));
+vi.mock('@/components/format-runtime/admin/LateJoiners', () => stub('LateJoiners'));
 
 import { formatLivePanel } from '../_components/panels/LivePanel';
 import type { LeagueAdminPanelContext } from '../_components/panels/context';
@@ -58,6 +59,7 @@ import AdjustmentHistory from '@/components/format-runtime/admin/AdjustmentHisto
 import ActionsOverview from '@/components/format-runtime/admin/ActionsOverview';
 import RelationsAdmin from '@/components/format-runtime/admin/RelationsAdmin';
 import AdminLadders from '@/components/format-runtime/admin/AdminLadders';
+import LateJoiners from '@/components/format-runtime/admin/LateJoiners';
 import DomainsSummary from '@/components/format-runtime/admin/DomainsSummary';
 
 const S1 = '5e150000-0000-4000-8000-000000000001';
@@ -116,6 +118,7 @@ const OVERVIEW = {
   open_checks: 1,
   open_challenges: 1,
   allowed_adjustments: ['points', 'resource', 'action', 'relation'],
+  late_joiners: [] as unknown[],
 };
 
 const ADJUSTMENTS = {
@@ -227,6 +230,20 @@ describe('Live tab panel', () => {
 
     const [domains] = findByType(tree, DomainsSummary);
     expect(domains.props.domains).toBe(OVERVIEW.domains);
+  });
+
+  it('lists the late joiners in a section of their own, and shows no such section when nobody joined late', async () => {
+    expect(findByType(await formatLivePanel(panelContext()), LateJoiners)).toHaveLength(0);
+
+    const lateJoiners = [{ player: { id: MISTY, name: 'Misty' }, missed: [] }];
+    mocks.loadAdminOverview.mockResolvedValue({ ...OVERVIEW, late_joiners: lateJoiners });
+    const tree = await formatLivePanel(panelContext());
+
+    const [list] = findByType(tree, LateJoiners);
+    expect(list.props.lateJoiners).toBe(lateJoiners);
+    const titles = findByType(tree, Section).map((s) => s.props.title);
+    expect(titles).toContain('Late joiners');
+    expect(titles.indexOf('Late joiners')).toBeLessThan(titles.indexOf('Relations'));
   });
 
   it('Open and Lock and Reveal follow the kinds the format allows', async () => {

@@ -65,7 +65,6 @@ export function wichtelDef(): FormatDefinition {
         via: 'santa',
         window: { opens_on: { event: 'stage_start', stage: 'finals' }, closes_on: { event: 'stage_start', stage: 'swiss' } },
         steps: [{ resource: 'picks', domain: 'new_year', count: 1 }],
-        review: true,
         lock: 'on_submit',
       },
     ],

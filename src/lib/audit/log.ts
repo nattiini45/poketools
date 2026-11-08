@@ -69,6 +69,7 @@ export type AuditAction =
   | 'season.phase.groups.repair'
   | 'season.phase.advance'
   | 'phase.enrollment.sync'
+  | 'phase.roster.force'
   | 'season.groups.replace'
   | 'season.group.rename'
   | 'season.group.member.place'

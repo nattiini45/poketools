@@ -5,6 +5,7 @@
  * components can import it for limits and shapes.
  */
 import type { AuditLogRecord } from '@/lib/audit/queries';
+import type { StageEndedWarning } from '@/lib/match/stage-ended-warning';
 import type { MatchStatus } from '@/types/match';
 import type { RoundStatus } from '@/types/round';
 
@@ -102,6 +103,11 @@ export interface ReopenMatchResult {
   ratings_rebuilt_players: number;
   bracket_matches_removed: number;
   failed_steps: ReopenStep[];
+  /**
+   * Set when the reopen took back a completed match's result in a format phase whose stage had already ended: the phase
+   * stays completed, and this says which players advanced to the next phase on the strength of that result.
+   */
+  stage_already_ended?: StageEndedWarning;
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {

@@ -255,5 +255,46 @@ describe('POST /api/tournaments/[id]/regenerate-bracket', () => {
       expect(announceKitRound).not.toHaveBeenCalled();
       expect(getRoundsByTournament).not.toHaveBeenCalled();
     });
+
+    it('refuses a phase whose stage already ended with a catalogued 409 before anything is written, the forced-start audit included', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({ ...(kitTournament as object), status: 'completed' } as never);
+      vi.mocked(wantsForcedStart).mockReturnValue(true);
+
+      const response = await POST(request({ cascade: true }), params);
+      const payload = await response.json();
+
+      expect(response.status).toBe(409);
+      expect(payload.code).toBe('bracket_regenerate_phase_completed');
+      expect(payload.error).toBe('This phase has already ended, so its bracket cannot be regenerated. Reopen the phase first, then regenerate the bracket.');
+      expect(assertPhaseReadyForFirstRound).not.toHaveBeenCalled();
+      expect(regenerateEliminationBracket).not.toHaveBeenCalled();
+      expect(announceKitRound).not.toHaveBeenCalled();
+      expect(logAuditEvent).not.toHaveBeenCalled();
+      expect(expireTournamentReads).not.toHaveBeenCalled();
+      expect(revalidateMatchPages).not.toHaveBeenCalled();
+    });
+
+    it('regenerates a phase that is still running', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({ ...(kitTournament as object), status: 'active' } as never);
+
+      const response = await POST(request({}), params);
+
+      expect(response.status).toBe(200);
+      expect(regenerateEliminationBracket).toHaveBeenCalledTimes(1);
+    });
+
+    it('a completed phase of a league without an attached format keeps its old behaviour', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...(kitTournament as object),
+        status: 'completed',
+        season_format_type: 'singles',
+      } as never);
+      vi.mocked(loadKitPhaseOfTournament).mockResolvedValue(null);
+
+      const response = await POST(request({}), params);
+
+      expect(response.status).toBe(200);
+      expect(regenerateEliminationBracket).toHaveBeenCalledTimes(1);
+    });
   });
 });

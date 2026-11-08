@@ -9,15 +9,10 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/format-engine/runtime/actions-server', () => ({ saveAction: vi.fn(), submitAction: vi.fn() }));
-vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/format-engine/runtime/load')>()),
-  loadFreshKitContext: vi.fn(),
-}));
 
 import { logAuditEvent } from '@/lib/audit/log';
 import { assertSeasonOpenForPlay, requireSeasonMember } from '@/lib/auth/season-member';
 import { submitAction } from '@/lib/format-engine/runtime/actions-server';
-import { loadFreshKitContext } from '@/lib/format-engine/runtime/load';
 import { refuse } from '@/lib/format-engine/runtime/refusal';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { FormatRuntimeError } from '@/lib/supabase/queries/format-runtime';
@@ -65,17 +60,6 @@ const row = (over: Record<string, unknown> = {}) =>
     ...over,
   }) as never;
 
-/** A running kit league whose `choose_gift` action runs `via` the Secret Santa relation (giver hidden unless revealed). */
-const kitContext = (over: { revealed?: boolean; roster?: string[]; hiddenFrom?: boolean } = {}) =>
-  ({
-    def: {
-      relations: [{ key: 'santa', visibility: { from: over.hiddenFrom === false ? 'public' : 'hidden', to: 'own' } }],
-      rules: [{ kind: 'player.action', id: 'choose_gift', via: 'santa' }, { kind: 'player.action', id: 'plain' }],
-    },
-    state: { links: [{ relation: 'santa', revealed: over.revealed ?? false }] },
-    phases: [{ id: 'p1', stage: { key: 'cup' }, members: over.roster ?? [VIEWER] }],
-  }) as never;
-
 const PICKS = { picks: [{ step: 0, item_id: 'pikachu' }] };
 const params = (actionId = 'choose_gift') => ({ params: Promise.resolve({ id: SEASON_ID.toUpperCase(), actionId }) });
 const post = (body: unknown, raw?: string) =>
@@ -90,8 +74,7 @@ beforeEach(() => {
   vi.mocked(requireSeasonMember).mockResolvedValue({ player, seasonId: SEASON_ID });
   vi.mocked(assertSeasonOpenForPlay).mockResolvedValue(undefined);
   vi.mocked(checkRateLimit).mockResolvedValue(ALLOWED);
-  vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: row() });
-  vi.mocked(loadFreshKitContext).mockResolvedValue(kitContext({ hiddenFrom: false }));
+  vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: row(), giverHidden: false });
 });
 
 describe('POST /api/seasons/[id]/format/actions/[actionId]/submit', () => {
@@ -138,10 +121,9 @@ describe('POST /api/seasons/[id]/format/actions/[actionId]/submit', () => {
   });
 
   it('names no giver in the audit entry of an action a relation still hides, so an admin who plays cannot read it', async () => {
-    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(kitContext());
+    vi.mocked(submitAction).mockResolvedValueOnce({ ok: true, submission: row(), giverHidden: true });
     const response = await POST(post(PICKS), params());
     expect(response.status).toBe(200);
-    expect(loadFreshKitContext).toHaveBeenCalledWith(SEASON_ID);
     expect(logAuditEvent).toHaveBeenCalledTimes(1);
     const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
     expect(entry).toMatchObject({
@@ -156,38 +138,14 @@ describe('POST /api/seasons/[id]/format/actions/[actionId]/submit', () => {
     expect(json).not.toContain('Mara');
   });
 
-  it('still names no giver when an admin removed them from every phase after the draw (their link, and gift, stay)', async () => {
-    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(kitContext({ roster: [] }));
-    expect((await POST(post(PICKS), params())).status).toBe(200);
-    const entry = vi.mocked(logAuditEvent).mock.calls[0][0];
-    expect(entry).toMatchObject({ actor_id: null, actor_name: 'Player', metadata: { giver_hidden: true } });
-    expect(JSON.stringify(entry)).not.toContain(VIEWER);
-    expect(JSON.stringify(entry)).not.toContain('Mara');
-  });
-
-  it('keeps the giver in the audit entry once the relation is revealed, for a public giver and for an unrelated action', async () => {
-    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(kitContext({ revealed: true }));
+  it('keeps the giver in the audit entry when the submit reports the giver is not hidden', async () => {
     await POST(post(PICKS), params());
     expect(vi.mocked(logAuditEvent).mock.calls[0][0]).toMatchObject({ actor_id: VIEWER, actor_name: 'Mara' });
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('giver_hidden');
-
-    await POST(post(PICKS), params());
-    expect(vi.mocked(logAuditEvent).mock.calls[1][0]).toMatchObject({ actor_id: VIEWER, actor_name: 'Mara' });
-
-    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(kitContext());
-    await POST(post(PICKS), params('plain'));
-    expect(vi.mocked(logAuditEvent).mock.calls[2][0]).toMatchObject({ actor_id: VIEWER, actor_name: 'Mara' });
-  });
-
-  it('writes nothing when the kit context cannot be read', async () => {
-    vi.mocked(loadFreshKitContext).mockRejectedValueOnce(new Error('db down'));
-    expect((await POST(post(PICKS), params())).status).toBe(500);
-    expect(submitAction).not.toHaveBeenCalled();
-    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('records locked: true when the action locks on submit', async () => {
-    vi.mocked(submitAction).mockResolvedValueOnce({ ok: true, submission: row({ status: 'locked' }) });
+    vi.mocked(submitAction).mockResolvedValueOnce({ ok: true, submission: row({ status: 'locked' }), giverHidden: false });
     const response = await POST(post(PICKS), params());
     expect((await response.json()).data.submission.state).toBe('locked');
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ locked: true });
@@ -253,6 +211,16 @@ describe('POST /api/seasons/[id]/format/actions/[actionId]/submit', () => {
     expect((await POST(post(PICKS), params())).status).toBe(409);
     vi.mocked(submitAction).mockResolvedValueOnce({ ok: false, issues: [{ code: 'actor_without_link' }] });
     expect((await POST(post(PICKS), params())).status).toBe(403);
+  });
+
+  it('answers 403 with the issue actor_not_in_league for a giver who left the league, and writes no audit entry', async () => {
+    vi.mocked(submitAction).mockResolvedValueOnce({ ok: false, issues: [{ code: 'actor_not_in_league' }] });
+    const response = await POST(post(PICKS), params());
+    expect(response.status).toBe(403);
+    const body = await response.json();
+    expect(body).toMatchObject({ success: false, code: 'format_action_invalid' });
+    expect(body.issues).toEqual([{ code: 'actor_not_in_league' }]);
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('maps the signals the database raises under its lock to 409 with the catalog code', async () => {

@@ -62,12 +62,18 @@ const ROUND_STATE_CODES: ReadonlySet<string> = new Set([
 
 /**
  * What a saved round delete, reset or bracket regenerate tells the admin: the league format could not take back the effects of a
- * result that no longer stands (`format_revert_failed` of the response; the matches may be gone, so nothing retries it).
+ * result that no longer stands (`format_revert_failed` of the response; the matches may be gone, so nothing retries it), or the
+ * reset took back a result in a phase whose stage had already ended (`stage_already_ended`: who advanced; the phase is not
+ * reopened). The latter keeps its catalogue code, which `errorsMatches` words.
  */
 function savedChangeWarnings(data: unknown): ApiWarning[] {
-  return gameChangeWarnings(data).flatMap((warning) =>
-    warning.code === 'admin_game_format_revert_failed' ? [{ code: 'round_format_revert_failed' }] : [],
-  );
+  return gameChangeWarnings(data).flatMap((warning): ApiWarning[] => {
+    if (warning.code === 'admin_game_format_revert_failed') return [{ code: 'round_format_revert_failed' }];
+    if (warning.code?.startsWith('admin_game_stage_already_ended')) {
+      return [{ code: warning.code, ...(warning.params ? { params: warning.params } : {}) }];
+    }
+    return [];
+  });
 }
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
