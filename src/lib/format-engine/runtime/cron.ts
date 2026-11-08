@@ -70,6 +70,8 @@ import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 import { validateTransition } from '@/lib/tournament/match-state';
 import type { DeadlinePolicy, Stage, StageCalendar } from '@/lib/format-kit/types';
 import type { MatchWithPlayers } from '@/types/match';
+import { NOTIFICATION_RETENTION_DAYS } from '../notifications/types';
+import { purgeFormatNotifications } from '@/lib/supabase/queries/format-notifications';
 import { expireChallenges } from '../challenge-server';
 import { submitAction } from './actions-server';
 import { actionFlagKey, findAction } from './actions';
@@ -167,12 +169,14 @@ export interface FormatCronSummary {
   /** `match_completed` events fired for finalized matches that had none. */
   completions_backfilled: number;
   challenges_expired: number;
+  /** In-app notifications older than `NOTIFICATION_RETENTION_DAYS`, deleted by this pass. */
+  notifications_purged: number;
   /** Leagues (or the challenge sweep) that threw; each was logged. */
   failures: number;
 }
 
 function emptySummary(): FormatCronSummary {
-  return { leagues: 0, deferred: 0, marks: 0, forfeits: 0, checks: 0, locks: 0, picks: 0, completions_backfilled: 0, challenges_expired: 0, failures: 0 };
+  return { leagues: 0, deferred: 0, marks: 0, forfeits: 0, checks: 0, locks: 0, picks: 0, completions_backfilled: 0, challenges_expired: 0, notifications_purged: 0, failures: 0 };
 }
 
 interface PhaseJob {
@@ -767,8 +771,8 @@ async function runLeague(
 }
 
 /**
- * One pass over the running kit leagues, plus the expiry of open challenges (which needs no calendar). Never throws: a
- * failure is logged and counted in `failures`.
+ * One pass over the running kit leagues, plus the expiry of open challenges (which needs no calendar) and the purge of old
+ * in-app notifications. Never throws: a failure is logged and counted in `failures`.
  */
 export async function runFormatCronPass(now: Date = new Date(), options: FormatCronOptions = {}): Promise<FormatCronSummary> {
   const summary = emptySummary();
@@ -848,6 +852,13 @@ export async function runFormatCronPass(now: Date = new Date(), options: FormatC
   } catch (error) {
     summary.failures += 1;
     logger.error(TAG, 'could not expire challenges', { error });
+  }
+
+  try {
+    summary.notifications_purged = await purgeFormatNotifications(new Date(now.getTime() - NOTIFICATION_RETENTION_DAYS * 86_400_000));
+  } catch (error) {
+    summary.failures += 1;
+    logger.error(TAG, 'could not purge old notifications', { error });
   }
   return summary;
 }

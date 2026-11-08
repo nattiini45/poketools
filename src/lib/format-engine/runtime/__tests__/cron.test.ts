@@ -59,8 +59,11 @@ import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
 import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
 import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { purgeFormatNotifications } from '@/lib/supabase/queries/format-notifications';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
+
+vi.mock('@/lib/supabase/queries/format-notifications', () => ({ purgeFormatNotifications: vi.fn(async () => 0) }));
 
 const STAGED = { setAt: '2026-11-06T10:00:00.123456+00:00' };
 
@@ -1198,6 +1201,20 @@ describe('a pass', () => {
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(summary).toMatchObject({ leagues: 2, failures: 1, challenges_expired: 3 });
     expect(logger.error).toHaveBeenCalledWith('format-engine/cron', 'league cron pass failed', expect.objectContaining({ seasonId: SEASON, error: boom }));
+  });
+
+  it('deletes the notifications past their retention, and a purge that fails is logged and counted', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(null);
+    vi.mocked(purgeFormatNotifications).mockResolvedValueOnce(4);
+    const clean = await runFormatCronPass(new Date('2026-11-08T00:00:00Z'));
+    expect(clean).toMatchObject({ notifications_purged: 4, failures: 0 });
+    expect(purgeFormatNotifications).toHaveBeenCalledWith(new Date('2026-08-10T00:00:00Z'));
+
+    const boom = new Error('boom');
+    vi.mocked(purgeFormatNotifications).mockRejectedValueOnce(boom);
+    const failed = await runFormatCronPass(new Date('2026-11-08T00:00:00Z'));
+    expect(failed).toMatchObject({ notifications_purged: 0, failures: 1 });
+    expect(logger.error).toHaveBeenCalledWith('format-engine/cron', 'could not purge old notifications', { error: boom });
   });
 
   it('treats a time event refused as stale as retry-later: a warning, no failure, and the next league still runs', async () => {

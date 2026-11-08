@@ -64,6 +64,26 @@ describe('the rows of an event', () => {
   });
 });
 
+describe('the notices of an event', () => {
+  const notice = { message: { base: 'en', en: { v: 'Hi', s: 'human' } }, players: ['p1'], rule: 'r', effect: 0 };
+
+  it('go to the database with the event, in one call', async () => {
+    vi.mocked(planEffects).mockReturnValueOnce({ ...plan(), notifications: [notice] } as never);
+    await fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, { context: context() });
+    expect(fireFormatEvent).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(fireFormatEvent).mock.calls[0][0].notifications).toEqual([notice]);
+  });
+
+  it('are not planned or sent for an event that already fired (a retry or a heal)', async () => {
+    const result = await fireEvent(SEASON, { event: 'stage_start', stage: 'swiss' }, null, {
+      context: context({ firedEventKeys: ['stage_start:swiss'] }),
+    });
+    expect(result?.fired).toBe(false);
+    expect(planEffects).not.toHaveBeenCalled();
+    expect(fireFormatEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe('the revision of the format', () => {
   it('hands the revision of the context the ops were planned from to the database, for the event and for its cascade', async () => {
     vi.mocked(planEffects).mockReturnValueOnce(plan([{ op: 'lock_action', action: 'give_gifts' }]) as never);

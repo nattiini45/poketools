@@ -529,6 +529,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
   fx('error', 'effect-item-unknown', 'effect_item_invalid', '/rules/1/effects/3/item', mutate(G, [
     { op: 'replace', path: '/rules/1/effects/3/item', value: 'mew' },
   ]), { params: { resource: 'picks', reason: 'unknown' } }),
+  fx('warning', 'notify-relation-hidden', 'notify_relation_hidden', '/rules/0/effects/4/to/where', mutate(G, [
+    { op: 'add', path: '/rules/0/effects/4/to/where', value: { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'ref', name: 'player', t: 'text' } } },
+  ]), { params: { relation: 'santa' } }),
   fx('error', 'effect-set-attr-invalid', 'effect_set_attr_invalid', '/rules/1/effects/1/attr', mutate(G, [
     { op: 'replace', path: '/rules/1/effects/1/value', value: 'maybe' },
   ]), { params: { attr: 'veteran', reason: 'type' } }),

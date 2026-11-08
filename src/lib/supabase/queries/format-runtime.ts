@@ -18,6 +18,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { mapFormatDbError } from '@/lib/format-studio/errors';
 import { parseDbError } from '@/lib/studio-core/db-errors';
 import { isValidUuid } from '@/lib/utils/uuid';
+import type { PlannedNotification } from '@/lib/format-engine/runtime/effects';
 import type { FormatOp, RuntimeCheck } from '@/lib/format-engine/runtime/types';
 
 export type FormatRelationLinkRow = Tables<'format_relation_links'>;
@@ -212,6 +213,8 @@ export interface FireFormatEventInput {
   payload: Json;
   ops: readonly FormatOp[];
   firedBy: string | null;
+  /** The in-app notices of the event (none by default), written in its transaction only when it had not fired before. */
+  notifications?: readonly PlannedNotification[];
   /**
    * `season_formats.revision` of the format the ops were planned from (`KitContext.revision`). The database refuses the
    * call with `format_context_stale` when the format was attached, replaced, detached, switched or amended since, before
@@ -226,7 +229,7 @@ export interface FireFormatEventInput {
  * written then and the key stays free, so the caller treats it as "retry later" (the next cron pass, the heal).
  */
 export async function fireFormatEvent(input: FireFormatEventInput): Promise<boolean> {
-  const { data, error } = await supabase.rpc('format_fire_event', {
+  const { data, error } = await supabase.rpc('format_fire_event_notify', {
     p_season_id: input.seasonId,
     p_event_key: input.eventKey,
     p_event: input.event,
@@ -234,6 +237,7 @@ export async function fireFormatEvent(input: FireFormatEventInput): Promise<bool
     p_ops: input.ops as unknown as Json,
     p_fired_by: nullable(input.firedBy),
     p_expected_revision: input.revision,
+    p_notifications: (input.notifications ?? []).filter((notice) => notice.players.length > 0) as unknown as Json,
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data === true;

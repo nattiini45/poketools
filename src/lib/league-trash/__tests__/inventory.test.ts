@@ -117,7 +117,7 @@ describe('the replay sees the schema (sanity)', () => {
   });
 
   it('parses the four lists', () => {
-    expect(OWNED.size).toBe(61);
+    expect(OWNED.size).toBe(62);
     expect(sorted([...INVENTORY].filter(([, c]) => c === 'derived').map(([r]) => r))).toEqual([
       'aggregate_jobs',
       'aggregates',
@@ -230,10 +230,14 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
    * fails this test until somebody reads that section, proves the order still works and adds it here.
    * `season_formats.trg_season_formats_revision` is no guard: it only stamps the restored row with a new revision number
    * (a write validated before the league was deleted is then refused as stale) and never raises.
+   * `format_challenges.trg_format_challenges_notify` is no guard either: it never raises, and a restored row is not a new
+   * challenge (it reacts to a row created in its own transaction only), so a restore neither re-notifies nor collides
+   * with the restored `format_notifications` rows.
    */
   const REVIEWED = [
     'draft_pools.trg_draft_pools_guard_group',
     'evolution_tracker.trg_evolution_tracker_group',
+    'format_challenges.trg_format_challenges_notify',
     'rounds.trg_rounds_league_groups_guard',
     'season_formats.trg_season_formats_revision',
     'season_group_members.trg_season_group_members_guard',

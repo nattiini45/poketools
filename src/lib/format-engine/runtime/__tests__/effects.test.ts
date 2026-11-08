@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { Expr } from '@/lib/format-kit/expr/ast';
+import type { FormatDefinition, RelationDef } from '@/lib/format-kit/types';
 import { planEffects } from '../effects';
 import { eventKey, eventMatches, type KitEvent } from '../events';
 import { PLAYERS, SEED, giftDef, item, link, stateFor } from './helpers';
@@ -44,6 +46,40 @@ describe('planEffects on the gift exchange', () => {
     expect(ops.filter((o) => o.op === 'open_action')).toEqual([{ op: 'open_action', action: 'choose_gift' }]);
     expect(out.notifications).toHaveLength(1);
     expect(out.notifications[0].players).toEqual([...PLAYERS]);
+  });
+
+  it('names the rule and the effect of a notice: with the event key they make its delivery idempotent', () => {
+    const out = plan({ event: 'stage_start', stage: 'main' });
+    expect(out.notifications[0]).toMatchObject({ rule: 'kickoff', effect: 4 });
+  });
+
+  describe('a notice whose recipients depend on a relation', () => {
+    const where: Expr = { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'ref', name: 'player', t: 'text' } };
+    const withWhere = (visibility?: RelationDef['visibility']): FormatDefinition => ({
+      ...def,
+      relations: (def.relations ?? []).map((relation) => (visibility === undefined ? relation : { ...relation, visibility })),
+      rules: def.rules.map((rule) =>
+        rule.kind === 'rule.on_event' && rule.id === 'kickoff'
+          ? { ...rule, effects: rule.effects.map((effect) => (effect.effect === 'notify' ? { ...effect, to: { who: 'all' as const, where } } : effect)) }
+          : rule,
+      ),
+    });
+    const planWith = (format: FormatDefinition, revealed: boolean) =>
+      planEffects(format, { event: 'stage_start', stage: 'main' }, stateFor(format, { links: [{ ...link('p1', 'p2'), revealed }] }), PLAYERS, SEED, {});
+
+    it('is held back while a link is unrevealed: being told would name the giver', () => {
+      const out = planWith(withWhere(), false);
+      expect(out.notifications).toEqual([]);
+      expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
+    });
+
+    it('is delivered once every link is revealed', () => {
+      expect(planWith(withWhere(), true).notifications[0].players).toEqual(['p2']);
+    });
+
+    it('is delivered for a relation everybody may see', () => {
+      expect(planWith(withWhere({ from: 'all', to: 'all' }), false).notifications[0].players).toEqual(['p2']);
+    });
   });
 
   it('is deterministic for a seed and does not redraw existing links', () => {

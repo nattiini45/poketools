@@ -10,6 +10,7 @@
 import { toMap } from '@/lib/studio-core/keys';
 import { typeCheck, type ExprType, type TypeEnv } from '../expr';
 import type { Expr } from '../expr/ast';
+import { relationsRead } from '../expr/relations-read';
 import type {
   ActionStep,
   AttributeDef,
@@ -346,6 +347,13 @@ function checkEffect(out: Diagnostic[], lookup: Lookup, effect: Effect, pointer:
       return;
     case 'notify':
       checkTarget(out, lookup, effect.to, `${pointer}/to`);
+      // The runtime holds such a notice back while a link is unrevealed: being on its list would tell who is linked to whom.
+      for (const key of effect.to.where === undefined ? [] : relationsRead(effect.to.where)) {
+        const visibility = (lookup.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
+        if (visibility !== undefined && (visibility.from !== 'all' || visibility.to !== 'all')) {
+          out.push(diag('notify_relation_hidden', `${pointer}/to/where`, { relation: key }));
+        }
+      }
       return;
   }
 }

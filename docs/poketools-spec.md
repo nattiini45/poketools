@@ -442,6 +442,7 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `format_checks` | Format runtime: checks an admin confirms or rejects, deduplicated per league; sources `unresolved_outcome`, `standings_tie`, `pairing_rematch`, `pairing_forbidden` (a filtered round had to pair a forbidden pair), `deadline_missed` (a calendar deadline policy fired), `team_audit` (a played team broke the stage's team rules, differs from the replay or could not be audited; the subject is admin-only) and `expr` |
 | `format_adjustments` | Format runtime: admin corrections (points, resource, relation, outcome, action, domain, rank) with a required reason |
 | `format_challenges` | Format runtime: open, accepted, declined, expired or cancelled challenge-ladder challenges, with their expiry and accepted match (`20261106090000`) |
+| `format_notifications` | Format runtime: in-app notifications of a kit league, one row per recipient and event, idempotent by `dedupe_key` (`20261108090000`; service-role only; `docs/format-kit.md`, Notifications) |
 | `tournaments` | Standalone tournaments and league phases (4.3) |
 | `tournament_participants` | Phase or tournament enrollment and seeds (4.3) |
 | `tournament_groups` | Groups of a group-stage phase (`season_group_id` links one to the league group it mirrors) |
@@ -1123,6 +1124,9 @@ POST /api/teams/ai/team-coach   Player: AI commentary on the whole team (free te
 POST /api/locale                Public: set the language cookies ({ locale?, pkmnTerms? }; §17)
 
 GET/POST/DELETE /api/push/subscriptions  Player: my Web Push devices / subscribe or refresh this browser / remove a device (docs/push.md)
+GET  /api/notifications            Player: a page of my format-league notifications with the unread count
+GET  /api/notifications/unread-count  Player: my unread count (polled by the NavBar bell)
+POST /api/notifications/read       Player: mark my notifications read ({ ids } or { all: true })
 
 GET  /api/drafts/[id]/state     Draft snapshot (?since=state_version short-circuits)
 GET  /api/drafts/[id]/my-turn   Turn watch (60 s, also while the draft-room tab is hidden)

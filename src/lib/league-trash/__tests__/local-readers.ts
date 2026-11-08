@@ -99,6 +99,7 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'format_checks', order: ['id'], by: [bySeason()] },
   { table: 'format_adjustments', order: ['id'], by: [bySeason()] },
   { table: 'format_challenges', order: ['id'], by: [bySeason()] },
+  { table: 'format_notifications', order: ['id'], by: [bySeason()] },
 ];
 
 /** Deleted with the league but never captured: rebuilt by the app. */

@@ -12,6 +12,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+- **Apply `20261108090000_format_notifications.sql` BEFORE deploying the code.** It adds the in-app inbox of kit leagues and the
+  delivery function the format engine now calls for every event, so an older database refuses events until it is applied.
 - **Apply `20261027100000_admin_agent_tables.sql` BEFORE deploying the code.** It adds the Admin Assistant's own tables
   (conversations, messages, plans and their revisions, proposals, the action ledger, snapshots, references, usage),
   service-role only. Nothing else reads them, and the assistant stays off until it is switched on.
@@ -84,12 +86,14 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   shadow list does not preview these). Matches completed before
   `match_outcomes` existed have no outcome row and score as `played` with 0 faints, so per-faint points are 0 for them.
   Check the shadow list (`GET .../format/shadow`) before the switch.
-- **`notify` effects are not delivered yet.** A format's `notify` effect is planned and returned by the event runner, but
-  nothing stores it or sends it to a player or admin (no notice, push, Discord post or email). The shipped Wichtelcup
-  carries two such rules; the organizer announces the gift form and week 4 outside the app.
 
 ### Added
 
+- **In-app notifications for format-kit leagues.** A bell in the navigation bar shows an unread count and a list. Players are told
+  when a challenge is made, answered, cancelled or expires, and a format's `notify` rules now reach their recipients instead of
+  being planned and dropped. Delivery is written with the event, so a retry or a heal never notifies twice. Notifications are
+  kept for 90 days, in English and German. A `notify` rule whose recipients depend on a hidden relation is held back until
+  that relation is revealed, and the compiler warns about it (`notify_relation_hidden`).
 - **Zero-setup local development.** `npm run dev:seed` gives a local stack a confirmed admin, the standard rulesets and
   one 8-player league; with Discord left unconfigured, the sign-in page and Settings show email and password only
   (CONTRIBUTING, "Local development without Discord").

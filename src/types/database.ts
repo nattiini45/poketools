@@ -3086,6 +3086,54 @@ export type Database = {
           },
         ]
       }
+      format_notifications: {
+        Row: {
+          created_at: string
+          dedupe_key: string
+          id: string
+          kind: string
+          payload: Json
+          player_id: string
+          read_at: string | null
+          season_id: string
+        }
+        Insert: {
+          created_at?: string
+          dedupe_key: string
+          id?: string
+          kind: string
+          payload?: Json
+          player_id: string
+          read_at?: string | null
+          season_id: string
+        }
+        Update: {
+          created_at?: string
+          dedupe_key?: string
+          id?: string
+          kind?: string
+          payload?: Json
+          player_id?: string
+          read_at?: string | null
+          season_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "format_notifications_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_notifications_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       format_player_attrs: {
         Row: {
           attr_key: string
@@ -7361,6 +7409,19 @@ export type Database = {
           p_event_key: string
           p_expected_revision: number
           p_fired_by: string
+          p_ops: Json
+          p_payload: Json
+          p_season_id: string
+        }
+        Returns: boolean
+      }
+      format_fire_event_notify: {
+        Args: {
+          p_event: string
+          p_event_key: string
+          p_expected_revision: number
+          p_fired_by: string
+          p_notifications: Json
           p_ops: Json
           p_payload: Json
           p_season_id: string

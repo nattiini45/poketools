@@ -113,6 +113,7 @@ export default {
     tunable_default_invalid: 'The default of the tunable {tunable} does not fit: {reason}.',
     effect_item_invalid: 'The effect on the resource {resource} names an item that does not fit: {reason}.',
     effect_set_attr_invalid: 'An effect cannot set the attribute {attr}: {reason}.',
+    notify_relation_hidden: "A notification's recipients depend on the relation {relation}, which players cannot fully see. It is held back until every link of that relation is revealed.",
     action_step_mismatch: 'A step of the action {action} cannot use the resource {resource}: {reason}.',
     action_distinct_attr_invalid: 'The action {action} asks for different {attr} values, but that attribute cannot be used: {reason}.',
     action_distinct_attr_missing: 'The action {action} asks for different {attr} values, but {count} entries of the domain {domain} have no {attr} (first: {first}). Such an entry can be picked next to any other.',

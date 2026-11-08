@@ -1,6 +1,7 @@
 /**
- * Fires an event of a kit league: plan the ops from the format's rules, hand them to `format_fire_event` (one
- * transaction; the event key makes a second call a no-op), then expire the public reads. Server only.
+ * Fires an event of a kit league: plan the ops from the format's rules, hand them and the planned notices to
+ * `format_fire_event_notify` (one transaction, the in-app notifications included; the event key makes a second call a
+ * no-op), then expire the public reads. Server only.
  *
  * A `lock_action` op locks the action, which is itself an event (`action_locked`, for a relation's `reveal_on` and any
  * rule on it): it is fired right after, up to `MAX_CASCADE` levels deep. The cascade is a second transaction, so it can be
@@ -139,6 +140,7 @@ export async function fireEvent(
     ops,
     firedBy,
     revision: ctx.revision,
+    notifications: plan.notifications,
   });
   if (!fired) return { ...empty, ops, notifications: plan.notifications, issues: plan.issues };
 

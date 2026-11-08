@@ -13,6 +13,7 @@
  * Pure and client-safe.
  */
 import { evaluate } from '@/lib/format-kit/expr/eval';
+import { relationsRead } from '@/lib/format-kit/expr/relations-read';
 import type { Effect, EffectTarget, FormatDefinition, LText, ResourceDef } from '@/lib/format-kit/types';
 import { toMap } from '@/lib/studio-core/keys';
 import { domainFlagKey } from './domains';
@@ -24,6 +25,9 @@ import { own, type FormatOp, type KitRuntimeState, type PlayerRow, type RuntimeI
 export interface PlannedNotification {
   message: LText;
   players: string[];
+  /** The rule and the position of the effect in it: with the event key and revision they make the delivery idempotent. */
+  rule: string;
+  effect: number;
 }
 
 export interface EffectPlan {
@@ -53,6 +57,7 @@ class Planner {
   private readonly held: Held[];
   private readonly generated = new Set<string>();
   private rule: string | undefined;
+  private effectIndex = 0;
 
   constructor(
     private readonly def: FormatDefinition,
@@ -187,6 +192,19 @@ class Planner {
     }
   }
 
+  /**
+   * A relation the target of a `notify` reads and a player may not fully see yet, or undefined. Being on the list of a
+   * notice selected by such a relation would tell the recipient who is linked to whom, so the notice is not delivered.
+   */
+  private hiddenRelationIn(target: EffectTarget): string | undefined {
+    if (target.where === undefined) return undefined;
+    return relationsRead(target.where).find((key) => {
+      const visibility = (this.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
+      if (visibility?.from === 'all' && visibility.to === 'all') return false;
+      return this.state.links.some((link) => link.relation === key && !link.revealed);
+    });
+  }
+
   apply(effect: Effect): void {
     switch (effect.effect) {
       case 'unlock_domain':
@@ -228,9 +246,12 @@ class Planner {
         return this.push({ op: 'open_action', action: effect.action });
       case 'lock_action':
         return this.push({ op: 'lock_action', action: effect.action });
-      case 'notify':
-        this.notifications.push({ message: effect.message, players: this.targets(effect.to) });
+      case 'notify': {
+        const hidden = this.hiddenRelationIn(effect.to);
+        if (hidden !== undefined) return this.issue('notify_relation_hidden', hidden);
+        this.notifications.push({ message: effect.message, players: this.targets(effect.to), rule: this.rule ?? 'event', effect: this.effectIndex });
         return;
+      }
     }
   }
 
@@ -247,7 +268,10 @@ class Planner {
         }
         if (result.value !== true) continue;
       }
-      for (const effect of rule.effects) this.apply(effect);
+      for (const [index, effect] of rule.effects.entries()) {
+        this.effectIndex = index;
+        this.apply(effect);
+      }
     }
     this.rule = undefined;
     for (const relation of this.def.relations ?? []) {
