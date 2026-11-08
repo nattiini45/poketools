@@ -55,18 +55,21 @@ COMMENT ON TABLE public.format_notifications IS
   'In-app notifications of a kit league, one row per recipient and event (dedupe_key is the idempotency key). Written by format_fire_event_notify() and the format_challenges trigger. Service-role only. No RLS policies by design.';
 
 -- ---------------------------------------------------------------------------------------------------------------
--- A fired event and its notifications, in one transaction. format_fire_event is called unchanged: false (the event had fired
--- before) writes nothing. A recipient deleted since the plan is skipped by the join, and the row lock closes the window between
--- that read and the foreign-key check, so a delete cannot roll the event back.
+-- A fired event and its notifications, in one transaction. format_fire_event is called unchanged, with a completion's fence
+-- passed on: false (the event had fired before) writes nothing. A recipient deleted since the plan is skipped by the join, and
+-- the row lock closes the window between that read and the foreign-key check, so a delete cannot roll the event back.
+-- The eight-argument form of an earlier revision of this file is dropped first (a new argument is an overload, not a replacement).
+DROP FUNCTION IF EXISTS public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb);
 CREATE OR REPLACE FUNCTION public.format_fire_event_notify(
-  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint, p_notifications jsonb
+  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint, p_notifications jsonb,
+  p_fence_match uuid DEFAULT NULL, p_fence_confirmed_at timestamptz DEFAULT NULL
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 BEGIN
   IF p_notifications IS NULL OR jsonb_typeof(p_notifications) <> 'array' THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'notify')::text;
   END IF;
-  IF NOT public.format_fire_event(p_season_id, p_event_key, p_event, p_payload, p_ops, p_fired_by, p_expected_revision) THEN
+  IF NOT public.format_fire_event(p_season_id, p_event_key, p_event, p_payload, p_ops, p_fired_by, p_expected_revision, p_fence_match, p_fence_confirmed_at) THEN
     RETURN false;
   END IF;
   INSERT INTO public.format_notifications (season_id, player_id, kind, dedupe_key, payload)
@@ -128,12 +131,16 @@ END $$;
 CREATE TRIGGER trg_format_challenges_notify AFTER INSERT OR UPDATE OF status ON public.format_challenges
   FOR EACH ROW EXECUTE FUNCTION public.format_challenges__notify();
 
--- The body of 20261106090000's format_challenge_cancel, plus the set_config before the withdrawal.
+-- The body of 20261106090000's format_challenge_cancel (kept in step with it), plus the set_config before the withdrawal.
 CREATE OR REPLACE FUNCTION public.format_challenge_cancel(p_season_id uuid, p_challenge_id uuid, p_player uuid)
 RETURNS public.format_challenges
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_challenges;
 BEGIN
+  -- A player's withdrawal is a move; the system's (p_player NULL) is housekeeping and runs in a closed league too.
+  IF p_player IS NOT NULL THEN
+    PERFORM public.format__assert_season_open(p_season_id);
+  END IF;
   PERFORM 1 FROM public.seasons s WHERE s.id = p_season_id FOR KEY SHARE;
   SELECT * INTO v_row FROM public.format_challenges WHERE id = p_challenge_id AND season_id = p_season_id FOR UPDATE;
   IF NOT FOUND THEN
@@ -159,14 +166,14 @@ BEGIN
 END $$;
 
 REVOKE ALL ON FUNCTION
-  public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb),
+  public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb, uuid, timestamptz),
   public.format_challenges__notify()
 FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION
-  public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb)
+  public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb, uuid, timestamptz)
 TO service_role;
 
-COMMENT ON FUNCTION public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb) IS
+COMMENT ON FUNCTION public.format_fire_event_notify(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb, uuid, timestamptz) IS
   'format_fire_event plus one format_notifications row per recipient of each planned notify, in one transaction; false and nothing written when the event had fired.';
 COMMENT ON FUNCTION public.format_challenges__notify() IS
   'Writes the format_notifications rows of a challenge that was created or changed status. Idempotent by challenge and status.';

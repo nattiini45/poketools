@@ -123,6 +123,7 @@ export const FORMAT_RUNTIME_ERROR_CODES = [
   'resource_item_taken',
   'resource_capacity_reached',
   'format_context_stale',
+  'format_season_closed',
   'domain_amendment_locked',
   'reason_required',
   'reason_too_long',
@@ -134,6 +135,7 @@ const FORMAT_RUNTIME_ERROR_STATUS: { readonly [C in FormatRuntimeErrorCode]: num
   resource_item_taken: 409,
   resource_capacity_reached: 409,
   format_context_stale: 409,
+  format_season_closed: 409,
   domain_amendment_locked: 409,
   reason_required: 400,
   reason_too_long: 400,
@@ -221,6 +223,11 @@ export interface FireFormatEventInput {
    * it logs the key: an event planned for the old format must neither touch the new runtime nor use up the key.
    */
   revision: number;
+  /**
+   * The completion a `match_completed` event belongs to: the database refuses the event (`format_context_stale`, nothing
+   * written) unless the match is still completed with this `confirmed_at`, under a lock a reset waits for.
+   */
+  matchFence?: { matchId: string; confirmedAt: string };
 }
 
 /**
@@ -238,6 +245,7 @@ export async function fireFormatEvent(input: FireFormatEventInput): Promise<bool
     p_fired_by: nullable(input.firedBy),
     p_expected_revision: input.revision,
     p_notifications: (input.notifications ?? []).filter((notice) => notice.players.length > 0) as unknown as Json,
+    ...(input.matchFence ? { p_fence_match: input.matchFence.matchId, p_fence_confirmed_at: input.matchFence.confirmedAt } : {}),
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data === true;

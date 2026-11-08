@@ -10,7 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   getLiveAccess: vi.fn(),
   getSeasonWithDetails: vi.fn(),
-  getSeasonParticipantRow: vi.fn(),
+  isSeasonPlayer: vi.fn(),
   loadPlayerView: vi.fn(),
 }));
 
@@ -32,7 +32,7 @@ vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/lib/format-engine/runtime/views-server', () => ({ loadPlayerView: mocks.loadPlayerView }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonWithDetails: mocks.getSeasonWithDetails,
-  getSeasonParticipantRow: mocks.getSeasonParticipantRow,
+  isSeasonPlayer: mocks.isSeasonPlayer,
 }));
 
 import PlayPage from '../page';
@@ -96,7 +96,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getLiveAccess.mockResolvedValue(access());
   mocks.getSeasonWithDetails.mockResolvedValue(league());
-  mocks.getSeasonParticipantRow.mockResolvedValue({ gym_type: null, core_types: null, core_assigned_at: null });
+  mocks.isSeasonPlayer.mockResolvedValue(true);
   mocks.loadPlayerView.mockResolvedValue(RUNNING);
 });
 
@@ -137,17 +137,17 @@ describe('PlayPage: notices', () => {
     const page = await PlayPage(params(SEASON_ID));
     expect(textOf(page)).toContain(t('page.notCustom'));
     expect(propsOf(page, PlayerFormatView)).toBeNull();
-    expect(mocks.getSeasonParticipantRow).not.toHaveBeenCalled();
+    expect(mocks.isSeasonPlayer).not.toHaveBeenCalled();
     expect(mocks.loadPlayerView).not.toHaveBeenCalled();
   });
 
   it('a player who is not in the league gets the notice, not the view (a site admin gets no bypass)', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ name: 'Root' }, true));
-    mocks.getSeasonParticipantRow.mockResolvedValue(null);
+    mocks.isSeasonPlayer.mockResolvedValue(false);
     const page = await PlayPage(params(SEASON_ID));
     expect(textOf(page)).toContain(t('page.notMember'));
     expect(propsOf(page, PlayerFormatView)).toBeNull();
-    expect(mocks.getSeasonParticipantRow).toHaveBeenCalledWith(SEASON_ID, PLAYER_ID);
+    expect(mocks.isSeasonPlayer).toHaveBeenCalledWith(SEASON_ID, PLAYER_ID);
     expect(mocks.loadPlayerView).not.toHaveBeenCalled();
   });
 
@@ -158,7 +158,7 @@ describe('PlayPage: notices', () => {
       const page = await PlayPage(params(SEASON_ID));
       expect(textOf(page)).toContain(t('page.notMember'));
       expect(propsOf(page, PlayerFormatView)).toBeNull();
-      expect(mocks.getSeasonParticipantRow).not.toHaveBeenCalled();
+      expect(mocks.isSeasonPlayer).not.toHaveBeenCalled();
       expect(mocks.loadPlayerView).not.toHaveBeenCalled();
     },
   );

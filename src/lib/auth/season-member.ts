@@ -1,6 +1,6 @@
 /**
  * The guard of the player routes of a running format (`/api/seasons/[id]/format/me`, `.../actions/*`, `.../challenges/*`):
- * the caller must be a participant of the league. Like the other guards it is live (the ban / suspension check of
+ * the caller must be a participant of the league: on its roster or enrolled in a phase of it still in play (`isSeasonPlayer`). Like the other guards it is live (the ban / suspension check of
  * `requirePlayer`) and it never trusts the session copy.
  *
  * Site admins get no bypass here: a player route acts only for the session player, and the actor id never comes from the
@@ -14,7 +14,7 @@ import 'server-only';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { refuse } from '@/lib/format-engine/runtime/refusal';
 import { getSeasonPlayState } from '@/lib/supabase/queries/format-runtime-reads';
-import { getSeasonParticipantRow } from '@/lib/supabase/queries/seasons';
+import { isSeasonPlayer } from '@/lib/supabase/queries/seasons';
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { SessionPlayer } from '@/types/auth';
 import { requirePlayer } from './helpers';
@@ -34,8 +34,7 @@ export async function requireSeasonMember(rawId: string): Promise<SeasonMember> 
   const player = await requirePlayer();
   if (!isValidUuid(rawId)) throw new UserFacingError('League not found', { status: 404, code: 'INVALID_SEASON_ID' });
   const seasonId = rawId.toLowerCase();
-  const row = await getSeasonParticipantRow(seasonId, player.playerId);
-  if (row === null) throw refuse('format_not_participant');
+  if (!(await isSeasonPlayer(seasonId, player.playerId))) throw refuse('format_not_participant');
   return { player, seasonId };
 }
 

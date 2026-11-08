@@ -309,7 +309,7 @@ async function applyActionPolicy(
       // player is still waiting, so the next pass draws again against the new one; nothing is counted or audited now.
       if (
         error instanceof FormatRuntimeError &&
-        (error.code === 'format_context_stale' || error.code === 'resource_capacity_reached' || error.code === 'resource_item_taken')
+        (error.code === 'format_context_stale' || error.code === 'format_season_closed' || error.code === 'resource_capacity_reached' || error.code === 'resource_item_taken')
       ) {
         logger.warn(TAG, 'random pick skipped, the format or the holding changed meanwhile', { seasonId, action: actionId, code: error.code });
         continue;
@@ -420,10 +420,16 @@ async function applyForfeit(
       revision: job.revision,
     });
   } catch (error) {
-    // The database refused it under the league's locks (the format changed or the league left the kit): nothing was written,
-    // so the staged row goes whatever the match's status is now. The next pass decides again (runPhase: not a failure).
-    if (isFormatContextStale(error)) {
+    // The database refused it under the league's locks (the format changed, the league left the kit or it closed): nothing was
+    // written, so the staged row goes whatever the match's status is now. A stale format is for the next pass to decide
+    // (runPhase: not a failure); a closed league takes no forfeit at all.
+    const closed = error instanceof FormatRuntimeError && error.code === 'format_season_closed';
+    if (closed || isFormatContextStale(error)) {
       await unstageForfeit(match.id, await getMatchById(match.id).catch(() => null), staged);
+      if (closed) {
+        logger.info(TAG, 'no deadline forfeit, the league closed since the pass read it', { matchId: match.id });
+        return;
+      }
       throw error;
     }
     // The write threw, so it may have committed: a completed match may be this pass's own, whose row stays.
@@ -661,6 +667,7 @@ async function backfillMatchCompleted(ctx: KitContext, budget: BackfillBudget, s
       player1Id: match.player_1_id,
       player2Id: match.player_2_id,
       winnerId: match.winner_id,
+      ...(match.confirmed_at !== null && match.confirmed_at !== undefined ? { confirmedAt: match.confirmed_at } : {}),
     };
     // The hook is idempotent by key, so the second call repeats only what failed.
     // A hook refused only because the format changed meanwhile (`format_context_stale`) is not retried at once and not a failure:

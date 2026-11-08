@@ -6,24 +6,23 @@ import type { SessionPlayer } from '@/types/auth';
 vi.mock('server-only', () => ({}));
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: vi.fn() }));
-vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipantRow: vi.fn() }));
+vi.mock('@/lib/supabase/queries/seasons', () => ({ isSeasonPlayer: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-runtime-reads', () => ({ getSeasonPlayState: vi.fn() }));
 
 import { auth, loadSessionPlayer } from '@/auth';
 import { getSeasonPlayState } from '@/lib/supabase/queries/format-runtime-reads';
-import { getSeasonParticipantRow } from '@/lib/supabase/queries/seasons';
+import { isSeasonPlayer } from '@/lib/supabase/queries/seasons';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { AuthError } from '../helpers';
 import { assertSeasonOpenForPlay, requireSeasonMember } from '../season-member';
 
 const mockedAuth = vi.mocked(auth) as unknown as ReturnType<typeof vi.fn<() => Promise<Session | null>>>;
 const mockedLoad = vi.mocked(loadSessionPlayer);
-const mockedRow = vi.mocked(getSeasonParticipantRow);
+const mockedRow = vi.mocked(isSeasonPlayer);
 const mockedPlayState = vi.mocked(getSeasonPlayState);
 
 const SEASON = '3f2b8c1e-5a47-4d0b-9f6e-0c1d2e3f4a5b';
 const PLAYER_ID = '7a1d2c3b-4e5f-4a6b-8c7d-9e0f1a2b3c4d';
-const MEMBER_ROW = { gym_type: null, core_types: null, core_assigned_at: null };
 
 function player(overrides: Partial<SessionPlayer> = {}): SessionPlayer {
   return {
@@ -52,7 +51,7 @@ function signIn(live: SessionPlayer | null): void {
 beforeEach(() => {
   vi.resetAllMocks();
   signIn(player());
-  mockedRow.mockResolvedValue(MEMBER_ROW);
+  mockedRow.mockResolvedValue(true);
 });
 
 describe('requireSeasonMember', () => {
@@ -76,18 +75,18 @@ describe('requireSeasonMember', () => {
   });
 
   it('refuses a signed-in player who is not a participant with a 403 format_not_participant', async () => {
-    mockedRow.mockResolvedValue(null);
+    mockedRow.mockResolvedValue(false);
     await expect(requireSeasonMember(SEASON)).rejects.toMatchObject({ code: 'format_not_participant', statusCode: 403 });
   });
 
   it('gives a site admin who does not play no bypass', async () => {
     signIn(player({ isAdmin: true }));
-    mockedRow.mockResolvedValue(null);
+    mockedRow.mockResolvedValue(false);
     await expect(requireSeasonMember(SEASON)).rejects.toMatchObject({ code: 'format_not_participant', statusCode: 403 });
   });
 
   it('refuses a player who left the league (no participant row any more)', async () => {
-    mockedRow.mockResolvedValueOnce(MEMBER_ROW).mockResolvedValueOnce(null);
+    mockedRow.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
     await expect(requireSeasonMember(SEASON)).resolves.toBeDefined();
     await expect(requireSeasonMember(SEASON)).rejects.toMatchObject({ code: 'format_not_participant' });
   });

@@ -126,6 +126,19 @@ describe('the RPC wrappers', () => {
     { op: 'grant_item', resource: 'gift', player_id: P1, item_id: 'pikachu', amount: 1, exclusive: true, source: 'event', source_ref: null },
   ];
 
+  it('fireFormatEvent passes a completion fence alongside the notifications', async () => {
+    state.rpcReply = { data: true };
+    const notifications = [{ rule: 'r1', effect: 0, players: [P1], message: { en: 'hi', de: 'hallo' } }];
+    await fireFormatEvent({
+      seasonId: SEASON, eventKey: 'match_completed:m1', event: 'match_completed', payload: {}, ops: [], firedBy: null, revision: 41,
+      notifications, matchFence: { matchId: 'm1', confirmedAt: '2026-11-08T12:00:00.000Z' },
+    });
+    expect(state.rpcCalls[0]).toMatchObject({
+      name: 'format_fire_event_notify',
+      args: { p_notifications: notifications, p_fence_match: 'm1', p_fence_confirmed_at: '2026-11-08T12:00:00.000Z' },
+    });
+  });
+
   it('fireFormatEvent passes the key, the ops, a NULL actor and the revision it was planned from, and returns the boolean', async () => {
     state.rpcReply = { data: true };
     await expect(

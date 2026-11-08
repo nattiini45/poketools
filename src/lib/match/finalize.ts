@@ -234,7 +234,7 @@ class StepRunner {
  * the original error and reports it; the step then fails, `finalized_at` stays unset and the heal calls it again. It
  * needs the match's outcome row (faints, forfeit), so it never runs when the `outcome` step failed.
  */
-async function runFormatHook(match: MatchWithPlayers, winnerId: string, tournament: Tournament): Promise<void> {
+async function runFormatHook(match: MatchWithPlayers, winnerId: string, tournament: Tournament, confirmedAt: string | null): Promise<void> {
   const { onMatchCompleted } = await import('@/lib/format-engine/runtime/hooks');
   const applied = await onMatchCompleted({
     tournament,
@@ -243,6 +243,7 @@ async function runFormatHook(match: MatchWithPlayers, winnerId: string, tourname
     player1Id: match.player_1_id,
     player2Id: match.player_2_id,
     winnerId,
+    ...(confirmedAt !== null ? { confirmedAt } : {}),
   });
   if (!applied) throw new Error(`format runtime hook failed for match ${match.id}`);
 }
@@ -746,8 +747,8 @@ export async function finalizeMatchCompletion({
     // Always rewrite the row with THIS request's outcome, even for a played result whose stats are unknown: the
     // staged row is not atomic with the status flip, so a concurrent request may have overwritten it between
     // staging and the flip, and only the request whose flip won knows the outcome that matches the winner.
-    // A played result without stats gets null faints (healed once the stats read works) and keeps the format
-    // hook blocked, as the faints are not known yet.
+    // A played result whose stats could not be read gets null faints (healed once the read works) and keeps the format hook
+    // blocked, as the faints are not known yet. A read that finds no stats is an answer: such a result has none to wait for.
     const adminStep = await runner.run('outcome', () => recordAdminOutcome(match, adminOutcome, statsByGame));
     outcomeRecorded = adminStep.ok && (adminOutcome.kind !== 'played' || statsByGame !== null);
   } else if (statsByGame) {
@@ -870,7 +871,7 @@ export async function finalizeMatchCompletion({
   // (Without the tournament the league is unknown; that failed step already keeps the marker unset.)
   if (tournament && isKitCandidate(tournament)) {
     if (outcomeRecorded && !propagationFailed) {
-      await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament));
+      await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament, confirmedAt));
     } else {
       runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
     }
@@ -1046,7 +1047,7 @@ export async function healMatchFinalization(
     // after the propagation and never around a failed one (the stage end would complete the phase without the slot).
     if (isKitCandidate(tournament)) {
       if (outcomeRecorded && !propagationFailed) {
-        await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament));
+        await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament, match.confirmed_at));
       } else {
         runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
       }

@@ -56,13 +56,17 @@ describe('20261108090000_format_notifications.sql', () => {
   });
 
   // The migration copies this function to add one line: a later fix to the original must not be undone by the copy.
+  it('passes a completion fence on to format_fire_event', () => {
+    expect(bodyOf(SQL, 'format_fire_event_notify')).toContain('p_expected_revision, p_fence_match, p_fence_confirmed_at) THEN');
+  });
+
   it('changes format_challenge_cancel by exactly the line that names who cancelled', () => {
     const added = "  PERFORM set_config('format.challenge_actor', coalesce(p_player::text, 'admin'), true);\n";
     expect(bodyOf(SQL, 'format_challenge_cancel').replace(added, '')).toBe(bodyOf(CHALLENGES_SQL, 'format_challenge_cancel'));
   });
 
   it('gives the new functions to the service role only', () => {
-    expect(SQL).toMatch(/REVOKE ALL ON FUNCTION\s+public\.format_fire_event_notify\(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb\),\s+public\.format_challenges__notify\(\)\s+FROM PUBLIC, anon, authenticated;/);
-    expect(SQL).toMatch(/GRANT EXECUTE ON FUNCTION\s+public\.format_fire_event_notify\(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb\)\s+TO service_role;/);
+    expect(SQL).toMatch(/REVOKE ALL ON FUNCTION\s+public\.format_fire_event_notify\(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb, uuid, timestamptz\),\s+public\.format_challenges__notify\(\)\s+FROM PUBLIC, anon, authenticated;/);
+    expect(SQL).toMatch(/GRANT EXECUTE ON FUNCTION\s+public\.format_fire_event_notify\(uuid, text, text, jsonb, jsonb, uuid, bigint, jsonb, uuid, timestamptz\)\s+TO service_role;/);
   });
 });

@@ -7128,6 +7128,10 @@ export type Database = {
         }
         Returns: Json
       }
+      format__assert_season_open: {
+        Args: { p_season_id: string }
+        Returns: undefined
+      }
       format__check_revision: {
         Args: { p_expected_revision: number; p_season_id: string }
         Returns: undefined
@@ -7409,6 +7413,8 @@ export type Database = {
           p_event: string
           p_event_key: string
           p_expected_revision: number
+          p_fence_confirmed_at?: string
+          p_fence_match?: string
           p_fired_by: string
           p_ops: Json
           p_payload: Json
@@ -7421,6 +7427,8 @@ export type Database = {
           p_event: string
           p_event_key: string
           p_expected_revision: number
+          p_fence_confirmed_at?: string
+          p_fence_match?: string
           p_fired_by: string
           p_notifications: Json
           p_ops: Json

@@ -304,6 +304,16 @@ describe('match and team policies', () => {
     expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
   });
 
+  it('takes back its staged row and counts nothing when the league closed before the forfeit was written', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
+    vi.mocked(completeFormatForfeit).mockRejectedValue(new FormatRuntimeError('format_season_closed'));
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'scheduled' } as never);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(discardStagedAdminOutcome).toHaveBeenCalledWith('m-1', STAGED);
+    expect(finalizeMatchCompletion).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
+  });
+
   it('finalizes the forfeit even when the cache expiry throws after the status flip', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(revalidateMatchPages).mockRejectedValue(new Error('tournament read failed'));

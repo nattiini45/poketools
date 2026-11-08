@@ -336,6 +336,23 @@ BEGIN
   END IF;
 END $$;
 
+-- The write gate of a player's move, decided under the lock: the application's check (assertSeasonOpenForPlay) ran in
+-- another request. The seasons row FOR SHARE conflicts with the UPDATE that closes the league (FOR KEY SHARE would not), so
+-- a close either commits first and is seen here, or waits for this move. It comes before format__check_revision: seasons
+-- first, then season_formats.
+CREATE OR REPLACE FUNCTION public.format__assert_season_open(p_season_id uuid)
+RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_status   public.season_status;
+  v_archived boolean;
+BEGIN
+  SELECT s.status, s.archived INTO v_status, v_archived FROM public.seasons s WHERE s.id = p_season_id FOR SHARE;
+  IF FOUND AND (v_status = 'completed' OR v_archived) THEN
+    RAISE EXCEPTION 'format_season_closed' USING ERRCODE = 'P0001';
+  END IF;
+END $$;
+
 -- ---------------------------------------------------------------------------------------------------------------
 -- Holdings. What a player holds of one resource is capped by the resource's `capacity` in the attached spec. Every
 -- writer of the holding takes the same transaction lock first and reads the held units under it, so two grants (a
@@ -667,8 +684,10 @@ END $$;
 -- A new argument is an overload, not a replacement: the six-argument form of an earlier revision of this file is dropped first,
 -- so no service_role-callable overload is left that skips the check.
 DROP FUNCTION IF EXISTS public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid);
+DROP FUNCTION IF EXISTS public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint);
 CREATE OR REPLACE FUNCTION public.format_fire_event(
-  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint
+  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint,
+  p_fence_match uuid DEFAULT NULL, p_fence_confirmed_at timestamptz DEFAULT NULL
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
@@ -677,6 +696,17 @@ DECLARE
 BEGIN
   PERFORM public.format__lock_op_keys(p_season_id, p_ops);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
+  -- The event of a match's completion, written only while that completion stands (p_fence_confirmed_at is its token). The
+  -- row lock serialises it with a reset: a reset that came first is seen here and the event is refused like a stale format
+  -- (nothing written, the key stays free), and a reset that comes later waits and then finds the event to revert.
+  IF p_fence_match IS NOT NULL THEN
+    PERFORM 1 FROM public.matches m
+      WHERE m.id = p_fence_match AND m.status = 'completed' AND m.confirmed_at IS NOT DISTINCT FROM p_fence_confirmed_at
+      FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'format_context_stale' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
   INSERT INTO public.format_event_log (season_id, event_key, event, payload, ops, fired_by)
   VALUES (p_season_id, p_event_key, p_event, coalesce(p_payload, '{}'::jsonb), coalesce(p_ops, '[]'::jsonb), p_fired_by)
   ON CONFLICT (season_id, event_key) DO NOTHING;
@@ -715,6 +745,7 @@ LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_row public.format_action_submissions;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
@@ -759,6 +790,7 @@ DECLARE
   v_item jsonb;
 BEGIN
   PERFORM public.format__lock_action(p_season_id, p_action_key);
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   IF public.format__action_flag_locked(p_season_id, p_action_key) THEN
     RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('action', p_action_key)::text;
@@ -1006,6 +1038,7 @@ BEGIN
   IF p_match_id IS NULL OR p_expected_status IS NULL OR p_winner_id IS NULL THEN
     RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'forfeit')::text;
   END IF;
+  PERFORM public.format__assert_season_open(p_season_id);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
   SELECT f.engine INTO v_engine FROM public.season_formats f WHERE f.season_id = p_season_id;
   IF v_engine IS DISTINCT FROM 'kit' THEN
@@ -1050,6 +1083,7 @@ REVOKE ALL ON FUNCTION
   public.format__lock_action(uuid, text),
   public.format__check_revision(uuid, bigint),
   public.format__check_revision_for_update(uuid, bigint),
+  public.format__assert_season_open(uuid),
   public.format__lock_op_keys(uuid, jsonb),
   public.format__lock_holding(uuid, text, uuid),
   public.format__lock_exclusive(uuid, text, text),
@@ -1057,7 +1091,7 @@ REVOKE ALL ON FUNCTION
   public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb, boolean, boolean),
-  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint),
+  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz),
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
@@ -1071,6 +1105,7 @@ GRANT EXECUTE ON FUNCTION
   public.format__lock_action(uuid, text),
   public.format__check_revision(uuid, bigint),
   public.format__check_revision_for_update(uuid, bigint),
+  public.format__assert_season_open(uuid),
   public.format__lock_op_keys(uuid, jsonb),
   public.format__lock_holding(uuid, text, uuid),
   public.format__lock_exclusive(uuid, text, text),
@@ -1078,7 +1113,7 @@ GRANT EXECUTE ON FUNCTION
   public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb, boolean, boolean),
-  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint),
+  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz),
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
@@ -1096,6 +1131,8 @@ COMMENT ON FUNCTION public.format__check_revision(uuid, bigint) IS
   'Internal: raises format_context_stale unless season_formats.revision of the league equals the expected one (the row is share-locked until the transaction ends).';
 COMMENT ON FUNCTION public.format__check_revision_for_update(uuid, bigint) IS
   'Internal: format__check_revision for a writer that updates the season_formats row itself (a domain amendment): the row is locked FOR UPDATE, not FOR SHARE.';
+COMMENT ON FUNCTION public.format__assert_season_open(uuid) IS
+  'Internal: share-locks the seasons row and raises format_season_closed when the league is completed or archived, so a player move and the close of the league cannot both win.';
 COMMENT ON FUNCTION public.format__lock_op_keys(uuid, jsonb) IS
   'Internal: takes the transaction-scoped advisory locks of the relations a set_relation op draws and of the actions a lock_action op locks, sorted. An event and an adjustment take them before their revision check.';
 COMMENT ON FUNCTION public.format__lock_holding(uuid, text, uuid) IS
@@ -1110,7 +1147,7 @@ COMMENT ON FUNCTION public.format__clear_runtime(uuid) IS
   'Internal: deletes the rows of the nine format runtime tables of one league (attach-replace and detach).';
 COMMENT ON FUNCTION public.format__apply_ops(uuid, jsonb, boolean, boolean) IS
   'Internal: applies a jsonb array of format ops in order (set_flag, set_relation, reveal_relation, grant_item, revoke_item, set_attr, adjust_points, open_action, lock_action, set_track). Unknown op or missing member raises invalid_op; a grant_item over the resource capacity raises resource_capacity_reached. p_strict: a revoke_item of more units than held raises insufficient_holding. p_tolerant: a grant that hits capacity or an exclusive holder is skipped in a savepoint and returned in the jsonb array of skipped grants.';
-COMMENT ON FUNCTION public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint) IS
+COMMENT ON FUNCTION public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz) IS
   'Logs a format event once (event_key) and applies its ops. Returns true when it fired now, false when it had fired before. Raises format_context_stale (nothing logged, the key stays free) when the league''s format changed since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format__action_flag_locked(uuid, text) IS
   'Internal: true when the flag action:<key> is "locked".';
@@ -1123,7 +1160,7 @@ COMMENT ON FUNCTION public.format_apply_adjustment(uuid, text, jsonb, jsonb, tex
 COMMENT ON FUNCTION public.format_check_open(uuid, text, text, text, jsonb, bigint) IS
   'Opens an assisted check; returns its id, or NULL when a check with that dedupe_key already exists. Raises format_context_stale (nothing inserted, the key stays free) when the league''s format changed or was detached since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format_forfeit_complete(uuid, uuid, public.match_status, uuid, bigint) IS
-  'Completes a match of the league as a deadline forfeit, compare-and-set on its status, in one transaction with the revision and engine check. Returns false when the match no longer has that status (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read.';
+  'Completes a match of the league as a deadline forfeit, compare-and-set on its status, in one transaction with the revision and engine check. Returns false when the match no longer has that status (nothing written). Raises format_context_stale (nothing written) when the format changed or the league left the kit engine since p_expected_revision was read, format_season_closed (nothing written) when the league is completed or archived.';
 COMMENT ON FUNCTION public.format_check_resolve(uuid, uuid, text, uuid, text) IS
   'Resolves an open check of the league to confirmed or rejected. Returns false when it was not open or belongs to another league.';
 

@@ -157,7 +157,7 @@ describe('format_fire_event and format_apply_adjustment revision check', () => {
   });
 
   it('grants and comments only the new signatures (the old overloads are dropped, never granted)', () => {
-    expect(sql).toContain('public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint)');
+    expect(sql).toContain('public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz)');
     expect(sql).toContain('public.format_apply_adjustment(uuid, text, jsonb, jsonb, text, uuid, jsonb, text[], text[], bigint)');
     const statements = sql.split(';').filter((st) => !/^\s*DROP FUNCTION/m.test(st) && /(?:REVOKE|GRANT|COMMENT ON FUNCTION)/.test(st));
     const text = statements.join(';');
