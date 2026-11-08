@@ -67,8 +67,23 @@ describe('planEffects on the gift exchange', () => {
     const planWith = (format: FormatDefinition, revealed: boolean) =>
       planEffects(format, { event: 'stage_start', stage: 'main' }, stateFor(format, { links: [{ ...link('p1', 'p2'), revealed }] }), PLAYERS, SEED, {});
 
-    it('is held back while a link is unrevealed: being told would name the giver', () => {
+    it('is not delivered while a link is unrevealed: being told would name the giver', () => {
       const out = planWith(withWhere(), false);
+      expect(out.notifications).toEqual([]);
+      expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
+    });
+
+    it('is not delivered either when it reads the relation through a computed attribute', () => {
+      const format: FormatDefinition = {
+        ...withWhere(),
+        attributes: [...(def.attributes ?? []), { key: 'gifted', on: 'player', type: 'bool', assign: { kind: 'expr', expr: where } } as NonNullable<FormatDefinition['attributes']>[number]],
+        rules: withWhere().rules.map((rule) =>
+          rule.kind === 'rule.on_event' && rule.id === 'kickoff'
+            ? { ...rule, effects: rule.effects.map((effect) => (effect.effect === 'notify' ? { ...effect, to: { who: 'all' as const, where: { k: 'ref', name: 'attr.gifted', t: 'boolean' } as Expr } } : effect)) }
+            : rule,
+        ),
+      };
+      const out = planWith(format, false);
       expect(out.notifications).toEqual([]);
       expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
     });

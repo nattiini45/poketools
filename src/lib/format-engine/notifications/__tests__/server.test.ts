@@ -45,7 +45,7 @@ describe('loadInboxPage', () => {
     });
     const page = await loadInboxPage('me', 30, 0);
 
-    expect(page).toMatchObject({ unread: 2, has_more: true });
+    expect(page).toMatchObject({ unread: 2, next_offset: 2 });
     expect(page.items.map((item) => ('counterparty' in item ? item.counterparty.name : undefined))).toEqual(['Ada', null]);
     expect(readNotificationLeagueNames).toHaveBeenCalledTimes(1);
     expect(readCurrentLeagueMembers).toHaveBeenCalledTimes(1);
@@ -53,10 +53,16 @@ describe('loadInboxPage', () => {
     expect(resolvePlayerNames).toHaveBeenCalledTimes(1);
   });
 
+  it('moves the next page past a row it could not read', async () => {
+    vi.mocked(listFormatNotifications).mockResolvedValue({ rows: [{ ...challenge('n-1', 's-1', 'a'), kind: 'nope' }], hasMore: true });
+    await expect(loadInboxPage('me', 1, 4)).resolves.toMatchObject({ items: [], next_offset: 5 });
+  });
+
   it('leaves out a row it cannot read and logs it', async () => {
     vi.mocked(listFormatNotifications).mockResolvedValue({ rows: [{ ...challenge('n-1', 's-1', 'a'), kind: 'nope' }], hasMore: false });
     const page = await loadInboxPage('me', 30, 0);
     expect(page.items).toEqual([]);
+    expect(page.next_offset).toBeNull();
     expect(logger.error).toHaveBeenCalledWith('format-engine/notifications', 'a stored notification cannot be read', { notificationId: 'n-1', kind: 'nope' });
   });
 });

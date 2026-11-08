@@ -46,7 +46,8 @@ export type NotificationView = RuleNoticeView | ChallengeNoticeView;
 export interface InboxPage {
   items: NotificationView[];
   unread: number;
-  has_more: boolean;
+  /** Where the next page starts, or null on the last one. Counts stored rows: the client must not derive it from `items`. */
+  next_offset: number | null;
 }
 
 export interface UnreadCount {

@@ -45,7 +45,7 @@ beforeEach(() => {
   vi.mocked(requirePlayer).mockResolvedValue({ playerId: ME, name: 'Me' } as never);
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true } as never);
   vi.mocked(countUnreadFormatNotifications).mockResolvedValue(1);
-  vi.mocked(loadInboxPage).mockResolvedValue({ items: [], unread: 1, has_more: false });
+  vi.mocked(loadInboxPage).mockResolvedValue({ items: [], unread: 1, next_offset: null });
 });
 
 describe('GET /api/notifications', () => {
@@ -75,7 +75,7 @@ describe('GET /api/notifications', () => {
         counterparty: { id: 'p', name: 'Ada' },
       }],
       unread: 1,
-      has_more: false,
+      next_offset: null,
     });
     const response = await listGet(list());
     expectNoPrivatePlayerData(await response.text());
@@ -132,6 +132,7 @@ describe('POST /api/notifications/read', () => {
   it('answers 429 over the limit and writes nothing', async () => {
     vi.mocked(checkRateLimit).mockResolvedValue({ allowed: false, retryAfterSeconds: 9 } as never);
     expect((await readPost(post({ all: true }))).status).toBe(429);
+    expect(checkRateLimit).toHaveBeenCalledWith('notifications-read', ME, expect.objectContaining({ limit: 120, windowSeconds: 60 }));
     expect(markFormatNotificationsRead).not.toHaveBeenCalled();
   });
 

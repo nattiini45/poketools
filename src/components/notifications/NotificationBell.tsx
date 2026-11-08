@@ -18,28 +18,28 @@ const BADGE_MAX = 99;
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'failed';
 
-function challengeKey(item: ChallengeNoticeView) {
+function challengeSentence(item: ChallengeNoticeView) {
   switch (item.kind) {
     case 'challenge_created':
-      return 'challenge.created' as const;
+      return 'created' as const;
     case 'challenge_accepted':
-      return 'challenge.accepted' as const;
+      return 'accepted' as const;
     case 'challenge_declined':
-      return 'challenge.declined' as const;
+      return 'declined' as const;
     case 'challenge_expired':
-      return item.side === 'defender' ? ('challenge.expired_defender' as const) : ('challenge.expired_challenger' as const);
+      return item.side === 'defender' ? ('expired_defender' as const) : ('expired_challenger' as const);
     case 'challenge_cancelled':
-      return item.side === 'defender' ? ('challenge.cancelled_defender' as const) : ('challenge.cancelled_challenger' as const);
+      return item.side === 'defender' ? ('cancelled_defender' as const) : ('cancelled_challenger' as const);
   }
 }
 
 function NotificationRow({ item, onFollow }: { item: NotificationView; onFollow: (item: NotificationView) => void }) {
   const t = useT(notificationsMessages);
   const locale = useLocale();
-  const body =
-    item.kind === 'rule_notice'
-      ? (resolveLText(item.message, { viewer: locale })?.value ?? '')
-      : t(challengeKey(item), { player: item.counterparty.name ?? t('panel.formerPlayer') });
+  let body: string;
+  if (item.kind === 'rule_notice') body = resolveLText(item.message, { viewer: locale })?.value ?? '';
+  else if (item.counterparty.name === null) body = t(`challengeFormer.${challengeSentence(item)}`);
+  else body = t(`challenge.${challengeSentence(item)}`, { player: item.counterparty.name });
   return (
     <li>
       <Link
@@ -76,7 +76,7 @@ export default function NotificationBell() {
   const [unread, setUnread] = useState(0);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<NotificationView[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
   const [load, setLoad] = useState<LoadState>('idle');
   const [markFailed, setMarkFailed] = useState(false);
   const panelId = useId();
@@ -84,12 +84,21 @@ export default function NotificationBell() {
   const wrapperRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const titleRef = useRef<HTMLHeadingElement>(null);
+  const listRef = useRef<HTMLUListElement>(null);
+  /** The offset of the last list read, for its retry. */
+  const lastOffsetRef = useRef(0);
+  /** The row to focus once a page has landed: the button that asked for it is gone by then. */
+  const focusRowRef = useRef<number | null>(null);
+  /** Bumped by every list read and every mark: an answer that started before the latest of them is out of date. */
+  const listGeneration = useRef(0);
+  const countGeneration = useRef(0);
 
   const { refresh } = useVisiblePoll(
     async (): Promise<PollOutcome> => {
+      const started = countGeneration.current;
       const outcome = await loadUnreadCount();
       if (outcome.ok) {
-        setUnread(outcome.data.unread);
+        if (started === countGeneration.current) setUnread(outcome.data.unread);
         return 'live';
       }
       // Signed out or banned meanwhile: asking again cannot help.
@@ -100,7 +109,11 @@ export default function NotificationBell() {
 
   const fetchPage = useCallback(async (offset: number) => {
     setLoad('loading');
+    lastOffsetRef.current = offset;
+    listGeneration.current += 1;
+    const started = listGeneration.current;
     const outcome = await loadInbox(offset);
+    if (started !== listGeneration.current) return;
     if (!outcome.ok) {
       setLoad('failed');
       return;
@@ -111,7 +124,7 @@ export default function NotificationBell() {
       const known = new Set(current.map((row) => row.id));
       return [...current, ...outcome.data.items.filter((row) => !known.has(row.id))];
     });
-    setHasMore(outcome.data.has_more);
+    setNextOffset(outcome.data.next_offset);
     setUnread(outcome.data.unread);
     setLoad('ready');
   }, []);
@@ -119,6 +132,12 @@ export default function NotificationBell() {
   useEffect(() => {
     if (open) titleRef.current?.focus();
   }, [open]);
+
+  useEffect(() => {
+    if (focusRowRef.current === null) return;
+    listRef.current?.querySelectorAll('a')[focusRowRef.current]?.focus();
+    focusRowRef.current = null;
+  }, [items]);
 
   const toggle = () => {
     if (!open) {
@@ -164,6 +183,7 @@ export default function NotificationBell() {
     if (item.read) return;
     setItems((current) => current.map((row) => (row.id === item.id ? { ...row, read: true } : row)));
     setUnread((count) => Math.max(0, count - 1));
+    countGeneration.current += 1;
     void markRead([item.id]).then((outcome) => {
       if (outcome.ok) setUnread(outcome.data.unread);
       // The row stays unread on the server, and the next read says so.
@@ -178,8 +198,25 @@ export default function NotificationBell() {
       setMarkFailed(true);
       return;
     }
+    // A list or count read still on its way describes the state before this mark.
+    listGeneration.current += 1;
+    countGeneration.current += 1;
+    setLoad((current) => (current === 'loading' ? 'ready' : current));
     setItems((current) => current.map((row) => ({ ...row, read: true })));
     setUnread(outcome.data.unread);
+    // The button that was just pressed goes away with the last unread notification.
+    titleRef.current?.focus();
+  };
+
+  const retry = () => {
+    titleRef.current?.focus();
+    void fetchPage(lastOffsetRef.current);
+  };
+
+  const showOlder = (offset: number) => {
+    titleRef.current?.focus();
+    focusRowRef.current = items.length;
+    void fetchPage(offset);
   };
 
   const badge = unread > BADGE_MAX ? t('bell.overflow') : String(unread);
@@ -238,7 +275,7 @@ export default function NotificationBell() {
               </p>
             )}
             {items.length > 0 && (
-              <ul className="space-y-0.5">
+              <ul ref={listRef} className="space-y-0.5">
                 {items.map((item) => (
                   <NotificationRow key={item.id} item={item} onFollow={follow} />
                 ))}
@@ -251,17 +288,17 @@ export default function NotificationBell() {
                 <p>{t('panel.loadFailed')}</p>
                 <button
                   type="button"
-                  onClick={() => void fetchPage(items.length)}
+                  onClick={retry}
                   className={`mt-1 rounded-poke-sm text-xs font-semibold underline ${FOCUS_RING}`}
                 >
                   {t('panel.retry')}
                 </button>
               </div>
             )}
-            {load === 'ready' && hasMore && (
+            {load === 'ready' && nextOffset !== null && (
               <button
                 type="button"
-                onClick={() => void fetchPage(items.length)}
+                onClick={() => showOlder(nextOffset)}
                 className={`mt-1 w-full rounded-poke-md px-2 py-2 text-center text-xs font-semibold text-poke-text-secondary hover:bg-poke-elevated ${FOCUS_RING}`}
               >
                 {t('panel.loadMore')}

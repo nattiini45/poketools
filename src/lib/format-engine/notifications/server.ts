@@ -44,5 +44,5 @@ export async function loadInboxPage(playerId: string, limit: number, offset: num
     if (view === null) logger.error(TAG, 'a stored notification cannot be read', { notificationId: row.id, kind: row.kind });
     else items.push(view);
   }
-  return { items, unread, has_more: hasMore };
+  return { items, unread, next_offset: hasMore ? offset + rows.length : null };
 }

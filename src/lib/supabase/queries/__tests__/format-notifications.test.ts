@@ -71,6 +71,7 @@ describe('markFormatNotificationsRead', () => {
   it('scopes a write by ids to the player', async () => {
     fake.results.push({ error: null });
     await markFormatNotificationsRead('me', ['a', 'b']);
+    expect(called('update')).toEqual([[{ read_at: expect.any(String) }]]);
     expect(called('eq')).toEqual([['player_id', 'me']]);
     expect(called('in')).toEqual([['id', ['a', 'b']]]);
     expect(called('is')).toEqual([['read_at', null]]);

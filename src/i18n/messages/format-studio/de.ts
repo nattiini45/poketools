@@ -103,7 +103,7 @@ export default defineDe<typeof en>()({
     tunable_default_invalid: 'Der Standardwert des Reglers {tunable} passt nicht: {reason}.',
     effect_item_invalid: 'Der Effekt auf die Ressource {resource} nennt ein Element, das nicht passt: {reason}.',
     effect_set_attr_invalid: 'Ein Effekt kann das Attribut {attr} nicht setzen: {reason}.',
-    notify_relation_hidden: "Die Empfänger einer Benachrichtigung hängen von der Beziehung {relation} ab, die Spieler nicht vollständig sehen. Sie wird zurückgehalten, bis alle Verbindungen dieser Beziehung enthüllt sind.",
+    notify_relation_hidden: "Die Empfänger einer Benachrichtigung hängen von der Beziehung {relation} ab, die Spieler nicht vollständig sehen. Wird sie ausgelöst, solange eine Verbindung dieser Beziehung nicht enthüllt ist, wird sie nicht zugestellt, auch nicht nach der Enthüllung.",
     action_step_mismatch: 'Ein Schritt der Aktion {action} kann die Ressource {resource} nicht verwenden: {reason}.',
     action_distinct_attr_invalid: 'Die Aktion {action} verlangt unterschiedliche {attr}-Werte, aber dieses Attribut ist nicht verwendbar: {reason}.',
     action_distinct_attr_missing: 'Die Aktion {action} verlangt unterschiedliche {attr}-Werte, aber {count} Einträge der Liste {domain} haben kein {attr} (erster: {first}). Ein solcher Eintrag lässt sich neben jedem anderen wählen.',

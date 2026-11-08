@@ -194,11 +194,12 @@ class Planner {
 
   /**
    * A relation the target of a `notify` reads and a player may not fully see yet, or undefined. Being on the list of a
-   * notice selected by such a relation would tell the recipient who is linked to whom, so the notice is not delivered.
+   * notice selected by such a relation would tell the recipient who is linked to whom, so the notice is not delivered. The
+   * event still fires and its key is spent: a later reveal does not bring the notice back.
    */
   private hiddenRelationIn(target: EffectTarget): string | undefined {
     if (target.where === undefined) return undefined;
-    return relationsRead(target.where).find((key) => {
+    return relationsRead(target.where, this.def.attributes).find((key) => {
       const visibility = (this.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
       if (visibility?.from === 'all' && visibility.to === 'all') return false;
       return this.state.links.some((link) => link.relation === key && !link.revealed);

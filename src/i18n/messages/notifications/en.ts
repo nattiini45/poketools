@@ -2,7 +2,7 @@ export default {
   bell: {
     label: 'Notifications',
     labelUnread: 'Notifications, {count} unread',
-    announceUnread: '{count} unread notifications',
+    announceUnread: { one: '{count} unread notification', other: '{count} unread notifications' },
     overflow: '99+',
   },
   panel: {
@@ -15,7 +15,6 @@ export default {
     retry: 'Try again',
     loadMore: 'Show older',
     unread: 'Unread',
-    formerPlayer: 'Former player',
   },
   challenge: {
     created: '{player} challenged you.',
@@ -25,5 +24,14 @@ export default {
     expired_challenger: '{player} did not answer your challenge in time.',
     cancelled_defender: 'The challenge from {player} was cancelled.',
     cancelled_challenger: 'Your challenge to {player} was cancelled.',
+  },
+  challengeFormer: {
+    created: 'A former player challenged you.',
+    accepted: 'A former player accepted your challenge.',
+    declined: 'A former player declined your challenge.',
+    expired_defender: 'A challenge from a former player expired before you answered.',
+    expired_challenger: 'A former player did not answer your challenge in time.',
+    cancelled_defender: 'A challenge from a former player was cancelled.',
+    cancelled_challenger: 'Your challenge to a former player was cancelled.',
   },
 } as const;

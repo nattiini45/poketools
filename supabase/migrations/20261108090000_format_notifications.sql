@@ -56,7 +56,8 @@ COMMENT ON TABLE public.format_notifications IS
 
 -- ---------------------------------------------------------------------------------------------------------------
 -- A fired event and its notifications, in one transaction. format_fire_event is called unchanged: false (the event had fired
--- before) writes nothing. A recipient deleted since the plan is skipped by the join, so it cannot roll the event back.
+-- before) writes nothing. A recipient deleted since the plan is skipped by the join, and the row lock closes the window between
+-- that read and the foreign-key check, so a delete cannot roll the event back.
 CREATE OR REPLACE FUNCTION public.format_fire_event_notify(
   p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint, p_notifications jsonb
 ) RETURNS boolean
@@ -75,6 +76,7 @@ BEGIN
     FROM jsonb_array_elements(p_notifications) n
    CROSS JOIN LATERAL jsonb_array_elements_text(n -> 'players') recipient(id)
     JOIN public.players pl ON pl.id = recipient.id::uuid
+     FOR KEY SHARE OF pl
   ON CONFLICT ON CONSTRAINT format_notifications_dedupe DO NOTHING;
   RETURN true;
 END $$;

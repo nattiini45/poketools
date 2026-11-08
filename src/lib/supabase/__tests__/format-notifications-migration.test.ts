@@ -32,7 +32,7 @@ describe('20261108090000_format_notifications.sql', () => {
     expect(body).toMatch(/IF NOT public\.format_fire_event\([^)]*\) THEN\s+RETURN false;/);
     expect(body).toContain("'rule:' || p_expected_revision::text || ':' || p_event_key || ':' || (n ->> 'rule') || ':' || (n ->> 'effect')");
     // A recipient deleted since the plan must not roll the event back.
-    expect(body).toContain('JOIN public.players pl ON pl.id = recipient.id::uuid');
+    expect(body).toMatch(/JOIN public\.players pl ON pl\.id = recipient\.id::uuid\s+FOR KEY SHARE OF pl/);
   });
 
   it('reacts to a challenge on insert and on a status change, and not on a restored row', () => {
