@@ -10,6 +10,8 @@ import {
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { assertPhaseEditable } from '@/lib/tournament/league-phase';
+import { assertFormatPhaseRosterOpen } from '@/lib/format-studio/phase-guards';
+import { auditRosterOverride, rosterOverrideOf } from '@/lib/format-studio/roster-override';
 import { expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -29,17 +31,32 @@ async function assertPhaseInSeason(seasonId: string, phaseId: string) {
   return phase;
 }
 
-/** POST /api/seasons/[id]/phases/[phaseId]/participants/seed-by-rating */
-export async function POST(_request: NextRequest, { params }: RouteParams) {
+/** The JSON body of a call that may have none (the plain seed-by-rating has none): a body that is not JSON asks for no override. */
+async function optionalJsonBody(request: NextRequest): Promise<unknown> {
+  try {
+    return await request.json();
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * POST /api/seasons/[id]/phases/[phaseId]/participants/seed-by-rating
+ *
+ * Re-seeds the roster, so on a format phase that has started it is refused like the other roster writes (409
+ * `format_phase_owned`) unless the optional body forces it: `{ "force": true, "reason": "…" }`.
+ */
+export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, phaseId } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
     const phase = await assertPhaseInSeason(id, phaseId);
     assertPhaseEditable(phase, 'participants');
+    const override = await assertFormatPhaseRosterOpen(id, phase, rosterOverrideOf(await optionalJsonBody(request)));
 
     const participants = await getParticipants(phaseId);
     if (participants.length === 0) {
@@ -72,6 +89,7 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
       throw err;
     }
     expireTournamentReads(phaseId, id);
+    if (override) auditRosterOverride(admin, id, phase, override, 'seed_by_rating', { seeded: seeds.length });
 
     return NextResponse.json<ApiResult<{ seeds: typeof seeds }>>({
       success: true,

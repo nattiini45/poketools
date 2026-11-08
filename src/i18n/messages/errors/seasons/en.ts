@@ -219,4 +219,23 @@ export default {
     'The request took too long, so the result is unknown. Reload the page to see whether it went through.',
   LEAGUE_TRASH_REBUILD_PENDING:
     'The statistics and ratings of this deleted league were not rebuilt yet. Run the pending rebuild first, then restore the league.',
+
+  // Substitution in a league with a custom format: the substitute inherits the seat's format data (docs/format-kit.md, "Substitution").
+  format_substitute_links_collide:
+    "The incoming player already has a link in this format that would collide with the outgoing player's, so the format data cannot move. Nothing was changed.",
+  format_substitute_items_collide:
+    "The incoming player already holds items of a resource whose limit the outgoing player's items would exceed, so the format data cannot move. Nothing was changed.",
+  format_substitute_submissions_collide:
+    'The incoming player has already picked for an action the outgoing player picked for (or the two picked for each other), so the format data cannot move. Nothing was changed.',
+  format_substitute_attrs_collide:
+    'The incoming player already has a format attribute the outgoing player also has, so the format data cannot move. Nothing was changed.',
+  format_substitute_tracks_collide:
+    'The incoming player already has progress on a track the outgoing player also has, so the format data cannot move. Nothing was changed.',
+  format_substitute_challenges_collide:
+    "The incoming player already has an open challenge that would collide with one of the outgoing player's, so the format data cannot move. Nothing was changed.",
+  substitute_format_seat_kept:
+    'The outgoing player stays in {phases}, so their format data (links, items, picks, attributes, progress) stays with them. It moves when they are substituted out of the last of these phases.',
+
+  // Roster changes of a started format phase are forced with a reason (docs/format-kit.md, "Roster changes after the start").
+  PHASE_ROSTER_REASON_REQUIRED: 'Forcing a roster change on a started phase of the format needs a reason of 1 to 500 characters.',
 } as const;

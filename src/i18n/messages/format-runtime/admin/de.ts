@@ -248,10 +248,18 @@ export default defineDe<typeof en>()({
     linksCaption: 'Verknüpfungen von {relation}',
     showHidden: 'Verborgene Seiten anzeigen',
     hideAgain: 'Wieder verbergen',
+    ownHidden: {
+      one: '{count} Zeile, die dich betrifft (als Schenker, Empfänger oder Ziel), ist ausgeblendet, damit dein eigenes Spiel nicht verraten wird.',
+      other: '{count} Zeilen, die dich betreffen (als Schenker, Empfänger oder Ziel), sind ausgeblendet, damit dein eigenes Spiel nicht verraten wird.',
+    },
+    ownShown: 'Die Zeilen, die dich betreffen, sind sichtbar.',
+    ownShow: 'Meine Zeilen anzeigen',
+    ownHide: 'Meine Zeilen ausblenden',
+    ownHiddenNote: 'Die Zeilen, die dich betreffen, sind ausgeblendet.',
     unmaskedBadge: 'Verborgene Seiten sichtbar',
     unmaskTitle: 'Verborgene Seiten anzeigen?',
     unmaskBody:
-      'Du siehst, wer mit wem verknüpft ist und was jeder Spieler abgegeben hat. Wenn du selbst in dieser Liga spielst, siehst du auch deinen eigenen Schenker oder Empfänger. Der Zugriff wird im Protokoll festgehalten. Die Spieler sehen weiterhin nur ihre eigene Seite.',
+      'Du siehst, wer mit wem verknüpft ist und was jeder Spieler abgegeben hat. Wenn du selbst in dieser Liga spielst, bleiben die Zeilen, die dich betreffen (dein eigener Schenker, Empfänger oder deine eigene Abgabe), ausgeblendet, bis du sie anzeigst. Der Zugriff wird im Protokoll festgehalten. Die Spieler sehen weiterhin nur ihre eigene Seite.',
     unmaskConfirm: 'Anzeigen',
     reveal: 'Aufdecken',
     revealAria: '{relation} aufdecken',
@@ -317,6 +325,28 @@ export default defineDe<typeof en>()({
     },
     unlocked: 'Freigeschaltet',
     locked: 'Gesperrt',
+  },
+  lateJoiners: {
+    title: 'Spät dazugekommene Spieler',
+    subtitle:
+      'Spieler, die einer Stage beigetreten sind, nachdem einmalige Ereignisse dieser Stage schon ausgelöst waren. Sie bekommen davon nichts automatisch; gleiche es bei Bedarf mit einer Anpassung aus.',
+    caption: 'Spät dazugekommene Spieler und die Ereignisse, die sie verpasst haben',
+    columns: { player: 'Spieler', missed: 'Verpasst' },
+    anyStage: 'die Liga',
+    event: {
+      stage_start: 'Start von {stage}',
+      stage_end: 'Ende von {stage}',
+      round_start: 'Runde {round} von {stage} gestartet',
+      round_end: 'Runde {round} von {stage} beendet',
+      action_locked: 'Aktion {action} gesperrt',
+      time: 'Kalendermarke {mark} von {stage}',
+    },
+    effect: {
+      grant_resource: 'Vergabe von {name}',
+      adjust_points: 'Punkte in {name}',
+      set_attr: 'Attribut {name}',
+      generate_relation: 'Auslosung von {name}',
+    },
   },
   confirm: {
     reasonLabel: 'Grund',

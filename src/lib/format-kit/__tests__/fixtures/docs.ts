@@ -810,7 +810,6 @@ export function sampleNodes(): Record<string, unknown> {
       via: 'santa',
       window: { opens_on: { event: 'stage_start', stage: 'main' } },
       steps: [{ resource: 'picks', domain: 'pool', count: 2, distinct_attr: 'role' }],
-      review: true,
       lock: 'on_submit',
     },
     'track.progression': {

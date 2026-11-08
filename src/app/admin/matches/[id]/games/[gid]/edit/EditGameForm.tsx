@@ -10,7 +10,14 @@ import { useDataLocale, useT } from '@/i18n/client';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
-import { gameEditRequest, sendGameChange } from '@/lib/match/game-change-outcome';
+import DownstreamApprovalDialog from '@/components/match/DownstreamApprovalDialog';
+import {
+  downstreamApproval,
+  downstreamResetCount,
+  gameEditRequest,
+  sendGameChange,
+  type DownstreamApproval,
+} from '@/lib/match/game-change-outcome';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import type { Locale } from '@/i18n/config';
@@ -123,6 +130,10 @@ export default function EditGameForm({
   const [success, setSuccess] = useState(false);
   /** Warnings of a saved edit (e.g. the EPB recheck failed): shown instead of the auto-return. */
   const [warnings, setWarnings] = useState<ApiErrorLike[]>([]);
+  /** The played later bracket matches the API says this edit would reset (409, nothing written): the admin approves or cancels. */
+  const [approval, setApproval] = useState<DownstreamApproval | null>(null);
+  /** How many later bracket matches the saved edit reset after the admin approved it. */
+  const [resetCount, setResetCount] = useState(0);
 
   function updatePokemonField<K extends keyof PokemonStatInput>(
     playerIdx: number,
@@ -154,11 +165,17 @@ export default function EditGameForm({
     });
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    void save(false);
+  }
+
+  /** `confirmDownstream`: the admin approved resetting the later bracket matches the first attempt reported. */
+  async function save(confirmDownstream: boolean) {
     setError(null);
     setSuccess(false);
     setWarnings([]);
+    setResetCount(0);
 
     if (!winnerId) {
       setError({ local: 'selectWinner' });
@@ -189,11 +206,22 @@ export default function EditGameForm({
         winnerId,
         battleStats: battle_stats,
         expectedUpdatedAt: gameUpdatedAt,
+        confirmDownstream,
       });
       const result = await sendGameChange(request.url, request.init);
 
+      if (!result.ok && !confirmDownstream) {
+        const needed = downstreamApproval(result.error);
+        if (needed) {
+          // Nothing was written: ask first, then send the same edit again with the approval.
+          setApproval(needed);
+          return;
+        }
+      }
+      setApproval(null);
       if (result.ok) {
         setSuccess(true);
+        setResetCount(downstreamResetCount(result.data));
         setWarnings(result.warnings);
         // With a warning the admin stays here to read it and leaves by "Back to match".
         if (result.warnings.length === 0) {
@@ -203,6 +231,7 @@ export default function EditGameForm({
         setError({ api: result.error });
       }
     } catch {
+      setApproval(null);
       setError({ local: 'updateFailed' });
     } finally {
       setLoading(false);
@@ -347,7 +376,12 @@ export default function EditGameForm({
       ))}
 
       {error && 'local' in error && <Alert variant="error">{t(`editGame.${error.local}`)}</Alert>}
-      {success && <Alert variant="success">{t('editGame.updated')}</Alert>}
+      {success && (
+        <Alert variant="success">
+          <p>{t('editGame.updated')}</p>
+          {resetCount > 0 && <p>{t('gameChange.downstream.done', { count: resetCount })}</p>}
+        </Alert>
+      )}
       <GameChangeAlerts error={error && 'api' in error ? error.api : null} warnings={warnings} isSiteAdmin={isSiteAdmin} />
 
       <div className="flex gap-3">
@@ -364,6 +398,13 @@ export default function EditGameForm({
           {success ? t('editGame.backToMatch') : t('editGame.cancel')}
         </Button>
       </div>
+
+      <DownstreamApprovalDialog
+        approval={approval}
+        onApprove={() => void save(true)}
+        onCancel={() => setApproval(null)}
+        loading={loading}
+      />
     </form>
   );
 }

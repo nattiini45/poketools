@@ -94,6 +94,14 @@ export default {
     matchesHeading: 'Matches to repair ({count})',
     match: '{player1} vs {player2}',
     nothingToSubstitute: 'Nothing to substitute: no roster row, phase slot or match would change.',
+    formatMoves: {
+      one: 'Format data: <b>{count}</b> entry moves to the incoming player, who takes over the seat in the league format. The event log and adjustments stay with the outgoing player.',
+      other:
+        'Format data: <b>{count}</b> entries move to the incoming player, who takes over the seat in the league format. The event log and adjustments stay with the outgoing player.',
+    },
+    formatNothing: 'Format data: the outgoing player holds none, so nothing moves; the incoming player takes over the seat.',
+    formatRows:
+      'Links {links}, items {items}, picks {picks}, attributes {attrs}, progress {tracks}, open challenges {challenges}',
   },
   skipped: {
     heading: {
@@ -125,6 +133,10 @@ export default {
       groupHandedOver: 'Group slot handed over in {phases}',
       enrollmentMoved: 'Enrollment moved in {phases}',
       rosterSwapped: 'League roster swapped',
+      formatMoved: {
+        one: 'Format data moved to the incoming player ({count} entry)',
+        other: 'Format data moved to the incoming player ({count} entries)',
+      },
       phaseFallback: 'a phase',
     },
   },

@@ -150,6 +150,14 @@ vi.mock('@/lib/reconcile/evolution-rebuild', () => ({
   })),
 }));
 
+vi.mock('@/lib/format-engine/runtime/hooks', () => ({
+  onMatchReverted: vi.fn(async () => true),
+}));
+
+vi.mock('@/lib/match/stage-ended', () => ({
+  loadStageEndedWarning: vi.fn(async () => null),
+}));
+
 vi.mock('@/lib/tournament/bracket-propagation', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/tournament/bracket-propagation')>();
   return {
@@ -159,7 +167,20 @@ vi.mock('@/lib/tournament/bracket-propagation', async (importOriginal) => {
 });
 
 import { deleteGame, editGame, resetMatch } from '../game-pipeline';
-import { getGameById, deleteUncountedGameRow } from '@/lib/supabase/queries/games';
+import {
+  claimGameEditLease,
+  createBattleStats,
+  deleteUncountedGameRow,
+  getGameById,
+  getGameWinCounts,
+  releaseGameEditLease,
+  updateGameWinner,
+} from '@/lib/supabase/queries/games';
+import { rollbackGameAggregates } from '@/lib/supabase/queries/aggregates';
+import { GameChangeDownstreamPlayedError } from '@/lib/match/state-errors';
+import { onMatchReverted } from '@/lib/format-engine/runtime/hooks';
+import { loadStageEndedWarning } from '@/lib/match/stage-ended';
+import { parseDownstreamMatches } from '@/lib/match/downstream-matches';
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { planRatingRebuild } from '@/lib/rating/updateRatings';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -168,6 +189,7 @@ import {
   getMatchesByTournament,
   hasDownstreamMatches,
   resetMatchFields,
+  transitionMatchStatus,
 } from '@/lib/supabase/queries/matches';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
@@ -419,6 +441,50 @@ describe('resetMatch cascade', () => {
     );
   });
 
+  describe('what the reset of a later match reports belongs to the reset that caused it', () => {
+    const customLeague = (): Tournament => ({
+      ...makeTournament(),
+      season_id: 'season-1',
+      season_format_type: 'custom',
+    });
+
+    it('a format revert that failed for a cascaded match makes the whole reset report it', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(customLeague());
+      // Children go first: the finals' revert is the first call, the origin's the second.
+      vi.mocked(onMatchReverted).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const result = await resetMatch('m-r1', 'admin-1', true);
+
+      expect(onMatchReverted).toHaveBeenCalledTimes(2);
+      expect(result.format_revert_failed).toBe(true);
+    });
+
+    it('an approved game change reports the same failure for the matches it reset', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue(customLeague());
+      vi.mocked(getGameById).mockResolvedValue({ id: 'g-origin', match_id: 'm-r1', updated_at: '2026-01-01T00:00:00.000Z' } as never);
+      vi.mocked(getGameWinCounts).mockResolvedValue({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p4'] });
+      vi.mocked(onMatchReverted).mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+      const result = await deleteGame('g-origin', 'admin-1', { confirmDownstream: true });
+
+      expect(result.format_revert_failed).toBe(true);
+      expect(result.downstream_reset_match_ids).toEqual(['m-finals']);
+    });
+
+    it('a stage-ended notice a cascaded match raised reaches the result of the approved change', async () => {
+      const notice = { phase_id: 't1', phase_name: 'Playoffs', advanced: [] };
+      vi.mocked(getTournamentById).mockResolvedValue(customLeague());
+      vi.mocked(getGameById).mockResolvedValue({ id: 'g-origin', match_id: 'm-r1', updated_at: '2026-01-01T00:00:00.000Z' } as never);
+      vi.mocked(getGameWinCounts).mockResolvedValue({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p4'] });
+      // The finals' own reset raises it (first call); the origin's check finds none of its own.
+      vi.mocked(loadStageEndedWarning).mockResolvedValueOnce(notice).mockResolvedValueOnce(null);
+
+      const result = await deleteGame('g-origin', 'admin-1', { confirmDownstream: true });
+
+      expect(result.stage_already_ended).toEqual(notice);
+    });
+  });
+
   it('resets downstream matches deepest-first when cascade is true', async () => {
     const result = await resetMatch('m-r1', 'admin-1', true);
 
@@ -439,30 +505,190 @@ describe('resetMatch cascade', () => {
   });
 
   describe('an admin game change of the completed origin match', () => {
-    // A game change takes a completed match off `completed` exactly like a reopen, so a played later bracket match refuses
-    // it the same way (409 match_reopen_downstream_played) before anything is written.
+    // A game change takes a completed match off `completed` exactly like a reopen and orphans the played bracket path
+    // after it. It is refused with nothing written (409 game_change_downstream_played, listing the later matches) until
+    // the admin approves; an approved change resets those matches as a cascading reset does, then applies the change.
     beforeEach(() => {
       vi.mocked(getGameById).mockResolvedValue({ id: 'g-origin', match_id: 'm-r1', updated_at: '2026-01-01T00:00:00.000Z' } as never);
+      vi.mocked(getGameWinCounts).mockResolvedValue({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p4'] });
+      vi.mocked(createBattleStats).mockResolvedValue([]);
+      vi.mocked(transitionMatchStatus).mockResolvedValue({} as never);
     });
 
-    it('deleteGame refuses while the finals it advanced into were played, with nothing deleted', async () => {
+    const resetOrder = (matchId: string) => {
+      const calls = vi.mocked(resetMatchFields).mock.calls;
+      const index = calls.findIndex((call) => call[0] === matchId);
+      return index === -1 ? undefined : vi.mocked(resetMatchFields).mock.invocationCallOrder[index];
+    };
+    // The finals' own reset deletes their game; this is about the game the admin changes.
+    const originGameDeleteOrder = () => {
+      const calls = vi.mocked(deleteUncountedGameRow).mock.calls;
+      const index = calls.findIndex((call) => call[0] === 'g-origin');
+      return index === -1 ? undefined : vi.mocked(deleteUncountedGameRow).mock.invocationCallOrder[index];
+    };
+
+    it('deleteGame is refused with the finals it advanced into listed, and nothing is written', async () => {
       const rejection = deleteGame('g-origin', 'admin-1');
 
+      await expect(rejection).rejects.toBeInstanceOf(GameChangeDownstreamPlayedError);
       await expect(rejection).rejects.toMatchObject({
-        code: 'match_reopen_downstream_played',
+        code: 'game_change_downstream_played',
         statusCode: 409,
         params: { count: 1 },
       });
+      const err = (await rejection.catch((e: unknown) => e)) as UserFacingError;
+      expect(parseDownstreamMatches(err.params?.matches)).toEqual([
+        { id: 'm-finals', round_name: 'Finals', player_1_name: '', player_2_name: '', status: 'completed' },
+      ]);
+      expect(err.message).toBe(
+        'This change affects the rest of the bracket: 1 later bracket match was already played. It has to be reset for the change to apply. Nothing was changed yet; approve the reset to continue.'
+      );
       expect(deleteUncountedGameRow).not.toHaveBeenCalled();
+      expect(rollbackGameAggregates).not.toHaveBeenCalled();
+      expect(resetMatchFields).not.toHaveBeenCalled();
+      expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    });
+
+    it('editGame is refused the same way BEFORE it claims the edit lease, so the editor\'s version is untouched', async () => {
+      const rejection = editGame({ game_id: 'g-origin', admin_id: 'admin-1', winner_id: 'p4' });
+
+      await expect(rejection).rejects.toMatchObject({ code: 'game_change_downstream_played', statusCode: 409, params: { count: 1 } });
+      expect(claimGameEditLease).not.toHaveBeenCalled();
+      expect(releaseGameEditLease).not.toHaveBeenCalled();
+      expect(updateGameWinner).not.toHaveBeenCalled();
+      expect(resetMatchFields).not.toHaveBeenCalled();
+      expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    });
+
+    it('an approved deleteGame plans the whole cascade\'s ratings first, resets the finals before the origin game goes, then deletes', async () => {
+      const reset: string[] = [];
+      const result = await deleteGame('g-origin', 'admin-1', {
+        confirmDownstream: true,
+        onDownstreamMatchReset: (matchId) => reset.push(matchId),
+      });
+
+      // The same plan resetMatch makes for a cascade: both matches' players, both matches left out.
+      expect(vi.mocked(planRatingRebuild).mock.calls[0]).toEqual([
+        ['p1', 'p4', 'p2'],
+        { excludeMatchIds: ['m-r1', 'm-finals'] },
+      ]);
+      const planOrder = vi.mocked(planRatingRebuild).mock.invocationCallOrder[0];
+      expect(planOrder).toBeLessThan(resetOrder('m-finals')!);
+      // Children before parent: the finals are reset, then the origin's game is deleted, then the origin match is re-evaluated.
+      expect(resetOrder('m-finals')!).toBeLessThan(originGameDeleteOrder()!);
+      expect(originGameDeleteOrder()!).toBeLessThan(resetOrder('m-r1')!);
+      expect(reset).toEqual(['m-finals']);
+      expect(result.downstream_reset_match_ids).toEqual(['m-finals']);
+      expect(result.match_status).toBe('scheduled');
+    });
+
+    it('an approved editGame with a winner outside the match is refused before the finals are reset or the lease is claimed', async () => {
+      const rejection = editGame(
+        { game_id: 'g-origin', admin_id: 'admin-1', winner_id: 'p-stranger' },
+        { confirmDownstream: true }
+      );
+
+      await expect(rejection).rejects.toMatchObject({ code: 'match_winner_not_participant', statusCode: 400 });
+      expect(claimGameEditLease).not.toHaveBeenCalled();
+      expect(resetMatchFields).not.toHaveBeenCalled();
+      expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+      expect(rollbackGameAggregates).not.toHaveBeenCalled();
+      expect(updateGameWinner).not.toHaveBeenCalled();
+    });
+
+    it('an approved editGame with battle stats of a player outside the match is refused the same way', async () => {
+      const rejection = editGame(
+        {
+          game_id: 'g-origin',
+          admin_id: 'admin-1',
+          battle_stats: [{ player_id: 'p-stranger', pokemon_name: 'Pikachu' }],
+        },
+        { confirmDownstream: true }
+      );
+
+      await expect(rejection).rejects.toMatchObject({ code: 'admin_game_stats_player_not_participant', statusCode: 400 });
+      expect(claimGameEditLease).not.toHaveBeenCalled();
       expect(resetMatchFields).not.toHaveBeenCalled();
     });
 
-    it('editGame refuses the same way, with nothing written', async () => {
-      const rejection = editGame({ game_id: 'g-origin', admin_id: 'admin-1', winner_id: 'p4' });
+    it('an approved editGame resets the finals inside its lease, then applies the edit', async () => {
+      const reset: string[] = [];
+      const result = await editGame(
+        { game_id: 'g-origin', admin_id: 'admin-1', winner_id: 'p4' },
+        { confirmDownstream: true, onDownstreamMatchReset: (matchId) => reset.push(matchId) }
+      );
 
-      await expect(rejection).rejects.toMatchObject({ code: 'match_reopen_downstream_played', statusCode: 409 });
+      expect(claimGameEditLease).toHaveBeenCalledTimes(1);
+      const claimOrder = vi.mocked(claimGameEditLease).mock.invocationCallOrder[0];
+      expect(claimOrder).toBeLessThan(resetOrder('m-finals')!);
+      expect(resetOrder('m-finals')!).toBeLessThan(vi.mocked(updateGameWinner).mock.invocationCallOrder[0]);
+      expect(updateGameWinner).toHaveBeenCalledWith('g-origin', 'p4');
+      expect(vi.mocked(planRatingRebuild).mock.calls[0]).toEqual([
+        ['p1', 'p4', 'p2'],
+        { excludeMatchIds: ['m-r1', 'm-finals'] },
+      ]);
+      expect(releaseGameEditLease).toHaveBeenCalledTimes(1);
+      expect(reset).toEqual(['m-finals']);
+      expect(result.downstream_reset_match_ids).toEqual(['m-finals']);
+    });
+
+    it('a change that resets nothing downstream carries no cascade field and plans the plain rebuild', async () => {
+      const legacy = makeMatch({
+        id: 'm-legacy',
+        round_id: 'round-1',
+        player_1_id: 'p1',
+        player_2_id: 'p2',
+        bracket_pos: null,
+        status: 'completed',
+        winner_id: 'p1',
+      });
+      matchById.set(legacy.id, legacy);
+      vi.mocked(getGameById).mockResolvedValue({ id: 'g-legacy', match_id: 'm-legacy', updated_at: '2026-01-01T00:00:00.000Z' } as never);
+
+      const result = await deleteGame('g-legacy', 'admin-1', { confirmDownstream: true });
+
+      expect(vi.mocked(planRatingRebuild).mock.calls[0]).toEqual([['p1', 'p2'], { excludeMatchIds: ['m-legacy'] }]);
+      expect(result).not.toHaveProperty('downstream_reset_match_ids');
+    });
+
+    it('asks for the approval only after the rating plan passed: a refused plan is the answer, not the prompt', async () => {
+      const refusal = new UserFacingError('Rating history has gaps that no rebuild order can fill', {
+        code: 'rating_history_incomplete',
+        params: { count: 1, players: 'p1, p2' },
+        status: 409,
+      });
+      vi.mocked(planRatingRebuild).mockRejectedValueOnce(refusal);
+
+      await expect(deleteGame('g-origin', 'admin-1')).rejects.toBe(refusal);
       expect(resetMatchFields).not.toHaveBeenCalled();
-      expect(unpropagateBracketOnMatchReset).not.toHaveBeenCalled();
+    });
+
+    it('an origin match that moved while the finals were reset answers 409 and its game is not deleted', async () => {
+      vi.mocked(getMatchById).mockImplementation(async (id) => {
+        // Once the finals are reset, the origin match reads as moved on (another admin reopened it meanwhile).
+        if (id === 'm-r1' && resetOrder('m-finals') !== undefined) {
+          return { ...matchById.get(id)!, status: 'in_progress' } as MatchWithPlayers;
+        }
+        return matchById.get(id) ?? null;
+      });
+
+      await expect(deleteGame('g-origin', 'admin-1', { confirmDownstream: true })).rejects.toMatchObject({
+        code: 'match_state_changed',
+        statusCode: 409,
+      });
+      expect(originGameDeleteOrder()).toBeUndefined();
+    });
+
+    it('a failing reset of a later match stops the change: the game stays, the reset ones were reported', async () => {
+      const reset: string[] = [];
+      const failure = new Error('reset failed');
+      vi.mocked(resetMatchFields).mockRejectedValueOnce(failure);
+
+      await expect(
+        deleteGame('g-origin', 'admin-1', { confirmDownstream: true, onDownstreamMatchReset: (matchId) => reset.push(matchId) })
+      ).rejects.toBe(failure);
+      expect(originGameDeleteOrder()).toBeUndefined();
+      expect(reset).toEqual([]);
     });
   });
 

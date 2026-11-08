@@ -22,6 +22,9 @@ export default {
   team_list_tournament_id_invalid: 'tournament_id must be a valid UUID',
   team_list_player_id_invalid: 'player_id must be a valid UUID',
   team_submission_closed: 'Tournament is completed — team submission is closed',
+  // The tournament is archived, or its league is completed or archived (the league is named when it is the reason)
+  team_submission_tournament_archived: 'Tournament is archived — team submission is closed',
+  team_submission_league_closed: 'League is completed or archived — team submission is closed',
   team_not_tournament_participant: 'You are not a participant in this tournament',
   team_already_submitted: 'You already have a team for this tournament',
   team_not_owner: 'Not your team',

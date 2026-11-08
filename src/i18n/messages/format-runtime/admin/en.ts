@@ -259,10 +259,18 @@ export default {
     linksCaption: 'Links of {relation}',
     showHidden: 'Show hidden sides',
     hideAgain: 'Hide again',
+    ownHidden: {
+      one: '{count} row that involves you (as giver, recipient or target) is hidden, so your own game is not spoiled.',
+      other: '{count} rows that involve you (as giver, recipient or target) are hidden, so your own game is not spoiled.',
+    },
+    ownShown: 'The rows that involve you are shown.',
+    ownShow: 'Show my rows',
+    ownHide: 'Hide my rows',
+    ownHiddenNote: 'The rows that involve you are hidden.',
     unmaskedBadge: 'Hidden sides shown',
     unmaskTitle: 'Show the hidden sides?',
     unmaskBody:
-      'You will see who is linked to whom and what each player submitted. If you play in this league yourself, you would see your own giver or recipient too. The access is recorded in the audit log. The players keep seeing only their own side.',
+      'You will see who is linked to whom and what each player submitted. If you play in this league yourself, the rows that involve you (your own giver, recipient or submission) stay hidden until you choose to show them. The access is recorded in the audit log. The players keep seeing only their own side.',
     unmaskConfirm: 'Show',
     reveal: 'Reveal',
     revealAria: 'Reveal {relation}',
@@ -328,6 +336,29 @@ export default {
     },
     unlocked: 'Unlocked',
     locked: 'Locked',
+  },
+  // Players added to a stage after one-time events of that stage had fired (docs/format-kit.md, "Late joiners").
+  lateJoiners: {
+    title: 'Late joiners',
+    subtitle:
+      'Players who joined a stage after one-time events of that stage had fired. Nothing is granted to them automatically; make it good with an adjustment if you want to.',
+    caption: 'Late joiners and the events they missed',
+    columns: { player: 'Player', missed: 'Missed' },
+    anyStage: 'the league',
+    event: {
+      stage_start: 'Start of {stage}',
+      stage_end: 'End of {stage}',
+      round_start: 'Round {round} of {stage} started',
+      round_end: 'Round {round} of {stage} ended',
+      action_locked: 'Action {action} locked',
+      time: 'Calendar mark {mark} of {stage}',
+    },
+    effect: {
+      grant_resource: 'Grant of {name}',
+      adjust_points: 'Points in {name}',
+      set_attr: 'Attribute {name}',
+      generate_relation: 'Draw of {name}',
+    },
   },
   confirm: {
     reasonLabel: 'Reason',

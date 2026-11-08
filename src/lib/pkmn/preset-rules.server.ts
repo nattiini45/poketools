@@ -29,7 +29,7 @@ import { toID } from './i18n/id';
 import { CHAMPIONS_ROSTER } from './preset-data/champions';
 import { DRAFT_BANS, DRAFT_COMBINATION_BANS, DRAFT_TIER_BANS } from './preset-data/draft';
 import { PRESET_RULES_VERSION } from './preset-data/pin';
-import { WICHTELCUP_BANS, WICHTELCUP_SPECIES } from './preset-data/wichtelcup';
+import { WICHTELCUP_ALLOWED, WICHTELCUP_BANS } from './preset-data/wichtelcup';
 import {
   GEN9_1V1_BANS,
   GEN9_DOUBLES_LC_BANS,
@@ -190,7 +190,7 @@ function collect(preset: RulesetPreset): Collected {
   let collected = collectedByPreset.get(preset.id);
   if (collected === undefined) {
     if (preset.mod === 'champions') collected = collectChampions(preset);
-    else if (preset.source === 'poketools') collected = { names: WICHTELCUP_BANS, allow: { pokemon: WICHTELCUP_SPECIES } };
+    else if (preset.source === 'poketools') collected = { names: WICHTELCUP_BANS, allow: { pokemon: WICHTELCUP_ALLOWED } };
     else collected = preset.source === 'smogon-draft' ? collectDraft(preset) : collectLadder(preset);
     collectedByPreset.set(preset.id, collected);
   }

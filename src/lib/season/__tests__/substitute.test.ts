@@ -45,6 +45,10 @@ vi.mock('@/lib/supabase/queries/match-proposals', () => ({
   cancelPendingMatchProposalsForMatch: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/format-substitute', () => ({
+  moveFormatSeat: vi.fn(),
+}));
+
 import {
   emptySubstituteApplyLog,
   substituteApplyWrote,
@@ -74,6 +78,7 @@ import {
 import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/match-proposals';
 import { getSeasonGroupOfPlayer, seasonGroupHasDraftingPool } from '@/lib/supabase/queries/season-groups';
 import { seasonHasLiveLegacyDraft } from '@/lib/supabase/queries/drafts';
+import { moveFormatSeat, type FormatSeatMove } from '@/lib/supabase/queries/format-substitute';
 import { DraftRuleError } from '@/lib/draft/errors';
 
 const SEASON_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a01';
@@ -86,6 +91,15 @@ const PLAYOFF_PHASE_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a23';
 const SECOND_GROUP_PHASE_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a24';
 const GROUP_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a31';
 const SECOND_GROUP_ID = 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a32';
+
+/** The answer of a league without an attached format. */
+const NO_FORMAT: FormatSeatMove = {
+  attached: false,
+  moved: false,
+  kept_phase_ids: [],
+  rows: { relation_links: 0, resource_items: 0, action_submissions: 0, player_attrs: 0, track_progress: 0, challenges: 0 },
+  total: 0,
+};
 
 interface RecordedMock {
   mock: { calls: ReadonlyArray<ReadonlyArray<unknown>>; invocationCallOrder: number[] };
@@ -125,6 +139,7 @@ describe('substituteParticipant', () => {
     vi.mocked(getSeasonGroupOfPlayer).mockResolvedValue(null);
     vi.mocked(seasonGroupHasDraftingPool).mockResolvedValue(false);
     vi.mocked(seasonHasLiveLegacyDraft).mockResolvedValue(false);
+    vi.mocked(moveFormatSeat).mockResolvedValue(NO_FORMAT);
     vi.mocked(getPlayerById).mockImplementation(async (id) => {
       if (id === OUT_ID) return { id: OUT_ID, name: 'Out' } as never;
       if (id === IN_ID) return { id: IN_ID, name: 'In' } as never;
@@ -1161,6 +1176,7 @@ describe('substituteParticipant', () => {
       // Only real writes: the playoffs had no proposal to cancel, and its group
       // step (an ungrouped phase) wrote nothing.
       expect(log).toEqual({
+        format_moved: null,
         proposals_cancelled: [`match-${GROUP_PHASE_ID}`],
         matches_repaired: [`match-${GROUP_PHASE_ID}`, `match-${PLAYOFF_PHASE_ID}`],
         matches_skipped: [],
@@ -1279,6 +1295,7 @@ describe('substituteParticipant', () => {
 
       expect(substitutePartialApply(log)).toEqual({
         written: {
+          format_moved: null,
           proposals_cancelled: [],
           matches_repaired: [`match-${GROUP_PHASE_ID}`, `match-${PLAYOFF_PHASE_ID}`],
           matches_skipped: [],
@@ -1601,6 +1618,161 @@ describe('substituteParticipant', () => {
       });
 
       expect(getMatchesByTournament).toHaveBeenCalledWith(PHASE_ID, OUT_ID);
+    });
+  });
+
+  describe('the substitute inherits the seat in a league with a custom format', () => {
+    const ROWS = { relation_links: 2, resource_items: 3, action_submissions: 1, player_attrs: 0, track_progress: 1, challenges: 0 };
+    const NONE = { relation_links: 0, resource_items: 0, action_submissions: 0, player_attrs: 0, track_progress: 0, challenges: 0 };
+    const ATTACHED_MOVED: FormatSeatMove = { attached: true, moved: true, kept_phase_ids: [], rows: ROWS, total: 7 };
+    const NOTHING_LEFT: FormatSeatMove = { attached: true, moved: true, kept_phase_ids: [], rows: NONE, total: 0 };
+    const input = (over: Partial<SubstituteInput> = {}): SubstituteInput => ({
+      seasonId: SEASON_ID,
+      outPlayerId: OUT_ID,
+      inPlayerId: IN_ID,
+      scope: 'league',
+      dryRun: false,
+      ...over,
+    });
+
+    it('leaves the summary as it was in a league without a format: no format, no warnings', async () => {
+      const preview = await substituteParticipant(input({ dryRun: true }));
+      const applied = await substituteParticipant(input());
+
+      for (const summary of [preview, applied]) {
+        expect(summary).not.toHaveProperty('format');
+        expect(summary).not.toHaveProperty('warnings');
+      }
+      expect(substituteApplyWrote(emptySubstituteApplyLog())).toBe(false);
+    });
+
+    it('previews what moves: the same call as the apply, as a dry run, with the phases the substitution hands over', async () => {
+      vi.mocked(moveFormatSeat).mockResolvedValue(ATTACHED_MOVED);
+
+      const summary = await substituteParticipant(input({ dryRun: true }));
+
+      expect(moveFormatSeat).toHaveBeenCalledTimes(1);
+      expect(moveFormatSeat).toHaveBeenCalledWith({
+        seasonId: SEASON_ID,
+        outPlayerId: OUT_ID,
+        inPlayerId: IN_ID,
+        leagueScope: true,
+        phaseIds: [PHASE_ID],
+        dryRun: true,
+      });
+      expect(summary.format).toEqual({ moved: true, total: 7, rows: ROWS, kept_phase_ids: [] });
+      expect(summary).not.toHaveProperty('warnings');
+      // A preview writes nothing.
+      expect(writeSequence()).toEqual([]);
+    });
+
+    it('moves the seat as the FIRST write of an apply, before any match, group, enrollment or roster step', async () => {
+      vi.mocked(moveFormatSeat).mockResolvedValue(ATTACHED_MOVED);
+      const log = emptySubstituteApplyLog();
+
+      const summary = await substituteParticipant(input({ log }));
+
+      expect(moveFormatSeat).toHaveBeenCalledWith(expect.objectContaining({ dryRun: false, leagueScope: true, phaseIds: [PHASE_ID] }));
+      const seat = vi.mocked(moveFormatSeat).mock.invocationCallOrder[0];
+      const later = [
+        ...vi.mocked(cancelPendingMatchProposalsForMatch).mock.invocationCallOrder,
+        ...vi.mocked(repairMatchPairing).mock.invocationCallOrder,
+        ...vi.mocked(swapGroupMemberInTournament).mock.invocationCallOrder,
+        ...vi.mocked(swapTournamentParticipant).mock.invocationCallOrder,
+        ...vi.mocked(swapSeasonParticipant).mock.invocationCallOrder,
+      ];
+      expect(later.length).toBeGreaterThan(0);
+      expect(seat).toBeLessThan(Math.min(...later));
+      expect(summary.format).toEqual({ moved: true, total: 7, rows: ROWS, kept_phase_ids: [] });
+      expect(log.format_moved).toEqual({ total: 7, rows: ROWS });
+      expect(log.stopped_at).toBeNull();
+    });
+
+    it('logs no move when the outgoing player held nothing (the seat is inherited, nothing was written)', async () => {
+      vi.mocked(moveFormatSeat).mockResolvedValue(NOTHING_LEFT);
+      const log = emptySubstituteApplyLog();
+
+      const summary = await substituteParticipant(input({ log }));
+
+      expect(summary.format).toMatchObject({ moved: true, total: 0 });
+      expect(log.format_moved).toBeNull();
+    });
+
+    it('refuses a collision before anything else is written, in the preview and in the apply', async () => {
+      const collision = new UserFacingError('collides', { code: 'format_substitute_attrs_collide', status: 409 });
+      vi.mocked(moveFormatSeat).mockRejectedValue(collision);
+
+      for (const dryRun of [true, false]) {
+        const log = emptySubstituteApplyLog();
+        await expect(substituteParticipant(input({ dryRun, log }))).rejects.toBe(collision);
+        expect(substituteApplyWrote(log)).toBe(false);
+        expect(substitutePartialApply(log)).toBeNull();
+      }
+      expect(writeSequence()).toEqual([]);
+      expect(swapSeasonParticipant).not.toHaveBeenCalled();
+    });
+
+    it('records the move in the partial signal when a later step fails, and a re-run finds nothing left to move', async () => {
+      vi.mocked(moveFormatSeat).mockResolvedValue(ATTACHED_MOVED);
+      vi.mocked(swapTournamentParticipant).mockRejectedValueOnce(new Error('db down'));
+      const log = emptySubstituteApplyLog();
+
+      await expect(substituteParticipant(input({ log }))).rejects.toThrow('db down');
+
+      expect(log.format_moved).toEqual({ total: 7, rows: ROWS });
+      expect(log.stopped_at).toMatchObject({ step: 'enrollment', phase_id: PHASE_ID });
+      expect(substitutePartialApply(log)).toMatchObject({
+        written: { format_moved: { total: 7, rows: ROWS }, roster_swapped: false },
+        stopped_at: { step: 'enrollment' },
+      });
+
+      // The re-run: the outgoing player holds no rows any more, so the call moves nothing and records nothing.
+      vi.mocked(moveFormatSeat).mockResolvedValue(NOTHING_LEFT);
+      const rerun = emptySubstituteApplyLog();
+      await substituteParticipant(input({ log: rerun }));
+      expect(rerun.format_moved).toBeNull();
+    });
+
+    it('hands only the phases the outgoing player is enrolled in to the function', async () => {
+      vi.mocked(moveFormatSeat).mockResolvedValue(ATTACHED_MOVED);
+      vi.mocked(getStagesBySeasonId).mockResolvedValue([
+        { id: PHASE_ID, name: 'Playoffs', status: 'active' },
+        { id: GROUP_PHASE_ID, name: 'Group Stage', status: 'active' },
+        { id: PLAYOFF_PHASE_ID, name: 'Finals', status: 'completed' },
+      ] as never);
+      vi.mocked(getParticipants).mockImplementation(
+        async (tournamentId) =>
+          (tournamentId === PHASE_ID ? [{ id: OUT_ID, name: 'Out', seed: 3 }] : [{ id: OTHER_ID, name: 'Other', seed: 1 }]) as never,
+      );
+
+      await substituteParticipant(input({ dryRun: true }));
+
+      expect(moveFormatSeat).toHaveBeenCalledWith(expect.objectContaining({ phaseIds: [PHASE_ID] }));
+    });
+
+    it('warns, and moves nothing, when a phase-scope substitution leaves the outgoing player in another phase', async () => {
+      vi.mocked(getStagesBySeasonId).mockResolvedValue([
+        { id: PHASE_ID, name: 'Playoffs', status: 'active' },
+        { id: GROUP_PHASE_ID, name: 'Group Stage', status: 'active' },
+      ] as never);
+      vi.mocked(moveFormatSeat).mockResolvedValue({
+        attached: true,
+        moved: false,
+        kept_phase_ids: [GROUP_PHASE_ID],
+        rows: NONE,
+        total: 0,
+      });
+      const log = emptySubstituteApplyLog();
+
+      for (const dryRun of [true, false]) {
+        const summary = await substituteParticipant(input({ scope: PHASE_ID, dryRun, log }));
+        expect(summary.format).toMatchObject({ moved: false, total: 0, kept_phase_ids: [GROUP_PHASE_ID] });
+        expect(summary.warnings).toEqual([{ code: 'substitute_format_seat_kept', params: { phases: 'Group Stage' } }]);
+      }
+      expect(moveFormatSeat).toHaveBeenLastCalledWith(
+        expect.objectContaining({ leagueScope: false, phaseIds: [PHASE_ID], dryRun: false }),
+      );
+      expect(log.format_moved).toBeNull();
     });
   });
 });

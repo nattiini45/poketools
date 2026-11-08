@@ -10,7 +10,7 @@
 import 'server-only';
 
 import { listFormatChallenges } from '@/lib/supabase/queries/format-challenges';
-import { listFormatAdjustments, listFormatChecks, type FormatCheckListStatus } from '@/lib/supabase/queries/format-runtime-reads';
+import { listFiredFormatEvents, listFormatAdjustments, listFormatChecks, type FormatCheckListStatus } from '@/lib/supabase/queries/format-runtime-reads';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
@@ -115,11 +115,18 @@ async function countOpenChallenges(ctx: KitContext, now: Date): Promise<number> 
   }).length;
 }
 
-/** The admin overview (relations masked); a league that does not run a kit format is the "not running" overview. */
+/**
+ * The admin overview (relations masked, late joiners listed from the event log); a league that does not run a kit format
+ * is the "not running" overview.
+ */
 export async function loadAdminOverview(ctx: KitContext | null, adminId: string, now: Date = new Date()): Promise<AdminOverview> {
   if (ctx === null) return NOT_RUNNING_OVERVIEW;
-  const [names, openChallenges] = await Promise.all([loadParticipantNames(ctx.seasonId, ctx), countOpenChallenges(ctx, now)]);
-  return buildAdminOverview(ctx, adminId, names, { openChallenges });
+  const [names, openChallenges, events] = await Promise.all([
+    loadParticipantNames(ctx.seasonId, ctx),
+    countOpenChallenges(ctx, now),
+    listFiredFormatEvents(ctx.seasonId),
+  ]);
+  return buildAdminOverview(ctx, adminId, names, { openChallenges, events });
 }
 
 /** The explicit, audited read: relations with their hidden sides and the submission states and targets per action. */

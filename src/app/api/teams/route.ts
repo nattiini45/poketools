@@ -15,6 +15,7 @@ import type { ApiResponse, ApiResult } from '@/types/api';
 import type { PokemonSet, TeamFormData } from '@/types/team';
 import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
 import { teamWritesClosed } from './team-writes-closed';
+import { teamWritesClosedResponse } from './team-writes-closed-response';
 import { filterTeamVisibility } from '@/lib/team/visibility';
 import {
   toPublicTeam,
@@ -119,16 +120,8 @@ export async function POST(request: NextRequest) {
         );
       }
       // A completed phase is closed for everyone; for a player so is an archived or completed tournament or league.
-      if (tournament.status === 'completed' || (!player.isAdmin && (await teamWritesClosed(tournament.id)))) {
-        return NextResponse.json<ApiResult<never>>(
-          {
-            success: false,
-            error: 'Tournament is completed — team submission is closed',
-            code: 'team_submission_closed',
-          },
-          { status: 403 }
-        );
-      }
+      const closed = tournament.status === 'completed' ? 'tournament_completed' : player.isAdmin ? null : await teamWritesClosed(tournament.id);
+      if (closed) return teamWritesClosedResponse(closed);
 
       // Verify player is a tournament participant (admins can create teams on behalf of players)
       if (!player.isAdmin) {

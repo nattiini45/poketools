@@ -91,6 +91,7 @@ export default defineDe<typeof en>()({
     season__phase__groups__repair: 'Gruppen einer Phase repariert',
     season__phase__advance: 'Spieler von Hand in die nächste Phase übernommen',
     phase__enrollment__sync: 'Phasen-Anmeldung erzwungen abgeglichen',
+    phase__roster__force: 'Teilnehmerliste einer gestarteten Format-Phase erzwungen geändert',
     season__groups__replace: 'Ligagruppen geändert',
     season__group__rename: 'Ligagruppe umbenannt',
     season__group__member__place: 'Trainer einer Ligagruppe zugeordnet',
@@ -341,6 +342,20 @@ export default defineDe<typeof en>()({
     reload: 'Seite neu laden',
     openDataTools: 'Admin-Datenwerkzeuge öffnen',
     askSiteAdmin: 'Die Admin-Datenwerkzeuge sind nur für Seiten-Admins. Bitte einen Seiten-Admin, die oben beschriebene Korrektur auszuführen.',
+    downstream: {
+      title: 'Diese Änderung betrifft den restlichen Turnierbaum',
+      intro: {
+        one: 'Der Sieger dieses Spiels hat schon {count} späteres Spiel im Turnierbaum gespielt. Damit deine Änderung greift, wird dieses Spiel zuerst zurückgesetzt: Seine Partien werden gelöscht und sein Ergebnis wird zurückgerechnet. Es wurde noch nichts geändert.',
+        other: 'Der Sieger dieses Spiels hat schon {count} spätere Spiele im Turnierbaum gespielt. Damit deine Änderung greift, werden diese Spiele zuerst zurückgesetzt: Ihre Partien werden gelöscht und ihre Ergebnisse werden zurückgerechnet. Es wurde noch nichts geändert.',
+      },
+      listHeading: 'Diese Spiele werden zurückgesetzt:',
+      item: '{player1} vs {player2} ({round}, {status})',
+      approve: 'Zurücksetzen und Änderung anwenden',
+      done: {
+        one: '{count} späteres Spiel im Turnierbaum wurde zurückgesetzt.',
+        other: '{count} spätere Spiele im Turnierbaum wurden zurückgesetzt.',
+      },
+    },
   },
   players: {
     title: 'Spielerliste',

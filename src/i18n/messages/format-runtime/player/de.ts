@@ -73,6 +73,7 @@ export default defineDe<typeof en>()({
     action_unknown: 'Diese Aktion gibt es nicht.',
     window_closed: 'Diese Aktion kann gerade nicht geändert werden.',
     actor_without_link: 'Du hast an dieser Aktion keinen Anteil.',
+    actor_not_in_league: 'Du gehörst nicht mehr zu dieser Liga und kannst deshalb nicht mehr an dieser Aktion teilnehmen. Was du schon abgegeben hast, bleibt bestehen.',
     step_unknown: 'Diesen Schritt gibt es nicht.',
     wrong_count: 'Wähle genau so viele Einträge, wie der Schritt verlangt.',
     resource_unknown: 'Dieser Schritt vergibt etwas, das nicht definiert ist.',

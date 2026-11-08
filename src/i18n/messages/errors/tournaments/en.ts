@@ -118,6 +118,9 @@ export default {
   bracket_generate_elim_only: 'Full bracket generation only applies to elimination formats',
   bracket_already_generated: 'Bracket already generated',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
+  // The phase of a custom league has already ended (completed): its bracket is not wiped and restarted; reopen the phase first (409, nothing written).
+  bracket_regenerate_phase_completed:
+    'This phase has already ended, so its bracket cannot be regenerated. Reopen the phase first, then regenerate the bracket.',
   bracket_repair_elim_only: 'Bracket repair only applies to elimination formats',
 
   // Re-pairing one match

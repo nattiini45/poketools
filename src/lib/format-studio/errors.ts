@@ -55,6 +55,13 @@ export const FORMAT_ERROR_CODES = [
   'format_phases_in_use',
   'format_phase_owned',
   'format_runtime_has_data',
+  // a substitution would move rows onto a player who already holds some (queries/format-substitute.ts)
+  'format_substitute_links_collide',
+  'format_substitute_items_collide',
+  'format_substitute_submissions_collide',
+  'format_substitute_attrs_collide',
+  'format_substitute_tracks_collide',
+  'format_substitute_challenges_collide',
   'season_format_type_locked',
 ] as const satisfies readonly ApiErrorCode[];
 
@@ -95,6 +102,12 @@ export const FORMAT_ERROR_STATUS: { readonly [C in FormatErrorCode]: number } = 
   format_phases_in_use: 409,
   format_phase_owned: 409,
   format_runtime_has_data: 409,
+  format_substitute_links_collide: 409,
+  format_substitute_items_collide: 409,
+  format_substitute_submissions_collide: 409,
+  format_substitute_attrs_collide: 409,
+  format_substitute_tracks_collide: 409,
+  format_substitute_challenges_collide: 409,
   season_format_type_locked: 409,
 };
 

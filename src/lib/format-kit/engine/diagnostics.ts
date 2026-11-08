@@ -121,6 +121,8 @@ export const DIAGNOSTIC_CODES = [
   'calendar_invalid',
   'deadline_policy_invalid',
   'foreach_group_invalid',
+  // Privacy (a warning)
+  'public_expr_reads_hidden_relation',
 ] as const;
 
 export type DiagnosticCode = (typeof DIAGNOSTIC_CODES)[number];

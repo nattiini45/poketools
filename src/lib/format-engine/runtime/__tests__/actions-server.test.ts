@@ -29,7 +29,7 @@ const picks: ActionPick[] = [
 ];
 const action = { seasonId: SEASON, actionId: 'choose_gift', actorId: 'p1', picks };
 
-function context(opts: { submission?: RuntimeSubmission['status']; visibility?: 'admins' } = {}): KitContext {
+function context(opts: { submission?: RuntimeSubmission['status']; visibility?: 'admins'; left?: readonly string[] } = {}): KitContext {
   const base = giftDef();
   const def =
     opts.visibility === 'admins'
@@ -44,7 +44,7 @@ function context(opts: { submission?: RuntimeSubmission['status']; visibility?: 
     def,
     state: stateFor(def, { flags: { 'action:choose_gift': 'open', 'domain:pool': 'unlocked' }, links: [link('p1', 'p2')], submissions }),
     tunableIssues: [],
-    phases: [{ id: 't-1', stage: def.stages[0], members: PLAYERS }],
+    phases: [{ id: 't-1', stage: def.stages[0], members: PLAYERS.filter((id) => !(opts.left ?? []).includes(id)) }],
   };
 }
 
@@ -117,6 +117,30 @@ describe('the revision of the format a write was validated against', () => {
     expect(vi.mocked(submitFormatAction).mock.calls[0][0]).toMatchObject({ revision: 77, onlyIfUnsubmitted: true });
   });
 
+  it('refuses before validating when the loaded format is not the revision the caller decided on', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context({ visibility: 'admins' }), revision: 8 });
+    await expect(submitAction({ ...action, expectedRevision: 7 })).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
+    expect(submitFormatAction).not.toHaveBeenCalled();
+  });
+
+  it('writes under the expected revision when it is the loaded one', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...context(), revision: 7 });
+    await expect(submitAction({ ...action, expectedRevision: 7 })).resolves.toMatchObject({ ok: true });
+    expect(vi.mocked(submitFormatAction).mock.calls[0][0]).toMatchObject({ revision: 7 });
+  });
+
+  it('reports whether a relation hides the giver from the context it validated against', async () => {
+    const hiddenSides = (from: 'all' | 'hidden') => {
+      const ctx = context();
+      return { ...ctx, def: { ...ctx.def, relations: (ctx.def.relations ?? []).map((r) => ({ ...r, visibility: { from, to: 'own' as const } })) } } as KitContext;
+    };
+    vi.mocked(loadFreshKitContext).mockResolvedValue(hiddenSides('hidden'));
+    await expect(submitAction(action)).resolves.toMatchObject({ ok: true, giverHidden: true });
+    expect(loadFreshKitContext).toHaveBeenCalledTimes(1);
+    vi.mocked(loadFreshKitContext).mockResolvedValue(hiddenSides('all'));
+    await expect(submitAction(action)).resolves.toMatchObject({ ok: true, giverHidden: false });
+  });
+
   it('lets format_context_stale and resource_capacity_reached of the database leave as they are', async () => {
     vi.mocked(submitFormatAction).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
     await expect(submitAction(action)).rejects.toMatchObject({ code: 'format_context_stale', statusCode: 409 });
@@ -153,5 +177,37 @@ describe('submitAction', () => {
     await submitAction(action);
     await submitAction({ ...action, audience: 'system', onlyIfUnsubmitted: true });
     expect(vi.mocked(submitFormatAction).mock.calls.map((call) => call[0].onlyIfUnsubmitted)).toEqual([undefined, true]);
+  });
+});
+
+describe('a giver who is no longer in the league but still holds a link', () => {
+  // p1 holds the link p1 -> p2 and was taken out of every phase after the draw.
+  const left = () => vi.mocked(loadFreshKitContext).mockResolvedValue(context({ left: ['p1'] }));
+
+  it('is refused a submission with actor_not_in_league, and the database is not called', async () => {
+    left();
+    const result = await submitAction(action);
+    expect(result.ok ? [] : result.issues.map((i) => i.code)).toEqual(['actor_not_in_league']);
+    expect(submitFormatAction).not.toHaveBeenCalled();
+  });
+
+  it('is refused the system audience too (a deadline pick never lands for them)', async () => {
+    left();
+    const result = await submitAction({ ...action, audience: 'system', onlyIfUnsubmitted: true });
+    expect(result.ok ? [] : result.issues.map((i) => i.code)).toEqual(['actor_not_in_league']);
+    expect(submitFormatAction).not.toHaveBeenCalled();
+  });
+
+  it('is refused a draft save too', async () => {
+    left();
+    const result = await saveAction(action);
+    expect(result.ok ? [] : result.issues.map((i) => i.code)).toEqual(['actor_not_in_league']);
+    expect(saveFormatAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps what they gave: the refusal writes nothing, not even over their submitted pick', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ left: ['p1'], submission: 'submitted' }));
+    await submitAction(action);
+    expect(submitFormatAction).not.toHaveBeenCalled();
   });
 });

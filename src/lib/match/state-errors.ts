@@ -1,4 +1,5 @@
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { encodeDownstreamMatches, type DownstreamMatchSummary } from '@/lib/match/downstream-matches';
 
 /**
  * The match left the status the admin saw (a player, the auto-confirm cron or
@@ -20,9 +21,10 @@ export class MatchStateChangedError extends UserFacingError {
 
 /**
  * A later bracket match that this match's winner advanced into was already
- * played or is in progress. Reopening the match (or changing a game of it, which
- * takes it off `completed` the same way) would orphan that bracket path, so the
- * admin resets those matches first. `count` = such later matches. HTTP 409.
+ * played or is in progress. Reopening the match would orphan that bracket path,
+ * so the admin resets those matches first. `count` = such later matches. HTTP 409.
+ * (An admin game edit or delete takes the match off `completed` the same way but
+ * asks for approval instead: `GameChangeDownstreamPlayedError`.)
  */
 export class MatchReopenDownstreamPlayedError extends UserFacingError {
   constructor(count: number) {
@@ -33,5 +35,29 @@ export class MatchReopenDownstreamPlayedError extends UserFacingError {
       { code: 'match_reopen_downstream_played', params: { count }, status: 409 },
     );
     this.name = 'MatchReopenDownstreamPlayedError';
+  }
+}
+
+/**
+ * An admin game edit or delete would take a completed bracket match off `completed` while the winner already played
+ * later bracket matches. The change affects that played part of the bracket: the later matches have to be reset (as a
+ * cascading match reset does) for the change to apply. Nothing was written. HTTP 409; `params.matches` lists the later
+ * matches (`parseDownstreamMatches`), `params.count` their number. The admin approves, and the request is sent again
+ * with the confirm flag.
+ */
+export class GameChangeDownstreamPlayedError extends UserFacingError<'game_change_downstream_played'> {
+  constructor(matches: readonly DownstreamMatchSummary[]) {
+    const count = matches.length;
+    super(
+      count === 1
+        ? 'This change affects the rest of the bracket: 1 later bracket match was already played. It has to be reset for the change to apply. Nothing was changed yet; approve the reset to continue.'
+        : `This change affects the rest of the bracket: ${count} later bracket matches were already played. They have to be reset for the change to apply. Nothing was changed yet; approve the reset to continue.`,
+      {
+        code: 'game_change_downstream_played',
+        params: { count, matches: encodeDownstreamMatches(matches) },
+        status: 409,
+      },
+    );
+    this.name = 'GameChangeDownstreamPlayedError';
   }
 }

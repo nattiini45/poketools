@@ -457,7 +457,6 @@ const PLAYER_ACTION = variant('kind', 'player.action', [
   opt('via', KEY),
   dflt('window', obj([opt('opens_on', EVENT_SPEC), opt('closes_on', EVENT_SPEC)]), {}),
   req('steps', arr(ACTION_STEP, 1, MAX_ACTION_STEPS)),
-  dflt('review', BOOL, true),
   dflt('lock', oneOf('on_submit', 'on_close'), 'on_submit'),
 ]);
 const CHECK_ASSISTED = variant('kind', 'check.assisted', [

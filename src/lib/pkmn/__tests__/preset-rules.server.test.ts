@@ -52,17 +52,19 @@ describe('resolvePresetRules', () => {
 });
 
 describe('the Wichtelcup community preset', () => {
-  it('allows exactly the 141 authored species/forms and inherits no tier bans or competitive clauses', () => {
+  it('allows exactly the 141 pool entries plus the Low-Key forme, and inherits no tier bans or competitive clauses', () => {
     const cup = rules('gen9natdexwichtelcup');
     expect(cup.source).toBe('poketools');
     expect(cup.universe).toBe('national');
     expect(cup.pokemon.mode).toBe('allow');
-    expect(cup.pokemon.ids).toHaveLength(141);
-    expect(new Set(cup.pokemon.ids).size).toBe(141);
+    expect(cup.pokemon.ids).toHaveLength(142);
+    expect(new Set(cup.pokemon.ids).size).toBe(142);
     expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['vivillonicysnow', 'deerlingwinter', 'sawsbuckwinter', 'necrozma', 'rayquaza']));
+    // Toxtricity is "standard species" in the rules text: both formes may be brought.
+    expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['toxtricity', 'toxtricitylowkey']));
     expect(cup.pokemon.ids).not.toContain('garchomp');
-    // Dragon Ascent is the only route to Mega Rayquaza (no stone), so the move is banned with the stones.
-    expect(cup.moves).toEqual({ mode: 'block', ids: ['dragonascent'] });
+    // No move is banned: Dragon Ascent is an ordinary attack, "no Mega" is kept by the Mega Rayquaza Clause and the allowlist.
+    expect(cup.moves).toEqual({ mode: 'block', ids: [] });
     expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz', 'redorb', 'adamantcrystal', 'lustrousglobe']));
     expect(cup.abilities.ids).toEqual(['moody', 'snowcloak']);
     expect(cup.clauses).toEqual(['speciesclause', 'itemclause', 'terastalclause', 'megarayquazaclause']);

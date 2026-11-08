@@ -6,6 +6,7 @@ import { reopenMatch } from '@/lib/match/reopen';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { stageEndedParams } from '@/lib/match/stage-ended-warning';
 import type { ReopenMatchResult } from '@/lib/admin/match-detail';
 import type { ApiResult } from '@/types/api';
 
@@ -69,6 +70,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         ratings_rebuilt_players: result.ratings_rebuilt_players,
         bracket_matches_removed: result.bracket_matches_removed,
         ...(incomplete ? { incomplete: true, failed_steps: result.failed_steps } : {}),
+        ...(result.stage_already_ended ? { stage_already_ended: true } : {}),
       },
     });
 
@@ -81,7 +83,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           success: false,
           error: `The match was reopened, but ${count} follow-up step${count === 1 ? '' : 's'} failed. The failure was logged; a site admin should run the season reconcile.`,
           code: 'match_reopen_incomplete',
-          params: { count },
+          // The notice of an ended stage has no `data` to ride in on, so it travels as flat params (`stageEndedApiWarning`).
+          params: { count, ...(result.stage_already_ended ? stageEndedParams(result.stage_already_ended) : {}) },
         },
         { status: 500 }
       );

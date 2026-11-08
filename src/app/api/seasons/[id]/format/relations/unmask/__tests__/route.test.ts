@@ -58,10 +58,25 @@ const UNMASKED: AdminUnmasked = {
       shape: 'derangement',
       masked: false,
       link_count: 1,
-      links: [{ from: { id: P1, name: 'Mara' }, to: { id: P2, name: 'Jonas' }, revealed: false }],
+      links: [{ from: { id: P1, name: 'Mara' }, to: { id: P2, name: 'Jonas' }, revealed: false, involves_viewer: false }],
     },
   ],
-  submissions: [{ action: 'give', rows: [{ player: { id: P1, name: 'Mara' }, state: 'submitted', target: { id: P2, name: 'Jonas' } }] }],
+  submissions: [
+    { action: 'give', rows: [{ player: { id: P1, name: 'Mara' }, state: 'submitted', target: { id: P2, name: 'Jonas' }, involves_viewer: false }] },
+  ],
+};
+
+// An admin who also plays (P1): the route still sends their own rows and only marks them; the panel hides them.
+const UNMASKED_PLAYING: AdminUnmasked = {
+  relations: [
+    {
+      ...UNMASKED.relations[0],
+      links: [{ from: { id: P1, name: 'Mara' }, to: { id: P2, name: 'Jonas' }, revealed: false, involves_viewer: true }],
+    },
+  ],
+  submissions: [
+    { action: 'give', rows: [{ player: { id: P1, name: 'Mara' }, state: 'submitted', target: { id: P2, name: 'Jonas' }, involves_viewer: true }] },
+  ],
 };
 
 const params = { params: Promise.resolve({ id: SEASON_ID.toUpperCase() }) };
@@ -102,6 +117,19 @@ describe('POST /api/seasons/[id]/format/relations/unmask', () => {
     expect(text).not.toContain('"item_id"');
     expect(text).not.toContain('"status"');
     expectNoPrivatePlayerData(JSON.parse(text));
+  });
+
+  it('sends every row of an admin who also plays, marked involves_viewer, and does not filter anything out', async () => {
+    vi.mocked(loadUnmasked).mockResolvedValue(UNMASKED_PLAYING);
+    const response = await POST(post(), params);
+    expect(response.status).toBe(200);
+    const data = (await response.json()).data as AdminUnmasked;
+    expect(data).toEqual(UNMASKED_PLAYING);
+    expect(data.relations[0].links).toHaveLength(1);
+    expect(data.relations[0].links[0].involves_viewer).toBe(true);
+    expect(data.submissions[0].rows[0].involves_viewer).toBe(true);
+    // The audit entry is the same for either reader: it names the relations, never the rows or the marker.
+    expect(JSON.stringify(vi.mocked(logAuditEventStrict).mock.calls)).not.toContain('involves_viewer');
   });
 
   it('writes the audit entry before it returns the body, naming the relations and no pair', async () => {

@@ -44,7 +44,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
      `format_checks`, `format_adjustments`) and their writer functions. Edited in place on this branch: the signature of
      `format_check_resolve` is now `(p_season_id, p_check_id, p_status, p_admin, p_note)` (a check id of another league
      resolves nothing), and the helpers `format__lock_action` (one advisory lock for save, submit and the lock op of an
-     action) and `format__clear_runtime` are new. It also adds `season_formats.revision` (a number from one sequence,
+     action) and `format__clear_runtime` are new, and `format_forfeit_complete` completes a deadline forfeit in one
+     transaction with its revision and engine check. It also adds `season_formats.revision` (a number from one sequence,
      renewed by a trigger on every insert and update of the row), `format_action_save` and `format_action_submit` take
      it as `p_expected_revision` (the old five- and eight-argument forms are dropped), and `format__insert_item` now
      refuses a grant over the resource's `capacity` under a per-holding advisory lock. Rows that exist before the file
@@ -68,7 +69,9 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
      check gains `pairing_forbidden`, `deadline_missed` and `team_audit`; withdrawing a challenge whose accept window
      has run out stores it as `expired` instead of `cancelled`. `league_trash__inventory()` now lists 61 owned
      tables. `round_write` gains `p_expected_revision` (the seven-argument form is dropped) and `round_delete(round)` is
-     new.
+     new; `format_substitute_seat` (the seat
+     handover of a substitution) is new. A database that already applied an earlier revision of this file lacks it, so
+     substitutions in format leagues fail there until the file is applied again (reset it, see below).
 
   The migrations were edited in place because none of them had shipped: a development or preview database that applied an
   earlier revision of these files has to be reset (`supabase db reset` locally). Re-creating only the changed functions is
@@ -235,6 +238,26 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   items it granted and clears `submitted_at`; the lock then skips it and a deadline policy sees a player who has not submitted.
 - **Rulesets:** the teambuilder shows level rules from the shared team check (`level_rules`), and `levels: null` no longer
   changes the hash of an existing ruleset (see Added).
+- **Admin results, substitutions and rosters in custom-format leagues** (review round on the format studio PR).
+  - Admin game edit or delete of a completed bracket match that already fed played later matches now asks for approval
+    and resets those matches as a cascading reset does (409 `game_change_downstream_played`; resend with
+    `confirm_downstream`); a winner or battle stats of a player who is not in the match are refused before anything is
+    reset. Regenerating the bracket of an already completed format phase is refused, and taking back a result in a
+    completed format phase (match reset, reopen, game change, round delete) warns which players already advanced.
+  - Substituting a player in a custom-format league moves the departed player's format data (links, items, picks,
+    attributes, progress, open challenges) to the substitute in one transaction, with a preview, a warning when the
+    player keeps another phase, and 409 on colliding data (`format_substitute_*_collide`); reverts of earlier matches,
+    the late-joiner list and the effects of a match that still names the departed player follow the seat.
+  - An admin can change the roster of a started format phase (add, remove, re-seed, sync, seed by rating) by forcing it
+    with a reason, which is audited; the Live tab lists late joiners and the one-time events they missed; a player who
+    left the league no longer acts (no submissions, no random picks); a player enrolled in an unfinished format league
+    cannot be deleted until substituted or removed.
+  - Format Studio: an admin who also plays no longer sees their own rows when unmasking Secret Santa relations (a
+    "Show my rows" button reveals them per view), the compiler warns when a public rule such as a pairing filter reads a
+    hidden relation, and the unused `review` flag on player actions is removed (old documents that carry it still load).
+  - Wichtelcup: Toxtricity-Low-Key and Dragon Ascent are legal (the preset bans only what the rules text or Showdown
+    bans); players may delete their own match-less team in a completed or archived league, and a league closure is
+    refused with a league-specific message.
 
 ### Removed
 

@@ -31,12 +31,26 @@ describe('validateTeam on the Wichtelcup ruleset', () => {
   it('rejects species outside the pool and unlisted formes of pool species', () => {
     expect(codes([makeSet('Garchomp', noMoves)])).toContain('species_not_allowed');
     expect(codes([makeSet('Rayquaza-Mega', noMoves)])).toContain('species_not_allowed');
-    expect(codes([makeSet('Toxtricity-Low-Key', noMoves)])).toContain('species_not_allowed');
     expect(codes([makeSet('Vivillon', noMoves)])).toContain('species_not_allowed');
   });
 
-  it('closes the routes to Mega Rayquaza, Primal Groudon and the Origin formes', () => {
-    expect(codes([makeSet('Rayquaza', { ...noMoves, moves: ['Dragon Ascent'] })])).toContain('move_banned');
+  it('accepts both formes of Toxtricity, which count as one species', () => {
+    // The rules text lists Toxtricity as the "standard species; use form details supported by engine and Species Clause".
+    expect(codes([makeSet('Toxtricity', noMoves)])).not.toContain('species_not_allowed');
+    expect(codes([makeSet('Toxtricity-Low-Key', noMoves)])).not.toContain('species_not_allowed');
+    expect(codes([makeSet('Toxtricity', noMoves), makeSet('Toxtricity-Low-Key', noMoves)])).toContain('species_clause');
+  });
+
+  it('accepts a Rayquaza set with Dragon Ascent while Mega Rayquaza stays closed', () => {
+    const withAscent = { ...noMoves, moves: ['Dragon Ascent'] };
+    expect(codes([makeSet('Rayquaza', withAscent)])).toEqual([]);
+    // "No Mega Evolution": the Mega forme is not in the allowlist, and the clause is part of the preset.
+    expect(codes([makeSet('Rayquaza-Mega', withAscent)])).toContain('species_not_allowed');
+    expect(resolved.clauses).toContain('megarayquazaclause');
+    expect(resolved.moves.ids).not.toContain('dragonascent');
+  });
+
+  it('closes the routes to Primal Groudon, the Origin formes and Ultra Necrozma', () => {
     expect(codes([makeSet('Groudon', { ...noMoves, item: 'Red Orb' })])).toContain('item_banned');
     expect(codes([makeSet('Dialga', { ...noMoves, item: 'Adamant Crystal' })])).toContain('item_banned');
     expect(codes([makeSet('Palkia', { ...noMoves, item: 'Lustrous Globe' })])).toContain('item_banned');
@@ -57,9 +71,9 @@ describe('every forme a Wichtelcup species can turn into is closed', () => {
   const dex = Dex.forGen(9);
   const allowed = new Set(resolved.pokemon.ids);
   const bannedItems = new Set(resolved.items.ids);
-  const bannedMoves = new Set(resolved.moves.ids);
+  const clauses = new Set(resolved.clauses);
 
-  it('a forme outside the pool that needs an item (or, for a Mega, a move) has that item or move banned', () => {
+  it('a forme outside the pool that needs an item has that item banned, and a Mega that needs a move has its clause', () => {
     const open: string[] = [];
     for (const id of allowed) {
       const species = dex.species.get(id);
@@ -68,12 +82,13 @@ describe('every forme a Wichtelcup species can turn into is closed', () => {
         const forme = dex.species.get(formeName);
         if (allowed.has(forme.id)) continue;
         const items = (forme.requiredItems ?? (forme.requiredItem ? [forme.requiredItem] : [])).map(toID);
-        // "No Mega Evolution": a Mega forme that needs a move instead of a stone (Rayquaza) is closed by banning the move. Other
-        // in-battle changes (Meloetta's Relic Song, Castform's Forecast) are ordinary play and not the cup's business.
-        const megaMove = (forme.isMega || forme.isPrimal) && forme.requiredMove !== undefined ? toID(forme.requiredMove) : null;
+        // "No Mega Evolution": a Mega forme that needs a move instead of a stone (Rayquaza) is closed by the Mega Rayquaza Clause
+        // and by the allowlist, not by banning the move (Dragon Ascent is legal). Other in-battle changes (Meloetta's Relic Song,
+        // Castform's Forecast) are ordinary play and not the cup's business.
+        const megaMove = forme.isMega && forme.requiredMove !== undefined;
         // A forme with a required item is reachable through any one of them: all must be banned.
         if (items.length > 0 && !items.every((item) => bannedItems.has(item))) open.push(`${forme.name}: item`);
-        if (megaMove !== null && !bannedMoves.has(megaMove)) open.push(`${forme.name}: move`);
+        if (megaMove && !clauses.has('megarayquazaclause')) open.push(`${forme.name}: clause`);
       }
     }
     expect(open).toEqual([]);

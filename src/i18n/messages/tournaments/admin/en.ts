@@ -320,5 +320,17 @@ export default {
     startInLosers: 'Start in losers',
     remove: 'Remove',
     addPlayer: 'Add Player',
+    startedFormatPhase:
+      'This phase has started. The league format owns its roster, so a change is refused unless you force it with a reason.',
+  },
+  // The audited override of a roster change on a started phase of the league's format (409 format_phase_owned).
+  rosterForce: {
+    title: 'Change the roster of a started phase',
+    message:
+      'This phase belongs to the format of this league and has already started. Its draw, groups and one-time grants were made for the roster it started with, and a player you add now gets none of them automatically. Changing the roster anyway is recorded in the audit log with your reason.',
+    reasonLabel: 'Reason',
+    reasonHint: 'Required. Up to 500 characters.',
+    cancel: 'Cancel',
+    confirm: 'Change roster anyway',
   },
 } as const;

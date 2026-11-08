@@ -5,6 +5,7 @@ import AdjustmentsPanel from '@/components/format-runtime/admin/AdjustmentsPanel
 import AdminLadders, { type AdminLadderPhase } from '@/components/format-runtime/admin/AdminLadders';
 import ChecksInbox from '@/components/format-runtime/admin/ChecksInbox';
 import DomainsSummary from '@/components/format-runtime/admin/DomainsSummary';
+import LateJoiners from '@/components/format-runtime/admin/LateJoiners';
 import RelationsAdmin from '@/components/format-runtime/admin/RelationsAdmin';
 import { PAGE_SIZE } from '@/components/format-runtime/admin/admin-shared';
 import { getT } from '@/i18n/server';
@@ -20,8 +21,8 @@ import type { LeagueAdminPanelContext } from './context';
 /**
  * Live format tab (custom leagues only: `availableLeagueAdminTabs`). The admin's console for a league that runs a format
  * on the kit engine: the checks inbox, manual adjustments with their history, the player actions with Open and Lock,
- * the relations with the audited "show hidden sides" read, the open challenges of the ladders and a summary of the
- * format's lists.
+ * the relations with the audited "show hidden sides" read, the open challenges of the ladders, the players who joined a
+ * stage late (and the one-time events they missed) and a summary of the format's lists.
  *
  * A league without an attached format, or whose format does not run on the kit engine, gets a notice that links to the
  * Format tab. Otherwise the kit context is loaded ONCE (`loadKitContext`, memoised per request) and every admin loader
@@ -91,6 +92,12 @@ export async function formatLivePanel({ id, playerId, isSiteAdmin, tabLink }: Le
       <Section title={t('panel.actionsTitle')}>
         <ActionsOverview seasonId={id} actions={overview.actions} canAdjust={overview.allowed_adjustments.includes('action')} />
       </Section>
+
+      {overview.late_joiners.length > 0 && (
+        <Section title={t('lateJoiners.title')} subtitle={t('lateJoiners.subtitle')}>
+          <LateJoiners lateJoiners={overview.late_joiners} />
+        </Section>
+      )}
 
       <Section title={t('panel.relationsTitle')}>
         <RelationsAdmin

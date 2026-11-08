@@ -25,6 +25,7 @@ const DATA_HASHES: Readonly<Record<string, string>> = {
   '2026-10-27.1': 'add971e53efe718d833a820650dd45185199de513dc278134320cbac6c3f0afa',
   '2026-10-27.2': 'c2665cb8ee8c068c193d3b00af1aabe6d14fb98e3186aae2cefc2f2b29ea2507',
   '2026-11-05.1': '99371dcf363a121cf0877fa1c9f8176a7d15ab1fc41a605945c329dc64301a5e',
+  '2026-11-08.1': 'fa696b5e2fcfef7d4193ffeb1f57d1ebe4d25108b45ccab40f071fc386f91daf',
 };
 
 function canonical(value: unknown): unknown {
@@ -148,12 +149,14 @@ describe('every name in the tables exists in the dex of its generation and unive
     // Exact cosmetic forms and newly filed Mega Stones are legal through the preset's allowlist even when the
     // National Dex universe readers omit them. Validate the authored ids directly, like the Champions roster check.
     const dex = Dex.forGen(9);
-    expect(wichtelcup.WICHTELCUP_SPECIES.filter((name) => !dex.species.get(name).exists)).toEqual([]);
+    expect(wichtelcup.WICHTELCUP_ALLOWED.filter((name) => !dex.species.get(name).exists)).toEqual([]);
     for (const [kind, names] of [['moves', wichtelcup.WICHTELCUP_BANS.moves], ['items', wichtelcup.WICHTELCUP_BANS.items], ['abilities', wichtelcup.WICHTELCUP_BANS.abilities]] as const) {
       expect(names.filter((name) => !dex[kind].get(name).exists)).toEqual([]);
     }
+    // 141 pool entries, plus the Low-Key forme that the unpinned Toxtricity entry admits.
     expect(wichtelcup.WICHTELCUP_SPECIES).toHaveLength(141);
-    expect(new Set(wichtelcup.WICHTELCUP_SPECIES).size).toBe(141);
+    expect(wichtelcup.WICHTELCUP_ALLOWED).toHaveLength(142);
+    expect(new Set(wichtelcup.WICHTELCUP_ALLOWED).size).toBe(142);
   });
 
   it('the tour overlays (Gen 9, National Dex)', () => {

@@ -213,6 +213,12 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   format_phases_in_use: 'blocked',
   format_phase_owned: 'blocked',
   format_runtime_has_data: 'blocked',
+  format_substitute_links_collide: 'blocked',
+  format_substitute_items_collide: 'blocked',
+  format_substitute_submissions_collide: 'blocked',
+  format_substitute_attrs_collide: 'blocked',
+  format_substitute_tracks_collide: 'blocked',
+  format_substitute_challenges_collide: 'blocked',
   season_format_type_locked: 'blocked',
 };
 

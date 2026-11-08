@@ -117,6 +117,10 @@ vi.mock('@/lib/format-engine/runtime/hooks', () => ({
   onMatchReverted: vi.fn().mockResolvedValue(true),
 }));
 
+vi.mock('@/lib/match/stage-ended', () => ({
+  loadStageEndedWarning: vi.fn(async () => null),
+}));
+
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(async () => {}),
 }));
@@ -258,6 +262,7 @@ import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { onMatchReverted, onMatchUnresolved } from '@/lib/format-engine/runtime/hooks';
+import { loadStageEndedWarning } from '@/lib/match/stage-ended';
 
 const REPLAY_HASH = 'ab'.repeat(32);
 
@@ -3195,5 +3200,93 @@ describe('a custom league takes back the format effects of a completed match tha
     await deleteGame('game-1', 'admin-1');
 
     expect(onMatchReverted).toHaveBeenCalledWith({ tournament: expect.objectContaining({ id: 'tourney-1' }), matchId: 'match-1' });
+  });
+});
+
+describe('a take-back in a format phase whose stage already ended says who advanced', () => {
+  const endedPhase = { id: 'tourney-1', season_id: 'season-1', name: 'Test', best_of_default: 3, season_format_type: 'custom', status: 'completed' };
+  const notice = {
+    phase_id: 'tourney-1',
+    phase_name: 'Test',
+    advanced: [{ phase_id: 'phase-2', phase_name: 'Playoffs', players: [{ id: 'player-1', name: 'Alice' }] }],
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getGamesByMatch).mockResolvedValue([]);
+    vi.mocked(getTournamentById).mockResolvedValue(endedPhase as never);
+    vi.mocked(onMatchReverted).mockResolvedValue(true);
+    // The read itself is tested apart (`stage-ended.test.ts`): here it answers only for a result that was taken back.
+    vi.mocked(loadStageEndedWarning).mockImplementation(async (_phase, resultTakenBack) => (resultTakenBack ? notice : null));
+  });
+
+  it('deleteGame: a completed match sent back carries the notice, and the phase is not touched', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 1, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+
+    const result = await deleteGame('game-1', 'admin-1');
+
+    expect(result.stage_already_ended).toEqual(notice);
+    expect(result.match_status).toBe('in_progress');
+    expect(loadStageEndedWarning).toHaveBeenCalledWith(expect.objectContaining({ id: 'tourney-1', status: 'completed' }), true);
+  });
+
+  it('deleteGame: a match that was not completed has no result to take back, so no notice', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('pending_confirmation'));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 1, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+
+    const result = await deleteGame('game-1', 'admin-1');
+
+    expect(result).not.toHaveProperty('stage_already_ended');
+    expect(loadStageEndedWarning).toHaveBeenCalledWith(expect.anything(), false);
+  });
+
+  it('deleteGame: a concurrent writer that kept the match completed took nothing back, so no notice', async () => {
+    vi.mocked(getMatchById)
+      .mockResolvedValueOnce(matchWithStatus('completed'))
+      .mockResolvedValueOnce(matchWithStatus('completed'));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 2, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+    vi.mocked(hasReachedBoThreshold).mockReturnValueOnce({ reached: true, winner_id_index: 1 });
+    vi.mocked(transitionMatchStatus).mockResolvedValueOnce(null);
+
+    const result = await deleteGame('game-1', 'admin-1');
+
+    expect(result).not.toHaveProperty('stage_already_ended');
+    expect(loadStageEndedWarning).toHaveBeenCalledWith(expect.anything(), false);
+  });
+
+  it('editGame: an edit that moves a completed match to pending_confirmation carries the notice', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(matchWithStatus('completed'));
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 2, player_ids: ['p1', 'p2'] });
+    vi.mocked(hasReachedBoThreshold).mockReturnValueOnce({ reached: true, winner_id_index: 2 });
+
+    const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1', winner_id: 'player-2' });
+
+    expect(result.stage_already_ended).toEqual(notice);
+    expect(loadStageEndedWarning).toHaveBeenCalledWith(expect.objectContaining({ id: 'tourney-1' }), true);
+  });
+
+  it('resetMatch: a completed match carries the notice, a match that was only in progress does not', async () => {
+    vi.mocked(getMatchById).mockResolvedValue(matchWithStatus('completed'));
+    await expect(resetMatch('match-1', 'admin-1')).resolves.toMatchObject({ stage_already_ended: notice });
+
+    vi.mocked(getMatchById).mockResolvedValue(matchWithStatus('in_progress'));
+    const inProgress = await resetMatch('match-1', 'admin-1');
+    expect(inProgress).not.toHaveProperty('stage_already_ended');
+  });
+
+  it('resetRound: the notice of a reset match reaches the round result', async () => {
+    const completed = {
+      id: 'match-1', tournament_id: 'tourney-1', round_id: 'round-1',
+      player_1_id: 'player-1', player_2_id: 'player-2',
+      status: 'completed', winner_id: 'player-1',
+      player_1_name: 'A', player_2_name: 'B',
+    };
+    vi.mocked(getMatchesByRound).mockResolvedValueOnce([completed] as Awaited<ReturnType<typeof getMatchesByRound>>);
+    mockResetReads(completed as never);
+
+    const result = await resetRound('round-1', 'admin-1');
+
+    expect(result.stage_already_ended).toEqual(notice);
   });
 });

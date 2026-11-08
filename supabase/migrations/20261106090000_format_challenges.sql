@@ -748,6 +748,252 @@ COMMENT ON FUNCTION public.round_write(uuid, uuid, text, integer, integer, uuid[
   'Inserts a round (or, with p_round_id, fills a round an interrupted call left empty, locked FOR UPDATE and re-checked under the lock: rounds_round_completed, rounds_round_already_written when a concurrent retry filled it first; replaces its byes when p_bye_player_ids is not NULL) and its matches in one transaction, with the phase row read FOR NO KEY UPDATE so a stage-end completion either commits first (rounds_phase_completed, nothing written) or, for a write with at least one match, finds the new matches (unsettled); a round of byes only is not seen that way. Takes the season advisory lock and the seasons row FOR KEY SHARE first (a format attach, detach or league delete waits for the write), checks p_expected_revision when given (format_context_stale: a format replaced since the plan), and moves an upcoming phase to active and current_round up in the same transaction. Returns jsonb {round, matches}. Raises invalid_op, tournament_not_found, rounds_phase_completed, round_not_found, rounds_round_completed, rounds_round_already_written, format_context_stale (P0001).';
 
 -- ---------------------------------------------------------------------------------------------------------------
+-- Substitution: the incoming player inherits the seat's format data.
+--
+-- The runtime rows of a league are keyed by player (links, items, picks, attributes, track steps, challenges). A substitution
+-- moves the enrollment, the group slot, the scheduled matches and the roster row to the incoming player; without this function
+-- every format row stayed with the player who left, so the substitute could not act and nobody gave to them. One transaction,
+-- service role only (no SECURITY DEFINER), for one league:
+--
+--   format_substitute_seat(season, out, in, league_scope, phase_ids, dry_run)
+--     Moves to `in`: format_relation_links (the from and the to side), format_resource_items, format_action_submissions
+--     (the actor and the target side), format_player_attrs, format_track_progress and the OPEN format_challenges of the
+--     phases the substitution hands over (challenger and defender side). Stays as history with `out`: format_event_log,
+--     format_adjustments (their target names the player, the standings read them per enrolled player), every resolved check
+--     (an open check is the admin's to decide; it names what happened under `out`), finished and accepted challenges and the
+--     finished matches. Returns jsonb {attached, moved, kept_phase_ids, rows: {relation_links, resource_items,
+--     action_submissions, player_attrs, track_progress, challenges}, total}.
+--
+--   * Scope. The rows are league-wide while a substitution can be a league or a phase one. p_league_scope (the roster row
+--     moves) always moves them. A phase-scope call moves them only when `out` keeps no other phase of the league that is not
+--     completed (p_phase_ids are the phases handed over by this call): otherwise it moves nothing and returns
+--     moved = false with the phases `out` keeps in kept_phase_ids (the application warns the admin).
+--   * No format attached: {attached: false}, nothing happens. Nothing moved (total 0): no revision bump, no event.
+--   * Collisions. `in` is normally a new player without rows. A row of `in` that would collide with a row of `out` refuses the
+--     call with a P0001 code and changes nothing (no merge): format_substitute_links_collide (a link between the two, or both
+--     hold a link of one relation on the same side), format_substitute_items_collide (the two holdings of a resource together
+--     exceed its capacity), format_substitute_submissions_collide (both picked for one action, or one targets the other),
+--     format_substitute_attrs_collide / format_substitute_tracks_collide (both hold the key),
+--     format_substitute_challenges_collide (an open challenge between the two, or both have an open one with the same
+--     counterpart in a handed-over phase). The primary keys and the checks of the tables are the reason for the first
+--     kinds, the capacity rule for the second.
+--   * Locks, in the order of the runtime writers: the relation and action advisory locks of the rows involved (sorted), the
+--     seasons row FOR KEY SHARE, the season_formats row FOR NO KEY UPDATE (the revision is read and moved here: every writer
+--     that checks the revision holds the row FOR SHARE until it commits, so the call waits for them and then sees their rows,
+--     and one that comes later waits), the open challenge rows in id order (FOR UPDATE, like every challenge writer), the
+--     holdings and exclusive keys of the moved items (format__lock_grants), then the rows themselves.
+--   * Revision. A seat that moved bumps season_formats.revision (an UPDATE that fires the revision trigger): an event, a pick
+--     or an adjustment planned for the player who left before the move is refused with format_context_stale and planned again
+--     against the new holder; without the bump it would write rows for the departed player after the move.
+--   * Event log. A seat that moved logs one event `seat_moved` (key `seat_moved:<uuid>`, payload {from, to, rows}, fired_at =
+--     the clock after the locks): the revert of a match that completed before the move reads it to take its effects back
+--     from the seat's current holder (src/lib/format-engine/runtime/seat-succession.ts).
+--   * p_dry_run runs the same statements, reports the same result and rolls its writes back (a subtransaction), so a preview
+--     cannot differ from the apply; a collision refuses a preview too.
+CREATE OR REPLACE FUNCTION public.format_substitute_seat(
+  p_season_id uuid, p_out uuid, p_in uuid, p_league_scope boolean, p_phase_ids uuid[], p_dry_run boolean DEFAULT false
+) RETURNS jsonb
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE
+  v_zero     CONSTANT jsonb := jsonb_build_object(
+    'relation_links', 0, 'resource_items', 0, 'action_submissions', 0, 'player_attrs', 0, 'track_progress', 0, 'challenges', 0);
+  v_phases   uuid[];
+  v_key      text;
+  v_found    boolean;
+  v_kept     uuid[];
+  v_resource record;
+  v_capacity integer;
+  v_links    integer := 0;
+  v_items    integer := 0;
+  v_subs     integer := 0;
+  v_attrs    integer := 0;
+  v_tracks   integer := 0;
+  v_chal     integer := 0;
+  v_n        integer;
+  v_total    integer := 0;
+  v_rows     jsonb;
+  v_msg      text;
+BEGIN
+  IF p_season_id IS NULL OR p_out IS NULL OR p_in IS NULL OR p_league_scope IS NULL OR p_out = p_in THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'substitute_seat')::text;
+  END IF;
+  v_phases := coalesce(p_phase_ids, '{}'::uuid[]);
+  IF NOT p_league_scope AND cardinality(v_phases) = 0 THEN
+    RAISE EXCEPTION 'invalid_op' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('op', 'substitute_seat')::text;
+  END IF;
+
+  -- The relation locks, then the action locks, of every row the call touches (sorted). They are read before the locks, so a
+  -- relation or an action that appears meanwhile is not locked here; the revision lock below covers it, because every writer
+  -- of such a row holds the season_formats row FOR SHARE from its revision check until it commits.
+  FOR v_key IN
+    SELECT DISTINCT l.relation_key FROM public.format_relation_links l
+     WHERE l.season_id = p_season_id AND (l.from_player_id IN (p_out, p_in) OR l.to_player_id IN (p_out, p_in))
+     ORDER BY l.relation_key
+  LOOP
+    PERFORM pg_advisory_xact_lock(hashtextextended('format_relation:' || p_season_id::text || ':' || v_key, 0));
+  END LOOP;
+  FOR v_key IN
+    SELECT DISTINCT s.action_key FROM public.format_action_submissions s
+     WHERE s.season_id = p_season_id AND (s.actor_player_id IN (p_out, p_in) OR s.target_player_id IN (p_out, p_in))
+     ORDER BY s.action_key
+  LOOP
+    PERFORM public.format__lock_action(p_season_id, v_key);
+  END LOOP;
+
+  -- The seasons row, then the season_formats row (see format__check_revision): an attach, a detach, an engine switch and a
+  -- league delete wait for this call, and so does every writer that checks the revision.
+  PERFORM 1 FROM public.seasons s WHERE s.id = p_season_id FOR KEY SHARE;
+  PERFORM 1 FROM public.season_formats f WHERE f.season_id = p_season_id FOR NO KEY UPDATE;
+  IF NOT FOUND THEN
+    RETURN jsonb_build_object('attached', false, 'moved', false, 'kept_phase_ids', '[]'::jsonb, 'rows', v_zero, 'total', 0);
+  END IF;
+
+  -- A phase-scope call hands the seat over only when `out` is in no other phase that is still to be played.
+  IF NOT p_league_scope THEN
+    SELECT coalesce(array_agg(t.id ORDER BY t.id), '{}'::uuid[]) INTO v_kept
+      FROM public.tournaments t
+     WHERE t.season_id = p_season_id AND t.status IN ('upcoming', 'active') AND NOT (t.id = ANY (v_phases))
+       AND EXISTS (SELECT 1 FROM public.tournament_participants tp WHERE tp.tournament_id = t.id AND tp.player_id = p_out);
+    IF cardinality(v_kept) > 0 THEN
+      RETURN jsonb_build_object('attached', true, 'moved', false, 'kept_phase_ids', to_jsonb(v_kept), 'rows', v_zero, 'total', 0);
+    END IF;
+  END IF;
+
+  PERFORM 1 FROM public.format_challenges c
+   WHERE c.season_id = p_season_id AND c.status = 'open' AND c.phase_id = ANY (v_phases)
+     AND (c.challenger_id IN (p_out, p_in) OR c.defender_id IN (p_out, p_in))
+   ORDER BY c.id FOR UPDATE;
+  PERFORM public.format__lock_grants(p_season_id, coalesce((
+    SELECT jsonb_agg(jsonb_build_object('resource', u.resource_key, 'player_id', u.holder::text, 'item_id', u.item_id, 'exclusive', u.exclusive))
+      FROM (SELECT DISTINCT i.resource_key, h.holder, i.item_id, i.exclusive
+              FROM public.format_resource_items i CROSS JOIN (VALUES (p_out), (p_in)) AS h(holder)
+             WHERE i.season_id = p_season_id AND i.player_id = p_out) u
+  ), '[]'::jsonb));
+
+  -- Collisions, decided under the locks, before the first write.
+  IF EXISTS (
+       SELECT 1 FROM public.format_relation_links l
+        WHERE l.season_id = p_season_id
+          AND ((l.from_player_id = p_out AND l.to_player_id = p_in) OR (l.from_player_id = p_in AND l.to_player_id = p_out)))
+     OR EXISTS (
+       SELECT 1 FROM public.format_relation_links a
+         JOIN public.format_relation_links b ON b.season_id = a.season_id AND b.relation_key = a.relation_key
+        WHERE a.season_id = p_season_id
+          AND ((a.from_player_id = p_out AND b.from_player_id = p_in) OR (a.to_player_id = p_out AND b.to_player_id = p_in)))
+  THEN
+    RAISE EXCEPTION 'format_substitute_links_collide' USING ERRCODE = 'P0001';
+  END IF;
+  FOR v_resource IN
+    SELECT i.resource_key, sum(i.amount) AS held FROM public.format_resource_items i
+     WHERE i.season_id = p_season_id AND i.player_id = p_out GROUP BY i.resource_key ORDER BY i.resource_key
+  LOOP
+    v_capacity := public.format__resource_capacity(p_season_id, v_resource.resource_key);
+    IF v_capacity IS NOT NULL AND v_resource.held + coalesce((
+         SELECT sum(i.amount) FROM public.format_resource_items i
+          WHERE i.season_id = p_season_id AND i.player_id = p_in AND i.resource_key = v_resource.resource_key), 0) > v_capacity THEN
+      RAISE EXCEPTION 'format_substitute_items_collide' USING ERRCODE = 'P0001',
+        DETAIL = jsonb_build_object('resource', v_resource.resource_key, 'capacity', v_capacity)::text;
+    END IF;
+  END LOOP;
+  IF EXISTS (
+       SELECT 1 FROM public.format_action_submissions a
+         JOIN public.format_action_submissions b ON b.season_id = a.season_id AND b.action_key = a.action_key
+        WHERE a.season_id = p_season_id AND a.actor_player_id = p_out AND b.actor_player_id = p_in)
+     OR EXISTS (
+       SELECT 1 FROM public.format_action_submissions s
+        WHERE s.season_id = p_season_id
+          AND ((s.actor_player_id = p_out AND s.target_player_id = p_in) OR (s.actor_player_id = p_in AND s.target_player_id = p_out)))
+  THEN
+    RAISE EXCEPTION 'format_substitute_submissions_collide' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM public.format_player_attrs a
+         JOIN public.format_player_attrs b ON b.season_id = a.season_id AND b.attr_key = a.attr_key
+        WHERE a.season_id = p_season_id AND a.player_id = p_out AND b.player_id = p_in)
+  THEN
+    RAISE EXCEPTION 'format_substitute_attrs_collide' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM public.format_track_progress a
+         JOIN public.format_track_progress b ON b.season_id = a.season_id AND b.track_key = a.track_key
+        WHERE a.season_id = p_season_id AND a.player_id = p_out AND b.player_id = p_in)
+  THEN
+    RAISE EXCEPTION 'format_substitute_tracks_collide' USING ERRCODE = 'P0001';
+  END IF;
+  IF EXISTS (
+       SELECT 1 FROM public.format_challenges c
+        WHERE c.season_id = p_season_id AND c.status = 'open' AND c.phase_id = ANY (v_phases)
+          AND ((c.challenger_id = p_out AND c.defender_id = p_in) OR (c.challenger_id = p_in AND c.defender_id = p_out)))
+     OR EXISTS (
+       SELECT 1 FROM public.format_challenges a
+         JOIN public.format_challenges b ON b.phase_id = a.phase_id AND b.status = 'open'
+          AND ((b.challenger_id = p_in AND b.defender_id = CASE WHEN a.challenger_id = p_out THEN a.defender_id ELSE a.challenger_id END)
+            OR (b.defender_id = p_in AND b.challenger_id = CASE WHEN a.challenger_id = p_out THEN a.defender_id ELSE a.challenger_id END))
+        WHERE a.season_id = p_season_id AND a.status = 'open' AND a.phase_id = ANY (v_phases)
+          AND (a.challenger_id = p_out OR a.defender_id = p_out))
+  THEN
+    RAISE EXCEPTION 'format_substitute_challenges_collide' USING ERRCODE = 'P0001';
+  END IF;
+
+  -- The writes run in a subtransaction so a preview (p_dry_run) can report them and roll them back.
+  BEGIN
+    UPDATE public.format_relation_links SET from_player_id = p_in WHERE season_id = p_season_id AND from_player_id = p_out;
+    GET DIAGNOSTICS v_links = ROW_COUNT;
+    UPDATE public.format_relation_links SET to_player_id = p_in WHERE season_id = p_season_id AND to_player_id = p_out;
+    GET DIAGNOSTICS v_n = ROW_COUNT;
+    v_links := v_links + v_n;
+
+    UPDATE public.format_resource_items SET player_id = p_in WHERE season_id = p_season_id AND player_id = p_out;
+    GET DIAGNOSTICS v_items = ROW_COUNT;
+
+    UPDATE public.format_action_submissions
+       SET actor_player_id = CASE WHEN actor_player_id = p_out THEN p_in ELSE actor_player_id END,
+           target_player_id = CASE WHEN target_player_id = p_out THEN p_in ELSE target_player_id END
+     WHERE season_id = p_season_id AND (actor_player_id = p_out OR target_player_id = p_out);
+    GET DIAGNOSTICS v_subs = ROW_COUNT;
+
+    UPDATE public.format_player_attrs SET player_id = p_in WHERE season_id = p_season_id AND player_id = p_out;
+    GET DIAGNOSTICS v_attrs = ROW_COUNT;
+    UPDATE public.format_track_progress SET player_id = p_in WHERE season_id = p_season_id AND player_id = p_out;
+    GET DIAGNOSTICS v_tracks = ROW_COUNT;
+
+    UPDATE public.format_challenges
+       SET challenger_id = CASE WHEN challenger_id = p_out THEN p_in ELSE challenger_id END,
+           defender_id = CASE WHEN defender_id = p_out THEN p_in ELSE defender_id END
+     WHERE season_id = p_season_id AND status = 'open' AND phase_id = ANY (v_phases) AND (challenger_id = p_out OR defender_id = p_out);
+    GET DIAGNOSTICS v_chal = ROW_COUNT;
+
+    v_total := v_links + v_items + v_subs + v_attrs + v_tracks + v_chal;
+    v_rows := jsonb_build_object(
+      'relation_links', v_links, 'resource_items', v_items, 'action_submissions', v_subs, 'player_attrs', v_attrs,
+      'track_progress', v_tracks, 'challenges', v_chal);
+
+    IF v_total > 0 AND NOT p_dry_run THEN
+      -- Any UPDATE of the row fires the revision trigger: plans made for the old holder are refused from here on.
+      UPDATE public.season_formats SET engine = engine WHERE season_id = p_season_id;
+      INSERT INTO public.format_event_log (season_id, event_key, event, payload, ops, fired_by, fired_at)
+      VALUES (p_season_id, 'seat_moved:' || gen_random_uuid()::text, 'seat_moved',
+              jsonb_build_object('from', p_out, 'to', p_in, 'rows', v_rows), '[]'::jsonb, NULL, clock_timestamp());
+    END IF;
+    IF p_dry_run THEN
+      RAISE EXCEPTION 'format_substitute_dry_run' USING ERRCODE = 'P0001';
+    END IF;
+  EXCEPTION WHEN SQLSTATE 'P0001' THEN
+    GET STACKED DIAGNOSTICS v_msg = MESSAGE_TEXT;
+    IF v_msg IS DISTINCT FROM 'format_substitute_dry_run' THEN
+      RAISE;
+    END IF;
+  END;
+
+  RETURN jsonb_build_object('attached', true, 'moved', true, 'kept_phase_ids', '[]'::jsonb, 'rows', v_rows, 'total', v_total);
+END $$;
+
+REVOKE ALL ON FUNCTION public.format_substitute_seat(uuid, uuid, uuid, boolean, uuid[], boolean) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.format_substitute_seat(uuid, uuid, uuid, boolean, uuid[], boolean) TO service_role;
+COMMENT ON FUNCTION public.format_substitute_seat(uuid, uuid, uuid, boolean, uuid[], boolean) IS
+  'Substitution: moves the seat''s format rows of one league from p_out to p_in in one transaction (links on both sides, resource items, action submissions as actor and target, attributes, track steps, open challenges of the handed-over phases), bumps season_formats.revision and logs a seat_moved event when something moved. A phase-scope call moves nothing while p_out keeps another phase that is not completed. Event log, adjustments and checks stay as history. A row of p_in that would collide refuses the call with format_substitute_*_collide (nothing changes). p_dry_run reports the same result and rolls back. Returns jsonb {attached, moved, kept_phase_ids, rows, total}.';
+
+-- ---------------------------------------------------------------------------------------------------------------
 -- The recycle bin classifies the new table. These definitions replace 20261105090000's; the inventory test reads the
 -- last definition of each function.
 CREATE OR REPLACE FUNCTION public.league_trash__inventory()

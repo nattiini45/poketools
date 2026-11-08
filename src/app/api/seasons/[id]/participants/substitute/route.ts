@@ -30,6 +30,13 @@ interface RouteParams {
  * Repairs scheduled matches with zero games. Pass dry_run: true for preview.
  * A completed or archived league takes no substitution (409 `SEASON_CLOSED`).
  *
+ * In a league with an attached custom format the incoming player inherits the seat's format data (links, items, picks,
+ * attributes, track steps, open challenges), in one transaction before any other write. The response carries `format`
+ * (`moved`, `total` and the rows per table; a preview reports the same and rolls it back) and, when the outgoing player
+ * keeps another phase in a phase-scope substitution so that nothing moves, a `warnings` entry. The audit entry records the
+ * same. A row of the incoming player that would collide refuses the whole call (409 `format_substitute_*_collide`) before
+ * anything is written.
+ *
  * A failed apply answers with its own error and code (`safeErrorResponse`)
  * plus `partial`: exactly what it wrote before it stopped
  * (`SubstitutePartialApply`, the apply log), or null when it wrote nothing.
@@ -148,6 +155,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         substituteAuditEntry(admin, seasonId, body, {
           phases_updated: summary.phases.length,
           matches_repaired: summary.matches_repaired,
+          ...(summary.format ? { format: summary.format } : {}),
           phase_ids: summary.phases.map((phase) => phase.phase_id),
           groups: log.groups_handed_over.filter((step) => step.group_id !== null),
           matches_skipped: summary.matches_skipped.map((match) => ({

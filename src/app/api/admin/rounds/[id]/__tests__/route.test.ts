@@ -192,6 +192,34 @@ describe('DELETE /api/admin/rounds/[id]', () => {
     expect(vi.mocked(logAuditEvent).mock.calls.at(-1)?.[0].metadata).toMatchObject({ format_revert_failed: true });
   });
 
+  it('returns the first stage_already_ended notice of the resets and audits it', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);
+    vi.mocked(getMatchesByRound).mockResolvedValue([
+      { id: 'match-1', status: 'completed' },
+      { id: 'match-2', status: 'completed' },
+      { id: 'match-3', status: 'completed' },
+    ] as never);
+    vi.mocked(getGamesByMatch).mockResolvedValue([] as never);
+    const first = {
+      phase_id: 'phase-1',
+      phase_name: 'Groups',
+      advanced: [{ phase_id: 'phase-2', phase_name: 'Playoffs', players: [{ id: 'p1', name: 'Ash' }] }],
+    };
+    vi.mocked(resetMatch)
+      .mockResolvedValueOnce({ games_deleted: 1 } as never)
+      .mockResolvedValueOnce({ games_deleted: 1, stage_already_ended: first } as never)
+      .mockResolvedValueOnce({ games_deleted: 1, stage_already_ended: { ...first, phase_name: 'Other' } } as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+    const body = await res.json();
+
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual({ deleted: true, stage_already_ended: first });
+    expect(deleteRoundWithMatches).toHaveBeenCalled();
+    expect(vi.mocked(logAuditEvent).mock.calls.at(-1)?.[0].metadata).toMatchObject({ stage_already_ended: true });
+  });
+
   it('does not add format_revert_failed when every reset reverted cleanly', async () => {
     vi.mocked(getRoundById).mockResolvedValue(baseRound as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([baseRound] as never);

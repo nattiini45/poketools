@@ -231,7 +231,6 @@ export const wichtelcup: FormatDefinition = {
         { resource: 'junk_gifts', domain: 'junk', count: 2, distinct_attr: 'primary_role' },
         { resource: 'premium_gift', domain: 'premium', count: 1 },
       ],
-      review: true,
       lock: 'on_submit',
     },
     { kind: 'check.assisted', id: 'tied_standings', source: { kind: 'standings_tie', stage: 'cup' } },

@@ -430,8 +430,6 @@ export interface PlayerActionRule {
   window: { opens_on?: EventSpec; closes_on?: EventSpec };
   /** 1..8, picked in order */
   steps: ActionStep[];
-  /** default true */
-  review: boolean;
   /** default 'on_submit' */
   lock: 'on_submit' | 'on_close';
 }

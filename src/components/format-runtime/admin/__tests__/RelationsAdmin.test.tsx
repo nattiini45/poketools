@@ -24,8 +24,8 @@ const UNMASKED = {
     {
       ...relationView({ masked: false }),
       links: [
-        { from: { id: MARA, name: 'Mara' }, to: { id: MISTY, name: 'Misty' }, revealed: false },
-        { from: { id: MISTY, name: 'Misty' }, to: { id: BROCK, name: 'Brock' }, revealed: false },
+        { from: { id: MARA, name: 'Mara' }, to: { id: MISTY, name: 'Misty' }, revealed: false, involves_viewer: false },
+        { from: { id: MISTY, name: 'Misty' }, to: { id: BROCK, name: 'Brock' }, revealed: false, involves_viewer: false },
       ],
     },
   ],
@@ -33,8 +33,32 @@ const UNMASKED = {
     {
       action: 'gift',
       rows: [
-        { player: { id: MARA, name: 'Mara' }, state: 'submitted', target: { id: MISTY, name: 'Misty' } },
-        { player: { id: BROCK, name: 'Brock' }, state: 'draft', target: null },
+        { player: { id: MARA, name: 'Mara' }, state: 'submitted', target: { id: MISTY, name: 'Misty' }, involves_viewer: false },
+        { player: { id: BROCK, name: 'Brock' }, state: 'draft', target: null, involves_viewer: false },
+      ],
+    },
+  ],
+};
+
+// The reading admin is Brock, who also plays: the link into him (Misty gives to Brock) and his own submission row involve
+// him, and so does Mara's row, which names him as her target.
+const BROCK_PLAYS = {
+  relations: [
+    {
+      ...relationView({ masked: false }),
+      links: [
+        { from: { id: MARA, name: 'Mara' }, to: { id: MISTY, name: 'Misty' }, revealed: false, involves_viewer: false },
+        { from: { id: MISTY, name: 'Misty' }, to: { id: BROCK, name: 'Brock' }, revealed: false, involves_viewer: true },
+      ],
+    },
+  ],
+  submissions: [
+    {
+      action: 'gift',
+      rows: [
+        { player: { id: MARA, name: 'Mara' }, state: 'submitted', target: { id: BROCK, name: 'Brock' }, involves_viewer: true },
+        { player: { id: MISTY, name: 'Misty' }, state: 'locked', target: { id: MARA, name: 'Mara' }, involves_viewer: false },
+        { player: { id: BROCK, name: 'Brock' }, state: 'draft', target: { id: MISTY, name: 'Misty' }, involves_viewer: true },
       ],
     },
   ],
@@ -156,6 +180,106 @@ describe('RelationsAdmin: show hidden sides', () => {
     await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Show' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect(screen.queryByText('Hidden sides shown')).toBeNull();
+  });
+});
+
+async function unmaskWith(data: unknown, locale: Locale = 'en') {
+  const user = userEvent.setup();
+  // A fresh Response per call: a body can be read once, and a test may read the route twice.
+  fetchMock.mockImplementation(() => Promise.resolve(okResponse(data)));
+  const view = mount({}, locale);
+  await user.click(screen.getByRole('button', { name: locale === 'en' ? 'Show hidden sides' : 'Verborgene Seiten anzeigen' }));
+  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: locale === 'en' ? 'Show' : 'Anzeigen' }));
+  await screen.findByText(locale === 'en' ? 'Hidden sides shown' : 'Verborgene Seiten sichtbar');
+  return { user, view };
+}
+
+const tableCells = (name: string | RegExp) =>
+  within(screen.getByRole('table', { name }))
+    .getAllByRole('row')
+    .slice(1)
+    .map((row) => within(row).getAllByRole('cell').map((c) => c.textContent));
+
+describe('RelationsAdmin: an admin who also plays', () => {
+  it('does not see the rows that involve them until they choose to', async () => {
+    await unmaskWith(BROCK_PLAYS);
+    // The audited read happened (the route sent everything), but the lists leave out the admin's own rows.
+    expect(tableCells('Links of Secret Santa')).toEqual([['Mara', 'Misty']]);
+    expect(tableCells('Submissions for Gift')).toEqual([['Misty', 'Locked', 'Mara']]);
+    expect(screen.getByText('3 rows that involve you (as giver, recipient or target) are hidden, so your own game is not spoiled.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Show my rows' })).toBeTruthy();
+    // The hidden rows are not in the page at all, so nothing is one tab-stop or one screen-reader pass away.
+    expect(document.body.textContent).not.toContain('Brock');
+  });
+
+  it('shows their own rows on request, and hides them again with the same button', async () => {
+    const { user } = await unmaskWith(BROCK_PLAYS);
+    const toggle = screen.getByRole('button', { name: 'Show my rows' });
+    await user.click(toggle);
+    expect(tableCells('Links of Secret Santa')).toEqual([['Mara', 'Misty'], ['Misty', 'Brock']]);
+    expect(tableCells('Submissions for Gift')).toEqual([
+      ['Mara', 'Submitted', 'Brock'],
+      ['Misty', 'Locked', 'Mara'],
+      ['Brock', 'Draft', 'Misty'],
+    ]);
+    expect(screen.getByText('The rows that involve you are shown.')).toBeTruthy();
+    // One element for both states, so keyboard focus stays where it was.
+    expect(screen.getByRole('button', { name: 'Hide my rows' })).toBe(toggle);
+    expect(document.activeElement).toBe(toggle);
+
+    await user.click(toggle);
+    expect(tableCells('Links of Secret Santa')).toEqual([['Mara', 'Misty']]);
+    expect(screen.getByRole('button', { name: 'Show my rows' })).toBe(toggle);
+  });
+
+  it('asks again for every view: Hide again and a new read start hidden, and nothing is stored', async () => {
+    const { user } = await unmaskWith(BROCK_PLAYS);
+    await user.click(screen.getByRole('button', { name: 'Show my rows' }));
+    expect(tableCells('Links of Secret Santa')).toHaveLength(2);
+
+    await user.click(screen.getByRole('button', { name: 'Hide again' }));
+    await user.click(screen.getByRole('button', { name: 'Show hidden sides' }));
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Show' }));
+    await screen.findByText('Hidden sides shown');
+    expect(tableCells('Links of Secret Santa')).toEqual([['Mara', 'Misty']]);
+    expect(screen.getByRole('button', { name: 'Show my rows' })).toBeTruthy();
+    expect(window.localStorage.length).toBe(0);
+    expect(window.sessionStorage.length).toBe(0);
+  });
+
+  it('names what is hidden when every row of a list involves them', async () => {
+    await unmaskWith({
+      relations: [
+        {
+          ...relationView({ masked: false, link_count: 1 }),
+          links: [{ from: { id: MISTY, name: 'Misty' }, to: { id: BROCK, name: 'Brock' }, revealed: false, involves_viewer: true }],
+        },
+      ],
+      submissions: [
+        { action: 'gift', rows: [{ player: { id: BROCK, name: 'Brock' }, state: 'draft', target: null, involves_viewer: true }] },
+      ],
+    });
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getAllByText('The rows that involve you are hidden.')).toHaveLength(2);
+    expect(screen.queryByText('No links yet.')).toBeNull();
+    expect(screen.queryByText('No player can act on this yet.')).toBeNull();
+    expect(document.body.textContent).not.toContain('Brock');
+  });
+
+  it('is in German too', async () => {
+    const { user } = await unmaskWith(BROCK_PLAYS, 'de');
+    expect(screen.getByText(/3 Zeilen, die dich betreffen/)).toBeTruthy();
+    await user.click(screen.getByRole('button', { name: 'Meine Zeilen anzeigen' }));
+    expect(screen.getByText('Die Zeilen, die dich betreffen, sind sichtbar.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Meine Zeilen ausblenden' })).toBeTruthy();
+  });
+
+  it('shows everything at once to an admin who does not play, with no control to reveal', async () => {
+    await unmaskWith(UNMASKED);
+    expect(tableCells('Links of Secret Santa')).toEqual([['Mara', 'Misty'], ['Misty', 'Brock']]);
+    expect(tableCells('Submissions for Gift')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /my rows|Meine Zeilen/ })).toBeNull();
+    expect(document.querySelector('[data-own-rows]')).toBeNull();
   });
 });
 

@@ -12,6 +12,7 @@ const ISSUE_CODES = {
   action_unknown: true,
   window_closed: true,
   actor_without_link: true,
+  actor_not_in_league: true,
   step_unknown: true,
   wrong_count: true,
   resource_unknown: true,

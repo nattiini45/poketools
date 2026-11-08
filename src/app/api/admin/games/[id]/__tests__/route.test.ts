@@ -90,7 +90,7 @@ describe('DELETE /api/admin/games/[id]', () => {
 
     expect(body.success).toBe(true);
     expect(body.data.match_status).toBe('in_progress');
-    expect(deleteGame).toHaveBeenCalledWith('0fd91c32-fc35-40ed-8384-7e345468560c', 'player-1');
+    expect(deleteGame).toHaveBeenCalledWith('0fd91c32-fc35-40ed-8384-7e345468560c', 'player-1', expect.objectContaining({ confirmDownstream: false }));
     expect(revalidateMatchPages).toHaveBeenCalledWith('tourn-1', 'match-1');
   });
 
@@ -251,12 +251,15 @@ describe('PATCH /api/admin/games/[id]', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(editGame).toHaveBeenCalledWith({
-      game_id: '0fd91c32-fc35-40ed-8384-7e345468560c',
-      winner_id: P2_UUID,
-      battle_stats: undefined,
-      admin_id: 'player-1',
-    });
+    expect(editGame).toHaveBeenCalledWith(
+      {
+        game_id: '0fd91c32-fc35-40ed-8384-7e345468560c',
+        winner_id: P2_UUID,
+        battle_stats: undefined,
+        admin_id: 'player-1',
+      },
+      expect.objectContaining({ confirmDownstream: false }),
+    );
   });
 
   it('edits game battle stats', async () => {
@@ -281,12 +284,15 @@ describe('PATCH /api/admin/games/[id]', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
-    expect(editGame).toHaveBeenCalledWith({
-      game_id: '0fd91c32-fc35-40ed-8384-7e345468560c',
-      winner_id: undefined,
-      battle_stats: battleStats,
-      admin_id: 'player-1',
-    });
+    expect(editGame).toHaveBeenCalledWith(
+      {
+        game_id: '0fd91c32-fc35-40ed-8384-7e345468560c',
+        winner_id: undefined,
+        battle_stats: battleStats,
+        admin_id: 'player-1',
+      },
+      expect.objectContaining({ confirmDownstream: false }),
+    );
   });
 
   it('passes the version the editor loaded to editGame (optimistic concurrency)', async () => {
@@ -305,6 +311,7 @@ describe('PATCH /api/admin/games/[id]', () => {
     expect(res.status).toBe(200);
     expect(editGame).toHaveBeenCalledWith(
       expect.objectContaining({ expected_updated_at: '2026-10-19T10:00:00.123456+00:00' }),
+      expect.anything(),
     );
   });
 
@@ -464,5 +471,151 @@ describe('admin game change with a concurrent match status change', () => {
     expect(res.status).toBe(200);
     const [event] = vi.mocked(logAuditEvent).mock.calls[0];
     expect(event.metadata).not.toHaveProperty('match_status_conflict');
+  });
+});
+
+describe('admin game change that affects the played part of the bracket', () => {
+  const lateMatch = 'match-late-1';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, name: 'Admin' } as never);
+    vi.mocked(getGameById).mockResolvedValue({ ...mockGame, game_number: 2 } as never);
+    vi.mocked(getMatchById).mockResolvedValue({ ...mockMatch, status: 'completed', player_1_name: 'Ash', player_2_name: 'Misty' } as never);
+    vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
+  });
+
+  function approvalRefusal() {
+    return Object.assign(new Error('This change affects the rest of the bracket'), {
+      code: 'game_change_downstream_played',
+      statusCode: 409,
+    });
+  }
+
+  it('DELETE without the confirm flag hands the refusal over with nothing audited or revalidated', async () => {
+    const refusal = approvalRefusal();
+    vi.mocked(deleteGame).mockRejectedValue(refusal);
+
+    await DELETE({ json: async () => ({ reason: 'Wrong replay' }) } as NextRequest, routeParams);
+
+    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: false }));
+    expect(safeErrorResponse).toHaveBeenCalledWith(refusal, 'Failed to delete game');
+    expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(revalidateMatchPages).not.toHaveBeenCalled();
+  });
+
+  it('DELETE with the confirm flag passes it on and audits the cascade with the reset match ids', async () => {
+    vi.mocked(deleteGame).mockResolvedValue({
+      match_status: 'in_progress',
+      games_remaining: 1,
+      evolution_events: [],
+      downstream_reset_match_ids: [lateMatch, 'match-late-2'],
+    });
+
+    const res = await DELETE({ json: async () => ({ reason: 'Wrong replay', confirm_downstream: true }) } as NextRequest, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(deleteGame).toHaveBeenCalledWith(expect.any(String), 'player-1', expect.objectContaining({ confirmDownstream: true }));
+    const [event] = vi.mocked(logAuditEvent).mock.calls[0];
+    expect(event.action).toBe('game.delete');
+    expect(event.metadata).toMatchObject({
+      cascade: true,
+      downstream_reset_match_ids: [lateMatch, 'match-late-2'],
+      reason: 'Wrong replay',
+    });
+  });
+
+  it('DELETE without a cascade leaves cascade out of the audit', async () => {
+    vi.mocked(deleteGame).mockResolvedValue({ match_status: 'in_progress', games_remaining: 1, evolution_events: [] });
+
+    await DELETE({ json: async () => ({ confirm_downstream: true }) } as NextRequest, routeParams);
+
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).not.toHaveProperty('cascade');
+  });
+
+  it('DELETE that fails after it reset a later match still audits that reset, then hands the error over', async () => {
+    const failure = new Error('rollback failed');
+    vi.mocked(deleteGame).mockImplementation(async (_id, _admin, options) => {
+      options?.onDownstreamMatchReset?.(lateMatch);
+      throw failure;
+    });
+
+    await DELETE({ json: async () => ({ confirm_downstream: true }) } as NextRequest, routeParams);
+
+    expect(safeErrorResponse).toHaveBeenCalledWith(failure, 'Failed to delete game');
+    expect(logAuditEvent).toHaveBeenCalledTimes(1);
+    const [event] = vi.mocked(logAuditEvent).mock.calls[0];
+    expect(event.action).toBe('game.delete');
+    expect(event.metadata).toMatchObject({ completed: false, cascade: true, downstream_reset_match_ids: [lateMatch] });
+  });
+
+  it('DELETE rejects a confirm flag that is not a boolean with 400 before deleting', async () => {
+    const res = await DELETE({ json: async () => ({ confirm_downstream: 'yes' }) } as NextRequest, routeParams);
+
+    expect(res.status).toBe(400);
+    expect(deleteGame).not.toHaveBeenCalled();
+  });
+
+  it('PATCH without the confirm flag hands the refusal over with nothing audited or revalidated', async () => {
+    const refusal = approvalRefusal();
+    vi.mocked(editGame).mockRejectedValue(refusal);
+
+    await PATCH({ json: vi.fn().mockResolvedValue({ winner_id: P2_UUID }) } as unknown as NextRequest, routeParams);
+
+    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: false }));
+    expect(safeErrorResponse).toHaveBeenCalledWith(refusal, 'Failed to edit game');
+    expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(revalidateMatchPages).not.toHaveBeenCalled();
+  });
+
+  it('PATCH with the confirm flag passes it on and audits the cascade with the reset match ids', async () => {
+    vi.mocked(editGame).mockResolvedValue({
+      match_status: 'pending_confirmation',
+      match_winner_id: 'p2',
+      evolution_events: [],
+      downstream_reset_match_ids: [lateMatch],
+    });
+
+    const res = await PATCH(
+      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: true }) } as unknown as NextRequest,
+      routeParams,
+    );
+
+    expect(res.status).toBe(200);
+    expect(editGame).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ confirmDownstream: true }));
+    const [event] = vi.mocked(logAuditEvent).mock.calls[0];
+    expect(event.action).toBe('game.edit');
+    expect(event.metadata).toMatchObject({ cascade: true, downstream_reset_match_ids: [lateMatch] });
+  });
+
+  it('PATCH that fails after it reset a later match still audits that reset, then hands the error over', async () => {
+    const failure = new Error('write failed');
+    vi.mocked(editGame).mockImplementation(async (_input, options) => {
+      options?.onDownstreamMatchReset?.(lateMatch);
+      throw failure;
+    });
+
+    await PATCH(
+      { json: vi.fn().mockResolvedValue({ winner_id: P2_UUID, confirm_downstream: true }) } as unknown as NextRequest,
+      routeParams,
+    );
+
+    expect(safeErrorResponse).toHaveBeenCalledWith(failure, 'Failed to edit game');
+    const [event] = vi.mocked(logAuditEvent).mock.calls[0];
+    expect(event.action).toBe('game.edit');
+    expect(event.metadata).toMatchObject({ completed: false, cascade: true, downstream_reset_match_ids: [lateMatch] });
+  });
+
+  it('PATCH marks an ended stage in the audit', async () => {
+    vi.mocked(editGame).mockResolvedValue({
+      match_status: 'pending_confirmation',
+      match_winner_id: 'p2',
+      evolution_events: [],
+      stage_already_ended: { phase_id: 'phase-1', phase_name: 'Playoffs', advanced: [] },
+    });
+
+    await PATCH({ json: vi.fn().mockResolvedValue({ winner_id: P2_UUID }) } as unknown as NextRequest, routeParams);
+
+    expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toMatchObject({ stage_already_ended: true });
   });
 });

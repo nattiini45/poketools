@@ -75,6 +75,23 @@ function edgeName(def: FormatDefinition, key: string, locale: Locale): string {
   return `${stageName(edge.from)} → ${stageName(edge.to)}`;
 }
 
+/**
+ * The name of what holds an expression (`owner` with its `owner_kind`, see `checks-privacy.ts`): a rule or an advancement
+ * rule reads as in the other sentences, a stage by its name; an attribute and a metric keep their key.
+ */
+function ownerName(def: FormatDefinition, kind: string, key: string, locale: Locale): string {
+  switch (kind) {
+    case 'rule':
+      return nameOf(ruleText(def.rules.find((r) => r.id === key)), locale, key);
+    case 'stage':
+      return nameOf(def.stages.find((s) => s.key === key)?.name, locale, key);
+    case 'edge':
+      return edgeName(def, key, locale);
+    default:
+      return key;
+  }
+}
+
 /** The params a message sees: names for keys (with a definition), labels for metric and reason codes. */
 function displayParams(
   raw: Readonly<Record<string, string | number | boolean>>,
@@ -97,6 +114,8 @@ function displayParams(
         out[name] = nameOf(def.views.find((v) => v.key === value)?.label, locale, value);
       } else if (name === 'edge') {
         out[name] = edgeName(def, value, locale);
+      } else if (name === 'owner') {
+        out[name] = ownerName(def, String(raw.owner_kind), value, locale);
       }
     }
     if (name === 'metric' && metrics.has(`metric.${value}`)) out[name] = metrics.dynamic(`metric.${value}`);

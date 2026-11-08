@@ -21,8 +21,9 @@ vi.mock('@/lib/supabase/queries/format-engine', () => ({ getSeasonKitHead: vi.fn
 vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/supabase/queries/format-runtime')>()),
   openFormatCheck: vi.fn(),
+  completeFormatForfeit: vi.fn(),
 }));
-vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn(), getMatchesByTournament: vi.fn(), updateMatchStatus: vi.fn() }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: vi.fn(), getMatchesByTournament: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn(), listRoundStatusesByTournamentIds: vi.fn() }));
 vi.mock('@/lib/supabase/queries/teams', () => ({ listTeamsByTournament: vi.fn() }));
 vi.mock('@/lib/match/finalize', () => ({ finalizeMatchCompletion: vi.fn(), stageAdminOutcome: vi.fn(), discardStagedAdminOutcome: vi.fn() }));
@@ -57,8 +58,8 @@ import { logger } from '@/lib/logger';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { getSeasonKitHead } from '@/lib/supabase/queries/format-engine';
 import { listFinalizedMatches, listKitCronPhases, listKitIdleSeasonIds, listKitSeasonIds, listUncompletedMatches } from '@/lib/supabase/queries/format-cron';
-import { FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
-import { getMatchById, getMatchesByTournament, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { completeFormatForfeit, FormatActionAlreadySubmittedError, FormatRuntimeError, openFormatCheck } from '@/lib/supabase/queries/format-runtime';
+import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getRoundsByTournament, listRoundStatusesByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { listTeamsByTournament } from '@/lib/supabase/queries/teams';
 
@@ -123,7 +124,7 @@ beforeEach(() => {
   vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'r-1', round_number: 1, deadline: null }] as never);
   vi.mocked(getMatchesByTournament).mockResolvedValue([match()] as never);
   vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: 'm-1', player_id: 'p1' }] as never);
-  vi.mocked(updateMatchStatus).mockResolvedValue({ id: 'm-1' } as never);
+  vi.mocked(completeFormatForfeit).mockResolvedValue(true);
   vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true } as never);
   vi.mocked(expireChallenges).mockResolvedValue(0);
   vi.mocked(getSeasonKitHead).mockResolvedValue({ engine: 'kit', seed: SEED, revision: 1, clockShiftSeconds: 0 });
@@ -206,14 +207,14 @@ describe('match and team policies', () => {
   it('does nothing before the round deadline', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     await runFormatCronPass(BEFORE_DEADLINE);
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
     expect(openFormatCheck).not.toHaveBeenCalled();
   });
 
   it('forfeits the side without a team and finalizes with a system forfeit outcome', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
-    expect(updateMatchStatus).toHaveBeenCalledWith('m-1', 'completed', 'p1', undefined, undefined, 'scheduled');
+    expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
     const input = vi.mocked(finalizeMatchCompletion).mock.calls[0][0];
     expect(input.winnerId).toBe('p1');
     expect(input.previousStatus).toBe('scheduled');
@@ -231,7 +232,17 @@ describe('match and team policies', () => {
     vi.mocked(getSeasonKitHead).mockResolvedValue(head as never);
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(stageAdminOutcome).not.toHaveBeenCalled();
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
+    expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
+  });
+
+  it('takes back its staged row and finalizes nothing when the database refuses a stale format, even if the match was completed meanwhile', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
+    vi.mocked(completeFormatForfeit).mockRejectedValue(new FormatRuntimeError('format_context_stale'));
+    vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'completed' } as never);
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(discardStagedAdminOutcome).toHaveBeenCalledWith('m-1', STAGED);
+    expect(finalizeMatchCompletion).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
   });
 
@@ -248,7 +259,7 @@ describe('match and team policies', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(getRoundsByTournament).mockResolvedValue([{ id: 'r-1', round_number: 1, deadline: '2026-06-20T00:00:00Z' }] as never);
     await runFormatCronPass(AFTER_DEADLINE);
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
   });
 
   it('writes the forfeit outcome before the status flip', async () => {
@@ -258,9 +269,9 @@ describe('match and team policies', () => {
       order.push('outcome');
       return STAGED;
     });
-    vi.mocked(updateMatchStatus).mockImplementation(async () => {
+    vi.mocked(completeFormatForfeit).mockImplementation(async () => {
       order.push('status');
-      return { id: 'm-1' } as never;
+      return true;
     });
     await runFormatCronPass(AFTER_DEADLINE);
     expect(order).toEqual(['outcome', 'status']);
@@ -272,14 +283,14 @@ describe('match and team policies', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(stageAdminOutcome).mockRejectedValue(new Error('db'));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
     expect(finalizeMatchCompletion).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ forfeits: 0, failures: 1 });
   });
 
   it('leaves a match that changed meanwhile alone (compare-and-set miss) and removes the staged outcome', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
-    vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    vi.mocked(completeFormatForfeit).mockResolvedValue(false);
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(finalizeMatchCompletion).not.toHaveBeenCalled();
     expect(summary.forfeits).toBe(0);
@@ -288,7 +299,7 @@ describe('match and team policies', () => {
 
   it('takes back its own staged row when another writer completed the match meanwhile (it may have kept our row without admin intent)', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
-    vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    vi.mocked(completeFormatForfeit).mockResolvedValue(false);
     vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'completed' } as never);
     await runFormatCronPass(AFTER_DEADLINE);
     expect(discardStagedAdminOutcome).toHaveBeenCalledWith('m-1', STAGED);
@@ -297,7 +308,7 @@ describe('match and team policies', () => {
   it('keeps the row of a completed match when nothing identifies it as ours (no handle)', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(stageAdminOutcome).mockResolvedValue(null);
-    vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    vi.mocked(completeFormatForfeit).mockResolvedValue(false);
     vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'completed' } as never);
     await runFormatCronPass(AFTER_DEADLINE);
     expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
@@ -305,7 +316,7 @@ describe('match and team policies', () => {
 
   it('keeps the outcome when the status of the match cannot be read after a miss', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
-    vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
+    vi.mocked(completeFormatForfeit).mockResolvedValue(false);
     vi.mocked(getMatchById).mockRejectedValue(new Error('db'));
     await runFormatCronPass(AFTER_DEADLINE);
     expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
@@ -313,7 +324,7 @@ describe('match and team policies', () => {
 
   it('removes the staged outcome when the status write throws', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
-    vi.mocked(updateMatchStatus).mockRejectedValue(new Error('db'));
+    vi.mocked(completeFormatForfeit).mockRejectedValue(new Error('db'));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(discardStagedAdminOutcome).toHaveBeenCalledWith('m-1', STAGED);
     expect(summary.failures).toBe(1);
@@ -321,7 +332,7 @@ describe('match and team policies', () => {
 
   it('keeps the row when the status write threw but the match is completed (the write may have been ours)', async () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
-    vi.mocked(updateMatchStatus).mockRejectedValue(new Error('timeout'));
+    vi.mocked(completeFormatForfeit).mockRejectedValue(new Error('timeout'));
     vi.mocked(getMatchById).mockResolvedValue({ id: 'm-1', status: 'completed' } as never);
     await runFormatCronPass(AFTER_DEADLINE);
     expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
@@ -331,7 +342,7 @@ describe('match and team policies', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(stageAdminOutcome).mockRejectedValue(new StagedOutcomeBlockedError('disputed'));
     const summary = await runFormatCronPass(AFTER_DEADLINE);
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
     expect(finalizeMatchCompletion).not.toHaveBeenCalled();
     expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
     expect(summary).toMatchObject({ forfeits: 0, failures: 0 });
@@ -341,7 +352,7 @@ describe('match and team policies', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
     vi.mocked(listTeamsByTournament).mockResolvedValue([]);
     const summary = await runFormatCronPass(AFTER_DEADLINE);
-    expect(updateMatchStatus).not.toHaveBeenCalled();
+    expect(completeFormatForfeit).not.toHaveBeenCalled();
     expect(openFormatCheck).toHaveBeenCalledWith(
       expect.objectContaining({ source: 'deadline_missed', ruleId: 'deadline:swiss:0', dedupeKey: 'deadline:swiss:0:m-1', subject: expect.objectContaining({ reason: 'undecidable_forfeit' }) }),
     );
@@ -375,7 +386,7 @@ describe('match and team policies', () => {
       vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: 'm-1', player_id: 'p1' }, { match_id: null, player_id: 'p2' }] as never);
       const summary = await runFormatCronPass(AFTER_DEADLINE);
       expect(openFormatCheck).not.toHaveBeenCalled();
-      expect(updateMatchStatus).not.toHaveBeenCalled();
+      expect(completeFormatForfeit).not.toHaveBeenCalled();
       expect(summary).toMatchObject({ forfeits: 0, checks: 0 });
     });
 
@@ -384,7 +395,7 @@ describe('match and team policies', () => {
       vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
       vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: null, player_id: 'p1' }] as never);
       const summary = await runFormatCronPass(AFTER_DEADLINE);
-      expect(updateMatchStatus).toHaveBeenCalledWith('m-1', 'completed', 'p1', undefined, undefined, 'scheduled');
+      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
       expect(summary.forfeits).toBe(1);
     });
 
@@ -393,7 +404,7 @@ describe('match and team policies', () => {
       vi.mocked(loadFreshKitContext).mockResolvedValue(context(calendar([forfeit])));
       vi.mocked(listTeamsByTournament).mockResolvedValue([{ match_id: null, player_id: 'p1' }, { match_id: 'm-9', player_id: 'p2' }] as never);
       const summary = await runFormatCronPass(AFTER_DEADLINE);
-      expect(updateMatchStatus).toHaveBeenCalledWith('m-1', 'completed', 'p1', undefined, undefined, 'scheduled');
+      expect(completeFormatForfeit).toHaveBeenCalledWith({ seasonId: SEASON, matchId: 'm-1', expectedStatus: 'scheduled', winnerId: 'p1', revision: 1 });
       expect(summary.forfeits).toBe(1);
     });
   });
@@ -480,7 +491,7 @@ describe('action policies', () => {
       const summary = await runFormatCronPass(AFTER_DEADLINE);
       expect(getRoundsByTournament).not.toHaveBeenCalled();
       expect(getMatchesByTournament).not.toHaveBeenCalled();
-      expect(updateMatchStatus).not.toHaveBeenCalled();
+      expect(completeFormatForfeit).not.toHaveBeenCalled();
       expect(vi.mocked(openFormatCheck).mock.calls.map((call) => call[0].dedupeKey)).toEqual(['deadline:swiss:2:give_gifts:p1']);
       expect(summary.checks).toBe(1);
     });
@@ -506,8 +517,8 @@ describe('action policies', () => {
     vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {} } as never);
     const summary = await runFormatCronPass(AFTER_DEADLINE);
     expect(vi.mocked(submitAction).mock.calls.map((call) => call[0])).toEqual([
-      { seasonId: SEASON, actionId: 'give_gifts', actorId: 'p1', picks: [{ step: 0, item_id: 'garchomp' }], audience: 'system', onlyIfUnsubmitted: true },
-      { seasonId: SEASON, actionId: 'give_gifts', actorId: 'p3', picks: [{ step: 0, item_id: 'garchomp' }], audience: 'system', onlyIfUnsubmitted: true },
+      { seasonId: SEASON, actionId: 'give_gifts', actorId: 'p1', picks: [{ step: 0, item_id: 'garchomp' }], audience: 'system', onlyIfUnsubmitted: true, expectedRevision: 1 },
+      { seasonId: SEASON, actionId: 'give_gifts', actorId: 'p3', picks: [{ step: 0, item_id: 'garchomp' }], audience: 'system', onlyIfUnsubmitted: true, expectedRevision: 1 },
     ]);
     expect(summary.picks).toBe(2);
   });
@@ -534,6 +545,7 @@ describe('action policies', () => {
 
     // A relation whose giver side is hidden and not revealed: the entry names no player.
     vi.mocked(logAuditEvent).mockClear();
+    vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {}, giverHidden: true } as never);
     vi.mocked(loadFreshKitContext).mockResolvedValue(withFromSide('hidden'));
     await runFormatCronPass(AFTER_DEADLINE);
     const hidden = vi.mocked(logAuditEvent).mock.calls.map((call) => call[0]).filter((entry) => entry.action === 'season.format.action.auto_pick');
@@ -544,21 +556,54 @@ describe('action policies', () => {
     }
   });
 
-  it('names no giver for a pick drawn for a giver an admin removed from every phase after the draw (their link stays)', async () => {
+  it('stops drawing, submits nothing and opens no check when the format changed since the pass read the policy', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
+    const before = context(calendar([pick]), { links, flags: OPEN_FLAGS });
+    vi.mocked(loadFreshKitContext).mockResolvedValueOnce(before).mockResolvedValue({ ...before, revision: before.revision + 1 });
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+    expect(submitAction).not.toHaveBeenCalled();
+    expect(openFormatCheck).not.toHaveBeenCalled();
+    expect(summary.picks).toBe(0);
+  });
+
+  it('opens a no-valid-pick check under the revision of the pass', async () => {
+    const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
+    const ctx = context(calendar([pick]), { links: [link('p1', 'p2')], flags: OPEN_FLAGS });
+    vi.mocked(loadFreshKitContext).mockResolvedValue({ ...ctx, revision: 1 });
+    vi.mocked(submitAction).mockResolvedValue({ ok: false, issues: [{ code: 'window_closed' }] });
+    await runFormatCronPass(AFTER_DEADLINE);
+    expect(vi.mocked(openFormatCheck).mock.calls.every((call) => call[0].revision === 1)).toBe(true);
+    expect(openFormatCheck).toHaveBeenCalled();
+  });
+
+  it('draws nothing and opens no check for a giver who is no longer in the league (their link stays), and still draws for the others', async () => {
     const pick: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'seeded_random_pick' };
     vi.mocked(submitAction).mockResolvedValue({ ok: true, submission: {} } as never);
     const ctx = context(calendar([pick]), { links, flags: OPEN_FLAGS });
-    ctx.def = { ...ctx.def, relations: (ctx.def.relations ?? []).map((r) => ({ ...r, visibility: { from: 'hidden', to: 'own' } })) } as never;
-    // p1 and p3 hold the links as givers but are in no phase any more.
-    ctx.phases = ctx.phases.map((phase) => ({ ...phase, members: phase.members.filter((m) => m !== 'p1' && m !== 'p3') }));
+    // p1 holds a link as a giver but an admin took them out of every phase after the draw; p3 is still enrolled.
+    ctx.phases = ctx.phases.map((phase) => ({ ...phase, members: phase.members.filter((m) => m !== 'p1') }));
     vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
-    await runFormatCronPass(AFTER_DEADLINE);
+
+    const summary = await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(vi.mocked(submitAction).mock.calls.map((call) => call[0].actorId)).toEqual(['p3']);
+    expect(summary.picks).toBe(1);
+    expect(openFormatCheck).not.toHaveBeenCalled();
     const entries = vi.mocked(logAuditEvent).mock.calls.map((call) => call[0]).filter((entry) => entry.action === 'season.format.action.auto_pick');
-    expect(entries).toHaveLength(2);
-    for (const entry of entries) {
-      expect(entry.metadata).toEqual({ via: 'seeded_random_pick', action_id: 'give_gifts', pick_count: 1, giver_hidden: true });
-      expect(JSON.stringify(entry)).not.toMatch(/p1|p3/);
-    }
+    expect(entries).toHaveLength(1);
+    expect(JSON.stringify(entries)).not.toContain('p1');
+  });
+
+  it('opens no admin-review check for a giver who is no longer in the league', async () => {
+    const review: DeadlinePolicy = { applies: 'action', action: 'give_gifts', offset_hours: 0, on_miss: 'admin_review' };
+    const ctx = context(calendar([review]), { links, flags: OPEN_FLAGS });
+    ctx.phases = ctx.phases.map((phase) => ({ ...phase, members: phase.members.filter((m) => m !== 'p1') }));
+    vi.mocked(loadFreshKitContext).mockResolvedValue(ctx);
+
+    await runFormatCronPass(AFTER_DEADLINE);
+
+    expect(vi.mocked(openFormatCheck).mock.calls.map((call) => JSON.stringify(call[0]))).toEqual([expect.stringContaining('p3')]);
+    expect(vi.mocked(openFormatCheck).mock.calls.some((call) => JSON.stringify(call[0]).includes('p1'))).toBe(false);
   });
 
   it('writes no audit entry for a pick it could not draw or that was refused', async () => {

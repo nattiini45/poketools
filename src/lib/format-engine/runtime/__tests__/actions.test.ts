@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { isActionWindowOpen, findAction, validateActionSubmission, type ActionIssueCode } from '../actions';
+import { actorAccess, isActionWindowOpen, findAction, validateActionSubmission, type ActionIssueCode } from '../actions';
 import type { ActionPick, KitRuntimeState } from '../types';
 import { PLAYERS, SEED, giftDef, item, link, stateFor } from './helpers';
 
@@ -41,6 +41,26 @@ describe('validateActionSubmission', () => {
   it('rejects an actor without a link', () => {
     expect(codes(run([pick('garchomp'), pick('blissey')], open(), 'p3'))).toContain('actor_without_link');
     expect(codes(run([pick('garchomp'), pick('blissey')], open(), 'p2'))).toContain('actor_without_link');
+  });
+
+  it('refuses a giver who holds a link but is no longer in the league (not on the roster), and says why', () => {
+    const roster = PLAYERS.filter((id) => id !== 'p1');
+    const result = validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('blissey')], open(), roster, SEED);
+    expect(result).toEqual({ ok: false, issues: [{ code: 'actor_not_in_league' }] });
+    // The system's deadline pick is refused the same way: it never draws for a player who left.
+    const system = validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('blissey')], open(), roster, SEED, { audience: 'system' });
+    expect(system).toEqual({ ok: false, issues: [{ code: 'actor_not_in_league' }] });
+    // The same pick from a giver who is still enrolled is accepted.
+    expect(validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('blissey')], open(), PLAYERS, SEED).ok).toBe(true);
+  });
+
+  it('refuses a linked giver when nobody is enrolled at all (an empty roster is no place in the league)', () => {
+    expect(codes(validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('blissey')], open(), [], SEED))).toEqual(['actor_not_in_league']);
+  });
+
+  it('reports no link before it reports a missing place in the league', () => {
+    const roster = PLAYERS.filter((id) => id !== 'p3');
+    expect(codes(validateActionSubmission(def, 'choose_gift', 'p3', [pick('garchomp'), pick('blissey')], open(), roster, SEED))).toEqual(['actor_without_link']);
   });
 
   it('rejects a wrong count and an unknown step', () => {
@@ -153,5 +173,19 @@ describe('validateActionSubmission audience', () => {
     const lockedState = open({ flags: { 'action:choose_gift': 'open' } });
     const result = validateActionSubmission(def, 'choose_gift', 'p1', [pick('garchomp'), pick('mew')], lockedState, PLAYERS, SEED, { audience: 'system' });
     expect(result.ok ? [] : result.issues.map((i) => i.code)).toEqual(['domain_locked', 'item_outside_domain']);
+  });
+});
+
+describe('actorAccess', () => {
+  const rule = findAction(def, 'choose_gift')!;
+  const links = [link('p1', 'p2')];
+
+  it('lets an enrolled giver with a link act, and names the recipient', () => {
+    expect(actorAccess(rule, 'p1', { links }, PLAYERS)).toEqual({ ok: true, target: 'p2' });
+  });
+
+  it('refuses a giver who left the league with the code the views and the submit share', () => {
+    expect(actorAccess(rule, 'p1', { links }, ['p2'])).toEqual({ ok: false, code: 'actor_not_in_league' });
+    expect(actorAccess(rule, 'p2', { links }, PLAYERS)).toEqual({ ok: false, code: 'actor_without_link' });
   });
 });

@@ -7,6 +7,7 @@ import {
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
 import { regenerateEliminationBracket } from '@/lib/tournament/bracket-generate';
+import { assertBracketMayBeRegenerated } from '@/lib/tournament/regenerate-guard';
 import { expireTournamentReads, revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
@@ -51,6 +52,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // A custom league without an attached format cannot start: refuse before anything is written (a phase of an unattached
     // custom league would otherwise be started by hand, and the league could then neither attach a format nor activate).
     const kitPhase = await loadKitPhaseOfTournament(tournament);
+
+    // A phase of a custom league whose stage already ended is not wiped and restarted behind the format's back: the admin
+    // reopens the phase first. Before anything is written, the forced-start audit of the set-up gate below included.
+    assertBracketMayBeRegenerated(tournament);
 
     let rawBody: unknown = {};
     try {

@@ -25,6 +25,7 @@ const STATUS_PRIORITY: readonly (readonly [string, number])[] = [
   ['action_unknown', 404],
   ['format_not_running', 409],
   ['actor_without_link', 403],
+  ['actor_not_in_league', 403],
   ['window_closed', 409],
   ['resource_item_taken', 409],
 ];

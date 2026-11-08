@@ -72,6 +72,7 @@ const auditActions = {
   season__phase__groups__repair: 'Phase groups repaired',
   season__phase__advance: 'Players advanced to the next phase by hand',
   phase__enrollment__sync: 'Phase enrollment synced by force',
+  phase__roster__force: 'Roster of a started format phase changed by force',
   season__groups__replace: 'League groups changed',
   season__group__rename: 'League group renamed',
   season__group__member__place: 'Trainer placed in a league group',
@@ -360,6 +361,21 @@ export default {
     openDataTools: 'Open admin data tools',
     // Shown instead of the data-tools link to a tournament/league admin: the tools there are site-admin only
     askSiteAdmin: 'The admin data tools are for site admins only. Ask a site admin to run the fix described above.',
+    // Approval prompt of a game edit/delete that affects later bracket matches that were already played (src/components/match/DownstreamApprovalDialog.tsx)
+    downstream: {
+      title: 'This change affects the rest of the bracket',
+      intro: {
+        one: 'The winner of this match has already played {count} later bracket match. To apply your change, that match is reset first: its games are deleted and its result is rolled back. Nothing has been changed yet.',
+        other: 'The winner of this match has already played {count} later bracket matches. To apply your change, these matches are reset first: their games are deleted and their results are rolled back. Nothing has been changed yet.',
+      },
+      listHeading: 'Matches that will be reset:',
+      item: '{player1} vs {player2} ({round}, {status})',
+      approve: 'Reset them and apply the change',
+      done: {
+        one: '{count} later bracket match was reset.',
+        other: '{count} later bracket matches were reset.',
+      },
+    },
   },
   players: {
     title: 'Player Roster',

@@ -41,6 +41,18 @@ export const WICHTELCUP_SPECIES = [
   ...WICHTELCUP_NORMAL, ...WICHTELCUP_JUNK, ...WICHTELCUP_PREMIUM, ...WICHTELCUP_NEW_YEAR,
 ] as const;
 
+/**
+ * Formes the rules admit through a pool entry that does not pin its form. Toxtricity is "standard species; use form details
+ * supported by engine and Species Clause" (section 9), unlike the "base form" entries (Dialga, Necrozma, Rayquaza, ...) and
+ * "standard starting form" (Meloetta): both its formes may be brought, and they count as one species under the Species Clause.
+ * They are not extra pool entries (the pools keep the sizes of the rules text); the format's pool check already matches a
+ * forme by its base species, so only the rule preset's exact-id allowlist has to list them.
+ */
+export const WICHTELCUP_ENTRY_FORMES = ['Toxtricity-Low-Key'] as const;
+
+/** The exact-id allowlist of the rule preset: every pool entry plus the formes an unpinned entry admits. */
+export const WICHTELCUP_ALLOWED = [...WICHTELCUP_SPECIES, ...WICHTELCUP_ENTRY_FORMES] as const;
+
 const Z_CRYSTALS_AND_MEGA_STONES = [
   'Abomasite', 'Absolite', 'Absolite Z', 'Aerodactylite', 'Aggronite', 'Alakazite', 'Aloraichium Z',
   'Altarianite', 'Ampharosite', 'Audinite', 'Banettite', 'Barbaracite', 'Baxcalibrite', 'Beedrillite',
@@ -70,14 +82,17 @@ const Z_CRYSTALS_AND_MEGA_STONES = [
 const FORME_ITEMS = ['Red Orb', 'Adamant Crystal', 'Lustrous Globe'] as const;
 
 /**
- * "Rayquaza (base form; no Mega)": Mega Rayquaza needs no Mega Stone, only Dragon Ascent, which is why the move is banned
- * here (the team check cannot see a battle action). The Mega Rayquaza Clause (clausesForTier) says the same in battle.
+ * Every ban of the cup traces to a line of the rules text or the Showdown ruleset; nothing else is banned:
+ *  - Light Clay: "Banned item" (section 2); Moody and Snow Cloak: "Banned abilities" (section 2);
+ *  - the Mega Stones: "No Mega Evolution"; the Z-crystals: "No Z-Moves";
+ *  - Red Orb, Adamant Crystal, Lustrous Globe: Groudon, Dialga and Palkia are "base form" entries, and these items turn them
+ *    into Primal Groudon and the Origin formes.
+ * No move is banned. "Rayquaza (base form; no Mega)" is kept by the Mega Rayquaza Clause (clausesForTier) in battle and by
+ * the allowlist, which does not list Rayquaza-Mega; Dragon Ascent itself is an ordinary attack the rules do not ban.
  */
-const MEGA_RAYQUAZA_MOVES = ['Dragon Ascent'] as const;
-
 export const WICHTELCUP_BANS: RuleNames = {
   pokemon: [],
-  moves: [...MEGA_RAYQUAZA_MOVES],
+  moves: [],
   items: ['Light Clay', ...FORME_ITEMS, ...Z_CRYSTALS_AND_MEGA_STONES],
   abilities: ['Moody', 'Snow Cloak'],
 };

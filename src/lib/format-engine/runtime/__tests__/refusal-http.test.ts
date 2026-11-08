@@ -28,6 +28,8 @@ describe('actionRejectedStatus', () => {
     expect(actionRejectedStatus([issue('wrong_count'), issue('action_unknown')])).toBe(404);
     expect(actionRejectedStatus([issue('format_not_running')])).toBe(409);
     expect(actionRejectedStatus([issue('wrong_count'), issue('actor_without_link')])).toBe(403);
+    // A giver who left the league is refused like one without a link: the actor may not act (403), not a bad pick (422).
+    expect(actionRejectedStatus([issue('wrong_count'), issue('actor_not_in_league')])).toBe(403);
     expect(actionRejectedStatus([issue('window_closed')])).toBe(409);
     expect(actionRejectedStatus([issue('resource_item_taken', { step: 0, item_id: 'x' })])).toBe(409);
   });

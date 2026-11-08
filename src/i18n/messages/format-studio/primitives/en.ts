@@ -472,7 +472,6 @@ export default {
     window: 'Window',
     opens_on: 'Opens when',
     closes_on: 'Closes when',
-    review: 'Needs review',
     lock: 'Locks',
     distinct_attr: 'Must differ in',
     source: 'Source',

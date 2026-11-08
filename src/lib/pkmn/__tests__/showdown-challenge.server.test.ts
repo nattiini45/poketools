@@ -1,3 +1,4 @@
+import { Dex } from '@pkmn/dex';
 import { describe, expect, it } from 'vitest';
 import { computeEffective } from '@/lib/ruleset-kit/effective';
 import { newRulesetDocument } from '@/lib/ruleset-studio/document';
@@ -31,15 +32,21 @@ describe('the Wichtelcup challenge', () => {
     expect(challenge.startsWith('gen9nationaldexag @@@ -All Pokemon, ')).toBe(true);
   });
 
-  it('closes the formes a "base form" entry would open: Mega Rayquaza, Primal Groudon, the Origin formes, Necrozma fusions, Low-Key', () => {
+  it('closes the formes a "base form" entry would open: Mega Rayquaza, Primal Groudon, the Origin formes, Necrozma fusions', () => {
     const closed = [
       'rayquazamega', 'groudonprimal', 'dialgaorigin', 'palkiaorigin', 'necrozmaultra', 'necrozmaduskmane',
-      'necrozmadawnwings', 'magearnaoriginal', 'magearnamega', 'toxtricitylowkey',
+      'necrozmadawnwings', 'magearnaoriginal', 'magearnamega',
     ];
     for (const forme of closed) expect(rules, forme).toContain(`-pokemon:${forme}`);
     for (const base of ['rayquaza', 'groudon', 'dialga', 'palkia', 'necrozma', 'magearna', 'toxtricity']) {
       expect(rules, base).toContain(`+pokemon:${base}`);
     }
+  });
+
+  it('does not close Toxtricity-Low-Key: the rules text admits both formes of the standard species', () => {
+    expect(rules).toContain('+pokemon:toxtricity');
+    expect(rules).toContain('+pokemon:toxtricitylowkey');
+    expect(rules).not.toContain('-pokemon:toxtricitylowkey');
   });
 
   it('writes the exact-pattern cosmetic entries as their base species, once', () => {
@@ -54,10 +61,21 @@ describe('the Wichtelcup challenge', () => {
     expect(rules).not.toContain('+pokemon:sandslash');
   });
 
-  it('bans the forme-changing items and the Mega Rayquaza route, and carries the Mega Rayquaza Clause', () => {
+  it('bans the forme-changing items and carries the Mega Rayquaza Clause, but bans no move', () => {
     expect(rules).toEqual(
-      expect.arrayContaining(['-item:redorb', '-item:adamantcrystal', '-item:lustrousglobe', '-item:lightclay', '-move:dragonascent', 'Mega Rayquaza Clause', 'Terastal Clause']),
+      expect.arrayContaining(['-item:redorb', '-item:adamantcrystal', '-item:lustrousglobe', '-item:lightclay', 'Mega Rayquaza Clause', 'Terastal Clause']),
     );
+    // Dragon Ascent is legal; Mega Rayquaza stays closed by the clause and the closed forme.
+    expect(rules.filter((rule) => rule.startsWith('-move:') || rule === '-All Moves')).toEqual([]);
+    expect(rules).toContain('-pokemon:rayquazamega');
+  });
+
+  it('bans exactly the items and abilities the rules text names or implies (Mega Stones, Z-crystals, forme items)', () => {
+    expect(rules.filter((rule) => rule.startsWith('-ability:'))).toEqual(['-ability:moody', '-ability:snowcloak']);
+    const items = rules.filter((rule) => rule.startsWith('-item:')).map((rule) => rule.slice(6));
+    const dex = Dex.forGen(9);
+    const named = new Set(['lightclay', 'redorb', 'adamantcrystal', 'lustrousglobe']);
+    expect(items.filter((id) => !named.has(id) && !dex.items.get(id).megaStone && !dex.items.get(id).zMove)).toEqual([]);
   });
 
   it('has no duplicate rule', () => {

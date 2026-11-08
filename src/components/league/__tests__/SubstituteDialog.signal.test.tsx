@@ -47,6 +47,7 @@ const CONFIRMED = summary({
 /** The group row moved, then the enrollment swap failed. */
 const GROUP_ONLY: SubstitutePartialApply = {
   written: {
+    format_moved: null,
     proposals_cancelled: [],
     matches_repaired: [],
     matches_skipped: [],
@@ -217,6 +218,10 @@ describe('describeSubstitutePartial', () => {
     const lines = describeSubstitutePartial(
       {
         written: {
+          format_moved: {
+            total: 5,
+            rows: { relation_links: 2, resource_items: 1, action_submissions: 1, player_attrs: 1, track_progress: 0, challenges: 0 },
+          },
           proposals_cancelled: ['m-1'],
           matches_repaired: ['m-1', 'm-2'],
           matches_skipped: ['m-3'],
@@ -231,6 +236,7 @@ describe('describeSubstitutePartial', () => {
     );
 
     expect(lines).toEqual([
+      'Format data moved to the incoming player (5 entries)',
       'Pending proposals cancelled on 1 match',
       '2 matches re-paired',
       'Group slot handed over in Gruppenphase',
@@ -276,6 +282,10 @@ describe('SubstitutePartialWarning with the exact signal', () => {
 describe('the written steps in German', () => {
   const ALL_STEPS: SubstitutePartialApply = {
     written: {
+      format_moved: {
+        total: 1,
+        rows: { relation_links: 1, resource_items: 0, action_submissions: 0, player_attrs: 0, track_progress: 0, challenges: 0 },
+      },
       proposals_cancelled: ['m-1', 'm-2'],
       matches_repaired: ['m-1'],
       matches_skipped: [],
@@ -289,6 +299,7 @@ describe('the written steps in German', () => {
 
   it('describes each step with German plurals', () => {
     expect(describeSubstitutePartial(ALL_STEPS, CONFIRMED, createTranslator(leagueRosterMessages, 'de'))).toEqual([
+      'Formatdaten zum Ersatzspieler verschoben (1 Eintrag)',
       'Offene Vorschläge für 2 Spiele storniert',
       '1 Spiel neu gepaart',
       'Gruppenplatz übergeben in: Gruppenphase',

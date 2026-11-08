@@ -34,6 +34,12 @@ export default {
   player_still_referenced: 'Cannot delete this player because other records still reference them.',
   player_in_active_draft:
     'Cannot delete a player who is seated in an unfinished draft. Finish or cancel the draft, or remove the player from it, first.',
+  // The player is enrolled in a league that runs a format and has not finished (`count` leagues, `league` names the first).
+  player_in_format_league: {
+    one: 'Cannot delete a player who is enrolled in the unfinished league "{league}", which runs a format. Substitute the player or remove them from the league first.',
+    other:
+      'Cannot delete a player who is enrolled in {count} unfinished leagues that run a format, among them "{league}". Substitute the player or remove them from those leagues first.',
+  },
   avatar_edit_forbidden: 'Not authorized to edit this avatar',
   showdown_sprite_invalid: 'Invalid Showdown sprite id',
   showdown_sprite_url_invalid: 'Invalid Showdown sprite URL',

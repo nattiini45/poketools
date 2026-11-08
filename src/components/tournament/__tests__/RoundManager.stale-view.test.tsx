@@ -66,4 +66,29 @@ describe('RoundManager: stale view and revert warning', () => {
 
     expect(await screen.findByText(/could not be taken back/)).toBeTruthy();
   });
+
+  it('shows who advanced when a round reset took back a result of a phase whose stage had already ended', async () => {
+    const notice = {
+      phase_id: 'groups',
+      phase_name: 'Group stage',
+      advanced: [{ phase_id: 'playoffs', phase_name: 'Playoffs', players: [{ id: 'p1', name: 'Ash' }] }],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) =>
+        url === '/api/admin/rounds/r-1/reset'
+          ? json({ success: true, data: { matches_reset: 1, total_games_deleted: 2, evolution_events: [], stage_already_ended: notice } })
+          : json({ success: true, data: [] }),
+      ),
+    );
+    const user = userEvent.setup();
+    render(withI18n(<RoundManager tournament={tournament} initialRounds={[{ ...ROUND, status: 'active' }]} />));
+
+    await user.click(screen.getByRole('button', { name: 'Reset' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getAllByRole('button').at(-1) as HTMLElement);
+
+    expect(await screen.findByText(/the stage of the phase Group stage had already ended/)).toBeTruthy();
+    expect(screen.getByText(/Playoffs: Ash/)).toBeTruthy();
+  });
 });

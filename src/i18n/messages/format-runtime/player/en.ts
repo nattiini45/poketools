@@ -80,6 +80,7 @@ export default {
     action_unknown: 'This action does not exist.',
     window_closed: 'This action is not open for changes right now.',
     actor_without_link: 'You have no part in this action.',
+    actor_not_in_league: 'You are no longer part of this league, so you can no longer take part in this action. What you already gave stays.',
     step_unknown: 'This step does not exist.',
     wrong_count: 'Pick exactly as many entries as the step asks for.',
     resource_unknown: 'This step hands out something that is not defined.',

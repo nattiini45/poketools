@@ -18,7 +18,7 @@ vi.mock('@/lib/supabase/client', () => ({
       const call = { table, steps: [] as Step[] };
       state.calls.push(call);
       const chain: Record<string, unknown> = {};
-      for (const name of ['select', 'eq', 'order', 'range', 'maybeSingle']) {
+      for (const name of ['select', 'eq', 'neq', 'order', 'range', 'maybeSingle']) {
         chain[name] = (...args: unknown[]) => {
           call.steps.push([name, ...args]);
           return chain;
@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/client', () => ({
   },
 }));
 
-import { getFormatCheck, getSeasonPlayState, listFormatAdjustments, listFormatChecks } from '../format-runtime-reads';
+import { getFormatCheck, getSeasonPlayState, listFiredFormatEvents, listFormatAdjustments, listFormatChecks } from '../format-runtime-reads';
 
 const SEASON = '3f2b8c1e-5a47-4d0b-9f6e-0c1d2e3f4a5b';
 const CHECK = '7f2b8c1e-5a47-4d0b-9f6e-0c1d2e3f4a5f';
@@ -39,6 +39,34 @@ const stepsOf = (call: { steps: Step[] }, name: string) => call.steps.filter(([s
 beforeEach(() => {
   state.calls.length = 0;
   state.respond = null;
+});
+
+describe('listFiredFormatEvents', () => {
+  it('reads the league event log without the per-match events, oldest first, in one paged request', async () => {
+    const rows = [{ event_key: 'stage_start:swiss', event: 'stage_start', payload: {}, ops: [] }];
+    state.respond = () => ({ data: rows });
+
+    await expect(listFiredFormatEvents(SEASON)).resolves.toEqual(rows);
+
+    expect(state.calls).toHaveLength(1);
+    const [call] = state.calls;
+    expect(call.table).toBe('format_event_log');
+    expect(stepsOf(call, 'select')).toEqual([['select', 'event_key, event, payload, ops']]);
+    expect(stepsOf(call, 'eq')).toEqual([['eq', 'season_id', SEASON]]);
+    expect(stepsOf(call, 'neq')).toEqual([['neq', 'event', 'match_completed']]);
+    expect(stepsOf(call, 'order')).toEqual([['order', 'fired_at'], ['order', 'event_key']]);
+    expect(stepsOf(call, 'range')).toEqual([['range', 0, 999]]);
+  });
+
+  it('answers empty for a malformed league id without a request', async () => {
+    await expect(listFiredFormatEvents('not-a-uuid')).resolves.toEqual([]);
+    expect(state.calls).toHaveLength(0);
+  });
+
+  it('rethrows a failed read', async () => {
+    state.respond = () => ({ data: null, error: { message: 'boom' } });
+    await expect(listFiredFormatEvents(SEASON)).rejects.toMatchObject({ message: 'boom' });
+  });
 });
 
 describe('getFormatCheck', () => {

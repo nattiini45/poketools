@@ -447,6 +447,23 @@ export function classifyRuleEntry(entry: unknown, pointer: string): RuleDecision
 
 // --- Document pre-pass --------------------------------------------------------------------------
 
+/**
+ * Keys a `player.action` rule used to carry that nothing reads any more. A stored or hand-authored document may
+ * still have them, and the schemas reject unknown keys, so the pre-pass drops them silently (the document was valid
+ * when it was written; there is nothing for the author to fix). `review` was a "needs review" flag with no queue
+ * behind it.
+ */
+const RETIRED_ACTION_KEYS: readonly string[] = ['review'];
+
+/** The rule without its retired keys: the same object when it is not a `player.action` or has none (copy on write). */
+function withoutRetiredActionKeys(rule: unknown): unknown {
+  if (!isRecord(rule) || rule.kind !== 'player.action') return rule;
+  if (!RETIRED_ACTION_KEYS.some((key) => hasOwn(rule, key))) return rule;
+  const copy: Record<string, unknown> = { ...rule };
+  for (const key of RETIRED_ACTION_KEYS) delete copy[key];
+  return copy;
+}
+
 export interface PreparedDocument {
   /** The input with reserved subtrees removed and unknown rule kinds degraded (copy on write). */
   doc: unknown;
@@ -459,7 +476,8 @@ export interface PreparedDocument {
  * Runs on the plain input before zod / the interpreter:
  * - a reserved top-level section, stage field, pairing kind or rule kind yields one
  *   `not_available_yet` issue at its pointer and nothing else for that subtree;
- * - a `rules[]` entry with an unknown kind becomes a manual rule card (with a note).
+ * - a `rules[]` entry with an unknown kind becomes a manual rule card (with a note);
+ * - a `player.action` entry loses the retired keys (`RETIRED_ACTION_KEYS`) without a note.
  * The input is never mutated; only the touched spine is copied.
  */
 export function prepareDocument(input: unknown): PreparedDocument {
@@ -518,7 +536,14 @@ export function prepareDocument(input: unknown): PreparedDocument {
     let nextRules: unknown[] | null = null;
     for (let i = 0; i < rules.length; i += 1) {
       const decision = classifyRuleEntry(rules[i], `/rules/${i}`);
-      if (decision.action === 'keep') continue;
+      if (decision.action === 'keep') {
+        const stripped = withoutRetiredActionKeys(rules[i]);
+        if (stripped !== rules[i]) {
+          nextRules ??= [...rules];
+          nextRules[i] = stripped;
+        }
+        continue;
+      }
       nextRules ??= [...rules];
       if (decision.action === 'issue') {
         issues.push(decision.issue);

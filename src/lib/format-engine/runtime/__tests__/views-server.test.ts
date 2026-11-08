@@ -12,13 +12,13 @@ vi.mock('@/lib/format-engine/runtime/load', async (importOriginal) => ({
 }));
 vi.mock('@/lib/format-engine/runtime/stage-table', () => ({ loadStageTable: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-challenges', () => ({ listFormatChallenges: vi.fn() }));
-vi.mock('@/lib/supabase/queries/format-runtime-reads', () => ({ listFormatAdjustments: vi.fn(), listFormatChecks: vi.fn() }));
+vi.mock('@/lib/supabase/queries/format-runtime-reads', () => ({ listFiredFormatEvents: vi.fn(), listFormatAdjustments: vi.fn(), listFormatChecks: vi.fn() }));
 vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: vi.fn() }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: vi.fn() }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getPublicSeasonParticipants: vi.fn() }));
 
 import { listFormatChallenges } from '@/lib/supabase/queries/format-challenges';
-import { listFormatAdjustments, listFormatChecks } from '@/lib/supabase/queries/format-runtime-reads';
+import { listFiredFormatEvents, listFormatAdjustments, listFormatChecks } from '@/lib/supabase/queries/format-runtime-reads';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
@@ -65,6 +65,7 @@ beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(getPublicSeasonParticipants).mockResolvedValue(PLAYERS.map((id) => ({ id, name: `Name ${id}`, gym_type: null, avatar_url: null, core_types: null })) as never);
   vi.mocked(listFormatChallenges).mockResolvedValue([]);
+  vi.mocked(listFiredFormatEvents).mockResolvedValue([]);
   vi.mocked(getRoundsByTournament).mockResolvedValue([]);
   vi.mocked(loadStageTable).mockResolvedValue([]);
   vi.mocked(resolvePlayerNames).mockResolvedValue({});
@@ -169,6 +170,40 @@ describe('the admin loaders', () => {
     ] as never);
     const overview = await loadAdminOverview(context(), 'admin-1', NOW);
     expect(overview).toMatchObject({ running: true, open_challenges: 1 });
+  });
+
+  it('reads the league event log once and lists the late joiners from it', async () => {
+    const def = giftDef();
+    const stage = def.stages[0].key;
+    const ctx = context();
+    // The stage start gave points to p1 and p2 only; p3 to p6 sit in the phase now.
+    ctx.def = {
+      ...def,
+      rules: [
+        ...def.rules,
+        { kind: 'rule.on_event', id: 'welcome', on: { event: 'stage_start', stage }, effects: [{ effect: 'adjust_points', stage, to: { who: 'all' }, points: 1 }] },
+      ],
+    };
+    vi.mocked(listFiredFormatEvents).mockResolvedValue([
+      {
+        event_key: `stage_start:${stage}`,
+        event: 'stage_start',
+        payload: { event: 'stage_start', stage },
+        ops: ['p1', 'p2'].map((player_id) => ({ op: 'adjust_points', stage, player_id, points: 1, reason: `welcome (stage_start:${stage})` })),
+      },
+    ]);
+
+    const overview = await loadAdminOverview(ctx, 'admin-1', NOW);
+
+    expect(listFiredFormatEvents).toHaveBeenCalledTimes(1);
+    expect(listFiredFormatEvents).toHaveBeenCalledWith(SEASON);
+    expect(overview.late_joiners.map((entry) => entry.player.id)).toEqual(['p3', 'p4', 'p5', 'p6']);
+    expect(overview.late_joiners[0].player).toEqual({ id: 'p3', name: 'Name p3' });
+  });
+
+  it('lists nobody late when the log holds no event', async () => {
+    const overview = await loadAdminOverview(context(), 'admin-1', NOW);
+    expect(overview.late_joiners).toEqual([]);
   });
 
   it('unmasks through the same participants read', async () => {

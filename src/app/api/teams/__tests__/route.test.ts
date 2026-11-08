@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 import type { Team, TeamWithContext } from '@/types/team';
 
-vi.mock('@/app/api/teams/team-writes-closed', () => ({ teamWritesClosed: vi.fn().mockResolvedValue(false) }));
+vi.mock('@/app/api/teams/team-writes-closed', () => ({ teamWritesClosed: vi.fn().mockResolvedValue(null) }));
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
   AuthError: class AuthError extends Error {
@@ -443,14 +443,20 @@ describe('POST /api/teams', () => {
     expect(body.code).toBe('team_submission_closed');
   });
 
-  it('returns 403 team_submission_closed for a player when the league or tournament is archived or completed, and lets an admin through', async () => {
+  it.each([
+    ['tournament_completed', 'team_submission_closed', /Tournament is completed/],
+    ['tournament_archived', 'team_submission_tournament_archived', /Tournament is archived/],
+    ['league_closed', 'team_submission_league_closed', /League is completed or archived/],
+  ] as const)('returns 403 for a player when the closure is %s (code %s, text names the real reason), and lets an admin through', async (reason, code, text) => {
     vi.mocked(getTournamentById).mockResolvedValue({ id: UUID, status: 'active', season_id: 'season-1' } as Awaited<ReturnType<typeof getTournamentById>>);
-    vi.mocked(teamWritesClosed).mockResolvedValueOnce(true);
+    vi.mocked(teamWritesClosed).mockResolvedValueOnce(reason);
     const request = () => ({ json: vi.fn().mockResolvedValue({ tournament_id: UUID, pokemon: [mockPokemonSet] }) }) as unknown as NextRequest;
 
     const response = await POST(request());
     expect(response.status).toBe(403);
-    expect((await response.json()).code).toBe('team_submission_closed');
+    const refusal = await response.json();
+    expect(refusal.code).toBe(code);
+    expect(refusal.error).toMatch(text);
     expect(vi.mocked(createTeam)).not.toHaveBeenCalled();
 
     vi.mocked(requirePlayer).mockResolvedValue(adminPlayer);
