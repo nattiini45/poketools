@@ -41,6 +41,8 @@ export interface FireOptions {
   context?: KitContext;
   /** Cascade depth, set by the call itself. */
   depth?: number;
+  /** The completion this event belongs to (`FireFormatEventInput.matchFence`). */
+  matchFence?: { matchId: string; confirmedAt: string };
 }
 
 export interface FireResult {
@@ -139,6 +141,7 @@ export async function fireEvent(
     ops,
     firedBy,
     revision: ctx.revision,
+    ...(options.matchFence ? { matchFence: options.matchFence } : {}),
   });
   if (!fired) return { ...empty, ops, notifications: plan.notifications, issues: plan.issues };
 

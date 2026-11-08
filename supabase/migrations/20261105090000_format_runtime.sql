@@ -684,8 +684,10 @@ END $$;
 -- A new argument is an overload, not a replacement: the six-argument form of an earlier revision of this file is dropped first,
 -- so no service_role-callable overload is left that skips the check.
 DROP FUNCTION IF EXISTS public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid);
+DROP FUNCTION IF EXISTS public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint);
 CREATE OR REPLACE FUNCTION public.format_fire_event(
-  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint
+  p_season_id uuid, p_event_key text, p_event text, p_payload jsonb, p_ops jsonb, p_fired_by uuid, p_expected_revision bigint,
+  p_fence_match uuid DEFAULT NULL, p_fence_confirmed_at timestamptz DEFAULT NULL
 ) RETURNS boolean
 LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
@@ -694,6 +696,17 @@ DECLARE
 BEGIN
   PERFORM public.format__lock_op_keys(p_season_id, p_ops);
   PERFORM public.format__check_revision(p_season_id, p_expected_revision);
+  -- The event of a match's completion, written only while that completion stands (p_fence_confirmed_at is its token). The
+  -- row lock serialises it with a reset: a reset that came first is seen here and the event is refused like a stale format
+  -- (nothing written, the key stays free), and a reset that comes later waits and then finds the event to revert.
+  IF p_fence_match IS NOT NULL THEN
+    PERFORM 1 FROM public.matches m
+      WHERE m.id = p_fence_match AND m.status = 'completed' AND m.confirmed_at IS NOT DISTINCT FROM p_fence_confirmed_at
+      FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'format_context_stale' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
   INSERT INTO public.format_event_log (season_id, event_key, event, payload, ops, fired_by)
   VALUES (p_season_id, p_event_key, p_event, coalesce(p_payload, '{}'::jsonb), coalesce(p_ops, '[]'::jsonb), p_fired_by)
   ON CONFLICT (season_id, event_key) DO NOTHING;
@@ -1078,7 +1091,7 @@ REVOKE ALL ON FUNCTION
   public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb, boolean, boolean),
-  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint),
+  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz),
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
@@ -1100,7 +1113,7 @@ GRANT EXECUTE ON FUNCTION
   public.format__resource_capacity(uuid, text),
   public.format__clear_runtime(uuid),
   public.format__apply_ops(uuid, jsonb, boolean, boolean),
-  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint),
+  public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz),
   public.format__action_flag_locked(uuid, text),
   public.format_action_save(uuid, text, uuid, uuid, jsonb, bigint),
   public.format_action_submit(uuid, text, uuid, uuid, jsonb, jsonb, boolean, bigint, boolean),
@@ -1134,7 +1147,7 @@ COMMENT ON FUNCTION public.format__clear_runtime(uuid) IS
   'Internal: deletes the rows of the nine format runtime tables of one league (attach-replace and detach).';
 COMMENT ON FUNCTION public.format__apply_ops(uuid, jsonb, boolean, boolean) IS
   'Internal: applies a jsonb array of format ops in order (set_flag, set_relation, reveal_relation, grant_item, revoke_item, set_attr, adjust_points, open_action, lock_action, set_track). Unknown op or missing member raises invalid_op; a grant_item over the resource capacity raises resource_capacity_reached. p_strict: a revoke_item of more units than held raises insufficient_holding. p_tolerant: a grant that hits capacity or an exclusive holder is skipped in a savepoint and returned in the jsonb array of skipped grants.';
-COMMENT ON FUNCTION public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint) IS
+COMMENT ON FUNCTION public.format_fire_event(uuid, text, text, jsonb, jsonb, uuid, bigint, uuid, timestamptz) IS
   'Logs a format event once (event_key) and applies its ops. Returns true when it fired now, false when it had fired before. Raises format_context_stale (nothing logged, the key stays free) when the league''s format changed since p_expected_revision was read.';
 COMMENT ON FUNCTION public.format__action_flag_locked(uuid, text) IS
   'Internal: true when the flag action:<key> is "locked".';

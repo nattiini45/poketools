@@ -143,6 +143,8 @@ export interface MatchCompletedInput {
   player1Id: string;
   player2Id: string;
   winnerId: string;
+  /** `matches.confirmed_at` of the completion this call applies; when set, the event is written only while it stands. */
+  confirmedAt?: string;
   /**
    * What a transient failure of the team audit does (`AuditRetry`): by default it is retried by the caller's heal while
    * the match is recent. The cron backfill, which the heal never sees, asks for `always` first and `never` on its repeat.
@@ -213,7 +215,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
         players: [holder1, holder2],
       },
       null,
-      { context: ctx, ops: tracks.ops },
+      { context: ctx, ops: tracks.ops, ...(input.confirmedAt !== undefined ? { matchFence: { matchId: input.matchId, confirmedAt: input.confirmedAt } } : {}) },
     );
     for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { matchId: input.matchId, ...issue });
 
@@ -274,13 +276,21 @@ export interface InverseOps {
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** Whether `payload.skipped_grants` (the grants `format_fire_event` skipped in a race) lists this grant: it was never applied. */
-function wasSkipped(payload: Json | undefined, grant: { resource: string; player_id: string; item_id: string | null }): boolean {
+/** The entries of `payload.skipped_grants` (the grants `format_fire_event` skipped in a race): they were never applied. */
+function skippedGrants(payload: Json | undefined): Json[] {
   const skipped = isRecord(payload) ? payload.skipped_grants : undefined;
-  return (
-    Array.isArray(skipped) &&
-    skipped.some((entry) => isRecord(entry) && entry.resource === grant.resource && entry.player_id === grant.player_id && (entry.item_id ?? null) === grant.item_id)
-  );
+  return Array.isArray(skipped) ? [...skipped] : [];
+}
+
+/**
+ * Whether one of `skipped` is this grant, and takes that entry off the list: an event can log the same grant twice with one of
+ * them skipped, and identical grants are interchangeable, so each skip accounts for exactly one of them.
+ */
+function takeSkipped(skipped: Json[], grant: { resource: string; player_id: string; item_id: string | null }): boolean {
+  const index = skipped.findIndex((entry) => isRecord(entry) && entry.resource === grant.resource && entry.player_id === grant.player_id && (entry.item_id ?? null) === grant.item_id);
+  if (index < 0) return false;
+  skipped.splice(index, 1);
+  return true;
 }
 
 /**
@@ -295,6 +305,7 @@ function wasSkipped(payload: Json | undefined, grant: { resource: string; player
 export function inverseOps(logged: Json | undefined, payload?: Json): InverseOps {
   const out: InverseOps = { ops: [], irreversible: [] };
   if (!Array.isArray(logged)) return out;
+  const skipped = skippedGrants(payload);
   for (const entry of logged) {
     if (!isRecord(entry) || typeof entry.op !== 'string') continue;
     if (
@@ -304,7 +315,7 @@ export function inverseOps(logged: Json | undefined, payload?: Json): InverseOps
       (typeof entry.item_id === 'string' || entry.item_id === null) &&
       typeof entry.amount === 'number'
     ) {
-      if (wasSkipped(payload, { resource: entry.resource, player_id: entry.player_id, item_id: entry.item_id })) continue;
+      if (takeSkipped(skipped, { resource: entry.resource, player_id: entry.player_id, item_id: entry.item_id })) continue;
       const revoke = {
         op: 'revoke_item' as const,
         resource: entry.resource,

@@ -663,6 +663,7 @@ async function backfillMatchCompleted(ctx: KitContext, budget: BackfillBudget, s
       player1Id: match.player_1_id,
       player2Id: match.player_2_id,
       winnerId: match.winner_id,
+      ...(match.confirmed_at !== null && match.confirmed_at !== undefined ? { confirmedAt: match.confirmed_at } : {}),
     };
     // The hook is idempotent by key, so the second call repeats only what failed.
     // A hook refused only because the format changed meanwhile (`format_context_stale`) is not retried at once and not a failure:

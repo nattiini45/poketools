@@ -7365,6 +7365,8 @@ export type Database = {
           p_event: string
           p_event_key: string
           p_expected_revision: number
+          p_fence_confirmed_at?: string
+          p_fence_match?: string
           p_fired_by: string
           p_ops: Json
           p_payload: Json

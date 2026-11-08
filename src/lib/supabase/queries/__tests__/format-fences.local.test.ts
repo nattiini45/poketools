@@ -162,6 +162,42 @@ describe.skipIf(!optIn)('format fences (local stack)', () => {
     });
   });
 
+  describe('format_fire_event with a completion fence', () => {
+    const completedMatch = async () => {
+      const { season, phase } = await league({}, true);
+      const round = randomUUID();
+      const match = randomUUID();
+      const confirmedAt = '2026-11-08T10:00:00.123456+00:00';
+      await must('round', client.from('rounds').insert({ id: round, tournament_id: phase as string, name: 'Round 1', round_number: 1, best_of: 1 }));
+      await must('match', client.from('matches').insert({ id: match, round_id: round, tournament_id: phase as string, player_1_id: players.p1, player_2_id: players.p2, status: 'completed', winner_id: players.p1, confirmed_at: confirmedAt }));
+      return { season, match, confirmedAt };
+    };
+    const fenced = async (season: string, match: string, confirmedAt: string, key: string) =>
+      rt.fireFormatEvent({ seasonId: season, eventKey: key, event: 'match_completed', payload: {}, ops: [], firedBy: null, revision: await revisionOf(season), matchFence: { matchId: match, confirmedAt } });
+    const logged = async (season: string, key: string) => {
+      const { data, error } = await client.from('format_event_log').select('event_key').eq('season_id', season).eq('event_key', key);
+      if (error) throw new Error(JSON.stringify(error));
+      return data ?? [];
+    };
+
+    it('writes the event while that completion stands', async () => {
+      const { season, match, confirmedAt } = await completedMatch();
+      await expect(fenced(season, match, confirmedAt, 'k1')).resolves.toBe(true);
+      expect(await logged(season, 'k1')).toHaveLength(1);
+    });
+
+    it('refuses it, leaving the key free, after a reset or a completion with another token', async () => {
+      const reset = await completedMatch();
+      await must('reset', client.from('matches').update({ status: 'scheduled' }).eq('id', reset.match));
+      await expect(fenced(reset.season, reset.match, reset.confirmedAt, 'k1')).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect(await logged(reset.season, 'k1')).toEqual([]);
+
+      const other = await completedMatch();
+      await expect(fenced(other.season, other.match, '2026-11-08T11:00:00+00:00', 'k1')).rejects.toMatchObject({ code: 'format_context_stale' });
+      expect(await logged(other.season, 'k1')).toEqual([]);
+    });
+  });
+
   describe('a closed league takes no player move, decided under the lock', () => {
     const closed = async (patch: { status?: 'completed'; archived?: boolean }) => {
       const { season, phase } = await league({}, true);

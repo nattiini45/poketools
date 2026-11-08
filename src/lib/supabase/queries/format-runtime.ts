@@ -220,6 +220,11 @@ export interface FireFormatEventInput {
    * it logs the key: an event planned for the old format must neither touch the new runtime nor use up the key.
    */
   revision: number;
+  /**
+   * The completion a `match_completed` event belongs to: the database refuses the event (`format_context_stale`, nothing
+   * written) unless the match is still completed with this `confirmed_at`, under a lock a reset waits for.
+   */
+  matchFence?: { matchId: string; confirmedAt: string };
 }
 
 /**
@@ -236,6 +241,7 @@ export async function fireFormatEvent(input: FireFormatEventInput): Promise<bool
     p_ops: input.ops as unknown as Json,
     p_fired_by: nullable(input.firedBy),
     p_expected_revision: input.revision,
+    ...(input.matchFence ? { p_fence_match: input.matchFence.matchId, p_fence_confirmed_at: input.matchFence.confirmedAt } : {}),
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data === true;

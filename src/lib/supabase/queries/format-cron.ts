@@ -136,6 +136,7 @@ export interface FinalizedMatchRow {
   player_1_id: string;
   player_2_id: string;
   winner_id: string;
+  confirmed_at: string | null;
 }
 
 /**
@@ -150,7 +151,7 @@ export async function listFinalizedMatches(phaseIds: readonly string[]): Promise
     (from, to) =>
       supabase
         .from('matches')
-        .select('id, tournament_id, round_id, player_1_id, player_2_id, winner_id')
+        .select('id, tournament_id, round_id, player_1_id, player_2_id, winner_id, confirmed_at')
         .in('tournament_id', [...phaseIds])
         .eq('status', 'completed')
         .not('finalized_at', 'is', null)

@@ -296,6 +296,14 @@ describe('onMatchCompleted: team audit', () => {
   });
 });
 
+describe('inverseOps of a grant logged twice with one skipped', () => {
+  const grant = { op: 'grant_item', resource: 'picks', player_id: 'p1', item_id: 'garchomp', amount: 1, exclusive: false, source: 'event', source_ref: null };
+  it('takes back the one that was applied', () => {
+    const payload = { skipped_grants: [{ resource: 'picks', player_id: 'p1', item_id: 'garchomp', reason: 'resource_capacity_reached' }] };
+    expect(inverseOps([grant, grant] as never, payload as never).ops).toHaveLength(1);
+  });
+});
+
 describe('inverseOps', () => {
   it('revokes granted items and takes awarded points back; everything else is irreversible', () => {
     const logged = [
