@@ -106,7 +106,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (isKitEnginePhase(kitPhase)) {
       const rounds = await getRoundsByTournament(id);
       const first = rounds.reduce((lowest, round) => Math.min(lowest, round.round_number), Number.POSITIVE_INFINITY);
-      await announceKitRound(tournament, kitPhase, { roundNumber: Number.isFinite(first) ? first : 1 }, tournament.status === 'upcoming', forcedStart);
+      // The phase opens only when this call moved it out of upcoming; a status another writer moved meanwhile is not replayed.
+      const startsPhase = tournament.status === 'upcoming' && !result.status_moved_elsewhere;
+      await announceKitRound(tournament, kitPhase, { roundNumber: Number.isFinite(first) ? first : 1 }, startsPhase, forcedStart);
     }
 
     logAuditEvent({
