@@ -463,6 +463,29 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
     expect(updateTournament).toHaveBeenCalledTimes(1);
   });
 
+  it('a generate whose status moved meanwhile does not start its first round', async () => {
+    vi.mocked(updateTournament).mockRejectedValueOnce(
+      new UserFacingError('changed', { code: 'tournament_status_changed', status: 409 }),
+    );
+    const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4), {
+      startFirstRound: true,
+    });
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+    expect(result.started_round_id).toBeUndefined();
+  });
+
+  it('a regenerate keeps the round counter until the old bracket is gone: a failed reset leaves it as it was', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    vi.mocked(getMatchesByTournament).mockResolvedValueOnce([played]);
+    vi.mocked(getMatchById).mockResolvedValue(played);
+    vi.mocked(resetMatch).mockRejectedValueOnce(new Error('reset failed'));
+    await expect(
+      regenerateEliminationBracket({ ...makeTournament(), current_round: 2 }, makeParticipants(2), { cascade: true, adminId: 'admin-1' }),
+    ).rejects.toThrow('reset failed');
+    expect(vi.mocked(updateTournament).mock.calls).toEqual([['t1', { status: 'active', current_round: 2 }, { from: 'active' }]]);
+  });
+
   it('a generate that moved the status itself does not report it moved elsewhere', async () => {
     const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
     expect(result.status_moved_elsewhere).toBeUndefined();
@@ -486,9 +509,9 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
       new UserFacingError('changed', { code: 'tournament_status_changed', status: 409 }),
     );
     await expect(
-      regenerateEliminationBracket(makeTournament(), makeParticipants(2), { cascade: true, adminId: 'admin-1' }),
+      regenerateEliminationBracket({ ...makeTournament(), current_round: 2 }, makeParticipants(2), { cascade: true, adminId: 'admin-1' }),
     ).rejects.toMatchObject({ code: 'tournament_status_changed' });
-    expect(vi.mocked(updateTournament).mock.calls[0]).toEqual(['t1', { status: 'active', current_round: 0 }, { from: 'active' }]);
+    expect(vi.mocked(updateTournament).mock.calls[0]).toEqual(['t1', { status: 'active', current_round: 2 }, { from: 'active' }]);
     expect(resetMatch).not.toHaveBeenCalled();
     expect(createRound).not.toHaveBeenCalled();
   });
