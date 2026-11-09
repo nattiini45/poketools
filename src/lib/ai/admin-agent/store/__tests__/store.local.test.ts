@@ -17,7 +17,8 @@ import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 //   * the atomic proposal claim: of several approvers with the right token exactly one wins;
 //   * the usage reservation and the cap math: sequential and concurrent, settle and release, every cap;
 //   * the blast-radius counters under concurrency;
-//   * the triggers still holding behind the store (a ledger row never returns to executing).
+//   * the triggers still holding behind the store (a ledger row never returns to executing; a raw UPDATE out of a
+//     terminal state, or any move the machines do not list, is refused on proposals, ledger rows and plans).
 //
 // It seeds LOCAL data only, never loads `.env`, runs in CI only with LOCAL_STACK_CI=1. Rows cannot be deleted through the API on purpose,
 // so cleanup is the real retention purge: the test conversations are aged past the audit window first and the purge
@@ -340,6 +341,50 @@ describe.skipIf(!optIn)('Admin Assistant store on the local stack', () => {
     });
   });
 
+  describe('the guard triggers hold the whole status matrix behind the store', () => {
+    const refused = { code: 'P0001', message: 'ADMIN_AGENT_STATUS_REGRESS' };
+    const statusOf = async (table: 'admin_agent_actions' | 'admin_agent_proposals' | 'admin_agent_plans', id: string) =>
+      (await db.from(table).select('status').eq('id', id).single()).data?.status;
+
+    it('refuses a raw UPDATE out of a terminal state on every table and leaves the row as it is; a same-status write passes', async () => {
+      const admin = await newAdmin('matrix');
+      const { id } = await newConversation(admin);
+
+      const inserted = await store.actions.insertAction(admin, {
+        conversationId: id, toolUseId: 'toolu_matrix', toolName: 'format_save_draft', class: 'D', args: {}, argsHash: HASH('a'),
+      });
+      if (!inserted.inserted) throw new Error('unreachable');
+      const action = inserted.action.id;
+      await store.actions.completeAction(admin, action, { status: 'failed', httpStatus: 400 });
+      for (const to of ['ok', 'unknown', 'skipped', 'undone'] as const) {
+        expect((await db.from('admin_agent_actions').update({ status: to }).eq('id', action)).error, to).toMatchObject(refused);
+      }
+      expect(await statusOf('admin_agent_actions', action)).toBe('failed');
+      expect((await db.from('admin_agent_actions').update({ status: 'failed' }).eq('id', action)).error).toBeNull();
+
+      const proposal = await store.proposals.stageProposal(admin, {
+        conversationId: id, kind: 'action', class: 'G', toolRegistryVersion: 'r1', steps: [{ key: 's1' }], proposalHash: HASH('b'),
+        preview: {}, previewHash: HASH('c'), tokenHash: HASH('e'), expiresAt: new Date(Date.now() + 60_000), locale: 'en',
+      });
+      await store.proposals.declineProposal(admin, proposal.id);
+      for (const to of ['executing', 'completed', 'superseded', 'expired'] as const) {
+        expect((await db.from('admin_agent_proposals').update({ status: to }).eq('id', proposal.id)).error, to).toMatchObject(refused);
+      }
+      expect(await statusOf('admin_agent_proposals', proposal.id)).toBe('declined');
+
+      const plan = await store.plans.createPlan(admin, { conversationId: id, mode: 'create', doc: {}, docHash: HASH('d') });
+      // An illegal forward move is refused too (drafting cannot be built without a build).
+      expect((await db.from('admin_agent_plans').update({ status: 'built' }).eq('id', plan.id)).error).toMatchObject(refused);
+      await store.plans.setPlanStatus(admin, plan.id, 'building');
+      await store.plans.setPlanStatus(admin, plan.id, 'built');
+      for (const to of ['drafting', 'ready', 'building', 'partial', 'abandoned'] as const) {
+        expect((await db.from('admin_agent_plans').update({ status: to }).eq('id', plan.id)).error, to).toMatchObject(refused);
+      }
+      expect(await statusOf('admin_agent_plans', plan.id)).toBe('built');
+      expect((await db.from('admin_agent_plans').update({ status: 'built' }).eq('id', plan.id)).error).toBeNull();
+    });
+  });
+
   describe('ledger, refs and snapshots', () => {
     it('inserts the ledger row once per dispatch key and completes it; a finished row never reopens', async () => {
       const admin = await newAdmin('ledger');
@@ -352,9 +397,14 @@ describe.skipIf(!optIn)('Admin Assistant store on the local stack', () => {
 
       const done = await store.actions.completeAction(admin, first.action.id, { status: 'ok', httpStatus: 200, entityType: 'format', entityId: randomUUID(), result: { ok: true } });
       expect(done).toMatchObject({ status: 'ok', http_status: 200 });
+      // The store refuses the move before it writes; the trigger behind it refuses the same move as a raw UPDATE.
       await expect(store.actions.completeAction(admin, first.action.id, { status: 'executing' })).rejects.toMatchObject({
-        name: 'AdminAgentStoreDbError',
-        dbCode: 'ADMIN_AGENT_STATUS_REGRESS',
+        code: 'state_transition_invalid',
+        statusCode: 409,
+      });
+      expect((await db.from('admin_agent_actions').update({ status: 'executing' }).eq('id', first.action.id)).error).toMatchObject({
+        code: 'P0001',
+        message: 'ADMIN_AGENT_STATUS_REGRESS',
       });
       expect((await store.actions.getActionByToolUse(admin, id, 'toolu_1'))?.id).toBe(first.action.id);
       expect((await store.actions.listActions(admin, id)).map((a) => a.id)).toEqual([first.action.id]);

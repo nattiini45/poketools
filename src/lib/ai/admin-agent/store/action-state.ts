@@ -6,8 +6,8 @@ import { defineMachine } from '@/lib/state-machine/machine';
  * A row is inserted `executing` before the dispatch (the unique keys give at-most-once), then completed exactly once
  * with the outcome by `completeAction`, whose UPDATE is guarded with `.in('status', actionMachine.sourcesOf(to))`. A
  * Resume reconciles an `executing` row a crashed request left behind, or an `unknown` one, by reading the resource
- * back. The guard trigger `admin_agent_actions__guard` blocks every move back to `executing` and a move to `undone` from
- * anything but `ok` (or `undone`).
+ * back. The guard trigger `admin_agent_actions__guard` allows only the status changes listed here (a raw UPDATE outside
+ * them, e.g. back to `executing` or out of a terminal state, raises ADMIN_AGENT_STATUS_REGRESS).
  */
 export const actionMachine = defineMachine({
   id: 'admin_agent_action',

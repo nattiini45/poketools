@@ -5,7 +5,8 @@ import type { ProposalStatus } from './types';
  * `admin_agent_proposals.status`: a hash-bound confirmation card from staging to its outcome (spec §18.6, plan 4.5).
  *
  * Every transition is one guarded UPDATE in `store/proposals.ts` (`.eq('status', from)` plus the admin, the token and
- * the clock for the claim). The guard trigger `admin_agent_proposals__guard` blocks every move back to `proposed`, and
+ * the clock for the claim). The guard trigger `admin_agent_proposals__guard` allows only the status changes listed here
+ * (a raw UPDATE outside them raises ADMIN_AGENT_STATUS_REGRESS; `__tests__/state-machines.test.ts` holds the two equal), and
  * the partial unique index allows one `executing` proposal per conversation (`proposal_conflict_executing`). A Resume
  * continues the same claim and writes no status, so it is not a transition: a Build left `executing` (an unknown or
  * pending step) stays there until a Resume finishes it or the reaper ends it `unknown`.
