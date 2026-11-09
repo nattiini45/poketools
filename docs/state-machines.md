@@ -14,6 +14,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Draft room armed confirm](#draft-room-armed-confirm) — `client: armedConfirmReducer phase in ArmedConfirmDialog`
 - [Draft room pick dialog](#draft-room-pick-dialog) — `client: pickFlowReducer state (open, submitting) in DraftToolClient`
 - [Match](#match) — `matches.status (enum match_status)`
+- [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
 
 ## Visible poller
 
@@ -161,3 +162,35 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## Teambuilder save
+
+- **Id:** `teambuilder.save`
+- **State lives in:** client: EditorState.saveStatus in TeamsEditor
+- **Module doc:** `docs/teambuilder-editor.md`
+- **States:** `idle`, `saving`, `saved`, `warned`, `unchecked`, `error`
+- **Actors:** `player`, `server`
+
+One save of the team (POST /api/teams, PATCH /api/teams/[id], or POST /api/match-prep in plan mode). A save never overlaps another one. An edit made while a save is in flight keeps the team dirty after the save lands.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> saving: save (player)
+  saved --> saving: save (player)
+  warned --> saving: save (player)
+  unchecked --> saving: save (player)
+  error --> saving: save (player)
+  saving --> saved: saved (server)
+  saving --> error: fail (server)
+  saved --> warned: warn (server)
+  saved --> unchecked: uncheck (server)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `save` | `idle`, `saved`, `warned`, `unchecked`, `error` | `saving` | player | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | The Save button; disabled while saving. |
+| `saved` | `saving` | `saved` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | MARK_SAVED: clean unless the team was edited during the save. |
+| `fail` | `saving` | `error` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | One generic label; a 409 for a completed match also locks the editor. |
+| `warn` | `saved` | `warned` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules are not met (the verdict goes to the validation panel). |
+| `uncheck` | `saved` | `unchecked` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules could not be checked. |

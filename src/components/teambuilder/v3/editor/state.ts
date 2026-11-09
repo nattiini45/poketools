@@ -2,6 +2,7 @@ import type { PokemonSet, TeamImportSource, TeamMode, TeamValidationResult } fro
 import { generationOrDefault } from '@/lib/pkmn/format-id';
 import type { CalcField } from '@/types/calc';
 import type { DraftPoolEntry } from '@/types/draft-pool';
+import { teamSaveMachine, type TeamSaveStatus } from '@/lib/team/editor-save-state';
 
 // ── Draft context loaded by useDraftContext ──────────────────────────
 export interface DraftEditorContext {
@@ -78,8 +79,8 @@ export interface EditorState {
   draft: DraftEditorContext | null;
 
   // ── Save status ─────────────────────────────────────────────────────
-  /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. */
-  saveStatus: 'idle' | 'saving' | 'saved' | 'warned' | 'unchecked' | 'error';
+  /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. Moves only as `teamSaveMachine` allows. */
+  saveStatus: TeamSaveStatus;
 }
 
 // ============================================================
@@ -360,11 +361,12 @@ export function editorReducer(
 
     // ── Save ─────────────────────────────────────────────────────
     case 'SET_SAVE_STATUS': {
-      return { ...state, saveStatus: action.status };
+      const actor = action.status === 'saving' ? 'player' : 'server';
+      return teamSaveMachine.can(state.saveStatus, action.status, actor) ? { ...state, saveStatus: action.status } : state;
     }
 
     case 'MARK_SAVED': {
-      return { ...state, saveStatus: 'saved', dirty: false };
+      return teamSaveMachine.can(state.saveStatus, 'saved', 'server') ? { ...state, saveStatus: 'saved', dirty: false } : state;
     }
 
     // ── Meta ───────────────────────────────────────────────────────
