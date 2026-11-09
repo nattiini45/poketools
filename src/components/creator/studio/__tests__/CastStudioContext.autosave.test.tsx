@@ -14,9 +14,11 @@ import { withI18n } from '@/test/i18n';
 vi.mock('@/lib/broadcast/channel', () => ({
   createCastChannel: () => ({ send: vi.fn(), onMessage: vi.fn(), close: vi.fn() }),
 }));
+vi.mock('../MatchSelector', () => ({ default: () => <p>match selector</p> }));
 
 import { CastStudioProvider } from '../CastStudioContext';
 import CastToolbar from '../CastToolbar';
+import CastStudio from '../CastStudio';
 
 const SESSION: CastSession = {
   id: '9f2cf170-09cd-49c8-81a4-9898aefdcd21',
@@ -52,6 +54,10 @@ function okResponse(): Response {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
   });
+}
+
+function jsonResponse(status: number, body: unknown): Response {
+  return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
 function renderStudio() {
@@ -151,5 +157,99 @@ describe('Cast Studio autosave', () => {
     fetchMock.mockClear();
     window.dispatchEvent(new Event('pagehide'));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('Cast Studio autosave behaviour fixes', () => {
+  it('an HTTP error shows Save failed, not Saved, and keeps the edit for the next save', async () => {
+    fetchMock.mockImplementationOnce(async () =>
+      jsonResponse(400, { success: false, error: 'match_id: Invalid UUID', code: 'validation_failed' }),
+    );
+    renderStudio();
+    rename('Finals');
+    await advance(5_000);
+    expect(screen.queryByText('Saved')).toBeNull();
+    expect(screen.getByText('Save failed').getAttribute('title')).toBe('match_id: Invalid UUID');
+
+    window.dispatchEvent(new Event('pagehide'));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    rename('Finals 2');
+    expect(screen.getByText('Unsaved')).toBeTruthy();
+    await advance(5_000);
+    expect(patchBodies().at(-1)?.name).toBe('Finals 2');
+    expect(screen.getByText('Saved')).toBeTruthy();
+  });
+
+  it('success: false in a 200 answer is a failed save', async () => {
+    fetchMock.mockImplementationOnce(async () => jsonResponse(200, { success: false, error: 'nope' }));
+    renderStudio();
+    rename('Finals');
+    await advance(5_000);
+    expect(screen.getByText('Save failed')).toBeTruthy();
+  });
+
+  it('a network failure shows Save failed instead of Saving... forever', async () => {
+    fetchMock.mockImplementationOnce(async () => {
+      throw new TypeError('Failed to fetch');
+    });
+    renderStudio();
+    rename('Finals');
+    await advance(5_000);
+    expect(screen.queryByText('Saving...')).toBeNull();
+    expect(screen.getByText('Save failed')).toBeTruthy();
+  });
+
+  it('an edit made while the save runs stays unsaved and is sent by the next save', async () => {
+    let answer: (res: Response) => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { answer = resolve; }));
+    renderStudio();
+    rename('Finals');
+    await advance(5_000);
+    expect(screen.getByText('Saving...')).toBeTruthy();
+
+    rename('Grand Finals');
+    await advance(5_000);
+    expect(patchBodies()).toHaveLength(1);
+
+    await act(async () => {
+      answer(okResponse());
+    });
+    expect(screen.getByText('Unsaved')).toBeTruthy();
+
+    await advance(5_000);
+    expect(patchBodies()).toHaveLength(2);
+    expect(patchBodies()[1].name).toBe('Grand Finals');
+    expect(screen.getByText('Saved')).toBeTruthy();
+  });
+
+  it('an edit while saving that leaves the stored session unchanged ends Saved', async () => {
+    let answer: (res: Response) => void = () => {};
+    fetchMock.mockImplementationOnce(() => new Promise<Response>((resolve) => { answer = resolve; }));
+    renderStudio();
+    rename('Finals');
+    await advance(5_000);
+    fireEvent.click(screen.getByRole('button', { name: 'Facing' }));
+    await act(async () => {
+      answer(okResponse());
+    });
+    expect(screen.getByText('Saved')).toBeTruthy();
+    await advance(10_000);
+    expect(patchBodies()).toHaveLength(1);
+  });
+
+  it('Change Match saves match_id null, which the PATCH schema accepts', async () => {
+    render(
+      withI18n(
+        <CastStudioProvider session={{ ...SESSION, match_id: 'b3a2c4d5-0000-4000-8000-000000000001' }}>
+          <CastStudio />
+        </CastStudioProvider>,
+      ),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Change Match' }));
+    expect(screen.getByText('match selector')).toBeTruthy();
+    await advance(5_000);
+    expect(patchBodies()[0].match_id).toBeNull();
+    expect(screen.getByText('Saved')).toBeTruthy();
   });
 });
