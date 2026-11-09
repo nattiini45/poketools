@@ -52,6 +52,25 @@ async function claimBracketStart(tournament: Tournament, currentRound: number): 
   await updateTournament(tournament.id, { status: 'active', current_round: currentRound }, { from: tournament.status });
 }
 
+/**
+ * Undoes a regenerate's claim of a completed tournament when the first reset refused (a `UserFacingError` writes nothing)
+ * and nothing was reset or deleted yet: the tournament keeps its old bracket and results, so it stays completed. A
+ * compare-and-set from `active`, the status the claim wrote; a failed restore is logged and the refusal still reported.
+ * An upcoming tournament has no played match to reset (its first round starts it), so only completed is restored.
+ */
+async function restoreCompletedStatus(tournament: Tournament): Promise<void> {
+  if (tournament.status !== 'completed') return;
+  tournamentMachine.assertTransition('active', 'completed', 'system');
+  try {
+    await updateTournament(tournament.id, { status: 'completed' }, { from: 'active' });
+  } catch (error) {
+    logger.error('tournament/bracket-generate', 'could not restore the completed status after a refused regenerate', {
+      tournamentId: tournament.id,
+      error,
+    });
+  }
+}
+
 /** The bracket of these participants, or the refusal of a tournament that is not elimination or has too few of them. */
 function bracketStructureOrRefuse(tournament: Tournament, participants: ParticipantWithSeed[]) {
   if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
@@ -204,11 +223,18 @@ export async function regenerateEliminationBracket(
 
   let formatRevertFailed = false;
   if (rounds.length > 0) {
+    let resetCommitted = false;
     for (const match of played) {
       const latest = await getMatchById(match.id);
       if (!latest || latest.status === 'scheduled') continue;
-      const reset = await resetMatch(match.id, options.adminId!, true);
-      if (reset?.format_revert_failed) formatRevertFailed = true;
+      try {
+        const reset = await resetMatch(match.id, options.adminId!, true);
+        if (reset?.format_revert_failed) formatRevertFailed = true;
+      } catch (err) {
+        if (!resetCommitted && err instanceof UserFacingError) await restoreCompletedStatus(tournament);
+        throw err;
+      }
+      resetCommitted = true;
     }
 
     const roundIds = rounds.map((r) => r.id);

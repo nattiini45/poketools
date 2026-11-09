@@ -486,6 +486,43 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
     expect(vi.mocked(updateTournament).mock.calls).toEqual([['t1', { status: 'active', current_round: 2 }, { from: 'active' }]]);
   });
 
+  it('a regenerate of a completed tournament whose first reset refuses restores completed, nothing reset or deleted', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    vi.mocked(getMatchesByTournament).mockResolvedValueOnce([played]);
+    vi.mocked(getMatchById).mockResolvedValue(played);
+    vi.mocked(resetMatch).mockRejectedValueOnce(new UserFacingError('refused', { code: 'match_already_scheduled', status: 409 }));
+    await expect(
+      regenerateEliminationBracket({ ...makeTournament(), status: 'completed', current_round: 2 }, makeParticipants(2), {
+        cascade: true,
+        adminId: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ code: 'match_already_scheduled' });
+    expect(vi.mocked(updateTournament).mock.calls).toEqual([
+      ['t1', { status: 'active', current_round: 2 }, { from: 'completed' }],
+      ['t1', { status: 'completed' }, { from: 'active' }],
+    ]);
+    expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it('a regenerate keeps a completed tournament active once a reset committed, even when a later reset refuses', async () => {
+    const first = makeMatch({ id: 'm-1', status: 'completed', winner_id: 'p1' });
+    const second = makeMatch({ id: 'm-2', status: 'completed', winner_id: 'p2' });
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    vi.mocked(getMatchesByTournament).mockResolvedValueOnce([first, second]);
+    vi.mocked(getMatchById).mockImplementation(async (id) => (id === 'm-1' ? first : second));
+    vi.mocked(resetMatch)
+      .mockResolvedValueOnce({ games_deleted: 1, has_downstream_matches: false, evolution_events: [] })
+      .mockRejectedValueOnce(new UserFacingError('refused', { code: 'match_already_scheduled', status: 409 }));
+    await expect(
+      regenerateEliminationBracket({ ...makeTournament(), status: 'completed', current_round: 2 }, makeParticipants(2), {
+        cascade: true,
+        adminId: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ code: 'match_already_scheduled' });
+    expect(vi.mocked(updateTournament).mock.calls).toEqual([['t1', { status: 'active', current_round: 2 }, { from: 'completed' }]]);
+  });
+
   it('a generate that moved the status itself does not report it moved elsewhere', async () => {
     const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
     expect(result.status_moved_elsewhere).toBeUndefined();
