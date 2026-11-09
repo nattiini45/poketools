@@ -27,7 +27,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - **States:** `draft`, `submitted`, `locked`
 - **Actors:** `player`, `admin`, `system`
 
-A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save would also turn a submitted pick back into a draft (dropping the items it granted), which saveAction refuses first (format_action_already_submitted).
+A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save writes only a draft and refuses a submitted pick under the action's lock (action_already_submitted, answered as format_action_already_submitted), so a save never demotes a submission.
 
 ```mermaid
 stateDiagram-v2
@@ -45,7 +45,7 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `save` | `draft` | `draft` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_save` | Save draft. The first save inserts the row. |
+| `save` | `draft` | `draft` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261109090000_format_action_save_draft_only.sql#format_action_save` | Save draft. The first save inserts the row. |
 | `submit` | `draft`, `submitted` | `submitted` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | Submit, or submit again: the new picks replace the old ones and their items; submitted_at records the last submission. |
 | `submit_final` | `draft`, `submitted` | `locked` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | Submit on an action whose lock is on_submit: the pick is final at once. |
 | `draw` | `draft` | `submitted` | system | `src/lib/format-engine/runtime/cron.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | The cron's deadline pick (seeded_random_pick) for a player who has not submitted: p_only_if_unsubmitted refuses anything but a draft or no row (action_already_submitted). |
@@ -116,7 +116,7 @@ stateDiagram-v2
 | `withdraw` | `open` | `cancelled` | challenger, admin | `src/lib/supabase/queries/format-challenges.ts`<br>`supabase/migrations/20261108090000_format_notifications.sql#format_challenge_cancel` | The challenger withdraws, or an admin for them. |
 | `void` | `open` | `cancelled` | defender, system | `supabase/migrations/20261106090000_format_challenges.sql#format_challenge_respond`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_create` | A player left the phase: found by an accept (stored, then challenge_player_not_enrolled) or swept by the next create in the phase. |
 | `expire` | `open` | `expired` | challenger, defender, admin, system | `src/lib/format-engine/challenge-server.ts`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenges_expire`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_create`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_respond`<br>`supabase/migrations/20261108090000_format_notifications.sql#format_challenge_cancel` | The accept window ran out: the cron sweep, a create in the phase, or a late answer or withdrawal (stored, then challenge_expired). |
-| `cancel_match` | `accepted` | `cancelled` | system | `supabase/migrations/20261106090000_format_challenges.sql#round_delete` | Deleting a round with only scheduled matches cancels the challenges whose match it deletes. The UPDATE keys on match_id with no status guard; only an accept sets match_id, so it reaches accepted rows only. |
+| `cancel_match` | `accepted` | `cancelled` | system | `supabase/migrations/20261109090000_format_action_save_draft_only.sql#round_delete` | Deleting a round with only scheduled matches cancels the accepted challenges whose match it deletes (the UPDATE is guarded by status = 'accepted'). |
 
 ## Format check
 

@@ -69,13 +69,18 @@ describe('the declared states match the CHECK constraints and the TypeScript uni
 });
 
 describe('format_action_submissions.status', () => {
-  it('format_action_save refuses exactly the terminal state; saveAction refuses the submitted pick before it', () => {
-    const { body } = lastDefinition('format_action_save');
-    expect(body).toMatch(/DO UPDATE\s+SET [^;]*status = 'draft'[^;]*WHERE s\.status <> 'locked'/);
+  it('format_action_save updates a draft only: a submitted row raises action_already_submitted, a locked one action_locked', () => {
+    const { file, body } = lastDefinition('format_action_save');
+    expect(file).toBe('20261109090000_format_action_save_draft_only.sql');
+    const upsert = body.match(/DO UPDATE\s+SET ([^;]*?)\s+WHERE s\.status = 'draft'\s+RETURNING \* INTO v_row;/);
+    expect(upsert).not.toBeNull();
+    // The update never writes a status: a draft stays a draft, and nothing else is updated.
+    expect(upsert?.[1]).not.toMatch(/status/);
+    const refusal = body.slice(body.indexOf('IF NOT FOUND THEN'));
+    expect(refusal).toMatch(/^IF NOT FOUND THEN\s+SELECT s\.status INTO v_status FROM public\.format_action_submissions s[^;]*;\s+IF v_status = 'submitted' THEN\s+RAISE EXCEPTION 'action_already_submitted' USING ERRCODE = 'P0001'[^;]*;\s+END IF;\s+RAISE EXCEPTION 'action_locked' USING ERRCODE = 'P0001'/);
     expect(actionSubmissionMachine.spec.terminal).toEqual(['locked']);
-    // The SQL would also move submitted -> draft; the machine does not declare it (actions-server.ts refuses it as
-    // format_action_already_submitted, see actions-server.test.ts).
     expect(sourcesBy(actionSubmissionMachine, 'format_action_save', 'player')).toEqual(['draft']);
+    expect(actionSubmissionMachine.nextStates('submitted', 'player')).not.toContain('draft');
   });
 
   it('format_action_submit refuses a locked row for everyone and anything but a draft for the deadline draw', () => {
@@ -154,12 +159,18 @@ describe('format_challenges.status', () => {
     expect(sourcesBy(formatChallengeMachine, 'format_challenges_expire', 'system')).toEqual(['open']);
   });
 
-  it('round_delete cancels by match_id with no status guard: only an accept sets match_id, so it reaches accepted rows only', () => {
-    const del = lastDefinition('round_delete').body;
-    const update = del.match(/UPDATE public\.format_challenges SET status = 'cancelled'[^;]*;/);
-    expect(update?.[0]).toMatch(/WHERE match_id IN \(SELECT m\.id FROM public\.matches m WHERE m\.round_id = p_round_id\)/);
-    expect(update?.[0].slice(update[0].indexOf('WHERE'))).not.toMatch(/status/);
-    // Every write of match_id in the challenge functions sets status 'accepted' with it.
+  it('round_delete cancels the accepted challenges of the matches it deletes, and no other', () => {
+    const { file, body: del } = lastDefinition('round_delete');
+    expect(file).toBe('20261109090000_format_action_save_draft_only.sql');
+    const updates = del.match(/UPDATE public\.format_challenges[^;]*;/g) ?? [];
+    expect(updates).toHaveLength(1);
+    const update = updates[0] ?? '';
+    expect(update).toMatch(/^UPDATE public\.format_challenges SET status = 'cancelled'/);
+    expect(literals(update.slice(update.indexOf('WHERE')).match(/AND status = ('[^']*')/)?.[1] ?? '')).toEqual(
+      sourcesBy(formatChallengeMachine, 'round_delete', 'system'),
+    );
+    expect(update).toMatch(/WHERE match_id IN \(SELECT m\.id FROM public\.matches m WHERE m\.round_id = p_round_id\) AND status = 'accepted';$/);
+    // Every write of match_id in the challenge functions sets status 'accepted' with it, so the guard changes no outcome.
     for (const fn of ['format_challenge_create', 'format_challenge_respond', 'format_challenge_cancel', 'format_challenges_expire']) {
       for (const m of lastDefinition(fn).body.matchAll(/UPDATE public\.format_challenges[^;]*match_id = [^;]*;/g)) {
         expect(m[0]).toContain("status = 'accepted'");
