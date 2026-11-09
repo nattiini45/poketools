@@ -2,8 +2,8 @@ import 'server-only';
 /**
  * Tournament readers (plan 3.6.2): `tournament_get`, `tournament_list`, `tournament_bracket_preview`.
  *
- * Standalone tournaments only for the list: `GET /api/tournaments?archived=true` leaks across resource admins, so no
- * archived read is offered. Participants leave as the public tournament-participant shape (id, name, seed), mapped
+ * Standalone tournaments only for the list; no archived read is offered (`GET /api/tournaments?archived=true` serves
+ * the admin UI, scoped to the caller's own tournaments). Participants leave as the public tournament-participant shape (id, name, seed), mapped
  * field by field from the query rows.
  */
 import { z } from 'zod';

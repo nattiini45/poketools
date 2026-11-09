@@ -25,11 +25,14 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   listSeasons: vi.fn(),
   listArchivedSeasons: vi.fn(),
+  listSeasonsByIds: vi.fn(),
   createSeason: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({
   addResourceAdmin: vi.fn(),
+  getAdminSeasonIds: vi.fn(),
+  getAdminTournamentIds: vi.fn(),
 }));
 
 vi.mock('@/lib/season/format-rules-defaults', () => ({
@@ -59,8 +62,8 @@ vi.mock('@/lib/season/clone', () => ({
 
 import { GET, POST } from '@/app/api/seasons/route';
 import { getLiveAccess, requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
-import { listSeasons, listArchivedSeasons, createSeason } from '@/lib/supabase/queries/seasons';
-import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
+import { listSeasons, listArchivedSeasons, listSeasonsByIds, createSeason } from '@/lib/supabase/queries/seasons';
+import { addResourceAdmin, getAdminSeasonIds, getAdminTournamentIds } from '@/lib/supabase/queries/resource-admins';
 import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
@@ -183,6 +186,43 @@ describe('GET /api/seasons', () => {
     expect(body.success).toBe(true);
     expect(body.data).toEqual([archivedSeason]);
     expect(vi.mocked(listArchivedSeasons)).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns a resource admin only the archived leagues they administer', async () => {
+    const ownLeague = { ...mockSeason, id: 'season-own', archived: true };
+    const otherLeague = { ...mockSeason, id: 'season-other', archived: true };
+    vi.mocked(requireAnyAdmin).mockResolvedValue(resourceAdminPlayer);
+    vi.mocked(getAdminSeasonIds).mockResolvedValue(['season-own']);
+    vi.mocked(getAdminTournamentIds).mockResolvedValue([]);
+    vi.mocked(listArchivedSeasons).mockResolvedValue([ownLeague, otherLeague]);
+    vi.mocked(listSeasonsByIds).mockResolvedValue([ownLeague]);
+
+    const request = { url: 'http://localhost:3000/api/seasons?archived=true' } as unknown as NextRequest;
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual([ownLeague]);
+    expect(getAdminSeasonIds).toHaveBeenCalledWith('radmin-1');
+    expect(listSeasonsByIds).toHaveBeenCalledWith(['season-own'], { archived: true });
+    expect(listArchivedSeasons).not.toHaveBeenCalled();
+  });
+
+  it('returns a resource admin without league assignments no archived leagues', async () => {
+    vi.mocked(requireAnyAdmin).mockResolvedValue(resourceAdminPlayer);
+    vi.mocked(getAdminSeasonIds).mockResolvedValue([]);
+    vi.mocked(getAdminTournamentIds).mockResolvedValue(['tournament-own']);
+    vi.mocked(listArchivedSeasons).mockResolvedValue([{ ...mockSeason, archived: true }]);
+    vi.mocked(listSeasonsByIds).mockResolvedValue([]);
+
+    const request = { url: 'http://localhost:3000/api/seasons?archived=true' } as unknown as NextRequest;
+    const response = await GET(request);
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.data).toEqual([]);
+    expect(listSeasonsByIds).toHaveBeenCalledWith([], { archived: true });
+    expect(listArchivedSeasons).not.toHaveBeenCalled();
   });
 
   it('returns 500 on unexpected error', async () => {

@@ -3,7 +3,13 @@ import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logger } from '@/lib/logger';
 import { seasonCreateRequestSchema, formatZodErrors } from '@/lib/validation';
-import { listSeasons, listArchivedSeasons, createSeason } from '@/lib/supabase/queries/seasons';
+import { getAdminScope } from '@/lib/auth/admin-scope';
+import {
+  listSeasons,
+  listArchivedSeasons,
+  listSeasonsByIds,
+  createSeason,
+} from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -29,7 +35,9 @@ import type { SeasonWithDetails } from '@/types/season';
  * badge them). The same list for every viewer, signed out included: test
  * leagues are open for the community to test together.
  *
- * - `archived=true`: the archived leagues; any admin (requireAnyAdmin).
+ * - `archived=true`: the archived leagues the caller may administer; any admin
+ *   (requireAnyAdmin). A site admin gets every archived league, a resource
+ *   admin only the ones assigned to them (`getAdminScope`).
  */
 export async function GET(request: NextRequest) {
   try {
@@ -37,8 +45,10 @@ export async function GET(request: NextRequest) {
     const archived = searchParams.get('archived') === 'true';
 
     if (archived) {
-      await requireAnyAdmin();
-      const seasons = await listArchivedSeasons();
+      const scope = await getAdminScope(await requireAnyAdmin());
+      const seasons = scope.seasonIds === null
+        ? await listArchivedSeasons()
+        : await listSeasonsByIds(scope.seasonIds, { archived: true });
       return NextResponse.json<ApiResult<SeasonWithDetails[]>>({
         success: true,
         data: seasons,

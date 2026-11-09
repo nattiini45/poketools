@@ -41,12 +41,15 @@ vi.mock('@/lib/api/error-response', async () => {
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   listTournaments: vi.fn(),
   listArchivedTournaments: vi.fn(),
+  listTournamentsByIds: vi.fn(),
   getStagesBySeasonId: vi.fn(),
   createTournament: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({
   addResourceAdmin: vi.fn(),
+  getAdminSeasonIds: vi.fn(),
+  getAdminTournamentIds: vi.fn(),
 }));
 
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
@@ -58,10 +61,11 @@ import { requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
 import {
   listTournaments,
   listArchivedTournaments,
+  listTournamentsByIds,
   getStagesBySeasonId,
   createTournament,
 } from '@/lib/supabase/queries/tournaments';
-import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
+import { addResourceAdmin, getAdminSeasonIds, getAdminTournamentIds } from '@/lib/supabase/queries/resource-admins';
 import { logAuditEvent } from '@/lib/audit/log';
 import { revalidateTag } from 'next/cache';
 
@@ -111,6 +115,7 @@ describe('GET /api/tournaments', () => {
 
   it('requires admin for archived tournaments', async () => {
     const archived = [{ id: 't3', name: 'Old' }];
+    vi.mocked(requireAnyAdmin).mockResolvedValue({ playerId: 'admin-1', isAdmin: true, isResourceAdmin: false } as never);
     vi.mocked(listArchivedTournaments).mockResolvedValue(archived as never);
 
     const response = await GET(makeGetRequest({ archived: 'true' }));
@@ -119,6 +124,25 @@ describe('GET /api/tournaments', () => {
     expect(requireAnyAdmin).toHaveBeenCalled();
     expect(response.status).toBe(200);
     expect(payload.data).toEqual(archived);
+  });
+
+  it('returns a resource admin only the archived tournaments they administer', async () => {
+    const own = { id: 't-own', name: 'Mine', archived: true };
+    const other = { id: 't-other', name: 'Theirs', archived: true };
+    vi.mocked(requireAnyAdmin).mockResolvedValue({ playerId: 'radmin-1', isAdmin: false, isResourceAdmin: true } as never);
+    vi.mocked(getAdminSeasonIds).mockResolvedValue([]);
+    vi.mocked(getAdminTournamentIds).mockResolvedValue(['t-own']);
+    vi.mocked(listArchivedTournaments).mockResolvedValue([own, other] as never);
+    vi.mocked(listTournamentsByIds).mockResolvedValue([own] as never);
+
+    const response = await GET(makeGetRequest({ archived: 'true' }));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.data).toEqual([own]);
+    expect(getAdminTournamentIds).toHaveBeenCalledWith('radmin-1');
+    expect(listTournamentsByIds).toHaveBeenCalledWith(['t-own'], { archived: true, standaloneOnly: true });
+    expect(listArchivedTournaments).not.toHaveBeenCalled();
   });
 
   it('returns 401 when non-admin requests archived', async () => {
