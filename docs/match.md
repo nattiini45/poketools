@@ -22,7 +22,9 @@ src/lib/match/
 ├── downstream-matches.ts  # The later bracket matches a game change would reset, encoded into the refusal's params (client-safe)
 ├── game-change-outcome.ts  # How the admin game UI reports the outcome of a game change
 ├── match-children.ts  # Match children cleanup
+├── match-actions.ts  # availableMatchActions: the match machine events a viewer may start from a screen (client-safe)
 ├── outcome.ts  # Faint tally and source of a played result (match_outcomes)
+├── outcome-state.ts  # match_outcomes as a state machine (SQL-owned, docs/state-machines.md)
 ├── outcome-takeback.ts  # Taking back a match's outcome row when it leaves completed or disputed, by the set_at read before the flip
 ├── match-kos.ts  # One player's KO totals across the games of a match
 ├── reopen.ts  # Reopening a completed match
