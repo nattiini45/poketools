@@ -102,7 +102,7 @@ describe('source stays free of dead opacity modifiers', () => {
   function deadModifiers(source: string, names: string[]): string[] {
     const alternation = [...names]
       .sort((a, b) => b.length - a.length)
-      .map((name) => name.replace(/-/g, '\\-'))
+      .map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .join('|');
     const pattern = new RegExp(
       `(?<![\\w-])(?:[^\\s"'\`:]+:)*(?:${PREFIXES})(?:-[trblxyse])?-(?:${alternation})/(?:\\d+(?:\\.\\d+)?|\\[[^\\]]+\\])(?![\\w-])`,
