@@ -12,6 +12,7 @@ import { freezeEnrollment, updateTournament } from '@/lib/supabase/queries/tourn
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { tournamentMachine } from './tournament-state';
+import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 
 export interface GenerateBracketResult {
@@ -30,6 +31,19 @@ export interface GenerateBracketResult {
 export interface GenerateBracketOptions {
   /** Also start the first round (best effort). Default false: every round stays pending. */
   startFirstRound?: boolean;
+  /** The caller (a regenerate) already moved the status to active before its own writes; only the counter is written here. */
+  statusClaimed?: boolean;
+}
+
+/**
+ * The status move of a bracket (tournamentMachine): it starts an upcoming tournament, keeps an active one active and
+ * restarts a completed one, as a compare-and-set on the status the caller read (409 `tournament_status_changed` when it
+ * moved). A regenerate claims it before its first destructive write, so a move in between refuses the regenerate before
+ * anything was reset or deleted.
+ */
+async function claimBracketStart(tournament: Tournament, currentRound: number): Promise<void> {
+  if (tournament.status !== 'active') tournamentMachine.assertTransition(tournament.status, 'active', 'system');
+  await updateTournament(tournament.id, { status: 'active', current_round: currentRound }, { from: tournament.status });
 }
 
 /**
@@ -98,15 +112,22 @@ export async function generateEliminationBracket(
 
   await freezeEnrollment(tournament.id);
 
-  // The bracket starts an upcoming tournament (tournamentMachine); a regenerate keeps an active one active and restarts a
-  // completed one. The write is a compare-and-set on the status read by the caller, so a move in between is not overwritten.
+  // The bracket is written: the status follows it. A status another writer moved since the caller's read (an admin completed
+  // the tournament meanwhile) is kept, not overwritten, and the written bracket is not reported as a failure.
   const firstRoundNumber = structure.rounds[0]?.round_number ?? 1;
-  if (tournament.status !== 'active') tournamentMachine.assertTransition(tournament.status, 'active', 'system');
-  await updateTournament(
-    tournament.id,
-    { status: 'active', current_round: firstRoundNumber },
-    { from: tournament.status }
-  );
+  if (options.statusClaimed) {
+    await updateTournament(tournament.id, { current_round: firstRoundNumber });
+  } else {
+    try {
+      await claimBracketStart(tournament, firstRoundNumber);
+    } catch (err) {
+      if (!(err instanceof UserFacingError) || err.code !== 'tournament_status_changed') throw err;
+      logger.warn('tournament/bracket-generate', 'the status moved while the bracket was written; kept it', {
+        tournamentId: tournament.id,
+        from: tournament.status,
+      });
+    }
+  }
 
   const result: GenerateBracketResult = {
     rounds_created: structure.rounds.length,
@@ -149,31 +170,26 @@ export async function regenerateEliminationBracket(
   options: RegenerateBracketOptions = {}
 ): Promise<GenerateBracketResult> {
   const rounds = await getRoundsByTournament(tournament.id);
-  let formatRevertFailed = false;
+  const matches = rounds.length > 0 ? await getMatchesByTournament(tournament.id) : [];
+  const played = matches.filter(isPlayedBracketMatch);
+  if (played.length > 0 && (!options.cascade || !options.adminId)) {
+    throw new UserFacingError(
+      `${played.length} played match(es) will be reset and all results rolled back.`,
+      { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
+    );
+  }
 
+  // The status is claimed after the refusals and before the first write (a reset, a delete), so a status that moved since
+  // the caller's read refuses the regenerate before anything changed.
+  await claimBracketStart(tournament, 0);
+
+  let formatRevertFailed = false;
   if (rounds.length > 0) {
-    const matches = await getMatchesByTournament(tournament.id);
-    const played = matches.filter(isPlayedBracketMatch);
-    if (played.length > 0) {
-      if (!options.cascade) {
-        throw new UserFacingError(
-          `${played.length} played match(es) will be reset and all results rolled back.`,
-          { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
-        );
-      }
-      const adminId = options.adminId;
-      if (!adminId) {
-        throw new UserFacingError(
-          `${played.length} played match(es) will be reset and all results rolled back.`,
-          { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
-        );
-      }
-      for (const match of played) {
-        const latest = await getMatchById(match.id);
-        if (!latest || latest.status === 'scheduled') continue;
-        const reset = await resetMatch(match.id, adminId, true);
-        if (reset?.format_revert_failed) formatRevertFailed = true;
-      }
+    for (const match of played) {
+      const latest = await getMatchById(match.id);
+      if (!latest || latest.status === 'scheduled') continue;
+      const reset = await resetMatch(match.id, options.adminId!, true);
+      if (reset?.format_revert_failed) formatRevertFailed = true;
     }
 
     const roundIds = rounds.map((r) => r.id);
@@ -190,10 +206,9 @@ export async function regenerateEliminationBracket(
     if (roundErr) throw roundErr;
   }
 
-  await updateTournament(tournament.id, { current_round: 0 });
-
-  const generated = await generateEliminationBracket(tournament, participants, {
+  const generated = await generateEliminationBracket({ ...tournament, status: 'active' }, participants, {
     startFirstRound: options.startFirstRound,
+    statusClaimed: true,
   });
   return formatRevertFailed ? { ...generated, format_revert_failed: true } : generated;
 }
