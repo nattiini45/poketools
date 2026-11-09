@@ -1,6 +1,7 @@
 import type { MachineSpec } from './machine';
 import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
 import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
+import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { matchMachine } from '@/lib/tournament/match-state';
 
 /**
@@ -13,4 +14,5 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
   castSessionMachine.spec,
   castStudioSaveMachine.spec,
+  playerStatusMachine.spec,
 ];
