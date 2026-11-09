@@ -11,8 +11,6 @@ import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/mat
 import { freezeEnrollment, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { tournamentMachine } from './tournament-state';
-import { logger } from '@/lib/logger';
 import { supabase } from '@/lib/supabase/client';
 
 export interface GenerateBracketResult {
@@ -26,62 +24,33 @@ export interface GenerateBracketResult {
    * warning `admin_game_format_revert_failed`.
    */
   format_revert_failed?: boolean;
-  /**
-   * Present (true) only when another writer moved the tournament's status while the bracket was written, so this call
-   * did not move it: the caller's status read is stale then, and nothing may be derived from it (a `stage_start` for a
-   * phase that was upcoming).
-   */
-  status_moved_elsewhere?: true;
 }
 
 export interface GenerateBracketOptions {
   /** Also start the first round (best effort). Default false: every round stays pending. */
   startFirstRound?: boolean;
-  /** The caller (a regenerate) already moved the status to active before its own writes; only the counter is written here. */
-  statusClaimed?: boolean;
 }
 
 /**
- * The status move of a bracket (tournamentMachine): it starts an upcoming tournament, keeps an active one active and
- * restarts a completed one, as a compare-and-set on the status the caller read (409 `tournament_status_changed` when it
- * moved). A regenerate claims it before its first destructive write, so a move in between refuses the regenerate before
- * anything was reset or deleted.
+ * Generate the full elimination bracket: all round rows + initial match materialization.
  */
-async function claimBracketStart(tournament: Tournament, currentRound: number): Promise<void> {
-  if (tournament.status !== 'active') tournamentMachine.assertTransition(tournament.status, 'active', 'system');
-  await updateTournament(tournament.id, { status: 'active', current_round: currentRound }, { from: tournament.status });
-}
-
-/**
- * The `resetMatch` refusals raised before it writes anything, its downstream cascade included (its first check: the match
- * is already scheduled). Any other failure may follow committed downstream resets, so the restart stands then.
- */
-const RESET_REFUSALS_BEFORE_ANY_WRITE = new Set(['match_already_scheduled']);
-
-/**
- * Undoes a regenerate's claim of a completed tournament when the first reset refused (a `UserFacingError` writes nothing)
- * and nothing was reset or deleted yet: the tournament keeps its old bracket and results, so it stays completed. A
- * compare-and-set from `active`, the status the claim wrote; a failed restore is logged and the refusal still reported.
- * An upcoming tournament has no played match to reset (its first round starts it), so only completed is restored.
- */
-async function restoreCompletedStatus(tournament: Tournament): Promise<void> {
-  if (tournament.status !== 'completed') return;
-  tournamentMachine.assertTransition('active', 'completed', 'system');
-  try {
-    await updateTournament(tournament.id, { status: 'completed' }, { from: 'active' });
-  } catch (error) {
-    logger.error('tournament/bracket-generate', 'could not restore the completed status after a refused regenerate', {
-      tournamentId: tournament.id,
-      error,
-    });
-  }
-}
-
-/** The bracket of these participants, or the refusal of a tournament that is not elimination or has too few of them. */
-function bracketStructureOrRefuse(tournament: Tournament, participants: ParticipantWithSeed[]) {
+export async function generateEliminationBracket(
+  tournament: Tournament,
+  participants: ParticipantWithSeed[],
+  options: GenerateBracketOptions = {}
+): Promise<GenerateBracketResult> {
   if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
     throw new Error('Full bracket generation only applies to elimination formats');
   }
+
+  const existingRounds = await getRoundsByTournament(tournament.id);
+  if (existingRounds.length > 0) {
+    throw new UserFacingError('Bracket already generated', {
+      code: 'bracket_already_generated',
+      status: 409,
+    });
+  }
+
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
@@ -93,26 +62,6 @@ function bracketStructureOrRefuse(tournament: Tournament, participants: Particip
       status: 400,
     });
   }
-  return structure;
-}
-
-/**
- * Generate the full elimination bracket: all round rows + initial match materialization.
- */
-export async function generateEliminationBracket(
-  tournament: Tournament,
-  participants: ParticipantWithSeed[],
-  options: GenerateBracketOptions = {}
-): Promise<GenerateBracketResult> {
-  const existingRounds = await getRoundsByTournament(tournament.id);
-  if (existingRounds.length > 0) {
-    throw new UserFacingError('Bracket already generated', {
-      code: 'bracket_already_generated',
-      status: 409,
-    });
-  }
-
-  const structure = bracketStructureOrRefuse(tournament, participants);
 
   const roundIdByGlobalNumber = new Map<number, string>();
 
@@ -148,37 +97,21 @@ export async function generateEliminationBracket(
 
   await freezeEnrollment(tournament.id);
 
-  // The bracket is written: the status follows it. A status another writer moved since the caller's read (an admin completed
-  // the tournament meanwhile) is kept, not overwritten, and the written bracket is not reported as a failure.
   const firstRoundNumber = structure.rounds[0]?.round_number ?? 1;
-  let statusMovedElsewhere = false;
-  if (options.statusClaimed) {
-    await updateTournament(tournament.id, { current_round: firstRoundNumber });
-  } else {
-    try {
-      await claimBracketStart(tournament, firstRoundNumber);
-    } catch (err) {
-      if (!(err instanceof UserFacingError) || err.code !== 'tournament_status_changed') throw err;
-      statusMovedElsewhere = true;
-      await updateTournament(tournament.id, { current_round: firstRoundNumber });
-      logger.warn('tournament/bracket-generate', 'the status moved while the bracket was written; kept it', {
-        tournamentId: tournament.id,
-        from: tournament.status,
-      });
-    }
-  }
+  await updateTournament(tournament.id, {
+    status: 'active',
+    current_round: firstRoundNumber,
+  });
 
   const result: GenerateBracketResult = {
     rounds_created: structure.rounds.length,
     matches_materialized: created.length,
-    ...(statusMovedElsewhere ? { status_moved_elsewhere: true as const } : {}),
   };
 
   // Start the first round when asked. Best effort: the bracket exists either way, and a round that is still
   // pending shows the Start banner. Later rounds are started by the admin.
-  // Not after a status another writer moved meanwhile (an admin completed the tournament): no round is opened under it.
   const firstRoundId = roundIdByGlobalNumber.get(firstRoundNumber);
-  if (options.startFirstRound && firstRoundId && !statusMovedElsewhere) {
+  if (options.startFirstRound && firstRoundId) {
     try {
       await updateRoundStatus(firstRoundId, 'active');
       result.started_round_id = firstRoundId;
@@ -211,39 +144,31 @@ export async function regenerateEliminationBracket(
   options: RegenerateBracketOptions = {}
 ): Promise<GenerateBracketResult> {
   const rounds = await getRoundsByTournament(tournament.id);
-  const matches = rounds.length > 0 ? await getMatchesByTournament(tournament.id) : [];
-  const played = matches.filter(isPlayedBracketMatch);
-  if (played.length > 0 && (!options.cascade || !options.adminId)) {
-    throw new UserFacingError(
-      `${played.length} played match(es) will be reset and all results rolled back.`,
-      { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
-    );
-  }
-
-  // The structure is checked here as well: a regenerate it would refuse leaves the bracket and the status as they were.
-  bracketStructureOrRefuse(tournament, participants);
-
-  // The status is claimed after the refusals and before the first write (a reset, a delete), so a status that moved since
-  // the caller's read refuses the regenerate before anything changed. The round counter is kept until the old bracket is
-  // gone, so a reset or delete that fails part-way does not leave the existing bracket with a counter of 0.
-  await claimBracketStart(tournament, tournament.current_round);
-
   let formatRevertFailed = false;
+
   if (rounds.length > 0) {
-    let resetCommitted = false;
-    for (const match of played) {
-      const latest = await getMatchById(match.id);
-      if (!latest || latest.status === 'scheduled') continue;
-      try {
-        const reset = await resetMatch(match.id, options.adminId!, true);
-        if (reset?.format_revert_failed) formatRevertFailed = true;
-      } catch (err) {
-        if (!resetCommitted && err instanceof UserFacingError && RESET_REFUSALS_BEFORE_ANY_WRITE.has(err.code ?? '')) {
-          await restoreCompletedStatus(tournament);
-        }
-        throw err;
+    const matches = await getMatchesByTournament(tournament.id);
+    const played = matches.filter(isPlayedBracketMatch);
+    if (played.length > 0) {
+      if (!options.cascade) {
+        throw new UserFacingError(
+          `${played.length} played match(es) will be reset and all results rolled back.`,
+          { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
+        );
       }
-      resetCommitted = true;
+      const adminId = options.adminId;
+      if (!adminId) {
+        throw new UserFacingError(
+          `${played.length} played match(es) will be reset and all results rolled back.`,
+          { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
+        );
+      }
+      for (const match of played) {
+        const latest = await getMatchById(match.id);
+        if (!latest || latest.status === 'scheduled') continue;
+        const reset = await resetMatch(match.id, adminId, true);
+        if (reset?.format_revert_failed) formatRevertFailed = true;
+      }
     }
 
     const roundIds = rounds.map((r) => r.id);
@@ -262,9 +187,8 @@ export async function regenerateEliminationBracket(
 
   await updateTournament(tournament.id, { current_round: 0 });
 
-  const generated = await generateEliminationBracket({ ...tournament, status: 'active' }, participants, {
+  const generated = await generateEliminationBracket(tournament, participants, {
     startFirstRound: options.startFirstRound,
-    statusClaimed: true,
   });
   return formatRevertFailed ? { ...generated, format_revert_failed: true } : generated;
 }

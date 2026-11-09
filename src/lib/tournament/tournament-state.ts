@@ -31,7 +31,7 @@ export const tournamentMachine = defineMachine({
         'src/lib/tournament/tournament-transition.ts',
         'src/lib/dev-seed/seed.ts',
       ],
-      note: 'The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start.',
+      note: 'The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start. bracket-generate still writes active unguarded after the bracket; its guarded, locked writer is a follow-up.',
     },
     {
       event: 'complete',
@@ -41,9 +41,8 @@ export const tournamentMachine = defineMachine({
       writers: [
         'src/lib/tournament/tournament-transition.ts',
         'supabase/migrations/20261106090000_format_challenges.sql#phase_complete_at_stage_end',
-        'src/lib/tournament/bracket-generate.ts',
       ],
-      note: 'Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement. bracket-generate only undoes its own regenerate claim when the first reset refused (nothing fires).',
+      note: 'Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement.',
     },
     {
       event: 'complete',
@@ -67,7 +66,7 @@ export const tournamentMachine = defineMachine({
       to: 'active',
       actors: ['system'],
       writers: ['src/lib/tournament/bracket-generate.ts'],
-      note: 'Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase).',
+      note: 'Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase). The active write is unguarded until the follow-up locked regenerate writer.',
     },
   ],
 });
