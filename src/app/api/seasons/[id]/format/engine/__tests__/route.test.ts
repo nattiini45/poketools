@@ -101,6 +101,21 @@ describe('PUT /api/seasons/[id]/format/engine', () => {
     );
   });
 
+  it.each([
+    ['legacy', 'shadow'],
+    ['legacy', 'kit'],
+    ['shadow', 'legacy'],
+    ['shadow', 'kit'],
+    ['kit', 'legacy'],
+    ['kit', 'shadow'],
+  ] as const)('accepts the switch %s -> %s', async (from, to) => {
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary(from));
+    const response = await PUT(put({ engine: to }), params);
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.season_format.engine).toBe(to);
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: { from, to } }));
+  });
+
   it('writes nothing when the engine is already the one asked for', async () => {
     vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary('kit'));
     const response = await PUT(put({ engine: 'kit' }), params);
