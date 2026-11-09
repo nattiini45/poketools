@@ -73,11 +73,11 @@ describe('PATCH rounds/[rid]: legal non-completing status moves', () => {
 });
 
 describe('PATCH rounds/[rid]: refused and guarded moves', () => {
-  it('reopening a completed round to active is 409 state_transition_invalid, nothing written', async () => {
+  it('reopening a completed round to active is the system revert only: 403 state_transition_forbidden, nothing written', async () => {
     vi.mocked(getRoundById).mockResolvedValue(round('completed'));
     const res = await patch({ status: 'active' });
-    expect(res.status).toBe(409);
-    expect((await res.json()).code).toBe('state_transition_invalid');
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('state_transition_forbidden');
     expect(updateRoundStatus).not.toHaveBeenCalled();
   });
 
