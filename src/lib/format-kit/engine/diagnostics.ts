@@ -100,6 +100,7 @@ export const DIAGNOSTIC_CODES = [
   'tunable_default_invalid',
   'effect_item_invalid',
   'effect_set_attr_invalid',
+  'notify_relation_hidden',
   'action_step_mismatch',
   'action_distinct_attr_invalid',
   'action_distinct_attr_missing',

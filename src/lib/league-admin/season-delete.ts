@@ -58,6 +58,7 @@ export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly st
     'format_checks',
     'format_adjustments',
     'format_challenges',
+    'format_notifications',
   ],
   phases: ['tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports'],
   matches: [

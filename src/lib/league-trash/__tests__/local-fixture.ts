@@ -492,6 +492,9 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
   ]);
   await insert(client, 'format_player_attrs', playerIds.map((player_id) => ({ season_id: seasonId, player_id, attr_key: 'role', value: 'sweeper', source: 'manual' })));
   await insert(client, 'format_track_progress', playerIds.map((player_id, i) => ({ season_id: seasonId, player_id, track_key: 'ladder', step: i % 4 })));
+  await insert(client, 'format_notifications', [
+    { season_id: seasonId, player_id: playerIds[0], kind: 'rule_notice', dedupe_key: 'rule:1:time:main:open:note:0', payload: { message: { base: 'en', en: { v: 'Open', s: 'human' } } } },
+  ]);
   await insert(client, 'format_checks', [
     { season_id: seasonId, source: 'standings_tie', rule_id: 'tie', dedupe_key: 'tie:1', subject: { players: [playerIds[0], playerIds[1]] } },
     { season_id: seasonId, source: 'expr', rule_id: 'late', dedupe_key: 'late:1', status: 'confirmed', resolved_by: adminId, resolved_at: at(-DAY), note: 'ok' },

@@ -10,6 +10,7 @@
 import { toMap } from '@/lib/studio-core/keys';
 import { typeCheck, type ExprType, type TypeEnv } from '../expr';
 import type { Expr } from '../expr/ast';
+import { relationsRead } from '../expr/relations-read';
 import type {
   ActionStep,
   AttributeDef,
@@ -305,7 +306,7 @@ function setAttrProblem(attr: AttributeDef | undefined, value: Effect & { effect
   return fit === null ? null : fit === 'enum_value' ? 'enum_value' : 'type';
 }
 
-function checkEffect(out: Diagnostic[], lookup: Lookup, effect: Effect, pointer: string): void {
+function checkEffect(out: Diagnostic[], lookup: Lookup, effect: Effect, pointer: string, when?: { expr: Expr; pointer: string }): void {
   switch (effect.effect) {
     case 'unlock_domain':
     case 'lock_domain':
@@ -346,6 +347,19 @@ function checkEffect(out: Diagnostic[], lookup: Lookup, effect: Effect, pointer:
       return;
     case 'notify':
       checkTarget(out, lookup, effect.to, `${pointer}/to`);
+      // The runtime skips such a notice while a link is unrevealed: being on its list, or being told at all when the rule's
+      // condition reads the relation, would tell who is linked to whom.
+      for (const site of [
+        ...(effect.to.where === undefined ? [] : [{ expr: effect.to.where, pointer: `${pointer}/to/where` }]),
+        ...(when === undefined ? [] : [when]),
+      ]) {
+        for (const key of relationsRead(site.expr, lookup.def.attributes, lookup.def.rules)) {
+          const visibility = (lookup.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
+          if (visibility !== undefined && (visibility.from !== 'all' || visibility.to !== 'all')) {
+            out.push(diag('notify_relation_hidden', site.pointer, { relation: key }));
+          }
+        }
+      }
       return;
   }
 }
@@ -419,7 +433,11 @@ function checkRules(out: Diagnostic[], lookup: Lookup): void {
       case 'rule.on_event':
         checkEvent(out, lookup, rule.on, at('on'));
         if (rule.when !== undefined) checkExpr(out, rule.when, eventEnv(def), 'boolean', at('when'), 'event_condition');
-        rule.effects.forEach((effect, j) => checkEffect(out, lookup, effect, at('effects', j)));
+        const firstNotify = rule.effects.findIndex((effect) => effect.effect === 'notify');
+        rule.effects.forEach((effect, j) =>
+          // The condition is one place however many notices it decides: the first of them reports it.
+          checkEffect(out, lookup, effect, at('effects', j), rule.when === undefined || j !== firstNotify ? undefined : { expr: rule.when, pointer: at('when') }),
+        );
         break;
       case 'player.action':
         checkAction(out, lookup, rule, i);

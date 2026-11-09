@@ -57,6 +57,21 @@ describe('negative fixtures', () => {
     if (fixture.params !== undefined) expect(first.params).toMatchObject(fixture.params);
   });
 
+  it('warns once of a hidden relation in the condition of a rule with two notices', () => {
+    const notifying = NEGATIVE_FIXTURES.find((f) => f.id === 'notify-relation-hidden-rule-when');
+    const twice = mutate(notifying?.input as FormatDefinition, [
+      { op: 'add', path: '/rules/0/effects/-', value: { effect: 'notify', message: { base: 'en', en: { v: 'Again', s: 'human' } }, to: { who: 'all' } } },
+    ]);
+    const warnings = compile(twice, CURRENT_ENV).diagnostics.filter((d) => d.code === 'notify_relation_hidden' && d.json_pointer === '/rules/0/when');
+    expect(warnings).toHaveLength(1);
+  });
+
+  it('does not warn of a hidden relation in the condition of a rule that notifies nobody', () => {
+    const notifying = NEGATIVE_FIXTURES.find((f) => f.id === 'notify-relation-hidden-rule-when');
+    const silent = mutate(notifying?.input as FormatDefinition, [{ op: 'remove', path: '/rules/0/effects/4' }]);
+    expect(compile(silent, CURRENT_ENV).diagnostics.map((d) => d.code)).not.toContain('notify_relation_hidden');
+  });
+
   it('sets ok to false exactly when an error exists', () => {
     for (const fixture of NEGATIVE_FIXTURES.filter((f) => !f.engineOnly)) {
       const result = compile(fixture.input, fixture.env ?? CURRENT_ENV);

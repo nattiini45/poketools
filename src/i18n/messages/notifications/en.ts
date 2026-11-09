@@ -1,0 +1,37 @@
+export default {
+  bell: {
+    label: 'Notifications',
+    labelUnread: 'Notifications, {count} unread',
+    announceUnread: { one: '{count} unread notification', other: '{count} unread notifications' },
+    overflow: '99+',
+  },
+  panel: {
+    title: 'Notifications',
+    markAllRead: 'Mark all as read',
+    empty: 'Nothing new. Challenges and notices from your leagues show up here.',
+    loading: 'Loading…',
+    loadFailed: 'Your notifications could not be loaded.',
+    markFailed: 'Your notifications could not be marked as read.',
+    retry: 'Try again',
+    loadMore: 'Show older',
+    unread: 'Unread',
+  },
+  challenge: {
+    created: '{player} challenged you.',
+    accepted: '{player} accepted your challenge.',
+    declined: '{player} declined your challenge.',
+    expired_defender: 'The challenge from {player} expired before you answered.',
+    expired_challenger: '{player} did not answer your challenge in time.',
+    cancelled_defender: 'The challenge from {player} was cancelled.',
+    cancelled_challenger: 'Your challenge to {player} was cancelled.',
+  },
+  challengeFormer: {
+    created: 'A former player challenged you.',
+    accepted: 'A former player accepted your challenge.',
+    declined: 'A former player declined your challenge.',
+    expired_defender: 'A challenge from a former player expired before you answered.',
+    expired_challenger: 'A former player did not answer your challenge in time.',
+    cancelled_defender: 'A challenge from a former player was cancelled.',
+    cancelled_challenger: 'Your challenge to a former player was cancelled.',
+  },
+} as const;

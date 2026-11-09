@@ -13,6 +13,7 @@ import ThemeToggle from './ThemeToggle';
 import PalettePicker, { PalettePickerSection } from './PalettePicker';
 import LanguagePicker, { LanguagePickerSection } from './LanguagePicker';
 import PwaInstallPrompt from './PwaInstallPrompt';
+import NotificationBell from '@/components/notifications/NotificationBell';
 import { useT } from '@/i18n/client';
 import { navMessages } from '@/i18n/messages/nav';
 
@@ -235,6 +236,7 @@ export default function NavBar({
               <div className="hidden shrink-0 whitespace-nowrap sm:block">
                 <DiscordLoginButton />
               </div>
+              {player && <NotificationBell />}
               <LanguagePicker />
               <PalettePicker />
               <ThemeToggle />

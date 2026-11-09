@@ -126,6 +126,19 @@ describe('the RPC wrappers', () => {
     { op: 'grant_item', resource: 'gift', player_id: P1, item_id: 'pikachu', amount: 1, exclusive: true, source: 'event', source_ref: null },
   ];
 
+  it('fireFormatEvent passes a completion fence alongside the notifications', async () => {
+    state.rpcReply = { data: true };
+    const notifications = [{ rule: 'r1', effect: 0, players: [P1], message: { base: 'en' as const, en: { v: 'hi', s: 'human' as const } } }];
+    await fireFormatEvent({
+      seasonId: SEASON, eventKey: 'match_completed:m1', event: 'match_completed', payload: {}, ops: [], firedBy: null, revision: 41,
+      notifications, matchFence: { matchId: 'm1', confirmedAt: '2026-11-08T12:00:00.000Z' },
+    });
+    expect(state.rpcCalls[0]).toMatchObject({
+      name: 'format_fire_event_notify',
+      args: { p_notifications: notifications, p_fence_match: 'm1', p_fence_confirmed_at: '2026-11-08T12:00:00.000Z' },
+    });
+  });
+
   it('fireFormatEvent passes the key, the ops, a NULL actor and the revision it was planned from, and returns the boolean', async () => {
     state.rpcReply = { data: true };
     await expect(
@@ -133,10 +146,10 @@ describe('the RPC wrappers', () => {
     ).resolves.toBe(true);
     expect(state.rpcCalls).toEqual([
       {
-        name: 'format_fire_event',
+        name: 'format_fire_event_notify',
         args: {
           p_season_id: SEASON, p_event_key: 'stage_start:main', p_event: 'stage_start', p_payload: { stage: 'main' }, p_ops: ops,
-          p_fired_by: null, p_expected_revision: 41,
+          p_fired_by: null, p_expected_revision: 41, p_notifications: [],
         },
       },
     ]);
@@ -145,6 +158,17 @@ describe('the RPC wrappers', () => {
     await expect(
       fireFormatEvent({ seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: {}, ops: [], firedBy: P1, revision: 41 }),
     ).resolves.toBe(false);
+  });
+
+  it('fireFormatEvent hands the planned notices over and drops the ones without a recipient', async () => {
+    state.rpcReply = { data: true };
+    const message = { base: 'en' as const, en: { v: 'Hi', s: 'human' as const } };
+    const told = { message, players: [P1], rule: 'r', effect: 2 };
+    await fireFormatEvent({
+      seasonId: SEASON, eventKey: 'stage_start:main', event: 'stage_start', payload: {}, ops: [], firedBy: null, revision: 3,
+      notifications: [told, { message, players: [], rule: 'r', effect: 3 }],
+    });
+    expect((state.rpcCalls.at(-1) as { args: { p_notifications: unknown } }).args.p_notifications).toEqual([told]);
   });
 
   it('fireFormatEvent and applyFormatAdjustment raise format_context_stale as a typed 409 error', async () => {
