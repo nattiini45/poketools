@@ -25,7 +25,7 @@ src/lib/season/
 └── substitute.ts  # Substituting a participant: the affected matches and the apply steps
 
 src/lib/supabase/queries/seasons.ts  # Typed season/participant/core queries
-src/lib/league-trash/                # League recycle bin: constants, service, errors, social-image sweep (below)
+src/lib/league-trash/                # League recycle bin: constants, service, errors, lifecycle state, social-image sweep (below)
 
 src/app/api/seasons/                 # Route tree (see API Routes)
 ```

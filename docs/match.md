@@ -8,6 +8,8 @@ The Match module focuses on match/team stat aggregation helpers used by UI, repo
 src/lib/match/
 ├── aggregation.ts  # Match/team aggregation helpers
 ├── aggregate-queue.ts  # Deferred aggregate processing
+├── aggregate-job-state.ts  # aggregateJobMachine: the aggregate_jobs.status machine (client-safe)
+├── game-marker-state.ts  # The game marker machines: aggregate and evolution markers, edit lease, stats lock (client-safe)
 ├── finalize.ts  # Shared completion side effects for manual/cron finalization
 ├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
 ├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
