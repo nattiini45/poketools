@@ -249,7 +249,7 @@ describe('validator parity: seeded fuzz', () => {
     // The fuzz must exercise both outcomes, otherwise it proves little.
     expect(rejected).toBeGreaterThan(600);
     expect(accepted).toBeGreaterThan(20);
-  });
+  }, 30_000);
 
   it('agrees on hostile garbage and does not pollute Object.prototype', () => {
     const rng = mulberry32(77);

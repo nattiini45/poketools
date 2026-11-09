@@ -27,6 +27,11 @@ export default defineDe<typeof en>()({
     'Dieser Spieler lässt sich nicht löschen, weil noch andere Einträge auf ihn verweisen.',
   player_in_active_draft:
     'Dieser Spieler sitzt in einem noch nicht abgeschlossenen Draft und lässt sich nicht löschen. Schließ den Draft ab oder brich ihn ab – oder nimm den Spieler vorher aus dem Draft.',
+  player_in_format_league: {
+    one: 'Dieser Spieler ist in der noch laufenden Liga „{league}“ eingetragen, die ein Format nutzt, und lässt sich nicht löschen. Tausche den Spieler per Ersatz aus oder nimm ihn vorher aus der Liga.',
+    other:
+      'Dieser Spieler ist in {count} noch laufenden Ligen eingetragen, die ein Format nutzen, darunter „{league}“, und lässt sich nicht löschen. Tausche den Spieler per Ersatz aus oder nimm ihn vorher aus diesen Ligen.',
+  },
   avatar_edit_forbidden: 'Du darfst diesen Avatar nicht bearbeiten.',
   showdown_sprite_invalid: 'Ungültige Showdown-Sprite-ID.',
   showdown_sprite_url_invalid: 'Ungültige Showdown-Sprite-URL.',

@@ -143,6 +143,12 @@ export default {
       section: 'Record result',
       hint: 'This match has not started. Choose the winner to settle it without a replay. The result counts for standings, ratings and the bracket like any other.',
       winnerLabel: 'Winner',
+      outcomeLabel: 'How the match ended',
+      outcome: {
+        played: 'Played',
+        forfeit: 'Forfeit',
+        no_show: 'No-show',
+      },
       button: 'Record result',
       dialogTitle: 'Record the result',
       dialogMessage: 'Settle this match with {winner} as the winner? The match is completed at once, without a confirmation step.',

@@ -80,6 +80,8 @@ export default async function MatchPrepPage({ params }: PageProps) {
       >
         <MatchPrepClient
           matchId={mid}
+          tournamentId={match.tournament_id}
+          seasonId={tournament?.season_id}
           rulesetId={ruleset?.id}
           rulesetName={ruleset?.name}
           baseFormat={ruleset?.base_format}

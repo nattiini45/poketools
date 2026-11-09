@@ -131,7 +131,75 @@ describe('describePrimitive: labels and robustness', () => {
       expect(en).toContain('(Not available yet)');
       expect(de).toContain('(Noch nicht verfügbar)');
     }
-    expect(describePrimitive('attr.define', null, 'en')).toBe('Attribute definition (Not available yet)');
+    expect(describePrimitive('acquire.draft', null, 'en')).toBe('Draft (Not available yet)');
+  });
+
+  it('describes the Phase 4 kinds with their values, in both languages', () => {
+    const s = sampleNodes();
+    const text = (kind: PrimitiveKind, locale: Locale) => describePrimitive(kind, s[kind], locale);
+    expect(text('pairing.bipartite', 'en')).toBe(
+      'Bipartite pairing by house over 3 rounds: ember play tide and grove. Opponents never repeat.',
+    );
+    expect(text('pairing.bipartite', 'de')).toBe(
+      'Zweiseitige Paarung nach house über 3 Runden: ember spielen gegen tide und grove. Gegner wiederholen sich nie.',
+    );
+    expect(text('pairing.filter', 'en')).toBe(
+      'Swiss system over 4 rounds. A pair is allowed only when not rel(santa, a, b).',
+    );
+    expect(text('pairing.challenge', 'en')).toContain('Challenge pairing over 6 rounds. A player may challenge up to 3 places above them.');
+    expect(text('constraint.roster_size', 'en')).toBe('Team size: exactly 6 Pokémon.');
+    expect(text('constraint.roster_size', 'de')).toBe('Teamgröße: genau 6 Pokémon.');
+    expect(text('constraint.count', 'en')).toBe(
+      'A team may have at most 1 Pokémon from the combination of the list normal and the resource picks. This applies when round >= 2.',
+    );
+    expect(text('constraint.distinct', 'en')).toBe('A team may have at most 1 Pokémon with the same base species.');
+    expect(text('constraint.type_quota', 'en')).toBe('A team needs at least 1 Pokémon of each of the types fire and water.');
+    expect(text('constraint.tera', 'en')).toBe('Terastallization: not allowed.');
+    expect(text('constraint.tera', 'de')).toBe('Terakristallisierung: nicht erlaubt.');
+    expect(text('constraint.evolution_stage', 'en')).toBe(
+      'A team may have at most 4 fully evolved Pokémon and at most 2 Pokémon that can still evolve.',
+    );
+    expect(text('time.schedule', 'en')).toBe(
+      'Rounds start from 2026-12-01 at 18:00, every week, and each round lasts 168 hours. Named point in time: gift_deadline (round 1, -12 hours).',
+    );
+    expect(text('time.deadline_policy', 'en')).toBe(
+      'Deadline for matches: 0 hours relative to the round deadline. If it is missed: the match is forfeited.',
+    );
+    expect(text('stage.end_when', 'en')).toBe('The stage ends after 4 rounds.');
+    expect(text('stage.foreach_group', 'de')).toBe('Die Stage wird einmal für jede Gruppe der Stage groups gespielt.');
+  });
+
+  it('describes the Phase 3 kinds with their values, in both languages', () => {
+    const s = sampleNodes();
+    const text = (kind: PrimitiveKind, locale: Locale) => describePrimitive(kind, s[kind], locale);
+    expect(text('attr.define', 'en')).toBe('Attribute House (choice) for players, assigned with a seeded random draw.');
+    expect(text('attr.define', 'de')).toBe('Attribut Haus (Auswahl) für Spieler, vergeben per Zufall mit festem Startwert.');
+    expect(text('attr.assign', 'en')).toBe('Values are calculated by the formula tunable.base_level.');
+    expect(text('domain.define', 'en')).toBe('List Gift pool with 2 entries. It starts locked and is visible to everyone once it is unlocked.');
+    expect(text('relation.define', 'en')).toContain('Everything is revealed when round 2 of stage main ends.');
+    expect(text('resource.define', 'en')).toBe('Resource Picks: holds entries of the list pool; up to 2 per player and each item can be held by one player only.');
+    expect(text('metric.define', 'en')).toBe('Custom metric Gift score, calculated per player as wins * 2.');
+    expect(text('rule.on_event', 'en')).toBe('When stage main starts and round >= 0: unlock the list pool and grant 3 of coins to all players.');
+    expect(text('effect.apply', 'en')).toBe('Effect: grant 2 of coins to the players of the event.');
+    expect(text('player.action', 'en')).toBe('Action Choose a gift, through the relation santa: take 2 from pool into picks.');
+    expect(text('track.progression', 'en')).toBe('Progression track Milestones with 1 step, counted in stage main.');
+    expect(text('score.placement', 'en')).toBe('Placement scoring Placement for stage main: 5, 3 and 1 points by final place.');
+    expect(text('check.assisted', 'en')).toBe('Assisted check Ties: flags ties in the standings for an admin to review.');
+    expect(text('adjust.manual', 'en')).toBe('Admins may adjust by hand, with a recorded reason: points and resources.');
+    expect(text('adjust.manual', 'de')).toBe('Admins dürfen von Hand anpassen, mit festgehaltener Begründung: Punkte und Ressourcen.');
+  });
+
+  it('picks the variant sentence of the Phase 3 kinds', () => {
+    const d = (kind: PrimitiveKind, node: unknown) => describePrimitive(kind, node, 'en');
+    expect(d('attr.assign', { kind: 'manual' })).toBe('Values are entered by hand.');
+    expect(d('domain.define', { label: lt('Pool'), entries: [{ id: 'mew', attrs: [] }], initially: 'unlocked', visibility: 'admins' })).toBe(
+      'List Pool with 1 entry. It starts unlocked and is visible to admins only.',
+    );
+    expect(d('resource.define', { label: lt('Coins'), holds: { kind: 'counter' }, visibility: 'own', exclusive: 'none' })).toBe('Resource Coins: a counter.');
+    expect(d('track.progression', { kind: 'track.progression', key: 't', label: lt('T'), steps: [{}, {}] })).toBe('Progression track T with 2 steps.');
+    expect(d('check.assisted', { kind: 'check.assisted', id: 'vets', source: { kind: 'expr', of: 'match', when: { k: 'ref', name: 'forfeit', t: 'boolean' } } })).toBe(
+      'Assisted check vets: flags every match where forfeit for an admin to review.',
+    );
   });
 
   it('never throws on a node of the wrong shape and returns the label', () => {

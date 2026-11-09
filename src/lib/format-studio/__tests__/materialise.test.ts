@@ -8,9 +8,11 @@ import {
   type SeriesOverride,
   type Stage,
 } from '@/lib/format-kit';
+import { wichtelcupDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
 import { ltext } from '@/lib/studio-core/ltext';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
-import { STAGE_NAME_MAX_CHARS, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
+import type { EngineGap } from '../library-types';
+import { STAGE_NAME_MAX_CHARS, engineGaps, expectedPhaseCount, groupPhaseName, mapSeriesOverrides, planStages, type PlanStagesInput } from '../materialise';
 
 const preset = (id: string): FormatDefinition => {
   const found = PRESETS.find((entry) => entry.id === id);
@@ -340,7 +342,7 @@ describe('planStages', () => {
       });
     });
 
-    it('reports legs, a third-place match and unrun edge selections', () => {
+    it('reports legs and edge selections the legacy engine does not run; a third-place match is no gap', () => {
       const definition = preset('cup');
       definition.stages[0].pairing = { kind: 'round_robin', legs: 2, mirror_legs: false };
       definition.stages[1].pairing = { kind: 'single_elim', third_place: true };
@@ -351,7 +353,7 @@ describe('planStages', () => {
       ];
       const { warnings } = plan(definition, {}, 16);
       expect(warnings).toContainEqual({ code: 'rr_legs_not_run', stage: 'groups', params: { legs: 2 } });
-      expect(warnings).toContainEqual({ code: 'third_place_not_run', stage: 'knockout', params: {} });
+      expect(warnings.map((w) => w.code)).not.toContain('third_place_not_run');
       expect(warnings).toContainEqual({ code: 'edge_select_not_run', stage: 'groups', edge: 'to_knockout', params: { kind: 'wildcard' } });
       expect(warnings).toContainEqual({ code: 'edge_select_not_run', stage: 'groups', edge: 'to_knockout', params: { kind: 'bottom_n' } });
       expect(warnings.filter((w) => w.code === 'edge_select_not_run')).toHaveLength(2);
@@ -362,7 +364,40 @@ describe('planStages', () => {
       definition.stages[1].pairing = { kind: 'single_elim', third_place: true };
       definition.edges[0].select = [{ kind: 'per_group', n: 2 }, { kind: 'wildcard', n: 1 }];
       const { warnings } = plan(definition, {}, 16);
-      expect(warnings.map((w) => w.code)).toEqual(['groups_not_created', 'third_place_not_run', 'edge_select_not_run']);
+      expect(warnings.map((w) => w.code)).toEqual(['groups_not_created', 'edge_select_not_run']);
+    });
+
+    it('drops what the kit engine runs for a kit league, keeps every gap for legacy and shadow', () => {
+      const definition = preset('cup');
+      definition.stages[0].pairing = { kind: 'round_robin', legs: 2, mirror_legs: false };
+      definition.edges[0].select = [{ kind: 'per_group', n: 2 }, { kind: 'wildcard', n: 1 }];
+      const { warnings } = plan(definition, {}, 16);
+      expect(warnings.map((w) => w.code)).toEqual(['rr_legs_not_run', 'groups_not_created', 'edge_select_not_run']);
+      expect(engineGaps(warnings, 'kit')).toEqual([]);
+      expect(engineGaps(warnings, 'shadow')).toEqual(warnings);
+      expect(engineGaps(warnings, 'legacy')).toEqual(warnings);
+    });
+
+    it('keeps the groups gap for a kit league only when the groups are manual', () => {
+      const groupsGap = (method: string): EngineGap => ({ code: 'groups_not_created', stage: 'groups', params: { count: 4, method } });
+      for (const method of ['serpentine', 'straight', 'random_seeded']) {
+        expect(engineGaps([groupsGap(method)], 'kit'), method).toEqual([]);
+        expect(engineGaps([groupsGap(method)], 'shadow'), method).toEqual([groupsGap(method)]);
+      }
+      expect(engineGaps([groupsGap('manual')], 'kit')).toEqual([groupsGap('manual')]);
+      expect(engineGaps([groupsGap('manual')], 'legacy')).toEqual([groupsGap('manual')]);
+    });
+
+    it('drops filter, bipartite, challenge and constraint gaps for a kit league and keeps them on shadow and legacy', () => {
+      const gaps: EngineGap[] = [
+        { code: 'pairing_not_run', stage: 'a', params: { kind: 'filter' } },
+        { code: 'pairing_not_run', stage: 'b', params: { kind: 'bipartite' } },
+        { code: 'pairing_not_run', stage: 'c', params: { kind: 'challenge' } },
+        { code: 'constraints_not_run', stage: 'a', params: { count: 3 } },
+      ];
+      expect(engineGaps(gaps, 'kit')).toEqual([]);
+      expect(engineGaps(gaps, 'shadow')).toEqual(gaps);
+      expect(engineGaps(gaps, 'legacy')).toEqual(gaps);
     });
 
     it('reports nothing for a format the engine runs completely', () => {
@@ -376,5 +411,53 @@ describe('planStages', () => {
   it('is deterministic', () => {
     const definition = preset('swiss-top-cut');
     expect(plan(definition, {}, 16)).toEqual(plan(definition, {}, 16));
+  });
+});
+
+describe('foreach_group', () => {
+  const doc = wichtelcupDoc() as unknown as FormatDefinition;
+  const rows = plan(doc).stages;
+  const groupsStage = doc.stages.find((stage) => stage.groups !== undefined);
+  const repeated = doc.stages.find((stage) => stage.foreach_group !== undefined);
+
+  it('plans one phase per group of the source stage, named by group', () => {
+    expect(groupsStage?.groups).toBeDefined();
+    expect(repeated).toBeDefined();
+    const count = groupsStage?.groups?.count ?? 0;
+    const phases = rows.filter((row) => row.key === repeated?.key);
+    expect(phases.map((row) => row.format_group)).toEqual(Array.from({ length: count }, (_, i) => i + 1));
+    expect(phases.map((row) => row.name.split(' · ')[1])).toEqual(['Group A', 'Group B', 'Group C', 'Group D'].slice(0, count));
+    expect(new Set(phases.map((row) => row.stage_order)).size).toBe(1);
+  });
+
+  it('leaves every other stage as one phase with group 0', () => {
+    for (const row of rows.filter((entry) => entry.key !== repeated?.key)) expect(row.format_group).toBe(0);
+    expect(rows.filter((row) => row.key === groupsStage?.key)).toHaveLength(1);
+  });
+
+  it('is deterministic', () => {
+    expect(plan(doc).stages).toEqual(rows);
+  });
+
+  it('expectedPhaseCount is the number of phases planStages writes (a foreach_group stage counts once per group)', () => {
+    expect(expectedPhaseCount(doc)).toBe(rows.length);
+    expect(expectedPhaseCount(doc)).toBeGreaterThan(doc.stages.length);
+  });
+
+  it('keeps the group suffix when the stage name is cut', () => {
+    const name = groupPhaseName('x'.repeat(STAGE_NAME_MAX_CHARS), 2);
+    expect(name.endsWith(' · Group B')).toBe(true);
+    expect(name.length).toBeLessThanOrEqual(STAGE_NAME_MAX_CHARS);
+  });
+
+  it('the kit engine runs it; the other engines still report it', () => {
+    const warnings = plan(doc).warnings;
+    const codes = (engine: 'kit' | 'shadow' | 'legacy') => engineGaps(warnings, engine).map((gap) => gap.code);
+    expect(codes('kit')).not.toContain('foreach_group_not_run');
+    expect(codes('kit')).not.toContain('calendar_not_run');
+    expect(codes('kit')).not.toContain('end_when_not_run');
+    expect(codes('legacy')).toContain('foreach_group_not_run');
+    expect(codes('legacy')).toContain('calendar_not_run');
+    expect(codes('legacy')).toContain('end_when_not_run');
   });
 });

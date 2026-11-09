@@ -203,6 +203,15 @@ describe('write path: revalidateMatchPages', () => {
     );
   });
 
+  it('a failed tournament lookup after the paths are expired does not throw', async () => {
+    vi.mocked(getTournamentById).mockRejectedValue(new Error('transient'));
+
+    await expect(revalidateMatchPages('t1', 'm1')).resolves.toBeUndefined();
+
+    expectEveryPathPairedWithItsTags(log.calls);
+    expect(tagsIn(log.calls)).toContain('tournament:t1');
+  });
+
   it('standalone tournament: no league tag, still paired', async () => {
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't1', season_id: null } as never);
 

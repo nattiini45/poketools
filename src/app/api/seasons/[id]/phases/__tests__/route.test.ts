@@ -2,6 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // The route expires public read-cache tags after its write (D37). Outside a
 // Next request `revalidateTag` throws, so record the calls instead.
+vi.mock('@/lib/format-studio/phase-guards', () => ({
+  assertSeasonPhasesFree: vi.fn(),
+  assertFormatPhaseDeletable: vi.fn(),
+  assertFormatPhaseUnchanged: vi.fn(),
+  assertFormatPhaseStatusUnchanged: vi.fn(),
+  assertFormatPhaseRosterOpen: vi.fn(),
+  assertSeasonRosterMembers: vi.fn(),
+}));
 vi.mock('@/lib/ruleset-studio/pin-change', () => ({
   assertRulesetChangeAllowed: vi.fn(),
   assertRulesetUsableForCreate: vi.fn(),
@@ -53,6 +61,8 @@ import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
+import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
+import { FormatStudioError } from '@/lib/format-studio/errors';
 import { makeRequest, makeParams } from '@/lib/__tests__/helpers/api-request';
 import { revalidateTag } from 'next/cache';
 
@@ -113,6 +123,41 @@ describe('POST /api/seasons/[id]/phases', () => {
       legacy: false,
     } as never);
     vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+  });
+
+  it('refuses a hand-made phase on a league with an attached format: 409 format_phase_owned, nothing written', async () => {
+    vi.mocked(assertSeasonPhasesFree).mockRejectedValueOnce(new FormatStudioError('format_phase_owned'));
+    const request = makeRequest({
+      name: 'Extra',
+      bracket_type: 'single_elim',
+      ruleset_id: '00000000-0000-4000-8000-000000000002',
+    }) as NextRequest;
+
+    const response = await POST(request, { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_phase_owned');
+    expect(createTournament).not.toHaveBeenCalled();
+    expect(shiftStageOrders).not.toHaveBeenCalled();
+  });
+
+  it('expires the league reads when the enrollment sync throws after the phase and the stage-order shift committed', async () => {
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([{ id: 'p-2', name: 'B', stage_order: 2, status: 'upcoming' }] as never);
+    vi.mocked(syncStandingsEnrollment).mockRejectedValueOnce(new Error('connection reset'));
+    const request = makeRequest({
+      name: 'Playoffs',
+      bracket_type: 'single_elim',
+      ruleset_id: '00000000-0000-4000-8000-000000000002',
+      insert_at: 2,
+    }) as NextRequest;
+
+    const response = await POST(request, { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+
+    expect(response.status).toBe(500);
+    expect(shiftStageOrders).toHaveBeenCalled();
+    const tags = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+    expect(tags).toContain('tournament:phase-1');
+    expect(tags).toContain('tournament:p-2');
   });
 
   it('creates phase and auto-enrolls participants', async () => {

@@ -58,9 +58,9 @@ function walk(spec: Spec, visit: (spec: Spec, fieldName: string | null, inOneof:
 }
 
 describe('kinds and manifest', () => {
-  it('lists 27 available and 27 reserved kinds without duplicates', () => {
-    expect(AVAILABLE_KINDS).toHaveLength(27);
-    expect(RESERVED_KINDS).toHaveLength(27);
+  it('lists 53 available and 1 reserved kind without duplicates', () => {
+    expect(AVAILABLE_KINDS).toHaveLength(53);
+    expect(RESERVED_KINDS).toHaveLength(1);
     expect(PRIMITIVE_KINDS).toHaveLength(54);
     expect(new Set(PRIMITIVE_KINDS).size).toBe(54);
     for (const kind of PRIMITIVE_KINDS) expect(kind).toMatch(/^[a-z]+\.[a-z_]+$/);
@@ -92,36 +92,57 @@ describe('kinds and manifest', () => {
 
   it('slot and tag are consistent with the kind', () => {
     for (const entry of MANIFEST) {
-      if (entry.slot === 'pairing' || entry.slot === 'rank') {
+      if (entry.slot === 'pairing' || entry.slot === 'rank' || entry.slot === 'constraint') {
         expect(entry.tag, entry.kind).not.toBeNull();
         expect(entry.kind).toBe(`${entry.slot}.${entry.tag}`);
       } else if (entry.slot === 'advance') {
         if (entry.tag !== null) expect(entry.kind).toBe(`advance.${entry.tag}`);
         else expect(entry.kind).toBe('advance.rule');
-      } else if (entry.slot === 'rule') {
+      } else if (entry.slot === 'rule' || entry.slot === 'metric') {
         expect(entry.tag).toBe(entry.kind);
       } else {
         expect(entry.tag, entry.kind).toBeNull();
       }
     }
     expect(manifestEntry('pairing.swiss')).toMatchObject({ slot: 'pairing', tag: 'swiss' });
-    expect(manifestForSlot('pairing').map((e) => e.tag)).toEqual(['round_robin', 'swiss', 'single_elim', 'double_elim', 'manual']);
+    expect(manifestForSlot('pairing').map((e) => e.tag)).toEqual([
+      'round_robin',
+      'swiss',
+      'single_elim',
+      'double_elim',
+      'manual',
+      'bipartite',
+      'filter',
+      'challenge',
+    ]);
     expect(manifestForSlot('rank')).toHaveLength(5);
     expect(manifestForSlot('advance')).toHaveLength(7);
-    expect(manifestForSlot('reserved')).toHaveLength(27);
+    expect(manifestForSlot('reserved')).toHaveLength(1);
+    expect(manifestForSlot('constraint')).toHaveLength(6);
   });
 
-  it('levels: only rule.custom is honor among the available kinds; reserved kinds are honor and reserved', () => {
+  it('levels: rule.custom is the only honor kind, check.assisted, adjust.manual and the team constraints are checked, the rest of the available kinds are auto', () => {
     for (const entry of MANIFEST) {
       if (entry.availability === 'reserved') {
         expect(entry.level).toBe('honor');
         expect(entry.slot).toBe('reserved');
-        expect(entry.phase).toBeGreaterThanOrEqual(3);
+        expect(entry.phase).toBeGreaterThanOrEqual(4);
       } else {
-        expect(entry.level).toBe(entry.kind === 'rule.custom' ? 'honor' : 'auto');
+        const checked = entry.kind === 'check.assisted' || entry.kind === 'adjust.manual' || entry.slot === 'constraint';
+        expect(entry.level).toBe(entry.kind === 'rule.custom' ? 'honor' : checked ? 'checked' : 'auto');
         expect(entry.phase).toBeGreaterThanOrEqual(1);
-        expect(entry.phase).toBeLessThanOrEqual(2);
+        expect(entry.phase).toBeLessThanOrEqual(4);
       }
+    }
+  });
+
+  it('every team constraint is checked (advisory feedback plus the post-match audit) and a phase 4 kind', () => {
+    const constraints = MANIFEST.filter((entry) => entry.slot === 'constraint');
+    expect(constraints.length).toBeGreaterThan(0);
+    for (const entry of constraints) {
+      expect(entry.kind.startsWith('constraint.')).toBe(true);
+      expect(entry.level).toBe('checked');
+      expect(entry.phase).toBe(4);
     }
   });
 

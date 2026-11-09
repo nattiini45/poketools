@@ -140,6 +140,19 @@ describe('requests', () => {
     expect(calls[1].init?.method).toBe('DELETE');
   });
 
+  it('attach and detach send confirm_clear only when the admin confirmed the deletion of the runtime data', async () => {
+    const { f, calls } = fakeFetch(ok({}), ok({}), ok({}), ok({}));
+    await attachFormatRequest('season-1', 'def-1', 3, f, true);
+    await attachFormatRequest('season-1', 'def-1', 3, f, false);
+    await detachFormatRequest('season-1', f, true);
+    await detachFormatRequest('season-1', f);
+    expect(bodyOf(calls[0])).toEqual({ definition_id: 'def-1', version_no: 3, confirm_clear: true });
+    expect(bodyOf(calls[1])).toEqual({ definition_id: 'def-1', version_no: 3 });
+    expect(calls[2].init?.method).toBe('DELETE');
+    expect(bodyOf(calls[2])).toEqual({ confirm_clear: true });
+    expect(calls[3].init?.body).toBeUndefined();
+  });
+
   it('encodes every path segment, so an id cannot change the path', async () => {
     const evil = 'a/../b?x=1#frag';
     const { f, calls } = fakeFetch(ok({}), ok({}), ok({}), ok({}), ok({}), ok({}), ok({}), ok({}), ok({}));
@@ -280,6 +293,15 @@ describe('classifyApiError', () => {
     format_not_attached: 'blocked',
     format_nothing_attached: 'not_found',
     format_detach_blocked: 'blocked',
+    format_phases_in_use: 'blocked',
+    format_phase_owned: 'blocked',
+    format_runtime_has_data: 'blocked',
+    format_substitute_links_collide: 'blocked',
+    format_substitute_items_collide: 'blocked',
+    format_substitute_submissions_collide: 'blocked',
+    format_substitute_attrs_collide: 'blocked',
+    format_substitute_tracks_collide: 'blocked',
+    format_substitute_challenges_collide: 'blocked',
     season_format_type_locked: 'blocked',
   };
 
@@ -331,6 +353,7 @@ describe('error texts', () => {
     format_attach_invalid: { first: 'schema_refine' },
     format_attach_ruleset_required: { count: 2 },
     format_attach_manual_phases: { count: 1 },
+    format_runtime_has_data: { links: 10, items: 4, submissions: 3, adjustments: 2 },
   };
   const catalogs = [errorsAdmin, errorsSeasons] as const;
   const unknownText = (locale: 'en' | 'de') => createTranslator(errorsCommon, locale)('unknown_error');

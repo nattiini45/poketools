@@ -11,12 +11,22 @@ import { createTranslator } from '@/i18n/core';
 import { formatStudioMessages } from '@/i18n/messages/format-studio';
 import { formatStudioPrimitivesMessages } from '@/i18n/messages/format-studio/primitives';
 import { resolveLText, type LText } from '@/lib/studio-core/ltext';
-import type { FormatDefinition } from '../types';
+import type { FormatDefinition, RuleEntry } from '../types';
 import type { Diagnostic, DiagnosticCode, Fix, Severity } from './diagnostics';
 
 type Params = Record<string, string | number>;
 
 const STAGE_PARAMS: ReadonlySet<string> = new Set(['stage', 'from_stage', 'to_stage']);
+
+/** Params whose value is a code that the `format-studio` catalog turns into words, and the group that holds the words. */
+const CATALOG_PARAMS: ReadonlyMap<string, string> = new Map([
+  ['reason', 'reasons'],
+  ['context', 'exprContexts'],
+  ['issue', 'exprIssues'],
+  ['ref', 'refKinds'],
+  ['adjust', 'adjustKinds'],
+  ['constraint', 'constraintKinds'],
+]);
 
 /**
  * The param that decides singular or plural for a code or fix id. The catalog's `{one, other}` forms read a
@@ -48,12 +58,38 @@ function toParams(raw: Readonly<Record<string, string | number | boolean>>): Par
   return out;
 }
 
+/** The text that names a rule: a rule card's own text, a player action's or assisted check's label. */
+function ruleText(rule: RuleEntry | undefined): LText | undefined {
+  if (rule === undefined) return undefined;
+  if (rule.kind === 'rule.custom') return rule.text;
+  if (rule.kind === 'player.action') return rule.label;
+  if (rule.kind === 'check.assisted') return rule.label;
+  return undefined;
+}
+
 /** An advancement rule has no name of its own, so it reads as the stages it connects; its key is the fallback. */
 function edgeName(def: FormatDefinition, key: string, locale: Locale): string {
   const edge = def.edges.find((e) => e.key === key);
   if (edge === undefined) return key;
   const stageName = (stageKey: string) => nameOf(def.stages.find((s) => s.key === stageKey)?.name, locale, stageKey);
   return `${stageName(edge.from)} → ${stageName(edge.to)}`;
+}
+
+/**
+ * The name of what holds an expression (`owner` with its `owner_kind`, see `checks-privacy.ts`): a rule or an advancement
+ * rule reads as in the other sentences, a stage by its name; an attribute and a metric keep their key.
+ */
+function ownerName(def: FormatDefinition, kind: string, key: string, locale: Locale): string {
+  switch (kind) {
+    case 'rule':
+      return nameOf(ruleText(def.rules.find((r) => r.id === key)), locale, key);
+    case 'stage':
+      return nameOf(def.stages.find((s) => s.key === key)?.name, locale, key);
+    case 'edge':
+      return edgeName(def, key, locale);
+    default:
+      return key;
+  }
 }
 
 /** The params a message sees: names for keys (with a definition), labels for metric and reason codes. */
@@ -73,15 +109,18 @@ function displayParams(
       if (STAGE_PARAMS.has(name)) {
         out[name] = nameOf(def.stages.find((s) => s.key === value)?.name, locale, value);
       } else if (name === 'rule') {
-        out[name] = nameOf(def.rules.find((r) => r.id === value)?.text, locale, value);
+        out[name] = nameOf(ruleText(def.rules.find((r) => r.id === value)), locale, value);
       } else if (name === 'view') {
         out[name] = nameOf(def.views.find((v) => v.key === value)?.label, locale, value);
       } else if (name === 'edge') {
         out[name] = edgeName(def, value, locale);
+      } else if (name === 'owner') {
+        out[name] = ownerName(def, String(raw.owner_kind), value, locale);
       }
     }
     if (name === 'metric' && metrics.has(`metric.${value}`)) out[name] = metrics.dynamic(`metric.${value}`);
-    if (name === 'reason' && reasons.has(`reasons.${value}`)) out[name] = reasons.dynamic(`reasons.${value}`);
+    const group = CATALOG_PARAMS.get(name);
+    if (group !== undefined && reasons.has(`${group}.${value}`)) out[name] = reasons.dynamic(`${group}.${value}`);
   }
   if (pointer !== null) out.pointer = pointer === '' ? '/' : pointer;
   return out;

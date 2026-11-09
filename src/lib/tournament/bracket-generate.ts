@@ -1,7 +1,7 @@
 import type { Tournament } from '@/types/tournament';
 import type { ParticipantWithSeed } from '@/types/tournament';
 import type { MatchWithPlayers } from '@/types/match';
-import { buildBracketStructureForParticipants } from './bracket-structure';
+import { bracketStructureOptionsOf, buildBracketStructureForParticipants } from './bracket-structure';
 import {
   buildSlotResolutionsFromMatches,
   materializeReadySlots,
@@ -18,6 +18,12 @@ export interface GenerateBracketResult {
   matches_materialized: number;
   /** Present only when the first round was started (`startFirstRound`) and the start succeeded. */
   started_round_id?: string;
+  /**
+   * Present (true) only on a regenerate when taking back the league format's effects of a reset played match
+   * failed. The match rows are deleted right after, so the format cron cannot retry it; clients show the catalogue
+   * warning `admin_game_format_revert_failed`.
+   */
+  format_revert_failed?: boolean;
 }
 
 export interface GenerateBracketOptions {
@@ -48,7 +54,7 @@ export async function generateEliminationBracket(
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
-    { bracketResetEnabled: tournament.bracket_reset_enabled ?? true }
+    bracketStructureOptionsOf(tournament)
   );
   if (!structure) {
     throw new UserFacingError('Need at least 2 participants', {
@@ -138,6 +144,7 @@ export async function regenerateEliminationBracket(
   options: RegenerateBracketOptions = {}
 ): Promise<GenerateBracketResult> {
   const rounds = await getRoundsByTournament(tournament.id);
+  let formatRevertFailed = false;
 
   if (rounds.length > 0) {
     const matches = await getMatchesByTournament(tournament.id);
@@ -159,7 +166,8 @@ export async function regenerateEliminationBracket(
       for (const match of played) {
         const latest = await getMatchById(match.id);
         if (!latest || latest.status === 'scheduled') continue;
-        await resetMatch(match.id, adminId, true);
+        const reset = await resetMatch(match.id, adminId, true);
+        if (reset?.format_revert_failed) formatRevertFailed = true;
       }
     }
 
@@ -179,7 +187,8 @@ export async function regenerateEliminationBracket(
 
   await updateTournament(tournament.id, { current_round: 0 });
 
-  return generateEliminationBracket(tournament, participants, {
+  const generated = await generateEliminationBracket(tournament, participants, {
     startFirstRound: options.startFirstRound,
   });
+  return formatRevertFailed ? { ...generated, format_revert_failed: true } : generated;
 }

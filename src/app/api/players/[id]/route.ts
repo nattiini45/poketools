@@ -6,6 +6,9 @@ import {
   superadminPlayerProtectedResponse,
 } from '@/lib/auth/superadmin-player-guard';
 import { deleteAuthUser } from '@/lib/supabase/queries/auth-users';
+import { listUnfinishedFormatLeaguesOfPlayer } from '@/lib/supabase/queries/player-format-leagues';
+import { createTranslator } from '@/i18n/core';
+import { errorsPlayers } from '@/i18n/messages/errors/players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logger } from '@/lib/logger';
 import { playerUpdateSchema, formatZodErrors } from '@/lib/validation';
@@ -27,6 +30,8 @@ import { leagueTrashBlockError } from '@/lib/league-trash/errors';
 interface RouteParams {
   params: Promise<{ id: string }>;
 }
+
+const englishPlayers = createTranslator(errorsPlayers, 'en');
 
 /** The admin-editable fields an admin PATCH audits. Identity columns are not editable here. */
 const AUDITED_PLAYER_FIELDS = ['name', 'ps_username', 'champions_username', 'is_admin', 'is_creator'] as const;
@@ -195,6 +200,23 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Player not found', code: 'player_not_found' },
         { status: 404 }
+      );
+    }
+
+    // A player enrolled in an unfinished league that runs a format is not deleted: the delete would cascade away their
+    // phase enrollments, relation links, items and submissions mid-run. The admin substitutes or removes them first; a
+    // finished league behaves as before. Checked first because it is the refusal an admin can act on.
+    const formatLeagues = await listUnfinishedFormatLeaguesOfPlayer(id);
+    if (formatLeagues.length > 0) {
+      const params = { count: formatLeagues.length, league: formatLeagues[0].name };
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: englishPlayers.dynamic('player_in_format_league', params),
+          code: 'player_in_format_league',
+          params,
+        },
+        { status: 409 }
       );
     }
 

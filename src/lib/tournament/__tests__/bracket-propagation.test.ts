@@ -23,6 +23,7 @@ import {
   propagateBracketOnMatchComplete,
   repairBracket,
   syncBracketResetSetting,
+  syncThirdPlaceSetting,
   unpropagateBracketOnMatchReset,
   type SlotResolution,
 } from '../bracket-propagation';
@@ -880,5 +881,117 @@ describe('repairBracket', () => {
     const result = await repairBracket(tournament, participants);
     expect(result.slots_materialized).toBeGreaterThanOrEqual(0);
     expect(store.matches.length).toBeGreaterThanOrEqual(before);
+  });
+});
+
+describe('third-place match', () => {
+  async function playSemis(thirdPlace: boolean) {
+    const participants = makeParticipants(4);
+    const tournament = { ...makeTournament('single_elim'), third_place_enabled: thirdPlace };
+    const structure = buildBracketStructureForParticipants('single_elim', participants, {
+      thirdPlaceEnabled: thirdPlace,
+    })!;
+    const store = setupStore(structure);
+    await materializeInitial(store, tournament, participants, structure);
+    const semiA = findMatchByPlayers(store, 'p1', 'p4')!;
+    const semiB = findMatchByPlayers(store, 'p2', 'p3')!;
+    await completeAndPropagate(store, semiA.id, 'p1', tournament, participants);
+    await completeAndPropagate(store, semiB.id, 'p3', tournament, participants);
+    return { participants, tournament, store, semiA };
+  }
+
+  it('pairs the semifinal losers in the final round once both semifinals are decided', async () => {
+    const { store } = await playSemis(true);
+    const final = findMatchByPlayers(store, 'p1', 'p3');
+    const thirdPlace = findMatchByPlayers(store, 'p4', 'p2');
+    expect(final?.bracket_pos).toBe(0);
+    expect(thirdPlace).toMatchObject({ bracket_side: 'winners', bracket_pos: 1 });
+    expect(thirdPlace?.round_id).toBe(final?.round_id);
+  });
+
+  it('waits for the second semifinal', async () => {
+    const participants = makeParticipants(4);
+    const tournament = { ...makeTournament('single_elim'), third_place_enabled: true };
+    const structure = buildBracketStructureForParticipants('single_elim', participants, { thirdPlaceEnabled: true })!;
+    const store = setupStore(structure);
+    await materializeInitial(store, tournament, participants, structure);
+    await completeAndPropagate(store, findMatchByPlayers(store, 'p1', 'p4')!.id, 'p1', tournament, participants);
+    expect(store.matches.some((m) => m.bracket_pos === 1 && m.round_id === 'round-2')).toBe(false);
+  });
+
+  it('builds no third-place match when the setting is off', async () => {
+    const { store } = await playSemis(false);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+    expect(store.matches.filter((m) => m.round_id === 'round-2')).toHaveLength(1);
+  });
+
+  it('removes the scheduled third-place match when a semifinal is reset', async () => {
+    const { store, tournament, participants, semiA } = await playSemis(true);
+    const thirdPlaceId = findMatchByPlayers(store, 'p4', 'p2')!.id;
+    const removed = await unpropagateBracketOnMatchReset(semiA, tournament, participants);
+    expect(removed).toContain(thirdPlaceId);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+  });
+
+  it('syncThirdPlaceSetting deletes an unplayed match on disable and materializes it on enable', async () => {
+    const { store, tournament, participants } = await playSemis(true);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
+
+    const off = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: false }, participants);
+    expect(off).toEqual({ third_place_matches_removed: 1, slots_materialized: 0 });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+    expect(on).toEqual({ third_place_matches_removed: 0, slots_materialized: 1 });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
+  });
+
+  it('syncThirdPlaceSetting does not add a third-place match to a final round that is completed', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    const final = findMatchByPlayers(store, 'p1', 'p3')!;
+    await completeAndPropagate(store, final.id, 'p1', tournament, participants);
+    store.rounds.find((round) => round.round_number === 2)!.status = 'completed';
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on).toEqual({ third_place_matches_removed: 0, slots_materialized: 0, skipped_final_completed: true });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+  });
+
+  it('syncThirdPlaceSetting does not add a third-place match once the final was played, even if its round is not marked completed', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    const final = findMatchByPlayers(store, 'p1', 'p3')!;
+    await completeAndPropagate(store, final.id, 'p3', tournament, participants);
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on.skipped_final_completed).toBe(true);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeUndefined();
+  });
+
+  it('syncThirdPlaceSetting still materializes while the final is open', async () => {
+    const { store, tournament, participants } = await playSemis(false);
+    store.rounds.find((round) => round.round_number === 2)!.status = 'active';
+
+    const on = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: true }, participants);
+
+    expect(on).toEqual({ third_place_matches_removed: 0, slots_materialized: 1 });
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
+  });
+
+  it('syncThirdPlaceSetting keeps a third-place match that is under way', async () => {
+    const { store, tournament, participants } = await playSemis(true);
+    const match = findMatchByPlayers(store, 'p4', 'p2')!;
+    match.status = 'in_progress';
+    const off = await syncThirdPlaceSetting({ ...tournament, third_place_enabled: false }, participants);
+    expect(off.third_place_matches_removed).toBe(0);
+    expect(findMatchByPlayers(store, 'p4', 'p2')).toBeDefined();
+  });
+
+  it('syncThirdPlaceSetting is a no-op for other bracket types', async () => {
+    expect(await syncThirdPlaceSetting(makeTournament('double_elim'), makeParticipants(4))).toEqual({
+      third_place_matches_removed: 0,
+      slots_materialized: 0,
+    });
   });
 });

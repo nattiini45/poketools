@@ -13,6 +13,7 @@ export default {
     items: 'Items',
     abilities: 'Abilities',
     constraints: 'Team rules',
+    levels: 'Levels',
     notes: 'Notes',
   },
   base: {
@@ -61,6 +62,15 @@ export default {
     evolutionUncapped: 'Evolution stage: only Pokémon that are not fully evolved, plus any number of fully evolved ones.',
     eviolite: 'Eviolite is limited to Pokémon of tier {tier} or lower.',
     none: 'There are no team rules.',
+  },
+  levels: {
+    defaultExact: 'Pokémon default to exactly level {level}. A missing Level line means level 100.',
+    defaultMax: 'Pokémon default to a maximum level of {level}. A missing Level line means level 100.',
+    entryExact: '{species}: exactly level {level} ({status}).',
+    entryMax: '{species}: maximum level {level} ({status}).',
+    approved: 'approved',
+    experimental: 'experimental',
+    experimentalNote: 'Experimental entries are shown for review but are not enforced until approved.',
   },
   notes: {
     none: 'There are no notes.',

@@ -9,6 +9,7 @@ import Alert from '@/components/ui/Alert';
 import ReasonDialog from '@/components/admin/ReasonDialog';
 import type { MatchStatus, GameSummary } from '@/types/match';
 import type { MatchRecalculationSummary } from '@/types/game';
+import { ADMIN_OUTCOME_KINDS, type AdminOutcomeKind } from '@/types/match-outcome';
 import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -16,7 +17,16 @@ import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { adminMatchMessages } from '@/i18n/messages/admin-match';
 import { enumMessages } from '@/i18n/messages/enums';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
-import { gameChangeFailureHints, sendGameChange } from '@/lib/match/game-change-outcome';
+import DownstreamApprovalDialog from '@/components/match/DownstreamApprovalDialog';
+import {
+  approvedMatchIds,
+  downstreamApproval,
+  downstreamResetCount,
+  gameChangeFailureHints,
+  gameDeleteRequest,
+  sendGameChange,
+  type DownstreamApproval,
+} from '@/lib/match/game-change-outcome';
 import { computeSeriesTally } from '@/lib/match/series-tally';
 import type { MatchResetPreview } from '@/lib/admin/match-detail';
 import { hasReachedBoThreshold } from '@/lib/tournament/match-state';
@@ -185,8 +195,16 @@ export default function AdminMatchActions({
   const [resetReason, setResetReason] = useState('');
   const [resetPreview, setResetPreview] = useState<ResetPreviewState>({ status: 'loading' });
   const [deleteGameId, setDeleteGameId] = useState<string | null>(null);
+  /**
+   * A game delete the API refused because it affects bracket matches that were already played (nothing written): the
+   * admin approves the reset of those matches, and the same delete is sent again with the approval.
+   */
+  const [deleteApproval, setDeleteApproval] = useState<{ gameId: string; reason: string; approval: DownstreamApproval } | null>(null);
+  /** How many later bracket matches the saved game delete reset after the admin approved it. */
+  const [downstreamReset, setDownstreamReset] = useState(0);
   const [resetting, setResetting] = useState(false);
   const [settleWinnerId, setSettleWinnerId] = useState('');
+  const [settleOutcome, setSettleOutcome] = useState<AdminOutcomeKind>('played');
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [settling, setSettling] = useState(false);
 
@@ -292,7 +310,7 @@ export default function AdminMatchActions({
       const res = await fetch(`/api/admin/matches/${matchId}/result`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ winner_id: settleWinnerId, reason }),
+        body: JSON.stringify({ winner_id: settleWinnerId, reason, outcome: settleOutcome }),
       });
       const json = await res.json();
       if (json.success) {
@@ -324,6 +342,7 @@ export default function AdminMatchActions({
     setWarnings([]);
     setRecalculation(null);
     setDownstreamWarning(false);
+    setDownstreamReset(0);
     setCascadeCount(null);
     setResetting(true);
     try {
@@ -365,11 +384,23 @@ export default function AdminMatchActions({
     }
   }
 
-  async function handleDeleteGame(reason: string) {
+  /** The delete dialog's confirm: the first attempt, without the approval of later bracket matches. */
+  function handleDeleteGame(reason: string) {
     if (!deleteGameId) return;
+    void deleteGame(deleteGameId, reason);
+  }
+
+  /** The approval prompt's confirm: the same delete again, now allowed to reset the later bracket matches. */
+  function handleApprovedDelete() {
+    if (!deleteApproval) return;
+    void deleteGame(deleteApproval.gameId, deleteApproval.reason, approvedMatchIds(deleteApproval.approval));
+  }
+
+  async function deleteGame(gameId: string, reason: string, confirmDownstream?: readonly string[]) {
     setError(null);
     setSuccess(null);
     setWarnings([]);
+    setDownstreamReset(0);
     // Clear any prior reset summary so a stale itemized summary doesn't bleed
     // across actions (spec §24): a delete must not leave the previous reset's
     // recalculation/rendered list visible under the new "Game deleted" message.
@@ -377,15 +408,22 @@ export default function AdminMatchActions({
     setDownstreamWarning(false);
     setResetting(true);
     try {
-      const result = await sendGameChange(`/api/admin/games/${deleteGameId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reason }),
-      });
+      const request = gameDeleteRequest(gameId, { reason, confirmDownstream });
+      const result = await sendGameChange(request.url, request.init);
+
+      const needed = result.ok ? null : downstreamApproval(result.error);
+      if (needed) {
+        // Nothing was written: ask first, then send the same delete again with the approval.
+        setDeleteGameId(null);
+        setDeleteApproval({ gameId, reason, approval: needed });
+        return;
+      }
+      setDeleteApproval(null);
 
       if (result.ok) {
         const data = result.data;
         setSuccess({ kind: 'gameDeleted', count: toCount(data.games_remaining) });
+        setDownstreamReset(downstreamResetCount(data));
         setWarnings(result.warnings);
         // Surface the EPB game-deletion recalculation summary when the API
         // provides it (deleteGame returns its own, smaller recalculation). If
@@ -403,6 +441,7 @@ export default function AdminMatchActions({
     } catch {
       setError({ local: 'deleteFailed' });
       setDeleteGameId(null);
+      setDeleteApproval(null);
     } finally {
       setResetting(false);
     }
@@ -614,6 +653,26 @@ export default function AdminMatchActions({
             </div>
           </div>
           <div className="mt-4">
+            <p className="block text-sm font-heading text-poke-text-muted mb-2">{tMatch('actions.settle.outcomeLabel')}</p>
+            <div className="flex flex-wrap gap-3" role="group" aria-label={tMatch('actions.settle.outcomeLabel')}>
+              {ADMIN_OUTCOME_KINDS.map((kind) => (
+                <button
+                  key={kind}
+                  type="button"
+                  aria-pressed={settleOutcome === kind}
+                  onClick={() => setSettleOutcome(kind)}
+                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
+                    settleOutcome === kind
+                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
+                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
+                  }`}
+                >
+                  {tMatch(`actions.settle.outcome.${kind}`)}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-4">
             <Button variant="success" loading={settling} onClick={requestSettle}>
               {tMatch('actions.settle.button')}
             </Button>
@@ -692,6 +751,7 @@ export default function AdminMatchActions({
               </ul>
             )}
             {downstreamWarning && <p className="text-xs">{t('actions.downstreamWarning')}</p>}
+            {downstreamReset > 0 && <p className="text-xs">{t('gameChange.downstream.done', { count: downstreamReset })}</p>}
           </div>
         </Alert>
       )}
@@ -777,6 +837,14 @@ export default function AdminMatchActions({
       >
         {deleteImpact && <DeleteGameImpactNotice impact={deleteImpact} ratingsRebuilt={isTerminal} />}
       </ReasonDialog>
+
+      {/* The delete affects bracket matches that were already played: approve their reset or leave everything as it is */}
+      <DownstreamApprovalDialog
+        approval={deleteApproval?.approval ?? null}
+        onApprove={handleApprovedDelete}
+        onCancel={() => setDeleteApproval(null)}
+        loading={resetting}
+      />
     </>
   );
 }

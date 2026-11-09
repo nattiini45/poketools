@@ -8,7 +8,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin, errorsMatches } from '@/i18n/messages/errors';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
-import { gameChangeFailureHints } from '@/lib/match/game-change-outcome';
+import { gameChangeFailureHints, warningNeedsDataTools } from '@/lib/match/game-change-outcome';
 
 interface GameChangeAlertsProps {
   /** A failed game edit/delete/reset (rendered by code), or null. */
@@ -38,7 +38,8 @@ export default function GameChangeAlerts({ error, warnings = [], isSiteAdmin }: 
   if (!error && warnings.length === 0) return null;
 
   const hints = gameChangeFailureHints(error);
-  const dataTools = hints.dataTools || warnings.length > 0;
+  // Only the warnings that name a repair point to the data tools; the stage-ended notice needs the admin's attention, not a tool.
+  const dataTools = hints.dataTools || warnings.some(warningNeedsDataTools);
 
   return (
     <div className="space-y-2">

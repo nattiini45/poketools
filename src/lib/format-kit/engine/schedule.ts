@@ -8,13 +8,16 @@
  * - Stages run one after the other, so the totals are an upper bound for stages that could overlap.
  * - Elimination stages report bounds: the matches a player plays depend on how far they get.
  * - A stage with manual pairing, or without a participant count, is `unknown`: every number is `null`.
+ * - A filtered pairing plays the rounds of its base and a bipartite or challenge stage its `rounds`; which pairs are
+ *   allowed, which sides the players fall on and which challenges are made is not known up front, so their matches and
+ *   byes are bounds (at least none, at most a full round of pairs).
  * - The weeks of a stage are `ceil(rounds * roundDays / 7)`. The totals add the rounds first and round once, so
  *   stage rounding does not pile up.
  *
  * Pure: no clock, no randomness, no I/O.
  */
 import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
-import type { FormatDefinition, Stage } from '../types';
+import type { FormatDefinition, Pairing, Stage } from '../types';
 import type { CompileResult } from './core';
 import { ceilLog2, mapRange, nextPowerOfTwo, type CountRange, type StagePlan } from './plan';
 
@@ -144,9 +147,17 @@ function doubleElimFigures(bracketReset: boolean, n: number): Figures {
   };
 }
 
+/** A pairing whose pairs are not fixed up front: at most a full round of pairs per round, possibly none. */
+function openFigures(rounds: number, n: number): Figures {
+  return { rounds, matchesMin: 0, matchesMax: rounds * Math.floor(n / 2), perPlayerMin: 0, perPlayerMax: rounds, byes: 0 };
+}
+
 function figuresFor(stage: Stage, n: number): Figures {
   if (n < 2) return ZERO;
-  const pairing = stage.pairing;
+  return pairingFigures(stage, stage.pairing, n);
+}
+
+function pairingFigures(stage: Stage, pairing: Pairing, n: number): Figures {
   switch (pairing.kind) {
     case 'round_robin':
       return roundRobinFigures(stage, pairing.legs, n);
@@ -156,6 +167,13 @@ function figuresFor(stage: Stage, n: number): Figures {
       return singleElimFigures(pairing.third_place, n);
     case 'double_elim':
       return doubleElimFigures(pairing.bracket_reset, n);
+    case 'bipartite':
+    case 'challenge':
+      return openFigures(pairing.rounds, n);
+    case 'filter': {
+      const base = pairingFigures(stage, pairing.base, n);
+      return { ...base, matchesMin: 0, perPlayerMin: 0 };
+    }
     default:
       return ZERO;
   }
@@ -190,7 +208,8 @@ function stageSchedule(stage: Stage, plan: StagePlan | undefined, roundDays: num
   if (participants === null || stage.pairing.kind === 'manual') return unknownStage(stage, plan);
   const rounds = spread(participants, (n) => figuresFor(stage, n).rounds, (n) => figuresFor(stage, n).rounds);
   const elimination = stage.pairing.kind === 'single_elim' || stage.pairing.kind === 'double_elim';
-  const uncertain = elimination || participants.min !== participants.max;
+  const open = ['bipartite', 'challenge', 'filter'].includes(stage.pairing.kind);
+  const uncertain = elimination || open || participants.min !== participants.max;
   return {
     key: stage.key,
     participants,

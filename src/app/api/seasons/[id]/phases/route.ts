@@ -19,6 +19,7 @@ import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-p
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
+import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 
@@ -73,6 +74,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // A league with an attached format gets its phases from the format only (409 format_phase_owned).
+    await assertSeasonPhasesFree(id);
+
     const rawBody = await request.json();
     const parsed = phaseCreateSchema.safeParse(rawBody);
     if (!parsed.success) {
@@ -106,47 +110,56 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    if (insertAt <= maxOrder) {
-      const wouldShift = existing.filter((phase) => phase.stage_order >= insertAt);
-      const locked = wouldShift.filter((phase) => phase.status !== 'upcoming');
-      if (locked.length > 0) {
-        throw new UserFacingError(
-          'Cannot insert a phase before stages that have already started',
-          { code: 'PHASE_INSERT_LOCKED' }
-        );
+    // The shift, the insert and the enrollment sync commit one by one: the public reads expire in a finally, with the
+    // phases whose order moved and the new phase, whichever step is the last to succeed.
+    const touchedIds: string[] = [];
+    let tournament: Awaited<ReturnType<typeof createTournament>>;
+    try {
+      if (insertAt <= maxOrder) {
+        const wouldShift = existing.filter((phase) => phase.stage_order >= insertAt);
+        const locked = wouldShift.filter((phase) => phase.status !== 'upcoming');
+        if (locked.length > 0) {
+          throw new UserFacingError(
+            'Cannot insert a phase before stages that have already started',
+            { code: 'PHASE_INSERT_LOCKED' }
+          );
+        }
+        touchedIds.push(...wouldShift.map((phase) => phase.id));
+        await shiftStageOrders(id, insertAt, 1);
       }
-      await shiftStageOrders(id, insertAt, 1);
-    }
 
-    const tournament = await createTournament({
-      name: body.name,
-      description: body.description,
-      season_id: id,
-      bracket_type: body.bracket_type,
-      ruleset_id: body.ruleset_id,
-      best_of_default: body.best_of_default,
-      bo_overrides: body.bo_overrides,
-      is_doubles: body.is_doubles,
-      team_visibility: body.team_visibility,
-      stage_order: insertAt,
-      advancement_rule: body.advancement_rule ?? null,
-    });
+      tournament = await createTournament({
+        name: body.name,
+        description: body.description,
+        season_id: id,
+        bracket_type: body.bracket_type,
+        ruleset_id: body.ruleset_id,
+        best_of_default: body.best_of_default,
+        bo_overrides: body.bo_overrides,
+        is_doubles: body.is_doubles,
+        team_visibility: body.team_visibility,
+        stage_order: insertAt,
+        advancement_rule: body.advancement_rule ?? null,
+      });
+      touchedIds.push(tournament.id);
 
-    if (!admin.isAdmin) {
-      try {
-        await addResourceAdmin(admin.playerId, 'tournament', tournament.id);
-      } catch (adminErr) {
-        logger.error('api/seasons', 'Failed to assign resource admin', {
-          seasonId: id,
-          tournamentId: tournament.id,
-          playerId: admin.playerId,
-          error: adminErr,
-        });
+      if (!admin.isAdmin) {
+        try {
+          await addResourceAdmin(admin.playerId, 'tournament', tournament.id);
+        } catch (adminErr) {
+          logger.error('api/seasons', 'Failed to assign resource admin', {
+            seasonId: id,
+            tournamentId: tournament.id,
+            playerId: admin.playerId,
+            error: adminErr,
+          });
+        }
       }
-    }
 
-    await syncStandingsEnrollment(id, tournament.id);
-    expireSeasonReads(id, [tournament.id]);
+      await syncStandingsEnrollment(id, tournament.id);
+    } finally {
+      expireSeasonReads(id, touchedIds);
+    }
 
     const withDetails = await getTournamentWithDetails(tournament.id);
     const rounds = await getRoundsByTournament(tournament.id);

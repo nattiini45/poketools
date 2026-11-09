@@ -12,6 +12,7 @@ export default defineDe<typeof en>()({
     subtitle: 'Kampfregeln für deine Ligen: Bans, Klauseln und Teamregeln. Ein Regelwerk startet von einem Katalog-Preset oder einer leeren Seite, ist vollständig bearbeitbar und wird in Versionen veröffentlicht.',
     presetsHeading: 'Regel-Presets',
     presetsShowdown: 'Showdown-Formate',
+    presetsCommunity: 'PokéTools-Community-Formate',
     presetsDraft: 'Smogon-Draft-Formate',
     presetsCount: { one: '{count} Preset', other: '{count} Presets' },
     leagues: 'Liga-Regelwerke',

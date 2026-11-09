@@ -41,6 +41,56 @@ export const MAX_EXPECTED_COUNT = 4096;
 export const MAX_VIEW_STAGES = 50;
 export const SCORE_ABS_MAX = 1000;
 
+// Phase 3 primitives: attributes, domains, relations, resources, metrics, tunables, events and actions.
+export const MAX_ATTRIBUTES = 32;
+export const MAX_ENUM_VALUES = 32;
+export const MAX_DOMAINS = 16;
+export const MAX_DOMAIN_ENTRIES = 512;
+export const MAX_ENTRY_ATTRS = 16;
+export const MAX_MULTI_VALUES = 8;
+export const MAX_RELATIONS = 8;
+export const MAX_RESOURCES = 16;
+export const MAX_CAPACITY = 64;
+export const MAX_METRICS = 32;
+export const MAX_TRACK_STEPS = 16;
+export const MAX_PLACEMENT_POINTS = 64;
+export const MAX_TUNABLES = 32;
+export const MAX_TABLE_VALUES = 64;
+export const MAX_EFFECTS = 16;
+export const MAX_ACTION_STEPS = 8;
+export const MAX_STEP_COUNT = 16;
+export const MAX_EVENT_ROUND = 64;
+export const MAX_GRANT = 64;
+
+// Phase 4 primitives: bipartite, filter and challenge pairings, team constraints, calendars and stage ends.
+export const MAX_SIDE_VALUES = 32;
+export const MAX_BIPARTITE_ROUNDS = 32;
+export const MAX_CHALLENGE_ROUNDS = 64;
+export const MAX_CHALLENGE_RANK_RANGE = 64;
+export const MAX_CHALLENGE_OPEN = 8;
+export const MAX_CHALLENGE_COOLDOWN = 16;
+export const MAX_CHALLENGE_WINDOW_HOURS = 336;
+export const MAX_CONSTRAINTS = 32;
+/** Pokémon on one team. */
+export const MAX_TEAM_SIZE = 6;
+export const MAX_COUNT_SPECIES = 64;
+export const MIN_COUNT_ANY_OF = 2;
+export const MAX_COUNT_ANY_OF = 6;
+/** How many `any_of` / `not` levels a count source may nest (the types in `types.ts` have exactly this many). */
+export const MAX_COUNT_SOURCE_DEPTH = 2;
+export const MAX_QUOTA_TYPES = 18;
+export const MAX_TYPE_NAME_CHARS = 16;
+export const MAX_CALENDAR_EVERY = 28;
+export const MAX_CALENDAR_WINDOW_HOURS = 672;
+export const MAX_CALENDAR_MARKS = 16;
+export const MAX_CALENDAR_ROUND = 64;
+/** The longest text of a calendar date (YYYY-MM-DD) and of a time of day (HH:MM). */
+export const CALENDAR_DATE_CHARS = 10;
+export const CALENDAR_TIME_CHARS = 5;
+export const MAX_CALENDAR_OFFSET_HOURS = 672;
+export const MAX_DEADLINES = 8;
+export const MAX_END_ROUNDS = 64;
+
 export {
   COLLECTION_ASSUMED_MAX,
   EXPR_MAX_ARGS,
@@ -85,4 +135,47 @@ export const DOCUMENT_LIMITS = {
   maxViewStages: MAX_VIEW_STAGES,
   ltextMaxChars: LTEXT_MAX_CHARS,
   scoreAbsMax: SCORE_ABS_MAX,
+  maxAttributes: MAX_ATTRIBUTES,
+  maxEnumValues: MAX_ENUM_VALUES,
+  maxDomains: MAX_DOMAINS,
+  maxDomainEntries: MAX_DOMAIN_ENTRIES,
+  maxEntryAttrs: MAX_ENTRY_ATTRS,
+  maxMultiValues: MAX_MULTI_VALUES,
+  maxRelations: MAX_RELATIONS,
+  maxResources: MAX_RESOURCES,
+  maxCapacity: MAX_CAPACITY,
+  maxMetrics: MAX_METRICS,
+  maxTrackSteps: MAX_TRACK_STEPS,
+  maxPlacementPoints: MAX_PLACEMENT_POINTS,
+  maxTunables: MAX_TUNABLES,
+  maxTableValues: MAX_TABLE_VALUES,
+  maxEffects: MAX_EFFECTS,
+  maxActionSteps: MAX_ACTION_STEPS,
+  maxStepCount: MAX_STEP_COUNT,
+  maxEventRound: MAX_EVENT_ROUND,
+  maxGrant: MAX_GRANT,
+  maxSideValues: MAX_SIDE_VALUES,
+  maxBipartiteRounds: MAX_BIPARTITE_ROUNDS,
+  maxChallengeRounds: MAX_CHALLENGE_ROUNDS,
+  maxChallengeRankRange: MAX_CHALLENGE_RANK_RANGE,
+  maxChallengeOpen: MAX_CHALLENGE_OPEN,
+  maxChallengeCooldown: MAX_CHALLENGE_COOLDOWN,
+  maxChallengeWindowHours: MAX_CHALLENGE_WINDOW_HOURS,
+  maxConstraints: MAX_CONSTRAINTS,
+  maxTeamSize: MAX_TEAM_SIZE,
+  maxCountSpecies: MAX_COUNT_SPECIES,
+  minCountAnyOf: MIN_COUNT_ANY_OF,
+  maxCountAnyOf: MAX_COUNT_ANY_OF,
+  maxCountSourceDepth: MAX_COUNT_SOURCE_DEPTH,
+  maxQuotaTypes: MAX_QUOTA_TYPES,
+  maxTypeNameChars: MAX_TYPE_NAME_CHARS,
+  maxCalendarEvery: MAX_CALENDAR_EVERY,
+  maxCalendarWindowHours: MAX_CALENDAR_WINDOW_HOURS,
+  maxCalendarMarks: MAX_CALENDAR_MARKS,
+  maxCalendarRound: MAX_CALENDAR_ROUND,
+  calendarDateChars: CALENDAR_DATE_CHARS,
+  calendarTimeChars: CALENDAR_TIME_CHARS,
+  maxCalendarOffsetHours: MAX_CALENDAR_OFFSET_HOURS,
+  maxDeadlines: MAX_DEADLINES,
+  maxEndRounds: MAX_END_ROUNDS,
 } as const;

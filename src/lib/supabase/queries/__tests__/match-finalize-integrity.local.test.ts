@@ -182,16 +182,43 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     expect(after.map((m) => m.id)).not.toContain(ids.match);
 
     // Leaving `completed` clears the marker, and the marker write refuses a non-completed match.
-    await matches.resetMatchFields(ids.match);
+    // (the reset is a compare-and-set on the status the caller read: a wrong one writes nothing)
+    expect(await matches.resetMatchFields(ids.match, 'in_progress')).toBeNull();
+    expect(await readMarker()).not.toBeNull();
+    expect(await matches.resetMatchFields(ids.match, 'completed')).not.toBeNull();
     expect(await readMarker()).toBeNull();
     expect(await matches.markMatchFinalized(ids.match)).toBe(false);
     expect(await readMarker()).toBeNull();
 
-    // updateMatchPlayers is a status write too: it clears the marker (CR-2).
+    // updateMatchPlayers writes a scheduled match only: a completed one keeps its result and its marker.
     await matches.updateMatchStatus(ids.match, 'completed', ids.p1);
     expect(await matches.markMatchFinalized(ids.match)).toBe(true);
-    await matches.updateMatchPlayers(ids.match, ids.p1, ids.p2);
-    expect(await readMarker()).toBeNull();
+    expect(await matches.updateMatchPlayers(ids.match, ids.p1, ids.p2)).toBeNull();
+    expect(await readMarker()).not.toBeNull();
+  });
+
+  it('binds the marker to the completion: a match completed again carries another confirmed_at', async () => {
+    // The previous test leaves the match completed: start this one from an open match.
+    const reopen = await client
+      .from('matches')
+      .update({ status: 'in_progress', winner_id: null, confirmed_at: null, finalized_at: null })
+      .eq('id', ids.match);
+    expect(reopen.error).toBeNull();
+
+    const first = await matches.updateMatchStatus(ids.match, 'completed', ids.p1, undefined, undefined, 'in_progress');
+    expect(first?.status).toBe('completed');
+    const staleToken = first!.confirmed_at;
+    expect(staleToken).not.toBeNull();
+
+    // Reopened and completed again (another confirmed_at, finalize still to run).
+    await matches.transitionMatchStatus(ids.match, { expectedStatus: 'completed', status: 'in_progress', confirmedAt: null, datePlayed: null });
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    const second = await matches.updateMatchStatus(ids.match, 'completed', ids.p2, undefined, undefined, 'in_progress');
+    expect(second!.confirmed_at).not.toBe(staleToken);
+
+    // The first completion's run cannot stamp the second one.
+    expect(await matches.markMatchFinalized(ids.match, undefined, { confirmedAt: staleToken })).toBe(false);
+    expect(await matches.markMatchFinalized(ids.match, undefined, { confirmedAt: second!.confirmed_at })).toBe(true);
   });
 
   it('pages the finalize worklist with the keyset cursor: every row once, oldest first (CR-2)', async () => {

@@ -18,7 +18,7 @@ export default {
   },
   gallery: {
     heading: 'Examples',
-    intro: 'Three example formats show what the Studio can describe. Open one to read its stages, rules and checks, or use it as a starting point.',
+    intro: 'Example formats show what the Studio can describe. Open one to read its stages, rules and checks, or use it as a starting point.',
     exampleBadge: 'Example',
     readOnlyNote: 'Examples are read-only. Use one as a starting point to get a private copy you can change.',
     open: 'Open',

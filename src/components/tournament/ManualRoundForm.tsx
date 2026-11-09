@@ -6,15 +6,26 @@ import type { Round } from '@/types/round';
 import type { ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
+import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { commonMessages } from '@/i18n/messages/common';
-import { errorsTournaments } from '@/i18n/messages/errors';
+import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import { apiFailure, type UiError } from './ui-error';
+import { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
 
 type ManualRoundErrorKey = 'manualRound.loadFailed' | 'manualRound.createFailed';
+
+/**
+ * The URL of the manual-round call. `force` adds `?force=true`, the league admin's audited override of the first-round
+ * guard (`wantsForcedStart` in src/lib/format-engine/route-guards.ts): the route reads it from the query.
+ */
+export function manualRoundEndpoint(tournamentId: string, force = false): string {
+  const base = `/api/tournaments/${tournamentId}/rounds/manual`;
+  return force ? `${base}?force=true` : base;
+}
 
 interface ManualRoundFormProps {
   tournamentId: string;
@@ -38,9 +49,13 @@ export default function ManualRoundForm({
   const [loading, setLoading] = useState(true);
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
-  const errorText = useApiErrorText(errorsTournaments);
+  // errorsSeasons: the manual route of a grouped league's phase refuses with league-group codes (PHASE_PLAYER_WITHOUT_LEAGUE_GROUP,
+  // PHASE_GROUPS_STALE), the same set RoundManager resolves.
+  const errorText = useApiErrorText(errorsTournaments, errorsSeasons);
   const [error, setError] = useState<UiError<ManualRoundErrorKey> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Set when the server refused the first round with 409 `format_not_ready`: the dialog offers the audited force start.
+  const [forceStart, setForceStart] = useState<FormatNotReadyReason[] | null>(null);
 
   const [roundName, setRoundName] = useState('');
   const [bestOf, setBestOf] = useState(bestOfDefault);
@@ -108,12 +123,13 @@ export default function ManualRoundForm({
   const allSlotsValid = slots.every((s) => s.player_1_id && s.player_2_id);
   const canSubmit = slots.length > 0 && allSlotsValid && unpairedCount <= 1;
 
-  async function handleSubmit() {
+  /** `force`: start anyway after the admin confirmed a 409 `format_not_ready` (audited by the server). */
+  async function handleSubmit(force = false) {
     setError(null);
     setSubmitting(true);
 
     try {
-      const res = await fetch(`/api/tournaments/${tournamentId}/rounds/manual`, {
+      const res = await fetch(manualRoundEndpoint(tournamentId, force), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -128,6 +144,8 @@ export default function ManualRoundForm({
       const result: ApiResult<Round> = await res.json();
 
       if (!result.success) {
+        const reasons = formatNotReadyReasons(result);
+        if (reasons !== null && !force) setForceStart(reasons);
         setError(apiFailure(result));
         return;
       }
@@ -249,7 +267,7 @@ export default function ManualRoundForm({
         <Button
           variant="secondary"
           size="sm"
-          onClick={handleSubmit}
+          onClick={() => void handleSubmit()}
           disabled={!canSubmit}
           loading={submitting}
         >
@@ -259,6 +277,23 @@ export default function ManualRoundForm({
           {t('manualRound.cancel')}
         </Button>
       </div>
+
+      <ConfirmDialog
+        open={forceStart !== null}
+        onClose={() => setForceStart(null)}
+        onConfirm={() => {
+          setForceStart(null);
+          void handleSubmit(true);
+        }}
+        title={t('rounds.forceStart.title')}
+        message={t('rounds.forceStart.message', {
+          reasons: (forceStart ?? [])
+            .map((reason) => (reason === 'relation_undrawn' ? t('rounds.forceStart.relationUndrawn') : t('rounds.forceStart.actionIncomplete')))
+            .join(' '),
+        })}
+        confirmLabel={t('rounds.forceStart.confirm')}
+        confirmVariant="primary"
+      />
     </div>
   );
 }

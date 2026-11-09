@@ -70,10 +70,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rawBody = await request.json();
     const bulkResult = seasonParticipantBulkAddSchema.safeParse(rawBody);
     if (bulkResult.success) {
-      for (const playerId of bulkResult.data.player_ids) {
-        await addSeasonParticipant(id, playerId);
+      // One insert per player: a later one can be refused after the earlier ones committed, so the reads expire in a finally.
+      try {
+        for (const playerId of bulkResult.data.player_ids) {
+          await addSeasonParticipant(id, playerId);
+        }
+      } finally {
+        expireSeasonReads(id);
       }
-      expireSeasonReads(id);
       return NextResponse.json<ApiResult<{ added: number }>>(
         { success: true, data: { added: bulkResult.data.player_ids.length } },
         { status: 201 },
@@ -164,13 +168,17 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     const { player_id: playerId } = zodResult.data;
 
-    if (hasGymType) {
-      await updateParticipantGymType(id, playerId, zodResult.data.gym_type ?? null);
+    // The gym type commits before the core types are checked (a conflict refuses the second), so expire in a finally.
+    try {
+      if (hasGymType) {
+        await updateParticipantGymType(id, playerId, zodResult.data.gym_type ?? null);
+      }
+      if (hasCoreTypes) {
+        await updateParticipantCoreTypes(id, playerId, zodResult.data.core_types ?? null);
+      }
+    } finally {
+      expireSeasonReads(id);
     }
-    if (hasCoreTypes) {
-      await updateParticipantCoreTypes(id, playerId, zodResult.data.core_types ?? null);
-    }
-    expireSeasonReads(id);
 
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {

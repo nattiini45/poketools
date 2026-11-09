@@ -20,6 +20,8 @@ import {
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { assertPhaseEditable } from '@/lib/tournament/league-phase';
+import { assertFormatPhaseRosterOpen, assertSeasonRosterMembers } from '@/lib/format-studio/phase-guards';
+import { auditRosterOverride, rosterOverrideOf } from '@/lib/format-studio/roster-override';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
@@ -38,19 +40,6 @@ async function assertPhaseInSeason(seasonId: string, phaseId: string) {
     });
   }
   return phase;
-}
-
-async function assertRosterMembers(seasonId: string, playerIds: string[]) {
-  const roster = await getSeasonParticipants(seasonId);
-  const rosterIds = new Set(roster.map((p) => p.id));
-  for (const pid of playerIds) {
-    if (!rosterIds.has(pid)) {
-      throw new UserFacingError(
-        'All enrollees must be league roster members',
-        { code: 'PHASE_ROSTER_REQUIRED', status: 400 }
-      );
-    }
-  }
 }
 
 /**
@@ -80,7 +69,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, phaseId } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
@@ -89,6 +78,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     assertPhaseEditable(phase, 'participants');
 
     const rawBody = await request.json();
+    // The roster of a format phase that has started is not edited here (409 format_phase_owned) unless the request forces
+    // it with a reason; a forced change is audited below once it is made.
+    const override = await assertFormatPhaseRosterOpen(id, phase, rosterOverrideOf(rawBody));
     const bulkParsed = phaseParticipantBulkSchema.safeParse(rawBody);
     if (bulkParsed.success) {
       const roster = await getSeasonParticipants(id);
@@ -96,19 +88,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         ? roster.map((p) => p.id)
         : bulkParsed.data.player_ids ?? [];
 
-      await assertRosterMembers(id, playerIds);
+      await assertSeasonRosterMembers(id, playerIds);
 
       const existing = await getParticipants(phaseId);
       const enrolledIds = new Set(existing.map((p) => p.id));
       let added = 0;
-      for (const playerId of playerIds) {
-        if (!enrolledIds.has(playerId)) {
-          await addParticipant(phaseId, playerId);
-          enrolledIds.add(playerId);
-          added++;
+      // One insert per player: a later one can fail after the earlier ones committed, so the reads expire and a forced
+      // change is audited in a finally, with the players that did get in.
+      try {
+        for (const playerId of playerIds) {
+          if (!enrolledIds.has(playerId)) {
+            await addParticipant(phaseId, playerId);
+            enrolledIds.add(playerId);
+            added++;
+          }
         }
+      } finally {
+        expireTournamentReads(phaseId, id);
+        if (override && added > 0) auditRosterOverride(admin, id, phase, override, 'add', { added });
       }
-      expireTournamentReads(phaseId, id);
 
       return NextResponse.json<ApiResult<{ added: number }>>(
         { success: true, data: { added } },
@@ -125,9 +123,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await assertRosterMembers(id, [singleParsed.data.player_id]);
+    await assertSeasonRosterMembers(id, [singleParsed.data.player_id]);
     await addParticipant(phaseId, singleParsed.data.player_id);
     expireTournamentReads(phaseId, id);
+    if (override) auditRosterOverride(admin, id, phase, override, 'add', { player_id: singleParsed.data.player_id });
     return NextResponse.json<ApiResult<null>>(
       { success: true, data: null },
       { status: 201 }
@@ -140,7 +139,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, phaseId } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
@@ -149,6 +148,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     assertPhaseEditable(phase, 'participants');
 
     const rawBody = await request.json();
+    // See POST: 409 format_phase_owned for a started format phase, unless forced with a reason.
+    const override = await assertFormatPhaseRosterOpen(id, phase, rosterOverrideOf(rawBody));
     const parsed = seasonParticipantRemoveSchema.safeParse(rawBody);
     if (!parsed.success) {
       const issues = formatZodErrors(parsed.error);
@@ -160,6 +161,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     await removeParticipant(phaseId, parsed.data.player_id);
     expireTournamentReads(phaseId, id);
+    if (override) auditRosterOverride(admin, id, phase, override, 'remove', { player_id: parsed.data.player_id });
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to remove phase participant');
@@ -169,7 +171,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
     const { id, phaseId } = await params;
-    await requireResourceAdmin('season', id);
+    const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
@@ -178,6 +180,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     assertPhaseEditable(phase, 'participants');
 
     const rawBody = await request.json();
+    // See POST: 409 format_phase_owned for a started format phase, unless forced with a reason.
+    const override = await assertFormatPhaseRosterOpen(id, phase, rosterOverrideOf(rawBody));
     const parsed = tournamentParticipantSeedsSchema.safeParse(rawBody);
     if (!parsed.success) {
       const issues = formatZodErrors(parsed.error);
@@ -221,6 +225,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       throw err;
     }
     expireTournamentReads(phaseId, id);
+    if (override) auditRosterOverride(admin, id, phase, override, 'seeds', { seeded: nonNullSeeds.length });
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update phase seeds');

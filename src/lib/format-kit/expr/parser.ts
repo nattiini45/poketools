@@ -1,5 +1,5 @@
 import { KEY_PATTERN } from '@/lib/studio-core/keys';
-import type { CollectionType, Expr, ExprIssue, ExprIssueCode, ExprType, TypeEnv } from './ast';
+import { isPlainRefName, type CollectionType, type Expr, type ExprIssue, type ExprIssueCode, type ExprType, type TypeEnv } from './ast';
 import { KEYWORDS, LexError, tokenize, type Token } from './lexer';
 import {
   EXPR_MAX_ARGS,
@@ -302,12 +302,12 @@ class Parser {
 
   private parseRef(token: Token): Expr {
     const name = token.text;
-    const dot = name.indexOf('.');
-    if (dot < 0) {
+    if (isPlainRefName(name)) {
       const t = this.env.refs.get(name);
       if (t === undefined) return this.fail('expr_unknown_ref', { offset: token.offset, name });
       return { k: 'ref', name, t };
     }
+    const dot = name.indexOf('.');
     if (name.slice(0, dot) !== 'item' || this.scope === null) return this.fail('expr_item_scope', { offset: token.offset, name });
     const t: ExprType | undefined = this.scope.collection.fields.get(name.slice(dot + 1));
     if (t === undefined) return this.fail('expr_unknown_field', { offset: token.offset, name, over: this.scope.over });

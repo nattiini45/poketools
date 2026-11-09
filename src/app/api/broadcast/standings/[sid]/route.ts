@@ -104,6 +104,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     }
 
     const matchRecords: MatchRecord[] = completedMatches.map((m) => ({
+      match_id: m.id,
       player_1_id: m.player_1_id,
       player_2_id: m.player_2_id,
       winner_id: m.winner_id,

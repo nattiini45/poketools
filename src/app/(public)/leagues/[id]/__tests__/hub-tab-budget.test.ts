@@ -1135,6 +1135,41 @@ describe('league hub — tab links keep ?world= and every other param', () => {
   });
 });
 
+// ─── 4b. The player page link of a custom league ─────────────────────────
+
+/** Every href the real LeagueHub renders (header links and tab links). */
+function hubHrefs(hub: HubElement): string[] {
+  return collect(LeagueHub(hub.props) as ReactNode, (element) => typeof element.props.href === 'string').map(
+    (element) => element.props.href as string,
+  );
+}
+
+describe('league hub — the player page link', () => {
+  const playHref = `/dashboard/leagues/${EPB_SEASON_ID}/play`;
+
+  it('a custom league links to its play page and a league of any other format does not', async () => {
+    const plain = await renderPage(EPB_SEASON_ID);
+    expect(hubHrefs(hubOf(plain))).not.toContain(playHref);
+
+    installFake((tables) => {
+      tables.seasons = tables.seasons.map((season) => (season.id === EPB_SEASON_ID ? { ...season, format_type: 'custom' } : season));
+    });
+    const custom = await coldRender(EPB_SEASON_ID);
+    expect(hubHrefs(hubOf(custom.page))).toContain(playHref);
+  });
+
+  it('the link comes from the league row the page already has: the hub costs no read of its own', async () => {
+    const plain = await coldRender(EPB_SEASON_ID);
+    installFake((tables) => {
+      tables.seasons = tables.seasons.map((season) => (season.id === EPB_SEASON_ID ? { ...season, format_type: 'custom' } : season));
+    });
+    const custom = await coldRender(EPB_SEASON_ID);
+    // A custom league's page reads its attached format (`season_formats`) as it did before the link; the hub adds nothing.
+    expect(tablesRead(custom.queries)).toEqual([...tablesRead(plain.queries), 'season_formats'].sort());
+    expect(custom.queries.length).toBe(plain.queries.length + 1);
+  });
+});
+
 // ─── 5. Public-only hub props ─────────────────────────────────────────────
 
 describe('league hub — the hub props are public-only', () => {

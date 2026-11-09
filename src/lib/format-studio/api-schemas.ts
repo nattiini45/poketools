@@ -5,6 +5,7 @@
  */
 import { z } from 'zod';
 import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import { SEASON_FORMAT_ENGINES } from './library-types';
 import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
 import {
   MAX_REVISION,
@@ -74,6 +75,11 @@ export const seasonFormatAttachSchema = z.strictObject({
   version_no: z.number().int().min(1).max(MAX_REVISION).optional(),
 });
 export type SeasonFormatAttachBody = z.infer<typeof seasonFormatAttachSchema>;
+
+/** `PUT /api/seasons/[id]/format/engine`. */
+export const seasonFormatEngineSchema = z.strictObject({
+  engine: z.enum(SEASON_FORMAT_ENGINES),
+});
 
 /** `GET /api/seasons/[id]/format` query string. */
 export const seasonFormatQuerySchema = z.strictObject({

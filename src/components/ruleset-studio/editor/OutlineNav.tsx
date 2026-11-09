@@ -30,6 +30,7 @@ export function changeCountOf(doc: DraftDocument, section: EditorSection): numbe
       return rules.ban.length + rules.unban.length + (rules.allow?.length ?? 0);
     }
     case 'constraints': return (doc.team_constraints !== null ? 1 : 0) + (doc.min_shared_type_pct > 0 ? 1 : 0);
+    case 'levels': return doc.levels === null ? 0 : 1 + doc.levels.entries.length;
     case 'notes': return doc.custom_rules.trim() === '' ? 0 : 1;
     default: return 0;
   }

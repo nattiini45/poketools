@@ -6,6 +6,7 @@ import { FormatStudioError } from '../errors';
 import type { FormatDefinitionMeta, FormatVersion, SeasonFormatSummary } from '../library-types';
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
+vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 vi.mock('@/lib/supabase/queries/format-definitions', () => ({
   getFormatDefinitionMeta: vi.fn(),
   getFormatVersion: vi.fn(),
@@ -29,6 +30,7 @@ vi.mock('@/lib/format-kit/compile', async (importOriginal) => {
   return { ...actual, compile: vi.fn(actual.compile) };
 });
 
+import { expireSeasonReads } from '@/lib/revalidation';
 import { compile as compileSpy } from '@/lib/format-kit/compile';
 import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } from '@/lib/supabase/queries/format-definitions';
 import {
@@ -176,6 +178,7 @@ beforeEach(() => {
     ],
     removed_stage_ids: [],
     removed_ruleset_ids: [],
+    cleared: null,
   });
 });
 
@@ -237,6 +240,18 @@ describe('attachFormatToSeason: refusals, in order, with no database function ca
     vi.mocked(getFormatDefinitionMeta).mockResolvedValue(definitionMeta({ owner_id: OTHER, visibility: 'private' }));
     await attach({ actor: actor({ playerId: '33333333-3333-4333-8333-333333333333', isAdmin: true }) });
     expect(attachSeasonFormat).toHaveBeenCalledTimes(1);
+  });
+
+  it('answers a team that points at a phase the replace removes with format_phases_in_use, not the detach text, and discards the rulesets', async () => {
+    vi.mocked(attachSeasonFormat).mockRejectedValueOnce(new FormatStudioError('format_detach_blocked'));
+    expect(codeOf(await failure(attach()))).toBe('format_phases_in_use');
+    expect(discardMaterialised).toHaveBeenCalled();
+  });
+
+  it('expires the league reads right after the RPC commits, even when the summary read that follows throws', async () => {
+    vi.mocked(getSeasonFormatSummary).mockRejectedValue(new Error('boom'));
+    await expect(attach()).rejects.toThrow('boom');
+    expect(expireSeasonReads).toHaveBeenCalledWith(SEASON_ID, [STAGE_KNOCKOUT, STAGE_GROUPS]);
   });
 
   it('3. a definition with no published version answers format_not_published', async () => {
@@ -366,6 +381,12 @@ describe('attachFormatToSeason: the write', () => {
     expect(input.stages.every((s) => s.stage_spec.spec_hash === version.content_hash)).toBe(true);
   });
 
+  it('keeps the groups gap for a league that does not run on the kit engine', async () => {
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue({ ...summary, engine: 'shadow' });
+    const outcome = await attach();
+    expect(outcome.warnings).toEqual([{ code: 'groups_not_created', stage: 'groups', params: { count: 4, method: 'serpentine' } }]);
+  });
+
   it('uses the version named by the caller', async () => {
     await attach(3);
     expect(getFormatVersion).toHaveBeenCalledWith(DEFINITION_ID, 3);
@@ -379,7 +400,7 @@ describe('attachFormatToSeason: the write', () => {
     expect(env).toBeDefined();
     expect(env).not.toHaveProperty('rosterSize');
     expect(env?.rulesetIds).toBeInstanceOf(Set);
-    expect(env?.matchModel).toEqual({ draws: false, forfeits: false, maxPlayersPerMatch: 2 });
+    expect(env?.matchModel).toEqual({ draws: false, forfeits: true, maxPlayersPerMatch: 2 });
   });
 
   it('draws a new seed on every attach', async () => {
@@ -396,7 +417,8 @@ describe('attachFormatToSeason: the write', () => {
       { id: STAGE_GROUPS, key: 'groups', bracket_type: 'round_robin', stage_order: 1 },
       { id: STAGE_KNOCKOUT, key: 'knockout', bracket_type: 'single_elim', stage_order: 2 },
     ]);
-    expect(outcome.warnings).toEqual([{ code: 'groups_not_created', stage: 'groups', params: { count: 4, method: 'serpentine' } }]);
+    // The league runs on the kit engine, which forms serpentine groups before the first round: no gap left to report.
+    expect(outcome.warnings).toEqual([]);
     expect(outcome.season_format).toBe(summary);
     expect(outcome.definition).toEqual({ id: DEFINITION_ID, slug: 'spring-cup' });
     expect(outcome.version_no).toBe(3);
@@ -412,10 +434,17 @@ describe('attachFormatToSeason: the write', () => {
       ],
       removed_stage_ids: [STAGE_OLD],
       removed_ruleset_ids: [],
+      cleared: { links: 6, items: 6, submissions: 1, adjustments: 2 },
     });
     const outcome = await attach();
     expect(outcome.replaced).toBe(true);
     expect(outcome.touched_stage_ids).toContain(STAGE_OLD);
+    // What the replace deleted reaches the caller, which writes it into the audit entry.
+    expect(outcome.cleared).toEqual({ links: 6, items: 6, submissions: 1, adjustments: 2 });
+  });
+
+  it('a first attach reports no cleared counts', async () => {
+    expect((await attach()).cleared).toBeNull();
   });
 
   it('lets a database refusal through (the function repeats the started and manual-phase checks under a lock)', async () => {
@@ -504,6 +533,7 @@ describe('attachFormatToSeason: rule-preset stages', () => {
       ],
       removed_stage_ids: [],
       removed_ruleset_ids: [OLD_RULESET],
+      cleared: null,
     });
     expect((await attach()).rulesets_changed).toBe(true);
   });
@@ -513,6 +543,26 @@ describe('attachFormatToSeason: rule-preset stages', () => {
     vi.mocked(attachSeasonFormat).mockRejectedValue(new FormatStudioError('format_season_started'));
     expect(codeOf(await failure(attach()))).toBe('format_season_started');
     expect(discardMaterialised).toHaveBeenCalledWith([NEW_DEFINITION]);
+  });
+
+  it('passes the confirmation of a replace over runtime data to the function, and defaults to no confirmation', async () => {
+    await attachFormatToSeason({ actor: actor(), seasonId: SEASON_ID, definitionId: DEFINITION_ID });
+    expect(vi.mocked(attachSeasonFormat).mock.calls[0][0].confirmClear).toBe(false);
+    await attachFormatToSeason({ actor: actor(), seasonId: SEASON_ID, definitionId: DEFINITION_ID, confirmClear: true });
+    expect(vi.mocked(attachSeasonFormat).mock.calls[1][0].confirmClear).toBe(true);
+  });
+
+  it('refuses a replace over runtime data with the counts, discards the rulesets it created and expires nothing', async () => {
+    vi.mocked(getLatestPublishedVersion).mockResolvedValue(presetVersion());
+    vi.mocked(attachSeasonFormat).mockRejectedValue(
+      new FormatStudioError('format_runtime_has_data', { links: 10, items: 4, submissions: 3, adjustments: 0 }),
+    );
+    const err = (await failure(attach())) as FormatStudioError;
+    expect(err.code).toBe('format_runtime_has_data');
+    expect(err.statusCode).toBe(409);
+    expect(err.params).toEqual({ links: 10, items: 4, submissions: 3, adjustments: 0 });
+    expect(discardMaterialised).toHaveBeenCalledWith([NEW_DEFINITION]);
+    expect(getSeasonFormatSummary).not.toHaveBeenCalled();
   });
 
   it('a format the catalog does not know is a compile error and creates nothing', async () => {
@@ -527,12 +577,29 @@ describe('attachFormatToSeason: rule-preset stages', () => {
 
 describe('detachFormatFromSeason', () => {
   it('returns the removed stage ids and the rulesets the attach had created', async () => {
-    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS], removed_ruleset_ids: [OLD_RULESET] });
+    const cleared = { links: 2, items: 0, submissions: 0, adjustments: 1 };
+    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [STAGE_GROUPS], removed_ruleset_ids: [OLD_RULESET], cleared });
     await expect(detachFormatFromSeason(SEASON_ID)).resolves.toEqual({
       removed_stage_ids: [STAGE_GROUPS],
       removed_ruleset_ids: [OLD_RULESET],
+      cleared,
     });
-    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID);
+    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, false, null);
+  });
+
+  it('passes the confirmation to the function', async () => {
+    vi.mocked(detachSeasonFormat).mockResolvedValue({ removed_stage_ids: [], removed_ruleset_ids: [], cleared: null });
+    await detachFormatFromSeason(SEASON_ID, { confirmClear: true });
+    expect(detachSeasonFormat).toHaveBeenCalledWith(SEASON_ID, true, null);
+  });
+
+  it('lets the refusal over runtime data through with its counts', async () => {
+    vi.mocked(detachSeasonFormat).mockRejectedValue(
+      new FormatStudioError('format_runtime_has_data', { links: 1, items: 0, submissions: 0, adjustments: 0 }),
+    );
+    const err = (await failure(detachFormatFromSeason(SEASON_ID))) as FormatStudioError;
+    expect(err.code).toBe('format_runtime_has_data');
+    expect(err.params).toEqual({ links: 1, items: 0, submissions: 0, adjustments: 0 });
   });
 
   it('lets the typed refusals of the function through', async () => {

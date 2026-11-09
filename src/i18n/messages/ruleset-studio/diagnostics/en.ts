@@ -11,6 +11,7 @@ export default {
     items: 'items',
     abilities: 'abilities',
     clauses: 'clauses',
+    levels: 'level rules',
   },
   code: {
     invalid_structure: 'The document has a structure problem: {issue}.',
@@ -38,6 +39,7 @@ export default {
     bad_id: 'an id with characters that are not allowed',
     bad_percent: 'a percentage outside 0 to 100',
     bad_team_constraints: 'invalid team constraints',
+    bad_levels: 'invalid level rules',
     bad_custom_rules: 'invalid notes',
   },
   fix: {

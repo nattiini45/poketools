@@ -7,6 +7,7 @@ import 'server-only';
 import type { Locale } from '@/i18n/config';
 import { describeRuleset, type DescribedRuleset } from '@/lib/ruleset-kit/describe';
 import { getPreset } from '@/lib/pkmn/format-catalog';
+import { challengeSpeciesLookup } from '@/lib/pkmn/showdown-challenge.server';
 import type { ResolvedRules, RulesetDocument } from '@/lib/ruleset-kit/types';
 import { compileDocument } from './compile.server';
 import { KIND_OF, displayNameOf } from './editor/picker/display';
@@ -17,6 +18,7 @@ export function describeResolved(rules: ResolvedRules, locale: Locale, presetNam
   return describeRuleset(rules, locale, {
     presetName,
     nameOf: (category, id) => displayNameOf(KIND_OF[category], entryName(category, id), locale),
+    challengeSpecies: challengeSpeciesLookup(rules.gen),
   });
 }
 

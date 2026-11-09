@@ -12,6 +12,8 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { adminMatchMessages } from '@/i18n/messages/admin-match';
 import { errorsMatches } from '@/i18n/messages/errors';
 import { canReopenMatch } from '@/lib/tournament/match-state';
+import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
+import { stageEndedApiWarning } from '@/lib/match/stage-ended-warning';
 import { errorNeedsRefresh } from './AdminMatchActions';
 import type { MatchStatus } from '@/types/match';
 
@@ -23,8 +25,11 @@ interface MatchReopenSectionProps {
 /** An API failure (translated by its code) or the local failure; never translated text. */
 type ReopenError = { api: ApiErrorLike } | { local: 'failed' };
 
-/** What the section reports once it is no longer reopenable: a clean reopen, or one whose follow-up steps failed. */
-type ReopenOutcome = 'reopened' | { incomplete: ApiErrorLike };
+/**
+ * What the section reports once it is no longer reopenable: a reopen (with the warnings it carries, e.g. that the stage
+ * of the match's phase had already ended), or one whose follow-up steps failed.
+ */
+type ReopenOutcome = { reopened: ApiErrorLike[] } | { incomplete: ApiErrorLike; warnings: ApiErrorLike[] };
 
 /**
  * How a failed reopen is handled: `incomplete` (the status change is committed,
@@ -58,13 +63,16 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
       const json = await res.json();
       if (json.success) {
         setOpen(false);
-        setOutcome('reopened');
+        setOutcome({ reopened: gameChangeWarnings(json.data) });
         router.refresh();
       } else if (reopenFailureKind(json.code) === 'incomplete') {
         // The status change is committed; only follow-up steps failed. Show the
-        // page as it is now and keep the warning where the controls were.
+        // page as it is now and keep the warning where the controls were. The
+        // error carries the stage-ended notice as flat params (it has no data).
+        const incomplete = toApiErrorLike(json);
+        const stageEnded = stageEndedApiWarning(incomplete.params);
         setOpen(false);
-        setOutcome({ incomplete: toApiErrorLike(json) });
+        setOutcome({ incomplete, warnings: stageEnded ? [stageEnded] : [] });
         router.refresh();
       } else {
         if (reopenFailureKind(json.code) === 'stale') router.refresh();
@@ -82,11 +90,18 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
     if (!outcome) return null;
     return (
       <Section title={t('reopen.title')}>
-        {outcome === 'reopened' ? (
-          <Alert variant="success">{t('reopen.success')}</Alert>
-        ) : (
-          <Alert variant="warning">{errorText(outcome.incomplete)}</Alert>
-        )}
+        <div className="space-y-2">
+          {'reopened' in outcome ? (
+            <Alert variant="success">{t('reopen.success')}</Alert>
+          ) : (
+            <Alert variant="warning">{errorText(outcome.incomplete)}</Alert>
+          )}
+          {('reopened' in outcome ? outcome.reopened : outcome.warnings).map((warning) => (
+            <Alert key={warning.code ?? warning.error ?? ''} variant="warning">
+              {errorText(warning)}
+            </Alert>
+          ))}
+        </div>
       </Section>
     );
   }

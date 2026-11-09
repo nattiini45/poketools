@@ -152,7 +152,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(async () => [...db.rounds].sort((a, b) => (a.round_number as number) - (b.round_number as number))),
-  createRound: vi.fn(async (input: Record<string, unknown>) => {
+  // The route writes a round and its matches in one call (`round_write`). `failMatches` models the leftover the agent's
+  // read-back must still tolerate: a round whose matches never arrived (an older version wrote the two apart).
+  createRoundWithMatches: vi.fn(async (input: Record<string, unknown>) => {
     const row = {
       id: '00000000-0000-4000-8000-000000007301',
       tournament_id: input.tournament_id,
@@ -168,9 +170,18 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
       updated_at: '2026-10-27T12:00:05.000Z',
     };
     db.rounds.push(row);
+    if (db.failMatches) throw new Error('connection reset (secret detail)');
+    db.matches.push(...(input.matches as Array<Record<string, unknown>>));
+    // `round_write` moves the phase in the same transaction: upcoming becomes active, current_round never goes backwards.
+    if (db.tournament) {
+      Object.assign(db.tournament, {
+        status: db.tournament.status === 'upcoming' ? 'active' : db.tournament.status,
+        current_round: Math.max(Number(db.tournament.current_round ?? 0), Number(input.round_number)),
+      });
+    }
     return row;
   }),
-  updateRoundByePlayers: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(async (id: string, status: string) => {
     if (db.failStart) throw new Error('start failed (secret detail)');
     const row = db.rounds.find((round) => round.id === id);
@@ -179,10 +190,6 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   }),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(async (inputs: Array<Record<string, unknown>>) => {
-    if (db.failMatches) throw new Error('connection reset (secret detail)');
-    db.matches.push(...inputs);
-  }),
   getCompletedMatchRecords: vi.fn(async () => []),
   getPairedMatchRecords: vi.fn(async () => []),
   getMatchesByTournament: vi.fn(async () => db.matches),

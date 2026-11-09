@@ -111,6 +111,15 @@ describe('buildTournamentPatch', () => {
     ).toEqual({});
   });
 
+  it('compares the third-place match only for single elimination, default off', () => {
+    const single = { ...initial, bracket_type: 'single_elim' as const, third_place_enabled: undefined };
+    const asSingle = (third: boolean | undefined) =>
+      submitted({ bracket_type: 'single_elim', bracket_reset_enabled: undefined, third_place_enabled: third });
+    expect(buildTournamentPatch(single, asSingle(false), open)).toEqual({});
+    expect(buildTournamentPatch(single, asSingle(true), open)).toEqual({ third_place_enabled: true });
+    expect(buildTournamentPatch(initial, submitted({ third_place_enabled: true }), open)).toEqual({});
+  });
+
   it('does not emit the reset when the bracket type moves away from double elimination', () => {
     expect(
       buildTournamentPatch(initial, submitted({ bracket_type: 'swiss', bracket_reset_enabled: undefined }), open),

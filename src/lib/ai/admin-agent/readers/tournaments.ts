@@ -11,7 +11,7 @@ import { getAdminScope } from '@/lib/auth/admin-scope';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { getParticipants, getTournamentWithDetails, listTournaments, listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
-import { buildBracketStructureForParticipants } from '@/lib/tournament/bracket-structure';
+import { bracketStructureOptionsOf, buildBracketStructureForParticipants } from '@/lib/tournament/bracket-structure';
 import { defineRunnable } from '../registry/define';
 import { capped, code, id, label, uuidArg } from '../registry/atoms';
 import { fenceLabel } from '../registry/fence';
@@ -142,7 +142,7 @@ export const tournamentBracketPreview = defineRunnable('tournament', {
     const structure = buildBracketStructureForParticipants(
       tournament.bracket_type,
       rows.map((row) => ({ seed: row.seed, starting_bracket: row.starting_bracket, name: row.name })),
-      { bracketResetEnabled: tournament.bracket_reset_enabled ?? true },
+      bracketStructureOptionsOf(tournament),
     );
     if (structure === null) {
       return {

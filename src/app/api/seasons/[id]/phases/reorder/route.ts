@@ -6,6 +6,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { getStagesBySeasonId, reorderPhases } from '@/lib/supabase/queries/tournaments';
 import { expireSeasonReads } from '@/lib/revalidation';
+import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -30,6 +31,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    // A league with an attached format keeps the order its format gave the phases (409 format_phase_owned).
+    await assertSeasonPhasesFree(id);
 
     const stages = await getStagesBySeasonId(id);
     const upcoming = stages.filter((s) => s.status === 'upcoming');

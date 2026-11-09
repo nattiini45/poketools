@@ -15,6 +15,7 @@ import { parseAdvancementRule, parseBoOverrides, parseEnrollmentSource } from '@
 import type { SeasonFormatType } from '@/types/season';
 import type { EnrollmentSource } from '@/types/season';
 import { SeedConflictError, SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 type TournamentRow = Tables<'tournaments'>;
 
@@ -38,6 +39,7 @@ function toTournament(row: TournamentRow): Tournament {
     archived: row.archived,
     legacy: row.legacy,
     bracket_reset_enabled: row.bracket_reset_enabled,
+    third_place_enabled: row.third_place_enabled,
     created_at: row.created_at,
     updated_at: row.updated_at,
   };
@@ -248,6 +250,7 @@ export async function createTournament(input: TournamentFormData): Promise<Tourn
     stage_order: input.stage_order ?? 0,
     advancement_rule: (input.advancement_rule as Json) ?? null,
     bracket_reset_enabled: input.bracket_reset_enabled ?? true,
+    third_place_enabled: input.third_place_enabled ?? false,
   };
 
   const { data, error } = await supabase
@@ -366,6 +369,9 @@ export async function updateTournament(
   if (input.bracket_reset_enabled !== undefined) {
     updates.bracket_reset_enabled = input.bracket_reset_enabled;
   }
+  if (input.third_place_enabled !== undefined) {
+    updates.third_place_enabled = input.third_place_enabled;
+  }
   if (input.enrollment_source !== undefined) {
     updates.enrollment_source = input.enrollment_source as Json;
   }
@@ -379,6 +385,52 @@ export async function updateTournament(
 
   if (error) throw error;
   return toTournament(data);
+}
+
+/** What `completeTournamentIfActive` found; see `phase_complete_at_stage_end` in 20261106090000_format_challenges.sql. */
+export type CompleteTournamentResult =
+  /** This call moved the row, so exactly one of two concurrent callers gets it. */
+  | { outcome: 'completed'; tournament: Tournament }
+  /** The tournament was not active (another writer completed it first, or it never started), or is gone. */
+  | { outcome: 'not_active' }
+  /** An unfinished match exists that the caller's read did not see (a challenge accepted since): the phase stays active. */
+  | { outcome: 'unsettled'; unknownUnfinished: number };
+
+/**
+ * Compare-and-set of the status at a stage end: `active` to `completed`, decided under a lock on the phase row
+ * (`phase_complete_at_stage_end`). `knownUnfinished` are the ids of the matches the caller's read saw unfinished (the
+ * facts its `end_when` decision rests on): the phase completes only while no other unfinished match exists, so a match
+ * created after that read (a challenge accepted meanwhile locks the phase row FOR SHARE until it has inserted it) keeps
+ * the phase open instead of being left unfinished in a completed phase.
+ */
+export async function completeTournamentIfActive(
+  id: string,
+  knownUnfinished: readonly string[],
+): Promise<CompleteTournamentResult> {
+  const { data, error } = await supabase.rpc('phase_complete_at_stage_end', {
+    p_phase_id: id,
+    p_known_unfinished: [...knownUnfinished],
+  });
+  if (error) throw error;
+  const result = parsePhaseComplete(data);
+  if (result === null) throw new Error(`phase_complete_at_stage_end returned an unexpected result: ${JSON.stringify(data)}`);
+  return result;
+}
+
+function parsePhaseComplete(data: unknown): CompleteTournamentResult | null {
+  if (typeof data !== 'object' || data === null || Array.isArray(data)) return null;
+  const body = data as { outcome?: unknown; tournament?: unknown; unknown_unfinished?: unknown };
+  switch (body.outcome) {
+    case 'completed':
+      if (typeof body.tournament !== 'object' || body.tournament === null) return null;
+      return { outcome: 'completed', tournament: toTournament(body.tournament as TournamentRow) };
+    case 'not_active':
+      return { outcome: 'not_active' };
+    case 'unsettled':
+      return { outcome: 'unsettled', unknownUnfinished: typeof body.unknown_unfinished === 'number' ? body.unknown_unfinished : 0 };
+    default:
+      return null;
+  }
 }
 
 export async function archiveTournamentsBySeason(seasonId: string, archived: boolean): Promise<void> {
@@ -549,18 +601,22 @@ export async function addParticipant(
   tournamentId: string,
   playerId: string
 ): Promise<void> {
+  // Frozen BEFORE the write (like the swap): a standings sync that read the phase unfrozen is refused under the row lock
+  // from here on (tournament_enrollment_replace), so it can never replace this row, and a failure of the write leaves the
+  // phase frozen, not the roster half-edited and open to a sync.
+  await freezeEnrollment(tournamentId);
   const { error } = await supabase
     .from('tournament_participants')
     .insert({ tournament_id: tournamentId, player_id: playerId });
 
   if (error) throw error;
-  await freezeEnrollment(tournamentId);
 }
 
 export async function removeParticipant(
   tournamentId: string,
   playerId: string
 ): Promise<void> {
+  await freezeEnrollment(tournamentId); // before the write, see addParticipant
   const { error } = await supabase
     .from('tournament_participants')
     .delete()
@@ -568,7 +624,6 @@ export async function removeParticipant(
     .eq('player_id', playerId);
 
   if (error) throw error;
-  await freezeEnrollment(tournamentId);
 }
 
 /**
@@ -645,9 +700,9 @@ export { SeedConflictError, SeedUpdatePartialError };
  *
  * Unknown player ids are ignored (no row to update), and a row whose seed is
  * unchanged is only written when the request sets its `starting_bracket`.
- * Every non-empty request that completes freezes the phase's enrollment
- * (`freezeEnrollment`), including one that changes nothing: the save records
- * that the admin took control of the seeding.
+ * Every non-empty request that passes the conflict check freezes the phase's enrollment
+ * (`freezeEnrollment`) BEFORE the first write, including one that changes nothing: the save records
+ * that the admin took control of the seeding, and a standings sync cannot replace seeds that are half written.
  * When step 3 fails after anything was written, `SeedUpdatePartialError`
  * (code `SEED_UPDATE_PARTIAL`) reports it distinctly; a failure before any
  * write rethrows the original error.
@@ -701,6 +756,10 @@ export async function updateParticipantSeeds(
     return;
   }
 
+  // Frozen BEFORE the first write, like addParticipant and the swap: a standings sync that read the phase unfrozen is refused
+  // under the row lock from here on, so it can never replace the seeds this call is about to write.
+  await freezeEnrollment(tournamentId);
+
   if (toClear.length > 0) {
     const { error: clearError } = await supabase
       .from('tournament_participants')
@@ -746,29 +805,17 @@ export async function updateParticipantSeeds(
       failures.map((failure) => failure.reason),
     );
   }
-
-  await freezeEnrollment(tournamentId);
 }
 
-export async function setEnrollmentSource(
-  tournamentId: string,
-  source: import('@/types/season').EnrollmentSource
-): Promise<void> {
-  const { error } = await supabase
-    .from('tournaments')
-    .update({ enrollment_source: source as unknown as Json })
-    .eq('id', tournamentId);
-  if (error) throw error;
-}
-
+/**
+ * Freezes the roster of a phase (an admin edited it), in ONE atomic update of the `frozen` flag under the phase row lock a
+ * sync takes (`tournament_enrollment_freeze`). Never a whole-document write built from an earlier read: that would put a
+ * stale source over the one a concurrent sync committed (its contributions and `synced_at` included). A phase without a
+ * source, or one that is frozen already, is left alone.
+ */
 export async function freezeEnrollment(tournamentId: string): Promise<void> {
-  const tournament = await getTournamentById(tournamentId);
-  if (!tournament?.enrollment_source || tournament.enrollment_source.frozen) return;
-
-  await setEnrollmentSource(tournamentId, {
-    ...tournament.enrollment_source,
-    frozen: true,
-  });
+  const { error } = await supabase.rpc('tournament_enrollment_freeze', { p_tournament_id: tournamentId });
+  if (error) throw error;
 }
 
 export async function replacePhaseParticipants(
@@ -793,6 +840,44 @@ export async function replacePhaseParticipants(
       }))
     );
   if (insErr) throw insErr;
+}
+
+/**
+ * Replaces a phase's participants and its `enrollment_source` in one transaction (`tournament_enrollment_replace`), but only
+ * while the stored `enrollment_source.synced_at` still equals `expectedSyncedAt` (the value the caller read before it merged;
+ * null when it read no source). The timestamp is the token because the app reads the source through a normalising parser, so
+ * the raw jsonb would never compare equal. false: another sync of the same phase won in between, so the caller reads the phase again, merges again and retries.
+ *
+ * Without `force` the function also decides "not frozen, no rounds" under the lock (the application's own check ran seconds
+ * earlier, before the standings were computed): a roster an admin froze or a round written since refuses the write with the
+ * same errors `assertEnrollmentSyncAllowed` raises (`ENROLLMENT_FROZEN`, `ENROLLMENT_ROUNDS_EXIST`). The stored `frozen`
+ * flag is kept, whatever `source.frozen` says.
+ */
+export async function replacePhaseEnrollment(
+  tournamentId: string,
+  entries: Array<{ player_id: string; seed: number }>,
+  source: import('@/types/season').EnrollmentSource,
+  expectedSyncedAt: string | null,
+  force = false
+): Promise<boolean> {
+  const { data, error } = await supabase.rpc('tournament_enrollment_replace', {
+    p_tournament_id: tournamentId,
+    p_entries: entries as unknown as Json,
+    p_source: source as unknown as Json,
+    // NULL when the phase had no source; the generated type does not model a nullable argument.
+    p_expected_synced_at: expectedSyncedAt as unknown as string,
+    p_force: force,
+  });
+  if (error) {
+    if (error.code === 'P0001' && error.message === 'enrollment_frozen') {
+      throw new UserFacingError('Enrollment is frozen. Confirm to overwrite imported standings.', { code: 'ENROLLMENT_FROZEN' });
+    }
+    if (error.code === 'P0001' && error.message === 'enrollment_rounds_exist') {
+      throw new UserFacingError('Enrollment cannot be re-synced while rounds exist. Confirm to overwrite.', { code: 'ENROLLMENT_ROUNDS_EXIST' });
+    }
+    throw error;
+  }
+  return data === true;
 }
 
 /** Shift stage_order for phases at or after insert position. */

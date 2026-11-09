@@ -17,11 +17,11 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(),
-  createRound: vi.fn(),
+  createRoundWithMatches: vi.fn(),
+  addMatchesToRound: vi.fn(),
   updateRoundStatus: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  createMatchBatch: vi.fn(),
   getMatchesByTournament: vi.fn(),
   getPairedMatchRecords: vi.fn().mockResolvedValue([]),
 }));
@@ -44,8 +44,9 @@ import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { logAuditEvent } from '@/lib/audit/log';
 import { POST } from '@/app/api/tournaments/[id]/generate-all-rounds/route';
 import { getParticipants, getTournamentById, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { createRound, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
-import { createMatchBatch, getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { addMatchesToRound, createRoundWithMatches, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
+import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { writtenBatches } from '@/test/round-writes';
 import {
   addGroupMembersBatch,
   createGroupBatch,
@@ -106,11 +107,14 @@ beforeEach(() => {
     { id: 'sg-b', season_id: 'season-1', name: 'Silver', sort_order: 2, player_ids: B },
   ]);
   vi.mocked(getMatchesByTournament).mockResolvedValue([]);
-  vi.mocked(createRound).mockImplementation(async (input) => {
+  vi.mocked(createRoundWithMatches).mockImplementation(async (input) => {
     roundSeq += 1;
     return { id: `new-${roundSeq}`, round_number: input.round_number } as never;
   });
 });
+
+// The matches the route wrote (a new round carries them, a reused round gets them added), in call order.
+const batches = () => writtenBatches(vi.mocked(createRoundWithMatches), vi.mocked(addMatchesToRound));
 
 /** Rows of weeks 1..last as stored, every match completed (the first trainer wins). */
 function storedWeeks(last: number) {
@@ -151,11 +155,12 @@ describe('generate-all-rounds — league groups', () => {
     ]);
     expect(vi.mocked(addGroupMembersBatch).mock.calls[0][0]).toHaveLength(14);
 
-    const written = vi.mocked(createRound).mock.calls.map(([input]) => input.round_number);
+    const written = vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.round_number);
     expect(written).toEqual(Array.from({ length: firstPlacement - 1 }, (_, i) => i + 1));
     // Week 1: 3 + 3 in-group matches and the two byes meet across groups.
-    expect(vi.mocked(createMatchBatch).mock.calls[0][0]).toHaveLength(7);
-    expect(updateTournament).toHaveBeenCalledWith(PHASE_ID, { current_round: firstPlacement - 1, status: 'active' });
+    expect(batches()[0]).toHaveLength(7);
+    // The phase went active / current_round moved inside round_write (SQL), not in a second request.
+    expect(updateTournament).not.toHaveBeenCalled();
   });
 
   it('refuses the placement week while a match before it is open: 409, nothing written', async () => {
@@ -170,8 +175,8 @@ describe('generate-all-rounds — league groups', () => {
     expect(res.status).toBe(409);
     expect(json.code).toBe('rounds_group_placement_not_ready');
     expect(json.params).toEqual({ week: firstPlacement });
-    expect(createRound).not.toHaveBeenCalled();
-    expect(createMatchBatch).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('once the weeks before it are played: the placement week from the tables, then on to the next one', async () => {
@@ -182,13 +187,13 @@ describe('generate-all-rounds — league groups', () => {
 
     const res = await POST({} as NextRequest, params);
     expect(res.status).toBe(201);
-    const written = vi.mocked(createRound).mock.calls.map(([input]) => input.round_number);
+    const written = vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.round_number);
     // The placement week and every week after it up to (not including) the second placement week.
     expect(written).toEqual(
       Array.from({ length: plan.totalWeeks - firstPlacement }, (_, i) => firstPlacement + i),
     );
     // The placement week pairs all 14 trainers across groups.
-    const placementMatches = vi.mocked(createMatchBatch).mock.calls[0][0];
+    const placementMatches = batches()[0];
     expect(placementMatches).toHaveLength(7);
     for (const m of placementMatches) expect(m.player_1_id[0]).not.toBe(m.player_2_id[0]);
     // The group tables are untouched once the phase has rounds.
@@ -196,22 +201,43 @@ describe('generate-all-rounds — league groups', () => {
   });
 
   it('a written week an interrupted call left without matches is filled into its round, not skipped', async () => {
-    // Week 2 was written, but its matches never were (round and matches are two writes).
+    // Week 2 was written, but its matches never were (an interrupted call of an earlier version, which wrote the round and its matches apart).
     const { rounds, matches } = storedWeeks(2);
-    vi.mocked(getRoundsByTournament).mockResolvedValue(rounds as never);
+    // The interrupted call left the round as it inserts it (pending); a completed empty round is refused (next test).
+    vi.mocked(getRoundsByTournament).mockResolvedValue(
+      rounds.map((r) => (r.id === 'r2' ? { ...r, status: 'pending' } : r)) as never,
+    );
     vi.mocked(getMatchesByTournament).mockResolvedValue(matches.filter((m) => m.round_id !== 'r2') as never);
     vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
 
     const res = await POST({} as NextRequest, params);
     expect(res.status).toBe(201);
     // Week 2 reuses its round (no second round 2); weeks 3.. up to the placement week get new rounds.
-    expect(vi.mocked(createRound).mock.calls.map(([input]) => input.round_number)).toEqual(
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.round_number)).toEqual(
       Array.from({ length: firstPlacement - 3 }, (_, i) => i + 3),
     );
     const week2 = plan.weeks.find((w) => w.week === 2)!;
-    const firstBatch = vi.mocked(createMatchBatch).mock.calls[0][0];
-    expect(firstBatch.every((m) => m.round_id === 'r2')).toBe(true);
+    const firstBatch = batches()[0];
+    expect(addMatchesToRound).toHaveBeenCalledTimes(1);
+    expect(addMatchesToRound).toHaveBeenCalledWith(expect.objectContaining({ id: 'r2' }), firstBatch);
     expect(firstBatch).toHaveLength(week2.groupPairings.length + week2.crossPairings.length);
+  });
+
+  it('a week whose round the admin completed while it was empty is refused before anything is written (409 rounds_round_completed)', async () => {
+    // Week 2 holds no match and is completed: round_write would refuse it, so the batch must not write weeks 3.. around it.
+    const { rounds, matches } = storedWeeks(2);
+    vi.mocked(getRoundsByTournament).mockResolvedValue(rounds.map((r) => (r.id === 'r2' ? { ...r, name: 'Round 2' } : r)) as never);
+    vi.mocked(getMatchesByTournament).mockResolvedValue(matches.filter((m) => m.round_id !== 'r2') as never);
+    vi.mocked(getGroupsByTournament).mockResolvedValue(mirrored);
+
+    const res = await POST({} as NextRequest, params);
+    const json = await res.json();
+    expect(res.status).toBe(409);
+    expect(json.code).toBe('rounds_round_completed');
+    expect(json.params).toEqual({ round: 'Round 2' });
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
+    expect(addMatchesToRound).not.toHaveBeenCalled();
+    expect(batches()).toEqual([]);
   });
 
   it('a trainer of the phase in no league group is refused before anything is written', async () => {
@@ -225,7 +251,7 @@ describe('generate-all-rounds — league groups', () => {
     expect(res.status).toBe(409);
     expect(json.code).toBe('PHASE_PLAYER_WITHOUT_LEAGUE_GROUP');
     expect(deleteGroupsByTournament).not.toHaveBeenCalled();
-    expect(createRound).not.toHaveBeenCalled();
+    expect(createRoundWithMatches).not.toHaveBeenCalled();
   });
 
   it('7+6 never throws half-way: every group its own round count, rest weeks for the smaller one', async () => {
@@ -250,7 +276,7 @@ describe('generate-all-rounds — league groups', () => {
       { crossGroup: true },
     );
     const placement = smallPlan.weeks.find((w) => w.kind === 'placement')!.week;
-    expect(vi.mocked(createRound).mock.calls.map(([input]) => input.round_number)).toEqual(
+    expect(vi.mocked(createRoundWithMatches).mock.calls.map(([input]) => input.round_number)).toEqual(
       Array.from({ length: placement - 1 }, (_, i) => i + 1),
     );
   });
@@ -267,7 +293,7 @@ describe('generate-all-rounds — league groups', () => {
     const json = await res.json();
 
     expect(res.status).toBe(201);
-    expect(vi.mocked(createRound).mock.calls.length).toBeGreaterThan(1);
+    expect(vi.mocked(createRoundWithMatches).mock.calls.length).toBeGreaterThan(1);
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
     expect(updateRoundStatus).toHaveBeenCalledWith('new-1', 'active');
     expect(json.data[0].status).toBe('active');

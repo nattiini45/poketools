@@ -46,7 +46,7 @@ const ALLOWED: Record<string, Allowed> = {
   '@/lib/studio-core/ltext': ['resolveLText'],
   // One definition of the invisible characters (tag characters, bidi marks, zero-width, variation selectors).
   '@/lib/utils/hidden-text': ['stripHiddenChars'],
-  '@/lib/tournament/bracket-structure': ['buildBracketStructureForParticipants'],
+  '@/lib/tournament/bracket-structure': ['bracketStructureOptionsOf', 'buildBracketStructureForParticipants'],
   '@/lib/tournament/group-schedule': ['GroupScheduleError', 'planGroupSchedule'],
   '@/lib/tournament/league-phase': ['assertPhaseNameFree'],
   '@/lib/tournament/round-robin': ['getRoundRobinTotalRounds'],

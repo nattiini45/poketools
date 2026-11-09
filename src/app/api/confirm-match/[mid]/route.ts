@@ -207,6 +207,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         winnerId,
         previousStatus,
       });
+      if (!finalize.finalized && finalize.reason === 'match_changed') {
+        // Another request reset or reopened the match after the status flip above; it owns the cleanup, nothing is left to finalize.
+        const status = finalize.current_status ?? 'removed';
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `The match changed to ${status} while you were editing it. Review it and try again.`,
+            code: 'match_state_changed',
+            params: { status },
+          },
+          { status: 409 }
+        );
+      }
       if (!finalize.finalized) {
         // Unreachable after the checks above (winner is a participant, the
         // transition left a non-completed status); surface it as a 500.

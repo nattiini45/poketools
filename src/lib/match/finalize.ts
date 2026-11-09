@@ -1,3 +1,4 @@
+import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
@@ -5,8 +6,16 @@ import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tourn
 import { propagateBracketOnMatchComplete } from '@/lib/tournament/bracket-propagation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
-import { markMatchFinalized } from '@/lib/supabase/queries/matches';
+import { getMatchById, markMatchFinalized } from '@/lib/supabase/queries/matches';
 import { getMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
+import {
+  deleteMatchOutcome,
+  getMatchOutcome,
+  recordMatchOutcome,
+  type RecordMatchOutcomeResult,
+} from '@/lib/supabase/queries/match-outcomes';
+import { faintTally, playedOutcomeSource } from '@/lib/match/outcome';
+import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
 import { getRatingHistoryByMatch, getRatingHistoryByMatches, loadRatingScope } from '@/lib/supabase/queries/ratings';
 import { matchCountsForRatings } from '@/lib/rating/rating-scope';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -19,6 +28,7 @@ import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
 import { updateRatings, type RatingUpdateResult } from '@/lib/rating/updateRatings';
 import type { MatchStatus, MatchWithPlayers } from '@/types/match';
+import type { AdminOutcomeKind } from '@/types/match-outcome';
 import type { BattleStat } from '@/types/game';
 import type { Tournament } from '@/types/tournament';
 import type { StreakChanges } from '@/types/streak';
@@ -41,10 +51,12 @@ import type { EarnedAchievement } from '@/types/achievement';
  */
 
 export const FINALIZE_STEPS = [
-  'revalidate',
   'tournament',
-  'ratings',
+  // The outcome row comes first: a completed match is visible to the standings readers from the status flip on, and
+  // without its row it scores as a played match with unknown faints.
   'battle_stats',
+  'outcome',
+  'ratings',
   'streaks',
   'signatures',
   'achievements',
@@ -52,6 +64,9 @@ export const FINALIZE_STEPS = [
   'epb_real_kills',
   'epb_hooks',
   'bracket_propagation',
+  'format_hook',
+  // Last write step: the caches expire after every write a reader can observe, not before the first one.
+  'revalidate',
   'mark_finalized',
 ] as const;
 
@@ -73,7 +88,15 @@ export type FinalizeStep = (typeof FINALIZE_STEPS)[number];
  *   checks are state-based, snapshots go through the replace RPC, and the
  *   orchestrator rolls its own writes back on failure; re-run only while the
  *   match has no snapshots, since they are its last write), bracket_propagation
- *   (materializes only missing downstream slots), mark_finalized.
+ *   (materializes only missing downstream slots), outcome (`match_outcome_record`
+ *   without force rewrites the same played row and never replaces an admin row;
+ *   an admin row is rewritten from itself, so the heal carries the admin's
+ *   forfeit, no-show or played result and only recomputes the faints of a
+ *   played one; the admin result route writes that row BEFORE the status flip
+ *   (`stageAdminOutcome`), so a completed match never lacks it), format_hook
+ *   (the format runtime's `match_completed`, idempotent per completion key; a
+ *   failed hook leaves the marker unset, so the heal calls it again),
+ *   mark_finalized.
  * - `verify`: never re-applied, only checked. ratings: the heal requires
  *   both rating_history rows (a test-league match stays out of ratings and
  *   requires none); when they are missing it stops before every
@@ -94,6 +117,7 @@ export const FINALIZE_HEAL_POLICY: Readonly<Record<FinalizeStep, 'rerun' | 'veri
   tournament: 'rerun',
   ratings: 'verify',
   battle_stats: 'rerun',
+  outcome: 'rerun',
   streaks: 'rerun',
   signatures: 'rerun',
   achievements: 'not_rerun',
@@ -101,6 +125,7 @@ export const FINALIZE_HEAL_POLICY: Readonly<Record<FinalizeStep, 'rerun' | 'veri
   epb_real_kills: 'rerun',
   epb_hooks: 'rerun',
   bracket_propagation: 'rerun',
+  format_hook: 'rerun',
   mark_finalized: 'rerun',
 };
 
@@ -109,16 +134,31 @@ const NOT_RERUN_STEPS: FinalizeStep[] = FINALIZE_STEPS.filter(
   (step) => FINALIZE_HEAL_POLICY[step] === 'not_rerun'
 );
 
+/** The outcome an admin set with the result route; written with force, so it replaces any earlier row. */
+export interface AdminMatchOutcome {
+  kind: AdminOutcomeKind;
+  reason: string;
+  /** The admin who set it; null when the system did (a format's deadline policy). */
+  setBy: string | null;
+}
+
 interface FinalizeMatchCompletionInput {
   match: MatchWithPlayers;
   winnerId: string;
   previousStatus: MatchStatus;
+  /** Absent: a played result (faints from the battle stats, source replay or manual). */
+  adminOutcome?: AdminMatchOutcome;
 }
 
 export interface FinalizeMatchCompletionResult {
   /** False when finalize did not run at all (see `reason`). */
   finalized: boolean;
   reason?: string;
+  /**
+   * With `reason: 'match_changed'`: the status the match has now (`'removed'` when it is gone). The match was reset,
+   * reopened or completed with another winner after the caller's status write; the change owns the cleanup.
+   */
+  current_status?: string;
   propagation_failed?: boolean;
   /**
    * Steps that failed, or could not run because a step they need failed.
@@ -186,6 +226,168 @@ class StepRunner {
       `[match-${this.mode}] step "${step}" not run for match ${this.matchId}: "${missing}" failed`
     );
   }
+}
+
+/**
+ * The format runtime of a custom league (`match_completed`, track progress, assisted checks). A finalize step, so a
+ * failure is visible and retried: the hook is idempotent per completion (its event key), logs its own failure with
+ * the original error and reports it; the step then fails, `finalized_at` stays unset and the heal calls it again. It
+ * needs the match's outcome row (faints, forfeit), so it never runs when the `outcome` step failed.
+ */
+async function runFormatHook(match: MatchWithPlayers, winnerId: string, tournament: Tournament, confirmedAt: string | null): Promise<void> {
+  const { onMatchCompleted } = await import('@/lib/format-engine/runtime/hooks');
+  const applied = await onMatchCompleted({
+    tournament,
+    matchId: match.id,
+    roundId: match.round_id,
+    player1Id: match.player_1_id,
+    player2Id: match.player_2_id,
+    winnerId,
+    ...(confirmedAt !== null ? { confirmedAt } : {}),
+  });
+  if (!applied) throw new Error(`format runtime hook failed for match ${match.id}`);
+}
+
+/**
+ * The outcome of a played match: the faint tally of its battle stats (null when it has none). By default it never
+ * replaces an admin row (a forfeit, no-show or played result the admin result route wrote before the completion), so a
+ * heal or the take-back of a lost staging writes the same row again. `replaceAdminRow` is for the finalize of a
+ * completion that carries no admin intent (a player's confirmation, the auto-confirm, a bulk confirm): any admin row
+ * still there was staged by a request that never completed the match (it died between the staging and its status flip,
+ * or lost the compare-and-set and its take-back failed), so it describes a result that never happened and the played
+ * row replaces it. A staging that races this completion cannot land afterwards (it only writes while the match is not
+ * completed) and one that landed before is the loser's: its own take-back then finds the row replaced and leaves it.
+ */
+function recordPlayedOutcome(
+  match: MatchWithPlayers,
+  statsByGame: Record<string, BattleStat[]>,
+  options: { replaceAdminRow?: boolean } = {}
+): Promise<RecordMatchOutcomeResult> {
+  const tally = faintTally(statsByGame, match.player_1_id, match.player_2_id);
+  return recordMatchOutcome({
+    matchId: match.id,
+    kind: 'played',
+    p1Faints: tally?.p1 ?? null,
+    p2Faints: tally?.p2 ?? null,
+    source: playedOutcomeSource(match.games ?? []),
+    reason: null,
+    setBy: null,
+    force: options.replaceAdminRow ?? false,
+  });
+}
+
+/**
+ * The admin's outcome. Faints come from the battle stats only for a played result (null without stats); a forfeit
+ * or no-show never carries faints.
+ */
+function recordAdminOutcome(
+  match: MatchWithPlayers,
+  outcome: AdminMatchOutcome,
+  statsByGame: Record<string, BattleStat[]> | null
+): Promise<RecordMatchOutcomeResult> {
+  const tally =
+    outcome.kind === 'played' && statsByGame ? faintTally(statsByGame, match.player_1_id, match.player_2_id) : null;
+  return recordMatchOutcome({
+    matchId: match.id,
+    kind: outcome.kind,
+    p1Faints: tally?.p1 ?? null,
+    p2Faints: tally?.p2 ?? null,
+    source: 'admin',
+    reason: outcome.reason,
+    setBy: outcome.setBy,
+    force: true,
+  });
+}
+
+/** The row `stageAdminOutcome` wrote, identified by its `set_at`: what the caller may take back, and nothing another writer put there since. */
+export interface StagedAdminOutcome {
+  setAt: string;
+}
+
+/**
+ * Writes the admin's outcome BEFORE the status flip that completes the match. The flip commits on its own and the
+ * finalize steps after it can fail, and a heal cannot know the admin's intent: written first, a forfeit or no-show
+ * can never be lost to a completed match with a played row. A failure throws with nothing completed, so the caller
+ * answers an error and the admin retries. Faints stay unknown here; the finalize outcome step fills them for a played
+ * result. The write is skipped (`kept`) when the match is already completed: the request that completed it owns the
+ * row, and the caller's own status write then loses with a 409. The write and the status flip are separate
+ * transactions, so two concurrent staged writers can overwrite each other's row; the request whose flip wins
+ * therefore rewrites the row with its own outcome in finalize's outcome step. A request that dies between this write and
+ * its status flip (a timeout, a kill) leaves the row behind on a match that is not completed; the completion that
+ * follows without admin intent (a player's confirmation, the auto-confirm) replaces it in its finalize outcome step, so
+ * the stale row never scores a played match as a forfeit. A caller whose status write loses
+ * anyway calls `discardStagedAdminOutcome` with the handle this returns: the `set_at` of the row it wrote (null when
+ * nothing was written or the row could not be read back; a null handle on a match that is not completed still takes the
+ * row back, see `discardStagedAdminOutcome`).
+ *
+ * A match that a replay-tie has disputed meanwhile owns an `unresolved` row, which the forced write would overwrite
+ * (the status write after it can only lose, the match left its status): staging refuses with
+ * `StagedOutcomeBlockedError` and leaves the row alone. The check and the write are separate calls, so a dispute that
+ * lands between them is still possible; `discardStagedAdminOutcome` puts the row back in that case.
+ */
+export async function stageAdminOutcome(matchId: string, outcome: AdminMatchOutcome): Promise<StagedAdminOutcome | null> {
+  if ((await getMatchOutcome(matchId))?.kind === 'unresolved' && (await getMatchById(matchId))?.status === 'disputed') {
+    throw new StagedOutcomeBlockedError('disputed');
+  }
+  const written = await recordMatchOutcome({
+    matchId,
+    kind: outcome.kind,
+    p1Faints: null,
+    p2Faints: null,
+    source: 'admin',
+    reason: outcome.reason,
+    setBy: outcome.setBy,
+    force: true,
+    // A request that lost the race to a completed match must not overwrite the winner's row.
+    openOnly: true,
+  });
+  if (written !== 'written') return null;
+  try {
+    const row = await getMatchOutcome(matchId);
+    return row?.source === 'admin' ? { setAt: row.set_at } : null;
+  } catch (error) {
+    // The write stands; without its handle a later loss can only take it back without the `set_at` guard (logged).
+    console.error(`[match-outcome] could not read back the staged outcome of match ${matchId}`, error);
+    return null;
+  }
+}
+
+/**
+ * Takes back the outcome `stageAdminOutcome` wrote when the status write lost: the result it described never happened.
+ * With the `staged` handle only that very row goes (a row another request wrote or rewrote since is theirs). The match
+ * may have been completed meanwhile by a request with no admin intent (a player's confirmation, the auto-confirm): its
+ * finalize replaces an admin row, but its outcome write may have run before ours landed or failed, so the played row is
+ * written here once ours is gone (a no-op write when finalize already wrote it). A match that a replay-tie disputed meanwhile lost its `unresolved` row to ours (our forced
+ * write replaced it, or the dispute's own write was kept out by ours): that row is put back, as a disputed match without it
+ * would reach no check and score as a played one. Without a handle (the write stood but could not be read back) the
+ * row goes unconditionally, the callers having ruled out a completed match, and a disputed match gets its `unresolved`
+ * row back all the same; the played row is only written with a handle, as without one the row that went may be
+ * another writer's.
+ */
+export async function discardStagedAdminOutcome(matchId: string, staged?: StagedAdminOutcome | null): Promise<void> {
+  const deleted = await deleteMatchOutcome(matchId, staged ? { onlyIfSetAt: staged.setAt } : {});
+  if (deleted === 0) return;
+  const match = await getMatchById(matchId);
+  if (match?.status === 'disputed') {
+    await restoreUnresolvedOutcome(matchId);
+    return;
+  }
+  if (!staged || match?.status !== 'completed') return;
+  await recordPlayedOutcome(match, await getBattleStatsByMatch(matchId));
+}
+
+/** The row the replay-tie dispute writes (`disputeUnresolvedMatch`); never replaces an admin row. */
+function restoreUnresolvedOutcome(matchId: string): Promise<RecordMatchOutcomeResult> {
+  return recordMatchOutcome({
+    matchId,
+    kind: 'unresolved',
+    p1Faints: null,
+    p2Faints: null,
+    source: 'replay',
+    reason: 'replay_engine_tie',
+    setBy: null,
+    force: false,
+  });
 }
 
 async function loadTournament(tournamentId: string): Promise<Tournament> {
@@ -485,13 +687,18 @@ function emitAnnouncements(input: {
   }
 }
 
-/** Stamp the marker; false when the match is no longer `completed` (reset meanwhile). */
-async function markFinalized(runner: StepRunner, matchId: string): Promise<boolean> {
-  const marked = await runner.run('mark_finalized', () => markMatchFinalized(matchId));
+/**
+ * Stamp the marker; false when the match is no longer the completion this run worked on (reset, or reopened and
+ * completed again, meanwhile): the stamp is bound to the `confirmed_at` the run started from.
+ */
+async function markFinalized(runner: StepRunner, matchId: string, confirmedAt: string | null): Promise<boolean> {
+  const marked = await runner.run('mark_finalized', () =>
+    markMatchFinalized(matchId, undefined, { confirmedAt })
+  );
   if (!marked.ok) return false;
   if (!marked.value) {
     console.error(
-      `[match-finalize] match ${matchId} is no longer completed; finalized_at not stamped`
+      `[match-finalize] match ${matchId} is no longer the completion this run finalized; finalized_at not stamped`
     );
   }
   return marked.value;
@@ -501,6 +708,7 @@ export async function finalizeMatchCompletion({
   match,
   winnerId,
   previousStatus,
+  adminOutcome,
 }: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
   if (previousStatus === 'completed') {
     return { finalized: false, reason: 'already_completed' };
@@ -512,18 +720,47 @@ export async function finalizeMatchCompletion({
   const runner = new StepRunner(match.id, 'finalize');
   const loserId = winnerId === match.player_1_id ? match.player_2_id : match.player_1_id;
 
-  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
+  // The completion this run owns: the callers pass the row they read BEFORE their status write, so the token (the
+  // `confirmed_at` that write stamped) is read here. A match that is no longer completed was reset or reopened since, and
+  // finalizing it would rate a result that no longer stands. A failed read leaves the run without a token: the steps still
+  // run, the marker stays unset and the heal finishes the match.
+  let confirmedAt: string | null = null;
+  const completionStep = await runner.run('mark_finalized', () => getMatchById(match.id));
+  if (completionStep.ok) {
+    // The completion this run owns is this winner's: a match reopened and completed again with another winner is another
+    // completion (its own run finalizes it), and rating this winner under its token would stamp the wrong result.
+    if (completionStep.value?.status !== 'completed' || completionStep.value.winner_id !== winnerId) {
+      return { finalized: false, reason: 'match_changed', current_status: completionStep.value?.status ?? 'removed' };
+    }
+    confirmedAt = completionStep.value.confirmed_at;
+  }
 
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
 
-  const ratingsStep = await runner.run('ratings', () =>
-    updateRatings(winnerId, loserId, false, match.id)
-  );
-
   const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
   const statsByGame = statsStep.ok ? statsStep.value : null;
   const flatStats = statsByGame ? Object.values(statsByGame).flat() : null;
+
+  let outcomeRecorded = false;
+  if (adminOutcome) {
+    // Always rewrite the row with THIS request's outcome, even for a played result whose stats are unknown: the
+    // staged row is not atomic with the status flip, so a concurrent request may have overwritten it between
+    // staging and the flip, and only the request whose flip won knows the outcome that matches the winner.
+    // A played result whose stats could not be read gets null faints (healed once the read works) and keeps the format hook
+    // blocked, as the faints are not known yet. A read that finds no stats is an answer: such a result has none to wait for.
+    const adminStep = await runner.run('outcome', () => recordAdminOutcome(match, adminOutcome, statsByGame));
+    outcomeRecorded = adminStep.ok && (adminOutcome.kind !== 'played' || statsByGame !== null);
+  } else if (statsByGame) {
+    // No admin intent on this completion: a leftover staged admin row is replaced (see recordPlayedOutcome).
+    outcomeRecorded = (await runner.run('outcome', () => recordPlayedOutcome(match, statsByGame, { replaceAdminRow: true }))).ok;
+  } else {
+    runner.blocked('outcome', 'battle_stats');
+  }
+
+  const ratingsStep = await runner.run('ratings', () =>
+    updateRatings(winnerId, loserId, false, match.id)
+  );
 
   // Rebuilt from each player's whole history in one fenced write: two finalizations
   // sharing a player both end up counted, and a rerun lands on the same numbers.
@@ -626,9 +863,27 @@ export async function finalizeMatchCompletion({
     }
   }
 
+  // The format runtime reads the outcome row (faints, forfeit): without it the event would fire with 0 faints and burn
+  // its key, so a failed outcome step blocks it. It also decides the stage end (end_when) from the matches that exist: a
+  // bracket whose next-slot match was not created (propagation failed) looks finished, the phase would complete around the
+  // missing match and the heal's propagation would then insert it into a completed phase, so a failed propagation blocks it
+  // too (the heal runs the propagation before the hook).
+  // (Without the tournament the league is unknown; that failed step already keeps the marker unset.)
+  if (tournament && isKitCandidate(tournament)) {
+    if (outcomeRecorded && !propagationFailed) {
+      await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament, confirmedAt));
+    } else {
+      runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
+    }
+  }
+
+  // After the last write: any reader that took a cache miss in between would have cached a half-written state, and
+  // nothing else expires a result without game rows (a forfeit, a no-show) afterwards.
+  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
+
   let complete = false;
   if (runner.failed.length === 0) {
-    complete = await markFinalized(runner, match.id);
+    complete = await markFinalized(runner, match.id, confirmedAt);
   }
 
   if (runner.failed.length > 0) {
@@ -669,6 +924,25 @@ export async function finalizeMatchCompletion({
 }
 
 /**
+ * The heal's outcome step. A row an admin wrote (the result route stages it before the completion) is the admin's
+ * intent and is rewritten from itself: a forfeit or no-show is left as it is, a played result gets its faints
+ * recomputed from the battle stats. Any other match gets the played row. The heal cannot tell a leftover staged row
+ * from an admin's completed result; the finalize of a completion without admin intent replaces such a row itself, and a
+ * game change, reopen or reset that takes the match off `completed` or `disputed` takes its row with it, so only a failure
+ * of one of those writes (or of the delete after it, which is logged) can leave one for the heal to keep.
+ */
+async function healOutcome(match: MatchWithPlayers, statsByGame: Record<string, BattleStat[]>): Promise<void> {
+  const existing = await getMatchOutcome(match.id);
+  if (existing?.source !== 'admin') {
+    await recordPlayedOutcome(match, statsByGame);
+    return;
+  }
+  if (existing.kind === 'played') {
+    await recordAdminOutcome(match, { kind: 'played', reason: existing.reason ?? '', setBy: existing.set_by }, statsByGame);
+  }
+}
+
+/**
  * Heal a completed match whose finalize did not finish (`finalized_at` NULL):
  * verify ratings first (stopping there if they cannot be verified), then
  * re-run only the replay-safe steps; never re-run achievements or
@@ -690,6 +964,18 @@ export async function healMatchFinalization(
 
   const runner = new StepRunner(match.id, 'heal');
 
+  // The worklist row may be old by now (the cron heals up to a page of matches one after another): only the completion
+  // it names is healed. A match reset, or reopened and completed again with another winner, is left to its own finalize.
+  const current = await runner.run('mark_finalized', () => getMatchById(match.id));
+  if (!current.ok) return { healed: false, failed_steps: [...runner.failed] };
+  if (
+    current.value?.status !== 'completed' ||
+    current.value.winner_id !== winnerId ||
+    current.value.confirmed_at !== match.confirmed_at
+  ) {
+    return { healed: false, skipped: true, reason: 'not_completed', failed_steps: [] };
+  }
+
   // Verify ratings first and stop on any failure: the steps below assume the
   // match counted (streaks, signatures, EPB, bracket), and a match whose
   // ratings never verify would otherwise replay them on every cron run.
@@ -701,9 +987,17 @@ export async function healMatchFinalization(
     return { healed: false, needs_admin: true, reason: 'ratings_missing', failed_steps: ['ratings'] };
   }
 
-  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
   const tournamentStep = await runner.run('tournament', () => loadTournament(match.tournament_id));
   const tournament = tournamentStep.ok ? tournamentStep.value : null;
+
+  const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
+  const statsByGame = statsStep.ok ? statsStep.value : null;
+  let outcomeRecorded = false;
+  if (statsByGame) {
+    outcomeRecorded = (await runner.run('outcome', () => healOutcome(match, statsByGame))).ok;
+  } else {
+    runner.blocked('outcome', 'battle_stats');
+  }
 
   // Rebuilt from the history: correct whether or not the first run's write landed.
   await runner.run('streaks', async () => {
@@ -723,9 +1017,7 @@ export async function healMatchFinalization(
     if (isEpbTournament(tournament)) {
       // Real kills first, always: every game is credited at most once (its
       // marker), so a re-run credits only the games the first run did not.
-      const statsStep = await runner.run('battle_stats', () => getBattleStatsByMatch(match.id));
-      if (statsStep.ok) {
-        const statsByGame = statsStep.value;
+      if (statsByGame) {
         const kills = await runner.run('epb_real_kills', () =>
           runEpbRealKillsStep(match, tournament.season_id, statsByGame)
         );
@@ -747,16 +1039,29 @@ export async function healMatchFinalization(
         runner.blocked('epb_hooks', 'battle_stats');
       }
     }
+    let propagationFailed = false;
     if (isElimTournament(tournament)) {
-      await runner.run('bracket_propagation', () => runBracketStep(match, winnerId, tournament));
+      propagationFailed = !(await runner.run('bracket_propagation', () => runBracketStep(match, winnerId, tournament))).ok;
+    }
+    // The retry of a hook that failed (or never ran) at completion: its event key makes a second call a no-op. It runs
+    // after the propagation and never around a failed one (the stage end would complete the phase without the slot).
+    if (isKitCandidate(tournament)) {
+      if (outcomeRecorded && !propagationFailed) {
+        await runner.run('format_hook', () => runFormatHook(match, winnerId, tournament, match.confirmed_at));
+      } else {
+        runner.blocked('format_hook', outcomeRecorded ? 'bracket_propagation' : 'outcome');
+      }
     }
   }
+
+  // After the last write, whatever failed before it: the writes that did land are visible to readers.
+  await runner.run('revalidate', () => revalidateMatchPages(match.tournament_id, match.id));
 
   if (runner.failed.length > 0) {
     return { healed: false, failed_steps: [...runner.failed] };
   }
 
-  const marked = await markFinalized(runner, match.id);
+  const marked = await markFinalized(runner, match.id, match.confirmed_at);
   if (!marked) {
     if (runner.failed.length > 0) {
       return { healed: false, failed_steps: [...runner.failed] };

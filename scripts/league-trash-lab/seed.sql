@@ -212,5 +212,23 @@ BEGIN
   INSERT INTO cast_sessions (owner_id, season_id, tournament_id, match_id, name) SELECT v_admin, v_season, t.id, (SELECT id FROM matches WHERE tournament_id = t.id LIMIT 1), 'cast' FROM tournaments t WHERE t.season_id = v_season LIMIT 1;
   INSERT INTO agent_conversations (id, player_id, persona, messages) VALUES (v_conv, v_admin, 'p', '[]'::jsonb);
   INSERT INTO agent_suggestions (player_id, conversation_id, match_id, context_format) SELECT v_admin, v_conv, (SELECT m.id FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE t.season_id = v_season LIMIT 1), 'gen9';
+
+  -- the format engine and the match outcomes (added after the lab was written): season_formats, the nine runtime tables,
+  -- format_challenges and match_outcomes, so the fingerprint covers every owned table.
+  INSERT INTO season_formats (season_id, version_no, spec, spec_hash, seed, engine) VALUES (v_season, 1, '{}'::jsonb, repeat('c', 64), 'ltlabseed', 'kit')
+    ON CONFLICT (season_id) DO UPDATE SET engine = 'kit';
+  INSERT INTO format_relation_links (season_id, relation_key, from_player_id, to_player_id) VALUES (v_season, 'lt_rel', v_players[1], v_players[2]);
+  INSERT INTO format_resource_items (season_id, resource_key, player_id, item_id, source) VALUES (v_season, 'lt_res', v_players[1], 'lt_item', 'event');
+  INSERT INTO format_action_submissions (season_id, action_key, actor_player_id) VALUES (v_season, 'lt_action', v_players[1]);
+  INSERT INTO format_event_log (season_id, event_key, event) VALUES (v_season, 'lt_event_key', 'lt_event');
+  INSERT INTO format_flags (season_id, key, value) VALUES (v_season, 'lt_flag', 'true'::jsonb);
+  INSERT INTO format_player_attrs (season_id, player_id, attr_key, value, source) VALUES (v_season, v_players[1], 'lt_attr', '1'::jsonb, 'event');
+  INSERT INTO format_track_progress (season_id, player_id, track_key) VALUES (v_season, v_players[1], 'lt_track');
+  INSERT INTO format_checks (season_id, source, rule_id, dedupe_key) VALUES (v_season, 'expr', 'lt_rule', 'lt_dedupe');
+  INSERT INTO format_adjustments (season_id, kind, reason) VALUES (v_season, 'points', 'lt adjustment');
+  INSERT INTO format_challenges (season_id, phase_id, round, challenger_id, defender_id, expires_at)
+    SELECT v_season, t.id, 1, v_players[1], v_players[2], now() + interval '2 days' FROM tournaments t WHERE t.season_id = v_season ORDER BY t.id LIMIT 1;
+  INSERT INTO match_outcomes (match_id, kind, source)
+    SELECT m.id, 'played', 'replay' FROM matches m JOIN tournaments t ON t.id = m.tournament_id WHERE t.season_id = v_season AND m.status = 'completed';
   RETURN v_season;
 END $$;

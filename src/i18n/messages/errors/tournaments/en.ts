@@ -32,6 +32,7 @@ export default {
   },
   ENROLLMENT_FROZEN: 'Enrollment is frozen. Confirm to overwrite imported standings.',
   ENROLLMENT_ROUNDS_EXIST: 'Enrollment cannot be re-synced while rounds exist. Confirm to overwrite.',
+  ENROLLMENT_SYNC_CONFLICT: 'Another enrollment sync of this phase was running at the same time. Try again.',
   SEED_CONFLICT:
     'Seed {seed} is already held by another participant — include them in the reseed or pick a free seed.',
   SEED_UPDATE_PARTIAL: {
@@ -66,6 +67,23 @@ export default {
   round_best_of_locked: 'Can only change best_of on pending rounds',
   rounds_round_robin_only: 'Generate-all-rounds is only supported for round_robin tournaments',
   rounds_all_generated: 'All rounds have already been generated',
+  rounds_manual_pairing: 'This phase is paired by hand. Create its rounds in the manual round editor.',
+  rounds_challenge_ladder:
+    'This phase is a challenge ladder: its matches come from accepted challenges. Create its rounds in the manual round editor.',
+  rounds_stage_ended: 'This phase has reached its end condition: no more rounds can be generated.',
+  format_not_ready:
+    'This phase cannot start its first round yet: a relation the format needs (for example a draw) has not been made, or players still owe an action. Fix it, or start anyway with force.',
+  auto_advance_failed: 'The phase is completed, but moving players on to the next phase failed. Move them on by hand.',
+  /** A warning, not an error: the round was generated. */
+  swiss_rematches: {
+    one: 'This round repeats {count} earlier pairing: no other opponent was left.',
+    other: 'This round repeats {count} earlier pairings: no other opponents were left.',
+  },
+  /** A warning, not an error: the round was generated. */
+  pairing_forbidden: {
+    one: 'This round has {count} pairing that the phase filter rejects: no other pairing was possible, or it was dropped from the schedule.',
+    other: 'This round has {count} pairings that the phase filter rejects: no other pairings were possible, or they were dropped from the schedule.',
+  },
   rounds_round_already_written: '{round} already exists with its matches. Delete it to generate it again.',
   round_matches_unfinished: {
     one: '{round} still has {count} unfinished match. Finish it, or complete the round anyway with a reason.',
@@ -100,6 +118,9 @@ export default {
   bracket_generate_elim_only: 'Full bracket generation only applies to elimination formats',
   bracket_already_generated: 'Bracket already generated',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
+  // The phase of a custom league has already ended (completed): its bracket is not wiped and restarted; reopen the phase first (409, nothing written).
+  bracket_regenerate_phase_completed:
+    'This phase has already ended, so its bracket cannot be regenerated. Reopen the phase first, then regenerate the bracket.',
   bracket_repair_elim_only: 'Bracket repair only applies to elimination formats',
 
   // Re-pairing one match
@@ -118,6 +139,25 @@ export default {
     'A league in the trash still uses this ruleset, so it was not deleted. Restore or permanently remove that league first.',
   seed_rulesets_admin_required: 'Admin authentication required.',
   seed_rulesets_secret_invalid: 'Invalid or missing bootstrap secret.',
+
+  rounds_batch_end_when_expression:
+    'This phase ends by a condition that is checked after every round, so its rounds cannot be generated all at once. Generate them one round at a time.',
+  rounds_end_when_round_open:
+    'This phase ends by a condition that is checked when a round is finished. Finish the open matches of {round} before creating the next round, so the condition can be checked first, or complete {round} anyway with a reason.',
+  rounds_mirrored_groups_legs:
+    'This round robin plays more than one leg, but its groups are managed by the league and follow the league week plan, which has no legs. Use a single leg, or remove the league groups.',
+  // The phase completed (a stage end, or an admin) between the generator's checks and its write; nothing was written (409).
+  rounds_phase_completed: 'This phase was completed while the round was being created, so no round was written. No more rounds can be generated.',
+  // A round delete, reset or bracket regenerate went through, but the league format could not take back the effects of a result that no longer stands (warning, 200).
+  round_format_revert_failed:
+    "The round was changed, but the league format's effects of some results that no longer stand (item grants, points) could not be taken back. The failure was logged. Check the league's adjustments for the points and items of those results.",
+  // A format could not react to a phase status change (warning, 200).
+  format_reaction_failed:
+    "The phase status was saved, but the league format's reaction to it (stage start or end, tie checks) did not run. Send the same status again to repeat it.",
+  // A match of the round changed (a result, an accepted challenge) between the admin's reset and the delete; nothing was deleted (409).
+  round_changed: 'A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.',
+  // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
+  rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

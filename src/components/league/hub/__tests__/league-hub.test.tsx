@@ -628,6 +628,23 @@ describe('LeagueHub header strip', () => {
     ]);
   });
 
+  it('adds the player page for a custom league, in the viewer language, and for no other format', () => {
+    const en = renderHub({ league: makeLeague({ format_type: 'custom' }), panel: STANDINGS_PANEL });
+    expect(findAll(headerOf(en.hub), tag('a')).map((a) => [a.attrs.href, squash(a)])).toEqual([
+      [`/insights?scope=league&id=${LEAGUE_ID}&tab=usage`, 'Full insights'],
+      [`/dashboard/leagues/${LEAGUE_ID}/play`, 'Your moves'],
+    ]);
+    const de = renderHub({ locale: 'de', league: makeLeague({ format_type: 'custom' }), panel: STANDINGS_PANEL });
+    expect(findAll(headerOf(de.hub), tag('a')).map((a) => [a.attrs.href, squash(a)])).toContainEqual([
+      `/dashboard/leagues/${LEAGUE_ID}/play`,
+      'Deine Aktionen',
+    ]);
+    for (const format_type of ['singles', 'doubles', 'draft', 'evolution_point_buy'] as const) {
+      const other = renderHub({ league: makeLeague({ format_type }), panel: STANDINGS_PANEL });
+      expect(findAll(headerOf(other.hub), tag('a')).map((a) => a.attrs.href)).not.toContain(`/dashboard/leagues/${LEAGUE_ID}/play`);
+    }
+  });
+
   it('adds the draft room and matchup analysis for EPB (German labels)', () => {
     const { hub } = renderHub({
       locale: 'de',

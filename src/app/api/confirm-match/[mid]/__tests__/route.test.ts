@@ -36,6 +36,10 @@ vi.mock('@/lib/tournament/match-state', () => ({
   validateTransition: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/match-outcomes', () => ({
+  recordMatchOutcome: vi.fn(async () => 'written'),
+}));
+
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
 }));
@@ -113,6 +117,13 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
   return { json: vi.fn().mockResolvedValue(body) } as unknown as NextRequest;
 }
 
+// The finalize run re-reads the match and works on the completion that is stored: after the route's status write it is `completed`.
+const completedOf = <T extends { status: string }>(match: T, winnerId?: string) =>
+  ({ ...match, ...(winnerId ? { winner_id: winnerId } : {}), status: 'completed', confirmed_at: '2026-01-02T00:00:00.000Z' }) as Omit<T, 'status'> & {
+    status: 'completed';
+    confirmed_at: string;
+  };
+
 const pendingMatch = {
   id: '642bef26-17c2-466f-8eca-61a394f687ca',
   tournament_id: 't-1',
@@ -130,6 +141,7 @@ const pendingMatch = {
   social_image_url: null,
   games: [],
 };
+const completedMatch = completedOf(pendingMatch);
 
 const overridePlayerOneId = '00000000-0000-4000-8000-000000000001';
 const overridePlayerTwoId = '00000000-0000-4000-8000-000000000002';
@@ -188,7 +200,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('returns 400 when transition is invalid', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({
       valid: false,
       error: 'Invalid transition: completed -> completed',
@@ -213,7 +225,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     ['Only match participants or admins can confirm results', { code: 'match_confirm_participants_only' }],
     ['Only match participants or admins can dispute results', { code: 'match_dispute_participants_only' }],
   ] as const)('forwards the transition code with the English error %j', async (message, extra) => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: false, error: message, ...extra });
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -223,7 +235,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('sends no code when validateTransition gives none', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: false, error: 'A reason this route does not know' });
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -239,7 +251,7 @@ describe('POST /api/confirm-match/[mid]', () => {
       name: 'Alice',
       isAdmin: false,
     } as never);
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -256,7 +268,7 @@ describe('POST /api/confirm-match/[mid]', () => {
       name: 'Alice',
       isAdmin: true,
     } as never);
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'completed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -270,7 +282,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('rejects winner overrides from non-admin players', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
 
     const response = await POST(
       makeRequest({ action: 'confirm', winner_id: overridePlayerTwoId }),
@@ -290,14 +302,15 @@ describe('POST /api/confirm-match/[mid]', () => {
       name: 'Admin',
       isAdmin: true,
     } as never);
-    vi.mocked(getMatchById).mockResolvedValue({
+    const disputed = {
       ...pendingMatch,
       player_1_id: overridePlayerOneId,
       player_2_id: overridePlayerTwoId,
       winner_id: overridePlayerOneId,
-      status: 'disputed',
+      status: 'disputed' as const,
       notes: 'Needs review',
-    } as never);
+    };
+    vi.mocked(getMatchById).mockResolvedValueOnce(disputed as never).mockResolvedValue(completedOf(disputed, overridePlayerTwoId) as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({
       ...pendingMatch,
@@ -328,7 +341,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   // ---- happy path: confirm ----
 
   it('confirms a match and returns the updated record', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({
       ...pendingMatch,
@@ -351,7 +364,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('defaults to confirm action when action is not provided', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({
       ...pendingMatch,
@@ -375,7 +388,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   // ---- happy path: dispute ----
 
   it('disputes a match when action=dispute', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({
       ...pendingMatch,
@@ -625,7 +638,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
   it('audits an admin dispute as match.dispute, with or without notes', async () => {
     vi.mocked(requirePlayer).mockResolvedValue({ playerId: 'admin-1', name: 'Admin', isAdmin: true } as never);
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -651,7 +664,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('audits a participant dispute as match.dispute and never as an override', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -663,7 +676,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('keeps the original submitter when the opponent disputes', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -674,7 +687,7 @@ describe('POST /api/confirm-match/[mid]', () => {
   });
 
   it('still blocks notes from non-admin players', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
 
     const response = await POST(makeRequest({ action: 'dispute', notes: 'Not fair' }), routeParams(MID));
 
@@ -696,7 +709,7 @@ describe('POST /api/confirm-match/[mid]', () => {
       name: 'Admin',
       isAdmin: true,
     } as never);
-    vi.mocked(getMatchById).mockResolvedValue(inProgress as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(inProgress as never).mockResolvedValue(completedOf(inProgress, overridePlayerOneId) as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({
       ...inProgress,
@@ -715,10 +728,25 @@ describe('POST /api/confirm-match/[mid]', () => {
     expect(revalidateMatchPages).toHaveBeenCalledWith('t-1', '642bef26-17c2-466f-8eca-61a394f687ca');
   });
 
+  it('answers 409 match_state_changed when the match was reset after the status flip (finalize rates nothing)', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue({ ...pendingMatch, status: 'scheduled' } as never);
+    vi.mocked(validateTransition).mockReturnValue({ valid: true });
+    vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'completed' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
+    vi.mocked(getBattleStatsByMatch).mockResolvedValue({} as never);
+
+    const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
+    const body = await response.json();
+
+    expect(response.status).toBe(409);
+    expect(body.code).toBe('match_state_changed');
+    expect(body.params).toEqual({ status: 'scheduled' });
+  });
+
   // ---- finalize outcome (code review C2) ----
 
   function arrangeConfirm() {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'completed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -731,7 +759,8 @@ describe('POST /api/confirm-match/[mid]', () => {
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
 
     expect(response.status).toBe(200);
-    expect(markMatchFinalized).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca');
+    // Bound to the completion the run started from (the confirmed_at the status write stamped).
+    expect(markMatchFinalized).toHaveBeenCalledWith('642bef26-17c2-466f-8eca-61a394f687ca', undefined, { confirmedAt: completedMatch.confirmed_at });
   });
 
   it('returns 500 match_finalize_incomplete when a finalize step fails, keeping the completion', async () => {
@@ -766,7 +795,8 @@ describe('POST /api/confirm-match/[mid]', () => {
   it('counts every failed step in match_finalize_incomplete', async () => {
     arrangeConfirm();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
-    // battle_stats fails, so the announcement cannot run either (streaks read their own history).
+    // battle_stats fails, so neither the outcome (it tallies the faints) nor the announcement
+    // (streaks read their own history) can run.
     vi.mocked(getBattleStatsByMatch).mockRejectedValueOnce(new Error('stats read failed'));
 
     const response = await POST(makeRequest({ action: 'confirm' }), routeParams('642bef26-17c2-466f-8eca-61a394f687ca'));
@@ -774,12 +804,12 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     expect(response.status).toBe(500);
     expect(payload.code).toBe('match_finalize_incomplete');
-    expect(payload.params).toEqual({ count: 2 });
+    expect(payload.params).toEqual({ count: 3 });
     consoleError.mockRestore();
   });
 
   it('does not run finalize for a dispute', async () => {
-    vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+    vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
     vi.mocked(validateTransition).mockReturnValue({ valid: true });
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
     vi.mocked(getTournamentById).mockResolvedValue({ id: 't-1', name: 'League', season_id: 's-1' } as never);
@@ -807,7 +837,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     });
 
     it('audits a participant dispute with its reason and never stores the reason as notes', async () => {
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
       vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
 
       const response = await POST(makeRequest({ action: 'dispute', reason: 'Score was 2-1' }), routeParams(MID));
@@ -829,7 +859,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     });
 
     it('audits a participant dispute without a reason and omits the reason key', async () => {
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
       vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
 
       await POST(makeRequest({ action: 'dispute' }), routeParams(MID));
@@ -839,7 +869,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     });
 
     it('still refuses notes from a participant', async () => {
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
 
       const response = await POST(makeRequest({ action: 'dispute', notes: 'my side' }), routeParams(MID));
 
@@ -875,7 +905,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     it('prefers an explicit reason over the notes for an admin dispute', async () => {
       vi.mocked(requirePlayer).mockResolvedValue(adminPlayer as never);
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
       vi.mocked(updateMatchStatus).mockResolvedValue({ ...pendingMatch, status: 'disputed' } as never);
 
       await POST(makeRequest({ action: 'dispute', reason: 'Wrong winner', notes: 'long note' }), routeParams(MID));
@@ -884,7 +914,7 @@ describe('POST /api/confirm-match/[mid]', () => {
     });
 
     it('does not write a dispute event when the compare-and-set misses', async () => {
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
       vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
 
       await POST(makeRequest({ action: 'dispute', reason: 'x' }), routeParams(MID));
@@ -916,7 +946,7 @@ describe('POST /api/confirm-match/[mid]', () => {
 
     it('answers 409 for a resource admin whose update missed too', async () => {
       vi.mocked(isResourceAdminFor).mockResolvedValue(true);
-      vi.mocked(getMatchById).mockResolvedValue(pendingMatch as never);
+      vi.mocked(getMatchById).mockResolvedValueOnce(pendingMatch as never).mockResolvedValue(completedMatch as never);
       vi.mocked(updateMatchStatus).mockResolvedValue(null as never);
 
       const response = await POST(makeRequest({ action: 'dispute' }), routeParams(MID));

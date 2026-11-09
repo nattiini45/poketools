@@ -6,11 +6,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import {
+  downstreamApproval,
+  downstreamResetCount,
   gameChangeFailureHints,
   gameChangeWarnings,
+  gameDeleteRequest,
   gameEditRequest,
   sendGameChange,
+  warningNeedsDataTools,
 } from '@/lib/match/game-change-outcome';
+import { encodeDownstreamMatches } from '@/lib/match/downstream-matches';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
 
 vi.mock('next/navigation', () => ({
@@ -47,6 +52,15 @@ describe('gameChangeWarnings', () => {
     expect(gameChangeWarnings({ match_status: 'in_progress', evolution_recheck_failed: true })).toEqual([
       { code: 'admin_game_evolution_recheck_failed' },
     ]);
+  });
+
+  it('turns format_revert_failed into its catalogue warning, next to the recheck warning', () => {
+    expect(gameChangeWarnings({ format_revert_failed: true })).toEqual([{ code: 'admin_game_format_revert_failed' }]);
+    expect(gameChangeWarnings({ evolution_recheck_failed: true, format_revert_failed: true })).toEqual([
+      { code: 'admin_game_evolution_recheck_failed' },
+      { code: 'admin_game_format_revert_failed' },
+    ]);
+    expect(gameChangeWarnings({ format_revert_failed: 'yes' })).toEqual([]);
   });
 
   it('has no warning without the flag, with a non-true flag or for a malformed body', () => {
@@ -215,5 +229,129 @@ describe('sendGameChange', () => {
   it('a body that is not JSON rejects (the caller shows its local failure)', async () => {
     const fetchImpl = vi.fn(async () => new Response('<html>502</html>', { status: 502 })) as unknown as typeof fetch;
     await expect(sendGameChange('/api/admin/games/g1', { method: 'DELETE' }, fetchImpl)).rejects.toThrow();
+  });
+});
+
+// ─── Approval of a game change that affects the played part of the bracket ──
+
+describe('gameChangeWarnings: the stage of an ended phase', () => {
+  const notice = {
+    phase_id: 'groups',
+    phase_name: 'Group stage',
+    advanced: [{ phase_id: 'playoffs', phase_name: 'Playoffs', players: [{ id: 'p1', name: 'Ash' }, { id: 'p2', name: 'Misty' }] }],
+  };
+
+  it('turns stage_already_ended into a warning that names the phase and who advanced', () => {
+    expect(gameChangeWarnings({ match_status: 'in_progress', stage_already_ended: notice })).toEqual([
+      { code: 'admin_game_stage_already_ended', params: { phase: 'Group stage', advanced: 'Playoffs: Ash, Misty' } },
+    ]);
+  });
+
+  it('uses another message when nobody advanced or the advancement could not be read', () => {
+    expect(gameChangeWarnings({ stage_already_ended: { ...notice, advanced: [] } })).toEqual([
+      { code: 'admin_game_stage_already_ended_nobody', params: { phase: 'Group stage' } },
+    ]);
+    expect(gameChangeWarnings({ stage_already_ended: { ...notice, advanced: null } })).toEqual([
+      { code: 'admin_game_stage_already_ended_unlisted', params: { phase: 'Group stage' } },
+    ]);
+  });
+
+  it('sits next to the other warnings and ignores a malformed field', () => {
+    expect(gameChangeWarnings({ format_revert_failed: true, stage_already_ended: notice }).map((w) => w.code)).toEqual([
+      'admin_game_format_revert_failed',
+      'admin_game_stage_already_ended',
+    ]);
+    expect(gameChangeWarnings({ stage_already_ended: 'yes' })).toEqual([]);
+    expect(gameChangeWarnings({ stage_already_ended: { phase_id: 'groups' } })).toEqual([]);
+  });
+
+  it('renders in both languages with the player names, and offers no data tools (nothing there repairs it)', () => {
+    const [warning] = gameChangeWarnings({ stage_already_ended: notice });
+    const en = renderWithI18n(<GameChangeAlerts warnings={[warning]} isSiteAdmin />);
+    expect(en).toContain('the stage of the phase Group stage had already ended');
+    expect(en).toContain('Playoffs: Ash, Misty');
+    expect(en).not.toContain('/admin/data');
+    expect(en).not.toContain('Ask a site admin');
+
+    const de = renderWithI18n(<GameChangeAlerts warnings={[warning]} isSiteAdmin={false} />, { locale: 'de' });
+    expect(de).toContain('die Stufe der Phase Group stage war bereits beendet');
+    expect(de).toContain('Playoffs: Ash, Misty');
+    expect(de).not.toContain('Seiten-Admin');
+  });
+
+  it.each([
+    ['admin_game_evolution_recheck_failed', true],
+    ['admin_game_format_revert_failed', true],
+    ['admin_game_stage_already_ended', false],
+    ['admin_game_stage_already_ended_nobody', false],
+    ['admin_game_stage_already_ended_unlisted', false],
+  ])('%s points at the data tools: %s', (code, expected) => {
+    expect(warningNeedsDataTools({ code })).toBe(expected);
+  });
+});
+
+describe('the approval request of a game change', () => {
+  const LATER = [{ id: 'm9', round_name: 'Finals', player_1_name: 'Ash', player_2_name: 'Misty', status: 'completed' as const }];
+  const refusal = {
+    code: 'game_change_downstream_played',
+    error: 'This change affects the rest of the bracket',
+    params: { count: 1, matches: encodeDownstreamMatches(LATER) },
+  };
+
+  it('reads the refusal of a game change into the matches to approve', () => {
+    expect(downstreamApproval(refusal)).toEqual({ count: 1, matches: LATER });
+  });
+
+  it('keeps the count when the list cannot be read, and asks nothing for any other outcome', () => {
+    expect(downstreamApproval({ ...refusal, params: { count: 3 } })).toEqual({ count: 3, matches: [] });
+    expect(downstreamApproval({ code: 'admin_game_edit_stale' })).toBeNull();
+    expect(downstreamApproval({ code: 'match_reopen_downstream_played', params: { count: 1 } })).toBeNull();
+    expect(downstreamApproval(null)).toBeNull();
+  });
+
+  it('the refusal is a question, not an error that needs a reload', () => {
+    expect(gameChangeFailureHints(refusal)).toEqual({ reload: false, dataTools: false });
+  });
+
+  it('the edit request carries the confirm flag only once the admin approved', () => {
+    const base = { winnerId: 'p1', battleStats: [STAT], expectedUpdatedAt: 'v1' };
+    expect(JSON.parse(String(gameEditRequest('g1', base).init.body))).not.toHaveProperty('confirm_downstream');
+    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: undefined }).init.body))).not.toHaveProperty('confirm_downstream');
+    expect(JSON.parse(String(gameEditRequest('g1', { ...base, confirmDownstream: ['m-1'] }).init.body))).toMatchObject({
+      winner_id: 'p1',
+      expected_updated_at: 'v1',
+      confirm_downstream: ['m-1'],
+    });
+  });
+
+  it('the delete request carries the reason, and the confirm flag only once the admin approved', () => {
+    const first = gameDeleteRequest('g1', { reason: 'Wrong replay' });
+    expect(first.url).toBe('/api/admin/games/g1');
+    expect(first.init.method).toBe('DELETE');
+    expect(JSON.parse(String(first.init.body))).toEqual({ reason: 'Wrong replay' });
+    expect(JSON.parse(String(gameDeleteRequest('g1', { reason: 'Wrong replay', confirmDownstream: ['m-1'] }).init.body))).toEqual({
+      reason: 'Wrong replay',
+      confirm_downstream: ['m-1'],
+    });
+  });
+
+  it('counts the later matches a saved change reset', () => {
+    expect(downstreamResetCount({ downstream_reset_match_ids: ['a', 'b'] })).toBe(2);
+    expect(downstreamResetCount({})).toBe(0);
+    expect(downstreamResetCount({ downstream_reset_match_ids: 'a' })).toBe(0);
+  });
+
+  it('a refusal through sendGameChange reaches the approval with its params intact', async () => {
+    const result = await sendGameChange('/api/admin/games/g1', { method: 'DELETE' }, fakeFetch(409, { success: false, ...refusal }));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(downstreamApproval(result.error)).toEqual({ count: 1, matches: LATER });
+  });
+
+  it('the refusal renders in both languages', () => {
+    const en = renderWithI18n(<GameChangeAlerts error={{ code: refusal.code, params: { count: 2 } }} isSiteAdmin />);
+    expect(en).toContain('2 later bracket matches were already played');
+    const de = renderWithI18n(<GameChangeAlerts error={{ code: refusal.code, params: { count: 1 } }} isSiteAdmin />, { locale: 'de' });
+    expect(de).toContain('1 späteres Spiel im Turnierbaum wurde bereits gespielt');
   });
 });

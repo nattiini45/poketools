@@ -1,4 +1,5 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { logger } from '@/lib/logger';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { AggregateScope } from '@/types/game';
 
@@ -256,7 +257,13 @@ export async function revalidateMatchPages(tournamentId: string, matchId?: strin
   pass.path('/teams/library');
 
   // If this tournament belongs to a season/league, revalidate those too
-  const tournament = await getTournamentById(tournamentId);
+  // The paths above are already expired: a failed lookup must not turn a committed write into a 500 for the caller.
+  let tournament: Awaited<ReturnType<typeof getTournamentById>> = null;
+  try {
+    tournament = await getTournamentById(tournamentId);
+  } catch (error) {
+    logger.error('revalidation', 'could not read the tournament for the league paths', { tournamentId, error });
+  }
   if (tournament?.season_id) {
     pass.path(`/leagues/${tournament.season_id}`);
     pass.path(`/leagues/${tournament.season_id}/stats`);

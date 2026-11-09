@@ -31,6 +31,7 @@ import { draftPanel } from './_components/panels/DraftPanel';
 import { phasesPanel } from './_components/panels/PhasesPanel';
 import { rulesPanel } from './_components/panels/RulesPanel';
 import { formatPanel } from './_components/panels/FormatPanel';
+import { formatLivePanel } from './_components/panels/LivePanel';
 import { settingsPanel } from './_components/panels/SettingsPanel';
 import { dangerPanel } from './_components/panels/DangerPanel';
 
@@ -49,6 +50,7 @@ const PANELS: Record<LeagueAdminTab, (ctx: LeagueAdminPanelContext) => Promise<R
   phases: phasesPanel,
   rules: rulesPanel,
   format: formatPanel,
+  live: formatLivePanel,
   settings: settingsPanel,
   danger: dangerPanel,
 };
@@ -62,7 +64,7 @@ async function customBlockedStatuses(seasonId: string): Promise<Partial<Record<S
 /**
  * `/admin/leagues/[id]?tab=` — one league's admin page, split into tabs
  * (`src/lib/league-admin/tabs.ts`): overview (default), participants, draft,
- * phases, rules, format, settings, danger. The format decides which tabs exist
+ * phases, rules, format, live (custom leagues), settings, danger. The format decides which tabs exist
  * (`getFormatCapabilities`); an unknown or unavailable `?tab=` opens the
  * overview, the former `?tab=schedule` opens phases. The server renders, and reads for, the selected tab only: every
  * tab shares the live gate and the league row, the overview needs
@@ -136,6 +138,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
     phases: t('tabs.phases'),
     rules: t('tabs.rules'),
     format: t('tabs.format'),
+    live: t('tabs.live'),
     settings: t('tabs.settings'),
     danger: t('tabs.danger'),
   };

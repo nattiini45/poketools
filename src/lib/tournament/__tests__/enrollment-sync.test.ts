@@ -5,8 +5,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
   getStagesBySeasonId: vi.fn(),
   getParticipants: vi.fn(),
-  replacePhaseParticipants: vi.fn(),
-  setEnrollmentSource: vi.fn(),
+  replacePhaseEnrollment: vi.fn(async () => true),
 }));
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({

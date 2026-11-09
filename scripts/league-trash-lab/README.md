@@ -16,7 +16,7 @@ bash scripts/league-trash-lab/run-all.sh --timing   # plus 05 for four league si
 
 | File | What it proves |
 |---|---|
-| `seed.sql` | `lt_lab.seed(players, rounds, name)` builds one evolution-point-buy league that touches all 50 owned tables, four draft pools (one drafting, one in submissions), a circular redraft slot and pick, groups, teams on completed matches, streak pointers, polymorphic rows and outside rows that point in. |
+| `seed.sql` | `lt_lab.seed(players, rounds, name)` builds one evolution-point-buy league that touches every owned table (61 as of `20261106090000`, including `season_formats`, the nine `format_*` runtime tables, `format_challenges` and `match_outcomes`; `01_cycle.sql` lists the owned tables the seed leaves empty, which must be none), four draft pools (one drafting, one in submissions), a circular redraft slot and pick, groups, teams on completed matches, streak pointers, polymorphic rows and outside rows that point in. |
 | `fingerprint.sql` | `lt_lab.fp(season)` (row count and md5 per owned table, minus the columns that legitimately change) and `lt_lab.others(season)` (row counts of everything else). |
 | `01_cycle.sql` | Delete leaves no row by any inventory key and touches nothing else; restore is row-identical. |
 | `02_clocks_and_pointers.sql` | After a simulated 30 days in the trash every running deadline moved by exactly the shift (an overdue one too), the draft is paused with a frozen slot, outside rows are re-linked, games come back unmarked with one pending increment job each. |

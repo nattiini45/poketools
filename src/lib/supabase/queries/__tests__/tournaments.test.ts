@@ -21,6 +21,7 @@ const { mockBuilder } = vi.hoisted(() => {
   }
   mb.single = vi.fn();
   mb.maybeSingle = vi.fn();
+  mb.rpc = vi.fn();
   return { mockBuilder: mb };
 });
 
@@ -128,6 +129,9 @@ beforeEach(() => {
   }
   mockBuilder.single.mockResolvedValue({ data: null, error: null });
   mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+  // tournament_enrollment_freeze: the atomic freeze of an edited roster.
+  mockBuilder.rpc.mockReset();
+  mockBuilder.rpc.mockResolvedValue({ data: true, error: null });
 });
 
 // ════════════════════════════════════════════════════════════════════
@@ -630,7 +634,7 @@ describe('isPlayerTournamentParticipant', () => {
 });
 
 describe('addParticipant', () => {
-  it('inserts participant row', async () => {
+  it('inserts participant row, after the enrollment is frozen', async () => {
     mockBuilder.insert.mockReturnValue({ error: null });
 
     await addParticipant('t1', 'p1');
@@ -638,11 +642,20 @@ describe('addParticipant', () => {
       tournament_id: 't1',
       player_id: 'p1',
     });
+    expect(mockBuilder.rpc).toHaveBeenCalledWith('tournament_enrollment_freeze', { p_tournament_id: 't1' });
+    // Freeze before the write: a sync that read the phase unfrozen is refused under the row lock from then on.
+    expect(mockBuilder.rpc.mock.invocationCallOrder[0]).toBeLessThan(mockBuilder.insert.mock.invocationCallOrder[0]);
   });
 
   it('throws on error', async () => {
     mockBuilder.insert.mockReturnValue({ error: new Error('add err') });
     await expect(addParticipant('t1', 'p1')).rejects.toThrow('add err');
+  });
+
+  it('writes nothing when the freeze fails', async () => {
+    mockBuilder.rpc.mockResolvedValue({ data: null, error: new Error('freeze err') });
+    await expect(addParticipant('t1', 'p1')).rejects.toThrow('freeze err');
+    expect(mockBuilder.insert).not.toHaveBeenCalled();
   });
 });
 
@@ -694,15 +707,13 @@ describe('swapTournamentParticipant', () => {
   }
 
   /**
-   * The outgoing row read ends at `.maybeSingle`, then freezeEnrollment reads
-   * the tournament (`.maybeSingle`; `tournament` null means nothing to
-   * freeze) and, for an open enrollment, updates it (ends at `.eq('id')`).
-   * The swap UPDATE ends at `.select('seed')`.
+   * The outgoing row read ends at `.maybeSingle`; freezeEnrollment is one RPC
+   * (`tournament_enrollment_freeze`, atomic under the phase row lock). The swap
+   * UPDATE ends at `.select('seed')`.
    */
   function stubSwap(opts: {
     outRow: { seed: number | null } | null;
     fetchError?: Error;
-    tournament?: Record<string, unknown> | null;
     swapped?: Array<{ seed: number | null }>;
     swapError?: Error;
   }) {
@@ -710,11 +721,6 @@ describe('swapTournamentParticipant', () => {
       data: opts.fetchError ? null : opts.outRow,
       error: opts.fetchError ?? null,
     });
-    // Queued only when the swap goes on to freeze: an unread value would leak
-    // into the next test (mockClear keeps the once-queue).
-    if (opts.outRow && !opts.fetchError) {
-      mockBuilder.maybeSingle.mockResolvedValueOnce({ data: opts.tournament ?? null, error: null });
-    }
     let table = '';
     let updating = false;
     mockBuilder.from.mockImplementation((name: string) => {
@@ -773,21 +779,22 @@ describe('swapTournamentParticipant', () => {
     expect(result).toEqual({ swapped: true, seed: 4 });
   });
 
-  it('freezes an open enrollment before the swap', async () => {
-    const source = { type: 'standings', source_phase_id: 'p0', synced_at: '2025-01-01T00:00:00Z', frozen: false };
-    stubSwap({ outRow: { seed: 1 }, tournament: { ...TOURNAMENT_ROW, enrollment_source: source, seasons: null } });
+  it('freezes the enrollment (one atomic RPC, never a whole-source write) before the swap', async () => {
+    stubSwap({ outRow: { seed: 1 } });
 
     await swapTournamentParticipant('t1', 'p-out', 'p-in');
 
+    expect(mockBuilder.rpc).toHaveBeenCalledWith('tournament_enrollment_freeze', { p_tournament_id: 't1' });
+    // The freeze goes first: the swap UPDATE is the last statement, and no statement rewrites enrollment_source.
+    const swapOrder = mockBuilder.select.mock.invocationCallOrder.at(-1) ?? 0;
+    expect(mockBuilder.rpc.mock.invocationCallOrder[0]).toBeLessThan(swapOrder);
     const all = statements();
     expect(all.map((statement) => statement[0])).toEqual([
       ['from', 'tournament_participants'],
-      ['from', 'tournaments'],
-      ['from', 'tournaments'],
       ['from', 'tournament_participants'],
     ]);
-    expect(all[2]).toContainEqual(['update', { enrollment_source: { ...source, frozen: true } }]);
-    expect(all[3]).toEqual(SWAP);
+    expect(all[1]).toEqual(SWAP);
+    expect(mockBuilder.update).not.toHaveBeenCalledWith(expect.objectContaining({ enrollment_source: expect.anything() }));
   });
 
   it('reports an unseeded row as swapped, with a null seed', async () => {

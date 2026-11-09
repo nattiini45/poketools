@@ -24,6 +24,8 @@ export interface BracketSlotDef {
   feeder2: FeederDef;
   /** True for the double-elim bracket reset ("if necessary" grand final). */
   isBracketReset?: boolean;
+  /** True for the single-elim third-place match (the two semifinal losers). */
+  isThirdPlace?: boolean;
 }
 
 export interface BracketRoundDef {
@@ -46,6 +48,45 @@ export interface BracketStructureOptions {
    * repair re-derive the graph from the current setting.
    */
   bracketResetEnabled?: boolean;
+  /**
+   * Single elimination only: add a third-place match between the two
+   * semifinal losers (`tournaments.third_place_enabled`, default off). It
+   * needs four or more participants and shares the final's round.
+   */
+  thirdPlaceEnabled?: boolean;
+}
+
+/** The structure options a tournament's stored settings ask for. */
+export function bracketStructureOptionsOf(tournament: {
+  bracket_reset_enabled?: boolean | null;
+  third_place_enabled?: boolean | null;
+}): BracketStructureOptions {
+  return {
+    bracketResetEnabled: tournament.bracket_reset_enabled ?? true,
+    thirdPlaceEnabled: tournament.third_place_enabled ?? false,
+  };
+}
+
+/** The third-place match sits next to the final (position 0) in the final's round. */
+export const THIRD_PLACE_BRACKET_POS = 1;
+
+/**
+ * Whether a match is a single-elimination third-place match: the winners-side
+ * match at position 1 of the bracket's last round (the final's round). A
+ * single-elimination final round otherwise holds only position 0.
+ */
+export function isThirdPlaceMatch(
+  match: { bracket_side: BracketSide | null; bracket_pos: number | null },
+  roundNumber: number,
+  finalRoundNumber: number,
+  bracketType: BracketType
+): boolean {
+  return (
+    bracketType === 'single_elim' &&
+    roundNumber === finalRoundNumber &&
+    match.bracket_side === 'winners' &&
+    match.bracket_pos === THIRD_PLACE_BRACKET_POS
+  );
 }
 
 function defaultBracketResetEnabled(options?: BracketStructureOptions): boolean {
@@ -487,7 +528,10 @@ function buildDoubleElimWithLbStarts(
  * Build the complete single-elimination slot graph with traditional seeding.
  * participantIds must be ordered by seed (index 0 = seed 1).
  */
-export function buildSingleElimStructure(participantCount: number): BracketStructure {
+export function buildSingleElimStructure(
+  participantCount: number,
+  thirdPlaceEnabled = false
+): BracketStructure {
   const bracketSize = nextPowerOf2(participantCount);
   const wbRoundCount = Math.log2(bracketSize);
   const order = bracketOrder(bracketSize);
@@ -537,6 +581,22 @@ export function buildSingleElimStructure(participantCount: number): BracketStruc
     wbByRound.push(wrSlots);
     slots.push(...wrSlots);
     globalRound++;
+  }
+
+  if (thirdPlaceEnabled && wbRoundCount >= 2 && participantCount >= 4) {
+    const semis = wbByRound[wbRoundCount - 2];
+    const final = wbByRound[wbRoundCount - 1][0];
+    const thirdPlace = makeSlot(
+      'winners',
+      wbRoundCount - 1,
+      THIRD_PLACE_BRACKET_POS,
+      final.global_round_number,
+      final.round_name,
+      { kind: 'loser', slotKey: semis[0].slotKey },
+      { kind: 'loser', slotKey: semis[1].slotKey }
+    );
+    thirdPlace.isThirdPlace = true;
+    slots.push(thirdPlace);
   }
 
   return { rounds, slots };
@@ -741,7 +801,7 @@ export function buildBracketStructure(
   if (participantCount < 2) return null;
   switch (bracketType) {
     case 'single_elim':
-      return buildSingleElimStructure(participantCount);
+      return buildSingleElimStructure(participantCount, options?.thirdPlaceEnabled ?? false);
     case 'double_elim':
       return buildDoubleElimStructure(
         participantCount,

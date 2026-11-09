@@ -6,10 +6,19 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import InlinePokemonPicker from '@/components/match/InlinePokemonPicker';
 import GameChangeAlerts from '@/components/match/GameChangeAlerts';
+import DownstreamApprovalDialog from '@/components/match/DownstreamApprovalDialog';
 import { useDataLocale, useT } from '@/i18n/client';
 import type { ApiErrorLike } from '@/i18n/api-errors';
+import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
-import { gameEditRequest, sendGameChange } from '@/lib/match/game-change-outcome';
+import {
+  approvedMatchIds,
+  downstreamApproval,
+  downstreamResetCount,
+  gameEditRequest,
+  sendGameChange,
+  type DownstreamApproval,
+} from '@/lib/match/game-change-outcome';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { BattleStat, GameSource } from '@/types/game';
 
@@ -114,6 +123,7 @@ export default function GameDetailEditForm({
 }: GameDetailEditFormProps) {
   const router = useRouter();
   const t = useT(matchFormsMessages);
+  const tCore = useT(adminCoreMessages);
   const dataLocale = useDataLocale();
   const players = useMemo(() => [player1, player2], [player1, player2]);
 
@@ -148,6 +158,10 @@ export default function GameDetailEditForm({
    * and the editor only offers Close.
    */
   const [savedWarnings, setSavedWarnings] = useState<ApiErrorLike[] | null>(null);
+  /** How many later bracket matches the saved edit reset after the admin approved it (a save that reset some stays open too). */
+  const [savedResetCount, setSavedResetCount] = useState(0);
+  /** The played later bracket matches the API says this edit would reset (409, nothing written): the admin approves or cancels. */
+  const [approval, setApproval] = useState<DownstreamApproval | null>(null);
 
   const updateRow = useCallback(
     <K extends keyof PokemonStatInput>(
@@ -196,8 +210,13 @@ export default function GameDetailEditForm({
     side.every((r) => r.pokemon_valid || r.pokemon_name.trim() === ''),
   );
 
-  async function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    void save();
+  }
+
+  /** `confirmDownstream`: the later bracket matches the admin approved resetting (the last refusal listed them). */
+  async function save(confirmDownstream?: readonly string[]) {
     if (saving || savedWarnings) return;
     setError(null);
 
@@ -234,21 +253,33 @@ export default function GameDetailEditForm({
         winnerId,
         battleStats: battle_stats,
         expectedUpdatedAt,
+        confirmDownstream,
       });
       const result = await sendGameChange(request.url, request.init);
       if (!result.ok) {
+        const needed = downstreamApproval(result.error);
+        if (needed) {
+          // Nothing was written: ask first, then send the same edit again with the approval.
+          setApproval(needed);
+          return;
+        }
+        setApproval(null);
         const apiError = result.error;
         setError(apiError.error || apiError.code ? { kind: 'api', error: apiError } : { kind: 'saveFailed' });
         return;
       }
 
+      setApproval(null);
       router.refresh();
-      if (result.warnings.length > 0) {
+      const resetCount = downstreamResetCount(result.data);
+      if (result.warnings.length > 0 || resetCount > 0) {
         setSavedWarnings(result.warnings);
+        setSavedResetCount(resetCount);
         return;
       }
       onSaved?.();
     } catch {
+      setApproval(null);
       setError({ kind: 'saveFailed' });
     } finally {
       setSaving(false);
@@ -451,7 +482,12 @@ export default function GameDetailEditForm({
       </div>
 
       {error && error.kind !== 'api' && <Alert variant="error">{errorMessage(error)}</Alert>}
-      {savedWarnings && <Alert variant="success">{t('editor.saved')}</Alert>}
+      {savedWarnings && (
+        <Alert variant="success">
+          <p>{t('editor.saved')}</p>
+          {savedResetCount > 0 && <p>{tCore('gameChange.downstream.done', { count: savedResetCount })}</p>}
+        </Alert>
+      )}
       {/* A failed save (rendered by code, with a reload when the page is stale) or the warnings of a saved one. */}
       <GameChangeAlerts
         error={error?.kind === 'api' ? error.error : null}
@@ -473,6 +509,13 @@ export default function GameDetailEditForm({
           {savedWarnings ? t('editor.close') : t('editor.cancel')}
         </Button>
       </div>
+
+      <DownstreamApprovalDialog
+        approval={approval}
+        onApprove={() => void save(approval ? approvedMatchIds(approval) : undefined)}
+        onCancel={() => setApproval(null)}
+        loading={saving}
+      />
     </form>
   );
 }

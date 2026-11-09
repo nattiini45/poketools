@@ -94,7 +94,6 @@ describe('normalizeDraft', () => {
   it('keeps members it does not know, and lists the top-level ones', () => {
     const raw = {
       ...SKELETON,
-      attributes: [{ key: 'x' }],
       note: 'hello',
       stages: [
         {
@@ -109,7 +108,7 @@ describe('normalizeDraft', () => {
       ],
     };
     const result = normalized(raw);
-    expect(result.preservedKeys).toEqual(['attributes', 'note']);
+    expect(result.preservedKeys).toEqual(['note']);
     expect((result.doc as unknown as Record<string, unknown>).note).toBe('hello');
     expect((result.doc.stages[0] as unknown as Record<string, unknown>).mystery).toBe(7);
 

@@ -551,6 +551,25 @@ export async function getSeasonParticipantRow(
 }
 
 /**
+ * Whether the player takes part in the league: on its roster, or enrolled in a phase of it that is not completed. A reserve
+ * promoted by a phase-scope substitution is enrolled without being on the roster. A completed phase does not count: a
+ * substitution leaves it as it was, so a player who was replaced would otherwise stay a member through their old enrollment.
+ */
+export async function isSeasonPlayer(seasonId: string, playerId: string): Promise<boolean> {
+  if ((await getSeasonParticipantRow(seasonId, playerId)) !== null) return true;
+  const { data, error } = await supabase
+    .from('tournament_participants')
+    .select('player_id, tournaments!inner ( season_id, status )')
+    .eq('player_id', playerId)
+    .eq('tournaments.season_id', seasonId)
+    .in('tournaments.status', ['upcoming', 'active'])
+    .limit(1);
+
+  if (error) throw error;
+  return (data ?? []).length > 0;
+}
+
+/**
  * Swap roster membership in one UPDATE: the outgoing player's row passes to
  * the incoming player with its gym/core metadata, so no moment leaves the
  * league with neither player (a failure changes nothing, and the substitution

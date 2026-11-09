@@ -25,6 +25,14 @@ const db = vi.hoisted(() => ({
   cup: [] as string[],
 }));
 
+vi.mock('@/lib/format-studio/phase-guards', () => ({
+  assertSeasonPhasesFree: vi.fn(),
+  assertFormatPhaseDeletable: vi.fn(),
+  assertFormatPhaseUnchanged: vi.fn(),
+  assertFormatPhaseStatusUnchanged: vi.fn(),
+  assertFormatPhaseRosterOpen: vi.fn(),
+  assertSeasonRosterMembers: vi.fn(),
+}));
 vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('@/lib/supabase/client', () => ({

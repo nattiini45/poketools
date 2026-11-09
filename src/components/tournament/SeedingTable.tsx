@@ -17,6 +17,7 @@ import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { apiFailure, type UiError } from './ui-error';
 import { buildSeedPayload, reorderIds, seedsFromOrder, sortBySeedEdits } from './seeding-order';
+import { isFormatPhaseOwnedRefusal, useRosterForcePrompt, withRosterForce } from './roster-force';
 
 type SeedingErrorKey =
   | 'seeding.seedsPositive'
@@ -59,6 +60,11 @@ export interface SeedingTableProps<P extends AdminTournamentParticipant = AdminT
   onRemovePlayer: (playerId: string) => Promise<void>;
   bracketType?: BracketType | null;
   editable?: boolean;
+  /**
+   * The phase belongs to the league's format and has started. The controls stay usable (`editable`), and a change the
+   * server refuses with `format_phase_owned` asks for a reason and is repeated as an audited force.
+   */
+  startedFormatPhase?: boolean;
 }
 
 export default function SeedingTable<P extends AdminTournamentParticipant>({
@@ -75,6 +81,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   onRemovePlayer,
   bracketType = null,
   editable = true,
+  startedFormatPhase = false,
 }: SeedingTableProps<P>) {
   const [orderedIds, setOrderedIds] = useState<string[]>(() =>
     participants.map((p) => p.id)
@@ -107,6 +114,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   const [syncing, setSyncing] = useState(false);
   const [seedingRating, setSeedingRating] = useState(false);
   const dragIndex = useRef<number | null>(null);
+  const { ask: askRosterForce, dialog: rosterForceDialog } = useRosterForcePrompt();
 
   // Keep internal ordering and per-player edits in sync when participants are
   // added or removed by the parent (Add/Remove). Without this, `orderedIds`
@@ -200,7 +208,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     setOrderTouched(true);
   }
 
-  async function saveSeeds() {
+  async function saveSeeds(forceReason?: string) {
     setError(null);
     setSeedsSaved(false);
     setSavingSeeds(true);
@@ -231,10 +239,14 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ seeds }),
+        body: JSON.stringify(withRosterForce({ seeds }, forceReason)),
       });
       const result: ApiResult<null> = await res.json();
       if (!result.success) {
+        if (forceReason === undefined && isFormatPhaseOwnedRefusal(result)) {
+          askRosterForce((reason) => saveSeeds(reason));
+          return;
+        }
         setError(apiFailure(result));
         return;
       }
@@ -260,7 +272,11 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     }
   }
 
-  async function reimportStandings(force = false) {
+  /**
+   * `force` overwrites a frozen or already-played enrollment after the admin confirmed it. `forceReason` repeats a request
+   * the server refused with `format_phase_owned`: the reason dialog is the confirmation, so no second prompt follows.
+   */
+  async function reimportStandings(force = false, forceReason?: string) {
     if (!seasonId) return;
     setSyncing(true);
     setError(null);
@@ -271,7 +287,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(force ? { force: true } : {}),
+          body: JSON.stringify(withRosterForce(force ? { force: true } : {}, forceReason)),
         }
       );
       const result: ApiResult<{
@@ -281,6 +297,10 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         code?: string;
       }> = await res.json();
       if (!result.success) {
+        if (forceReason === undefined && isFormatPhaseOwnedRefusal(result)) {
+          askRosterForce((reason) => reimportStandings(true, reason));
+          return;
+        }
         const needsForce =
           result.code === 'ENROLLMENT_FROZEN' || result.code === 'ENROLLMENT_ROUNDS_EXIST';
         if (needsForce) {
@@ -317,7 +337,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     }
   }
 
-  async function seedByRating() {
+  async function seedByRating(forceReason?: string) {
     if (!seasonId) return;
     setSeedingRating(true);
     setError(null);
@@ -325,11 +345,17 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     try {
       const res = await fetch(
         `/api/seasons/${seasonId}/phases/${tournamentId}/participants/seed-by-rating`,
-        { method: 'POST' }
+        forceReason === undefined
+          ? { method: 'POST' }
+          : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withRosterForce({}, forceReason)) }
       );
       const result: ApiResult<{ seeds: Array<{ player_id: string; seed: number }> }> =
         await res.json();
       if (!result.success) {
+        if (forceReason === undefined && isFormatPhaseOwnedRefusal(result)) {
+          askRosterForce((reason) => seedByRating(reason));
+          return;
+        }
         setError(apiFailure(result));
         return;
       }
@@ -382,6 +408,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
 
   return (
     <div className="space-y-4">
+      {rosterForceDialog}
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
 
       {syncStatus && (
@@ -405,6 +432,10 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         </p>
       )}
 
+      {editable && startedFormatPhase && (
+        <p className="text-xs text-poke-text-muted">{t('seeding.startedFormatPhase')}</p>
+      )}
+
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
           {t('seeding.heading', { count: orderedParticipants.length })}
@@ -425,7 +456,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
             <Button
               variant="ghost"
               size="sm"
-              onClick={seedByRating}
+              onClick={() => void seedByRating()}
               loading={seedingRating}
               disabled={!editable}
             >
@@ -442,7 +473,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
             {t('seeding.clear')}
           </Button>
           {seedsDirty && editable && (
-            <Button variant="secondary" size="sm" onClick={saveSeeds} loading={savingSeeds}>
+            <Button variant="secondary" size="sm" onClick={() => void saveSeeds()} loading={savingSeeds}>
               {t('seeding.save')}
             </Button>
           )}

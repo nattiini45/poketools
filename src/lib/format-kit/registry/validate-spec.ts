@@ -40,6 +40,7 @@ import {
   RESERVED_RULE_KINDS,
   RESERVED_SECTIONS,
   RESERVED_STAGE_FIELDS,
+  manifestForSlot,
 } from './manifest';
 import { patternRegex, type FieldSpec, type JsonDefault, type Spec } from './spec';
 
@@ -58,6 +59,18 @@ export function createSpecOut(): SpecOut {
 
 const ABORTING: ReadonlySet<SchemaIssueCode> = new Set<SchemaIssueCode>(['type', 'required', 'enum']);
 
+/** Whether the member an expression-relative JSON pointer names is absent (its parent exists but lacks the key). */
+function isAbsentAt(root: unknown, relativePointer: string): boolean {
+  const segments = relativePointer.split('/').slice(1).map((s) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+  let node: unknown = root;
+  for (const segment of segments.slice(0, -1)) {
+    if (typeof node !== 'object' || node === null || !hasOwn(node, segment)) return false;
+    node = (node as Record<string, unknown>)[segment];
+  }
+  const last = segments[segments.length - 1];
+  if (last === undefined || typeof node !== 'object' || node === null) return false;
+  return !hasOwn(node, last) || (node as Record<string, unknown>)[last] === undefined;
+}
 function push(out: SpecOut, code: SchemaIssueCode, pointer: string, params: IssueParams = noParams()): void {
   out.issues.push({ code, pointer, params });
   if (ABORTING.has(code)) out.aborting += 1;
@@ -245,7 +258,12 @@ export function validateSpec(spec: Spec, value: unknown, pointer: string, out: S
       return validateLText(value, pointer, out);
     case 'expr': {
       const issues = validateExprJson(value, spec.type);
-      for (const issue of issues) push(out, issue.code, pointer + issue.pointer, issue.params);
+      // Inside a document the zod mapping reports an absent enum member as `required` and carries params only for
+      // type and limit issues; the standalone expression validator does neither.
+      for (const issue of issues) {
+        const code = issue.code === 'enum' && isAbsentAt(value, issue.pointer) ? 'required' : issue.code;
+        push(out, code, pointer + issue.pointer, code === 'type' || code === 'limit' ? issue.params : undefined);
+      }
       return issues.length === 0 ? cloneJson(value) : undefined;
     }
     case 'obj':
@@ -379,6 +397,9 @@ export function precheckInput(input: unknown): SchemaIssue | null {
 
 // --- Rules list: the open kind list ---------------------------------------------------------------
 
+/** The rule kinds the document knows; any other well-formed kind degrades to a manual rule card. */
+const KNOWN_RULE_KINDS: ReadonlySet<string> = new Set(manifestForSlot('rule').map((entry) => entry.tag as string));
+
 export type RuleDecision =
   | { action: 'keep' }
   | { action: 'issue'; issue: SchemaIssue }
@@ -404,7 +425,7 @@ export function classifyRuleEntry(entry: unknown, pointer: string): RuleDecision
   if (typeof kind !== 'string') {
     return { action: 'issue', issue: { code: 'type', pointer: kindPointer, params: { expected: 'string' } } };
   }
-  if (kind === 'rule.custom') return { action: 'keep' };
+  if (KNOWN_RULE_KINDS.has(kind)) return { action: 'keep' };
   if ((RESERVED_RULE_KINDS as readonly string[]).includes(kind)) {
     return { action: 'issue', issue: { code: 'not_available_yet', pointer, params: { what: kind } } };
   }
@@ -426,6 +447,23 @@ export function classifyRuleEntry(entry: unknown, pointer: string): RuleDecision
 
 // --- Document pre-pass --------------------------------------------------------------------------
 
+/**
+ * Keys a `player.action` rule used to carry that nothing reads any more. A stored or hand-authored document may
+ * still have them, and the schemas reject unknown keys, so the pre-pass drops them silently (the document was valid
+ * when it was written; there is nothing for the author to fix). `review` was a "needs review" flag with no queue
+ * behind it.
+ */
+const RETIRED_ACTION_KEYS: readonly string[] = ['review'];
+
+/** The rule without its retired keys: the same object when it is not a `player.action` or has none (copy on write). */
+function withoutRetiredActionKeys(rule: unknown): unknown {
+  if (!isRecord(rule) || rule.kind !== 'player.action') return rule;
+  if (!RETIRED_ACTION_KEYS.some((key) => hasOwn(rule, key))) return rule;
+  const copy: Record<string, unknown> = { ...rule };
+  for (const key of RETIRED_ACTION_KEYS) delete copy[key];
+  return copy;
+}
+
 export interface PreparedDocument {
   /** The input with reserved subtrees removed and unknown rule kinds degraded (copy on write). */
   doc: unknown;
@@ -438,7 +476,8 @@ export interface PreparedDocument {
  * Runs on the plain input before zod / the interpreter:
  * - a reserved top-level section, stage field, pairing kind or rule kind yields one
  *   `not_available_yet` issue at its pointer and nothing else for that subtree;
- * - a `rules[]` entry with an unknown kind becomes a manual rule card (with a note).
+ * - a `rules[]` entry with an unknown kind becomes a manual rule card (with a note);
+ * - a `player.action` entry loses the retired keys (`RETIRED_ACTION_KEYS`) without a note.
  * The input is never mutated; only the touched spine is copied.
  */
 export function prepareDocument(input: unknown): PreparedDocument {
@@ -497,7 +536,14 @@ export function prepareDocument(input: unknown): PreparedDocument {
     let nextRules: unknown[] | null = null;
     for (let i = 0; i < rules.length; i += 1) {
       const decision = classifyRuleEntry(rules[i], `/rules/${i}`);
-      if (decision.action === 'keep') continue;
+      if (decision.action === 'keep') {
+        const stripped = withoutRetiredActionKeys(rules[i]);
+        if (stripped !== rules[i]) {
+          nextRules ??= [...rules];
+          nextRules[i] = stripped;
+        }
+        continue;
+      }
       nextRules ??= [...rules];
       if (decision.action === 'issue') {
         issues.push(decision.issue);

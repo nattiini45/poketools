@@ -345,6 +345,7 @@ describe('cross-owner matrix: attaching to a league', () => {
       ],
       removed_stage_ids: [],
       removed_ruleset_ids: [],
+      cleared: null,
     });
   });
 

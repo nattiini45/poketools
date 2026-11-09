@@ -127,6 +127,7 @@ function playedAt(fixture: LeagueFixture): string {
 function toMatchRecord(fixture: LeagueFixture): MatchRecord {
   const { match } = fixture;
   return {
+    match_id: match.id,
     player_1_id: match.player_1_id,
     player_2_id: match.player_2_id,
     winner_id: match.winner_id,

@@ -33,6 +33,7 @@ const LABELS: Record<LeagueAdminTab, string> = {
   phases: 'Phases',
   rules: 'Rules',
   format: 'Format',
+  live: 'Live format',
   settings: 'Settings',
   danger: 'Danger zone',
 };
@@ -77,8 +78,17 @@ describe('LeagueAdminTabs', () => {
     expect(out.match(/<a [^>]*data-admin-tab="/g)).toHaveLength(LEAGUE_ADMIN_TABS.length);
   });
 
+  it('links the live tab with its label and marks it when it is the open one', () => {
+    const out = html('live');
+    expect(out).toContain('href="/admin/leagues/s1?tab=live"');
+    expect(out).toMatch(/<a href="\/admin\/leagues\/s1\?tab=live"[^>]*aria-current="page"[^>]*aria-controls="league-admin-panel"/);
+    expect(out).toContain('id="league-admin-tab-live"');
+    expect(out).toContain('Live format');
+  });
+
   it('renders only the tabs it is given', () => {
     const out = html('overview', ['overview', 'participants', 'phases', 'settings', 'danger']);
+    expect(out).not.toContain('?tab=live');
     expect(out).not.toContain('?tab=draft');
     expect(out).not.toContain('?tab=format');
     expect(out).not.toContain('?tab=rules');

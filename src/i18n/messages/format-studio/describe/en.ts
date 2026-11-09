@@ -108,6 +108,7 @@ export default {
     advancement: 'Advancement',
     rules: 'Rules',
     modules: 'Legacy modules',
+    runtime: 'Attributes, lists and relations',
     sections: 'Notes',
     coverage: 'Coverage',
   },

@@ -2,7 +2,8 @@
 
 import { useCallback } from 'react';
 import type { EditorState, EditorAction } from '../editor/state';
-import type { PokemonSet } from '@/types/team';
+import type { PokemonSet, TeamValidationResult } from '@/types/team';
+import type { TeamCheckAdvisory } from '@/types/api';
 
 /**
  * The `code` of a failed response body, if it has one (never its English text).
@@ -15,6 +16,34 @@ async function failureCode(res: Response): Promise<string | undefined> {
   } catch {
     return undefined;
   }
+}
+
+/** The JSON body of a response, or null when it is not JSON. */
+async function readBody(res: Response): Promise<unknown> {
+  try {
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+
+/** A verdict as `TeamValidationResult`: enough shape to render, nothing is trusted beyond it. */
+function isVerdict(value: unknown): value is TeamValidationResult {
+  return isRecord(value) && typeof value.valid === 'boolean' && Array.isArray(value.issues) && Array.isArray(value.team_issues);
+}
+
+/**
+ * The league-rules advisory a team write carries (`team_check` of the success body), or null when the body has none or
+ * not a well-formed one: a save never fails because of its advisory.
+ */
+function advisoryOf(body: unknown): TeamCheckAdvisory | null {
+  if (!isRecord(body) || !isRecord(body.team_check)) return null;
+  const advisory = body.team_check;
+  if (advisory.status === 'unavailable') return { status: 'unavailable' };
+  if (advisory.status === 'unmet' && isVerdict(advisory.verdict)) return { status: 'unmet', verdict: advisory.verdict };
+  return null;
 }
 
 /**
@@ -31,6 +60,18 @@ export function useTeamSave(
     // A failed save shows the generic `saveStatus: 'error'` label; the API's
     // error text (English, e.g. `tournament_not_found`) is never rendered here.
     const fail = () => dispatch({ type: 'SET_SAVE_STATUS', status: 'error' });
+    // The team is saved. When the league's rules are not met (or could not be checked) the editor says so: the verdict
+    // goes to the validation panel, rendered by code like the live check.
+    const saved = (advisory: TeamCheckAdvisory | null) => {
+      dispatch({ type: 'MARK_SAVED' });
+      if (advisory?.status === 'unmet') {
+        dispatch({ type: 'SET_VALIDATION', result: advisory.verdict });
+        dispatch({ type: 'SET_SAVE_STATUS', status: 'warned' });
+      } else if (advisory?.status === 'unavailable') {
+        dispatch({ type: 'SET_SAVE_STATUS', status: 'unchecked' });
+      }
+      onSaveSuccess?.();
+    };
     const pokemon = state.team.filter((s): s is PokemonSet => s !== null);
     if (pokemon.length === 0) return;
 
@@ -54,13 +95,12 @@ export function useTeamSave(
           }
           return fail();
         }
-        dispatch({ type: 'MARK_SAVED' });
-        onSaveSuccess?.();
-        return;
+        return saved(advisoryOf(await readBody(res)));
       }
 
       // teambuilder / library mode
       const trimmedName = state.teamName.trim();
+      let advisory: TeamCheckAdvisory | null;
       if (state.teamId) {
         const res = await fetch(`/api/teams/${state.teamId}`, {
           method: 'PATCH',
@@ -79,6 +119,7 @@ export function useTeamSave(
           }
           return fail();
         }
+        advisory = advisoryOf(await readBody(res));
       } else {
         const res = await fetch('/api/teams', {
           method: 'POST',
@@ -92,14 +133,14 @@ export function useTeamSave(
           }),
         });
         if (!res.ok) return fail();
-        const json = (await res.json()) as { success: boolean; data?: { id: string } };
-        if (json.success && json.data?.id) {
+        const json = await readBody(res);
+        if (isRecord(json) && json.success === true && isRecord(json.data) && typeof json.data.id === 'string') {
           dispatch({ type: 'SET_META', patch: { teamId: json.data.id } });
         }
+        advisory = advisoryOf(json);
       }
 
-      dispatch({ type: 'MARK_SAVED' });
-      onSaveSuccess?.();
+      saved(advisory);
     } catch {
       fail();
     }

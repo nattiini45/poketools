@@ -306,6 +306,7 @@ async function computeStandingsMovement(
 
     const completedMatches = allMatches.filter((m) => m.status === 'completed');
     const matchRecords: MatchRecord[] = completedMatches.map((m) => ({
+      match_id: m.id,
       player_1_id: m.player_1_id,
       player_2_id: m.player_2_id,
       winner_id: m.winner_id,

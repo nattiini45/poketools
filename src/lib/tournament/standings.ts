@@ -3,6 +3,7 @@ import { BYE_PLAYER_ID } from './types';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import { computeEvolutionPointBuyStandings } from './evolution-standings';
 import { effectiveMatchPoints } from './standings-rules';
+import { kitStandings, ranksWithKit, type KitStandingsData } from '@/lib/format-engine/context';
 
 export interface StandingsOptions {
   /** Points awarded per win (Swiss: 1, Round Robin: 3). Ignored for evolution_point_buy: the format pack decides. */
@@ -174,7 +175,9 @@ export function computeStandings(
  * (`epb.tiebreakerOrder`, the `format_rules.tiebreaker_order` as read) when it is a usable chain, else by the
  * format pack's chain (`epb.tiebreakerChain`), and score the pack's match points (`epb.matchPoints`) whatever
  * points the caller passes (`effectiveMatchPoints`): a caller's round robin 3/0 never reaches an Evolution Point
- * Buy table. Every other format keeps the generic computeStandings behavior unchanged.
+ * Buy table. A custom league whose attached format runs on the kit engine (`epb.kit`, engine `kit`) ranks every
+ * table by its phase's kit scoring and rank chain (`kitStandings`). Every other format keeps the generic
+ * computeStandings behavior unchanged.
  *
  * `options.byes` (stored Swiss byes) is read by computeStandings only. The EPB
  * branch builds its own options and never forwards it, so EPB standings are
@@ -192,8 +195,11 @@ export function computeStandingsForFormat(
   participant_avatars: Record<string, string | null> = {},
   options: StandingsOptions = {},
   participant_gym_types: Record<string, string | null> = {},
-  epb?: { evolutionPoints?: Record<string, number>; tiebreakerOrder?: unknown },
+  epb?: { evolutionPoints?: Record<string, number>; tiebreakerOrder?: unknown; kit?: KitStandingsData },
 ): Standing[] {
+  if (ranksWithKit(formatType, epb?.kit)) {
+    return kitStandings(epb.kit, participant_ids, participant_names, matches, participant_avatars, options, participant_gym_types);
+  }
   if (formatType === 'evolution_point_buy') {
     return computeEvolutionPointBuyStandings(
       participant_ids,

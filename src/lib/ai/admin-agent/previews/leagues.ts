@@ -274,6 +274,7 @@ export const phaseCreatePreview = defineRunnable('season', {
       is_doubles: args.is_doubles,
       team_visibility: args.team_visibility,
       bracket_reset_enabled: args.bracket_reset_enabled,
+      third_place_enabled: args.third_place_enabled,
       insert_at: args.insert_at,
       advancement_rule:
         args.advancement_count === undefined

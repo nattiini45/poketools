@@ -119,6 +119,9 @@ describe('MatchPrepPage', () => {
 
     expect(props).toMatchObject({
       matchId: MATCH_ID,
+      // The editor checks the team by the round of this match, and the validation panel reads the season's pools.
+      tournamentId: TOURNAMENT_ID,
+      seasonId: SEASON_ID,
       rulesetId: 'ruleset-1',
       rulesetName: 'Gen 9 OU',
       // The generation is the ruleset's own, not parsed from its format key.

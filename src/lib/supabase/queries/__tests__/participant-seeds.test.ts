@@ -114,7 +114,16 @@ vi.mock('@/lib/supabase/client', () => {
     return b;
   }
 
-  return { supabase: { from: (table: string) => builder(table) } };
+  // tournament_enrollment_freeze: one atomic update of the frozen flag (a phase without a source, or a frozen one, is left alone).
+  function rpc(name: string) {
+    if (name === 'tournament_enrollment_freeze' && state.enrollmentSource !== null && state.enrollmentSource.frozen !== true) {
+      state.tournamentUpdates.push({ enrollment_source: { ...state.enrollmentSource, frozen: true } });
+      return Promise.resolve({ data: true, error: null });
+    }
+    return Promise.resolve({ data: false, error: null });
+  }
+
+  return { supabase: { from: (table: string) => builder(table), rpc } };
 });
 
 import {
@@ -319,12 +328,21 @@ describe('updateParticipantSeeds', () => {
       expect(state.tournamentUpdates).toEqual([{ enrollment_source: { ...synced, frozen: true } }]);
     });
 
-    it('does not freeze when a seed write fails', async () => {
+    it('freezes before the first write, so a failed seed write leaves the phase frozen and not open to a sync', async () => {
       seed([['p1', null]]);
       state.enrollmentSource = synced;
       state.failWritesFor = new Set(['p1']);
 
       await updateParticipantSeeds('t1', [{ player_id: 'p1', seed: 1 }]).catch(() => undefined);
+
+      expect(state.tournamentUpdates).toEqual([{ enrollment_source: { ...synced, frozen: true } }]);
+    });
+
+    it('freezes nothing when the request conflicts and writes nothing', async () => {
+      seed([['p1', 1], ['p2', 2]]);
+      state.enrollmentSource = synced;
+
+      await updateParticipantSeeds('t1', [{ player_id: 'p1', seed: 2 }]).catch(() => undefined);
 
       expect(state.tournamentUpdates).toEqual([]);
     });

@@ -421,6 +421,15 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
   );
   const every = <T,>(rows: T[], n: number) => rows.filter((_, i) => i % n === 0);
   await insert(client, 'match_analyses', every(completed, 3).map((m) => ({ match_id: m.id, model_id: 'mdl' })));
+  await insert(
+    client,
+    'match_outcomes',
+    every(completed, 2).map((m, i) =>
+      i % 4 === 3
+        ? { match_id: m.id, kind: 'forfeit', source: 'admin', reason: 'no show', set_by: adminId }
+        : { match_id: m.id, kind: 'played', p1_faints: i % 6, p2_faints: 6, source: 'replay' },
+    ),
+  );
   await insert(client, 'match_prep_analyses', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id, model_id: 'mdl' })));
   await insert(client, 'match_prep_teams', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id })));
   await insert(client, 'match_proposals', every(scheduled, 3).map((m) => ({ match_id: m.id, proposer_id: m.player_1_id, responder_id: m.player_2_id, proposed_at: at(0), expires_at: at(2 * DAY), status: 'pending' })));
@@ -461,6 +470,46 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     { id: noteIds[1], entity_type: 'move', entity_name: 'tackle', author_id: playerIds[0], content: 'note', scope_type: 'tournament', scope_id: phaseIds[0] },
   ]);
   await insert(client, 'wiki_note_reports', [{ note_id: noteIds[0], reporter_id: playerIds[1], reason: 'spam' }]);
+
+  // Format runtime state (20261105090000): every table holds rows, the relation is a ring over the roster.
+  await insert(client, 'format_relation_links', playerIds.map((from, i) => ({
+    season_id: seasonId, relation_key: 'santa', from_player_id: from, to_player_id: playerIds[(i + 1) % playerIds.length], revealed_at: i === 0 ? at(-DAY) : null,
+  })));
+  await insert(client, 'format_resource_items', playerIds.map((player_id, i) => ({
+    season_id: seasonId, resource_key: 'gift', player_id, item_id: `item${i}`, exclusive: i % 2 === 0, source: 'action', source_ref: null,
+  })));
+  await insert(client, 'format_action_submissions', playerIds.map((actor_player_id, i) => ({
+    season_id: seasonId, action_key: 'pick', actor_player_id, target_player_id: playerIds[(i + 1) % playerIds.length],
+    status: i % 3 === 0 ? 'locked' : 'submitted', picks: [{ resource: 'gift', item_id: `item${i}` }], submitted_at: at(-DAY),
+  })));
+  await insert(client, 'format_event_log', [
+    { season_id: seasonId, event_key: 'stage_start:main', event: 'stage_start', ops: [], fired_by: adminId },
+    { season_id: seasonId, event_key: 'round_end:main:1', event: 'round_end', payload: { round: 1 }, ops: [] },
+  ]);
+  await insert(client, 'format_flags', [
+    { season_id: seasonId, key: 'domain:gifts', value: 'unlocked' },
+    { season_id: seasonId, key: 'action:pick', value: 'open' },
+  ]);
+  await insert(client, 'format_player_attrs', playerIds.map((player_id) => ({ season_id: seasonId, player_id, attr_key: 'role', value: 'sweeper', source: 'manual' })));
+  await insert(client, 'format_track_progress', playerIds.map((player_id, i) => ({ season_id: seasonId, player_id, track_key: 'ladder', step: i % 4 })));
+  await insert(client, 'format_checks', [
+    { season_id: seasonId, source: 'standings_tie', rule_id: 'tie', dedupe_key: 'tie:1', subject: { players: [playerIds[0], playerIds[1]] } },
+    { season_id: seasonId, source: 'expr', rule_id: 'late', dedupe_key: 'late:1', status: 'confirmed', resolved_by: adminId, resolved_at: at(-DAY), note: 'ok' },
+  ]);
+  await insert(client, 'format_adjustments', [
+    { season_id: seasonId, kind: 'points', target: { stage: 'main', player_id: playerIds[0] }, delta: { points: 1 }, reason: 'late report', admin_id: adminId },
+    { season_id: seasonId, kind: 'rank', target: { stage: 'main' }, delta: { order: [] }, reason: 'tie break by hand', admin_id: null },
+  ]);
+  // Challenge ladder (20261106090000): an open challenge (its accept window shifts on restore), an accepted one that
+  // points at a scheduled match, and an expired one.
+  await insert(client, 'format_challenges', [
+    { season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[0], defender_id: playerIds[1], round: 1, expires_at: at(DAY) },
+    {
+      season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[2], defender_id: playerIds[3], round: 1, status: 'accepted',
+      expires_at: at(-DAY), responded_at: at(-DAY), match_id: scheduled[0]?.id ?? null,
+    },
+    { season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[1], defender_id: playerIds[2], round: 1, status: 'expired', expires_at: at(-DAY) },
+  ]);
 
   // Derived rows.
   const aggs = (scope_type: string, scope_id: string) => Array.from({ length: 20 }, (_, g) => ({ scope_type, scope_id, pokemon_name: `mon${g + 1}`, total_appearances: 10 }));

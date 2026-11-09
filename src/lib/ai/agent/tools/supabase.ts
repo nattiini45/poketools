@@ -17,9 +17,8 @@ import {
   getCompletedMatchRecords,
   getUpcomingMatches as getUpcomingMatchesQuery,
 } from '@/lib/supabase/queries/matches';
-import { buildStandingsRowsFromMatchRecords } from '@/lib/stats/standings-rows';
-import { loadEpbStandingsContext } from '@/lib/tournament/season-standings';
-import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
+import { loadRankingContext } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import type { MatchWithPlayers } from '@/types/match';
 import type {
@@ -151,17 +150,17 @@ export async function queryLeagueData(
   ]);
   // A Swiss tournament's table scores the byes stored on its rounds.
   const byes = tournament ? await loadScoringByes(tournament) : [];
-  // A stage of an Evolution Point Buy league ranks like the league's tables (stored tiebreaker order, evolution
-  // points); any other tournament keeps the generic ranking.
+  // A stage of an Evolution Point Buy or kit league ranks like the league's tables; any other tournament keeps the
+  // generic ranking.
   const ranking =
-    tournament?.season_id && tournament.season_format_type && isEvolutionPointBuy(tournament.season_format_type)
-      ? await loadEpbStandingsContext(tournament.season_id, tournament.season_format_type)
+    tournament?.season_id && tournament.season_format_type
+      ? await loadRankingContext(tournament.season_id, tournament.season_format_type)
       : undefined;
   const rows = buildStandingsRowsFromMatchRecords(
     participants.map((p) => ({ id: p.id, name: p.name, avatar_url: p.avatar_url })),
     records,
     byes,
-    ranking,
+    rankingForPhase(ranking, scope.id),
   );
   const standings: StandingEntry[] = rows.map((r) => ({
     player_id: r.player_id,

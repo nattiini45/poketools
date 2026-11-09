@@ -198,6 +198,18 @@ describe('POST /api/seasons/[id]/participants', () => {
     expect(expireSeasonReads).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
   });
 
+  it('expires the league reads when a bulk add is refused after the first players were added', async () => {
+    vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(addSeasonParticipant).mockResolvedValueOnce(undefined as never).mockRejectedValueOnce(new Error('DB error'));
+
+    const req = makeRequest({ player_ids: [VALID_PLAYER_ID, '22222222-2222-4222-8222-222222222222'] });
+    const res = await POST(req, { params: makeParams({ id: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc' }) });
+
+    expect(res.status).toBe(500);
+    expect(addSeasonParticipant).toHaveBeenCalledTimes(2);
+    expect(expireSeasonReads).toHaveBeenCalledWith('cccccccc-cccc-4ccc-8ccc-cccccccccccc');
+  });
+
   it('returns 500 on unexpected error', async () => {
     vi.mocked(requireResourceAdmin).mockResolvedValue(undefined as never);
     vi.mocked(addSeasonParticipant).mockRejectedValue(new Error('DB error'));

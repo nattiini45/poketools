@@ -90,6 +90,14 @@ export default defineDe<typeof en>()({
     matchesHeading: 'Anzupassende Spiele ({count})',
     match: '{player1} vs. {player2}',
     nothingToSubstitute: 'Nichts auszuwechseln: Weder ein Kadereintrag noch ein Phasenplatz noch ein Spiel würde sich ändern.',
+    formatMoves: {
+      one: 'Formatdaten: <b>{count}</b> Eintrag wechselt zum Ersatzspieler, der den Platz im Format der Liga übernimmt. Ereignisprotokoll und Anpassungen bleiben beim ausscheidenden Spieler.',
+      other:
+        'Formatdaten: <b>{count}</b> Einträge wechseln zum Ersatzspieler, der den Platz im Format der Liga übernimmt. Ereignisprotokoll und Anpassungen bleiben beim ausscheidenden Spieler.',
+    },
+    formatNothing: 'Formatdaten: Der ausscheidende Spieler hält keine, deshalb wechselt nichts; der Ersatzspieler übernimmt den Platz.',
+    formatRows:
+      'Verknüpfungen {links}, Gegenstände {items}, Wahlen {picks}, Attribute {attrs}, Fortschritt {tracks}, offene Herausforderungen {challenges}',
   },
   skipped: {
     heading: {
@@ -122,6 +130,10 @@ export default defineDe<typeof en>()({
       groupHandedOver: 'Gruppenplatz übergeben in: {phases}',
       enrollmentMoved: 'Eintrag verschoben in: {phases}',
       rosterSwapped: 'Ligakader getauscht',
+      formatMoved: {
+        one: 'Formatdaten zum Ersatzspieler verschoben ({count} Eintrag)',
+        other: 'Formatdaten zum Ersatzspieler verschoben ({count} Einträge)',
+      },
       phaseFallback: 'unbekannte Phase',
     },
   },

@@ -95,6 +95,7 @@ export default function TournamentSettingsEditor({
           is_doubles: tournament.is_doubles,
           team_visibility: tournament.team_visibility,
           bracket_reset_enabled: tournament.bracket_reset_enabled,
+          third_place_enabled: tournament.third_place_enabled,
         }}
         submitLabel={t('form.saveChanges')}
         lockedFields={{ bracketType: locks.bracketType, ruleset: locks.ruleset, doubles: locks.doubles }}

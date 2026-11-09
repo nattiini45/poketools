@@ -32,6 +32,8 @@ export default {
     rules: 'Rules',
     /** The read-only Format Studio view of the league (generated outline, rules text, diagnostics). */
     format: 'Format',
+    /** The running format of a custom league: checks inbox, adjustments, player actions, relations, challenges. */
+    live: 'Live format',
     settings: 'Settings',
     danger: 'Danger zone',
     /** Native confirm before a tab switch while the open tab holds unsaved input (forms marked `data-unsaved`). */

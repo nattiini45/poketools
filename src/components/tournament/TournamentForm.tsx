@@ -65,6 +65,7 @@ export default function TournamentForm({
   const [bracketResetEnabled, setBracketResetEnabled] = useState(
     initialData?.bracket_reset_enabled ?? true
   );
+  const [thirdPlaceEnabled, setThirdPlaceEnabled] = useState(initialData?.third_place_enabled ?? false);
   const [teamVisibility, setTeamVisibility] = useState<TeamVisibility>(
     initialData?.team_visibility ?? 'hidden_until_match'
   );
@@ -99,6 +100,7 @@ export default function TournamentForm({
         team_visibility: teamVisibility,
         bracket_reset_enabled:
           bracketType === 'double_elim' ? bracketResetEnabled : undefined,
+        third_place_enabled: bracketType === 'single_elim' ? thirdPlaceEnabled : undefined,
       });
     } catch (err) {
       // The creator throws the API failure (English `error` + `code`); anything else is generic.
@@ -205,6 +207,21 @@ export default function TournamentForm({
           />
           <label htmlFor="bracketReset" className="text-sm text-poke-text-primary">
             {t('form.bracketReset')}
+          </label>
+        </div>
+      )}
+
+      {bracketType === 'single_elim' && (
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="thirdPlace"
+            checked={thirdPlaceEnabled}
+            onChange={(e) => setThirdPlaceEnabled(e.target.checked)}
+            className="rounded accent-poke-accent"
+          />
+          <label htmlFor="thirdPlace" className="text-sm text-poke-text-primary">
+            {t('form.thirdPlace')}
           </label>
         </div>
       )}

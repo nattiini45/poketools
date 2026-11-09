@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, deepFreeze, type FormatDefinition } from '@/lib/format-kit/client';
 import { LEAGUE_ADMIN_TABS } from '@/lib/league-admin/tabs';
+import { expectedPhaseCount } from '../../materialise';
+import { wichtelcupDoc } from '@/lib/format-kit/__tests__/fixtures/docs';
 import { computeReadiness, type ReadinessInput, type ReadinessItem } from '../../editor/readiness';
 
 const RULESET = '3f2b8c1e-5a47-4d09-9b6e-7c1d2a4e8f10';
@@ -96,6 +98,17 @@ describe('phases_created', () => {
 
   it('does not block the Active status', () => {
     expect(computeReadiness(ready({ phaseCount: 0 })).blockedReason).toBeNull();
+  });
+});
+
+describe('phases_created with a foreach_group stage', () => {
+  it('needs one phase per group, not one per stage', () => {
+    const doc = wichtelcupDoc() as unknown as FormatDefinition;
+    const need = expectedPhaseCount(doc);
+    expect(need).toBeGreaterThan(doc.stages.length);
+    const input = (phaseCount: number) => ready({ attached: { version_no: 1, spec: doc }, phaseCount });
+    expect(item(input(doc.stages.length), 'phases_created')).toMatchObject({ state: 'unmet', params: { have: doc.stages.length, need } });
+    expect(item(input(need), 'phases_created').state).toBe('met');
   });
 });
 
@@ -198,5 +211,99 @@ describe('purity', () => {
   it('does not mutate its input', () => {
     const input = deepFreeze(ready({ seasonRulesetId: null }));
     expect(() => computeReadiness(input)).not.toThrow();
+  });
+});
+
+describe('calendar_start', () => {
+  /** The classic league with a calendar on its first stage: a gift window two weeks and twelve hours before round 1. */
+  function withCalendar(start: { kind: 'season_start' } | { kind: 'date'; date: string } = { kind: 'season_start' }): FormatDefinition {
+    const doc = spec('classic-league');
+    doc.stages[0] = {
+      ...doc.stages[0],
+      calendar: {
+        start,
+        time: '18:00',
+        cadence: 'weekly',
+        every: 1,
+        round_window_hours: 168,
+        marks: [
+          { key: 'gifts_open', round: 1, offset_hours: -336 },
+          { key: 'gifts_close', round: 1, offset_hours: -12 },
+        ],
+        deadlines: [],
+      },
+    };
+    return doc;
+  }
+  const calendar = (over: Partial<ReadinessInput> = {}): ReadinessInput =>
+    ready({ attached: { version_no: 1, spec: withCalendar() }, seasonStartDate: '2026-12-01', now: new Date('2026-11-05T12:00:00Z'), ...over });
+  const found = (input: ReadinessInput) => computeReadiness(input).items.find((entry) => entry.id === 'calendar_start');
+
+  it('is not judged without a start date input, without a calendar, or for a calendar that names its own date', () => {
+    expect(found(ready({ attached: { version_no: 1, spec: withCalendar() } }))).toBeUndefined();
+    expect(found(ready({ seasonStartDate: '2026-12-01', now: new Date() }))).toBeUndefined();
+    expect(found(calendar({ attached: { version_no: 1, spec: withCalendar({ kind: 'date', date: '2026-12-01' }) }, seasonStartDate: null }))).toBeUndefined();
+    expect(computeReadiness(ready()).items.map((entry) => entry.id)).toEqual(['format_attached', 'phases_created', 'roster_size', 'rulesets']);
+  });
+
+  it('is not listed while no format is attached', () => {
+    expect(found(calendar({ attached: null }))).toBeUndefined();
+  });
+
+  it('is met when the start date is far enough ahead that no mark is due', () => {
+    expect(found(calendar())).toEqual({ id: 'calendar_start', state: 'met', params: {}, action: null });
+    expect(computeReadiness(calendar()).ready).toBe(true);
+  });
+
+  it('is unmet without a start date: nothing would ever open or fire, and it points at the settings tab', () => {
+    expect(found(calendar({ seasonStartDate: null }))).toEqual({
+      id: 'calendar_start',
+      state: 'unmet',
+      params: { reason: 'missing', count: 0 },
+      action: { tab: 'settings' },
+    });
+    expect(computeReadiness(calendar({ seasonStartDate: null })).ready).toBe(false);
+  });
+
+  it('reads a start date that is not a date as missing', () => {
+    expect(found(calendar({ seasonStartDate: 'soon' }))?.params).toEqual({ reason: 'missing', count: 0 });
+  });
+
+  it('accepts a longer ISO start date', () => {
+    expect(found(calendar({ seasonStartDate: '2026-12-01T00:00:00Z' }))?.state).toBe('met');
+  });
+
+  it('is unmet when marks are already due: they would all fire in one pass', () => {
+    // Round 1 opens 2026-11-17 18:00 local: gifts_open (14 days earlier) is due on 2026-11-05, gifts_close (12 hours earlier) is not.
+    expect(found(calendar({ seasonStartDate: '2026-11-17' }))).toEqual({
+      id: 'calendar_start',
+      state: 'unmet',
+      params: { reason: 'marks_past', count: 1 },
+      action: { tab: 'settings' },
+    });
+    expect(found(calendar({ seasonStartDate: '2026-11-17', now: new Date('2026-11-20T00:00:00Z') }))?.params).toEqual({ reason: 'marks_past', count: 2 });
+  });
+
+  it('counts marks of every stage that starts with the league', () => {
+    const two = withCalendar();
+    two.stages[1] = { ...two.stages[1], calendar: { ...two.stages[0].calendar!, marks: [{ key: 'later', round: 1, offset_hours: -336 }] } };
+    expect(found(calendar({ attached: { version_no: 1, spec: two }, seasonStartDate: '2026-11-17' }))?.params).toEqual({ reason: 'marks_past', count: 2 });
+  });
+
+  it('does not judge due marks of a league that has started, or without a clock', () => {
+    expect(found(calendar({ seasonStartDate: '2026-11-17', started: true }))?.state).toBe('met');
+    expect(found(calendar({ seasonStartDate: '2026-11-17', now: undefined }))?.state).toBe('met');
+  });
+
+  it('still reports a missing start date once the league started', () => {
+    expect(found(calendar({ seasonStartDate: null, started: true }))?.params).toEqual({ reason: 'missing', count: 0 });
+  });
+
+  it('does not block the Active status', () => {
+    expect(computeReadiness(calendar({ seasonStartDate: null })).blockedReason).toBeNull();
+  });
+
+  it('does not mutate a frozen input', () => {
+    expect(() => computeReadiness(deepFreeze(calendar({ seasonStartDate: '2026-11-17' })))).not.toThrow();
   });
 });

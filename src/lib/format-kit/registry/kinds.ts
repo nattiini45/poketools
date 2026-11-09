@@ -1,6 +1,6 @@
 /**
- * Primitive kinds: the vocabulary of format building blocks. 27 are available today; 27 more are
- * reserved so documents can name them and fail with `not_available_yet` instead of being
+ * Primitive kinds: the vocabulary of format building blocks. 53 are available today; 1 more is
+ * reserved so documents can name it and fail with `not_available_yet` instead of being
  * misread. A kind is `<family>.<name>`; `kindKey` turns it into a catalog key segment.
  */
 
@@ -32,37 +32,35 @@ export const AVAILABLE_KINDS = [
   'text.rules',
   'theme.hint',
   'module.legacy',
-] as const;
-
-export const RESERVED_KINDS = [
   'attr.define',
-  'domain.define',
   'attr.assign',
+  'domain.define',
   'relation.define',
   'resource.define',
   'metric.define',
   'rule.on_event',
-  'player.action',
   'effect.apply',
+  'player.action',
   'track.progression',
   'score.placement',
+  'check.assisted',
+  'adjust.manual',
   'pairing.bipartite',
   'pairing.filter',
   'pairing.challenge',
+  'constraint.roster_size',
+  'constraint.count',
+  'constraint.distinct',
   'constraint.type_quota',
   'constraint.tera',
   'constraint.evolution_stage',
-  'constraint.count',
-  'constraint.distinct',
-  'constraint.roster_size',
-  'acquire.draft',
-  'check.assisted',
-  'adjust.manual',
   'time.schedule',
   'time.deadline_policy',
   'stage.end_when',
   'stage.foreach_group',
 ] as const;
+
+export const RESERVED_KINDS = ['acquire.draft'] as const;
 
 export type AvailableKind = (typeof AVAILABLE_KINDS)[number];
 export type ReservedKind = (typeof RESERVED_KINDS)[number];
@@ -74,3 +72,6 @@ export const PRIMITIVE_KINDS: readonly PrimitiveKind[] = [...AVAILABLE_KINDS, ..
 export function kindKey(kind: string): string {
   return kind.split('.').join('_');
 }
+
+/** What an `adjust.manual` rule can allow an admin to change by hand. */
+export const ADJUST_KINDS = ['points', 'resource', 'relation', 'outcome', 'action', 'domain', 'rank'] as const;

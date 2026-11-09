@@ -142,6 +142,12 @@ export default defineDe<typeof en>()({
       section: 'Ergebnis eintragen',
       hint: 'Dieses Spiel hat noch nicht begonnen. Wähle den Sieger, um es ohne Replay abzuschließen. Das Ergebnis zählt für Tabelle, Ratings und Turnierbaum wie jedes andere.',
       winnerLabel: 'Sieger',
+      outcomeLabel: 'Wie das Spiel endete',
+      outcome: {
+        played: 'Gespielt',
+        forfeit: 'Aufgegeben',
+        no_show: 'Nicht erschienen',
+      },
       button: 'Ergebnis eintragen',
       dialogTitle: 'Ergebnis eintragen',
       dialogMessage: 'Dieses Spiel mit {winner} als Sieger abschließen? Das Spiel wird sofort abgeschlossen, ohne Bestätigungsschritt.',

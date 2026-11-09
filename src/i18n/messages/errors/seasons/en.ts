@@ -46,6 +46,10 @@ export default {
   advance_needs_two_phases: 'Need at least 2 phases to advance',
   advance_no_transition:
     'No valid phase transition found. Need a completed phase followed by an upcoming phase.',
+  advance_manual_list_required: 'This advancement needs the list of players who move on.',
+  advance_threshold_failed: 'The advancement condition could not be checked for every player.',
+  groups_forming_in_progress: 'Another request is forming the groups of this phase right now. Try again in a moment.',
+  pairing_expr_failed: 'The filter of this stage could not be evaluated for a pair of players, so the round was not paired.',
   // Seasons, roster, cores, format
   season_not_found: 'Season not found',
   // Path ids that are not UUIDs name no row (404 before the query; src/lib/api/invalid-path-id.ts)
@@ -53,6 +57,8 @@ export default {
   INVALID_PHASE_ID: 'Phase not found',
   INVALID_GROUP_ID: 'Group not found',
   INVALID_LEAGUE_TRASH_ID: 'Trashed league not found',
+  INVALID_CHALLENGE_ID: 'Challenge not found',
+  INVALID_CHECK_ID: 'Check not found',
   // League groups editor (api/seasons/[id]/groups/**); database refusals (SEASON_GROUP_LOCKED, ...) are errors/draft codes
   SEASON_GROUP_NOT_FOUND: 'Group not found in this league',
   SEASON_GROUP_NAME_TAKEN: 'Another group of this league already has this name',
@@ -125,8 +131,72 @@ export default {
     'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
   format_nothing_attached: 'No format is attached to this league.',
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
+  // A replace removes a phase that teams still point to (409).
+  format_phases_in_use: 'Teams still point to a phase that this format change would remove. Remove those teams first.',
+  // A phase created from the league's format, or a hand-made one on a format league, is changed outside the format (409).
+  format_phase_owned:
+    'This phase belongs to the format of this league, so it cannot be added, deleted, reordered or restructured, and its roster and status cannot be changed through this request. Replace the format, change the status in the phase settings, or use a substitute for a player.',
+  format_runtime_has_data:
+    'This league already has data from its current format: {links} links, {items} items, {submissions} submissions and {adjustments} adjustments. Replacing or detaching the format deletes all of it. Confirm to continue.',
   season_format_type_locked:
     'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
+  action_locked: 'This action is locked, so it can no longer be changed.',
+  resource_item_taken: 'Another player already holds this item, so it cannot be picked again.',
+  resource_capacity_reached: 'This player already holds as many of this resource as it allows, so nothing more can be added.',
+  format_context_stale: 'The league format changed while you were working, so your change was not saved. The view has been refreshed: check it and try again.',
+  domain_amendment_locked: 'This list cannot be amended because an action that uses it is already locked.',
+  reason_required: 'A reason is required for this adjustment.',
+  reason_too_long: 'The reason is too long: it can have at most 500 characters.',
+
+  // Challenge ladder (format_challenges): the signals of format_challenge_*, and the checks of the engine.
+  challenge_self: 'You cannot challenge yourself.',
+  challenge_phase_not_found: 'This phase does not belong to the league.',
+  challenge_phase_closed: 'This phase is completed, so it takes no more challenges.',
+  challenge_not_participant: 'Both players have to take part in this phase.',
+  challenge_no_open_round: 'This phase has no open round yet. An admin has to open a round first.',
+  challenge_rank_range: 'You can only challenge a player ranked above you, within the range this ladder allows.',
+  challenge_max_open: 'You have reached the number of open challenges this ladder allows.',
+  challenge_already_open: 'There is already an open challenge between you and this player.',
+  challenge_cooldown: 'You challenged this player too recently. Wait a few rounds before you do it again.',
+  challenge_not_found: 'This challenge does not exist.',
+  challenge_not_defender: 'Only the challenged player can answer this challenge.',
+  challenge_not_challenger: 'Only the player who made this challenge can withdraw it.',
+  challenge_not_open: 'This challenge has already been answered, withdrawn or has expired.',
+  challenge_expired: 'The time to answer this challenge has run out.',
+  challenge_player_not_enrolled: 'One of the two players is no longer part of this phase, so the challenge was cancelled.',
+  challenge_not_ladder: 'This phase is not a challenge ladder.',
+  // The league's engine is not the kit (an admin switched it): a challenge can neither be made nor accepted until it is back (409).
+  challenge_ladder_inactive: 'The challenge ladder of this league is not running at the moment, so challenges cannot be made or accepted. You can still decline or withdraw one.',
+
+  // Live format surface (api/seasons/[id]/format/{me,actions,challenges,adjustments,checks,relations}): the refusals of
+  // src/lib/format-engine/runtime/refusal.ts, plus the body of an action submission that has problems.
+  format_not_running: 'This league is not running a custom format right now.',
+  format_not_participant: 'You are not a participant of this league.',
+  format_season_closed: 'This league is closed, so no more moves can be made.',
+  // The audit write of an unmask failed, so nothing was shown (503, retry).
+  unmask_audit_unavailable: 'The hidden relations could not be shown because the read could not be recorded. Try again in a moment.',
+  format_action_unknown: 'This action does not exist in this league.',
+  format_action_already_submitted: 'You have already submitted this action. Submit again to change your pick.',
+  format_action_invalid: 'The submission has problems.',
+  format_adjust_not_allowed: 'This format does not allow this kind of adjustment.',
+  format_adjust_unknown_target: 'The adjustment points at something that is not part of this league.',
+  format_adjust_invalid_amount: 'This amount is not valid for the adjustment.',
+  format_adjust_invalid_links: 'These links do not fit the relation: they may only name players of the league and must follow the type of the relation.',
+  format_adjust_invalid_order: 'The order has to list every player of the stage exactly once.',
+  format_adjust_unknown_item: 'This item is not an entry of the list this resource holds.',
+  format_adjust_item_required: 'This resource holds entries of a list, so the adjustment has to name the item.',
+  format_adjust_item_not_allowed: 'This resource is a plain counter and takes no item.',
+  format_adjust_attr_missing: 'An added entry lacks an attribute that a step of an action over this list needs.',
+  format_adjust_insufficient_holding: 'The player does not hold that many of this item, so they cannot be taken away.',
+  format_adjust_domain_too_large: 'The list would have more entries than a list may have.',
+  format_adjust_amendment_limit: 'This league has reached the number of list changes it allows.',
+  format_adjust_relation_has_links: 'This relation already has links, and existing links cannot be changed.',
+  format_adjust_action_unchanged: 'The action is already in that state, so nothing was changed.',
+  format_adjust_domain_in_use:
+    'This list change is refused: a player already holds an entry it removes, or a stage that counts this list has already started.',
+  format_check_not_found: 'This check does not exist in this league.',
+  format_check_not_open: 'This check has already been resolved.',
+  format_request_too_large: 'This request is too large.',
 
   // League trash (src/lib/league-trash/errors.ts): the signals of league_trash_delete / league_trash_restore, the
   // restore of a league whose delete rebuild is still pending, and the junction blocks. The internal inventory
@@ -149,4 +219,23 @@ export default {
     'The request took too long, so the result is unknown. Reload the page to see whether it went through.',
   LEAGUE_TRASH_REBUILD_PENDING:
     'The statistics and ratings of this deleted league were not rebuilt yet. Run the pending rebuild first, then restore the league.',
+
+  // Substitution in a league with a custom format: the substitute inherits the seat's format data (docs/format-kit.md, "Substitution").
+  format_substitute_links_collide:
+    "The incoming player already has a link in this format that would collide with the outgoing player's, so the format data cannot move. Nothing was changed.",
+  format_substitute_items_collide:
+    "The incoming player already holds items of a resource whose limit the outgoing player's items would exceed, so the format data cannot move. Nothing was changed.",
+  format_substitute_submissions_collide:
+    'The incoming player has already picked for an action the outgoing player picked for (or the two picked for each other), so the format data cannot move. Nothing was changed.',
+  format_substitute_attrs_collide:
+    'The incoming player already has a format attribute the outgoing player also has, so the format data cannot move. Nothing was changed.',
+  format_substitute_tracks_collide:
+    'The incoming player already has progress on a track the outgoing player also has, so the format data cannot move. Nothing was changed.',
+  format_substitute_challenges_collide:
+    "The incoming player already has an open challenge that would collide with one of the outgoing player's, so the format data cannot move. Nothing was changed.",
+  substitute_format_seat_kept:
+    'The outgoing player stays in {phases}, so their format data (links, items, picks, attributes, progress) stays with them. It moves when they are substituted out of the last of these phases.',
+
+  // Roster changes of a started format phase are forced with a reason (docs/format-kit.md, "Roster changes after the start").
+  PHASE_ROSTER_REASON_REQUIRED: 'Forcing a roster change on a started phase of the format needs a reason of 1 to 500 characters.',
 } as const;

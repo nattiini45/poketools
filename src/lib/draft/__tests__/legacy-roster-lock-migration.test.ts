@@ -128,8 +128,12 @@ describe('20261102150100_legacy_draft_roster_lock_serialize.sql', () => {
 });
 
 describe('league recycle bin restore order', () => {
-  const restore = read('20261026091000_league_trash.sql');
-  const plan = fnBody(restore, 'league_trash__restore_plan(');
+  const definitions = readdirSync(DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .filter((f) => read(f).includes('FUNCTION public.league_trash__restore_plan'))
+    .sort();
+  // The live plan is the last CREATE OR REPLACE of it.
+  const plan = fnBody(read(definitions[definitions.length - 1]), 'league_trash__restore_plan(');
   const stepOf = (rel: string): number[] =>
     [...plan.matchAll(new RegExp(`\\((\\d+),\\s*'${rel}'`, 'g'))].map((m) => Number(m[1]));
 
@@ -140,8 +144,12 @@ describe('league recycle bin restore order', () => {
     expect(participants).toBeLessThan(Math.min(...pools));
   });
 
-  it('no later migration redefines the plan (this pin reads the only definition)', () => {
-    const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).filter((f) => read(f).includes('FUNCTION public.league_trash__restore_plan'));
-    expect(files).toEqual(['20261026091000_league_trash.sql']);
+  it('reads the last of the reviewed definitions of the plan', () => {
+    expect(definitions).toEqual([
+      '20261026091000_league_trash.sql',
+      '20261104090000_match_outcomes.sql',
+      '20261105090000_format_runtime.sql',
+      '20261106090000_format_challenges.sql',
+    ]);
   });
 });

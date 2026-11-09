@@ -54,6 +54,8 @@ function previewKey(preview: SubstituteSummary): string {
     roster: preview.roster_swapped,
     phases: preview.phases.map((phase) => [phase.phase_id, phase.group?.id ?? null]),
     matches: preview.affected_matches.map((match) => match.match_id).sort(),
+    // Format rows already moved (the first write of an apply) show as a count that fell to zero.
+    format: preview.format ? [preview.format.moved, preview.format.total] : null,
   });
 }
 
@@ -197,6 +199,7 @@ function mergeWritten(
       groups_handed_over: [...a.written.groups_handed_over, ...b.written.groups_handed_over],
       enrollments_swapped: [...a.written.enrollments_swapped, ...b.written.enrollments_swapped],
       roster_swapped: a.written.roster_swapped || b.written.roster_swapped,
+      format_moved: a.written.format_moved ?? b.written.format_moved,
     },
     phase_ids: [...new Set([...a.phase_ids, ...b.phase_ids])],
     stopped_at: b.stopped_at,
@@ -237,6 +240,9 @@ export function describeSubstitutePartial(
   const names = (phaseIds: readonly string[]) => phaseIds.map(phaseName).join(', ');
   const steps = written.written;
   const lines: string[] = [];
+  if (steps.format_moved) {
+    lines.push(t('partial.steps.formatMoved', { count: steps.format_moved.total }));
+  }
   if (steps.proposals_cancelled.length > 0) {
     lines.push(t('partial.steps.proposalsCancelled', { count: steps.proposals_cancelled.length }));
   }
@@ -305,6 +311,24 @@ export function SubstitutePartialWarning({
   return null;
 }
 
+/**
+ * The warnings of a substitution response (a seat that stays with a player who keeps another phase), in the viewer's
+ * language: the code and params are the response's, the text comes from the seasons error catalog.
+ */
+export function SubstituteWarnings({ warnings }: { warnings: SubstituteSummary['warnings'] }) {
+  const errorText = useApiErrorText(errorsSeasons);
+  if (!warnings || warnings.length === 0) return null;
+  return (
+    <Alert variant="warning">
+      <ul className="space-y-0.5">
+        {warnings.map((warning) => (
+          <li key={`${warning.code}:${warning.params.phases}`}>{errorText(warning)}</li>
+        ))}
+      </ul>
+    </Alert>
+  );
+}
+
 /** What a preview would write. */
 export function SubstitutePreviewView({ preview }: { preview: SubstituteSummary }) {
   const t = useT(leagueRosterMessages);
@@ -331,6 +355,29 @@ export function SubstitutePreviewView({ preview }: { preview: SubstituteSummary 
           </span>
         )}
       </p>
+
+      {preview.format?.moved === true && (
+        <p className="text-poke-text-secondary">
+          {preview.format.total > 0 ? (
+            <>
+              {t.rich('preview.formatMoves', { count: preview.format.total, b: strong })}
+              <span className="block text-xs text-poke-text-muted">
+                {t('preview.formatRows', {
+                  links: preview.format.rows.relation_links,
+                  items: preview.format.rows.resource_items,
+                  picks: preview.format.rows.action_submissions,
+                  attrs: preview.format.rows.player_attrs,
+                  tracks: preview.format.rows.track_progress,
+                  challenges: preview.format.rows.challenges,
+                })}
+              </span>
+            </>
+          ) : (
+            t('preview.formatNothing')
+          )}
+        </p>
+      )}
+      <SubstituteWarnings warnings={preview.warnings} />
 
       {preview.affected_matches.length === 0 ? (
         <p className="text-poke-text-muted">{t('preview.noMatches')}</p>
@@ -403,6 +450,8 @@ export default function SubstituteDialog({
   const [failure, setFailure] = useState<SubstituteFailureNotice | null>(null);
   /** The last apply succeeded but left planned matches as they were. */
   const [skipped, setSkipped] = useState<SubstituteSkippedMatch[] | null>(null);
+  /** The last apply succeeded with warnings (a format seat that stayed with the outgoing player). */
+  const [doneWarnings, setDoneWarnings] = useState<SubstituteSummary['warnings']>(undefined);
 
   function requestSubstitute(dryRun: boolean): Promise<SubstituteApplyResponse> {
     return fetch(`/api/seasons/${seasonId}/participants/substitute`, {
@@ -424,6 +473,7 @@ export default function SubstituteDialog({
       setApplied(false);
       setFailure(null);
       setSkipped(null);
+      setDoneWarnings(undefined);
       return;
     }
 
@@ -491,9 +541,11 @@ export default function SubstituteDialog({
         setFailure((previous) => nextSubstituteFailureNotice(previous, outcome, confirmed));
         return;
       }
-      if (outcome.summary.matches_skipped.length > 0) {
-        // Done, but say which planned matches it left as they were.
+      const warnings = outcome.summary.warnings;
+      if (outcome.summary.matches_skipped.length > 0 || (warnings && warnings.length > 0)) {
+        // Done, but say which planned matches it left as they were, and what it did not move.
         setSkipped(outcome.summary.matches_skipped);
+        setDoneWarnings(warnings);
         return;
       }
       onSuccess();
@@ -511,6 +563,7 @@ export default function SubstituteDialog({
             {t.rich('dialog.replaced', { inName: inPlayerName, outName: outPlayerName, b: bold })}
           </p>
           <SubstituteSkippedMatches matches={skipped} />
+          <SubstituteWarnings warnings={doneWarnings} />
           <div className="flex justify-end pt-2">
             <Button variant="primary" size="sm" onClick={handleClose}>
               {t('dialog.close')}

@@ -128,6 +128,32 @@ describe('ensurePhaseGroupsFromLeague', () => {
     expect(deleteGroupsByTournament).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['a unique violation on (phase, group number)', '23505'],
+    ['a member insert that lost its group to the other writer (foreign key)', '23503'],
+  ])('answers the retryable 409 groups_forming_in_progress for %s, never a 500', async (_label, code) => {
+    vi.mocked(getSeasonGroups).mockResolvedValue([
+      { id: 'sg-gold', season_id: 's1', name: 'Gold', sort_order: 1, player_ids: ['p1', 'p2'] },
+    ]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1', seed: 1 }, { id: 'p2', seed: 2 }] as never);
+    vi.mocked(createGroupBatch).mockResolvedValue([{ id: 'g1', season_group_id: 'sg-gold' }] as never);
+    vi.mocked(addGroupMembersBatch).mockRejectedValue({ code });
+    await expect(ensurePhaseGroupsFromLeague('s1', PHASE)).rejects.toMatchObject({ code: 'groups_forming_in_progress', statusCode: 409 });
+  });
+
+  it('lets any other error of the rebuild through', async () => {
+    vi.mocked(getSeasonGroups).mockResolvedValue([
+      { id: 'sg-gold', season_id: 's1', name: 'Gold', sort_order: 1, player_ids: ['p1', 'p2'] },
+    ]);
+    vi.mocked(getGroupsByTournament).mockResolvedValue([]);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getParticipants).mockResolvedValue([{ id: 'p1', seed: 1 }, { id: 'p2', seed: 2 }] as never);
+    vi.mocked(createGroupBatch).mockRejectedValue(new Error('db down'));
+    await expect(ensurePhaseGroupsFromLeague('s1', PHASE)).rejects.toThrow('db down');
+  });
+
   it('never rewrites the groups of a phase that already has rounds', async () => {
     vi.mocked(getSeasonGroups).mockResolvedValue([
       { id: 'sg-gold', season_id: 's1', name: 'Gold', sort_order: 1, player_ids: ['p1', 'p2'] },

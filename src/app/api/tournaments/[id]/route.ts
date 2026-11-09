@@ -23,12 +23,14 @@ import {
 } from '@/lib/tournament/standalone-lock';
 import {
   syncBracketResetSetting,
+  syncThirdPlaceSetting,
   type BracketResetSyncResult,
+  type ThirdPlaceSyncResult,
 } from '@/lib/tournament/bracket-propagation';
 import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
 import {
   toDeleteRebuildWarning,
   type DeleteRebuildWarning,
@@ -39,6 +41,10 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import type { AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
+import { advanceAfterStageEnd, stageEndFired } from '@/lib/format-engine/runtime/stage-end-advance';
+import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
+import { assertFormatPhaseDeletable, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
 import type { TournamentUpdateInput } from '@/lib/validation';
@@ -156,6 +162,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     assertSeasonPhaseTournamentEditable(before, body);
+    // A phase the league's attached format created keeps its structure (409 format_phase_owned).
+    await assertFormatPhaseUnchanged(before.season_id, before, body);
 
     // The ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and a started league
     // phase moves it only through the pin route (a started standalone tournament is locked below). Resending the stored value
@@ -214,8 +222,62 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       }
     }
 
+    // Third-place toggle changed: same idea for a single-elimination bracket
+    // (delete a scheduled third-place match on disable; repair on enable).
+    const thirdPlaceToggleChanged =
+      body.third_place_enabled !== undefined &&
+      body.third_place_enabled !== (before.third_place_enabled ?? false);
+    let thirdPlaceSync: ThirdPlaceSyncResult | null = null;
+    let thirdPlaceSyncError: string | null = null;
+    if (thirdPlaceToggleChanged) {
+      try {
+        thirdPlaceSync = await syncThirdPlaceSetting(tournament, await getParticipants(id));
+      } catch (err) {
+        logger.error('api/tournaments', 'third-place sync failed after tournament update', {
+          tournamentId: id,
+          error: err,
+        });
+        thirdPlaceSyncError = 'third_place_sync_failed';
+      }
+    }
+
+    // A kit league's format reacts to a phase that starts or completes (stage_start, stage_end, standings tie checks).
+    // Best effort and logged inside: the hook never fails the status change. A repeat of the same status replays the
+    // reaction (its events and checks are keyed, so it is a no-op once applied): a first call whose reaction failed or died
+    // after the status committed is repaired by sending it again. A failed reaction is reported, not dropped.
+    let formatReactionFailed = false;
+    if (body.status !== undefined && (body.status !== before.status || body.status === 'active' || body.status === 'completed')) {
+      const repeat = body.status === before.status;
+      const from = repeat ? (body.status === 'completed' ? 'active' : 'upcoming') : before.status;
+      formatReactionFailed = !(await onPhaseStatusChanged({ tournament: before, from, to: body.status }));
+    }
+
+    // A kit league phase that completes runs the `auto` edges out of it, after the reaction above: a format can adjust stage
+    // points on stage_end, and the players who move on are picked from the standings as they are then. A reaction that
+    // failed holds the advance back (recorded in the audit entry; sending the same status again replays the reaction and,
+    // once it applies, the advance). Best effort: the status change stands, and a failed advance is logged, recorded in the
+    // audit entry and left to the admin's Advance button. A repeat of `completed` runs the advance only while no target holds
+    // this phase's players yet (the advance rewrites a target's enrollment from the current standings).
+    let autoAdvance: AutoAdvanceResult[] = [];
+    let autoAdvanceError: string | null = null;
+    let autoAdvanceHeld = false;
+    // A repeat that ran the held advance changes no field, but the advance must still leave an audit entry.
+    let autoAdvanceRepeated = false;
+    if (body.status === 'completed' && before.season_id && before.season_format_type === 'custom') {
+      // Only a reaction that failed before its event fired holds it back: after that the standings are final.
+      if (formatReactionFailed && !(await stageEndFired(before.season_id, id))) {
+        autoAdvanceHeld = true;
+      } else {
+        const retry = before.status === 'completed';
+        const advance = await advanceAfterStageEnd({ seasonId: before.season_id, phaseId: id, retry });
+        autoAdvance = advance.results;
+        autoAdvanceError = advance.error;
+        autoAdvanceRepeated = retry && advance.ran;
+      }
+    }
+
     // Status, name and settings show on the next view of the public pages.
-    // Expired after the reset sync, which can add or delete a reset match.
+    // Expired after the reset and third-place syncs, which can add or delete a match.
     expireTournamentReads(id, before.season_id);
 
     // Audit log: record significant field changes
@@ -230,6 +292,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         before.bracket_reset_enabled ?? true,
         body.bracket_reset_enabled
       );
+    }
+    if (body.third_place_enabled !== undefined) {
+      diffField(changes, 'third_place_enabled', before.third_place_enabled ?? false, body.third_place_enabled);
     }
     // The description is never copied into the row.
     diffField(changes, 'bracket_type', before.bracket_type, body.bracket_type ?? before.bracket_type);
@@ -253,7 +318,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     ) {
       changes.bo_overrides = { before: before.bo_overrides ?? {}, after: body.bo_overrides };
     }
-    if (Object.keys(changes).length > 0) {
+    if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'tournament.update',
         actor_id: admin.playerId,
@@ -263,10 +328,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError
+          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || autoAdvanceHeld || formatReactionFailed || autoAdvanceRepeated
             ? {
-                bracket_reset_sync: bracketResetSync,
-                bracket_reset_sync_error: bracketResetSyncError,
+                ...(formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
+                ...(autoAdvanceHeld ? { auto_advance_held: true } : {}),
+                ...(autoAdvanceRepeated ? { auto_advance_repeated: true } : {}),
+                ...(autoAdvance.length > 0 || autoAdvanceError
+                  ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
+                  : {}),
+                ...(bracketResetSync || bracketResetSyncError
+                  ? { bracket_reset_sync: bracketResetSync, bracket_reset_sync_error: bracketResetSyncError }
+                  : {}),
+                ...(thirdPlaceSync || thirdPlaceSyncError
+                  ? { third_place_sync: thirdPlaceSync, third_place_sync_error: thirdPlaceSyncError }
+                  : {}),
               }
             : undefined,
       });
@@ -293,6 +368,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json<ApiResult<typeof tournament>>({
       success: true,
       data: tournament,
+      ...(formatReactionFailed ? { warnings: [{ code: 'format_reaction_failed' }] } : {}),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update tournament');
@@ -306,6 +382,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_TOURNAMENT_ID');
     if (invalidId) return invalidId;
     const tournament = await getTournamentById(id);
+    // The phase of an attached format is removed by replacing or detaching the format, never one by one (409 format_phase_owned).
+    await assertFormatPhaseDeletable(tournament?.season_id ?? null, id);
     // Capture participants BEFORE the delete: the cascade removes the
     // participant rows, and they define whose ratings/streaks must be rebuilt.
     const participants = await getParticipants(id);
@@ -333,6 +411,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       // rating_history_incomplete) and kept in the audit record.
       rebuildWarning = toDeleteRebuildWarning(err);
     }
+    // The rebuild rewrote ratings and streaks after the expiry above (and a failed one may have rewritten part of them), so the
+    // rating reads of the players expire again now.
+    expireRatingReads(participants.map((p) => p.id));
 
     logAuditEvent({
       action: 'tournament.delete',

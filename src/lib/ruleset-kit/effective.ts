@@ -23,6 +23,7 @@ import {
   type RulesetCategory,
   type RulesetDocument,
   type RulesetUniverse,
+  type LevelRules,
 } from './types';
 
 export const RESOLVED_RULES_VERSION = 1;
@@ -92,6 +93,7 @@ export function computeEffective(doc: RulesetDocument, preset: PresetRules | nul
     added_pokemon: sortedUnique(doc.pokemon.unban),
     min_shared_type_pct: doc.min_shared_type_pct,
     team_constraints: doc.team_constraints,
+    levels: doc.levels,
     custom_rules: doc.custom_rules,
   };
 }
@@ -113,6 +115,7 @@ export interface SyntheticRulesInput {
   addedPokemon?: readonly string[];
   minSharedTypePct?: number;
   teamConstraints?: TeamConstraints | null;
+  levels?: LevelRules | null;
   customRules?: string;
 }
 
@@ -140,6 +143,7 @@ export function rulesFromBans(input: SyntheticRulesInput): ResolvedRules {
     added_pokemon: sortedUnique((input.addedPokemon ?? []).map(toID).filter((id) => id !== '')),
     min_shared_type_pct: input.minSharedTypePct ?? 0,
     team_constraints: input.teamConstraints ?? null,
+    levels: input.levels ?? null,
     custom_rules: input.customRules ?? '',
   };
 }
@@ -195,6 +199,7 @@ export function diffResolved(from: ResolvedRules, to: ResolvedRules): RulesDiffe
       from.min_shared_type_pct !== to.min_shared_type_pct ||
       from.custom_rules !== to.custom_rules ||
       JSON.stringify(from.team_constraints) !== JSON.stringify(to.team_constraints) ||
+      JSON.stringify(from.levels ?? null) !== JSON.stringify(to.levels ?? null) ||
       JSON.stringify(from.added_pokemon) !== JSON.stringify(to.added_pokemon),
   };
 }

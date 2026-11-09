@@ -237,6 +237,51 @@ describe('regenerateEliminationBracket', () => {
     expect(result.rounds_created).toBeGreaterThan(0);
   });
 
+  it('reports format_revert_failed when a reset played match could not take back the format effects', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament)
+      .mockResolvedValueOnce(existingRounds)
+      .mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament)
+      .mockResolvedValueOnce([played])
+      .mockResolvedValue([]);
+    vi.mocked(getMatchById).mockResolvedValue(played);
+    vi.mocked(resetMatch).mockResolvedValueOnce({
+      games_deleted: 1,
+      has_downstream_matches: false,
+      evolution_events: [],
+      format_revert_failed: true,
+    });
+
+    const result = await regenerateEliminationBracket(
+      makeTournament(),
+      makeParticipants(2),
+      { cascade: true, adminId: 'admin-1' }
+    );
+
+    expect(result.rounds_created).toBeGreaterThan(0);
+    expect(result.format_revert_failed).toBe(true);
+  });
+
+  it('omits format_revert_failed when the resets reverted cleanly', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament)
+      .mockResolvedValueOnce(existingRounds)
+      .mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament)
+      .mockResolvedValueOnce([played])
+      .mockResolvedValue([]);
+    vi.mocked(getMatchById).mockResolvedValue(played);
+
+    const result = await regenerateEliminationBracket(
+      makeTournament(),
+      makeParticipants(2),
+      { cascade: true, adminId: 'admin-1' }
+    );
+
+    expect(result).not.toHaveProperty('format_revert_failed');
+  });
+
   it('throws UserFacingError so the route can surface REGENERATE_PLAYED', async () => {
     vi.mocked(getRoundsByTournament).mockResolvedValue(existingRounds);
     vi.mocked(getMatchesByTournament).mockResolvedValue([

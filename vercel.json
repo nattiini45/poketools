@@ -9,6 +9,10 @@
       "schedule": "*/15 * * * *"
     },
     {
+      "path": "/api/cron/format-engine",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/expire-suspensions",
       "schedule": "*/15 * * * *"
     },

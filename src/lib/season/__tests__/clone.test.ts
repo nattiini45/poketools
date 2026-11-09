@@ -105,6 +105,7 @@ function phase(overrides: Partial<Tournament> = {}): Tournament {
     archived: true,
     legacy: true,
     bracket_reset_enabled: false,
+    third_place_enabled: true,
     created_at: '2026-01-01',
     updated_at: '2026-01-02',
     ...overrides,
@@ -124,6 +125,7 @@ const PLAN_KEYS = [
   'season_id',
   'stage_order',
   'team_visibility',
+  'third_place_enabled',
 ];
 
 function tracker(actor: CloneActor = resourceAdmin): CloneTracker {
@@ -251,6 +253,7 @@ describe('planPhaseCopies', () => {
       is_doubles: false,
       team_visibility: 'private',
       bracket_reset_enabled: false,
+      third_place_enabled: true,
       advancement_rule: { type: 'top_n', count: 4, per_group: true },
       season_id: 'new-1',
       stage_order: 1,

@@ -39,6 +39,7 @@ export function legacyFormToDocument(form: RulesetFormData): RulesetDocument {
     abilities: { ban: ids(form.banned_abilities), unban: [], allow: null },
     min_shared_type_pct: form.min_shared_type_pct,
     team_constraints: normalizeTeamConstraints(form.team_constraints),
+    levels: null,
     custom_rules: form.custom_rules_string,
   };
 }

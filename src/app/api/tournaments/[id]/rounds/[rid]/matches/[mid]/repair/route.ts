@@ -7,6 +7,7 @@ import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/matc
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getParticipants } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
+import { readOutcomeMark, takeBackMarkedOutcome } from '@/lib/match/outcome-takeback';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -15,7 +16,10 @@ import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
  * PATCH /api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair
  *
  * Re-pair a match: replaces the two participants and resets it to scheduled
- * with no winner, submitter, or date.
+ * with no winner, submitter, or date. The write is a compare-and-set on the status
+ * and players validated here (409 `repair_match_status_locked` when a result landed
+ * since), and the outcome row a dead settle request may have left behind goes with
+ * the old pairing (read before the write, deleted by its `set_at`).
  *
  * Admin use only — for correcting bad pairings mid-tournament.
  */
@@ -105,7 +109,19 @@ export async function PATCH(
       player_2_id: match.player_2_id,
     };
 
-    const updated = await repairMatchPairing(matchId, body.player_1_id, body.player_2_id);
+    const outcomeMark = await readOutcomeMark(matchId);
+    const updated = await repairMatchPairing(matchId, body.player_1_id, body.player_2_id, {
+      status: match.status,
+      player_1_id: match.player_1_id,
+      player_2_id: match.player_2_id,
+    });
+    if (!updated) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'The match changed while it was being re-paired. Reload it and try again.', code: 'repair_match_status_locked' },
+        { status: 409 }
+      );
+    }
+    await takeBackMarkedOutcome(matchId, outcomeMark);
     const cancelledProposals = await cancelPendingMatchProposalsForMatch(matchId);
 
     await revalidateMatchPages(tournamentId, matchId);

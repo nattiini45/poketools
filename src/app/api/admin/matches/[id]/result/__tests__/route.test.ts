@@ -23,7 +23,11 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
 
 vi.mock('@/lib/match/finalize', () => ({
   finalizeMatchCompletion: vi.fn(),
+  stageAdminOutcome: vi.fn(),
+  discardStagedAdminOutcome: vi.fn(),
 }));
+
+vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn() } }));
 
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
@@ -48,9 +52,11 @@ import { POST } from '@/app/api/admin/matches/[id]/result/route';
 import { requirePlayer, AuthError } from '@/lib/auth/helpers';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
-import { finalizeMatchCompletion } from '@/lib/match/finalize';
+import { discardStagedAdminOutcome, finalizeMatchCompletion, stageAdminOutcome } from '@/lib/match/finalize';
+import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 
 const MATCH_ID = 'daa274a2-59da-43fd-84a5-8cede96e15a4';
@@ -82,6 +88,7 @@ function request(body: unknown): NextRequest {
   return { json: async () => body } as unknown as NextRequest;
 }
 
+const STAGED = { setAt: '2026-11-06T10:00:00.123456+00:00' };
 const validBody = { winner_id: P1, reason: 'Bob did not show up' };
 
 describe('POST /api/admin/matches/[id]/result', () => {
@@ -95,6 +102,8 @@ describe('POST /api/admin/matches/[id]/result', () => {
     vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 } as never);
     vi.mocked(revalidateMatchPages).mockResolvedValue(undefined);
     vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true, complete: true, failed_steps: [] });
+    vi.mocked(stageAdminOutcome).mockResolvedValue(STAGED);
+    vi.mocked(discardStagedAdminOutcome).mockResolvedValue(undefined);
   });
 
   describe('access', () => {
@@ -153,6 +162,8 @@ describe('POST /api/admin/matches/[id]/result', () => {
       ['a missing winner', { reason: 'no show' }],
       ['a winner that is not a uuid', { winner_id: 'alice', reason: 'no show' }],
       ['no body', null],
+      ['an unresolved outcome (never set by an admin)', { winner_id: P1, reason: 'no show', outcome: 'unresolved' }],
+      ['an unknown outcome', { winner_id: P1, reason: 'no show', outcome: 'draw' }],
     ])('answers 400 validation_failed for %s', async (_label, body) => {
       const res = await POST(request(body), routeParams);
 
@@ -217,7 +228,21 @@ describe('POST /api/admin/matches/[id]/result', () => {
         match: expect.objectContaining({ id: MATCH_ID, status: 'completed', winner_id: P1 }),
         winnerId: P1,
         previousStatus: status,
+        adminOutcome: { kind: 'played', reason: 'Bob did not show up', setBy: siteAdmin.playerId },
       });
+    });
+
+    it.each(['forfeit', 'no_show'])('hands a %s outcome with the reason to finalize and audits it', async (outcome) => {
+      await POST(request({ ...validBody, outcome }), routeParams);
+
+      expect(finalizeMatchCompletion).toHaveBeenCalledWith(
+        expect.objectContaining({
+          adminOutcome: { kind: outcome, reason: 'Bob did not show up', setBy: siteAdmin.playerId },
+        })
+      );
+      expect(logAuditEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ metadata: expect.objectContaining({ outcome }) })
+      );
     });
 
     it('audits match.admin_result with the reason and the status and winner change', async () => {
@@ -275,6 +300,144 @@ describe('POST /api/admin/matches/[id]/result', () => {
     expect(updateMatchStatus).toHaveBeenCalledWith(MATCH_ID, 'completed', P2, 'ra-1', undefined, 'scheduled');
   });
 
+  describe('the admin outcome', () => {
+    it('is written before the status flip and handed to finalize as the same intent', async () => {
+      const order: string[] = [];
+      vi.mocked(stageAdminOutcome).mockImplementation(async () => {
+        order.push('stage');
+        return STAGED;
+      });
+      vi.mocked(updateMatchStatus).mockImplementation(async () => {
+        order.push('flip');
+        return matchWith({ status: 'completed', winner_id: P1 }) as never;
+      });
+
+      const res = await POST(request({ ...validBody, outcome: 'forfeit' }), routeParams);
+
+      expect(res.status).toBe(200);
+      expect(order).toEqual(['stage', 'flip']);
+      const staged = { kind: 'forfeit', reason: 'Bob did not show up', setBy: 'admin-1' };
+      expect(stageAdminOutcome).toHaveBeenCalledWith(MATCH_ID, staged);
+      expect(finalizeMatchCompletion).toHaveBeenCalledWith(expect.objectContaining({ adminOutcome: staged }));
+    });
+
+    it('fails the request with the match untouched when the outcome cannot be written', async () => {
+      vi.mocked(stageAdminOutcome).mockRejectedValue(new Error('db down'));
+
+      const res = await POST(request({ ...validBody, outcome: 'no_show' }), routeParams);
+
+      expect(res.status).toBe(500);
+      expect(updateMatchStatus).not.toHaveBeenCalled();
+      expect(finalizeMatchCompletion).not.toHaveBeenCalled();
+    });
+
+    it('answers 409 and writes nothing when a replay-tie disputed the match since it was read', async () => {
+      vi.mocked(stageAdminOutcome).mockRejectedValue(new StagedOutcomeBlockedError('disputed'));
+
+      const res = await POST(request({ ...validBody, outcome: 'forfeit' }), routeParams);
+
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body).toMatchObject({ success: false, code: 'match_state_changed', params: { status: 'disputed' } });
+      expect(updateMatchStatus).not.toHaveBeenCalled();
+      expect(finalizeMatchCompletion).not.toHaveBeenCalled();
+      expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        'admin-match-result',
+        expect.stringContaining('staged outcome blocked'),
+        expect.objectContaining({ matchId: MATCH_ID, status: 'disputed' })
+      );
+    });
+
+    it('takes its staged row back (finalize-side restore of the dispute row) when the dispute lands between staging and the flip', async () => {
+      vi.mocked(updateMatchStatus).mockResolvedValue(null);
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'disputed' }) as never);
+
+      const res = await POST(request({ ...validBody, outcome: 'forfeit' }), routeParams);
+
+      expect(res.status).toBe(409);
+      expect(await res.json()).toMatchObject({ code: 'match_state_changed', params: { status: 'disputed' } });
+      // the handle is passed on, so the discard knows which row is ours and restores the dispute's
+      expect(discardStagedAdminOutcome).toHaveBeenCalledWith(MATCH_ID, STAGED);
+    });
+
+    it('is removed again when the compare-and-set loses to a status that is not completed', async () => {
+      vi.mocked(updateMatchStatus).mockResolvedValue(null);
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'pending_confirmation' }) as never);
+
+      const res = await POST(request(validBody), routeParams);
+
+      expect(res.status).toBe(409);
+      expect(discardStagedAdminOutcome).toHaveBeenCalledWith(MATCH_ID, STAGED);
+    });
+
+    it('takes back its own row when a request without an admin outcome (a player confirmation) completed the match meanwhile', async () => {
+      vi.mocked(updateMatchStatus).mockResolvedValue(null);
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'completed', winner_id: P1 }) as never);
+
+      const res = await POST(request({ ...validBody, outcome: 'forfeit' }), routeParams);
+
+      expect(res.status).toBe(409);
+      // The stale admin row would make the played match score as a forfeit; only the row this request wrote goes.
+      expect(discardStagedAdminOutcome).toHaveBeenCalledWith(MATCH_ID, STAGED);
+    });
+
+    it('leaves the row of a completed match alone when nothing was staged by this request (the match was completed before)', async () => {
+      vi.mocked(stageAdminOutcome).mockResolvedValue(null);
+      vi.mocked(updateMatchStatus).mockResolvedValue(null);
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'completed', winner_id: P1 }) as never);
+
+      const res = await POST(request(validBody), routeParams);
+
+      expect(res.status).toBe(409);
+      expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+    });
+
+    it('is removed when the status write throws and the match is confirmed not completed', async () => {
+      vi.mocked(updateMatchStatus).mockRejectedValue(new Error('timeout'));
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'scheduled' }) as never);
+
+      const res = await POST(request(validBody), routeParams);
+
+      expect(res.status).toBe(500);
+      expect(discardStagedAdminOutcome).toHaveBeenCalledWith(MATCH_ID, STAGED);
+    });
+
+    it('stays when the status write threw and the match is completed (the write may have been our own)', async () => {
+      vi.mocked(updateMatchStatus).mockRejectedValue(new Error('timeout'));
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockResolvedValueOnce(matchWith({ status: 'completed', winner_id: P1 }) as never);
+
+      const res = await POST(request(validBody), routeParams);
+
+      expect(res.status).toBe(500);
+      expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+    });
+
+    it('stays when the status write threw and the match status cannot be read (the write may have committed)', async () => {
+      vi.mocked(updateMatchStatus).mockRejectedValue(new Error('timeout'));
+      vi.mocked(getMatchById)
+        .mockResolvedValueOnce(matchWith() as never)
+        .mockRejectedValueOnce(new Error('db down'));
+
+      const res = await POST(request(validBody), routeParams);
+
+      expect(res.status).toBe(500);
+      expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+    });
+  });
+
   describe('a lost race', () => {
     it('answers 409 match_state_changed when the compare-and-set misses, and finalizes nothing', async () => {
       vi.mocked(updateMatchStatus).mockResolvedValue(null);
@@ -320,6 +483,17 @@ describe('POST /api/admin/matches/[id]/result', () => {
       expect(body.code).toBe('match_finalize_incomplete');
       expect(body.params).toEqual({ count: 2 });
       expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ action: 'match.admin_result' }));
+    });
+
+    it('answers 409 match_state_changed when the match was reset after the status flip', async () => {
+      vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: false, reason: 'match_changed', current_status: 'scheduled' });
+
+      const res = await POST(request(validBody), routeParams);
+      const body = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(body.code).toBe('match_state_changed');
+      expect(body.params).toEqual({ status: 'scheduled' });
     });
 
     it('fails loudly when finalize did not run at all', async () => {

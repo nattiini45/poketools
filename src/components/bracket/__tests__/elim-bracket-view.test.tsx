@@ -302,6 +302,50 @@ describe('ElimBracketView', () => {
   });
 });
 
+describe('ElimBracketView — third-place match', () => {
+  const thirdPlaceView = (matches: MatchWithPlayers[], enabled: boolean, locale: 'en' | 'de' = 'en') =>
+    renderWithI18n(
+      <ElimBracketView
+        bracketType="single_elim"
+        tournamentId={T}
+        rounds={SE_ROUNDS}
+        matches={matches}
+        participants={FOUR}
+        matchRecords={records(matches, SE_ROUNDS)}
+        thirdPlaceEnabled={enabled}
+      />,
+      { locale },
+    );
+
+  it('draws the third-place slot in the final round, fed by both semifinal losers', () => {
+    const html = thirdPlaceView(SE_MATCHES, true);
+    expect(html).toContain('Third place');
+    expect(html).toContain('Loser of M1');
+    expect(html).toContain('Loser of M2');
+    expect(html.indexOf('Third place')).toBeGreaterThan(html.indexOf('>Finals<'));
+  });
+
+  it('draws no third-place slot when the setting is off', () => {
+    const html = thirdPlaceView(SE_MATCHES, false);
+    expect(html).not.toContain('Third place');
+    expect(html).not.toContain('Loser of');
+  });
+
+  it('still draws a third-place match that exists after the setting was switched off', () => {
+    const played = [
+      ...SE_MATCHES,
+      match('se-m4', 'se-r2', 'p4', 'p3', { winner: 'p4', pos: 1, side: 'winners' }),
+    ];
+    const html = thirdPlaceView(played, false);
+    expect(html).toContain('Third place');
+    expect(html).toContain(`href="/tournaments/${T}/matches/se-m4"`);
+  });
+
+  it('labels the slot in German', () => {
+    expect(thirdPlaceView(SE_MATCHES, true, 'de')).toContain('Spiel um Platz 3');
+  });
+});
+
 describe('ElimBracketView — German viewer', () => {
   it('shows the stored English round names and feeder labels in German', () => {
     const html = renderWithI18n(

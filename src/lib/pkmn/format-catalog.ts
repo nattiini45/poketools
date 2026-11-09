@@ -34,7 +34,7 @@ export type FormatSummary = Pick<FormatDefaults, 'name' | 'gen' | 'tier' | 'is_d
 export type RulesetUniverse = 'standard' | 'national';
 
 /** Where a preset comes from: a Pokémon Showdown format, or one of the Smogon draft league formats. */
-export type PresetSource = 'showdown' | 'smogon-draft';
+export type PresetSource = 'showdown' | 'smogon-draft' | 'poketools';
 
 /** The Showdown mod whose rules a preset resolves with: one per generation, and the Pokémon Champions mod. */
 export type PresetMod = 'gen1' | 'gen2' | 'gen3' | 'gen4' | 'gen5' | 'gen6' | 'gen7' | 'gen8' | 'gen9' | 'champions';
@@ -50,7 +50,8 @@ export type PresetFamily =
   | 'draft'
   | 'draft-national'
   | 'draft-doubles'
-  | 'draft-champions';
+  | 'draft-champions'
+  | 'community';
 
 /**
  * Documented rules of the source format that the app does not model. The ruleset editor lists them so an admin
@@ -128,6 +129,7 @@ export const PRESET_FAMILIES: readonly { key: PresetFamily; source: PresetSource
   { key: 'draft-national', source: 'smogon-draft', label: 'NatDex Draft' },
   { key: 'draft-doubles', source: 'smogon-draft', label: 'Doubles Draft' },
   { key: 'draft-champions', source: 'smogon-draft', label: 'Champions Draft' },
+  { key: 'community', source: 'poketools', label: 'Community' },
 ];
 
 // ── Generation metadata ──────────────────────────────────────────────
@@ -195,6 +197,10 @@ function draft(
 ): TierDef {
   const { is_doubles = false, family = 'draft', universe = 'standard', ...rest } = extra;
   return { key, label, is_doubles, source: 'smogon-draft', family, universe, gens, searchShow: false, ...rest };
+}
+
+function community(key: string, label: string, gens: readonly number[], rules?: TierDef['rules']): TierDef {
+  return { key, label, gens, is_doubles: false, source: 'poketools', family: 'community', universe: 'national', searchShow: false, showdownId: () => null, rules };
 }
 
 const ANYTHING_GOES = (gen: number) => `gen${gen}anythinggoes`;
@@ -311,6 +317,8 @@ const TIER_DEFS: readonly TierDef[] = [
     showdownId: () => 'gen9champions4v4doublesdraft',
     rules: () => ({ level: 50, minTeamSize: 6, pickedTeamSize: 4, itemClauseLimit: 1, unmodelled: ['champions_move_legality'] }),
   }),
+  // "Exactly six Pokémon" per weekly team (documented fact; the cup's per-player team check owns the count).
+  community('natdexwichtelcup', 'Wichtelcup', [9], () => ({ minTeamSize: 6, pickedTeamSize: 6 })),
 ];
 
 const TIER_MAP = new Map<string, TierDef>(TIER_DEFS.map((t) => [t.key, t]));
@@ -400,6 +408,9 @@ export function clausesForTier(tier: string, gen: number): string[] {
       ];
     case 'nationaldexag':
       return ['Endless Battle Clause'];
+    case 'natdexwichtelcup':
+      // No Mega Evolution: the Mega Stones are banned, and Mega Rayquaza (no stone) is closed by its clause.
+      return ['Species Clause', 'Item Clause', 'Terastal Clause', 'Mega Rayquaza Clause'];
     case 'nationaldexdoublesubers':
       return [...DOUBLES_CLAUSES];
     case 'draft':

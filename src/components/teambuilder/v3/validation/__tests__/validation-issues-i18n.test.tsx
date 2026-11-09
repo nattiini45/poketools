@@ -100,3 +100,41 @@ describe('speed solver notes', () => {
     expect(de('speed.impossibleEvenScarf', { item: 'Wahlschal' })).toContain('Wahlschal');
   });
 });
+
+describe('ValidationPanel level rules', () => {
+  const withLevels: TeamValidationResult = {
+    valid: true,
+    issues: [],
+    team_issues: [],
+    level_rules: {
+      policy: 'exact',
+      default: 50,
+      entries: [
+        { id: 'dialga', name: 'Dialga', level: 90, status: 'approved' },
+        { id: 'palkia', name: 'Palkia', level: 85, status: 'experimental' },
+      ],
+    },
+  };
+
+  it('lists the default and every species rule with its status', () => {
+    const en = renderToStaticMarkup(<ValidationPanel validation={withLevels} />);
+    expect(en).toContain('Level rules');
+    expect(en).toContain('Default: exactly level 50');
+    expect(en).toContain('Dialga: exactly 90 (approved)');
+    expect(en).toContain('Palkia: exactly 85 (experimental)');
+  });
+
+  it('uses the maximum wording for a max policy and speaks German', () => {
+    const max: TeamValidationResult = { ...withLevels, level_rules: { policy: 'max', default: 100, entries: [] } };
+    expect(renderToStaticMarkup(<ValidationPanel validation={max} />)).toContain('Default: maximum level 100');
+    const de = renderWithI18n(<ValidationPanel validation={withLevels} />, { locale: 'de' });
+    expect(de).toContain('Level-Regeln');
+    expect(de).toContain('Standard: genau Level 50');
+    expect(de).toContain('Dialga: genau 90');
+  });
+
+  it('shows no level block without level rules', () => {
+    expect(renderToStaticMarkup(<ValidationPanel validation={{ ...withLevels, level_rules: null }} />)).not.toContain('Level rules');
+    expect(renderToStaticMarkup(<ValidationPanel validation={{ valid: true, issues: [], team_issues: [] }} />)).not.toContain('Level rules');
+  });
+});

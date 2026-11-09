@@ -1,13 +1,16 @@
 /**
- * Stage materialisation: how a format's stages become `tournaments` rows (one phase per kit stage) when a format
- * is attached to a custom league. Pure: no I/O, no clock, no randomness; the same input gives the same rows.
+ * Stage materialisation: how a format's stages become `tournaments` rows (one phase per kit stage, or one per group for
+ * a `foreach_group` stage) when a format is attached to a custom league. Pure: no I/O, no clock, no randomness; the
+ * same input gives the same rows.
  *
- * What the legacy engine can run today decides what a stage maps to. The kit expresses more than that (several
- * round robin legs, a third-place match, wildcard or threshold selections, groups that the legacy phases create
- * themselves), so every stage property the engine cannot honour yet is returned as an `EngineGap` code with
- * params, never as text: the next PR renders them, and Phase 2b makes the engine run them.
+ * What the legacy engine can run decides what a stage maps to. The kit expresses more than that (several round
+ * robin legs, wildcard, threshold or bottom-N selections, groups), so every stage property the legacy engine cannot
+ * honour is returned as an `EngineGap` code with params, never as text. A league on the kit engine runs legs and
+ * every selection itself and forms the groups of a stage before its first round (unless the groups are `manual`):
+ * `engineGaps` drops those for it.
  */
 import {
+  mappedBracketType,
   type CountRange,
   type Edge,
   type FormatDefinition,
@@ -16,10 +19,11 @@ import {
   type StagePlan,
 } from '@/lib/format-kit/client';
 import { resolveLText } from '@/lib/studio-core/ltext';
+import { groupLabel } from '@/lib/tournament/serpentine';
 import type { Locale } from '@/i18n/config';
 import type { BracketType } from '@/types/tournament';
 import type { AttachStageRow } from '@/lib/supabase/queries/season-formats';
-import type { EngineGap, EngineGapCode, StageSpecSnapshot } from './library-types';
+import type { EngineGap, EngineGapCode, SeasonFormatEngine, StageSpecSnapshot } from './library-types';
 
 /**
  * The longest stage name a phase keeps (the documented cut). It equals `FIELD_LIMITS.TITLE`; the constant lives here
@@ -129,13 +133,42 @@ export function mapSeriesOverrides(
 
 function mappedBracketOf(stage: Stage, plan: StagePlan | undefined): BracketType {
   if (plan !== undefined) return plan.mappedBracketType;
-  return stage.pairing.kind === 'manual' ? 'round_robin' : stage.pairing.kind;
+  return mappedBracketType(stage.pairing);
 }
 
 function stageName(stage: Stage, language: Locale, order: number): string {
   const resolved = resolveLText(stage.name, { seasonLanguage: language });
   const trimmed = (resolved?.value ?? '').trim().slice(0, STAGE_NAME_MAX_CHARS).trim();
   return trimmed === '' ? `Stage ${order}` : trimmed;
+}
+
+const GROUP_NAME_SEPARATOR = ' · ';
+
+/**
+ * The phase name of group `group` (1-based) of a `foreach_group` stage: "<stage> · Group A". The cut applies to the stage
+ * part, so the group suffix always survives.
+ */
+export function groupPhaseName(base: string, group: number): string {
+  const suffix = `${GROUP_NAME_SEPARATOR}Group ${groupLabel(group - 1)}`;
+  return `${base.slice(0, Math.max(1, STAGE_NAME_MAX_CHARS - suffix.length)).trim()}${suffix}`;
+}
+
+/**
+ * The groups a `foreach_group` stage repeats over: 1..N for the N groups of the stage it names, or an empty list for a
+ * stage that repeats over nothing (no `foreach_group`, or a source without groups, which the compiler rejects).
+ */
+function foreachGroups(definition: FormatDefinition, stage: Stage): number[] {
+  const source = stage.foreach_group === undefined ? undefined : definition.stages.find((s) => s.key === stage.foreach_group?.from);
+  const count = source?.groups?.count ?? 0;
+  return Array.from({ length: count }, (_, i) => i + 1);
+}
+
+/**
+ * How many phases attaching `definition` creates: one per stage, or one per group of the source for a `foreach_group` stage
+ * (the same expansion `planStages` writes). The readiness checklist compares it with the phases the league holds.
+ */
+export function expectedPhaseCount(definition: FormatDefinition): number {
+  return definition.stages.reduce((sum, stage) => sum + Math.max(1, foreachGroups(definition, stage).length), 0);
 }
 
 /** Stages in graph order; a stage missing from the order is appended in declaration order. */
@@ -192,12 +225,19 @@ function stageWarnings(stage: Stage, unmapped: readonly SeriesOverride[]): Engin
   if (stage.pairing.kind === 'round_robin' && stage.pairing.legs > 1) {
     gaps.push(gap('rr_legs_not_run', { stage: stage.key }, { legs: stage.pairing.legs }));
   }
-  if (stage.pairing.kind === 'single_elim' && stage.pairing.third_place) {
-    gaps.push(gap('third_place_not_run', { stage: stage.key }));
-  }
   if (stage.groups !== undefined) {
     gaps.push(gap('groups_not_created', { stage: stage.key }, { count: stage.groups.count, method: stage.groups.method }));
   }
+  const { pairing } = stage;
+  if (pairing.kind === 'bipartite' || pairing.kind === 'filter' || pairing.kind === 'challenge') {
+    gaps.push(gap('pairing_not_run', { stage: stage.key }, { kind: pairing.kind }));
+  }
+  if (stage.constraints !== undefined && stage.constraints.length > 0) {
+    gaps.push(gap('constraints_not_run', { stage: stage.key }, { count: stage.constraints.length }));
+  }
+  if (stage.calendar !== undefined) gaps.push(gap('calendar_not_run', { stage: stage.key }));
+  if (stage.end_when !== undefined) gaps.push(gap('end_when_not_run', { stage: stage.key }));
+  if (stage.foreach_group !== undefined) gaps.push(gap('foreach_group_not_run', { stage: stage.key }));
   return gaps;
 }
 
@@ -213,6 +253,37 @@ function edgeWarnings(edges: readonly Edge[]): EngineGap[] {
     }
   }
   return gaps;
+}
+
+/**
+ * The gaps the kit engine closes: it plays every round robin leg, runs every edge selection, pairs filter and bipartite
+ * stages, checks team constraints, follows the stage calendar and end condition, and repeats a `foreach_group` stage
+ * per group. It also forms the groups of a stage itself, except `manual` ones (see `kitRuns`).
+ */
+const KIT_RUNS: ReadonlySet<EngineGapCode> = new Set<EngineGapCode>([
+  'rr_legs_not_run',
+  'edge_select_not_run',
+  'pairing_not_run',
+  'constraints_not_run',
+  'calendar_not_run',
+  'end_when_not_run',
+  'foreach_group_not_run',
+]);
+
+/**
+ * Whether the kit engine closes this gap. A challenge ladder is closed too: players issue and answer challenges
+ * through the challenge routes and an accepted challenge becomes a match, so no round generator is involved. The kit
+ * engine forms a stage's groups before its first round (`ensureKitPhaseGroups`) by the spec's
+ * method; `manual` groups it cannot form, so that gap stays and tells the admin to set them up by hand.
+ */
+function kitRuns(entry: EngineGap): boolean {
+  if (entry.code === 'groups_not_created') return entry.params.method !== 'manual';
+  return KIT_RUNS.has(entry.code);
+}
+
+/** The gaps that still apply to a league on `engine` (`shadow` schedules and advances like `legacy`). */
+export function engineGaps(gaps: readonly EngineGap[], engine: SeasonFormatEngine): EngineGap[] {
+  return engine === 'kit' ? gaps.filter((entry) => !kitRuns(entry)) : [...gaps];
 }
 
 /**
@@ -244,18 +315,25 @@ export function planStages(input: PlanStagesInput): PlannedStages {
       stage: structuredClone(stage),
       mapped_bracket_type: bracket,
     };
-    stages.push({
-      key: stage.key,
-      name: stageName(stage, seasonLanguage, order),
-      bracket_type: bracket,
-      ruleset_id: rulesetId,
-      best_of_default: stage.series.best_of,
-      bo_overrides: series.map,
-      is_doubles: stage.doubles,
-      bracket_reset_enabled: stage.pairing.kind === 'double_elim' ? stage.pairing.bracket_reset : true,
-      stage_order: order,
-      stage_spec: snapshot,
-    });
+    const name = stageName(stage, seasonLanguage, order);
+    const groups = foreachGroups(definition, stage);
+    // A stage that repeats per group is one phase per group of its source, in group order; any other stage is one phase.
+    for (const group of groups.length > 0 ? groups : [0]) {
+      stages.push({
+        key: stage.key,
+        format_group: group,
+        name: group === 0 ? name : groupPhaseName(name, group),
+        bracket_type: bracket,
+        ruleset_id: rulesetId,
+        best_of_default: stage.series.best_of,
+        bo_overrides: series.map,
+        is_doubles: stage.doubles,
+        bracket_reset_enabled: stage.pairing.kind === 'double_elim' ? stage.pairing.bracket_reset : true,
+        third_place_enabled: stage.pairing.kind === 'single_elim' && stage.pairing.third_place,
+        stage_order: order,
+        stage_spec: snapshot,
+      });
+    }
     warnings.push(...stageWarnings(stage, series.unmapped));
   });
   warnings.push(...edgeWarnings(definition.edges));

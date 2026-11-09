@@ -26,6 +26,7 @@ import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { apiFailure, type UiError } from './ui-error';
 import { announceParticipantsChanged, summarizeParticipants } from './participants-events';
 import { loadParticipants } from './load-participants';
+import { isFormatPhaseOwnedRefusal, useRosterForcePrompt, withRosterForce } from './roster-force';
 
 interface ParticipantManagerProps {
   tournamentId: string;
@@ -60,6 +61,7 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
   const [searchError, setSearchError] = useState<ApiErrorLike | null>(null);
   const [searchMore, setSearchMore] = useState<{ shown: number; total: number } | null>(null);
   const seenHits = useRef(new Map<string, PlayerSearchHit>());
+  const { ask: askRosterForce, dialog: rosterForceDialog } = useRosterForcePrompt();
 
   useEffect(() => {
     let cancelled = false;
@@ -94,8 +96,11 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
     announceParticipantsChanged(tournamentId, summarizeParticipants(participants));
   }, [participants, loading, rosterLoaded, tournamentId]);
 
-  /** Enrol the player the picker returned for `playerId` (the server decides: duplicates, locked brackets). */
-  async function addPlayer(playerId: string) {
+  /**
+   * Enrol the player the picker returned for `playerId` (the server decides: duplicates, locked brackets). `forceReason`
+   * repeats a request the server refused with `format_phase_owned`, after the admin confirmed it with a reason.
+   */
+  async function addPlayer(playerId: string, forceReason?: string) {
     const hit = seenHits.current.get(playerId);
     if (!hit || adding || participants.some((p) => p.id === playerId)) return;
     setError(null);
@@ -104,10 +109,14 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
       const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ player_id: playerId }),
+        body: JSON.stringify(withRosterForce({ player_id: playerId }, forceReason)),
       });
       const result: ApiResult<null> = await res.json();
       if (!result.success) {
+        if (forceReason === undefined && isFormatPhaseOwnedRefusal(result)) {
+          askRosterForce((reason) => addPlayer(playerId, reason));
+          return;
+        }
         setError(apiFailure(result));
         return;
       }
@@ -144,15 +153,19 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
     });
   }
 
-  async function removePlayer(playerId: string) {
+  async function removePlayer(playerId: string, forceReason?: string) {
     setError(null);
     const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
       method: 'DELETE',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ player_id: playerId }),
+      body: JSON.stringify(withRosterForce({ player_id: playerId }, forceReason)),
     });
     const result: ApiResult<null> = await res.json();
     if (!result.success) {
+      if (forceReason === undefined && isFormatPhaseOwnedRefusal(result)) {
+        askRosterForce((reason) => removePlayer(playerId, reason));
+        return;
+      }
       setError(apiFailure(result));
       return;
     }
@@ -164,8 +177,14 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
 
   if (loading) return <p className="text-sm text-poke-text-muted">{t('participants.loading')}</p>;
 
+  // A started phase of the league's format is the format's to keep: the controls stay usable, and the server's
+  // 409 `format_phase_owned` offers the audited force (a phase of a custom league is created by its format).
+  const startedFormatPhase = tournament?.status === 'active' && tournament.season_format_type === 'custom';
+  const editable = tournament?.status === 'upcoming' || startedFormatPhase;
+
   return (
     <div className="space-y-4">
+      {rosterForceDialog}
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       <SeedingTable
         tournamentId={tournamentId}
@@ -181,10 +200,11 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
         onAddPlayer={addPlayer}
         onRemovePlayer={removePlayer}
         bracketType={tournament?.bracket_type ?? null}
-        editable={tournament?.status === 'upcoming'}
+        editable={editable}
+        startedFormatPhase={startedFormatPhase}
       />
 
-      {tournament?.status === 'upcoming' && (
+      {editable && (
         <div className="space-y-1">
           <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('seeding.addPlayer')}</h3>
           <Combobox

@@ -35,6 +35,10 @@ export interface GeneratedRound {
   pairings: Pairing[];
   /** Players receiving a bye this round */
   bye_player_ids: string[];
+  /** Swiss only: pairings of the round whose two players have met before (0 when the search avoided every rematch). */
+  rematches?: number;
+  /** Filtered pairing only: pairings the filter rejects that the round could not avoid (0 when none). */
+  forbidden?: number;
 }
 
 /**

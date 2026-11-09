@@ -5,6 +5,7 @@ import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { teamIssuesOf, useValidationIssueText } from '@/components/teambuilder/LegalityBadge';
 import type { TeamValidationResult, SetIssue } from '@/types/team';
+import PoolsCard, { useKitLeagueView } from './PoolsCard';
 
 /**
  * ValidationPanel — right-column panel showing team + per-slot issues.
@@ -19,23 +20,38 @@ import type { TeamValidationResult, SetIssue } from '@/types/team';
 interface ValidationPanelProps {
   validation: TeamValidationResult | null;
   onJumpToIssue?: (issueId: string) => void;
+  /**
+   * The season the team is built for; a kit league's pools card and audit note come from its live view. Both the
+   * teambuilder and the match-prep (plan mode) editor pass it, so a match team shows the same card.
+   */
+  seasonId?: string | null;
+}
+
+/** A kit league's stage rules produced this issue (`kit_*` codes), so the verdict is the advisory one. */
+function hasKitIssue(validation: TeamValidationResult): boolean {
+  const isKit = (code: string | undefined) => code?.startsWith('kit_') === true;
+  return validation.issues.some((i) => isKit(i.code)) || (validation.team_issue_details ?? []).some((i) => isKit(i.code));
 }
 
 export default function ValidationPanel({
   validation,
   onJumpToIssue,
+  seasonId,
 }: ValidationPanelProps) {
   const t = useT(teambuilderIntelMessages);
   const dl = useDataLocale();
   const issueText = useValidationIssueText();
+  const kitView = useKitLeagueView(seasonId);
+  const pools = kitView ? <PoolsCard view={kitView} /> : null;
 
   if (!validation) {
     return (
       <div className="p-3">
         <p className="text-xs text-poke-text-muted mb-2">{t('validation.title')}</p>
-        <p className="text-[11px] text-poke-text-muted/60">
+        <p className="text-[11px] text-poke-text-muted/60 mb-3">
           {t('validation.idle')}
         </p>
+        {pools}
       </div>
     );
   }
@@ -67,6 +83,37 @@ export default function ValidationPanel({
           </span>
         )}
       </div>
+
+      {/* Kit league: the live check is advisory. Only the stage's own rules (`kit_*` issues) are audited after the match; a
+          break of the ruleset (banned Pokémon, items, formes) is never re-checked, and a stage without rules audits nothing. */}
+      {(kitView !== null || hasKitIssue(validation)) && (
+        <p className="mb-3 text-[11px] text-poke-text-secondary" data-audit-note={hasKitIssue(validation) ? 'audited' : 'advisory'}>
+          {t(hasKitIssue(validation) ? 'validation.auditNote' : 'validation.advisoryNote')}
+        </p>
+      )}
+
+      {pools}
+
+      {validation.level_rules && (
+        <div className="mb-3 rounded bg-poke-elevated/40 px-2 py-2">
+          <p className="text-[10px] uppercase text-poke-text-muted/60 mb-1 tracking-wider">{t('validation.levelRules')}</p>
+          <p className="text-[11px] text-poke-text-secondary">
+            {t(validation.level_rules.policy === 'exact' ? 'validation.levelDefaultExact' : 'validation.levelDefaultMax', { level: validation.level_rules.default })}
+          </p>
+          <ul className="mt-1 space-y-0.5">
+            {validation.level_rules.entries.map((entry) => (
+              <li key={entry.id} className="text-[11px] text-poke-text-secondary">
+                {t(validation.level_rules?.policy === 'exact' ? 'validation.levelEntryExact' : 'validation.levelEntryMax', {
+                  // The shared check adds the English name; an id alone (a result that skipped it) still resolves in German.
+                  species: localizeSpecies(entry.name ?? entry.id, dl),
+                  level: entry.level,
+                  status: t(entry.status === 'approved' ? 'validation.levelApproved' : 'validation.levelExperimental'),
+                })}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Team-level issues (by code; English text when the API sent none) */}
       {teamIssues.length > 0 && (

@@ -36,7 +36,7 @@ const scoped = (scopeColumn: string, idColumn: string, typeValues: [string, stri
   { column: idColumn, keys: 'phases', where: { [scopeColumn]: typeValues[1] } },
 ];
 
-/** The 50 owned tables of `league_trash__inventory()` (the local test compares this list with the database). */
+/** The owned tables of `league_trash__inventory()` (the local test compares this list with the database). */
 export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'seasons', order: ['id'], by: [{ column: 'id', keys: 'season' }] },
   { table: 'season_participants', order: ['season_id', 'player_id'], by: [bySeason()] },
@@ -65,6 +65,7 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'match_prep_teams', order: ['id'], by: [byMatches()] },
   { table: 'match_proposals', order: ['id'], by: [byMatches()] },
   { table: 'match_evolution_snapshots', order: ['id'], by: [byMatches()] },
+  { table: 'match_outcomes', order: ['match_id'], by: [byMatches()] },
   { table: 'epb_animation_views', order: ['id'], by: [byMatches()] },
   { table: 'broadcast_moments', order: ['id'], by: [byMatches(), { column: 'game_id', keys: 'games' }] },
   { table: 'draft_pools', order: ['id'], by: [bySeason()] },
@@ -88,6 +89,16 @@ export const OWNED_SPECS: readonly TableSpec[] = [
   { table: 'social_integrations', order: ['id'], by: scoped('scope_type', 'scope_id', ['season', 'tournament']) },
   { table: 'wiki_notes', order: ['id'], by: scoped('scope_type', 'scope_id', ['league', 'tournament']) },
   { table: 'wiki_note_reports', order: ['id'], by: [{ column: 'note_id', keys: 'notes' }] },
+  { table: 'format_relation_links', order: ['relation_key', 'from_player_id'], by: [bySeason()] },
+  { table: 'format_resource_items', order: ['id'], by: [bySeason()] },
+  { table: 'format_action_submissions', order: ['id'], by: [bySeason()] },
+  { table: 'format_event_log', order: ['id'], by: [bySeason()] },
+  { table: 'format_flags', order: ['key'], by: [bySeason()] },
+  { table: 'format_player_attrs', order: ['player_id', 'attr_key'], by: [bySeason()] },
+  { table: 'format_track_progress', order: ['player_id', 'track_key'], by: [bySeason()] },
+  { table: 'format_checks', order: ['id'], by: [bySeason()] },
+  { table: 'format_adjustments', order: ['id'], by: [bySeason()] },
+  { table: 'format_challenges', order: ['id'], by: [bySeason()] },
 ];
 
 /** Deleted with the league but never captured: rebuilt by the app. */
@@ -98,13 +109,19 @@ export const DERIVED_SPECS: readonly TableSpec[] = [
   { table: 'rating_history', order: ['id'], by: [byMatches()] },
 ];
 
-/** Columns that legitimately differ after a delete + restore: shifted clocks, the aggregate marker, the freeze. */
+/**
+ * Columns that legitimately differ after a delete + restore: shifted clocks, the aggregate marker, the freeze, and the
+ * revision of the attached format (the restore inserts the row again and the trigger draws a fresh number, so a write
+ * that was validated before the delete is refused as stale) and the clock shift of its calendar (the time away).
+ */
 const EXCLUDED: Readonly<Record<string, readonly string[]>> = {
   draft_pools: ['paused_at', 'paused_by', 'pause_reason', 'state_version', 'updated_at', 'submission_deadline_at', 'token_purchase_closes_at'],
   draft_slots: ['deadline_at', 'remaining_ms_at_pause'],
   matches: ['auto_confirm_at'],
   rounds: ['deadline'],
   match_proposals: ['expires_at'],
+  format_challenges: ['expires_at'],
+  season_formats: ['revision', 'clock_shift_seconds'],
   games: ['aggregate_applied_at'],
 };
 
@@ -200,5 +217,6 @@ export async function readClocks(client: Client, ids: LeagueIds): Promise<Record
   await take('matches', 'auto_confirm_at', (r) => r.status === 'pending_confirmation');
   await take('match_proposals', 'expires_at', (r) => r.status === 'pending');
   await take('rounds', 'deadline', (r) => r.status !== 'completed');
+  await take('format_challenges', 'expires_at', (r) => r.status === 'open');
   return clocks;
 }

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { errorLikeOf, failureOf, makeClassifier, request, type ApiErrorKind, type FetchLike } from '../request';
 
 interface Call {
@@ -105,5 +105,60 @@ describe('makeClassifier', () => {
 
   it('another studio\'s stale code is not stale here', () => {
     expect(classify({ code: 'other_stale', params: { draft_rev: 3 } })).toEqual({ kind: 'other' });
+  });
+});
+
+describe('the extras hook (members of a failed body that only one route has)', () => {
+  interface WithIssues {
+    error?: string | null;
+    code?: string | null;
+    params?: Record<string, string | number> | null;
+    issues?: { code: string }[];
+  }
+  const issuesOf = (body: unknown): Partial<WithIssues> => {
+    const issues = (body as { issues?: unknown } | null)?.issues;
+    if (!Array.isArray(issues)) return {};
+    const valid = issues.filter((entry): entry is { code: string } => typeof (entry as { code?: unknown } | null)?.code === 'string');
+    return { issues: valid };
+  };
+
+  it('merges the hook\'s members into the failure and keeps the shared ones', async () => {
+    const body = { success: false, error: 'bad', code: 'format_action_invalid', params: { count: 2 }, issues: [{ code: 'wrong_count' }, { nope: 1 }] };
+    const { f } = fakeFetch(respond(422, body));
+    expect(await request<unknown, WithIssues>(f, 'PUT', '/p', { picks: [] }, issuesOf)).toEqual({
+      ok: false,
+      status: 422,
+      error: { error: 'bad', code: 'format_action_invalid', params: { count: 2 }, issues: [{ code: 'wrong_count' }] },
+    });
+  });
+
+  it('keeps the hook\'s members on the status-derived branches too', async () => {
+    const { f } = fakeFetch(respond(401, { issues: [{ code: 'x' }] }));
+    expect(await request<unknown, WithIssues>(f, 'POST', '/p', undefined, issuesOf)).toEqual({
+      ok: false,
+      status: 401,
+      error: { code: 'unauthenticated', issues: [{ code: 'x' }] },
+    });
+  });
+
+  it('the hook can never replace error, code or params', () => {
+    const hostile = () => ({ code: 'hijacked', error: 'x', params: { n: 1 } });
+    expect(errorLikeOf({ error: 'real', code: 'real_code' }, hostile)).toEqual({ error: 'real', code: 'real_code', params: { n: 1 } });
+  });
+
+  it('is not called for a success, and is optional', async () => {
+    const hook = vi.fn(() => ({}));
+    const ok = fakeFetch(respond(200, { success: true, data: 1 }));
+    expect(await request(ok.f, 'GET', '/p', undefined, hook)).toEqual({ ok: true, data: 1 });
+    expect(hook).not.toHaveBeenCalled();
+    const bad = fakeFetch(respond(409, { success: false, code: 'c' }));
+    expect(await request(bad.f, 'GET', '/p')).toEqual({ ok: false, status: 409, error: { code: 'c' } });
+  });
+
+  it('a network failure never calls the hook and still resolves', async () => {
+    const hook = vi.fn(() => ({}));
+    const { f } = fakeFetch(new TypeError('down'));
+    expect(await request(f, 'GET', '/p', undefined, hook)).toEqual({ ok: false, status: 0, error: { code: 'network_error' } });
+    expect(hook).not.toHaveBeenCalled();
   });
 });

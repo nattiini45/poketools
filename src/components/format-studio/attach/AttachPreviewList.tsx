@@ -95,7 +95,7 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
       <ol className="space-y-2">
         {preview.stages.map((stage) => (
           <li
-            key={stage.key}
+            key={`${stage.key}:${stage.name}`}
             className="min-w-0 rounded-poke-md border border-poke-border bg-poke-elevated/40 px-3 py-2"
             data-attach-stage={stage.key}
           >

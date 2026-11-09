@@ -12,7 +12,14 @@ import { emitDiscordEvent } from '@/lib/discord/notify';
 import { emitSocialEvent } from '@/lib/social/notify';
 import { expireTournamentReads } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
-import { assertSeasonFormatAttached } from '@/lib/format-studio/attach';
+import {
+  announceKitRound,
+  assertPhaseReadyForFirstRound,
+  isKitEnginePhase,
+  loadKitPhaseOfTournament,
+  wantsForcedStart,
+} from '@/lib/format-engine/route-guards';
+import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -44,10 +51,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     // A custom league without an attached format cannot start: refuse before the bracket is written. The season
-    // type is already joined onto the tournament, so every other league type takes no extra read.
-    if (tournament.season_format_type === 'custom' && tournament.season_id) {
-      await assertSeasonFormatAttached(tournament.season_id);
-    }
+    // type is already joined onto the tournament, so every other league type takes no extra read. The kit phase it
+    // answers with is what the format's own set-up gate and the announcement below work from.
+    const kitPhase = await loadKitPhaseOfTournament(tournament);
 
     if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
       return NextResponse.json<ApiResult<never>>(
@@ -70,17 +76,38 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const result = await generateEliminationBracket(tournament, participants, {
-      startFirstRound: options.startRound,
+    // The first round waits for the format's own set-up (a draw, the actions players owe), like the round generators: an
+    // admin may force it, and the override is audited once the bracket is written (`announceKitRound`).
+    const forcedStart = await assertPhaseReadyForFirstRound(tournament, kitPhase, {
+      force: wantsForcedStart(request),
+      actor: { id: admin.playerId, name: admin.name },
     });
+    // The bracket writes its rounds and matches one by one, and the league status follows: the public reads expire in a
+    // finally, so a failure part-way (or the league write after the bracket) still shows what was written.
+    let result: Awaited<ReturnType<typeof generateEliminationBracket>>;
+    try {
+      result = await generateEliminationBracket(tournament, participants, {
+        startFirstRound: options.startRound,
+      });
 
-    if (tournament.season_id) {
-      const season = await getSeasonById(tournament.season_id);
-      if (season && season.status === 'upcoming') {
-        await updateSeason(season.id, { status: 'active' });
+      if (tournament.season_id) {
+        const season = await getSeasonById(tournament.season_id);
+        if (season && season.status === 'upcoming') {
+          await updateSeason(season.id, { status: 'active' });
+        }
       }
+    } finally {
+      expireTournamentReads(id, tournament.season_id);
     }
-    expireTournamentReads(id, tournament.season_id);
+
+    // A kit league's format reacts to the opened phase like it does to a generated round: `stage_start`, `round_start` of the
+    // first round, the forced-start audit. The bracket writes every round at once, so the first one is announced.
+    // Best effort and logged inside; a phase that is not on the kit engine is left alone.
+    if (isKitEnginePhase(kitPhase)) {
+      const rounds = await getRoundsByTournament(id);
+      const first = rounds.reduce((lowest, round) => Math.min(lowest, round.round_number), Number.POSITIVE_INFINITY);
+      await announceKitRound(tournament, kitPhase, { roundNumber: Number.isFinite(first) ? first : 1 }, tournament.status === 'upcoming', forcedStart);
+    }
 
     logAuditEvent({
       actor_id: admin.playerId,

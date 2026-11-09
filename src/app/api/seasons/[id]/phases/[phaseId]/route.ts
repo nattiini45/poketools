@@ -24,7 +24,7 @@ import {
   rebuildAfterTournamentDelete,
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
 import { readJsonBody } from '@/lib/api/json-body';
 import {
   toDeleteRebuildWarning,
@@ -32,6 +32,11 @@ import {
   type EntityDeleteResult,
 } from '@/lib/api/delete-rebuild-warning';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
+import {
+  assertFormatPhaseDeletable,
+  assertFormatPhaseStatusUnchanged,
+  assertFormatPhaseUnchanged,
+} from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -112,6 +117,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       assertPhaseEditable(before, 'bracket_type');
     }
 
+    // A phase the league's attached format created keeps its structure and moves its status through the tournament route,
+    // which runs the format's reaction (409 format_phase_owned).
+    await assertFormatPhaseUnchanged(id, before, body);
+    await assertFormatPhaseStatusUnchanged(id, before, body.status);
+
     if (before.status === 'completed' && body.status !== 'active') {
       const lockedFields = ['name', 'bracket_type', 'ruleset_id', 'best_of_default', 'bo_overrides', 'is_doubles', 'team_visibility', 'advancement_rule'] as const;
       for (const field of lockedFields) {
@@ -186,6 +196,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    // The phase of an attached format is removed by replacing or detaching the format, never one by one (409 format_phase_owned).
+    await assertFormatPhaseDeletable(id, phaseId);
+
     const rounds = await getRoundsByTournament(phaseId);
     if (rounds.length > 0) {
       // An empty body is "no confirmation"; a malformed one is 400 invalid_json.
@@ -229,6 +242,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       // rating_history_incomplete) and kept in the audit record.
       rebuildWarning = toDeleteRebuildWarning(err);
     }
+    // The rebuild rewrote ratings and streaks after the expiry above, so the rating reads of the players expire again now.
+    expireRatingReads(participants.map((p) => p.id));
 
     logAuditEvent({
       action: 'phase.delete',

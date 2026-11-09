@@ -69,6 +69,7 @@ export default {
     bestOfDefault: 'Best of (default)',
     doubles: 'Doubles format (enables Bring/Lead/Win tracking)',
     bracketReset: 'Grand Finals bracket reset (“if necessary” second set)',
+    thirdPlace: 'Third-place match (the semifinal losers play for third; 4+ players)',
     teamVisibility: 'Team Visibility',
     submit: 'Create Tournament',
     saveChanges: 'Save changes',
@@ -200,6 +201,14 @@ export default {
       cascadeMessage: '{cascade} Then the bracket will be rebuilt from current seeds. This cannot be undone.',
       cascadeConfirm: 'Reset and Regenerate',
     },
+    /** The audited override of the first-round guard (409 `format_not_ready`); `{reasons}` joins the sentences below. */
+    forceStart: {
+      title: 'Start anyway?',
+      message: '{reasons} Starting anyway is recorded in the audit log.',
+      confirm: 'Start anyway',
+      relationUndrawn: 'The draw the format needs has not been made yet. Players without a link get nothing for good.',
+      actionIncomplete: 'Some players still owe an action the format asks for.',
+    },
     deleteDialog: {
       title: 'Delete Round',
       message:
@@ -311,5 +320,17 @@ export default {
     startInLosers: 'Start in losers',
     remove: 'Remove',
     addPlayer: 'Add Player',
+    startedFormatPhase:
+      'This phase has started. The league format owns its roster, so a change is refused unless you force it with a reason.',
+  },
+  // The audited override of a roster change on a started phase of the league's format (409 format_phase_owned).
+  rosterForce: {
+    title: 'Change the roster of a started phase',
+    message:
+      'This phase belongs to the format of this league and has already started. Its draw, groups and one-time grants were made for the roster it started with, and a player you add now gets none of them automatically. Changing the roster anyway is recorded in the audit log with your reason.',
+    reasonLabel: 'Reason',
+    reasonHint: 'Required. Up to 500 characters.',
+    cancel: 'Cancel',
+    confirm: 'Change roster anyway',
   },
 } as const;

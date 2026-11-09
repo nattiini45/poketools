@@ -23,11 +23,13 @@ import {
   type AdvanceSelect,
   type Edge,
   type Fix,
+  type ForfeitScoring,
   type GroupsSpec,
   type JsonValue,
   type Pairing,
   type RankStep,
   type RuleCard,
+  type RuleEntry,
   type RulesetRef,
   type SeriesOverride,
   type Stage,
@@ -156,7 +158,7 @@ export function previewRemoveStage(doc: DraftDocument, index: number): RemovalSu
   const key = doc.stages[index].key;
   return {
     edges: doc.edges.filter((e) => e.from === key || e.to === key).length,
-    ruleCards: doc.rules.filter((r) => r.scope?.kind === 'stage' && r.scope.stage === key).length,
+    ruleCards: doc.rules.filter((r) => r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === key).length,
     textSections: doc.text.sections.filter((s) => s.stage === key).length,
     views: doc.views.filter((v) => v.stages.includes(key)).length,
   };
@@ -170,8 +172,8 @@ export function removeStage(doc: DraftDocument, index: number): { doc: DraftDocu
   if (keyIsShared(doc, index)) return { doc: { ...doc, stages }, removed };
 
   const edges = doc.edges.filter((e) => e.from !== key && e.to !== key);
-  const rules = doc.rules.map((r): RuleCard =>
-    r.scope?.kind === 'stage' && r.scope.stage === key ? { ...r, scope: { kind: 'season' } } : r,
+  const rules = doc.rules.map((r): RuleEntry =>
+    r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === key ? { ...r, scope: { kind: 'season' } } : r,
   );
   const sections = doc.text.sections.map((s): TextSection => {
     if (s.stage !== key) return s;
@@ -210,8 +212,8 @@ export function renameStageKey(
       ...doc,
       stages,
       edges: doc.edges.map((e) => (e.from === previous || e.to === previous ? { ...e, from: rename(e.from), to: rename(e.to) } : e)),
-      rules: doc.rules.map((r): RuleCard =>
-        r.scope?.kind === 'stage' && r.scope.stage === previous ? { ...r, scope: { kind: 'stage', stage: next } } : r,
+      rules: doc.rules.map((r): RuleEntry =>
+        r.kind === 'rule.custom' && r.scope?.kind === 'stage' && r.scope.stage === previous ? { ...r, scope: { kind: 'stage', stage: next } } : r,
       ),
       views: doc.views.map((v) => (v.stages.includes(previous) ? { ...v, stages: v.stages.map(rename) } : v)),
       text: {
@@ -271,7 +273,10 @@ export function setGroups(s: Stage, g: GroupsSpec | undefined): Stage {
   return { ...s, groups: { ...g } };
 }
 
-const PAIRING_DEFAULTS: { readonly [K in Pairing['kind']]: Extract<Pairing, { kind: K }> } = {
+/** Pairing kinds the form switches to with defaults; bipartite, filter and challenge need values the user chooses first. */
+type DefaultedPairingKind = Exclude<Pairing['kind'], 'bipartite' | 'filter' | 'challenge'>;
+
+const PAIRING_DEFAULTS: { readonly [K in DefaultedPairingKind]: Extract<Pairing, { kind: K }> } = {
   round_robin: { kind: 'round_robin', legs: 1, mirror_legs: true },
   swiss: { kind: 'swiss', rounds: 'auto', avoid_repeats: true },
   single_elim: { kind: 'single_elim', third_place: false },
@@ -281,7 +286,7 @@ const PAIRING_DEFAULTS: { readonly [K in Pairing['kind']]: Extract<Pairing, { ki
 
 export function setPairingKind(s: Stage, kind: Pairing['kind']): Stage {
   if (s.pairing.kind === kind || !hasOwn(PAIRING_DEFAULTS, kind)) return s;
-  return { ...s, pairing: { ...PAIRING_DEFAULTS[kind] } };
+  return { ...s, pairing: { ...PAIRING_DEFAULTS[kind as DefaultedPairingKind] } };
 }
 
 const PAIRING_MEMBERS: Readonly<Record<string, readonly string[]>> = {
@@ -290,6 +295,9 @@ const PAIRING_MEMBERS: Readonly<Record<string, readonly string[]>> = {
   single_elim: ['third_place'],
   double_elim: ['bracket_reset'],
   manual: [],
+  bipartite: ['attr', 'side_a', 'side_b', 'rounds', 'avoid_repeats'],
+  filter: ['allow'],
+  challenge: ['rounds', 'rank_range', 'max_open', 'cooldown_rounds', 'accept_window_hours'],
 };
 
 /** Sets members of the current pairing kind; members of another kind (and `kind` itself) are ignored. */
@@ -344,6 +352,31 @@ export function setRuleset(s: Stage, ref: RulesetRef): Stage {
 export function setScoreValue(s: Stage, key: 'win' | 'loss' | 'bye', n: number): Stage {
   if (!isFiniteNumber(n) || s.scoring[key] === n) return s;
   return { ...s, scoring: { ...s.scoring, [key]: n } };
+}
+
+/** Points per fainted opponent Pokémon; 0 or no value removes the field (absent means 0). */
+export function setPerOpponentFaint(s: Stage, n: number | undefined): Stage {
+  const current = s.scoring.per_opponent_faint;
+  if (n === undefined || n === 0) {
+    if (current === undefined) return s;
+    const scoring: Stage['scoring'] = { ...s.scoring };
+    delete scoring.per_opponent_faint;
+    return { ...s, scoring };
+  }
+  if (!isFiniteNumber(n) || current === n) return s;
+  return { ...s, scoring: { ...s.scoring, per_opponent_faint: n } };
+}
+
+/** Separate forfeit points, or none (a forfeit then scores like a win and a loss). */
+export function setForfeitScoring(s: Stage, forfeit: ForfeitScoring | undefined): Stage {
+  if (forfeit === undefined) {
+    if (s.scoring.forfeit === undefined) return s;
+    const scoring: Stage['scoring'] = { ...s.scoring };
+    delete scoring.forfeit;
+    return { ...s, scoring };
+  }
+  if (!isFiniteNumber(forfeit.win) || !isFiniteNumber(forfeit.loss)) return s;
+  return { ...s, scoring: { ...s.scoring, forfeit: { win: forfeit.win, loss: forfeit.loss, faint_bonus: forfeit.faint_bonus } } };
 }
 
 export function setDoubles(s: Stage, doubles: boolean): Stage {
@@ -494,8 +527,10 @@ export function addRuleCard(doc: DraftDocument, authorBase: Locale): { doc: Draf
 
 export function updateRuleCard(doc: DraftDocument, i: number, fn: (c: RuleCard) => RuleCard): DraftDocument {
   if (!inRange(doc.rules, i)) return doc;
-  const next = fn(doc.rules[i]);
-  return next === doc.rules[i] ? doc : { ...doc, rules: replaceAt(doc.rules, i, next) };
+  const current = doc.rules[i];
+  if (current.kind !== 'rule.custom') return doc;
+  const next = fn(current);
+  return next === current ? doc : { ...doc, rules: replaceAt(doc.rules, i, next) };
 }
 
 export function removeRuleCard(doc: DraftDocument, i: number): DraftDocument {
@@ -504,13 +539,13 @@ export function removeRuleCard(doc: DraftDocument, i: number): DraftDocument {
 
 export function moveRuleCard(doc: DraftDocument, from: number, to: number): DraftDocument {
   const rules = moveIn(doc.rules, from, to);
-  return rules === doc.rules ? doc : { ...doc, rules: rules as RuleCard[] };
+  return rules === doc.rules ? doc : { ...doc, rules: rules as RuleEntry[] };
 }
 
 export function duplicateRuleCard(doc: DraftDocument, i: number): { doc: DraftDocument; index: number; id: string } {
   if (!inRange(doc.rules, i) || doc.rules.length >= MAX_RULES) return { doc, index: -1, id: '' };
   const id = uniqueKey(idsOf(doc.rules), `${doc.rules[i].id}_copy`);
-  const copy: RuleCard = { ...structuredClone(doc.rules[i]), id };
+  const copy: RuleEntry = { ...structuredClone(doc.rules[i]), id };
   return { doc: { ...doc, rules: insertAt(doc.rules, i + 1, copy) }, index: i + 1, id };
 }
 

@@ -15,6 +15,8 @@ export interface BracketLabels {
   winnersBracket: string;
   losersBracket: string;
   grandFinals: string;
+  /** Single elimination: the match between the two semifinal losers. */
+  thirdPlace: string;
   noRounds: string;
   /** An open slot or round with nobody in it yet. */
   tbd: string;

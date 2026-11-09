@@ -167,6 +167,91 @@ describe('toDraftViewModel', () => {
   });
 });
 
+describe('roundProgress', () => {
+  it('places a normal pick in its round: seats, pick in round and the overall pick', () => {
+    const vm = toDraftViewModel(snapshot());
+    expect(vm.roundProgress).toMatchObject({
+      round: 2,
+      roundsTotal: 9,
+      pickInRound: 1,
+      picksInRound: 2,
+      overallPick: 3,
+      overallTotal: 18,
+      makeupForRound: null,
+    });
+    expect(vm.roundProgress?.seats.map((s) => [s.state, s.name])).toEqual([
+      ['now', 'Dawn'],
+      ['upcoming', 'Misty'],
+    ]);
+  });
+
+  it('keeps the draft in the latest round during a make-up pick and names the round it makes up', () => {
+    const dto = snapshot();
+    const pick = (n: number, round: number, player: string) => ({ ...dto.picks[0], pick_id: `p${n}`, slot_id: `slot-${n}`, pick_number: n, round, player_id: player });
+    const vm = toDraftViewModel({
+      ...dto,
+      active_slot: dto.active_slot && { ...dto.active_slot, kind: 'makeup', round: 2, pick_number: 3 },
+      picks: [...dto.picks, pick(4, 2, MISTY), pick(5, 3, MISTY)],
+      upcoming: [{ slot_id: 'slot-6', player_id: DAWN, pick_number: 6, round: 3, kind: 'normal', duration_ms: 300_000 }],
+    });
+    expect(vm.roundProgress).toMatchObject({ round: 3, pickInRound: 2, makeupForRound: 2, overallPick: 5 });
+    expect(vm.roundProgress?.seats.map((s) => [s.state, s.name])).toEqual([
+      ['done', 'Misty'],
+      ['upcoming', 'Dawn'],
+    ]);
+  });
+
+  it('marks a pending make-up of the current round as a make-up seat', () => {
+    const vm = toDraftViewModel(
+      snapshot({ upcoming: [{ slot_id: 'slot-4m', player_id: MISTY, pick_number: 2, round: 2, kind: 'makeup', duration_ms: 150_000 }] }),
+    );
+    expect(vm.roundProgress?.seats.map((s) => [s.state, s.makeup])).toEqual([
+      ['now', false],
+      ['upcoming', true],
+    ]);
+  });
+
+  it('ends the round at its last pick; the next round stays out of the track', () => {
+    const dto = snapshot();
+    const vm = toDraftViewModel({
+      ...dto,
+      active_slot: dto.active_slot && { ...dto.active_slot, slot_id: 'slot-4', player_id: MISTY, pick_number: 4, round: 2 },
+      picks: [...dto.picks, { ...dto.picks[0], pick_id: 'p3', slot_id: 'slot-3', pick_number: 3, round: 2, player_id: DAWN }],
+      upcoming: [{ slot_id: 'slot-5', player_id: MISTY, pick_number: 5, round: 3, kind: 'normal', duration_ms: 300_000 }],
+    });
+    expect(vm.roundProgress).toMatchObject({ round: 2, pickInRound: 2, picksInRound: 2, overallPick: 4 });
+    expect(vm.roundProgress?.seats.map((s) => [s.state, s.name])).toEqual([
+      ['done', 'Dawn'],
+      ['now', 'Misty'],
+    ]);
+    expect(vm.upcoming[0].roundBreakBefore).toBe(true);
+  });
+
+  it('fills the round tail beyond the upcoming window with anonymous seats', () => {
+    const ids = Array.from({ length: 12 }, (_, i) => `00000000-0000-4000-8000-0000000001${String(i).padStart(2, '0')}`);
+    const base = snapshot();
+    const dto = snapshot({
+      participants: ids.map((id, i) => participant(id, `P${i + 1}`, i + 1, { picks_made: 0 })),
+      picks: [],
+      taken: {},
+      active_slot: base.active_slot && { ...base.active_slot, player_id: ids[0], round: 1, pick_number: 1 },
+      upcoming: ids.slice(1, 11).map((id, i) => ({ slot_id: `u${i}`, player_id: id, pick_number: i + 2, round: 1, kind: 'normal' as const, duration_ms: 300_000 })),
+    });
+    const vm = toDraftViewModel(dto);
+    expect(vm.roundProgress?.picksInRound).toBe(12);
+    expect(vm.roundProgress?.overallTotal).toBe(108);
+    const seats = vm.roundProgress?.seats ?? [];
+    expect(seats).toHaveLength(12);
+    expect(seats[0]).toMatchObject({ state: 'now', name: 'P1' });
+    expect(seats[11]).toEqual({ state: 'upcoming', playerId: null, name: '', isViewer: false, makeup: false });
+  });
+
+  it('is null when the draft is not running or nobody is on the clock', () => {
+    const dto = snapshot();
+    expect(toDraftViewModel({ ...dto, pool: { ...dto.pool, status: 'complete' } }).roundProgress).toBeNull();
+    expect(toDraftViewModel({ ...dto, active_slot: null }).roundProgress).toBeNull();
+  });
+});
 describe('cardStateOf', () => {
   const vm = toDraftViewModel(snapshot());
 

@@ -121,6 +121,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
               <Chip pressed={source === 'all'} onClick={() => { setSource('all'); setFamily('all'); }}>{t('presets.sourceAll')}</Chip>
               <Chip pressed={source === 'showdown'} onClick={() => { setSource('showdown'); setFamily('all'); }}>{t('presets.sourceShowdown')}</Chip>
               <Chip pressed={source === 'smogon-draft'} onClick={() => { setSource('smogon-draft'); setFamily('all'); }}>{t('presets.sourceDraft')}</Chip>
+              <Chip pressed={source === 'poketools'} onClick={() => { setSource('poketools'); setFamily('all'); }}>{t('presets.sourceCommunity')}</Chip>
             </div>
           </fieldset>
           <fieldset className="space-y-1.5">

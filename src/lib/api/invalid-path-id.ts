@@ -35,6 +35,8 @@ const INVALID_PATH_ID_MESSAGES: Record<InvalidPathIdCode, string> = {
   INVALID_ACHIEVEMENT_ID: 'Achievement not found',
   INVALID_NOTE_ID: 'Note not found',
   INVALID_WIKI_REPORT_ID: 'Report not found',
+  INVALID_CHALLENGE_ID: 'Challenge not found',
+  INVALID_CHECK_ID: 'Check not found',
 };
 
 /**

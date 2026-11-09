@@ -67,6 +67,7 @@ export default defineDe<typeof en>()({
     bestOfDefault: 'Best of (Standard)',
     doubles: 'Doppel-Format (erfasst Einsatz-, Lead- und Siegquoten)',
     bracketReset: 'Bracket-Reset im Großen Finale (zweites Set „falls nötig“)',
+    thirdPlace: 'Spiel um Platz 3 (die Verlierer der Halbfinals spielen um Platz 3; ab 4 Spielern)',
     teamVisibility: 'Sichtbarkeit der Teams',
     submit: 'Turnier erstellen',
     saveChanges: 'Änderungen speichern',
@@ -197,6 +198,13 @@ export default defineDe<typeof en>()({
         '{cascade} Danach wird der Turnierbaum aus den aktuellen Setzplätzen neu aufgebaut. Das lässt sich nicht rückgängig machen.',
       cascadeConfirm: 'Zurücksetzen und neu erstellen',
     },
+    forceStart: {
+      title: 'Trotzdem starten?',
+      message: '{reasons} Der Start wird im Audit-Log festgehalten.',
+      confirm: 'Trotzdem starten',
+      relationUndrawn: 'Die Auslosung, die das Format braucht, ist noch nicht erfolgt. Spieler ohne Zuordnung gehen dauerhaft leer aus.',
+      actionIncomplete: 'Einige Spieler schulden noch eine Aktion, die das Format verlangt.',
+    },
     deleteDialog: {
       title: 'Runde löschen',
       message:
@@ -307,5 +315,16 @@ export default defineDe<typeof en>()({
     startInLosers: 'Start auf der Verliererseite',
     remove: 'Entfernen',
     addPlayer: 'Spieler hinzufügen',
+    startedFormatPhase:
+      'Diese Phase hat begonnen. Das Liga-Format besitzt ihre Teilnehmerliste, daher wird eine Änderung abgelehnt, solange du sie nicht mit einer Begründung erzwingst.',
+  },
+  rosterForce: {
+    title: 'Teilnehmerliste einer gestarteten Phase ändern',
+    message:
+      'Diese Phase gehört zum Format dieser Liga und hat schon begonnen. Ihre Auslosung, ihre Gruppen und ihre einmaligen Vergaben wurden für die Teilnehmerliste gemacht, mit der sie gestartet ist. Wer jetzt dazukommt, bekommt davon nichts automatisch. Wenn du die Liste trotzdem änderst, wird das mit deiner Begründung im Audit-Log festgehalten.',
+    reasonLabel: 'Begründung',
+    reasonHint: 'Pflichtfeld. Höchstens 500 Zeichen.',
+    cancel: 'Abbrechen',
+    confirm: 'Trotzdem ändern',
   },
 });

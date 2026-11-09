@@ -5,7 +5,7 @@ import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import type { PublicMatch } from '@/lib/match/public-match';
 import type { Tournament } from '@/types/tournament';
-import type { ApiResult } from '@/types/api';
+import type { ApiResult, ApiWarning } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
@@ -28,14 +28,53 @@ import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { bestOfChoices } from '@/lib/tournament/best-of';
+import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
+import { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
 import type { ParticipantsSummary } from './participants-events';
 import { StartupChecklistView, STARTUP_CHECKLIST_REGION_ID_PREFIX, type StartupChecklistLinks } from './StartupChecklist';
 import { useParticipantsSummary } from './useParticipantsSummary';
 
 /** The reason's length limit on the round PATCH (`reasonSchema`). */
 const FORCE_REASON_MAX_LENGTH = 500;
+
+/**
+ * Refusals that say the round list this view holds is out of date (another admin generated, deleted or completed a round, a
+ * result came in, a phase ended): the list is read again, so the refusal text points at what is on screen.
+ */
+const ROUND_STATE_CODES: ReadonlySet<string> = new Set([
+  'rounds_round_already_written',
+  'rounds_round_completed',
+  'rounds_phase_completed',
+  'rounds_stage_ended',
+  'rounds_end_when_round_open',
+  'round_best_of_locked',
+  'round_changed',
+  'round_not_found',
+  'tournament_not_found',
+  'groups_forming_in_progress',
+  'PHASE_GROUPS_STALE',
+  'ENROLLMENT_SYNC_CONFLICT',
+  'bracket_already_generated',
+  'format_context_stale',
+]);
+
+/**
+ * What a saved round delete, reset or bracket regenerate tells the admin: the league format could not take back the effects of a
+ * result that no longer stands (`format_revert_failed` of the response; the matches may be gone, so nothing retries it), or the
+ * reset took back a result in a phase whose stage had already ended (`stage_already_ended`: who advanced; the phase is not
+ * reopened). The latter keeps its catalogue code, which `errorsMatches` words.
+ */
+function savedChangeWarnings(data: unknown): ApiWarning[] {
+  return gameChangeWarnings(data).flatMap((warning): ApiWarning[] => {
+    if (warning.code === 'admin_game_format_revert_failed') return [{ code: 'round_format_revert_failed' }];
+    if (warning.code?.startsWith('admin_game_stage_already_ended')) {
+      return [{ code: warning.code, ...(warning.params ? { params: warning.params } : {}) }];
+    }
+    return [];
+  });
+}
 
 type RoundErrorKey = `rounds.errors.${keyof typeof tournamentsAdminMessages.en.rounds.errors}`;
 
@@ -66,6 +105,20 @@ export function generateRequestInit(startNow: boolean): RequestInit | undefined 
     body: JSON.stringify({ start_round: true }),
   };
 }
+
+/** The generate routes a Generate call can reach. */
+export type GenerateKind = 'next' | 'all';
+
+/**
+ * The URL of a Generate call. `force` adds `?force=true`, the league admin's audited override of the first-round guard
+ * (`wantsForcedStart` in src/lib/format-engine/route-guards.ts): the routes read it from the query.
+ */
+export function generateEndpoint(tournamentId: string, kind: GenerateKind, force = false): string {
+  const base = kind === 'next' ? `/api/generate-round/${tournamentId}` : `/api/tournaments/${tournamentId}/generate-all-rounds`;
+  return force ? `${base}?force=true` : base;
+}
+
+export { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
 
 export type RoundMatchesLoad =
   | { ok: true; matches: PublicMatch[] }
@@ -329,6 +382,8 @@ export default function RoundManager({
   // "Start the new round right away" on Generate. Off on every visit: starting is a deliberate step.
   const [startNow, setStartNow] = useState(false);
   const [startingRoundId, setStartingRoundId] = useState<string | null>(null);
+  // Set when the server refused the first round with 409 `format_not_ready`: the dialog offers the audited force start.
+  const [forceStart, setForceStart] = useState<{ kind: GenerateKind; reasons: FormatNotReadyReason[] } | null>(null);
   // Set when the server answered `rounds_all_generated` for this many rounds (grouped phases, unknown count).
   const [allGeneratedAtCount, setAllGeneratedAtCount] = useState<number | null>(null);
   const startNowHintId = useId();
@@ -370,6 +425,8 @@ export default function RoundManager({
   );
   const [savingResetToggle, setSavingResetToggle] = useState(false);
   const [resetToggleInfo, setResetToggleInfo] = useState<'enabled' | 'disabled' | null>(null);
+  /** Notices the last round generation returned (codes, worded at render). */
+  const [generateWarnings, setGenerateWarnings] = useState<ApiWarning[]>([]);
   const [deadlineEditId, setDeadlineEditId] = useState<string | null>(null);
   const [deadlineDraft, setDeadlineDraft] = useState('');
   const [savingDeadlineId, setSavingDeadlineId] = useState<string | null>(null);
@@ -421,6 +478,21 @@ export default function RoundManager({
   const isLegacyElim =
     isElimination && isLegacyElimBracketData(rounds);
 
+  /** Reads the round list again after a refusal that says it is stale (see `ROUND_STATE_CODES`). */
+  async function reloadRoundsIfStale(result: { code?: string }) {
+    if (result.code === undefined || !ROUND_STATE_CODES.has(result.code)) return;
+    try {
+      const res = await fetch(`/api/tournaments/${tournament.id}/rounds`);
+      const json: ApiResult<Round[]> = await res.json();
+      if (!json.success) return;
+      setRounds(json.data);
+      setMatchesByRound({});
+      checkedRounds.current.clear();
+    } catch {
+      // The refusal text is already on screen; the next action reads again.
+    }
+  }
+
   async function generateBracket() {
     setGeneratingBracket(true);
     setError(null);
@@ -432,6 +504,7 @@ export default function RoundManager({
       const result = await res.json();
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
       const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
@@ -448,6 +521,7 @@ export default function RoundManager({
     setRegeneratingBracket(true);
     setError(null);
     setRepairInfo(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/tournaments/${tournament.id}/regenerate-bracket`, {
         method: 'POST',
@@ -462,11 +536,14 @@ export default function RoundManager({
           return;
         }
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setConfirmRegenerate(false);
         setRegenNeedsCascade(false);
         setRegenCascadeMessage(null);
         return;
       }
+      // The round delete inside a regenerate can fail to take back the league format's effects of a played result.
+      setGenerateWarnings(savedChangeWarnings(result.data));
       const roundsRes = await fetch(`/api/tournaments/${tournament.id}/rounds`);
       const roundsJson: ApiResult<Round[]> = await roundsRes.json();
       if (roundsJson.success) {
@@ -542,14 +619,18 @@ export default function RoundManager({
     if (!deleteRoundId) return;
     setDeletingRound(true);
     setError(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/admin/rounds/${deleteRoundId}`, { method: 'DELETE' });
       const result = await res.json();
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setDeleteRoundId(null);
         return;
       }
+      // The round is gone either way; a result's format effects that could not be taken back are for the admin to know.
+      setGenerateWarnings(savedChangeWarnings(result.data));
       setRounds((prev) => prev.filter((r) => r.id !== deleteRoundId));
       setMatchesByRound((prev) => {
         const next = { ...prev };
@@ -565,13 +646,15 @@ export default function RoundManager({
     }
   }
 
-  async function generateNextRound() {
+  /** `force`: start anyway after the admin confirmed a 409 `format_not_ready` (audited by the server). */
+  async function generateNextRound(force = false) {
     setGenerating(true);
     setError(null);
+    setGenerateWarnings([]);
 
     try {
       const res = await fetch(
-        `/api/generate-round/${tournament.id}`,
+        generateEndpoint(tournament.id, 'next', force),
         generateRequestInit(startNow) ?? { method: 'POST' },
       );
       const result: ApiResult<Round> = await res.json();
@@ -581,11 +664,15 @@ export default function RoundManager({
           setAllGeneratedAtCount(rounds.length);
           return;
         }
+        const reasons = formatNotReadyReasons(result);
+        if (reasons !== null && !force) setForceStart({ kind: 'next', reasons });
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
       setRounds((prev) => [...prev, result.data]);
+      setGenerateWarnings(result.warnings ?? []);
     } catch {
       setError({ key: 'rounds.errors.generateRound' });
     } finally {
@@ -593,13 +680,13 @@ export default function RoundManager({
     }
   }
 
-  async function generateAllRounds() {
+  async function generateAllRounds(force = false) {
     setGeneratingAll(true);
     setError(null);
 
     try {
       const res = await fetch(
-        `/api/tournaments/${tournament.id}/generate-all-rounds`,
+        generateEndpoint(tournament.id, 'all', force),
         generateRequestInit(startNow) ?? { method: 'POST' },
       );
       const result: ApiResult<Round[]> = await res.json();
@@ -609,7 +696,10 @@ export default function RoundManager({
           setAllGeneratedAtCount(rounds.length);
           return;
         }
+        const reasons = formatNotReadyReasons(result);
+        if (reasons !== null && !force) setForceStart({ kind: 'all', reasons });
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
@@ -643,6 +733,7 @@ export default function RoundManager({
       if (!result.success) {
         setBoFeedback(null);
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         return;
       }
 
@@ -694,6 +785,7 @@ export default function RoundManager({
 
       if (!result.success) {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         if (result.code === 'round_matches_unfinished') {
           // The list this control was built on is out of date: read it again.
           checkedRounds.current.delete(roundId);
@@ -777,6 +869,7 @@ export default function RoundManager({
     if (!resetRoundId) return;
     setResettingRound(true);
     setError(null);
+    setGenerateWarnings([]);
     try {
       const res = await fetch(`/api/admin/rounds/${resetRoundId}/reset`, {
         method: 'POST',
@@ -799,10 +892,12 @@ export default function RoundManager({
         setExpandedRound(null);
         setResetRoundId(null);
         setResetNeedsCascade(false);
+        setGenerateWarnings(savedChangeWarnings(result.data));
       } else if (result.code === 'DOWNSTREAM_PLAYED' && !resetNeedsCascade) {
         setResetNeedsCascade(true);
       } else {
         setError(apiFailure(result));
+        await reloadRoundsIfStale(result);
         setResetRoundId(null);
         setResetNeedsCascade(false);
       }
@@ -868,6 +963,11 @@ export default function RoundManager({
     <div className="space-y-4">
       {error &&<Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       {repairInfo !== null && <Alert variant="success">{t('rounds.repaired', { count: repairInfo })}</Alert>}
+      {generateWarnings.map((warning) => (
+        <Alert key={warning.code} variant="warning">
+          {errorText({ code: warning.code, params: warning.params })}
+        </Alert>
+      ))}
       {resetToggleInfo && (
         <Alert variant="success">
           {resetToggleInfo === 'enabled' ? t('rounds.resetEnabled') : t('rounds.resetDisabled')}
@@ -927,7 +1027,7 @@ export default function RoundManager({
           <Button
             variant="secondary"
             size="sm"
-            onClick={generateNextRound}
+            onClick={() => void generateNextRound()}
             disabled={!canGenerate || showManualForm || isBusy || generateBlocked || Boolean(roundRobin?.pastLast)}
             aria-describedby={checklistDescribes}
             loading={generating}
@@ -939,7 +1039,7 @@ export default function RoundManager({
           <Button
             variant="secondary"
             size="sm"
-            onClick={generateAllRounds}
+            onClick={() => void generateAllRounds()}
             disabled={!canGenerate || showManualForm || isBusy || generateBlocked}
             aria-describedby={generateBlocked ? checklistDescribes : undefined}
             loading={generatingAll}
@@ -1212,6 +1312,24 @@ export default function RoundManager({
           regenNeedsCascade ? t('rounds.regenerateDialog.cascadeConfirm') : t('rounds.regenerateDialog.confirm')
         }
         loading={regeneratingBracket}
+      />
+      <ConfirmDialog
+        open={forceStart !== null}
+        onClose={() => setForceStart(null)}
+        onConfirm={() => {
+          const pending = forceStart;
+          setForceStart(null);
+          if (pending?.kind === 'all') void generateAllRounds(true);
+          else if (pending !== null) void generateNextRound(true);
+        }}
+        title={t('rounds.forceStart.title')}
+        message={t('rounds.forceStart.message', {
+          reasons: (forceStart?.reasons ?? [])
+            .map((reason) => (reason === 'relation_undrawn' ? t('rounds.forceStart.relationUndrawn') : t('rounds.forceStart.actionIncomplete')))
+            .join(' '),
+        })}
+        confirmLabel={t('rounds.forceStart.confirm')}
+        confirmVariant="primary"
       />
       <ConfirmDialog
         open={deleteRoundId !== null}

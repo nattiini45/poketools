@@ -63,6 +63,7 @@ function attached(over: Partial<SeasonFormatRow> = {}): SeasonFormatRow {
     amendments: [],
     spec: spec('classic-league'),
     seed: 'SECRET-SEED-VALUE',
+    revision: 7,
     ...over,
   };
 }
@@ -186,5 +187,45 @@ describe('loadLeagueFormatState', () => {
   it('fails closed when a read fails', async () => {
     mocks.getSeasonFormat.mockRejectedValue(new Error('db down'));
     await expect(loadLeagueFormatState(league())).rejects.toThrow('db down');
+  });
+});
+
+describe('loadLeagueFormatState: the calendar start', () => {
+  const calendarSpec = (): FormatDefinition => {
+    const doc = spec('classic-league');
+    doc.stages[0] = {
+      ...doc.stages[0],
+      calendar: {
+        start: { kind: 'season_start' },
+        time: '18:00',
+        cadence: 'weekly',
+        every: 1,
+        round_window_hours: 168,
+        marks: [{ key: 'gifts_open', round: 1, offset_hours: -336 }],
+        deadlines: [],
+      },
+    };
+    return doc;
+  };
+  const calendarItem = (state: Awaited<ReturnType<typeof loadLeagueFormatState>>) => state?.readiness.items.find((entry) => entry.id === 'calendar_start');
+
+  beforeEach(() => {
+    mocks.getSeasonFormat.mockResolvedValue(attached({ spec: calendarSpec() }));
+  });
+
+  it('passes the league start date: none is a missing item', async () => {
+    expect(calendarItem(await loadLeagueFormatState(league({ start_date: null })))).toMatchObject({ state: 'unmet', params: { reason: 'missing', count: 0 } });
+    expect(calendarItem(await loadLeagueFormatState(league({ start_date: '2027-03-01' }), new Date('2026-11-05T12:00:00Z')))?.state).toBe('met');
+  });
+
+  it('judges due marks at the instant it is given', async () => {
+    const start = league({ start_date: '2026-11-17' });
+    expect(calendarItem(await loadLeagueFormatState(start, new Date('2026-11-05T12:00:00Z')))).toMatchObject({ state: 'unmet', params: { reason: 'marks_past', count: 1 } });
+    expect(calendarItem(await loadLeagueFormatState(start, new Date('2026-10-01T00:00:00Z')))?.state).toBe('met');
+  });
+
+  it('adds no item for a format without such a calendar', async () => {
+    mocks.getSeasonFormat.mockResolvedValue(attached());
+    expect(calendarItem(await loadLeagueFormatState(league({ start_date: null })))).toBeUndefined();
   });
 });

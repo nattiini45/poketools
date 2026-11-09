@@ -115,6 +115,10 @@ async function confirmItem(
       winnerId,
       previousStatus,
     });
+    if (!finalize.finalized && finalize.reason === 'match_changed') {
+      // Reset or reopened by another request after the completion above: it owns the cleanup, so this item is a conflict.
+      return failed(match.id, 'match_bulk_conflict');
+    }
     if (!finalize.finalized) {
       // Unreachable after the checks above (the winner is a participant, the transition left a non-completed status).
       throw new Error(`Finalize did not run for match ${match.id}: ${finalize.reason ?? 'unknown'}`);

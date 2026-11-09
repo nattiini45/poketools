@@ -10,6 +10,8 @@ export default {
     winnersBracket: 'Winners Bracket',
     losersBracket: 'Losers Bracket',
     grandFinals: 'Grand Finals',
+    /** Single elimination: the match between the two semifinal losers. */
+    thirdPlace: 'Third place',
     noRounds: 'No rounds generated yet.',
     /** An open slot or round with nobody in it yet. */
     tbd: 'TBD',

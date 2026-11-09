@@ -17,7 +17,7 @@
  */
 import 'server-only';
 
-import { compile, PRESETS, type FormatDefinition } from '@/lib/format-kit';
+import { compile, mappedBracketType, PRESETS, type FormatDefinition } from '@/lib/format-kit';
 import type { Coverage } from '@/lib/format-kit/client';
 import { epbPack } from '@/lib/format-pack';
 import { availableLeagueAdminTabs, leagueAdminHref, type LeagueAdminTab } from '@/lib/league-admin/tabs';
@@ -135,7 +135,7 @@ function summaryRow(league: SeasonWithDetails, view: FormatView | null): LeagueF
   if (view === null) return { ...base, stageCount: 0, pairings: [], errors: 0, warnings: 0, coverage: null };
   const pairings: PairingKind[] = [];
   for (const stage of view.definition?.stages ?? []) {
-    if (stage.pairing.kind !== 'manual') pairings.push(stage.pairing.kind);
+    if (stage.pairing.kind !== 'manual') pairings.push(mappedBracketType(stage.pairing));
   }
   return {
     ...base,

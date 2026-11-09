@@ -8,6 +8,8 @@ export default defineDe<typeof en>()({
   team_list_tournament_id_invalid: 'tournament_id muss eine gültige UUID sein.',
   team_list_player_id_invalid: 'player_id muss eine gültige UUID sein.',
   team_submission_closed: 'Das Turnier ist abgeschlossen – Teams können nicht mehr eingereicht werden.',
+  team_submission_tournament_archived: 'Das Turnier ist archiviert – Teams können nicht mehr eingereicht werden.',
+  team_submission_league_closed: 'Die Liga ist abgeschlossen oder archiviert – Teams können nicht mehr eingereicht werden.',
   team_not_tournament_participant: 'Du nimmst an diesem Turnier nicht teil.',
   team_already_submitted: 'Du hast für dieses Turnier schon ein Team.',
   team_not_owner: 'Das ist nicht dein Team.',
