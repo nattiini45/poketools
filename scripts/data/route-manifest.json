@@ -295,10 +295,10 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "ec76bea6aab372ec",
-      "importFiles": 404,
+      "importFingerprint": "32177ef70f5be280",
+      "importFiles": 407,
       "imports": {
-        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "3acd467f01f1a8aa", "files": 206 },
+        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "f034c4272fd901ca", "files": 209 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
@@ -653,8 +653,8 @@
       "expires": ["expireTournamentReads"],
       "audit": ["bracket.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitSocialEvent(round_generated)"],
-      "importFingerprint": "e60b70e82bc05625",
-      "importFiles": 409,
+      "importFingerprint": "df94cc278918ffe1",
+      "importFiles": 411,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
@@ -671,7 +671,7 @@
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/seasons.ts": { "names": ["getSeasonById", "updateSeason"], "closure": "7a8f3e45a6e4f3d7", "files": 27 },
         "src/lib/supabase/queries/tournaments.ts": { "names": ["getParticipants", "getTournamentById"], "closure": "dc70eb64e7d8de0e", "files": 10 },
-        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "c141d3f47125a600", "files": 302 },
+        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "c7aac5b1ff6f508f", "files": 304 },
         "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 }
       },
       "packages": ["next/server"]

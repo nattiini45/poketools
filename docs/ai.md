@@ -17,6 +17,7 @@ src/lib/ai/
 ├── api-key.ts  # The Anthropic API key every AI feature uses (ANTHROPIC_API_KEY, deprecated CLAUDE_API_KEY), blank-trimmed
 ├── model-capabilities.ts  # What a Claude model id accepts on the raw Messages API
 ├── constants.ts  # Shared AI constants (stale-analysis age)
+├── artifact-state.ts  # Lifecycle machine of the stored analyses and reports (aiArtifactMachine)
 ├── errors.ts  # Plain English error catalog of the AI routes
 ├── failure.ts  # How a failed generation is reported by the streamed generators
 ├── sse.ts  # Transport helpers of the streamed generators
@@ -96,7 +97,7 @@ void triggerMatchAnalysis(matchId);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/ai/__tests__/` (14 test files): `client.test.ts` and `client.contract.test.ts` (the SDK wrapper and its request contract), `package-pins.test.ts` (the pinned SDK versions), `api-key.test.ts`, `format.test.ts`, `language.test.ts`, `league-context.test.ts`, `rate-limit.test.ts`, `context-builder.test.ts`, `parse-scouting.test.ts`, `tournament-report-context.test.ts`, `tournament-report-generator.test.ts`, `trigger.test.ts` and `ai-helpers.test.ts`. The agent, the Admin Assistant and the Kale pipeline have their own `__tests__` under `src/lib/ai/agent/`, `src/lib/ai/admin-agent/` and `src/lib/ai/kale/`.
+- **Test Files**: `src/lib/ai/__tests__/` (15 test files): `client.test.ts` and `client.contract.test.ts` (the SDK wrapper and its request contract), `package-pins.test.ts` (the pinned SDK versions), `api-key.test.ts`, `format.test.ts`, `language.test.ts`, `league-context.test.ts`, `rate-limit.test.ts`, `context-builder.test.ts`, `parse-scouting.test.ts`, `tournament-report-context.test.ts`, `tournament-report-generator.test.ts`, `trigger.test.ts`, `ai-helpers.test.ts` and `artifact-state.test.ts`. The agent, the Admin Assistant and the Kale pipeline have their own `__tests__` under `src/lib/ai/agent/`, `src/lib/ai/admin-agent/` and `src/lib/ai/kale/`.
 - **Testing Approach**: Unit tests of the pure helpers (parsers, prompt builders, rate limit, key and language resolution) and the SDK wrapper with a mocked client; the AI routes are covered by their own route tests under `src/app/api/ai/`.
 
 ## Related Modules
