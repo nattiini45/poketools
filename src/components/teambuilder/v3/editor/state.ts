@@ -69,9 +69,6 @@ export interface EditorState {
   /** 'grid' = 6-card overview; 'set' = inline set editor */
   workspaceView: 'grid' | 'set';
 
-  // ── Validation status (separate from the validation result object) ──
-  validationStatus: 'idle' | 'pending' | 'fresh' | 'stale';
-
   // ── Mobile pane ────────────────────────────────────────────────────
   mobilePane: 'team' | 'browser' | 'intel' | 'ai';
 
@@ -131,9 +128,6 @@ export type EditorAction =
   | { type: 'SET_FIELD_CONDITIONS'; conditions: CalcField }
   | { type: 'SET_SPEED_TARGET'; target: EditorState['speedCalcTarget'] }
 
-  // ── Validation status ─────────────────────────────────────────────
-  | { type: 'SET_VALIDATION_STATUS'; status: EditorState['validationStatus'] }
-
   // ── Mobile ────────────────────────────────────────────────────────
   | { type: 'SET_MOBILE_PANE'; pane: EditorState['mobilePane'] }
 
@@ -190,8 +184,7 @@ export function editorReducer(
     // ── Format ─────────────────────────────────────────────────────
     case 'SET_FORMAT': {
       const gen = generationOrDefault(action.format);
-      // Legality differs per format — force revalidation
-      return { ...state, format: action.format, generation: gen, validationStatus: 'stale' };
+      return { ...state, format: action.format, generation: gen };
     }
 
     // ── Team mutations ─────────────────────────────────────────────
@@ -200,20 +193,20 @@ export function editorReducer(
       if (emptyIndex === -1) return state; // Team full
       const team = [...state.team];
       team[emptyIndex] = makeBlankSet(action.species);
-      return { ...state, team, activeSlot: emptyIndex, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, activeSlot: emptyIndex, dirty: true };
     }
 
     case 'REMOVE_SLOT': {
       const team = [...state.team];
       team[action.slot] = null;
       const activeSlot = state.activeSlot === action.slot ? null : state.activeSlot;
-      return { ...state, team, activeSlot, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, activeSlot, dirty: true };
     }
 
     case 'SET_SLOT': {
       const team = [...state.team];
       team[action.slot] = action.set;
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     case 'UPDATE_SLOT': {
@@ -221,7 +214,7 @@ export function editorReducer(
       const existing = team[action.slot];
       if (!existing) return state;
       team[action.slot] = { ...existing, ...action.patch };
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     case 'LOAD_TEAM': {
@@ -233,7 +226,6 @@ export function editorReducer(
         teamId: action.teamId ?? state.teamId,
         dirty: false,
         validation: null,
-        validationStatus: 'stale',
         workspaceView: 'grid',
       };
     }
@@ -246,7 +238,6 @@ export function editorReducer(
         teamName: '',
         dirty: true,
         validation: null,
-        validationStatus: 'stale',
         workspaceView: 'grid',
       };
     }
@@ -254,7 +245,7 @@ export function editorReducer(
     case 'SWAP_SLOTS': {
       const team = [...state.team];
       [team[action.slotA], team[action.slotB]] = [team[action.slotB], team[action.slotA]];
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     // ── Slot selection ─────────────────────────────────────────────
@@ -330,11 +321,6 @@ export function editorReducer(
       return { ...state, speedCalcTarget: action.target };
     }
 
-    // ── Validation status ─────────────────────────────────────────
-    case 'SET_VALIDATION_STATUS': {
-      return { ...state, validationStatus: action.status };
-    }
-
     // ── Mobile ────────────────────────────────────────────────────
     case 'SET_MOBILE_PANE': {
       return { ...state, mobilePane: action.pane };
@@ -343,7 +329,7 @@ export function editorReducer(
     // ── AI proposal ───────────────────────────────────────────────
     case 'APPLY_TEAM_PROPOSAL': {
       if (action.mode === 'replace') {
-        return { ...state, team: padTo6(action.team), dirty: true, validationStatus: 'stale' };
+        return { ...state, team: padTo6(action.team), dirty: true };
       }
       // fill: only overwrite empty slots
       const team = [...state.team];
@@ -353,7 +339,7 @@ export function editorReducer(
           team[i] = action.team[teamIdx++];
         }
       }
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     // ── Draft ─────────────────────────────────────────────────────
@@ -435,7 +421,6 @@ export function createInitialState(params?: {
     rulesetId: params?.rulesetId ?? null,
     dirty: false,
     workspaceView: 'grid',
-    validationStatus: 'idle',
     mobilePane: 'team',
     draft: null,
     saveStatus: 'idle',
