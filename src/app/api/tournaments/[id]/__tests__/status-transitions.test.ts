@@ -135,3 +135,59 @@ describe('PATCH /api/seasons/[id]/phases/[phaseId]: legal status moves', () => {
     expect(vi.mocked(updateTournament).mock.calls[0][1]).toEqual({ status: to });
   });
 });
+
+describe('refused status moves: nothing moves a phase or tournament back to upcoming', () => {
+  const REFUSED: [TournamentStatus, TournamentStatus][] = [
+    ['active', 'upcoming'],
+    ['completed', 'upcoming'],
+  ];
+
+  it.each(REFUSED)('tournament route %s -> %s is 409 state_transition_invalid, nothing written', async (from, to) => {
+    vi.mocked(getTournamentById).mockResolvedValue(row(from, SEASON) as never);
+    const res = await tournamentRequest({ status: to });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('state_transition_invalid');
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(onPhaseStatusChanged).not.toHaveBeenCalled();
+  });
+
+  it.each(REFUSED)('phase route %s -> %s is 409 state_transition_invalid, nothing written', async (from, to) => {
+    vi.mocked(getTournamentById).mockResolvedValue(row(from, SEASON) as never);
+    const res = await phaseRequest({ status: to });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('state_transition_invalid');
+    expect(updateTournament).not.toHaveBeenCalled();
+  });
+});
+
+describe('the status write is a compare-and-set on the status read', () => {
+  it('passes the read status as the guard when the body carries a status, and none otherwise', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(row('active', null) as never);
+    await tournamentRequest({ status: 'completed' });
+    expect(vi.mocked(updateTournament).mock.calls[0][2]).toEqual({ from: 'active' });
+
+    vi.mocked(updateTournament).mockClear();
+    await tournamentRequest({ name: 'Autumn Cup' });
+    expect(vi.mocked(updateTournament).mock.calls[0][2]).toBeUndefined();
+  });
+
+  it('the phase route guards the same way', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(row('completed', SEASON) as never);
+    await phaseRequest({ status: 'active' });
+    expect(vi.mocked(updateTournament).mock.calls[0][2]).toEqual({ from: 'completed' });
+  });
+
+  it('answers the 409 of a row that moved on and runs no status effect', async () => {
+    const { UserFacingError } = await import('@/lib/api/user-facing-error');
+    vi.mocked(getTournamentById).mockResolvedValue(row('active', SEASON) as never);
+    vi.mocked(updateTournament).mockRejectedValue(
+      new UserFacingError('changed', { code: 'tournament_status_changed', status: 409 }),
+    );
+    const res = await tournamentRequest({ status: 'completed' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('tournament_status_changed');
+    expect(onPhaseStatusChanged).not.toHaveBeenCalled();
+    expect(advanceAfterStageEnd).not.toHaveBeenCalled();
+  });
+});
+

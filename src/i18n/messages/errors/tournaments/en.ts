@@ -158,6 +158,8 @@ export default {
   round_changed: 'A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.',
   // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
   rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
+  // The status of the tournament or phase moved (another admin, a round written, a stage end) between the read and the guarded write; nothing was written (409).
+  tournament_status_changed: 'This tournament or phase changed its status in the meantime. Reload the page and try again.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

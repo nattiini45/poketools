@@ -11,6 +11,7 @@ import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/mat
 import { freezeEnrollment, updateTournament } from '@/lib/supabase/queries/tournaments';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { tournamentMachine } from './tournament-state';
 import { supabase } from '@/lib/supabase/client';
 
 export interface GenerateBracketResult {
@@ -97,11 +98,15 @@ export async function generateEliminationBracket(
 
   await freezeEnrollment(tournament.id);
 
+  // The bracket starts an upcoming tournament (tournamentMachine); a regenerate keeps an active one active and restarts a
+  // completed one. The write is a compare-and-set on the status read by the caller, so a move in between is not overwritten.
   const firstRoundNumber = structure.rounds[0]?.round_number ?? 1;
-  await updateTournament(tournament.id, {
-    status: 'active',
-    current_round: firstRoundNumber,
-  });
+  if (tournament.status !== 'active') tournamentMachine.assertTransition(tournament.status, 'active', 'system');
+  await updateTournament(
+    tournament.id,
+    { status: 'active', current_round: firstRoundNumber },
+    { from: tournament.status }
+  );
 
   const result: GenerateBracketResult = {
     rounds_created: structure.rounds.length,

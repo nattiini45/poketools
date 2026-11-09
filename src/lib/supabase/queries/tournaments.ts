@@ -340,6 +340,15 @@ export async function getStagesBySeasonIds(seasonIds: string[]): Promise<Map<str
   return grouped;
 }
 
+/** A status move to apply only while the row still holds `from` (tournamentMachine, src/lib/tournament/tournament-state.ts). */
+export interface TournamentStatusGuard {
+  from: TournamentStatus;
+}
+
+/**
+ * Updates the given fields. With `guard` the UPDATE is a compare-and-set on the status the caller read: when another
+ * writer moved it in between, nothing is written and a 409 `tournament_status_changed` is thrown.
+ */
 export async function updateTournament(
   id: string,
   input: Partial<TournamentFormData> & {
@@ -347,7 +356,8 @@ export async function updateTournament(
     current_round?: number;
     archived?: boolean;
     enrollment_source?: EnrollmentSource | null;
-  }
+  },
+  guard?: TournamentStatusGuard
 ): Promise<Tournament> {
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name;
@@ -374,6 +384,25 @@ export async function updateTournament(
   }
   if (input.enrollment_source !== undefined) {
     updates.enrollment_source = input.enrollment_source as Json;
+  }
+
+  if (guard) {
+    const { data, error } = await supabase
+      .from('tournaments')
+      .update(updates)
+      .eq('id', id)
+      .eq('status', guard.from)
+      .select()
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) {
+      throw new UserFacingError('This tournament or phase changed its status in the meantime. Reload the page and try again.', {
+        code: 'tournament_status_changed',
+        params: { from: guard.from },
+        status: 409,
+      });
+    }
+    return toTournament(data);
   }
 
   const { data, error } = await supabase

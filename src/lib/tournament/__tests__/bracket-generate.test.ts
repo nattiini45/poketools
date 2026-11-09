@@ -428,6 +428,14 @@ describe('generateEliminationBracket: the tournament status write', () => {
     const write = vi.mocked(updateTournament).mock.calls.find(([, input]) => input.status !== undefined);
     expect(write?.[0]).toBe('t1');
     expect(write?.[1]).toEqual({ status: 'active', current_round: 1 });
+    expect(write?.[2]).toEqual({ from: 'upcoming' });
+  });
+
+  it('restarts a completed tournament whose bracket is regenerated, guarded on completed', async () => {
+    await generateEliminationBracket({ ...makeTournament(), status: 'completed' }, makeParticipants(4));
+    const write = vi.mocked(updateTournament).mock.calls.find(([, input]) => input.status !== undefined);
+    expect(write?.[1]).toEqual({ status: 'active', current_round: 1 });
+    expect(write?.[2]).toEqual({ from: 'completed' });
   });
 
   it('keeps a regenerated active tournament active', async () => {

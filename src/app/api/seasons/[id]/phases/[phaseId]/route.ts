@@ -40,6 +40,7 @@ import {
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { tournamentMachine } from '@/lib/tournament/tournament-state';
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;
@@ -149,7 +150,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       assertPhaseNameFree(body.name, await getStagesBySeasonId(id), phaseId);
     }
 
-    const tournament = await updateTournament(phaseId, body);
+    // The status moves through the tournament machine, as a compare-and-set on the status read above.
+    if (body.status !== undefined && body.status !== before.status) {
+      tournamentMachine.assertTransition(before.status, body.status, 'admin');
+    }
+    const tournament =
+      body.status === undefined
+        ? await updateTournament(phaseId, body)
+        : await updateTournament(phaseId, body, { from: before.status });
     expireTournamentReads(phaseId, id);
 
     const changes: Record<string, { before: unknown; after: unknown }> = {};
