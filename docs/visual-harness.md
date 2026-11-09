@@ -40,6 +40,8 @@ npm run visual:compare -- --base origin/main                      # head = this 
 npm run visual:compare -- --base origin/main --head-url http://localhost:3010   # head = a dev server you already run here
 ```
 
+A base from before the harness (no `scripts/visual/frozen.json`, so no `data-frozen` markers) has nothing to compare against: `compare.mjs` says so and exits 0.
+
 Or capture and diff labels by hand:
 
 ```bash
@@ -57,14 +59,16 @@ Output goes to `.visual/` (gitignored): `<label>/<set>/*.png` with a `manifest.j
 - **Time.** Targets with `"clock": true` pin the browser clock to the manifest's `now` and pass it to the page (`/draft-preview?now=` builds its scenario from that instant), so countdowns read the same in every run. The seed writes fixed dates.
 - **Motion.** `prefers-reduced-motion: reduce`, Playwright's `animations: 'disabled'`, the dev overlay hidden, fonts awaited, lazy images switched to eager and every image loaded and decoded, then a quiet network for 600 ms.
 - **Raster.** Chromium runs with software raster on one thread (`DETERMINISTIC_CHROMIUM_ARGS` in `run.mjs`): GPU and tiled raster anti-alias rounded corners differently from run to run.
-- **Data order.** A frozen surface must not depend on row order the database leaves open. The usage overlay breaks ties by name for this reason.
+- **Timers.** Overlays that rotate or play on an interval (match story, moment reel, weekly recap, attract screen) run on a paused fake clock (`advanceMs`): the harness steps it until the overlay has its data, then runs it forward by exactly `advanceMs`, one capture per act or slide.
+- **Rate limits.** A `429` from the app would capture a page without its data, so that job fails and is run again after the `Retry-After` wait (up to four attempts).
+- **Data order.** A frozen surface must not depend on row order the database leaves open. The recap's usage list and stat leaders break ties by name for this reason.
 - **Network.** Every request is intercepted. Loopback goes through; images from the allow-listed sprite hosts (`lib.mjs`, `EXTERNAL_IMAGE_HOSTS`) are served from `.visual/cache` after their first fetch; anything else is aborted and fails the run. A capture therefore never reaches the hosted Supabase project or a Storage bucket (AGENTS.md: automation never spends the Supabase quota).
 - **Same code on both sides.** `compare.mjs` copies the head's `scripts/visual/` into the base worktree, hard-links `node_modules` when the lockfiles match (`npm ci` otherwise) and hard-links the gitignored local assets under `public/`.
 - **Proof.** Two runs on an unchanged tree give zero diff; a one-pixel change in `draft-tool.module.css` fails the run.
 
 ## Adding a frozen target
 
-Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the matrix, the seed ids in `seed-ids.json` and `now`/`theme`/`viewport`), `roots` or `fullPage`, and optionally `matrix`, `viewports`, `themes`, `needs` (seed ids it requires), `mask` (selectors painted over, for content that cannot be pinned), `clock`, `settleMs` and `tolerance` (`{ maxChangedPct, threshold }`, only for GPU-drawn content). Mark a new frozen component root with `data-frozen="<surface>"`; the attribute carries no styles.
+Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the matrix, the seed ids in `seed-ids.json` and `now`/`theme`/`viewport`), `roots` or `fullPage`, and optionally `matrix`, `viewports`, `themes`, `needs` (seed ids it requires), `mask` (selectors painted over, for content that cannot be pinned), `clock`, `advanceMs` (with `clock`: fake timers, run forward this many ms once the page has rendered `waitFor` or its overlay content; may be a `{matrix}` placeholder), `settleMs` and `tolerance` (`{ maxChangedPct, threshold }`, only for GPU-drawn content). Mark a new frozen component root with `data-frozen="<surface>"`; the attribute carries no styles.
 
 ## Not covered
 

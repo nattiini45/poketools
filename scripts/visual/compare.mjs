@@ -80,6 +80,12 @@ async function main() {
   const sets = set === 'all' ? ['frozen', 'surfaces'] : [set];
   const only = (option(argv, 'only', '') || '').split(',').filter(Boolean);
   const concurrency = Number(option(argv, 'concurrency', 4));
+  // The frozen roots are data-frozen markers in the components: a base from before the harness has none, so
+  // there is nothing to compare against (the PR that adds the harness itself).
+  if (spawnSync('git', ['cat-file', '-e', baseRef + ':scripts/visual/frozen.json'], { cwd: REPO }).status !== 0) {
+    console.log('visual: ' + baseRef + ' predates the harness (no scripts/visual/frozen.json): nothing to compare');
+    process.exit(0);
+  }
   const baseLabel = 'base-' + git(['rev-parse', '--short', baseRef]);
   const headLabel = headRef ? 'head-' + git(['rev-parse', '--short', headRef]) : 'head-worktree';
 

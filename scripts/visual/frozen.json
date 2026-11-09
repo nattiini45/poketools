@@ -286,7 +286,17 @@
         "overlay"
       ],
       "fullPage": true,
-      "settleMs": 6000
+      "settleMs": 600,
+      "clock": true,
+      "matrix": {
+        "advance": [
+          5000,
+          25000,
+          45000,
+          60000
+        ]
+      },
+      "advanceMs": "{advance}"
     },
     {
       "id": "broadcast-match-moments",
@@ -298,7 +308,16 @@
         "overlay"
       ],
       "fullPage": true,
-      "settleMs": 2500
+      "settleMs": 2500,
+      "clock": true,
+      "matrix": {
+        "advance": [
+          1000,
+          6000,
+          11000
+        ]
+      },
+      "advanceMs": "{advance}"
     },
     {
       "id": "broadcast-match-live",
@@ -370,7 +389,16 @@
         "overlay"
       ],
       "fullPage": true,
-      "settleMs": 2500
+      "settleMs": 2500,
+      "clock": true,
+      "matrix": {
+        "advance": [
+          1000,
+          13000,
+          25000
+        ]
+      },
+      "advanceMs": "{advance}"
     },
     {
       "id": "broadcast-league-recap",
@@ -384,7 +412,17 @@
         "overlay"
       ],
       "fullPage": true,
-      "settleMs": 2500
+      "settleMs": 2500,
+      "clock": true,
+      "matrix": {
+        "advance": [
+          1000,
+          11000,
+          21000,
+          31000
+        ]
+      },
+      "advanceMs": "{advance}"
     },
     {
       "id": "broadcast-league-usage",

@@ -98,6 +98,7 @@ export function expandTargets(manifest, { ids = {}, now = '', only = [] } = {}) 
             waitFor: target.waitFor ?? null,
             click: target.click ?? null,
             settleMs: target.settleMs ?? manifest.defaults?.settleMs ?? 400,
+            advanceMs: target.advanceMs == null ? null : Number(fillTemplate(String(target.advanceMs), all)),
           });
         }
       }

@@ -375,7 +375,7 @@ async function playMatch(spec: MatchSpec, admin: SessionPlayer): Promise<string[
       previousStatus: 'pending_confirmation',
     });
     if (!finalized.finalized || (finalized.failed_steps ?? []).length > 0) {
-      console.warn('[visual-seed] match ' + spec.id + ' finalize: ' + (finalized.reason ?? (finalized.failed_steps ?? []).join(', ')));
+      throw new Error('match ' + spec.id + ' finalize incomplete: ' + (finalized.reason ?? (finalized.failed_steps ?? []).join(', ')));
     }
   }
 
@@ -668,9 +668,19 @@ async function seedDraftLeague(versionId: string): Promise<void> {
   const participantIds = participants.map((participant) => participant.id);
   const names = new Map(participants.map((participant) => [participant.id, participant.name]));
   let picks = await getPicksByPool(ID.draftPool);
-  if (picks.length > 0) {
+  const events = await supabase.from('draft_replay_events').select('id', { count: 'exact', head: true }).eq('draft_pool_id', ID.draftPool);
+  if (events.error) throw events.error;
+  // Every pick has its replay event, plus the opening commentary: anything less is an interrupted seed.
+  if (picks.length === VISUAL_SEED_DRAFT_PICKS.length && events.count === VISUAL_SEED_DRAFT_PICKS.length + 1) {
     tally('draft picks', false);
     return;
+  }
+  if (picks.length > 0 || (events.count ?? 0) > 0) {
+    const clearEvents = await supabase.from('draft_replay_events').delete().eq('draft_pool_id', ID.draftPool);
+    if (clearEvents.error) throw clearEvents.error;
+    const clearPicks = await supabase.from('draft_picks').delete().eq('draft_pool_id', ID.draftPool);
+    if (clearPicks.error) throw clearPicks.error;
+    picks = [];
   }
   // The legacy engine decides whose turn each pick is (snake order over the league's trainers), as the picks route does.
   for (const [index, pokemon] of VISUAL_SEED_DRAFT_PICKS.entries()) {
