@@ -149,6 +149,27 @@ export async function expireMatchProposal(id: string): Promise<MatchProposal> {
   return updateMatchProposalStatus(id, 'expired', 'system');
 }
 
+/**
+ * Moves the match's pending proposals whose `expires_at` has passed to expired (event `expire`): before a new
+ * proposal, so an overdue one nobody answered no longer counts as the match's pending proposal (nor holds the
+ * one-pending-per-player index). Returns the expired rows.
+ */
+export async function expireOverdueMatchProposals(matchId: string, nowIso: string): Promise<MatchProposal[]> {
+  assertValidUuid(matchId, 'match id');
+  matchProposalMachine.assertTransition(PENDING, 'expired', 'system');
+
+  const { data, error } = await supabase
+    .from('match_proposals')
+    .update({ status: 'expired', responded_at: nowIso })
+    .eq('match_id', matchId)
+    .eq('status', PENDING)
+    .lte('expires_at', nowIso)
+    .select();
+
+  if (error) throw error;
+  return data.map(toMatchProposal);
+}
+
 export async function cancelPendingMatchProposalsForMatch(matchId: string): Promise<MatchProposal[]> {
   assertValidUuid(matchId, 'match id');
 

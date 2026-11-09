@@ -28,6 +28,7 @@ import {
   acceptMatchProposal,
   cancelPendingMatchProposalsForMatch,
   createMatchProposal,
+  expireOverdueMatchProposals,
   listMatchProposals,
   listPendingMatchProposalsForPlayer,
 } from '../match-proposals';
@@ -107,6 +108,18 @@ describe('queries/match-proposals', () => {
     expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'accepted' }));
     expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'proposal-1');
     expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
+  });
+
+  it('expires only the pending proposals of the match whose expiry has passed', async () => {
+    mockBuilder.select.mockReturnValue({ data: [{ ...proposalRow, status: 'expired', responded_at: 'now' }], error: null });
+
+    const result = await expireOverdueMatchProposals('match-1', '2026-05-23T00:00:00.000Z');
+
+    expect(result[0].status).toBe('expired');
+    expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'expired', responded_at: '2026-05-23T00:00:00.000Z' });
+    expect(mockBuilder.eq).toHaveBeenCalledWith('match_id', 'match-1');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
+    expect(mockBuilder.lte).toHaveBeenCalledWith('expires_at', '2026-05-23T00:00:00.000Z');
   });
 
   it('cancels pending proposals for a repaired or reset match', async () => {
