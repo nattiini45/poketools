@@ -1075,7 +1075,6 @@ async function reevaluateMatchStatus(
       status: 'pending_confirmation',
       winnerId,
       submitterId: adminId,
-      keepResultTimestamps: true,
     });
     if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
     await takeBackMarkedOutcome(matchId, outcomeMark);
@@ -1089,7 +1088,6 @@ async function reevaluateMatchStatus(
     status: 'in_progress',
     winnerId: null,
     submitterId: adminId,
-    keepResultTimestamps: true,
   });
   if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
   await takeBackMarkedOutcome(matchId, outcomeMark);

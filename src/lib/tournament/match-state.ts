@@ -426,7 +426,7 @@ export interface MatchTimestampPatch {
  * - `pending_confirmation`: the deadline of the result source (`autoConfirmAt`, none when not given) and no
  *   confirmation; a match that stays pending keeps its running deadline.
  * - `in_progress`: the first game changes nothing; a match moved back from a result loses its result timestamps.
- * - `disputed`: the deadline stops.
+ * - `disputed`: the deadline stops (a disputed match is never auto-confirmed).
  */
 export function matchTimestampsFor(
   from: MatchStatus,
@@ -453,8 +453,6 @@ export function matchTimestampsFor(
       if (from === 'in_progress') return { finalized_at: null, auto_confirm_at: null };
       return { finalized_at: null, auto_confirm_at: null, confirmed_at: null, date_played: null };
     case 'disputed':
-      // Legacy: a participant's dispute kept the deadline (behaviour fix in the next commit).
-      if (from === 'pending_confirmation') return { finalized_at: null };
       return { finalized_at: null, auto_confirm_at: null };
   }
 }

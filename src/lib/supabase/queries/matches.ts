@@ -1673,11 +1673,6 @@ export interface MatchStatusTransition {
   submitterId?: string | null;
   /** The auto-confirm deadline of a move into pending_confirmation (none when not given). */
   autoConfirmAt?: string | null;
-  /**
-   * Legacy (removed in the next commit): keep confirmed_at and date_played as stored, as the admin game-change
-   * recount did.
-   */
-  keepResultTimestamps?: boolean;
 }
 
 /**
@@ -1692,14 +1687,10 @@ export async function transitionMatchStatus(
 ): Promise<Match | null> {
   assertValidUuid(id, 'match id');
 
-  const timestamps = matchTimestampsFor(transition.expectedStatus, transition.status, {
-    autoConfirmAt: transition.autoConfirmAt,
-  });
-  if (transition.keepResultTimestamps) {
-    delete timestamps.confirmed_at;
-    delete timestamps.date_played;
-  }
-  const updates: Record<string, unknown> = { status: transition.status, ...timestamps };
+  const updates: Record<string, unknown> = {
+    status: transition.status,
+    ...matchTimestampsFor(transition.expectedStatus, transition.status, { autoConfirmAt: transition.autoConfirmAt }),
+  };
   if (transition.winnerId !== undefined) updates.winner_id = transition.winnerId;
   if (transition.submitterId !== undefined) updates.submitter_id = transition.submitterId;
 

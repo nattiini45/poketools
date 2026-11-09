@@ -54,7 +54,7 @@ describe('matchTimestampsFor', () => {
     }
   });
 
-  it('into disputed from a running series: the deadline stops', () => {
-    expect(matchTimestampsFor('in_progress', 'disputed')).toEqual({ finalized_at: null, auto_confirm_at: null });
+  it.each(['in_progress', 'pending_confirmation'] as const)('%s → disputed: the deadline stops', (from) => {
+    expect(matchTimestampsFor(from, 'disputed')).toEqual({ finalized_at: null, auto_confirm_at: null });
   });
 });

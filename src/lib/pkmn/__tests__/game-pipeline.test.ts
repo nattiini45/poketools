@@ -2657,7 +2657,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'in_progress',
       winnerId: null,
       submitterId: 'admin-1',
-      keepResultTimestamps: true,
     });
     expect(updateMatchStatus).not.toHaveBeenCalled();
     expect(result.match_status).toBe('in_progress');
@@ -2683,7 +2682,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'pending_confirmation',
       winnerId: 'player-1',
       submitterId: 'admin-1',
-      keepResultTimestamps: true,
     });
     expect(result.match_status).toBe('pending_confirmation');
   });
@@ -2701,7 +2699,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'pending_confirmation',
       winnerId: 'player-2',
       submitterId: 'admin-1',
-      keepResultTimestamps: true,
     });
   });
 

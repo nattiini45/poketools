@@ -88,9 +88,9 @@ describe('match status writes: the timestamps each writer flow sends', () => {
     expect(lastUpdate()).toEqual({ status: 'disputed', finalized_at: null, auto_confirm_at: null });
   });
 
-  it('pending_confirmation → disputed (participant dispute): status and submitter only', async () => {
+  it('pending_confirmation → disputed (participant dispute): the auto-confirm deadline stops', async () => {
     await updateMatchStatus('m1', 'disputed', undefined, 'p1', undefined, 'pending_confirmation');
-    expect(lastUpdate()).toEqual({ status: 'disputed', finalized_at: null, submitter_id: 'p1' });
+    expect(lastUpdate()).toEqual({ status: 'disputed', finalized_at: null, submitter_id: 'p1', auto_confirm_at: null });
   });
 
   it.each(['pending_confirmation', 'disputed', 'in_progress', 'scheduled'] as const)(
@@ -126,13 +126,12 @@ describe('match status writes: the timestamps each writer flow sends', () => {
     });
   });
 
-  it('completed → in_progress (admin game change, best-of no longer reached): clears the timer only', async () => {
+  it('completed → in_progress (admin game change, best-of no longer reached): clears the result timestamps', async () => {
     await transitionMatchStatus('m1', {
       expectedStatus: 'completed',
       status: 'in_progress',
       winnerId: null,
       submitterId: 'admin',
-      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'in_progress',
@@ -140,16 +139,17 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       winner_id: null,
       submitter_id: 'admin',
       auto_confirm_at: null,
+      confirmed_at: null,
+      date_played: null,
     });
   });
 
-  it('completed → pending_confirmation (admin game change, still decided): no timer', async () => {
+  it('completed → pending_confirmation (admin game change, still decided): no timer, no confirmation', async () => {
     await transitionMatchStatus('m1', {
       expectedStatus: 'completed',
       status: 'pending_confirmation',
       winnerId: 'p1',
       submitterId: 'admin',
-      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'pending_confirmation',
@@ -157,6 +157,8 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       winner_id: 'p1',
       submitter_id: 'admin',
       auto_confirm_at: null,
+      confirmed_at: null,
+      date_played: null,
     });
   });
 
@@ -166,7 +168,6 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       status: 'pending_confirmation',
       winnerId: 'p1',
       submitterId: 'admin',
-      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'pending_confirmation',

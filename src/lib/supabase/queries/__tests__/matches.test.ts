@@ -520,11 +520,6 @@ describe('transitionMatchStatus (M3: one row update)', () => {
       date_played: null,
     });
 
-    mockBuilder.update.mockClear();
-    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress', keepResultTimestamps: true });
-    const arg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
-    expect('date_played' in arg).toBe(false);
-    expect('confirmed_at' in arg).toBe(false);
   });
 
   it('returns null and writes nothing else when the compare-and-set misses', async () => {
