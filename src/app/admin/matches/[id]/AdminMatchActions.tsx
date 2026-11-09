@@ -64,6 +64,17 @@ type ActionSuccess =
   | { kind: 'completed' | 'disputed' | 'settled' | 'settledIncomplete' }
   | { kind: 'reset' | 'gameDeleted'; count: number };
 
+/**
+ * One admin action at a time: the one running, or the one that succeeded and waits for the refreshed page (`done`
+ * holds the props it was sent from, so new props from the refresh end it). Until then no action can be sent again.
+ */
+type ActionPhase =
+  | { kind: 'idle' }
+  | { kind: 'running'; action: 'override' | 'settle' | 'reset' }
+  | { kind: 'done'; status: MatchStatus; games: readonly GameSummary[] };
+
+const IDLE: ActionPhase = { kind: 'idle' };
+
 /** The reset dialog's read of what a reset touches. */
 type ResetPreviewState =
   | { status: 'loading' }
@@ -175,7 +186,7 @@ export default function AdminMatchActions({
   const formatter = useFormatter();
   const [winnerId, setWinnerId] = useState(currentWinnerId ?? '');
   const [notes, setNotes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<ActionPhase>(IDLE);
   const [error, setError] = useState<ActionError | null>(null);
   const [success, setSuccess] = useState<ActionSuccess | null>(null);
   /** Warnings of a saved reset or game delete (e.g. the EPB recheck failed), rendered by catalogue code. */
@@ -203,11 +214,16 @@ export default function AdminMatchActions({
   const [deleteApproval, setDeleteApproval] = useState<{ gameId: string; reason: string; approval: DownstreamApproval } | null>(null);
   /** How many later bracket matches the saved game delete reset after the admin approved it. */
   const [downstreamReset, setDownstreamReset] = useState(0);
-  const [resetting, setResetting] = useState(false);
   const [settleWinnerId, setSettleWinnerId] = useState('');
   const [settleOutcome, setSettleOutcome] = useState<AdminOutcomeKind>('played');
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
-  const [settling, setSettling] = useState(false);
+  const loading = phase.kind === 'running' && phase.action === 'override';
+  const settling = phase.kind === 'running' && phase.action === 'settle';
+  const resetting = phase.kind === 'running' && phase.action === 'reset';
+  const busy =
+    phase.kind === 'running' || (phase.kind === 'done' && phase.status === currentStatus && phase.games === games);
+  const succeeded = () => setPhase({ kind: 'done', status: currentStatus, games });
+  const settled = () => setPhase((current) => (current.kind === 'running' ? IDLE : current));
 
   // The actions come from the match machine (admin actor); the routes decide again on every write.
   const actions = availableMatchActions(
@@ -269,7 +285,7 @@ export default function AdminMatchActions({
     setSuccess(null);
     setWarnings([]);
 
-    setLoading(true);
+    setPhase({ kind: 'running', action: 'override' });
     try {
       const res = await fetch(`/api/confirm-match/${matchId}`, {
         method: 'POST',
@@ -284,6 +300,7 @@ export default function AdminMatchActions({
       const json = await res.json();
 
       if (json.success) {
+        succeeded();
         setSuccess({ kind: targetStatus });
         setTimeout(() => router.refresh(), 1500);
       } else {
@@ -295,7 +312,7 @@ export default function AdminMatchActions({
     } catch {
       setError({ local: 'updateFailed' });
     } finally {
-      setLoading(false);
+      settled();
       setConfirmKind(null);
     }
   }
@@ -315,7 +332,7 @@ export default function AdminMatchActions({
     setError(null);
     setSuccess(null);
     setWarnings([]);
-    setSettling(true);
+    setPhase({ kind: 'running', action: 'settle' });
     try {
       const res = await fetch(`/api/admin/matches/${matchId}/result`, {
         method: 'POST',
@@ -324,12 +341,14 @@ export default function AdminMatchActions({
       });
       const json = await res.json();
       if (json.success) {
+        succeeded();
         setSuccess({ kind: 'settled' });
         setTimeout(() => router.refresh(), 1500);
       } else {
         const apiError = toApiErrorLike(json);
         if (apiError.code === 'match_finalize_incomplete') {
           // The completion is already saved; only the follow-up steps failed and are retried.
+          succeeded();
           setSuccess({ kind: 'settledIncomplete' });
           router.refresh();
         } else {
@@ -340,7 +359,7 @@ export default function AdminMatchActions({
     } catch {
       setError({ local: 'settleFailed' });
     } finally {
-      setSettling(false);
+      settled();
       setSettleDialogOpen(false);
     }
   }
@@ -354,7 +373,7 @@ export default function AdminMatchActions({
     setDownstreamWarning(false);
     setDownstreamReset(0);
     setCascadeCount(null);
-    setResetting(true);
+    setPhase({ kind: 'running', action: 'reset' });
     try {
       const result = await sendGameChange(`/api/admin/matches/${matchId}/reset`, {
         method: 'POST',
@@ -364,6 +383,7 @@ export default function AdminMatchActions({
 
       if (result.ok) {
         const data = result.data;
+        succeeded();
         setSuccess({ kind: 'reset', count: toCount(data.games_deleted) });
         setWarnings(result.warnings);
         setDownstreamWarning(Boolean(data.has_downstream_matches));
@@ -390,7 +410,7 @@ export default function AdminMatchActions({
       setResetDialogOpen(false);
       setCascadeDialogOpen(false);
     } finally {
-      setResetting(false);
+      settled();
     }
   }
 
@@ -416,7 +436,7 @@ export default function AdminMatchActions({
     // recalculation/rendered list visible under the new "Game deleted" message.
     setRecalculation(null);
     setDownstreamWarning(false);
-    setResetting(true);
+    setPhase({ kind: 'running', action: 'reset' });
     try {
       const request = gameDeleteRequest(gameId, { reason, confirmDownstream });
       const result = await sendGameChange(request.url, request.init);
@@ -432,6 +452,7 @@ export default function AdminMatchActions({
 
       if (result.ok) {
         const data = result.data;
+        succeeded();
         setSuccess({ kind: 'gameDeleted', count: toCount(data.games_remaining) });
         setDownstreamReset(downstreamResetCount(data));
         setWarnings(result.warnings);
@@ -453,7 +474,7 @@ export default function AdminMatchActions({
       setDeleteGameId(null);
       setDeleteApproval(null);
     } finally {
-      setResetting(false);
+      settled();
     }
   }
 
@@ -533,6 +554,7 @@ export default function AdminMatchActions({
                         </Link>
                         <button
                           type="button"
+                          disabled={busy}
                           onClick={() => setDeleteGameId(game.id)}
                           className="text-xs text-poke-accent hover:underline font-heading"
                         >
@@ -551,7 +573,7 @@ export default function AdminMatchActions({
                 variant="danger"
                 size="sm"
                 onClick={openResetDialog}
-                disabled={loading}
+                disabled={busy}
               >
                 {t('actions.resetMatch')}
               </Button>
@@ -620,6 +642,7 @@ export default function AdminMatchActions({
             <Button
               variant="success"
               loading={loading}
+              disabled={busy}
               onClick={() => requestOverride('completed')}
             >
               {t('actions.completeMatch')}
@@ -629,6 +652,7 @@ export default function AdminMatchActions({
               <Button
                 variant="danger"
                 loading={loading}
+                disabled={busy}
                 onClick={() => requestOverride('disputed')}
               >
                 {t('actions.markDisputed')}
@@ -683,7 +707,7 @@ export default function AdminMatchActions({
             </div>
           </div>
           <div className="mt-4">
-            <Button variant="success" loading={settling} onClick={requestSettle}>
+            <Button variant="success" loading={settling} disabled={busy} onClick={requestSettle}>
               {tMatch('actions.settle.button')}
             </Button>
           </div>
@@ -697,6 +721,7 @@ export default function AdminMatchActions({
           <Button
             variant="danger"
             size="sm"
+            disabled={busy}
             onClick={openResetDialog}
           >
             {t('actions.resetMatch')}
