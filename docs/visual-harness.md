@@ -58,6 +58,7 @@ Output goes to `.visual/` (gitignored): `<label>/<set>/*.png` with a `manifest.j
 
 - **Time.** Targets with `"clock": true` pin the browser clock to the manifest's `now` and pass it to the page (`/draft-preview?now=` builds its scenario from that instant), so countdowns read the same in every run. The seed writes fixed dates.
 - **Motion.** `prefers-reduced-motion: reduce`, Playwright's `animations: 'disabled'`, the dev overlay hidden, fonts awaited, lazy images switched to eager and every image loaded and decoded, then a quiet network for 600 ms.
+- **Chrome.** Element captures hide every fixed or sticky element that neither sits inside a root nor contains one (the sticky nav bar over a scrolled root), so a chrome change never shows up as a frozen diff.
 - **Raster.** Chromium runs with software raster on one thread (`DETERMINISTIC_CHROMIUM_ARGS` in `run.mjs`): GPU and tiled raster anti-alias rounded corners differently from run to run.
 - **Timers.** Overlays that rotate or play on an interval (match story, moment reel, weekly recap, attract screen) run on a paused fake clock (`advanceMs`): the harness steps it until the overlay has its data, then runs it forward by exactly `advanceMs`, one capture per act or slide.
 - **Rate limits.** A `429` from the app would capture a page without its data, so that job fails and is run again after the `Retry-After` wait (up to four attempts).

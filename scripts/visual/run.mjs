@@ -313,6 +313,17 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
     if (job.fullPage) {
       shots.push(await page.screenshot({ fullPage: true, animations: 'disabled', caret: 'hide', mask }));
     } else {
+      // Site chrome that floats over a clipped root (the sticky nav bar) is not part of the surface: hide every
+      // fixed or sticky element that neither sits inside a root nor contains one, keeping its layout box.
+      await page.evaluate((selectors) => {
+        const roots = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]);
+        for (const el of document.querySelectorAll('body *')) {
+          const position = getComputedStyle(el).position;
+          if (position !== 'fixed' && position !== 'sticky') continue;
+          if (roots.some((root) => root.contains(el) || el.contains(root))) continue;
+          el.style.setProperty('visibility', 'hidden', 'important');
+        }
+      }, job.roots);
       for (const selector of job.roots) {
         const matches = page.locator(selector);
         const count = await matches.count();
