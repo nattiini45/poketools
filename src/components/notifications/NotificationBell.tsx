@@ -125,6 +125,8 @@ export default function NotificationBell() {
       return [...current, ...outcome.data.items.filter((row) => !known.has(row.id))];
     });
     setNextOffset(outcome.data.next_offset);
+    // This count is newer than the answer of a poll still on its way.
+    countGeneration.current += 1;
     setUnread(outcome.data.unread);
     setLoad('ready');
   }, []);

@@ -433,8 +433,10 @@ function checkRules(out: Diagnostic[], lookup: Lookup): void {
       case 'rule.on_event':
         checkEvent(out, lookup, rule.on, at('on'));
         if (rule.when !== undefined) checkExpr(out, rule.when, eventEnv(def), 'boolean', at('when'), 'event_condition');
+        const firstNotify = rule.effects.findIndex((effect) => effect.effect === 'notify');
         rule.effects.forEach((effect, j) =>
-          checkEffect(out, lookup, effect, at('effects', j), rule.when === undefined ? undefined : { expr: rule.when, pointer: at('when') }),
+          // The condition is one place however many notices it decides: the first of them reports it.
+          checkEffect(out, lookup, effect, at('effects', j), rule.when === undefined || j !== firstNotify ? undefined : { expr: rule.when, pointer: at('when') }),
         );
         break;
       case 'player.action':

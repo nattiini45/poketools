@@ -285,6 +285,18 @@ describe('NotificationBell', () => {
     expect(screen.getByRole('link', { name: /The pool is open/ })).not.toBeNull();
   });
 
+  it('keeps the count of the list when an older poll answers after it', async () => {
+    let answerPoll: (value: { ok: true; data: { unread: number } }) => void = () => undefined;
+    vi.mocked(loadUnreadCount).mockImplementationOnce(() => new Promise((resolve) => { answerPoll = resolve; }));
+    vi.mocked(loadInbox).mockResolvedValue(inbox([challenge], 4));
+    const user = userEvent.setup();
+    render(withI18n(<NotificationBell />));
+    await user.click(await screen.findByRole('button', { name: 'Notifications' }));
+    await screen.findByRole('button', { name: 'Notifications, 4 unread' });
+    await act(async () => answerPoll({ ok: true, data: { unread: 9 } }));
+    expect(screen.getByRole('button', { name: 'Notifications, 4 unread' })).not.toBeNull();
+  });
+
   it('drops a list answer that started before "mark all" landed', async () => {
     let answer: (value: ReturnType<typeof inbox>) => void = () => undefined;
     vi.mocked(loadInbox)

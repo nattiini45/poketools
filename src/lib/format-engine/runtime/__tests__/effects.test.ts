@@ -118,6 +118,17 @@ describe('planEffects on the gift exchange', () => {
       expect(planWith(format, true).notifications[0].players).toEqual([...PLAYERS]);
     });
 
+    it('does not hold back the notice of the next rule on the same event when one rule has a hidden condition', () => {
+      const format: FormatDefinition = {
+        ...def,
+        rules: [
+          ...def.rules.map((rule) => (rule.kind === 'rule.on_event' && rule.id === 'kickoff' ? { ...rule, when: { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'str', v: 'p2' } } as Expr } : rule)),
+          { kind: 'rule.on_event', id: 'also', on: { event: 'stage_start', stage: 'main' }, effects: [{ effect: 'notify', message: { base: 'en', en: { v: 'Hello', s: 'human' } }, to: { who: 'all' } }] },
+        ],
+      };
+      expect(planWith(format, false).notifications.map((notice) => notice.rule)).toEqual(['also']);
+    });
+
     it('is delivered once every link is revealed', () => {
       expect(planWith(withWhere(), true).notifications[0].players).toEqual(['p2']);
     });

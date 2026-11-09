@@ -95,7 +95,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 - **In-app notifications for format-kit leagues.** A bell in the navigation bar shows an unread count and a list. Players are told
   when a challenge is made, answered, cancelled or expires, and a format's `notify` rules now reach their recipients instead of
   being planned and dropped. Delivery is written with the event, so a retry or a heal never notifies twice. Notifications are
-  kept for 90 days, in English and German. A `notify` rule whose recipients depend on a hidden relation is not delivered
+  kept for 90 days, in English and German. A `notify` rule whose condition or recipients depend on a hidden relation is not delivered
   while a link of it is unrevealed, nor later; the compiler warns about it (`notify_relation_hidden`).
 - **Zero-setup local development.** `npm run dev:seed` gives a local stack a confirmed admin, the standard rulesets and
   one 8-player league; with Discord left unconfigured, the sign-in page and Settings show email and password only
