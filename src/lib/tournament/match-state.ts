@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from '@/i18n/messages/errors';
+import { defineMachine } from '@/lib/state-machine/machine';
 import type { MatchStatus } from '@/types/match';
 
 /**
@@ -237,3 +238,100 @@ export function hasReachedBoThreshold(
   }
   return { reached: false, winner_id_index: null };
 }
+
+/**
+ * The match machine as data, for docs/state-machines.md and for UI that
+ * derives the available action. The tables above stay the enforced source;
+ * `match-machine-parity.test.ts` holds this definition equal to
+ * `validateTransition` for every (from, to, actor).
+ */
+export const matchMachine = defineMachine({
+  id: 'match',
+  title: 'Match',
+  storage: 'matches.status (enum match_status)',
+  summary:
+    'A pairing from scheduling to a confirmed result (spec Section 8). Every status write clears finalized_at; a completion stamps confirmed_at and date_played and clears auto_confirm_at.',
+  doc: 'docs/match.md',
+  states: ['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed'],
+  initial: ['scheduled'],
+  terminal: [],
+  actors: ['player', 'admin'],
+  codes: { invalid: 'match_transition_invalid' },
+  transitions: [
+    {
+      event: 'record_game',
+      from: ['scheduled', 'in_progress'],
+      to: 'in_progress',
+      actors: ['player', 'admin'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'A game is submitted and the series has no winner yet.',
+    },
+    {
+      event: 'reach_threshold',
+      from: ['in_progress'],
+      to: 'pending_confirmation',
+      actors: ['player', 'admin'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'A game gives one player the wins the best-of needs; auto_confirm_at starts the 24 h clock.',
+    },
+    {
+      event: 'confirm',
+      from: ['pending_confirmation'],
+      to: 'completed',
+      actors: ['player', 'admin'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/cron/auto-confirm/route.ts'],
+      note: 'The opponent (not the submitter) or an admin confirms, or the auto-confirm cron does after 24 h.',
+    },
+    {
+      event: 'dispute',
+      from: ['pending_confirmation'],
+      to: 'disputed',
+      actors: ['player', 'admin'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+      note: 'A participant flags the result.',
+    },
+    {
+      event: 'resolve_dispute',
+      from: ['disputed'],
+      to: 'completed',
+      actors: ['admin'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/admin/matches/[id]/result/route.ts'],
+    },
+    {
+      event: 'set_result',
+      from: ['scheduled', 'in_progress'],
+      to: 'completed',
+      actors: ['admin'],
+      writers: [
+        'src/app/api/admin/matches/[id]/result/route.ts',
+        'src/lib/match/bulk-actions.ts',
+        'src/lib/format-engine/runtime/cron.ts',
+      ],
+      note: 'An admin settles a no-show, a drop or a result agreed outside the app; no confirmation step.',
+    },
+    {
+      event: 'flag_tie',
+      from: ['in_progress'],
+      to: 'disputed',
+      actors: ['admin'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'The game pipeline, on the admins\' behalf, when a replay is an engine tie.',
+    },
+    {
+      event: 'reopen',
+      from: ['pending_confirmation', 'completed', 'disputed'],
+      to: 'in_progress',
+      actors: ['admin'],
+      writers: ['src/lib/match/reopen.ts'],
+      note: 'Withdraws the result and keeps the games.',
+    },
+    {
+      event: 'reset',
+      from: ['in_progress', 'pending_confirmation', 'completed', 'disputed'],
+      to: 'scheduled',
+      actors: ['admin'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'resetMatch / resetRound: deletes the games and rolls their aggregates back.',
+    },
+  ],
+});

@@ -86,6 +86,7 @@ npm run dev                     # http://localhost:3000
 | Supabase query modules | `src/lib/supabase/queries/*.ts` (one per table or domain) |
 | API error handler | `src/lib/api/error-response.ts` |
 | Match state machine | `src/lib/tournament/match-state.ts` |
+| Every state machine (definitions, generated diagrams) | `src/lib/state-machine/registry.ts`, `docs/state-machines.md` |
 | AI agent orchestrator | `src/lib/ai/agent/orchestrator.ts` |
 | Security headers | `next.config.mjs` |
 | Format packs (league tuning; `@format-pack`, `FORMAT_PACK`) | `src/lib/format-pack/`, `src/format-packs/example/`, `docs/format-packs.md` |
