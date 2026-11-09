@@ -595,3 +595,8 @@
   --world-glow: var(--poke-glow);
   --world-border: var(--poke-border);
 }
+/* What a frozen root inherits from <body> today. Zero specificity: a class on the root itself still wins. */
+:where([data-frozen]:not(:is([data-world="evoliga"], [data-world="sakura"], [data-world="mountain"], [data-world="clouds"]), :is([data-world="evoliga"], [data-world="sakura"], [data-world="mountain"], [data-world="clouds"]) *)) {
+  color: var(--poke-text-primary);
+  font-family: var(--font-body), system-ui, sans-serif;
+}

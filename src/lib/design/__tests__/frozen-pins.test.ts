@@ -33,8 +33,8 @@ function pinsFor(palette: string, mode: 'light' | 'dark') {
 
 describe('frozen-surface pins (redesign F1)', () => {
   it('has one block per palette and mode, and one shared block, all scoped to frozen roots outside themed worlds', () => {
-    expect(RULES).toHaveLength(SITE_PALETTE_IDS.length * 2 + 1);
-    for (const rule of RULES) expect(rule.selector.endsWith(OUT_OF_WORLD)).toBe(true);
+    expect(RULES).toHaveLength(SITE_PALETTE_IDS.length * 2 + 2);
+    for (const rule of RULES) expect(rule.selector.replace(/^:where\((.*)\)$/, '$1').endsWith(OUT_OF_WORLD)).toBe(true);
   });
 
   for (const palette of SITE_PALETTE_IDS) {
@@ -55,5 +55,11 @@ describe('frozen-surface pins (redesign F1)', () => {
     expect(shared?.decls.get('--radius')).toBe('9px');
     expect(shared?.decls.get('--world-surface')).toBe('var(--poke-surface)');
     expect(shared?.decls.get('--world-ink')).toBe('var(--poke-text-primary)');
+  });
+
+  it('gives frozen roots the colour and font they inherit from <body> today, at zero specificity', () => {
+    const inherited = RULES.find((rule) => rule.selector === `:where(${OUT_OF_WORLD})`);
+    expect(inherited?.decls.get('color')).toBe('var(--poke-text-primary)');
+    expect(inherited?.decls.get('font-family')).toBe('var(--font-body), system-ui, sans-serif');
   });
 });
