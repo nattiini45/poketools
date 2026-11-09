@@ -12,8 +12,14 @@ Each machine below is a column, timestamp or flag combination that moves through
 
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
+- [Draft pool pause](#draft-pool-pause) — `draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'`
+- [Draft pool (queue engine)](#draft-pool-queue-engine) — `draft_pools.phase where engine = 'queue' (+ the status twin)`
+- [Draft pool (legacy engine)](#draft-pool-legacy-engine) — `draft_pools.status (enum draft_pool_status) where engine = 'legacy'`
+- [Draft slot](#draft-slot) — `draft_slots.status`
+- [Draft Kill Token window](#draft-kill-token-window) — `derived: the initial pool's phase, draft_pools.token_purchase_closes_at and the league's completed matches`
 - [Match](#match) — `matches.status (enum match_status)`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
+- [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
 
 ## Cast session
 
@@ -78,6 +84,153 @@ stateDiagram-v2
 | `save_ok_outdated` | `saving` | `dirty` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | The server stored the snapshot but the session changed while the request ran: the next save follows. |
 | `save_fail` | `saving` | `error` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | An HTTP error, success: false, or no answer: the badge shows the failure. |
 | `load` | `idle`, `dirty`, `saving`, `error` | `idle` | caster | `src/components/creator/studio/CastStudioContext.tsx` | A stored session replaces the studio state (the load_session action). |
+
+## Draft pool pause
+
+- **Id:** `draft_pool.pause`
+- **State lives in:** draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'
+- **Module doc:** `docs/draft-room.md`
+- **States:** `running`, `paused`
+- **Actors:** `admin`, `system`
+
+A paused pool runs no clock: the active slot's deadline_at is NULL and remaining_ms_at_pause holds its rest, and draft__resolve_timeouts skips the pool. Pick corrections (void, correct, restore a drop) need a paused drafting pool or a complete one (CORRECTION_REQUIRES_PAUSE). pause_reason 'blocked_slot' is retired: nothing writes it any more.
+
+```mermaid
+stateDiagram-v2
+  [*] --> running
+  running --> paused: pause (admin)
+  running --> paused: freeze (system)
+  paused --> running: resume (admin)
+  paused --> running: complete (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `pause` | `running` | `paused` | admin | `supabase/migrations/20261018140100_draft_quiet_hours.sql#draft_set_paused`<br>`src/app/api/drafts/[id]/pause/route.ts`<br>`supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick` | A paused pool answers ALREADY_PAUSED; outside drafting DRAFT_NOT_ACTIVE. A complete pool (never paused) reopened by a void also comes back paused. |
+| `freeze` | `running` | `paused` | system | `supabase/migrations/20261026091000_league_trash.sql#league_trash_delete` | Moving a league to the recycle bin pauses its running drafts; restoring it keeps them paused. |
+| `resume` | `paused` | `running` | admin | `supabase/migrations/20261018140100_draft_quiet_hours.sql#draft_set_paused`<br>`supabase/migrations/20261018140100_draft_quiet_hours.sql#draft__resume`<br>`src/app/api/drafts/[id]/pause/route.ts` | A running pool answers NOT_PAUSED. Restarts the active clock with its remaining time, or activates the next slot. |
+| `complete` | `paused` | `running` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next` | A restored drop that empties the queue completes the pool, which clears the pause. |
+
+## Draft pool (queue engine)
+
+- **Id:** `draft_pool.phase`
+- **State lives in:** draft_pools.phase where engine = 'queue' (+ the status twin)
+- **Module doc:** `docs/draft-room.md`
+- **States:** `setup`, `submissions`, `drafting`, `complete`, `cancelled`
+- **Actors:** `admin`, `system`
+
+An Initial draft starts in setup, a Redraft in submissions (created by draft_create_pool). Every writer sets status next to phase (DRAFT_PHASE_STATUS: setup → pending, submissions and drafting → in_progress, complete and cancelled → complete); no CHECK ties them, so read phase, never status, to tell a cancelled pool from a complete one. Inside drafting the clock can be paused (draft_pool.pause); inside submissions the drops lock when the deadline passes (redraft.submission_window). complete is not terminal: voiding a pick reopens the draft, paused. A pool leaves the machine only by DELETE (setup or cancelled, DELETABLE_QUEUE_PHASES). The system moves run inside reads too: draft_snapshot (GET /api/drafts/[id]/state), draft_my_turn and the draft-ticks cron all call draft__tick.
+
+```mermaid
+stateDiagram-v2
+  [*] --> setup
+  [*] --> submissions
+  setup --> drafting: start (admin)
+  submissions --> drafting: publish
+  drafting --> complete: complete (system)
+  drafting --> cancelled: abort (admin)
+  submissions --> cancelled: cancel_submissions (admin)
+  complete --> drafting: reopen (admin)
+  cancelled --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `setup` | `drafting` | admin | `supabase/migrations/20261027190000_draft_start_reroll_every_two_rounds.sql#draft_start`<br>`src/app/api/drafts/[id]/start/route.ts` | Initial drafts only (a Redraft answers SUBMISSION_PHASE); a started pool answers DRAFT_ALREADY_STARTED. Clears any pause. |
+| `publish` | `submissions` | `drafting` | admin, system | `supabase/migrations/20261018180000_league_groups.sql#redraft__publish_locked`<br>`supabase/migrations/20261012025023_redraft_rpcs.sql#redraft_publish`<br>`supabase/migrations/20261102150000_draft_list_due_pools.sql#draft__tick` | An admin publishes the drops (before the deadline only with force and a reason), or draft__tick does once the deadline passed; a refused publish stays in submissions with a backoff. |
+| `complete` | `drafting` | `complete` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next` | The queue runs empty after a pick, a timeout, a resume or a restored drop; clears the pause and stamps ended_at. |
+| `abort` | `drafting` | `cancelled` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_end`<br>`src/app/api/drafts/[id]/end/route.ts` | Initial drafts only (a running Redraft answers DRAFT_ABORT_NOT_ALLOWED): voids every live pick and discards the open slots. |
+| `cancel_submissions` | `submissions` | `cancelled` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_end`<br>`src/app/api/drafts/[id]/end/route.ts` | A Redraft still collecting drops (API only, no button). |
+| `reopen` | `complete` | `drafting` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick`<br>`src/app/api/drafts/[id]/picks/[pickId]/void/route.ts`<br>`src/app/api/drafts/[id]/picks/[pickId]/correct/route.ts` | Voiding (or correcting) a pick of a complete draft requeues its slot and reopens the draft paused (pause_reason admin, ended_at cleared). The Draft Kill Token window falls back to before. |
+
+## Draft pool (legacy engine)
+
+- **Id:** `draft_pool.status`
+- **State lives in:** draft_pools.status (enum draft_pool_status) where engine = 'legacy'
+- **Module doc:** `docs/draft-room.md`
+- **States:** `pending`, `in_progress`, `complete`
+- **Actors:** `admin`, `system`
+
+A pre-queue draft board: an admin opens it to picks, the last pick (or the first state read after it) completes it. The trigger trg_draft_pools_sync_legacy_phase mirrors every status write into phase. An admin may still reopen a complete pool or move a pool back to pending (docs/draft-room.md: retiring a legacy pool of a point-buy season), so no state is terminal; pending → complete is refused (an admin ends a running draft instead).
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> in_progress: start (admin)
+  in_progress --> complete: complete
+  complete --> in_progress: reopen (admin)
+  in_progress --> pending: reset (admin)
+  complete --> pending: reset (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `pending` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | DraftBoard Start (and the admin agent's staged propose_draft_activate_legacy_pool). A pool of a point-buy season answers POOL_ENGINE_LEGACY_EPB. |
+| `complete` | `in_progress` | `complete` | admin, system | `src/app/api/drafts/[id]/route.ts`<br>`src/app/api/drafts/[id]/picks/route.ts`<br>`src/app/api/drafts/[id]/state/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | An admin ends the draft (DraftBoard End draft), or the system after the last pick: the pick route, else the first GET /api/drafts/[id]/state. |
+| `reopen` | `complete` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): reopens a finished draft, e.g. to undo its last pick. The next state read completes it again while every pick is made. |
+| `reset` | `in_progress`, `complete` | `pending` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): docs/draft-room.md moves a legacy pool of a point-buy season back to pending so it can be deleted. |
+
+## Draft slot
+
+- **Id:** `draft_slot.status`
+- **State lives in:** draft_slots.status
+- **Module doc:** `docs/draft-room.md`
+- **States:** `pending`, `active`, `done`, `timed_out`
+- **Actors:** `player`, `admin`, `system`
+
+A slot is inserted pending (draft_start, the Redraft publish, a timeout's make-up slot, a voided pick's requeued slot). At most one slot of a pool is current (uq_draft_slots_one_current). draft_end and redraft_admin_restore_drop delete pending and active slots instead of moving them. Retired: blocked and forfeited (RETIRED_SLOT_STATUSES) are still allowed by the CHECK and the SlotStatus type, but nothing writes them any more, so they are not states of this machine.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> active: activate (system)
+  pending --> active: activate_replacement (admin)
+  active --> done: pick (player, admin)
+  active --> timed_out: time_out (system)
+  active --> pending: requeue (admin)
+  done --> [*]
+  timed_out --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `activate` | `pending` | `active` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next` | The first pending slot by sort_key gets the clock (none while another slot is current: ACTIVE_SLOT_EXISTS). |
+| `activate_replacement` | `pending` | `active` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick` | A correction activates the requeued slot and commits the replacement pick in the same statement. |
+| `pick` | `active` | `done` | player, admin | `supabase/migrations/20261018180000_league_groups.sql#draft__commit_pick`<br>`supabase/migrations/20261018140200_draft_pool_completability.sql#draft_confirm_pick` | The player on the clock, or an admin override, picks; a wrong slot answers STALE_SLOT. |
+| `time_out` | `active` | `timed_out` | system | `supabase/migrations/20261012024916_draft_rpcs.sql#draft__resolve_timeouts` | The deadline passed in an unpaused drafting pool; a make-up slot is queued behind the next player. |
+| `requeue` | `active` | `pending` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick` | A void puts the current slot back in the queue behind the requeued one. |
+
+## Draft Kill Token window
+
+- **Id:** `draft.kill_token_window`
+- **State lives in:** derived: the initial pool's phase, draft_pools.token_purchase_closes_at and the league's completed matches
+- **Module doc:** `docs/draft-room.md`
+- **States:** `before`, `open`, `closed`
+- **Actors:** `admin`, `system`
+
+before until the player's Initial draft is complete; then open until token_purchase_closes_at (or, without one, until the first league match is completed); then closed. Writers are the inputs' writers: the window moves when they change, and is recomputed wherever it is read (tokens overview, TokenCenter, the purchase RPC).
+
+```mermaid
+stateDiagram-v2
+  [*] --> before
+  before --> open: initial_complete (system)
+  before --> closed: initial_complete_late (system)
+  open --> closed: close (system)
+  open --> open: move_close_date (admin)
+  closed --> open: move_close_date (admin)
+  open --> closed: move_close_date_past (admin)
+  open --> before: reopen_initial (admin)
+  closed --> before: reopen_initial (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `initial_complete` | `before` | `open` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next`<br>`src/lib/draft/tokens.ts`<br>`supabase/migrations/20261027193000_draft_token_participation_rate.sql#epb_purchase_draft_token` | The Initial draft completes while the close date is ahead (or none is set and no match is completed). |
+| `initial_complete_late` | `before` | `closed` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next`<br>`src/lib/draft/tokens.ts`<br>`supabase/migrations/20261027193000_draft_token_participation_rate.sql#epb_purchase_draft_token` | The Initial draft completes after the close date (or after the first completed match). |
+| `close` | `open` | `closed` | system | `src/lib/draft/tokens.ts`<br>`supabase/migrations/20261027193000_draft_token_participation_rate.sql#epb_purchase_draft_token` | The close date passes, or without one the first league match is completed. |
+| `move_close_date` | `open`, `closed` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/config/route.ts` | token_purchase_closes_at is editable in every phase: a later date reopens a closed window (also after matches were played). |
+| `move_close_date_past` | `open` | `closed` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/config/route.ts` | An earlier close date closes the window at once. |
+| `reopen_initial` | `open`, `closed` | `before` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick` | Voiding a pick of the complete Initial draft reopens it (draft_pool.phase reopen). |
 
 ## Match
 
@@ -148,3 +301,25 @@ stateDiagram-v2
 | `ban` | `active` | `banned` | admin | `src/app/api/admin/players/[id]/suspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Stores ban_reason, clears suspended_until and ends the sessions the player holds. |
 | `reinstate` | `suspended`, `banned` | `active` | admin | `src/app/api/admin/players/[id]/unsuspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Clears suspended_until and ban_reason; the session epoch stays, so tokens from before the sanction stay dead. |
 | `expire` | `suspended` | `active` | system | `src/app/api/cron/expire-suspensions/route.ts`<br>`src/lib/supabase/queries/players.ts` | The cron (every 15 min) lifts suspensions whose suspended_until has passed; a banned player has no suspended_until and is never lifted. |
+
+## Redraft submission window
+
+- **Id:** `redraft.submission_window`
+- **State lives in:** derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()
+- **Module doc:** `docs/draft-room.md`
+- **States:** `open`, `locked`
+- **Actors:** `admin`, `system`
+
+Players change their secret drops while the window is open. The lock is time, not a write, so the client (server-offset clock) and SQL (now()) can disagree for a moment; SQL decides. Moving the deadline into the future reopens a locked window.
+
+```mermaid
+stateDiagram-v2
+  [*] --> open
+  open --> locked: lock (system)
+  locked --> open: move_deadline (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `lock` | `open` | `locked` | system | `supabase/migrations/20261018180000_league_groups.sql#draft__build_snapshot`<br>`supabase/migrations/20261018180000_league_groups.sql#redraft_set_submission`<br>`src/lib/supabase/queries/drafts-redraft.ts` | The deadline passes (derived where it is read). |
+| `move_deadline` | `locked` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/redraft/route.ts` | PATCH /api/drafts/[id]/redraft with a future deadline_at (submissions phase only). |
