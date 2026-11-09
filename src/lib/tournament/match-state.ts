@@ -239,23 +239,28 @@ export function hasReachedBoThreshold(
   return { reached: false, winner_id_index: null };
 }
 
+/** Who moves a match: a participant, an admin, or the app itself (crons and the game pipeline). */
+export type MatchActor = 'player' | 'admin' | 'system';
+
 /**
  * The match machine as data, for docs/state-machines.md and for UI that
- * derives the available action. The tables above stay the enforced source;
- * `match-machine-parity.test.ts` holds this definition equal to
- * `validateTransition` for every (from, to, actor).
+ * derives the available action. For players and admins the tables above stay
+ * the enforced source; `match-machine-parity.test.ts` holds this definition
+ * equal to `validateTransition` for every (from, to). The `system` moves
+ * (crons and the game pipeline) are checked against this definition directly
+ * (`assertTransition`).
  */
 export const matchMachine = defineMachine({
   id: 'match',
   title: 'Match',
-  storage: 'matches.status (enum match_status)',
+  storage: 'matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at',
   summary:
-    'A pairing from scheduling to a confirmed result (spec Section 8). Every status write clears finalized_at; a completion stamps confirmed_at and date_played and clears auto_confirm_at.',
+    'A pairing from scheduling to a confirmed result (spec Section 8). Every status write takes its timestamps from matchTimestampsFor: it clears finalized_at, a completion stamps confirmed_at and date_played and clears auto_confirm_at, a move into pending_confirmation starts the auto-confirm deadline of the result source, and a move back clears the result timestamps.',
   doc: 'docs/match.md',
   states: ['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed'],
   initial: ['scheduled'],
   terminal: [],
-  actors: ['player', 'admin'],
+  actors: ['player', 'admin', 'system'],
   codes: { invalid: 'match_transition_invalid' },
   transitions: [
     {
@@ -272,15 +277,23 @@ export const matchMachine = defineMachine({
       to: 'pending_confirmation',
       actors: ['player', 'admin'],
       writers: ['src/lib/pkmn/game-pipeline.ts'],
-      note: 'A game gives one player the wins the best-of needs; auto_confirm_at starts the 24 h clock.',
+      note: 'A game gives one player the wins the best-of needs; auto_confirm_at starts the deadline of the result source (24 h for a replay, 48 h for a screenshot, none for a manual result without one).',
     },
     {
       event: 'confirm',
       from: ['pending_confirmation'],
       to: 'completed',
       actors: ['player', 'admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/cron/auto-confirm/route.ts'],
-      note: 'The opponent (not the submitter) or an admin confirms, or the auto-confirm cron does after 24 h.',
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/bulk-actions.ts'],
+      note: 'The opponent (not the submitter) or an admin confirms the reported result.',
+    },
+    {
+      event: 'auto_confirm',
+      from: ['pending_confirmation'],
+      to: 'completed',
+      actors: ['system'],
+      writers: ['src/app/api/cron/auto-confirm/route.ts'],
+      note: 'The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person.',
     },
     {
       event: 'dispute',
@@ -288,34 +301,57 @@ export const matchMachine = defineMachine({
       to: 'disputed',
       actors: ['player', 'admin'],
       writers: ['src/app/api/confirm-match/[mid]/route.ts'],
-      note: 'A participant flags the result.',
+      note: 'A participant (or an admin) flags the reported result.',
     },
     {
       event: 'resolve_dispute',
       from: ['disputed'],
       to: 'completed',
       actors: ['admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/admin/matches/[id]/result/route.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+    },
+    {
+      event: 'settle',
+      from: ['scheduled'],
+      to: 'completed',
+      actors: ['admin'],
+      writers: ['src/app/api/admin/matches/[id]/result/route.ts'],
+      note: 'An admin records a result for a match that was never played (a no-show, a drop, a result agreed outside the app), with a reason; no confirmation step.',
     },
     {
       event: 'set_result',
-      from: ['scheduled', 'in_progress'],
+      from: ['in_progress'],
       to: 'completed',
       actors: ['admin'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/admin/matches/[id]/result/route.ts'],
+      note: 'An admin completes a running series directly; no confirmation step.',
+    },
+    {
+      event: 'forfeit',
+      from: ['scheduled', 'in_progress'],
+      to: 'completed',
+      actors: ['system'],
       writers: [
-        'src/app/api/admin/matches/[id]/result/route.ts',
-        'src/lib/match/bulk-actions.ts',
         'src/lib/format-engine/runtime/cron.ts',
+        'supabase/migrations/20261105090000_format_runtime.sql#format_forfeit_complete',
       ],
-      note: 'An admin settles a no-show, a drop or a result agreed outside the app; no confirmation step.',
+      note: 'The format cron completes a match as a deadline forfeit when one side registered no team.',
+    },
+    {
+      event: 'flag_dispute',
+      from: ['in_progress'],
+      to: 'disputed',
+      actors: ['admin'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+      note: 'An admin marks a running series disputed.',
     },
     {
       event: 'flag_tie',
       from: ['in_progress'],
       to: 'disputed',
-      actors: ['admin'],
+      actors: ['system'],
       writers: ['src/lib/pkmn/game-pipeline.ts'],
-      note: 'The game pipeline, on the admins\' behalf, when a replay is an engine tie.',
+      note: 'The game pipeline, on the admins\' behalf, when a replay is an engine tie (no draws are scored).',
     },
     {
       event: 'reopen',
@@ -333,5 +369,92 @@ export const matchMachine = defineMachine({
       writers: ['src/lib/pkmn/game-pipeline.ts'],
       note: 'resetMatch / resetRound: deletes the games and rolls their aggregates back.',
     },
+    {
+      event: 'recount',
+      from: ['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed'],
+      to: 'in_progress',
+      actors: ['system'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'After an admin edits or deletes a game, the status follows the remaining games (reevaluateMatchStatus): games left, best-of not reached.',
+    },
+    {
+      event: 'recount',
+      from: ['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed'],
+      to: 'pending_confirmation',
+      actors: ['system'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'As above, best-of still reached: the result waits for a confirmation again, without an auto-confirm deadline (one already running is kept).',
+    },
+    {
+      event: 'recount',
+      from: ['scheduled', 'in_progress', 'pending_confirmation', 'completed', 'disputed'],
+      to: 'scheduled',
+      actors: ['system'],
+      writers: ['src/lib/pkmn/game-pipeline.ts'],
+      note: 'As above, no game left.',
+    },
   ],
 });
+
+export type MatchEvent = (typeof matchMachine.spec.transitions)[number]['event'];
+
+/** The statuses one event leaves (`sourcesOf` narrowed to one event): the compare-and-set guard of its writer. */
+export function matchEventSources(event: MatchEvent): MatchStatus[] {
+  return [...new Set(matchMachine.spec.transitions.filter((t) => t.event === event).flatMap((t) => t.from))];
+}
+
+/** The status the auto-confirm cron completes a match from (event `auto_confirm`). */
+export const AUTO_CONFIRM_FROM: MatchStatus = matchEventSources('auto_confirm')[0];
+
+/** The timestamp columns a status write sets together with the status. */
+export interface MatchTimestampPatch {
+  finalized_at: null;
+  confirmed_at?: string | null;
+  date_played?: string | null;
+  auto_confirm_at?: string | null;
+}
+
+/**
+ * The timestamps of a status write from `from` to `to`, the one place every match status writer takes them from
+ * (`updateMatchStatus`, `transitionMatchStatus`, `resetMatchFields`; the SQL forfeit writes the same completion
+ * stamps, pinned by `match-timestamps-sql.test.ts`). A key that is absent leaves the column as stored.
+ *
+ * - Every status write clears `finalized_at`: a completion starts a fresh finalize run, a match that leaves
+ *   `completed` has no finalized result any more.
+ * - `completed`: confirmed and played now, no auto-confirm deadline.
+ * - `scheduled`: no result timestamps at all.
+ * - `pending_confirmation`: the deadline of the result source (`autoConfirmAt`, none when not given) and no
+ *   confirmation; a match that stays pending keeps its running deadline.
+ * - `in_progress`: the first game changes nothing; a match moved back from a result loses its result timestamps.
+ * - `disputed`: the deadline stops.
+ */
+export function matchTimestampsFor(
+  from: MatchStatus,
+  to: MatchStatus,
+  options: { now?: string; autoConfirmAt?: string | null } = {},
+): MatchTimestampPatch {
+  switch (to) {
+    case 'completed': {
+      const now = options.now ?? new Date().toISOString();
+      return { finalized_at: null, date_played: now, confirmed_at: now, auto_confirm_at: null };
+    }
+    case 'scheduled':
+      return { finalized_at: null, date_played: null, confirmed_at: null, auto_confirm_at: null };
+    case 'pending_confirmation':
+      if (from === to) return { finalized_at: null };
+      return {
+        finalized_at: null,
+        auto_confirm_at: options.autoConfirmAt ?? null,
+        confirmed_at: null,
+        ...(from === 'completed' ? { date_played: null } : {}),
+      };
+    case 'in_progress':
+      if (from === 'scheduled') return { finalized_at: null };
+      if (from === 'in_progress') return { finalized_at: null, auto_confirm_at: null };
+      return { finalized_at: null, auto_confirm_at: null, confirmed_at: null, date_played: null };
+    case 'disputed':
+      // Legacy: a participant's dispute kept the deadline (behaviour fix in the next commit).
+      if (from === 'pending_confirmation') return { finalized_at: null };
+      return { finalized_at: null, auto_confirm_at: null };
+  }
+}

@@ -72,7 +72,6 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       winnerId: 'p1',
       submitterId: 'p2',
       autoConfirmAt: DEADLINE,
-      confirmedAt: null,
     });
     expect(lastUpdate()).toEqual({
       status: 'pending_confirmation',
@@ -85,7 +84,7 @@ describe('match status writes: the timestamps each writer flow sends', () => {
   });
 
   it('in_progress → disputed (replay engine tie): clears the timer', async () => {
-    await transitionMatchStatus('m1', { expectedStatus: 'in_progress', status: 'disputed', autoConfirmAt: null });
+    await transitionMatchStatus('m1', { expectedStatus: 'in_progress', status: 'disputed' });
     expect(lastUpdate()).toEqual({ status: 'disputed', finalized_at: null, auto_confirm_at: null });
   });
 
@@ -116,9 +115,6 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       expectedStatus: 'completed',
       status: 'in_progress',
       winnerId: null,
-      autoConfirmAt: null,
-      confirmedAt: null,
-      datePlayed: null,
     });
     expect(lastUpdate()).toEqual({
       status: 'in_progress',
@@ -136,7 +132,7 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       status: 'in_progress',
       winnerId: null,
       submitterId: 'admin',
-      autoConfirmAt: null,
+      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'in_progress',
@@ -153,7 +149,7 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       status: 'pending_confirmation',
       winnerId: 'p1',
       submitterId: 'admin',
-      autoConfirmAt: null,
+      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'pending_confirmation',
@@ -170,7 +166,7 @@ describe('match status writes: the timestamps each writer flow sends', () => {
       status: 'pending_confirmation',
       winnerId: 'p1',
       submitterId: 'admin',
-      autoConfirmAt: undefined,
+      keepResultTimestamps: true,
     });
     expect(lastUpdate()).toEqual({
       status: 'pending_confirmation',

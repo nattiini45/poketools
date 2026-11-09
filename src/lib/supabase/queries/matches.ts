@@ -9,6 +9,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
 import type { MatchRecord } from '@/lib/tournament/types';
+import { AUTO_CONFIRM_FROM, matchTimestampsFor } from '@/lib/tournament/match-state';
 import {
   ADMIN_MATCH_AUTO_CONFIRM_SOON_HOURS,
   ADMIN_MATCH_DEFAULT_SORT,
@@ -1424,54 +1425,32 @@ export async function deleteMatchesByRound(roundId: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function updateMatchStatus(
-  id: string,
-  status: MatchStatus,
-  winnerId?: string | null,
-  submitterId?: string | null,
-  notes?: string | null,
-): Promise<Match>;
+/**
+ * Change a match's status with the timestamps `matchTimestampsFor` gives the move, as a compare-and-set on
+ * `expectedStatus`, the status the caller read and validated: null, nothing written, when the row no longer has it.
+ */
 export async function updateMatchStatus(
   id: string,
   status: MatchStatus,
   winnerId: string | null | undefined,
   submitterId: string | null | undefined,
   notes: string | null | undefined,
-  expectedStatus: MatchStatus,
-): Promise<Match | null>;
-export async function updateMatchStatus(
-  id: string,
-  status: MatchStatus,
-  winnerId?: string | null,
-  submitterId?: string | null,
-  notes?: string | null,
-  expectedStatus?: MatchStatus
+  expectedStatus: MatchStatus
 ): Promise<Match | null> {
-  // Every status write clears the finalize marker: a completion starts a fresh
-  // finalize run (which sets it last), and a match that leaves `completed` has
-  // no finalized result any more (see markMatchFinalized).
-  const updates: Record<string, unknown> = { status, finalized_at: null };
+  const updates: Record<string, unknown> = { status, ...matchTimestampsFor(expectedStatus, status) };
   if (winnerId !== undefined) updates.winner_id = winnerId;
   if (submitterId !== undefined) updates.submitter_id = submitterId;
   if (notes !== undefined) updates.notes = notes;
-  if (status === 'completed') {
-    const now = new Date().toISOString();
-    updates.date_played = now;
-    updates.confirmed_at = now;
-    updates.auto_confirm_at = null;
-  }
 
-  let query = supabase.from('matches').update(updates).eq('id', id);
-  if (expectedStatus !== undefined) {
-    query = query.eq('status', expectedStatus);
-    const { data, error } = await query.select().maybeSingle();
-    if (error) throw error;
-    return data ? toMatch(data) : null;
-  }
-
-  const { data, error } = await query.select().single();
+  const { data, error } = await supabase
+    .from('matches')
+    .update(updates)
+    .eq('id', id)
+    .eq('status', expectedStatus)
+    .select()
+    .maybeSingle();
   if (error) throw error;
-  return toMatch(data);
+  return data ? toMatch(data) : null;
 }
 
 /**
@@ -1486,10 +1465,7 @@ export async function resetMatchFields(id: string, expectedStatus: MatchStatus):
       status: 'scheduled' as MatchStatus,
       winner_id: null,
       submitter_id: null,
-      date_played: null,
-      auto_confirm_at: null,
-      confirmed_at: null,
-      finalized_at: null,
+      ...matchTimestampsFor(expectedStatus, 'scheduled'),
     })
     .eq('id', id)
     .eq('status', expectedStatus)
@@ -1685,10 +1661,9 @@ export async function updateMatchNotesIfUnchanged(
 }
 
 /**
- * A non-completing status change and its confirmation timing, written as one
- * row update. `undefined` leaves a field as stored; `null` clears it.
- * Completion goes through `updateMatchStatus` (it stamps date_played /
- * confirmed_at and is followed by finalize).
+ * A non-completing status change, written as one row update with the timestamps `matchTimestampsFor` gives the
+ * move. `undefined` leaves a field as stored; `null` clears it. Completion goes through `updateMatchStatus` (it is
+ * followed by finalize).
  */
 export interface MatchStatusTransition {
   /** Compare-and-set: the row is written only while it still has this status. */
@@ -1696,17 +1671,20 @@ export interface MatchStatusTransition {
   status: Exclude<MatchStatus, 'completed'>;
   winnerId?: string | null;
   submitterId?: string | null;
+  /** The auto-confirm deadline of a move into pending_confirmation (none when not given). */
   autoConfirmAt?: string | null;
-  confirmedAt?: string | null;
-  datePlayed?: string | null;
+  /**
+   * Legacy (removed in the next commit): keep confirmed_at and date_played as stored, as the admin game-change
+   * recount did.
+   */
+  keepResultTimestamps?: boolean;
 }
 
 /**
- * Change a match's status together with its winner, submitter and auto-confirm
- * timing in ONE conditional UPDATE (a PostgREST PATCH is a single statement),
- * so a failure can never leave the new status without its timer, or a stale
- * timer behind. Returns null when the row no longer has
- * `expectedStatus` (a concurrent writer moved it first); nothing is written then.
+ * Change a match's status together with its winner, submitter and timestamps in ONE conditional UPDATE (a PostgREST
+ * PATCH is a single statement), so a failure can never leave the new status without its timer, or a stale timer
+ * behind. Returns null when the row no longer has `expectedStatus` (a concurrent writer moved it first); nothing is
+ * written then.
  */
 export async function transitionMatchStatus(
   id: string,
@@ -1714,12 +1692,16 @@ export async function transitionMatchStatus(
 ): Promise<Match | null> {
   assertValidUuid(id, 'match id');
 
-  const updates: Record<string, unknown> = { status: transition.status, finalized_at: null };
+  const timestamps = matchTimestampsFor(transition.expectedStatus, transition.status, {
+    autoConfirmAt: transition.autoConfirmAt,
+  });
+  if (transition.keepResultTimestamps) {
+    delete timestamps.confirmed_at;
+    delete timestamps.date_played;
+  }
+  const updates: Record<string, unknown> = { status: transition.status, ...timestamps };
   if (transition.winnerId !== undefined) updates.winner_id = transition.winnerId;
   if (transition.submitterId !== undefined) updates.submitter_id = transition.submitterId;
-  if (transition.autoConfirmAt !== undefined) updates.auto_confirm_at = transition.autoConfirmAt;
-  if (transition.confirmedAt !== undefined) updates.confirmed_at = transition.confirmedAt;
-  if (transition.datePlayed !== undefined) updates.date_played = transition.datePlayed;
 
   const { data, error } = await supabase
     .from('matches')
@@ -1741,7 +1723,7 @@ export async function listMatchesReadyForAutoConfirm(
   const { data, error } = await supabase
     .from('matches')
     .select(MATCH_WITH_PLAYERS_SELECT)
-    .eq('status', 'pending_confirmation')
+    .eq('status', AUTO_CONFIRM_FROM)
     .not('auto_confirm_at', 'is', null)
     .lte('auto_confirm_at', nowIso)
     .order('auto_confirm_at', { ascending: true })
