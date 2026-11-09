@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
   getPicksByPool: vi.fn(),
   createDraftPick: vi.fn(),
-  updateDraftPoolStatus: vi.fn(),
+  completeLegacyPoolIfRunning: vi.fn(),
 }));
 vi.mock('@/lib/draft/rpc-errors', async () => {
   const actual = await vi.importActual<typeof import('@/lib/draft/rpc-errors')>('@/lib/draft/rpc-errors');

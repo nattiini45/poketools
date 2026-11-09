@@ -76,8 +76,17 @@ const DEFINITION_START = /CREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE|TRI
  * None of the draft migrations does either today.
  */
 export function functionBodyIn(sources: readonly { file: string; sql: string }[], name: string): string {
+  return functionDefinitionIn(sources, name).body;
+}
+
+/** As `functionBodyIn`, with the migration file that holds the latest definition. */
+export function functionDefinitionIn(
+  sources: readonly { file: string; sql: string }[],
+  name: string,
+): { file: string; body: string } {
   const anchor = new RegExp(`CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+public\\.${name}\\s*\\(`, 'g');
   let body: string | null = null;
+  let bodyFile = '';
   for (const { file, sql: raw } of sources) {
     // Cheap prefilter: only files that mention the function are stripped and scanned.
     if (!raw.includes(`public.${name}`)) continue;
@@ -89,21 +98,82 @@ export function functionBodyIn(sources: readonly { file: string; sql: string }[]
     const end = /\bEND\s*\$\$\s*;/.exec(rest);
     if (end === null) throw new Error(`${file}: public.${name} has no \`END $$;\` terminator`);
     body = rest.slice(0, end.index);
+    bodyFile = file;
     if (DEFINITION_START.test(body.slice(1))) {
       throw new Error(`${file}: another definition starts before public.${name}'s terminator`);
     }
   }
   if (body === null) throw new Error(`no migration defines public.${name}`);
-  return body;
+  return { file: bodyFile, body };
 }
 
 let migrationSources: { file: string; sql: string }[] | null = null;
 
-/** `functionBodyIn` over `supabase/migrations/*.sql` in file (timestamp) order, read once per run. */
-export function latestFunctionBody(name: string): string {
+/** `supabase/migrations/*.sql` in file (timestamp) order, read once per run. */
+export function migrationSourceList(): readonly { file: string; sql: string }[] {
   migrationSources ??= readdirSync(MIGRATIONS)
     .filter((f) => f.endsWith('.sql'))
     .sort()
     .map((file) => ({ file, sql: readFileSync(path.join(MIGRATIONS, file), 'utf8') }));
-  return functionBodyIn(migrationSources, name);
+  return migrationSources;
+}
+
+/** `functionBodyIn` over `supabase/migrations/*.sql` in file (timestamp) order. */
+export function latestFunctionBody(name: string): string {
+  return functionBodyIn(migrationSourceList(), name);
+}
+
+/** `functionDefinitionIn` over `supabase/migrations/*.sql` in file (timestamp) order. */
+export function latestFunctionDefinition(name: string): { file: string; body: string } {
+  return functionDefinitionIn(migrationSourceList(), name);
+}
+
+/**
+ * The text of the latest definition of `public.<name>` (comments stripped) up to the next definition or `DO`
+ * block, or the end of its file: a superset of the body that needs no terminator, for scans that must see every
+ * function (`LANGUAGE sql` bodies end in a bare `$$;`). It can include statements that follow the function in
+ * its file, so it only suits "this text is absent" checks and attributions that a test then pins.
+ */
+export function latestFunctionRegion(name: string): { file: string; text: string } {
+  const anchor = new RegExp(`CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+public\\.${name}\\s*\\(`, 'g');
+  let region: { file: string; text: string } | null = null;
+  for (const { file, sql: raw } of migrationSourceList()) {
+    if (!raw.includes(`public.${name}`)) continue;
+    const sql = stripComments(raw);
+    const definitions = [...sql.matchAll(anchor)];
+    if (definitions.length === 0) continue;
+    const rest = sql.slice(definitions[definitions.length - 1].index ?? 0);
+    const next = new RegExp(DEFINITION_START.source, 'g');
+    next.lastIndex = 1;
+    const end = next.exec(rest);
+    region = { file, text: end === null ? rest : rest.slice(0, end.index) };
+  }
+  if (region === null) throw new Error(`no migration defines public.${name}`);
+  return region;
+}
+
+/**
+ * Every `public.<name>` function the migrations create whose name matches `filter` and that no later
+ * `DROP FUNCTION` removed (a drop in the same file as the latest definition counts by its position).
+ */
+export function liveFunctionNames(filter: RegExp): string[] {
+  const events = new Map<string, { defined: number; dropped: number }>();
+  migrationSourceList().forEach(({ sql: raw }, fileIndex) => {
+    const sql = stripComments(raw);
+    const at = (index: number | undefined) => fileIndex * 1e9 + (index ?? 0);
+    for (const m of sql.matchAll(/CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+public\.(\w+)\s*\(/g)) {
+      const e = events.get(m[1]) ?? { defined: -1, dropped: -1 };
+      e.defined = at(m.index);
+      events.set(m[1], e);
+    }
+    for (const m of sql.matchAll(/DROP\s+FUNCTION\s+(?:IF\s+EXISTS\s+)?public\.(\w+)\b/g)) {
+      const e = events.get(m[1]) ?? { defined: -1, dropped: -1 };
+      e.dropped = at(m.index);
+      events.set(m[1], e);
+    }
+  });
+  return [...events.entries()]
+    .filter(([name, e]) => filter.test(name) && e.defined > e.dropped)
+    .map(([name]) => name)
+    .sort();
 }

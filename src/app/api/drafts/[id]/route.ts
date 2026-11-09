@@ -17,6 +17,7 @@ import { expireDraftReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { DraftPool, DraftPoolWithDetails } from '@/types/draft';
 import { isDeletableQueuePhase } from '@/types/draft-queue';
+import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import { draftPoolUpdateSchema, formatZodErrors } from '@/lib/validation';
 
 interface RouteParams {
@@ -51,6 +52,9 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
  * (use /start, /end, /pause instead). A legacy pool of a point-buy season is never
  * activated: `in_progress` answers `409 POOL_ENGINE_LEGACY_EPB`, because its picks would
  * bypass the queue engine's completability gate (docs/draft-room.md, "Completability").
+ * The move must be one `draftPoolStatusMachine` allows an admin (`409 state_transition_invalid`
+ * otherwise); asking for the current status changes nothing and answers the pool. The UPDATE is
+ * guarded with the status read here, so a pool that moved on in between answers `409 POOL_STATUS_CHANGED`.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -70,13 +74,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // Queue-engine pools move through phases only via their RPC routes (start/end/void);
     // a bare status write would leave phase and status disagreeing.
     const current = await getDraftPoolById(id);
-    if (current?.engine === 'queue') throw new DraftRuleError('INVALID_CONFIG', { field: 'status' });
-    if (current && body.status === 'in_progress') {
+    if (!current) throw new DraftRuleError('POOL_NOT_FOUND');
+    if (current.engine === 'queue') throw new DraftRuleError('INVALID_CONFIG', { field: 'status' });
+    if (body.status === 'in_progress') {
       const season = await getSeasonById(current.season_id);
       if (season && isEvolutionPointBuy(season.format_type)) throw new DraftRuleError('POOL_ENGINE_LEGACY_EPB');
     }
+    if (current.status === body.status) {
+      return NextResponse.json<ApiResult<DraftPool>>({ success: true, data: current });
+    }
+    draftPoolStatusMachine.assertTransition(current.status, body.status, 'admin');
 
-    const pool = await updateDraftPoolStatus(id, body.status);
+    const pool = await updateDraftPoolStatus(id, current.status, body.status);
+    if (!pool) throw new DraftRuleError('POOL_STATUS_CHANGED');
     expireDraftReads(pool.season_id);
     return NextResponse.json<ApiResult<DraftPool>>({ success: true, data: pool });
   } catch (err) {
