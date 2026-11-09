@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
-import { createVisiblePoller, type PollOutcome, type PollTick } from '@/lib/draft/use-visible-poll';
+import { createVisiblePoller, pollOutcomeForPool, type PollOutcome, type PollTick } from '@/lib/draft/use-visible-poll';
 import { TURN_WATCH_INTERVAL_MS } from '@/lib/draft-ui/constants';
 import type { MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
 import type { MyTurnResult } from '@/components/draft-tool/data-source';
@@ -65,7 +65,7 @@ export function createTurnWatchTick(deps: TurnWatchTickDeps): PollTick {
     if (result.kind === 'error') return 'live';
     const dto = result.dto;
     deps.onResult?.(dto);
-    return dto.status === 'complete' ? 'complete' : 'live';
+    return pollOutcomeForPool(dto);
   };
 }
 
