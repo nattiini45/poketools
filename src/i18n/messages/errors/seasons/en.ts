@@ -130,6 +130,8 @@ export default {
   format_not_attached:
     'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
   format_nothing_attached: 'No format is attached to this league.',
+  // Another admin switched the league's engine between the read and the write (409).
+  format_engine_changed: "The league's format engine was changed in the meantime. Reload the page and try again.",
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
   // A replace removes a phase that teams still point to (409).
   format_phases_in_use: 'Teams still point to a phase that this format change would remove. Remove those teams first.',
