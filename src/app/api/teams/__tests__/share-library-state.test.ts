@@ -38,6 +38,7 @@ import {
   disableTeamShareToken,
 } from '@/lib/supabase/queries/teams';
 import { teamRowWithShareSecrets } from '@/lib/team/__tests__/private-team-fields';
+import { TeamChangedError } from '@/lib/team/completed-match-lock';
 
 const TEAM_ID = '00000000-0000-4000-8000-000000000001';
 const TOKEN_A = '00000000-0000-4000-8000-0000000000aa';
@@ -90,6 +91,16 @@ describe('share link (characterization)', () => {
 
     expect(res.status).toBe(200);
     expect(disableTeamShareToken).toHaveBeenCalledWith(TEAM_ID);
+  });
+
+  it('a link that changed in between answers 409 team_changed (team.share)', async () => {
+    vi.mocked(getTeamById).mockResolvedValue({ id: TEAM_ID, player_id: 'player-1' } as never);
+    vi.mocked(setTeamShareToken).mockRejectedValue(new TeamChangedError());
+
+    const res = await createShare(jsonRequest({ teamId: TEAM_ID }));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ success: false, code: 'team_changed' });
   });
 
   it('an admin manages the link of another player', async () => {
@@ -153,6 +164,25 @@ describe('library publication (characterization)', () => {
     vi.mocked(getTeamById).mockResolvedValueOnce({ id: TEAM_ID, player_id: 'player-1', library_published_at: null } as never);
     expect((await unpublish(jsonRequest({ teamId: TEAM_ID }, 'DELETE'))).status).toBe(200);
     expect(unpublishTeamFromLibrary).toHaveBeenCalledTimes(2);
+  });
+
+  it('guards the write with the publication state it read (team.library)', async () => {
+    vi.mocked(getTeamById).mockResolvedValue({ id: TEAM_ID, player_id: 'player-1', library_published_at: '2026-10-01T00:00:00Z' } as never);
+    vi.mocked(publishTeamToLibrary).mockResolvedValue({ id: TEAM_ID, player_id: 'player-1', library_published_at: '2026-11-01T00:00:00Z' } as never);
+
+    await publish(jsonRequest({ teamId: TEAM_ID, title: 'New' }));
+
+    expect(publishTeamToLibrary).toHaveBeenCalledWith(TEAM_ID, { title: 'New', description: undefined, tags: undefined }, '2026-10-01T00:00:00Z');
+  });
+
+  it('a publication that changed in between answers 409 team_changed', async () => {
+    vi.mocked(getTeamById).mockResolvedValue({ id: TEAM_ID, player_id: 'player-1', library_published_at: null } as never);
+    vi.mocked(publishTeamToLibrary).mockRejectedValue(new TeamChangedError());
+
+    const res = await publish(jsonRequest({ teamId: TEAM_ID, title: 'Rain' }));
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ success: false, code: 'team_changed' });
   });
 
   it('refuses another player (403) without writing', async () => {

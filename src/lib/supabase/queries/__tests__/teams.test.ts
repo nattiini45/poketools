@@ -54,7 +54,7 @@ import {
   TEAM_COLUMNS,
 } from '../teams';
 import { ilikeAnyOf } from '../../postgrest-filter';
-import { TeamMatchCompletedError } from '@/lib/team/completed-match-lock';
+import { TeamChangedError, TeamMatchCompletedError } from '@/lib/team/completed-match-lock';
 import type { PokemonSet, Team, TeamImportSource } from '@/types/team';
 
 // ── Test fixtures ──────────────────────────────────────────────────
@@ -495,9 +495,9 @@ describe('team writes on a row linked to a completed match', () => {
   });
 
   it('deleteTeam: the trigger refusal becomes TeamMatchCompletedError', async () => {
-    mockBuilder.eq
-      .mockReturnValueOnce(mockBuilder) // getTeamById .eq('id')
-      .mockReturnValue({ error: COMPLETED_MATCH_REFUSAL }); // delete .eq('id')
+    mockBuilder.select
+      .mockReturnValueOnce(mockBuilder) // getTeamById .select(TEAM_COLUMNS)
+      .mockReturnValueOnce({ data: null, error: COMPLETED_MATCH_REFUSAL }); // delete ... .select('id')
     mockBuilder.maybeSingle.mockResolvedValueOnce({ data: LINKED_ROW, error: null });
 
     await expect(deleteTeam('team1')).rejects.toBeInstanceOf(TeamMatchCompletedError);
@@ -554,16 +554,26 @@ describe('team writes on a row linked to a completed match', () => {
 describe('deleteTeam', () => {
   it('deletes an unlocked team', async () => {
     // getTeamById chain: from -> select -> eq -> maybeSingle
-    // delete chain:      from -> delete -> eq -> (terminal)
-    // First eq call (getTeamById) must return mockBuilder so .maybeSingle is available
-    // Second eq call (delete) is terminal
-    mockBuilder.eq
-      .mockReturnValueOnce(mockBuilder)   // getTeamById .eq('id')
-      .mockReturnValue({ error: null });  // delete .eq('id')
+    // delete chain:      from -> delete -> eq('id') -> eq('locked', false) -> select('id') (terminal)
+    mockBuilder.select
+      .mockReturnValueOnce(mockBuilder) // getTeamById .select(TEAM_COLUMNS)
+      .mockReturnValueOnce({ data: [{ id: 'team1' }], error: null }); // delete ... .select('id')
     mockBuilder.maybeSingle.mockResolvedValueOnce({ data: TEAM_ROW, error: null });
 
     await deleteTeam('team1');
     expect(mockBuilder.delete).toHaveBeenCalled();
+    expect(mockBuilder.eq).toHaveBeenCalledWith('locked', false);
+  });
+
+  it('a row locked or deleted after the read deletes nothing and answers TeamChangedError (409 team_changed)', async () => {
+    mockBuilder.select
+      .mockReturnValueOnce(mockBuilder)
+      .mockReturnValueOnce({ data: [], error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: TEAM_ROW, error: null });
+
+    const err = await deleteTeam('team1').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(TeamChangedError);
+    expect(err).toMatchObject({ code: 'team_changed', statusCode: 409 });
   });
 
   it('throws when team is locked', async () => {
@@ -759,7 +769,8 @@ describe('share link queries', () => {
   });
 
   it('setTeamShareToken returns the TeamShareLink (the only token carrier)', async () => {
-    mockBuilder.single.mockResolvedValueOnce({
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: null }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({
       data: { id: 'team1', share_token: 'new-token', share_enabled_at: '2026-10-18T00:00:00Z' },
       error: null,
     });
@@ -771,7 +782,8 @@ describe('share link queries', () => {
   });
 
   it('setTeamShareToken throws when the row comes back without a link (no silent empty URL)', async () => {
-    mockBuilder.single.mockResolvedValueOnce({
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: null }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({
       data: { id: 'team1', share_token: null, share_enabled_at: null },
       error: null,
     });
@@ -779,8 +791,48 @@ describe('share link queries', () => {
   });
 
   it('setTeamShareToken throws on database error', async () => {
-    mockBuilder.single.mockResolvedValueOnce({ data: null, error: new Error('update err') });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: null }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: new Error('update err') });
     await expect(setTeamShareToken('team1')).rejects.toThrow('update err');
+  });
+
+  it('setTeamShareToken enables a link only where none is set (off -> on), guarded with share_token IS NULL', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: null }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({
+      data: { id: 'team1', share_token: 'new-token', share_enabled_at: '2026-10-18T00:00:00Z' },
+      error: null,
+    });
+
+    await setTeamShareToken('team1');
+
+    expect(mockBuilder.is).toHaveBeenCalledWith('share_token', null);
+  });
+
+  it('setTeamShareToken rotates a link guarded with the token it read (on -> on)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: 'old-token' }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({
+      data: { id: 'team1', share_token: 'new-token', share_enabled_at: '2026-10-18T00:00:00Z' },
+      error: null,
+    });
+
+    const link = await setTeamShareToken('team1');
+
+    expect(mockBuilder.eq).toHaveBeenCalledWith('share_token', 'old-token');
+    expect(link.share_token).toBe('new-token');
+  });
+
+  it('setTeamShareToken answers TeamChangedError when the link changed in between (no dead token handed out)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { share_token: 'old-token' }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(setTeamShareToken('team1')).rejects.toBeInstanceOf(TeamChangedError);
+  });
+
+  it('setTeamShareToken answers TeamChangedError for a team that is gone', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: null, error: null });
+
+    await expect(setTeamShareToken('team1')).rejects.toBeInstanceOf(TeamChangedError);
+    expect(mockBuilder.update).not.toHaveBeenCalled();
   });
 
   it('disableTeamShareToken clears both columns and returns nothing', async () => {

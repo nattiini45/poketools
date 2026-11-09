@@ -250,9 +250,9 @@ A ruleset is a **definition** with immutable, numbered **versions** (Ruleset Stu
 | match_id | UUID | nullable FK → matches.id; partial unique on `(player_id, match_id) WHERE match_id IS NOT NULL` |
 | pokemon | Text | JSON blob — full sets |
 | import_source | Select | pokepastes / manual / ps_text |
-| locked | Checkbox | manual lock flag (PATCH/DELETE refuse a locked row for its owner; no code path sets it today). A row linked to a **completed** match is locked independently by the `teams_completed_match_lock` trigger (see §7) |
+| locked | Checkbox | manual lock flag (PATCH refuses a locked row for everyone, DELETE for its owner; no code path sets it today). A row linked to a **completed** match is locked independently by the `teams_completed_match_lock` trigger (see §7). All write locks: state machine `team.roster` (`docs/state-machines.md`) |
 | draft_pool | Relation → DraftPools | nullable; the draft pool a draft-league team was built from |
-| is_draft_team | Checkbox | true for a team built from a draft pool |
+| is_draft_team | Checkbox | meant to be true for a team built from a draft pool; no code path writes it (nor draft_pool_id) today |
 | share_token | UUID | nullable; unique; ungessable UUID v4 for public share links |
 | share_enabled_at | Timestamp | nullable; set when share link is minted |
 | library_published_at | Timestamp | nullable; set when team is published to the public library |
