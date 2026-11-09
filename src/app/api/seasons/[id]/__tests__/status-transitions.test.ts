@@ -86,3 +86,25 @@ describe('PATCH /api/seasons/[id]: every admin status move is written', () => {
     expect(vi.mocked(updateSeason).mock.calls[0][1]).toEqual({ status });
   });
 });
+
+describe('PATCH /api/seasons/[id]: the status write is a compare-and-set on the status read', () => {
+  it('guards a status write with the status read, and leaves other writes unguarded', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(season('active') as never);
+    await patch({ status: 'completed' });
+    expect(vi.mocked(updateSeason).mock.calls[0][2]).toEqual({ from: 'active' });
+
+    vi.mocked(updateSeason).mockClear();
+    await patch({ name: 'Renamed' });
+    expect(vi.mocked(updateSeason).mock.calls[0]).toHaveLength(2);
+  });
+
+  it('answers 409 season_status_changed when the league moved in between', async () => {
+    const { UserFacingError } = await import('@/lib/api/user-facing-error');
+    vi.mocked(getSeasonById).mockResolvedValue(season('upcoming') as never);
+    vi.mocked(updateSeason).mockRejectedValue(new UserFacingError('changed', { code: 'season_status_changed', status: 409 }));
+    const res = await patch({ status: 'completed' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('season_status_changed');
+  });
+});
+

@@ -208,4 +208,5 @@ export default defineDe<typeof en>()({
   substitute_format_seat_kept:
     'Der ausscheidende Spieler bleibt in {phases}, deshalb bleiben seine Formatdaten (Verknüpfungen, Gegenstände, Wahlen, Attribute, Fortschritt) bei ihm. Sie wechseln, sobald er aus der letzten dieser Phasen ausgewechselt wird.',
   PHASE_ROSTER_REASON_REQUIRED: 'Eine erzwungene Änderung der Teilnehmerliste einer gestarteten Phase des Formats braucht eine Begründung mit 1 bis 500 Zeichen.',
+  season_status_changed: 'Der Status dieser Liga hat sich inzwischen geändert. Lade die Seite neu und versuche es erneut.',
 });

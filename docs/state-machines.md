@@ -11,6 +11,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 ## Machines
 
 - [Match](#match) — `matches.status (enum match_status)`
+- [League](#league) — `seasons.status (enum season_status)`
 - [Tournament and league phase](#tournament-and-league-phase) — `tournaments.status (enum tournament_status)`
 
 ## Match
@@ -55,6 +56,34 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## League
+
+- **Id:** `season`
+- **State lives in:** seasons.status (enum season_status)
+- **Module doc:** `docs/season.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A league from set-up to its end. The first round or bracket of a phase starts it; an admin sets any status from the status control. Nothing completes a league automatically, and a completed league leaves its phases as they are. Closed (isSeasonClosed) means completed or archived.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  upcoming --> completed: complete (admin)
+  active --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  active --> upcoming: reset (admin)
+  completed --> upcoming: reset (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `src/app/api/seasons/[id]/route.ts`<br>`src/lib/season/start-season.ts`<br>`src/lib/dev-seed/seed.ts` | The first round (generate-round) or bracket (generate-bracket) of a phase, as a compare-and-set on upcoming; or the admin status control. A custom league needs an attached format (FORMAT_NOT_ATTACHED). |
+| `complete` | `upcoming`, `active` | `completed` | admin | `src/app/api/seasons/[id]/route.ts` | The admin closes the league; its phases keep their status. |
+| `reopen` | `completed` | `active` | admin | `src/app/api/seasons/[id]/route.ts` |  |
+| `reset` | `active`, `completed` | `upcoming` | admin | `src/app/api/seasons/[id]/route.ts` | Offered by the admin status control. A league with phases past upcoming or with rounds still counts as started (isSeasonStarted). |
 
 ## Tournament and league phase
 
