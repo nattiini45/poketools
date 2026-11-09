@@ -63,8 +63,13 @@ describe('DashboardContent: result actions', () => {
     expect(html).not.toContain(SUBMIT);
   });
 
-  it('pending confirmation of the viewer\'s own result: the confirm call to action is shown', () => {
+  it('pending confirmation of the viewer\'s own result: no confirm call to action (the confirm page refuses it)', () => {
     const html = render(match('pending_confirmation', { winner_id: 'p1', submitter_id: 'p1' }));
+    expect(html).not.toContain(CONFIRM);
+  });
+
+  it('pending confirmation of an admin\'s own result: they may confirm it', () => {
+    const html = render(match('pending_confirmation', { winner_id: 'p1', submitter_id: 'p1' }), { is_admin: true });
     expect(html).toContain(CONFIRM);
   });
 

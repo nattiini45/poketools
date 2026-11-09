@@ -287,8 +287,9 @@ export default function DashboardContent({
                     const isP1 = m.player_1_id === playerId;
                     const opponentName = isP1 ? m.player_2_name : m.player_1_name;
                     const isUpcomingRound = m.round_status === 'pending';
-                    const canAct = !isUpcomingRound && availableMatchActions(m, viewer).has('record_game');
-                    const canConfirm = m.status === 'pending_confirmation';
+                    const actions = availableMatchActions(m, viewer);
+                    const canAct = !isUpcomingRound && actions.has('record_game');
+                    const canConfirm = actions.has('confirm');
                     const scheduledLabel = m.scheduled_at ? formatter.instant(m.scheduled_at, 'dateTime') : null;
                     return (
                       <Card key={m.id} variant="outlined" padding="sm" hover>
