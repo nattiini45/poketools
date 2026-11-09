@@ -1,4 +1,6 @@
 import type { MachineSpec } from './machine';
+import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
+import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
 import { matchMachine } from '@/lib/tournament/match-state';
 
 /**
@@ -7,4 +9,8 @@ import { matchMachine } from '@/lib/tournament/match-state';
  * each spec's structure. A new machine is added here in the same change that
  * defines it.
  */
-export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [matchMachine.spec];
+export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
+  matchMachine.spec,
+  castSessionMachine.spec,
+  castStudioSaveMachine.spec,
+];

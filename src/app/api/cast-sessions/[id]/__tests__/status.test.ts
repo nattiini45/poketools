@@ -16,12 +16,17 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/supabase/queries/cast-sessions', () => ({
   getCastSessionById: vi.fn(),
   updateCastSession: vi.fn(),
+  updateCastSessionFromStatus: vi.fn(),
   deleteCastSession: vi.fn(),
 }));
 
 import { PATCH } from '../route';
 import { requireCreator } from '@/lib/auth/helpers';
-import { getCastSessionById, updateCastSession } from '@/lib/supabase/queries/cast-sessions';
+import {
+  getCastSessionById,
+  updateCastSession,
+  updateCastSessionFromStatus,
+} from '@/lib/supabase/queries/cast-sessions';
 
 const ID = '9f2cf170-09cd-49c8-81a4-9898aefdcd21';
 
@@ -80,6 +85,10 @@ beforeEach(() => {
     ...session('draft'),
     ...(update.status ? { status: update.status } : {}),
   }));
+  vi.mocked(updateCastSessionFromStatus).mockImplementation(async (_id, update) => ({
+    ...session('draft'),
+    ...(update.status ? { status: update.status } : {}),
+  }));
 });
 
 describe('PATCH /api/cast-sessions/[id] status', () => {
@@ -94,7 +103,31 @@ describe('PATCH /api/cast-sessions/[id] status', () => {
     const res = await patch({ status: to });
     expect(res.status).toBe(200);
     expect((await res.json()).data.status).toBe(to);
-    expect(vi.mocked(updateCastSession).mock.calls[0][1]).toEqual({ status: to });
+    expect(updateCastSessionFromStatus).toHaveBeenCalledWith(ID, { status: to }, from);
+    expect(updateCastSession).not.toHaveBeenCalled();
+  });
+
+  it('refuses archived → live: an archived session goes back to draft first', async () => {
+    vi.mocked(getCastSessionById).mockResolvedValue(session('archived'));
+    const res = await patch({ status: 'live', name: 'Renamed' });
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.code).toBe('state_transition_invalid');
+    expect(json.params).toEqual({ machine: 'cast_session', from: 'archived', to: 'live' });
+    expect(updateCastSession).not.toHaveBeenCalled();
+    expect(updateCastSessionFromStatus).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 cast_session_changed when the status moved between the read and the write', async () => {
+    vi.mocked(getCastSessionById).mockResolvedValue(session('draft'));
+    vi.mocked(updateCastSessionFromStatus).mockResolvedValue(null);
+    const res = await patch({ status: 'live' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({
+      success: false,
+      error: 'Session changed in the meantime',
+      code: 'cast_session_changed',
+    });
   });
 
   it('an admin moves another caster’s session', async () => {
