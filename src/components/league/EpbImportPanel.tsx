@@ -17,6 +17,7 @@ import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
 import type { ReconciliationReport } from '@/lib/draft/reconciliation-report';
 import { countsByDisplayGroup } from '@/lib/evolution/point-buy-display';
+import { useSubmitPhase } from '@/lib/ui/use-submit-phase';
 
 interface EpbImportPanelProps {
   seasonId: string;
@@ -47,6 +48,11 @@ const MATCHUP_SHEETS = epbPack.workbook.teamRoles.sheets;
 /** A failed import keeps the API body; a local failure keeps a message key. */
 type ImportError = { api: ApiErrorLike } | { key: 'selectFile' | 'failed' };
 
+/** The identity of a picked file: a different file, or the same one picked again after a change, is a new import. */
+function fileKey(file: File | null): string {
+  return file ? [file.name, file.size, file.lastModified].join(':') : '';
+}
+
 function failure(json: unknown): ImportError {
   const api = toApiErrorLike(json);
   return api.error || api.code ? { api } : { key: 'failed' };
@@ -60,14 +66,15 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
   const [pbVersion, setPbVersion] = useState('1');
   const [pbBindSeason, setPbBindSeason] = useState(true);
   const [pbReport, setPbReport] = useState<ImportReport | null>(null);
-  const [pbBusy, setPbBusy] = useState(false);
   const [pbError, setPbError] = useState<ImportError | null>(null);
 
   const [rolesFile, setRolesFile] = useState<File | null>(null);
   const [rolesReport, setRolesReport] = useState<ImportReport | null>(null);
   const [rolesImported, setRolesImported] = useState(0);
-  const [rolesBusy, setRolesBusy] = useState(false);
   const [rolesError, setRolesError] = useState<ImportError | null>(null);
+  // A live import is final for its file and options; a dry run, a failure or new options leave the import open.
+  const pbSubmit = useSubmitPhase([fileKey(pbFile), pbName, pbVersion, pbBindSeason].join('|'));
+  const rolesSubmit = useSubmitPhase(fileKey(rolesFile));
 
   const errorText = (error: ImportError) =>
     'api' in error ? apiErrorText(error.api) : t(`import.errors.${error.key}`);
@@ -77,30 +84,31 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
       setPbError({ key: 'selectFile' });
       return;
     }
-    setPbBusy(true);
-    setPbError(null);
-    setPbReport(null);
+    await pbSubmit.run(async () => {
+      setPbError(null);
+      setPbReport(null);
 
-    const form = new FormData();
-    form.append('file', pbFile);
-    form.append('name', pbName);
-    form.append('version', pbVersion);
-    if (pbBindSeason) form.append('season_id', seasonId);
-    if (dryRun) form.append('dry_run', 'true');
+      const form = new FormData();
+      form.append('file', pbFile);
+      form.append('name', pbName);
+      form.append('version', pbVersion);
+      if (pbBindSeason) form.append('season_id', seasonId);
+      if (dryRun) form.append('dry_run', 'true');
 
-    try {
-      const res = await fetch('/api/admin/import/point-buy', { method: 'POST', body: form });
-      const json = await res.json();
-      if (json.success) {
-        setPbReport(json.data.report);
-      } else {
+      try {
+        const res = await fetch('/api/admin/import/point-buy', { method: 'POST', body: form });
+        const json = await res.json();
+        if (json.success) {
+          setPbReport(json.data.report);
+          return dryRun ? 'idle' : 'done';
+        }
         setPbError(failure(json));
+        return 'failed';
+      } catch {
+        setPbError({ key: 'failed' });
+        return 'failed';
       }
-    } catch {
-      setPbError({ key: 'failed' });
-    } finally {
-      setPbBusy(false);
-    }
+    });
   };
 
   const runRolesImport = async (dryRun: boolean) => {
@@ -108,28 +116,29 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
       setRolesError({ key: 'selectFile' });
       return;
     }
-    setRolesBusy(true);
-    setRolesError(null);
-    setRolesReport(null);
+    await rolesSubmit.run(async () => {
+      setRolesError(null);
+      setRolesReport(null);
 
-    const form = new FormData();
-    form.append('file', rolesFile);
-    if (dryRun) form.append('dry_run', 'true');
+      const form = new FormData();
+      form.append('file', rolesFile);
+      if (dryRun) form.append('dry_run', 'true');
 
-    try {
-      const res = await fetch('/api/admin/import/team-roles', { method: 'POST', body: form });
-      const json = await res.json();
-      if (json.success) {
-        setRolesReport(json.data.report);
-        setRolesImported(json.data.imported ?? 0);
-      } else {
+      try {
+        const res = await fetch('/api/admin/import/team-roles', { method: 'POST', body: form });
+        const json = await res.json();
+        if (json.success) {
+          setRolesReport(json.data.report);
+          setRolesImported(json.data.imported ?? 0);
+          return dryRun ? 'idle' : 'done';
+        }
         setRolesError(failure(json));
+        return 'failed';
+      } catch {
+        setRolesError({ key: 'failed' });
+        return 'failed';
       }
-    } catch {
-      setRolesError({ key: 'failed' });
-    } finally {
-      setRolesBusy(false);
-    }
+    });
   };
 
   const bold = (chunks: ReactNode) => <strong>{chunks}</strong>;
@@ -186,11 +195,11 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
         </div>
 
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => runPointBuyImport(true)} disabled={pbBusy}>
+          <Button variant="secondary" onClick={() => runPointBuyImport(true)} disabled={!pbSubmit.canSubmit}>
             {t('import.dryRun')}
           </Button>
-          <Button onClick={() => runPointBuyImport(false)} disabled={pbBusy}>
-            {pbBusy ? t('import.importing') : t('import.import')}
+          <Button onClick={() => runPointBuyImport(false)} disabled={!pbSubmit.canSubmit}>
+            {pbSubmit.phase === 'submitting' ? t('import.importing') : t('import.import')}
           </Button>
         </div>
 
@@ -213,11 +222,11 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
         />
 
         <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => runRolesImport(true)} disabled={rolesBusy}>
+          <Button variant="secondary" onClick={() => runRolesImport(true)} disabled={!rolesSubmit.canSubmit}>
             {t('import.dryRun')}
           </Button>
-          <Button onClick={() => runRolesImport(false)} disabled={rolesBusy}>
-            {rolesBusy ? t('import.importing') : t('import.import')}
+          <Button onClick={() => runRolesImport(false)} disabled={!rolesSubmit.canSubmit}>
+            {rolesSubmit.phase === 'submitting' ? t('import.importing') : t('import.import')}
           </Button>
         </div>
 

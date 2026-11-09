@@ -10,12 +10,40 @@ Each machine below is a column, timestamp or flag combination that moves through
 
 ## Machines
 
+- [Form submission](#form-submission) — `client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)`
 - [Visible poller](#visible-poller) — `client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)`
 - [Draft room armed confirm](#draft-room-armed-confirm) — `client: armedConfirmReducer phase in ArmedConfirmDialog`
 - [Draft room pick dialog](#draft-room-pick-dialog) — `client: pickFlowReducer state (open, submitting) in DraftToolClient`
 - [Match](#match) — `matches.status (enum match_status)`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
+
+## Form submission
+
+- **Id:** `client.submit_phase`
+- **State lives in:** client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)
+- **States:** `idle`, `submitting`, `done`, `failed`
+- **Actors:** `viewer`, `request`
+
+One submission at a time. A failure stays retryable; a success that navigates away is final, so a second click while the next page loads cannot create the same tournament or league twice.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> submitting: submit (viewer)
+  failed --> submitting: submit (viewer)
+  submitting --> done: succeed (request)
+  submitting --> idle: settle (request)
+  submitting --> failed: fail (request)
+  done --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `submit` | `idle`, `failed` | `submitting` | viewer | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` |  |
+| `succeed` | `submitting` | `done` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A create that navigates, a live import. |
+| `settle` | `submitting` | `idle` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A success that keeps the form open: an edit save, a dry run. |
+| `fail` | `submitting` | `failed` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | The form shows the error; a retry is a new submit. |
 
 ## Visible poller
 
