@@ -52,3 +52,16 @@ describe('AI artifact settle writes', () => {
     await expect(settle('completed')).rejects.toThrow('boom');
   });
 });
+
+describe('AI artifact settle compare-and-set (ai_artifact.status)', () => {
+  it.each(cases)('%s: settles only a row that is still pending and reports it', async (_table, settle) => {
+    await expect(settle('completed')).resolves.toBe(true);
+    expect(builder.in).toHaveBeenCalledWith('status', ['pending']);
+    expect(builder.select).toHaveBeenCalledWith('id');
+  });
+
+  it.each(cases)('%s: reports false when the row was deleted or replaced meanwhile', async (_table, settle) => {
+    builder.result = { data: [], error: null };
+    await expect(settle('failed')).resolves.toBe(false);
+  });
+});

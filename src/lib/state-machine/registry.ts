@@ -1,4 +1,5 @@
 import type { MachineSpec } from './machine';
+import { aiArtifactMachine } from '@/lib/ai/artifact-state';
 import { matchMachine } from '@/lib/tournament/match-state';
 import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
@@ -11,6 +12,7 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  aiArtifactMachine.spec,
   noteModerationMachine.spec,
   noteReportMachine.spec,
 ];

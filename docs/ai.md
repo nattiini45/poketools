@@ -66,6 +66,9 @@ src/lib/ai/
   3. Parse/merge response and persist in report/analysis tables
 - **Output**: Stored AI analyses/reports + downstream notifications/revalidation
 
+### Stored artifact lifecycle
+`match_analyses`, `match_prep_analyses` and `tournament_reports` share one state machine, `aiArtifactMachine` (`src/lib/ai/artifact-state.ts`, section "AI artifact" in `docs/state-machines.md`): absent → pending → completed | failed. A generation inserts a pending row and settles it through `updateMatchAnalysis` / `updateMatchPrepAnalysis` / `updateTournamentReport`, which all go through `settleAiArtifact` (`src/lib/supabase/queries/ai-artifacts.ts`): `UPDATE … WHERE id = ? AND status = 'pending'` with a row-count check. A settle that matches no row (a forced regenerate or a match reset deleted the row while the generation ran) writes nothing, logs `ai/artifact` at warn level and returns false; the routes' responses do not change. Regenerating is delete-then-insert, never an UPDATE back to pending. A new writer goes through the same helper.
+
 ## Dependencies
 - **External Libraries**: `@anthropic-ai/sdk`
 - **Internal Modules**:
