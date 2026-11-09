@@ -6,9 +6,11 @@ import { tournamentCreateSchema, formatZodErrors } from '@/lib/validation';
 import {
   listTournaments,
   listArchivedTournaments,
+  listTournamentsByIds,
   getStagesBySeasonId,
   createTournament,
 } from '@/lib/supabase/queries/tournaments';
+import { getAdminScope } from '@/lib/auth/admin-scope';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireTournamentReads } from '@/lib/revalidation';
@@ -16,7 +18,9 @@ import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
 import type { TournamentWithDetails } from '@/types/tournament';
 
-// Public — no auth required (archived=true requires admin)
+// Public — no auth required (archived=true requires admin and lists only the
+// archived standalone tournaments the caller may administer: all for a site
+// admin, a resource admin's own otherwise)
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -24,8 +28,10 @@ export async function GET(request: NextRequest) {
     const archived = searchParams.get('archived') === 'true';
 
     if (archived) {
-      await requireAnyAdmin();
-      const tournaments = await listArchivedTournaments();
+      const scope = await getAdminScope(await requireAnyAdmin());
+      const tournaments = scope.tournamentIds === null
+        ? await listArchivedTournaments()
+        : await listTournamentsByIds(scope.tournamentIds, { archived: true, standaloneOnly: true });
       return NextResponse.json<ApiResult<TournamentWithDetails[]>>({
         success: true,
         data: tournaments,

@@ -497,11 +497,12 @@
       "expires": ["expireSeasonReads"],
       "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create"],
       "emits": [],
-      "importFingerprint": "f74e122b97e2488e",
-      "importFiles": 226,
+      "importFingerprint": "198fc32b1e12a6ac",
+      "importFiles": 227,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
+        "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "83dcda0530f3e571", "files": 78 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "15d7b742f293570f", "files": 12 },
@@ -517,7 +518,11 @@
         "src/lib/season/settings-guards.ts": { "names": ["assertSeasonDateRange"], "closure": "ac28b0fe0cac698f", "files": 2 },
         "src/lib/supabase/queries/point-buy-lists.ts": { "names": ["bindSeasonToList", "getActiveListVersion"], "closure": "c9268583a73b376c", "files": 31 },
         "src/lib/supabase/queries/resource-admins.ts": { "names": ["addResourceAdmin"], "closure": "cc4c4d91097d36a0", "files": 5 },
-        "src/lib/supabase/queries/seasons.ts": { "names": ["createSeason", "listArchivedSeasons", "listSeasons"], "closure": "7a8f3e45a6e4f3d7", "files": 27 },
+        "src/lib/supabase/queries/seasons.ts": {
+          "names": ["createSeason", "listArchivedSeasons", "listSeasons", "listSeasonsByIds"],
+          "closure": "7a8f3e45a6e4f3d7",
+          "files": 27
+        },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "seasonCreateRequestSchema"], "closure": "549662de2f15c47a", "files": 25 }
       },
       "packages": ["next/server"]
@@ -620,18 +625,19 @@
       "expires": ["expireTournamentReads"],
       "audit": ["tournament.create"],
       "emits": [],
-      "importFingerprint": "0016b6c3673ddc86",
-      "importFiles": 97,
+      "importFingerprint": "cef9f76ed30baa73",
+      "importFiles": 98,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
+        "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "83dcda0530f3e571", "files": 78 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "a602b401c26377d1", "files": 86 },
         "src/lib/supabase/queries/resource-admins.ts": { "names": ["addResourceAdmin"], "closure": "cc4c4d91097d36a0", "files": 5 },
         "src/lib/supabase/queries/tournaments.ts": {
-          "names": ["createTournament", "getStagesBySeasonId", "listArchivedTournaments", "listTournaments"],
+          "names": ["createTournament", "getStagesBySeasonId", "listArchivedTournaments", "listTournaments", "listTournamentsByIds"],
           "closure": "dc70eb64e7d8de0e",
           "files": 10
         },
