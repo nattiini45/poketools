@@ -30,6 +30,7 @@ import {
 import { computeSeriesTally } from '@/lib/match/series-tally';
 import type { MatchResetPreview } from '@/lib/admin/match-detail';
 import { hasReachedBoThreshold } from '@/lib/tournament/match-state';
+import { availableMatchActions } from '@/lib/match/match-actions';
 import ConfirmResultDialog, { SeriesTallyLine, type ConfirmResultKind } from './ConfirmResultDialog';
 
 interface PlayerInfo {
@@ -208,8 +209,17 @@ export default function AdminMatchActions({
   const [settleDialogOpen, setSettleDialogOpen] = useState(false);
   const [settling, setSettling] = useState(false);
 
-  const isTerminal = currentStatus === 'completed';
-  const isScheduled = currentStatus === 'scheduled';
+  // The actions come from the match machine (admin actor); the routes decide again on every write.
+  const actions = availableMatchActions(
+    { status: currentStatus, player_1_id: player1.id, player_2_id: player2.id, submitter_id: null },
+    { playerId: null, isAdmin: true },
+  );
+  const canReset = actions.has('reset');
+  const canComplete = actions.has('confirm') || actions.has('resolve_dispute') || actions.has('set_result');
+  const canMarkDisputed = actions.has('dispute') || actions.has('flag_dispute');
+  const canSettle = actions.has('settle');
+  /** A match nothing completes any more (completed): its reset sits in its own card. */
+  const resetInCard = canReset && !canComplete;
   const tally = useMemo(
     () => computeSeriesTally(games, player1.id, player2.id, bestOf),
     [games, player1.id, player2.id, bestOf],
@@ -488,8 +498,8 @@ export default function AdminMatchActions({
 
   return (
     <>
-      {/* Reset Match Controls — shown for non-scheduled matches */}
-      {!isScheduled && !(isTerminal && games.length === 0) && (
+      {/* Reset Match Controls — shown for every match that can be reset */}
+      {canReset && !(resetInCard && games.length === 0) && (
         <Section title={t('actions.resetSection')}>
           <div className="space-y-4">
             {/* Per-game actions */}
@@ -536,7 +546,7 @@ export default function AdminMatchActions({
             )}
 
             {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
-            {!isTerminal && (
+            {!resetInCard && (
               <Button
                 variant="danger"
                 size="sm"
@@ -550,8 +560,8 @@ export default function AdminMatchActions({
         </Section>
       )}
 
-      {/* Override Actions — for non-terminal, non-scheduled states */}
-      {!isTerminal && !isScheduled && (
+      {/* Override Actions — for a match an admin can complete from here */}
+      {canComplete && (
         <Section title={t('actions.overrideSection')}>
           {/* Recorded games, so the result is picked with the series in view */}
           <div className="mb-4 space-y-1 text-sm">
@@ -615,7 +625,7 @@ export default function AdminMatchActions({
               {t('actions.completeMatch')}
             </Button>
 
-            {currentStatus !== 'disputed' && (
+            {canMarkDisputed && (
               <Button
                 variant="danger"
                 loading={loading}
@@ -629,7 +639,7 @@ export default function AdminMatchActions({
       )}
 
       {/* A match that has not started: settle it directly (admin-only, audited) */}
-      {isScheduled && (
+      {canSettle && (
         <Section title={tMatch('actions.settle.section')}>
           <p className="text-sm text-poke-text-muted mb-4">{tMatch('actions.settle.hint')}</p>
           <div>
@@ -681,7 +691,7 @@ export default function AdminMatchActions({
       )}
 
       {/* Completed match — show reset option only */}
-      {isTerminal && (
+      {resetInCard && (
         <Section title={t('actions.adminActions')}>
           <p className="text-sm text-poke-text-muted mb-3">{t('actions.completedHint')}</p>
           <Button
@@ -835,7 +845,7 @@ export default function AdminMatchActions({
         reasonLabel={tMatch('actions.deleteReasonLabel')}
         reasonPlaceholder={tMatch('actions.deleteReasonPlaceholder')}
       >
-        {deleteImpact && <DeleteGameImpactNotice impact={deleteImpact} ratingsRebuilt={isTerminal} />}
+        {deleteImpact && <DeleteGameImpactNotice impact={deleteImpact} ratingsRebuilt={currentStatus === 'completed'} />}
       </ReasonDialog>
 
       {/* The delete affects bracket matches that were already played: approve their reset or leave everything as it is */}

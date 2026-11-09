@@ -29,6 +29,7 @@ import RatingBadge from '@/components/gamification/RatingBadge';
 import type { PlayerRating } from '@/types/rating';
 import type { PlayerStreaks } from '@/types/streak';
 import { compareMatchesByScheduledAt } from '@/lib/match/compare-scheduled-at';
+import { availableMatchActions } from '@/lib/match/match-actions';
 import { useDataLocale, useFormatter, useRequestTime, useT } from '@/i18n/client';
 import type { Formatter } from '@/i18n/format';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -146,7 +147,7 @@ export function TeamsUsedList({ teamsUsed }: { teamsUsed: TeamUsed[] }) {
 
 export default function DashboardContent({
   playerId, playerName, avatarUrl, customAvatarUrl,
-  initialPlayer: _initialPlayer,
+  initialPlayer,
   initialMatches,
   initialTournaments,
   playerRating,
@@ -164,6 +165,8 @@ export default function DashboardContent({
   const requestTime = useRequestTime();
   const greeting = greetingKey(hourInZone(formatter, requestTime));
   const matches = initialMatches;
+  // Display only: the result routes decide again with the live roles.
+  const viewer = { playerId, isAdmin: initialPlayer?.is_admin ?? false };
   const tournaments = initialTournaments;
 
   // Actionable: pending confirmation first, then scheduled|in_progress by scheduled_at
@@ -284,9 +287,7 @@ export default function DashboardContent({
                     const isP1 = m.player_1_id === playerId;
                     const opponentName = isP1 ? m.player_2_name : m.player_1_name;
                     const isUpcomingRound = m.round_status === 'pending';
-                    const canAct =
-                      !isUpcomingRound &&
-                      (m.status === 'scheduled' || m.status === 'in_progress');
+                    const canAct = !isUpcomingRound && availableMatchActions(m, viewer).has('record_game');
                     const canConfirm = m.status === 'pending_confirmation';
                     const scheduledLabel = m.scheduled_at ? formatter.instant(m.scheduled_at, 'dateTime') : null;
                     return (
