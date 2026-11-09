@@ -61,7 +61,15 @@ describe('tournamentMachine and the SQL writers of tournaments.status', () => {
     const seasonLock = body.indexOf('FROM public.seasons s WHERE s.id = v_season FOR KEY SHARE');
     const phaseLock = body.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR NO KEY UPDATE;\s+IF NOT FOUND THEN/);
     const check = body.search(/IF v_status <> p_expected_status THEN\s+RAISE EXCEPTION 'tournament_status_changed'/);
+    const roundLock = body.indexOf('FROM public.rounds r WHERE r.tournament_id = p_tournament_id ORDER BY r.id FOR UPDATE');
+    const matchLock = body.indexOf('FROM public.matches m WHERE m.tournament_id = p_tournament_id ORDER BY m.id FOR UPDATE');
+    const playedCheck = body.indexOf('SELECT count(*) INTO v_played');
     const firstWrite = body.indexOf('DELETE FROM public.matches');
+    // A replace locks the old rounds, then their matches, before the played check, and holds them through the delete.
+    expect(roundLock).toBeGreaterThan(check);
+    expect(matchLock).toBeGreaterThan(roundLock);
+    expect(playedCheck).toBeGreaterThan(matchLock);
+    expect(firstWrite).toBeGreaterThan(playedCheck);
     expect(advisory).toBeGreaterThan(0);
     expect(seasonLock).toBeGreaterThan(advisory);
     expect(phaseLock).toBeGreaterThan(seasonLock);

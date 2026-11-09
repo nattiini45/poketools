@@ -10,7 +10,7 @@
 --   * it locks the phase row and refuses unless the status is still the one the caller read (tournament_status_changed,
 --     DETAIL the status found), so a completion that committed first is never overwritten and nothing is written;
 --   * a first generate (replace = false) refuses a phase that already has rounds (bracket_already_generated);
---   * a regenerate (replace = true) refuses while a match of the phase is played (status other than scheduled, or games;
+--   * a regenerate (replace = true) locks the old rounds and matches, then refuses while a match of the phase is played (status other than scheduled, or games;
 --     bracket_matches_played, DETAIL the count). The app resets the played matches first (ratings, aggregates, evolution
 --     cannot be rolled back in SQL); a result reported since makes the regenerate refuse instead of deleting it. Then it
 --     deletes the old matches and rounds;
@@ -29,7 +29,8 @@
 --
 -- Lock order (the one of 20261106090000_format_challenges.sql): the season advisory lock -> the seasons row FOR KEY SHARE ->
 -- the phase row FOR NO KEY UPDATE (the lock every status UPDATE needs, and the one round_write takes; it conflicts with
--- phase_complete_at_stage_end's FOR UPDATE and with every status UPDATE) -> the rounds and matches of the phase. The rounds
+-- phase_complete_at_stage_end's FOR UPDATE and with every status UPDATE) -> the rounds of the phase FOR UPDATE -> its
+-- matches FOR UPDATE (a replace only; each in id order). The rounds
 -- insert trigger (rounds__league_groups_guard) takes the same advisory lock, already held.
 --
 -- service_role only, like every writer here.
@@ -69,6 +70,13 @@ BEGIN
   END IF;
 
   IF p_replace THEN
+    -- The old bracket's rows are locked before the played check and held through the delete, rounds then matches (the
+    -- lock order of the header), each in id order: a result or a game written meanwhile either committed before the lock
+    -- (the check below, a new statement, sees it and refuses) or waits for this transaction (a match status UPDATE needs
+    -- the match row, a game insert its FOR KEY SHARE on the match, a match insert its FOR KEY SHARE on the round) and then
+    -- finds its parent gone. Nothing played is deleted.
+    PERFORM 1 FROM public.rounds r WHERE r.tournament_id = p_tournament_id ORDER BY r.id FOR UPDATE;
+    PERFORM 1 FROM public.matches m WHERE m.tournament_id = p_tournament_id ORDER BY m.id FOR UPDATE;
     SELECT count(*) INTO v_played FROM public.matches m
      WHERE m.tournament_id = p_tournament_id
        AND (m.status <> 'scheduled' OR EXISTS (SELECT 1 FROM public.games g WHERE g.match_id = m.id));

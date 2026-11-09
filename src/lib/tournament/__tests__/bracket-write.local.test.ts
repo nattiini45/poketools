@@ -223,6 +223,31 @@ describe.skipIf(!optIn)('bracket_write: the locked bracket writer (local stack)'
     }
   }, 60000);
 
+  it('a result racing the replace is either refused with the old bracket or lands on no match, never deleted', async () => {
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      const { tournament, oldRoundId } = await seedActiveBracket(`result-race-${attempt}`, true);
+      const { data: oldMatch } = await must('old match', client.from('matches').select('id').eq('tournament_id', tournament.id).single());
+      const matchId = oldMatch?.id ?? '';
+
+      const [regenerate, result] = await Promise.allSettled([
+        bracket.regenerateEliminationBracket(tournament, participants()),
+        client.from('matches').update({ status: 'in_progress' }).eq('id', matchId).eq('status', 'scheduled').select('id'),
+      ]);
+
+      const updated = result.status === 'fulfilled' ? (result.value.data ?? []).length : 0;
+      const after = await state(tournament.id);
+      if (updated === 1) {
+        // The result committed first: the replace saw it under its locks and deleted nothing.
+        expect(regenerate.status).toBe('rejected');
+        expect(after).toEqual({ status: 'active', roundIds: [oldRoundId], matches: 1 });
+      } else {
+        // The replace committed first: the result's UPDATE waited for the match lock and found the row gone.
+        expect(regenerate.status).toBe('fulfilled');
+        expect(after.roundIds).not.toContain(oldRoundId);
+      }
+    }
+  }, 60000);
+
   it('a replace refuses while a match is played (reported since the resets) and deletes nothing', async () => {
     const { tournament, oldRoundId } = await seedActiveBracket('played', true);
     await must('in_progress', client.from('matches').update({ status: 'in_progress' }).eq('tournament_id', tournament.id));
