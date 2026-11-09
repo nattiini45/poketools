@@ -43,7 +43,7 @@ export default function ActiveFilterChips({ chips, count, onRemove, onClearAll, 
     <div
       role="group"
       aria-label={t('chips.label')}
-      className={cn('flex min-h-[2.75rem] flex-wrap items-center gap-x-1.5 px-3 py-0.5 text-sm md:min-h-[2.25rem]', className)}
+      className={cn('flex min-h-[49.5px] flex-wrap items-center gap-x-1.5 px-3 py-0.5 text-sm md:min-h-[40.5px]', className)}
     >
       {empty ? (
         <span className="text-[var(--draft-ink-2,var(--poke-text-secondary))]">{t('chips.none')}</span>
@@ -60,7 +60,7 @@ export default function ActiveFilterChips({ chips, count, onRemove, onClearAll, 
                 title={full}
                 className="group inline-flex min-h-[44px] max-w-full items-center outline-none md:min-h-0 md:py-0.5"
               >
-                <span className="inline-flex max-w-[14rem] items-center gap-1 rounded-full border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-elevated,var(--poke-elevated))] py-0.5 pl-2 pr-1.5 text-xs text-[var(--draft-ink,var(--poke-text-primary))] group-hover:border-[var(--draft-ink-2,var(--poke-text-secondary))] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-[var(--poke-focus)]">
+                <span className="inline-flex max-w-[252px] items-center gap-1 rounded-full border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-elevated,var(--poke-elevated))] py-0.5 pl-2 pr-1.5 text-xs text-[var(--draft-ink,var(--poke-text-primary))] group-hover:border-[var(--draft-ink-2,var(--poke-text-secondary))] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-[var(--poke-focus)]">
                   <span className="truncate">{chipLabel(chip.labelParts, ctx, 'short')}</span>
                   <X className="h-3 w-3 shrink-0 text-[var(--draft-ink-2,var(--poke-text-secondary))]" aria-hidden="true" />
                 </span>

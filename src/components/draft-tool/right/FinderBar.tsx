@@ -145,7 +145,7 @@ export default function FinderBar({
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2 px-3 py-2', className)}>
-      {/* A real width from 768 px (16rem basis, grows into the free space): with `flex: 1` and a 0 basis the
+      {/* A real width from 768 px (288 px basis, grows into the free space): with `flex: 1` and a 0 basis the
           shrink-0 controls beside it squeezed the field to a few letters. The other controls wrap instead. */}
       <input
         type="search"
@@ -157,7 +157,7 @@ export default function FinderBar({
         autoComplete="off"
         spellCheck={false}
         className={cn(
-          'min-h-[44px] min-w-0 basis-full rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-3 py-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))] placeholder:text-poke-text-muted md:min-h-0 md:flex-[1_1_16rem]',
+          'min-h-[44px] min-w-0 basis-full rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-3 py-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))] placeholder:text-poke-text-muted md:min-h-0 md:flex-[1_1_288px]',
           FOCUS_RING,
         )}
       />

@@ -199,7 +199,7 @@ export default function RosterListPanel({ rows }: { rows: RosterListRow[] }) {
                   <span className="text-arena-ink-secondary"> · {row.trainer}</span>
                 )}
               </span>
-              <span className="max-w-[7rem] flex-none text-right leading-snug text-arena-ink-secondary">
+              <span className="max-w-[126px] flex-none text-right leading-snug text-arena-ink-secondary">
                 {row.bandLabel}
               </span>
               {row.price !== null && (

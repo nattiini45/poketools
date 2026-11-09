@@ -29,7 +29,7 @@ export default function RouteSceneRecovery() {
   const copy = themeLoaderCopy(locale);
 
   return (
-    <div className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-2rem)] items-center gap-2 rounded-poke-md border border-poke-border bg-poke-card py-1.5 pl-3 pr-1.5 shadow-lg">
+    <div className="fixed bottom-4 right-4 z-50 flex max-w-[calc(100vw-36px)] items-center gap-2 rounded-poke-md border border-poke-border bg-poke-card py-1.5 pl-3 pr-1.5 shadow-lg">
       <p id="route-scene-recovery-reason" className="text-xs text-poke-text-secondary">
         {copy.failed}
       </p>

@@ -147,7 +147,7 @@ export default function ClockBar({
       ) : null}
 
       {slot && running ? (
-        <div className="flex min-w-0 flex-[2_1_16rem] flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="flex min-w-0 flex-[2_1_288px] flex-wrap items-center gap-x-3 gap-y-1">
           {vm.viewerOnClock ? (
             <span className={`${styles.banner} ${styles.caps} text-sm`}>{tGlossary('draft.youOnClock')}</span>
           ) : (

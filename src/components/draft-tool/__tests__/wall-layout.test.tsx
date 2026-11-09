@@ -75,7 +75,7 @@ describe('wall layout CSS', () => {
     // page itself does not scroll past it.
     const screen = rule('.screen', media('(min-width: 1024px)', '.screen'));
     expect(screen).toMatch(/height: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/);
-    expect(CSS).toMatch(/--draft-page-pad-y: 3rem;/);
+    expect(CSS).toMatch(/--draft-page-pad-y: 54px;/);
     // The floor: in a very short window the page scrolls instead of crushing the panes.
     expect(screen).toMatch(/min-height: 600px;/);
   });
@@ -94,10 +94,10 @@ describe('wall layout CSS', () => {
   });
 
   it('scrolls the left column in an inner scroller, so its scrollbar stays clear of the diagonal clip', () => {
-    // The clipped frame is not a scroller; the scroller ends 3.75rem short of its right edge (the diagonal takes 48px).
+    // The clipped frame is not a scroller; the scroller ends 67.5px short of its right edge (the diagonal takes 48px).
     const frame = rule('.stagePane', media('(min-width: 1024px)', '.stagePane'));
     expect(frame).toMatch(/clip-path: polygon\(/);
-    expect(frame).toMatch(/padding-right: 3\.75rem;/);
+    expect(frame).toMatch(/padding-right: 67\.5px;/);
     expect(frame).not.toMatch(/overflow/);
     const scroller = rule('.stageScroll', media('(min-width: 1024px)', '.stageScroll'));
     expect(scroller).toMatch(/overflow-y: auto;/);
@@ -138,29 +138,29 @@ describe('wall layout CSS', () => {
   it('keeps the line picture above the sticky bars: capped on phones, the stage card capped above the dock from 1024 px', () => {
     const phone = media('(max-width: 767px)', '.previewArea');
     expect(rule('.previewArea', phone)).toMatch(
-      /max-height: calc\(100svh - var\(--nav-h\) - var\(--draft-clock-h\) - var\(--draft-bottom-bar-h\) - 1\.5rem\);/,
+      /max-height: calc\(100svh - var\(--nav-h\) - var\(--draft-clock-h\) - var\(--draft-bottom-bar-h\) - 27px\);/,
     );
     // From 1024 px the card ends where the dock begins: the scroller's height less the measured dock and the gap.
     const desktop = rule('.stageCard', media('(min-width: 1024px)', '.stageCard'));
-    expect(desktop).toMatch(/max-height: calc\(100% - var\(--draft-dock-h\) - 0\.75rem\);/);
+    expect(desktop).toMatch(/max-height: calc\(100% - var\(--draft-dock-h\) - 13\.5px\);/);
     expect(desktop).toMatch(/flex: 0 0 auto;/);
     // Too short a window: the card keeps its content height (the column scrolls) rather than overflowing its box.
     expect(desktop).toMatch(/min-height: min-content;/);
     // The dock's height is measured (a verdict can wrap), not assumed: the screen hands the dock to the offsets hook.
     expect(SCREEN_SRC).toMatch(/useStickyOffsets\(rootRef, clockRowRef, dockRef\);/);
     expect(SCREEN_SRC).toMatch(/<div ref=\{dockRef\} className=\{`\$\{styles\.ctaDock\}/);
-    expect(rule('.tokens,\n.root')).toMatch(/--draft-dock-h: [\d.]+rem;/);
+    expect(rule('.tokens,\n.root')).toMatch(/--draft-dock-h: [\d.]+px;/);
   });
 
   it('never lets the timer bar push past a narrow clock row (375 px phones)', () => {
     // The track's floor is capped by the line it is on, and its row's flex basis lets bar and digits wrap whole.
-    expect(rule('.timerTrack')).toMatch(/min-width: min\(6rem, 100%\);/);
-    expect(TIMER_SRC).toMatch(/className="flex min-w-0 flex-\[1_1_10rem\] flex-wrap/);
+    expect(rule('.timerTrack')).toMatch(/min-width: min\(108px, 100%\);/);
+    expect(TIMER_SRC).toMatch(/className="flex min-w-0 flex-\[1_1_180px\] flex-wrap/);
   });
 
   it('defines --nav-h once on the root instead of a silent 64 px fallback', () => {
     expect(CSS).not.toMatch(/var\(--nav-h,/);
-    expect(rule('.tokens,\n.root')).toMatch(/--nav-h: calc\(4rem \+ 1px\);/);
+    expect(rule('.tokens,\n.root')).toMatch(/--nav-h: calc\(72px \+ 1px\);/);
   });
 
   it('gives every card one height token and one fixed row skeleton, rows included', () => {
@@ -197,7 +197,7 @@ describe('wall layout CSS', () => {
 
   it('keeps the sprite constants of the card in step with the CSS boxes they fill', () => {
     const tokens = rule('.tokens,\n.root');
-    const rem = (name: string) => Number(new RegExp(`${name}: ([\\d.]+)rem;`).exec(tokens)?.[1]) * 16;
+    const rem = (name: string) => (Number(new RegExp(`${name}: ([\\d.]+)px;`).exec(tokens)?.[1]) / 18) * 16;
     expect(rem('--draft-card-sprite')).toBe(CARD_SPRITE_PX);
     expect(rem('--draft-card-footer-sprite')).toBe(FOOTER_SPRITE_PX);
     // The Pokémon dominates its card: the sprite row is the tallest, well above the old 64px.
@@ -531,12 +531,12 @@ describe('DraftToolScreen page header', () => {
 });
 
 describe('finder bar and filter sheet', () => {
-  it('gives the search field a 16rem basis from 768 px instead of a 0 basis', () => {
+  it('gives the search field a 288px basis from 768 px instead of a 0 basis', () => {
     const html = renderWithI18n(
       <FinderBar view={initialFinderState()} dispatch={() => {}} indexReady filterPanelId="fp" names={stubNames} />,
     );
     const search = /<input type="search"[^>]*class="([^"]*)"/.exec(html)?.[1] ?? '';
-    expect(search).toContain('md:flex-[1_1_16rem]');
+    expect(search).toContain('md:flex-[1_1_288px]');
     expect(search).not.toContain('md:flex-1');
   });
 

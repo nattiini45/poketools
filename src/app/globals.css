@@ -1038,9 +1038,9 @@ html[data-route-veil] .route-theme-veil-status {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.375rem;
+  gap: 6.75px;
   margin: 0;
-  padding: 0 1rem;
+  padding: 0 18px;
   text-align: center;
   color: var(--world-ink-secondary, var(--poke-text-secondary));
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
@@ -1048,11 +1048,11 @@ html[data-route-veil] .route-theme-veil-status {
 }
 html[data-route-veil] .route-theme-veil-title {
   color: var(--world-ink, var(--poke-text-primary));
-  font-size: 0.9375rem;
+  font-size: 16.875px;
   font-weight: 700;
 }
 html[data-route-veil] .route-theme-veil-progress {
-  font-size: 0.75rem;
+  font-size: 13.5px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
@@ -1081,9 +1081,9 @@ html[data-route-veil] .route-theme-veil-progress {
 html[data-route-veil] .route-theme-veil-ball {
   position: relative;
   display: block;
-  width: 2.5rem;
-  height: 2.5rem;
-  margin-bottom: 0.375rem;
+  width: 45px;
+  height: 45px;
+  margin-bottom: 6.75px;
   border-radius: 50%;
   background:
     radial-gradient(circle at 34% 26%, rgba(255, 255, 255, 0.85) 0 6%, transparent 18%),
@@ -1099,8 +1099,8 @@ html[data-route-veil] .route-theme-veil-ball-button {
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 0.75rem;
-  height: 0.75rem;
+  width: 13.5px;
+  height: 13.5px;
   border-radius: 50%;
   background: radial-gradient(circle at 40% 35%, #ffffff, #e6e8ee 60%, #b9bdc8);
   box-shadow: 0 0 0 2px #15161b;
@@ -1358,7 +1358,7 @@ html[data-route-veil] .route-theme-veil-ball-button {
   height: 56px;
   align-items: center;
   justify-content: center;
-  padding: 0 0.75rem 0.5rem;
+  padding: 0 13.5px 9px;
   transition: opacity 200ms ease;
 }
 
@@ -1367,10 +1367,10 @@ html[data-route-veil] .route-theme-veil-ball-button {
   pointer-events: auto;
   display: flex;
   max-width: 100%;
-  height: 2.75rem;
+  height: 49.5px;
   align-items: center;
-  gap: 0.5rem;
-  padding: 0.25rem 0.375rem 0.25rem 0.875rem;
+  gap: 9px;
+  padding: 4.5px 6.75px 4.5px 15.75px;
   border: 1px solid var(--hud-glass-border);
   border-radius: 9999px;
   background:
@@ -1387,7 +1387,7 @@ html[data-route-veil] .route-theme-veil-ball-button {
   flex: none;
   color: var(--hud-ink);
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.8125rem;
+  font-size: 14.625px;
   font-weight: 800;
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -1400,9 +1400,9 @@ html[data-route-veil] .route-theme-veil-ball-button {
   min-width: 0;
   height: 100%;
   align-items: center;
-  gap: 0.125rem;
+  gap: 2.25px;
   overflow-x: auto;
-  padding: 0 0.2rem;
+  padding: 0 3.6px;
   border: 1px solid var(--hud-track-border);
   border-radius: 9999px;
   background: var(--hud-track);
@@ -1416,14 +1416,14 @@ html[data-route-veil] .route-theme-veil-ball-button {
 
 .world-nav-hud-chip {
   display: inline-flex;
-  min-height: 1.85rem;
+  min-height: 33.3px;
   align-items: center;
-  gap: 0.4rem;
-  padding: 0 0.8rem;
+  gap: 7.2px;
+  padding: 0 14.4px;
   border-radius: 9999px;
   color: var(--hud-ink-muted);
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.75rem;
+  font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -1450,8 +1450,8 @@ html[data-route-veil] .route-theme-veil-ball-button {
 
 .world-nav-hud-chip.is-active::before {
   content: '';
-  width: 0.375rem;
-  height: 0.375rem;
+  width: 6.75px;
+  height: 6.75px;
   border-radius: 9999px;
   background: var(--hud-focus);
   box-shadow: 0 0 8px var(--hud-focus);
@@ -1462,23 +1462,23 @@ html[data-route-veil] .route-theme-veil-ball-button {
    cut at the right frame edge on 390). */
 @media (max-width: 767px) {
   .world-nav-hud {
-    padding: 0 0.5rem 0.375rem;
+    padding: 0 9px 6.75px;
   }
   .world-nav-hud-brand {
     display: none;
   }
   .world-nav-hud-bar {
     max-width: 100%;
-    padding-left: 0.25rem;
+    padding-left: 4.5px;
   }
   .world-nav-hud-track {
-    gap: 0.0625rem;
-    padding: 0 0.125rem;
+    gap: 1.125px;
+    padding: 0 2.25px;
   }
   .world-nav-hud-chip {
-    gap: 0.25rem;
-    padding: 0 0.5rem;
-    font-size: 0.6875rem;
+    gap: 4.5px;
+    padding: 0 9px;
+    font-size: 12.375px;
   }
 }
 
@@ -1486,7 +1486,7 @@ html[data-route-veil] .route-theme-veil-ball-button {
    edge to edge so the rightmost nav item is always fully inside the frame. */
 @media (max-width: 640px) {
   .world-nav-hud {
-    padding: 0 0.5rem 0.4375rem;
+    padding: 0 9px 7.875px;
   }
   .world-nav-hud-bar {
     width: 100%;
@@ -1532,7 +1532,7 @@ html.world-route-live .world-nav-hud {
    the pill glides back WHILE the panel leaves (transition in the W6 block). */
 @media (min-width: 768px) {
   html:has(.world-focus-panel[open]:not([data-closing])) .world-nav-hud {
-    padding-right: calc(min(26rem, 100vw - 2rem) + 1.5rem);
+    padding-right: calc(min(468px, 100vw - 36px) + 27px);
   }
 }
 
@@ -1561,18 +1561,18 @@ html.world-route-live .world-nav-hud {
   --world-focus: var(--hud-focus);
 
   position: fixed;
-  inset: auto 1rem 1rem auto;
-  top: calc(56px + 1rem);
+  inset: auto 18px 18px auto;
+  top: calc(56px + 18px);
   z-index: 25;
   margin: 0;
-  width: min(26rem, calc(100vw - 2rem));
-  max-height: calc(100vh - 56px - 2rem);
+  width: min(468px, calc(100vw - 36px));
+  max-height: calc(100vh - 56px - 36px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
   padding: 0;
   border: 1px solid var(--hud-glass-border);
-  border-radius: 1.25rem;
+  border-radius: 22.5px;
   color: var(--hud-ink);
   background:
     linear-gradient(180deg, var(--hud-glass-sheen), transparent 38%),
@@ -1597,14 +1597,14 @@ html.world-route-live .world-nav-hud {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 0.75rem;
-  padding: 1rem 1.25rem 0.75rem;
+  gap: 13.5px;
+  padding: 18px 22.5px 13.5px;
   border-bottom: 1px solid var(--world-border);
 }
 
 .world-focus-panel-title {
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 1rem;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.3;
@@ -1614,8 +1614,8 @@ html.world-route-live .world-nav-hud {
 .world-focus-panel-close {
   flex: none;
   display: inline-flex;
-  width: 2rem;
-  height: 2rem;
+  width: 36px;
+  height: 36px;
   align-items: center;
   justify-content: center;
   border-radius: 9999px;
@@ -1635,7 +1635,7 @@ html.world-route-live .world-nav-hud {
 
 .world-focus-panel-body {
   overflow-y: auto;
-  padding: 1rem 1.25rem 1.25rem;
+  padding: 18px 22.5px 22.5px;
   scrollbar-width: thin;
   scrollbar-color: var(--hud-glass-border) transparent;
 }
@@ -1666,26 +1666,26 @@ html.world-route-live .world-nav-hud {
    while the panel sat on the right. */
 @media (max-width: 767px) {
   .world-focus-panel {
-    inset: auto 0.75rem 0.75rem 0.75rem;
+    inset: auto 13.5px 13.5px 13.5px;
     top: auto;
     width: auto;
     max-height: 46vh;
-    border-radius: 1.25rem 1.25rem 0.5rem 0.5rem;
+    border-radius: 22.5px 22.5px 9px 9px;
   }
 
   .world-focus-panel-head {
     position: relative;
-    padding-top: 0.875rem;
+    padding-top: 15.75px;
   }
 
   /* Grabber: the sheet affordance, a lit teal bar above the title. */
   .world-focus-panel-head::before {
     content: '';
     position: absolute;
-    top: 0.4375rem;
+    top: 7.875px;
     left: 50%;
-    width: 2.75rem;
-    height: 0.25rem;
+    width: 49.5px;
+    height: 4.5px;
     border-radius: 9999px;
     background: var(--hud-chip-active-ring);
     opacity: 0.55;
@@ -1859,11 +1859,11 @@ html.world-route-live .world-nav-hud {
   align-self: flex-start;
   display: flex;
   flex-direction: column;
-  gap: 0.375rem;
+  gap: 6.75px;
   overflow: hidden;
-  padding: 0.75rem 0.875rem;
+  padding: 13.5px 15.75px;
   border: 1px solid var(--hud-glass-border);
-  border-radius: 1rem;
+  border-radius: 18px;
   color: var(--hud-ink);
   background:
     linear-gradient(180deg, var(--hud-glass-sheen), transparent 45%),
@@ -1902,17 +1902,17 @@ html.world-route-live .world-nav-hud {
 }
 
 .world-station-card[data-collapsed="true"] {
-  padding-block: 0.5rem;
+  padding-block: 9px;
 }
 
 .world-station-card-kicker {
   overflow: hidden;
   color: var(--hud-ink-muted);
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.75rem;
+  font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
-  line-height: 1rem;
+  line-height: 18px;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -1925,9 +1925,9 @@ html.world-route-live .world-nav-hud {
   -webkit-line-clamp: 2;
   line-clamp: 2;
   color: var(--hud-ink);
-  font-size: 0.875rem;
+  font-size: 15.75px;
   font-weight: 500;
-  line-height: 1.125rem;
+  line-height: 20.25px;
 }
 
 .world-station-card[data-variant="narrow"] .world-station-card-beat {
@@ -1938,10 +1938,10 @@ html.world-route-live .world-nav-hud {
 .world-station-card-digest {
   color: var(--hud-ink);
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.9375rem;
+  font-size: 16.875px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  line-height: 1.25rem;
+  line-height: 22.5px;
   overflow-wrap: anywhere;
 }
 
@@ -1949,8 +1949,8 @@ html.world-route-live .world-nav-hud {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.75rem;
-  margin-top: 0.125rem;
+  gap: 4.5px 13.5px;
+  margin-top: 2.25px;
 }
 
 .world-station-card[data-variant="compact"],
@@ -1958,7 +1958,7 @@ html.world-route-live .world-nav-hud {
   flex-direction: row;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.25rem 0.75rem;
+  gap: 4.5px 13.5px;
 }
 
 .world-station-card[data-variant="compact"] .world-station-card-actions,
@@ -1968,15 +1968,15 @@ html.world-route-live .world-nav-hud {
 
 .world-station-card-cta {
   display: inline-flex;
-  min-height: 2rem;
+  min-height: 36px;
   align-items: center;
-  padding: 0 0.875rem;
+  padding: 0 15.75px;
   border-radius: 9999px;
   color: var(--hud-chip-active-ink);
   background: var(--hud-chip-active);
   box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
   font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
-  font-size: 0.875rem;
+  font-size: 15.75px;
   font-weight: 700;
   white-space: nowrap;
   transition: background-color 150ms ease;
@@ -1988,7 +1988,7 @@ html.world-route-live .world-nav-hud {
 
 .world-station-card-lite {
   color: var(--hud-ink-muted);
-  font-size: 0.8125rem;
+  font-size: 14.625px;
   text-decoration: underline;
   text-underline-offset: 2px;
   white-space: nowrap;
@@ -2008,11 +2008,11 @@ html.world-route-live .world-nav-hud {
 /* Teams at 390: the roll-call rail in the digest slot (TeamsRollCallRail). */
 .world-roll-call-rail {
   display: flex;
-  gap: 0.375rem;
+  gap: 6.75px;
   overflow-x: auto;
   overscroll-behavior-x: contain;
-  margin-inline: -0.25rem;
-  padding: 0.125rem 0.25rem;
+  margin-inline: -4.5px;
+  padding: 2.25px 4.5px;
   scroll-snap-type: x proximity;
   scrollbar-width: none;
 }
@@ -2028,22 +2028,22 @@ html.world-route-live .world-nav-hud {
 
 .world-roll-call-chip {
   display: inline-flex;
-  min-height: 2.75rem;
+  min-height: 49.5px;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0 0.75rem;
+  gap: 6.75px;
+  padding: 0 13.5px;
   border: 1px solid var(--hud-glass-border);
   border-radius: 9999px;
   color: var(--hud-ink);
   background: rgba(255, 255, 255, 0.08);
-  font-size: 0.875rem;
+  font-size: 15.75px;
   font-weight: 600;
   white-space: nowrap;
 }
 
 .world-roll-call-dot {
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 9px;
+  height: 9px;
   flex: none;
   border-radius: 9999px;
   background: var(--hud-ink-muted);
@@ -2058,22 +2058,22 @@ html.world-route-live .world-nav-hud {
 /* Phone band: 44 px tap targets, one step larger kicker. */
 @media (max-width: 767px) {
   .world-station-card {
-    gap: 0.5rem;
+    gap: 9px;
   }
 
   .world-station-card-kicker {
-    font-size: 0.8125rem;
-    line-height: 1.125rem;
+    font-size: 14.625px;
+    line-height: 20.25px;
   }
 
   .world-station-card-cta {
-    min-height: 2.75rem;
-    padding: 0 1rem;
+    min-height: 49.5px;
+    padding: 0 18px;
   }
 
   .world-station-card-lite {
     display: inline-flex;
-    min-height: 2.75rem;
+    min-height: 49.5px;
     align-items: center;
   }
 }

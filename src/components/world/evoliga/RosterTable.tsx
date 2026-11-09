@@ -71,7 +71,7 @@ export default function RosterTable({ entries }: RosterTableProps) {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label={t('rosterTable.searchLabel')}
-          className={`min-w-[12rem] flex-1 ${CONTROL_CLASS}`}
+          className={`min-w-[216px] flex-1 ${CONTROL_CLASS}`}
         />
         <select
           value={sortKey}

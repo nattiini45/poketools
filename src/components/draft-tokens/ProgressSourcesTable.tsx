@@ -39,7 +39,7 @@ export default function ProgressSourcesTable({ lines, catalog }: ProgressSources
         <p className="text-sm text-poke-text-secondary">{t('table.empty')}</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[40rem] text-sm">
+          <table className="w-full min-w-[720px] text-sm">
             <thead>
               <tr className="text-left text-xs text-poke-text-secondary">
                 <th scope="col" className={TH}>{t('table.line')}</th>

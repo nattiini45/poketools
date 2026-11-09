@@ -28,7 +28,7 @@ export interface Point {
 
 /**
  * Bands chrome never enters (anti-pattern 3): the site header across the top
- * (the docked panel's `top: calc(56px + 1rem)` clears the same band) and the
+ * (the docked panel's `top: calc(56px + 18px)` clears the same band) and the
  * route HUD's 56 px landmark along the bottom (WorldNav `.world-nav-hud`,
  * the box the capture harness stamps).
  */

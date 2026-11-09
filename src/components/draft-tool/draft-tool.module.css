@@ -57,24 +57,24 @@
    * border); `DraftToolScreen` measures `#site-nav` and the clock row and
    * overrides both inline, so this value only holds before hydration.
    */
-  --nav-h: calc(4rem + 1px);
+  --nav-h: calc(72px + 1px);
   --draft-clock-h: 0px;
   /*
-   * The public layout's `<main>` vertical padding (`py-6`, 1.5rem top and
+   * The public layout's `<main>` vertical padding (`py-6`, 27px top and
    * bottom, src/app/(public)/layout.tsx). With the nav it is the only thing
    * the desktop screen subtracts from the viewport (the page header is the
    * screen's own first row), so the document ends exactly at the viewport
    * and only the two panes scroll.
    */
-  --draft-page-pad-y: 3rem;
+  --draft-page-pad-y: 54px;
   /*
    * The stage column's fit: the line picture's height in percent of its width, the DRAFT dock's height
    * (the default holds until `useStickyOffsets` has measured the real one) and, on phones, the bottom bar's
    * (a button of 48px plus its padding). See "Left stage".
    */
   --draft-preview-h: 72;
-  --draft-dock-h: 7.5rem;
-  --draft-bottom-bar-h: 4.5rem;
+  --draft-dock-h: 135px;
+  --draft-bottom-bar-h: 81px;
   /*
    * Gold of the favourite star (Pokémon HOME look, both themes). The palette
    * yellow is too pale for a thin outline on the light surfaces, so it is
@@ -89,18 +89,18 @@
    * the footer's height follows its sprite.
    */
   --draft-card-border: 2px;
-  --draft-card-head: 1.75rem;
-  --draft-card-sprite: 5.5rem;
-  --draft-card-name: 1rem;
-  --draft-card-meta: 0.875rem;
-  --draft-card-footer-sprite: 2.5rem;
-  --draft-card-footer: calc(var(--draft-card-footer-sprite) + 0.5rem);
+  --draft-card-head: 31.5px;
+  --draft-card-sprite: 99px;
+  --draft-card-name: 18px;
+  --draft-card-meta: 15.75px;
+  --draft-card-footer-sprite: 45px;
+  --draft-card-footer: calc(var(--draft-card-footer-sprite) + 9px);
   --draft-card-h: calc(
     var(--draft-card-head) + var(--draft-card-sprite) + var(--draft-card-name) + var(--draft-card-meta) +
       var(--draft-card-footer) + 2 * var(--draft-card-border)
   );
   /* Narrowest card the wall's grid tracks allow (names and the footer need the room). */
-  --draft-card-min: 6.75rem;
+  --draft-card-min: 121.5px;
   /*
    * The one skew of the card frame (negative: the top edge leans right), the
    * footer plate inside it and the dock tiles. Read it with `tan()`: a row at
@@ -135,7 +135,7 @@
   .tokens,
   .root {
     --draft-card-skew: -8deg;
-    --draft-card-min: 8.75rem;
+    --draft-card-min: 157.5px;
   }
 }
 
@@ -161,7 +161,7 @@
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 9px;
   min-width: 0;
 }
 
@@ -182,7 +182,7 @@
   order: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 13.5px;
 }
 
 .stagePane,
@@ -205,11 +205,11 @@
 .extras {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 13.5px;
   min-width: 0;
-  padding: 0.5rem;
+  padding: 9px;
   border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
+  border-radius: 13.5px;
   background: var(--draft-surface);
 }
 
@@ -245,15 +245,15 @@
     display: flex;
     flex-direction: column;
     border: 1px solid var(--draft-border);
-    border-radius: 0.75rem;
+    border-radius: 13.5px;
     background: var(--draft-surface);
   }
   .stageScroll {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 13.5px;
     min-width: 0;
-    padding: 0.75rem;
+    padding: 13.5px;
   }
   .stageCard,
   .extras {
@@ -267,10 +267,10 @@
 .wallPane {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  padding: 0.75rem;
+  gap: 9px;
+  padding: 13.5px;
   border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
+  border-radius: 13.5px;
   background: var(--draft-wall);
   isolation: isolate;
   /*
@@ -308,7 +308,7 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
     grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 0.75rem;
+    gap: 13.5px;
   }
   .screenHeader,
   .clockRow,
@@ -333,7 +333,7 @@
   .screen {
     grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
     gap: 0;
-    row-gap: 0.5rem;
+    row-gap: 9px;
     height: calc(100dvh - var(--nav-h) - var(--draft-page-pad-y));
     min-height: 600px;
   }
@@ -344,13 +344,13 @@
     display: block;
   }
   .stagePane {
-    border-radius: 0.75rem 0 0 0.75rem;
-    padding-right: 3.75rem;
+    border-radius: 13.5px 0 0 13.5px;
+    padding-right: 67.5px;
     clip-path: polygon(0 0, 100% 0, calc(100% - 48px) 100%, 0 100%);
     z-index: 1;
   }
   /*
-   * The scroller ends 3.75rem short of the frame's right edge, which the
+   * The scroller ends 67.5px short of the frame's right edge, which the
    * diagonal (48px at the bottom) never reaches, so its scrollbar is never
    * clipped. The gutter keeps the content width from jumping when the bar
    * appears.
@@ -367,7 +367,7 @@
    * The stage card never outgrows the scroller minus the dock below it: the dock is sticky at the bottom, so a
    * taller card would end under it with the base stage cut off. Capped, the card's one flexible item, the line
    * picture (`.previewArea`), takes the shortfall, and the dock sits in its natural place right under the card
-   * (the scroller's gap is the 0.75rem taken off here). `100%` is the scroller's content height: definite,
+   * (the scroller's gap is the 13.5px taken off here). `100%` is the scroller's content height: definite,
    * because the scroller is a flex item of the fixed-height frame. In a window too short for even the
    * picture's floor, `min-height: min-content` lets the card keep its content height instead of overflowing
    * its box (an overflow would stay under the dock at every scroll position): the column scrolls, and once
@@ -376,12 +376,12 @@
   .stageCard {
     flex: 0 0 auto;
     min-height: min-content;
-    max-height: calc(100% - var(--draft-dock-h) - 0.75rem);
+    max-height: calc(100% - var(--draft-dock-h) - 13.5px);
   }
   .wallPane {
     margin-left: -48px;
-    padding-left: calc(48px + 0.75rem);
-    border-radius: 0 0.75rem 0.75rem 0;
+    padding-left: calc(48px + 13.5px);
+    border-radius: 0 13.5px 13.5px 0;
   }
 }
 
@@ -398,7 +398,7 @@
   position: sticky;
   top: var(--nav-h);
   z-index: 5;
-  border-radius: 0.5rem;
+  border-radius: 9px;
   background: var(--draft-glass);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -415,8 +415,8 @@
 }
 
 .wallScroll [role="option"] {
-  scroll-margin-top: calc(var(--nav-h) + 4.5rem);
-  scroll-margin-bottom: 1rem;
+  scroll-margin-top: calc(var(--nav-h) + 81px);
+  scroll-margin-bottom: 18px;
 }
 
 @media (max-width: 767px) {
@@ -424,9 +424,9 @@
     top: calc(var(--nav-h) + var(--draft-clock-h));
   }
   .wallScroll [role="option"] {
-    scroll-margin-top: calc(var(--nav-h) + var(--draft-clock-h) + 5rem);
+    scroll-margin-top: calc(var(--nav-h) + var(--draft-clock-h) + 90px);
     /* The sticky bottom bar with the DRAFT button. */
-    scroll-margin-bottom: 7rem;
+    scroll-margin-bottom: 126px;
   }
 }
 
@@ -445,7 +445,7 @@
     scrollbar-gutter: stable;
   }
   .wallScroll [role="option"] {
-    scroll-margin: 0.5rem;
+    scroll-margin: 9px;
   }
 }
 
@@ -518,7 +518,7 @@
   /* Width and style only: the colour is the state's (utility classes), a shorthand would reset it. */
   border-width: var(--draft-card-border);
   border-style: solid;
-  border-radius: 0.375rem;
+  border-radius: 6.75px;
   /* Clips the footer plate to the frame's rounded corners. */
   overflow: hidden;
   transform: skewX(var(--draft-card-skew));
@@ -546,16 +546,16 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 0.25rem;
+  gap: 4.5px;
   width: 100%;
   min-width: 0;
-  padding-inline: 0.5rem;
+  padding-inline: 9px;
 }
 
 .cardHeadGroup {
   display: flex;
   align-items: center;
-  gap: 0.25rem;
+  gap: 4.5px;
 }
 
 .cardSprite {
@@ -572,7 +572,7 @@
   display: block;
   width: 100%;
   min-width: 0;
-  padding-inline: 0.25rem;
+  padding-inline: 4.5px;
   overflow: hidden;
   text-align: center;
   text-overflow: ellipsis;
@@ -593,10 +593,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 0.25rem;
+  gap: 4.5px;
   width: 100%;
   min-width: 0;
-  padding-inline: 0.375rem;
+  padding-inline: 6.75px;
 }
 
 .cardFooterBlob {
@@ -611,8 +611,8 @@
 
 .cardFooterArrow {
   flex: none;
-  width: 0.625rem;
-  height: 0.625rem;
+  width: 11.25px;
+  height: 11.25px;
 }
 
 /* Two lines at most, broken at the hyphens of form names; the full text is in the card's title. */
@@ -633,7 +633,7 @@
 .glass {
   background: var(--draft-glass);
   border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
+  border-radius: 13.5px;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--draft-ink) 8%, transparent);
   -webkit-backdrop-filter: blur(10px) saturate(1.2);
   backdrop-filter: blur(10px) saturate(1.2);
@@ -688,13 +688,13 @@
   place-items: center;
   aspect-ratio: 100 / var(--draft-preview-h);
   /* A size container has no content height of its own, so the floor is explicit: a tight flex column never squashes it below it. */
-  min-height: 11rem;
+  min-height: 198px;
 }
 
 .previewStage {
   position: relative;
   container-type: inline-size;
-  width: min(100cqi, 30rem, calc(100cqh * 100 / var(--draft-preview-h)));
+  width: min(100cqi, 540px, calc(100cqh * 100 / var(--draft-preview-h)));
   aspect-ratio: 100 / var(--draft-preview-h);
   margin: 0;
   padding: 0;
@@ -739,7 +739,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  filter: drop-shadow(0 0.4rem 0.5rem color-mix(in srgb, var(--draft-ink) 22%, transparent));
+  filter: drop-shadow(0 7.2px 9px color-mix(in srgb, var(--draft-ink) 22%, transparent));
 }
 
 /*
@@ -748,7 +748,7 @@
  */
 @media (max-width: 767px) {
   .previewArea {
-    max-height: calc(100svh - var(--nav-h) - var(--draft-clock-h) - var(--draft-bottom-bar-h) - 1.5rem);
+    max-height: calc(100svh - var(--nav-h) - var(--draft-clock-h) - var(--draft-bottom-bar-h) - 27px);
   }
 }
 
@@ -764,14 +764,14 @@
   bottom: 0;
   z-index: 2;
   order: 3;
-  padding-top: 0.5rem;
+  padding-top: 9px;
   background: linear-gradient(to top, var(--draft-surface) 70%, transparent);
 }
 
 @media (min-width: 1024px) {
   .ctaDock {
     top: 0;
-    padding-bottom: 0.25rem;
+    padding-bottom: 4.5px;
     background: var(--draft-surface);
   }
 }
@@ -782,11 +782,11 @@
   min-height: 56px;
   align-items: center;
   justify-content: center;
-  gap: 0.5rem;
-  border-radius: 0.75rem;
+  gap: 9px;
+  border-radius: 13.5px;
   border: 2px solid transparent;
   font-weight: 800;
-  font-size: 1.125rem;
+  font-size: 20.25px;
   background: var(--draft-cta);
   color: var(--draft-cta-ink);
   cursor: pointer;
@@ -839,10 +839,10 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-width: 3.25rem;
-  min-height: 3.75rem;
+  min-width: 58.5px;
+  min-height: 67.5px;
   border: 1px solid var(--draft-border);
-  border-radius: 0.375rem;
+  border-radius: 6.75px;
   background: var(--draft-elevated);
   transform: skewX(var(--draft-card-skew));
 }
@@ -882,14 +882,14 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  font-size: 0.6875rem;
+  font-size: 12.375px;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }
 
 .weaknessTable th,
 .weaknessTable td {
-  min-width: 1rem;
+  min-width: 18px;
   padding: 0;
   border-right: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
   border-bottom: 1px solid color-mix(in srgb, var(--draft-border) 55%, transparent);
@@ -899,13 +899,13 @@
   position: sticky;
   left: 0;
   z-index: 1;
-  min-width: 2.25rem;
+  min-width: 40.5px;
   white-space: nowrap;
   background: var(--draft-surface);
 }
 
 .weaknessTable .weaknessTypeCell {
-  padding: 0.125rem 0;
+  padding: 2.25px 0;
   vertical-align: bottom;
 }
 
@@ -913,7 +913,7 @@
 .weaknessTypeHead {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
-  min-height: 4.75rem;
+  min-height: 85.5px;
 }
 
 .weaknessWeak,
@@ -949,10 +949,10 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 0.5rem 1rem;
-  padding: 0.5rem 0.75rem;
+  gap: 9px 18px;
+  padding: 9px 13.5px;
   border: 1px solid var(--draft-border);
-  border-radius: 0.75rem;
+  border-radius: 13.5px;
   background: var(--draft-glass);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
@@ -973,10 +973,10 @@
 
 .timerTrack {
   position: relative;
-  height: 0.5rem;
-  /* Never wider than the line it is on: a fixed 6rem pushed the bar past a 375 px phone's edge. */
-  min-width: min(6rem, 100%);
-  flex: 1 1 8rem;
+  height: 9px;
+  /* Never wider than the line it is on: a fixed 108px pushed the bar past a 375 px phone's edge. */
+  min-width: min(108px, 100%);
+  flex: 1 1 144px;
   overflow: hidden;
   border-radius: 9999px;
   background: var(--draft-clock-track);
@@ -1016,8 +1016,8 @@
 /* "You're on the clock" / "You're next": neutral ink on the elevated surface. Violet stays reserved for the
    DRAFT call to action and red for drafted cards; only the paused banner is tinted (amber). */
 .banner {
-  border-radius: 0.5rem;
-  padding: 0.375rem 0.75rem;
+  border-radius: 9px;
+  padding: 6.75px 13.5px;
   font-weight: 800;
   background: var(--draft-elevated);
   color: var(--draft-ink);
@@ -1033,7 +1033,7 @@
 
 .orderStrip {
   display: flex;
-  gap: 0.375rem;
+  gap: 6.75px;
   overflow-x: auto;
   scrollbar-width: thin;
   padding-bottom: 2px;
@@ -1043,13 +1043,13 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.375rem;
-  max-width: 11rem;
-  padding: 0.25rem 0.625rem;
+  gap: 6.75px;
+  max-width: 198px;
+  padding: 4.5px 11.25px;
   border: 1px solid var(--draft-border);
   border-radius: 9999px;
   background: var(--draft-elevated);
-  font-size: 0.8125rem;
+  font-size: 14.625px;
 }
 
 .orderChipViewer {
@@ -1063,9 +1063,9 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 0.25rem;
-  margin: 0 0.125rem;
-  font-size: 0.6875rem;
+  gap: 4.5px;
+  margin: 0 2.25px;
+  font-size: 12.375px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--draft-ink-2);
@@ -1075,7 +1075,7 @@
 .orderBreak::after {
   content: "";
   width: 2px;
-  height: 1rem;
+  height: 18px;
   border-radius: 1px;
   background: var(--draft-border);
 }
@@ -1096,7 +1096,7 @@
   display: inline-flex;
   flex: 0 0 auto;
   align-items: center;
-  font-size: 0.6875rem;
+  font-size: 12.375px;
   font-weight: 700;
   color: var(--draft-ink-2);
 }
@@ -1104,8 +1104,8 @@
 .makeupBadge {
   border: 1px dashed var(--draft-border);
   border-radius: 9999px;
-  padding: 0.125rem 0.5rem;
-  font-size: 0.75rem;
+  padding: 2.25px 9px;
+  font-size: 13.5px;
   font-weight: 500;
   color: var(--draft-ink-2);
 }
@@ -1115,12 +1115,12 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 3px;
-  max-width: 14rem;
+  max-width: 252px;
 }
 
 .seat {
-  width: 0.875rem;
-  height: 0.375rem;
+  width: 15.75px;
+  height: 6.75px;
   border-radius: 9999px;
   border: 1px solid var(--draft-border);
 }
@@ -1144,8 +1144,8 @@
 .onClockPill {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  padding: 0.25rem 0.625rem;
+  gap: 6.75px;
+  padding: 4.5px 11.25px;
   border: 1px solid var(--draft-accent);
   border-radius: 9999px;
   background: color-mix(in srgb, var(--draft-accent) 14%, var(--draft-surface));
@@ -1154,8 +1154,8 @@
 
 .liveDot {
   flex: 0 0 auto;
-  width: 0.5rem;
-  height: 0.5rem;
+  width: 9px;
+  height: 9px;
   border-radius: 9999px;
   background: var(--draft-accent);
 }
@@ -1200,7 +1200,7 @@
     display: flex;
     flex: 1 1 100%;
     align-items: center;
-    gap: 0.5rem;
+    gap: 9px;
     min-width: 0;
   }
   .nextSingle {
@@ -1230,13 +1230,13 @@
   .phoneSection {
     display: flex;
     flex-direction: column;
-    gap: 0.5rem;
+    gap: 9px;
     min-width: 0;
   }
   .phoneBody {
     display: flex;
     flex-direction: column;
-    gap: 0.75rem;
+    gap: 13.5px;
     min-width: 0;
   }
   .phoneBodyCollapsed {
@@ -1246,12 +1246,12 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 0.5rem;
+    gap: 9px;
     min-height: 44px;
     width: 100%;
-    padding: 0 0.25rem;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
+    padding: 0 4.5px;
+    border-radius: 9px;
+    font-size: 15.75px;
     font-weight: 600;
     text-align: left;
     background: transparent;
@@ -1275,15 +1275,15 @@
     z-index: 20;
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
-    padding: 0.5rem 0;
+    gap: 4.5px;
+    padding: 9px 0;
     background: linear-gradient(to top, var(--draft-surface) 80%, transparent);
   }
   .bottomBar .cta {
     min-height: 48px;
     width: auto;
     flex: 0 0 auto;
-    padding: 0 1.5rem;
+    padding: 0 27px;
   }
   /* The bottom bar carries the DRAFT button and the budget left; the verdict and the admin switch stay. */
   .stageCta,
@@ -1292,9 +1292,9 @@
   }
   .ctaDock {
     position: static;
-    padding: 0.5rem;
+    padding: 9px;
     border: 1px solid var(--draft-border);
-    border-radius: 0.75rem;
+    border-radius: 13.5px;
     background: var(--draft-surface);
   }
   .ctaDockPhoneEmpty {
@@ -1307,12 +1307,12 @@
 .toastStack {
   position: fixed;
   left: 50%;
-  bottom: 1rem;
+  bottom: 18px;
   z-index: 60;
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  width: min(28rem, calc(100vw - 2rem));
+  gap: 9px;
+  width: min(504px, calc(100vw - 36px));
   transform: translateX(-50%);
   pointer-events: none;
 }
@@ -1320,11 +1320,11 @@
 .toast {
   display: flex;
   align-items: flex-start;
-  gap: 0.75rem;
-  padding: 0.625rem 0.75rem;
+  gap: 13.5px;
+  padding: 11.25px 13.5px;
   border: 1px solid var(--draft-border);
   border-left-width: 4px;
-  border-radius: 0.625rem;
+  border-radius: 11.25px;
   background: var(--draft-surface);
   color: var(--draft-ink);
   box-shadow: 0 8px 24px color-mix(in srgb, var(--draft-ink) 14%, transparent);
@@ -1349,7 +1349,7 @@
 @keyframes filterSheetIn {
   from {
     opacity: 0;
-    transform: translateX(-1.5rem);
+    transform: translateX(-27px);
   }
   to {
     opacity: 1;
@@ -1364,7 +1364,7 @@
   }
   to {
     opacity: 0;
-    transform: translateX(-1.5rem);
+    transform: translateX(-27px);
   }
 }
 

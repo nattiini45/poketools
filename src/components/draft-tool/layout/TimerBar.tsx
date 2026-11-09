@@ -6,7 +6,7 @@
  * The colour band is always paired with the digits; the bar never flashes
  * (SPEC:536).
  *
- * Its flex basis is the narrowest bar worth drawing (10rem): in a clock row too
+ * Its flex basis is the narrowest bar worth drawing (180 px): in a clock row too
  * narrow to share a line with the "on the clock" banner (a 375 px phone) the bar
  * and its digits wrap onto their own line instead of being squeezed past the
  * row's edge.
@@ -50,7 +50,7 @@ export default function TimerBar({ clock, mode, playerName, compact = false }: T
   const fill = clock.paused || held ? styles.bandPaused : BAND_CLASS[clock.band];
 
   return (
-    <div className="flex min-w-0 flex-[1_1_10rem] flex-wrap items-center gap-x-3 gap-y-1">
+    <div className="flex min-w-0 flex-[1_1_180px] flex-wrap items-center gap-x-3 gap-y-1">
       <div
         role="timer"
         aria-label={t('clock.timerAria', { player: playerName, time })}

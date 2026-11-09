@@ -27,13 +27,13 @@ interface BoardFocusPanelProps extends EvoligaLocaleProps {
  * so the docked panel stays a server component — no client JS for paging.
  */
 const TAB =
-  'row-start-1 cursor-pointer rounded-full px-2 py-1.5 text-center text-[0.7rem] font-semibold ' +
+  'row-start-1 cursor-pointer rounded-full px-2 py-1.5 text-center text-[12.6px] font-semibold ' +
   'uppercase tracking-wide text-arena-ink-secondary transition-colors duration-150 ' +
   'hover:bg-[var(--hud-chip-hover)] hover:text-arena-ink motion-reduce:transition-none';
 
 /** ZA `L`/`R` shoulder glyph: which trigger pages the panel on a controller. */
 const SHOULDER =
-  'row-start-1 select-none rounded-md border border-arena-border px-1.5 py-0.5 text-[0.6rem] ' +
+  'row-start-1 select-none rounded-md border border-arena-border px-1.5 py-0.5 text-[10.8px] ' +
   'font-bold text-arena-ink-secondary';
 
 export function boardPanelTitle(kind: BoardPanelKind, stages: TournamentWithDetails[], locale: Locale): string {

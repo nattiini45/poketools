@@ -45,6 +45,7 @@ export default function OverlayShell({ config, children, height, locale }: Overl
 
   return (
     <div
+      data-frozen="broadcast"
       lang={locale}
       style={{
         ...style,
