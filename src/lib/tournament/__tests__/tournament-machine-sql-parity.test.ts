@@ -46,6 +46,33 @@ describe('tournamentMachine and the SQL writers of tournaments.status', () => {
     expect([...named].sort()).toEqual(['completed', 'upcoming']);
   });
 
+  it('bracket_write moves the status to active only from the status the caller read, under the phase row lock', () => {
+    const body = lastDefinition('bracket_write');
+    // The machine: from upcoming (start) and completed (regenerate_bracket) to active, both by the system; an active phase
+    // keeps its status (the write sets the value it holds).
+    expect(fromOf('start', 'active', 'system')).toEqual(['upcoming']);
+    expect(fromOf('regenerate_bracket', 'active', 'system')).toEqual(['completed']);
+    for (const event of ['start', 'regenerate_bracket']) {
+      const transition = tournamentMachine.spec.transitions.find((t) => t.event === event);
+      expect(transition?.writers).toContain('supabase/migrations/20261109210000_bracket_write.sql#bracket_write');
+    }
+    // The lock order of the round writers, then the check of the status read under the lock, before any write.
+    const advisory = body.indexOf('pg_advisory_xact_lock(hashtext(v_season::text))');
+    const seasonLock = body.indexOf('FROM public.seasons s WHERE s.id = v_season FOR KEY SHARE');
+    const phaseLock = body.search(/FROM public\.tournaments t WHERE t\.id = p_tournament_id FOR NO KEY UPDATE;\s+IF NOT FOUND THEN/);
+    const check = body.search(/IF v_status <> p_expected_status THEN\s+RAISE EXCEPTION 'tournament_status_changed'/);
+    const firstWrite = body.indexOf('DELETE FROM public.matches');
+    expect(advisory).toBeGreaterThan(0);
+    expect(seasonLock).toBeGreaterThan(advisory);
+    expect(phaseLock).toBeGreaterThan(seasonLock);
+    expect(check).toBeGreaterThan(phaseLock);
+    expect(firstWrite).toBeGreaterThan(check);
+    // One status write, to active, after the bracket.
+    const updates = [...body.matchAll(/UPDATE public\.tournaments SET status = '(\w+)'/g)].map((m) => m[1]);
+    expect(updates).toEqual(['active']);
+    expect(body.indexOf('UPDATE public.tournaments SET status')).toBeGreaterThan(body.indexOf('INSERT INTO public.matches'));
+  });
+
   it('phase_complete_at_stage_end completes an active phase only', () => {
     const body = lastDefinition('phase_complete_at_stage_end');
     expect(fromOf('complete', 'completed', 'system')).toEqual(['active']);
