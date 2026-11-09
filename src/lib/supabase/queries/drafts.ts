@@ -24,6 +24,7 @@ import type {
 import { DELETABLE_QUEUE_PHASES, isDeletableQueuePhase } from '@/types/draft-queue';
 import type { GroupedPoolSummary } from '@/types/season-group';
 import { DraftRuleError } from '@/lib/draft/errors';
+import { draftPoolStatusMachine, type LegacyDraftPoolStatus } from '@/lib/draft/pool-status-state';
 
 type DraftPoolRow = Tables<'draft_pools'>;
 type DraftPickRow = Tables<'draft_picks'>;
@@ -381,25 +382,33 @@ export async function createDraftPool(input: DraftPoolFormData): Promise<DraftPo
   return toDraftPool(data);
 }
 
+/**
+ * Legacy pools: move the status `from` → `to` (a move `draftPoolStatusMachine` allows; the caller asserts it for
+ * its actor). The WHERE re-checks engine and the status the caller read, so a pool that moved on in between is never
+ * overwritten; null = no row matched (moved, a queue pool, or gone).
+ */
 export async function updateDraftPoolStatus(
   id: string,
-  status: DraftPool['status']
-): Promise<DraftPool> {
+  from: LegacyDraftPoolStatus,
+  to: LegacyDraftPoolStatus
+): Promise<DraftPool | null> {
   const { data, error } = await supabase
     .from('draft_pools')
-    .update({ status })
+    .update({ status: to })
     .eq('id', id)
+    .eq('engine', 'legacy')
+    .eq('status', from)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
-  return toDraftPool(data);
+  return data ? toDraftPool(data) : null;
 }
 
 /**
- * Legacy pools: set a running pool to `complete` once its last pick has committed. The WHERE re-checks engine and
- * status in the same statement, so a pool an admin moved back to `pending` meanwhile is not completed; false = no row
- * matched (already complete, moved, or gone).
+ * Legacy pools: set a running pool to `complete` once its last pick has committed (the system's `complete` move of
+ * `draftPoolStatusMachine`). The WHERE re-checks engine and status in the same statement, so a pool an admin moved
+ * back to `pending` meanwhile is not completed; false = no row matched (already complete, moved, or gone).
  */
 export async function completeLegacyPoolIfRunning(id: string): Promise<boolean> {
   const { data, error } = await supabase
@@ -407,7 +416,7 @@ export async function completeLegacyPoolIfRunning(id: string): Promise<boolean> 
     .update({ status: 'complete' })
     .eq('id', id)
     .eq('engine', 'legacy')
-    .eq('status', 'in_progress')
+    .in('status', draftPoolStatusMachine.sourcesOf('complete', 'system'))
     .select('id')
     .maybeSingle();
 

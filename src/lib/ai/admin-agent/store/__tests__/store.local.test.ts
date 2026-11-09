@@ -406,6 +406,7 @@ describe.skipIf(!optIn)('Admin Assistant store on the local stack', () => {
         code: 'P0001',
         message: 'ADMIN_AGENT_STATUS_REGRESS',
       });
+      expect((await store.actions.getAction(admin, first.action.id))?.status).toBe('ok');
       expect((await store.actions.getActionByToolUse(admin, id, 'toolu_1'))?.id).toBe(first.action.id);
       expect((await store.actions.listActions(admin, id)).map((a) => a.id)).toEqual([first.action.id]);
 
