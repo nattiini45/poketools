@@ -210,7 +210,7 @@ describe('PATCH /api/drafts/[id]', () => {
 
       expect(res.status).toBe(200);
       expect(getSeasonById).not.toHaveBeenCalled();
-      expect(updateDraftPoolStatus).toHaveBeenCalledWith('pool-1', status);
+      expect(updateDraftPoolStatus).toHaveBeenCalledWith('pool-1', 'in_progress', status);
     },
   );
 
@@ -218,6 +218,87 @@ describe('PATCH /api/drafts/[id]', () => {
     vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
     const json = await (await PATCH(makeRequest({}), routeParams)).json();
     expect(json.code).toBe('validation_failed');
+  });
+
+  describe('legacy status moves (draft_pool.status machine)', () => {
+    beforeEach(() => {
+      vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', format_type: 'round_robin' } as never);
+    });
+
+    it.each([
+      ['pending', 'in_progress'],
+      ['in_progress', 'complete'],
+      ['complete', 'in_progress'],
+      ['in_progress', 'pending'],
+      ['complete', 'pending'],
+    ] as const)('lets an admin move a legacy pool %s → %s and expires the draft reads', async (from, to) => {
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: from } as never);
+      vi.mocked(updateDraftPoolStatus).mockResolvedValue({ ...mockPool, status: to } as never);
+
+      const res = await PATCH(makeRequest({ status: to }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json).toMatchObject({ success: true, data: { status: to } });
+      expect(updateDraftPoolStatus).toHaveBeenCalledWith('pool-1', from, to);
+      expect(revalidateTag).toHaveBeenCalledWith('season:season-1', { expire: 0 });
+    });
+
+    it('refuses pending → complete (409 state_transition_invalid) without writing', async () => {
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: 'pending' } as never);
+
+      const res = await PATCH(makeRequest({ status: 'complete' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(json).toMatchObject({
+        success: false,
+        error: 'Invalid transition: draft_pool.status pending → complete',
+        code: 'state_transition_invalid',
+        params: { machine: 'draft_pool.status', from: 'pending', to: 'complete' },
+      });
+      expect(updateDraftPoolStatus).not.toHaveBeenCalled();
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it.each(['pending', 'in_progress', 'complete'] as const)(
+      'answers the pool unchanged when it already is %s (a repeated click), without a write',
+      async (status) => {
+        vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status } as never);
+
+        const res = await PATCH(makeRequest({ status }), routeParams);
+        const json = await res.json();
+
+        expect(res.status).toBe(200);
+        expect(json).toMatchObject({ success: true, data: { status } });
+        expect(updateDraftPoolStatus).not.toHaveBeenCalled();
+      },
+    );
+
+    it('answers 409 POOL_STATUS_CHANGED when the pool moved on between the read and the guarded write', async () => {
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: 'in_progress' } as never);
+      vi.mocked(updateDraftPoolStatus).mockResolvedValue(null);
+
+      const res = await PATCH(makeRequest({ status: 'complete' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(409);
+      expect(json).toMatchObject({ success: false, code: 'POOL_STATUS_CHANGED' });
+      expect(updateDraftPoolStatus).toHaveBeenCalledWith('pool-1', 'in_progress', 'complete');
+      expect(revalidateTag).not.toHaveBeenCalled();
+    });
+
+    it('answers 404 POOL_NOT_FOUND for a missing pool, without a write', async () => {
+      vi.mocked(getDraftPoolById).mockResolvedValue(null);
+
+      const res = await PATCH(makeRequest({ status: 'in_progress' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(404);
+      expect(json).toMatchObject({ success: false, code: 'POOL_NOT_FOUND' });
+      expect(updateDraftPoolStatus).not.toHaveBeenCalled();
+    });
   });
 });
 

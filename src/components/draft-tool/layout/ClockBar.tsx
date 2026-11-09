@@ -21,6 +21,7 @@ import { useFormatter, useT } from '@/i18n/client';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { draftSharedMessages } from '@/i18n/messages/draft/shared';
 import { glossaryMessages } from '@/i18n/messages/glossary';
+import { draftPoolDisplayStatus } from '@/lib/draft/pool-phase-state';
 import { formatDuration, type ClockView } from '@/lib/draft-ui/clock';
 import type { DraftViewModel, RoundSeatState } from '@/lib/draft-ui/snapshot-adapter';
 import type { ExtensionKind } from '@/lib/draft-ui/snapshot-types';
@@ -85,9 +86,12 @@ export default function ClockBar({
   const running = vm.status === 'in_progress';
   const me = vm.participants.find((p) => p.isViewer);
 
+  // From the phase, not the status twin: a cancelled pool's status reads complete (DRAFT_PHASE_STATUS).
+  const shownStatus = draftPoolDisplayStatus(vm);
   let status: ReactNode = null;
-  if (vm.status === 'pending') status = <span className="font-semibold">{t('clock.pending')}</span>;
-  else if (vm.status === 'complete') {
+  if (shownStatus === 'pending') status = <span className="font-semibold">{t('clock.pending')}</span>;
+  else if (shownStatus === 'cancelled') status = <span className="font-semibold">{t('clock.cancelled')}</span>;
+  else if (shownStatus === 'complete') {
     status = (
       <span className="flex flex-wrap items-center gap-2 font-semibold">
         {t('clock.complete')}

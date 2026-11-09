@@ -38,6 +38,7 @@ import {
   listDraftPools,
   createDraftPool,
   updateDraftPoolStatus,
+  completeLegacyPoolIfRunning,
   switchDraftPoolToFreeOrder,
   deleteDraftPool,
   getPicksByPool,
@@ -430,15 +431,43 @@ describe('queries/drafts — pools', () => {
   describe('updateDraftPoolStatus', () => {
     it('updates status and returns pool', async () => {
       const updated = { ...draftPoolRow, status: 'in_progress' };
-      mockBuilder.single.mockResolvedValue({ data: updated, error: null });
-      const result = await updateDraftPoolStatus('dp-1', 'in_progress');
-      expect(result.status).toBe('in_progress');
+      mockBuilder.maybeSingle.mockResolvedValue({ data: updated, error: null });
+      const result = await updateDraftPoolStatus('dp-1', 'pending', 'in_progress');
+      expect(result?.status).toBe('in_progress');
       expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'in_progress' });
     });
 
+    it('guards the UPDATE with the engine and the status the caller read', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: { ...draftPoolRow, status: 'complete' }, error: null });
+      await updateDraftPoolStatus('dp-1', 'in_progress', 'complete');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'dp-1');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('engine', 'legacy');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'in_progress');
+    });
+
+    it('returns null when the pool moved on (no row matched)', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+      expect(await updateDraftPoolStatus('dp-1', 'pending', 'in_progress')).toBeNull();
+    });
+
     it('throws on error', async () => {
-      mockBuilder.single.mockResolvedValue({ data: null, error: new Error('fail') });
-      await expect(updateDraftPoolStatus('dp-1', 'in_progress')).rejects.toThrow('fail');
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: new Error('fail') });
+      await expect(updateDraftPoolStatus('dp-1', 'pending', 'in_progress')).rejects.toThrow('fail');
+    });
+  });
+
+  describe('completeLegacyPoolIfRunning', () => {
+    it('completes only a running legacy pool, in one statement', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: { id: 'dp-1' }, error: null });
+      expect(await completeLegacyPoolIfRunning('dp-1')).toBe(true);
+      expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'complete' });
+      expect(mockBuilder.eq).toHaveBeenCalledWith('engine', 'legacy');
+      expect(mockBuilder.in).toHaveBeenCalledWith('status', ['in_progress']);
+    });
+
+    it('returns false when no row matched', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+      expect(await completeLegacyPoolIfRunning('dp-1')).toBe(false);
     });
   });
 
