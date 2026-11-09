@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logger } from '@/lib/logger';
-import { seasonCreateRequestSchema, formatZodErrors } from '@/lib/validation';
+import { formatZodErrors } from '@/lib/validation';
+import { seasonCreateWithFormatSchema, type SeasonFromFormatBody } from '@/lib/format-studio/api-schemas';
+import { createLeagueFromFormat, type CreatedLeague, type LeagueFields } from '@/lib/format-studio/create-league';
 import { getAdminScope } from '@/lib/auth/admin-scope';
 import {
   listSeasons,
   listArchivedSeasons,
   listSeasonsByIds,
   createSeason,
+  getSeasonById,
 } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
@@ -17,7 +21,8 @@ import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { assertSeasonDateRange } from '@/lib/season/settings-guards';
-import { expireSeasonReads } from '@/lib/revalidation';
+import { expireFormatLibraryReads, expireSeasonReads } from '@/lib/revalidation';
+import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import {
   assertCloneAllowed,
   copyLeagueStructure,
@@ -27,7 +32,20 @@ import {
 } from '@/lib/season/clone';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import type { ApiResult } from '@/types/api';
-import type { SeasonWithDetails } from '@/types/season';
+import type { SessionPlayer } from '@/types/auth';
+import type { Season, SeasonWithDetails } from '@/types/season';
+
+/** League creations per admin and hour, every way of creating one (plan Q9). */
+const SEASON_CREATE_LIMIT = { limit: 20, windowSeconds: 60 * 60 } as const;
+/** The bucket of the format create and fork routes: a league from an example also forks a format. */
+const FORMAT_CREATE_LIMIT = { limit: 20, windowSeconds: 60 * 60 } as const;
+
+export interface SeasonFromFormatResult {
+  season: Season;
+  format: CreatedLeague['format'];
+  stages: CreatedLeague['stages'];
+  warnings: CreatedLeague['warnings'];
+}
 
 /**
  * GET /api/seasons — public list of active leagues, test leagues included
@@ -66,19 +84,69 @@ export async function GET(request: NextRequest) {
 }
 
 /**
- * Admin — create league.
+ * The new-competition wizard: the league, its format (an example forked and published, or a published version) and its
+ * stages in one transaction (`src/lib/format-studio/create-league.ts`). Every check runs before the one write.
+ */
+async function createFromFormat(player: SessionPlayer, fields: LeagueFields, fromFormat: SeasonFromFormatBody): Promise<NextResponse> {
+  const forks = 'preset_id' in fromFormat;
+  if (forks) {
+    const rate = await checkRateLimit('format-create', player.playerId, FORMAT_CREATE_LIMIT);
+    if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
+  }
+  await assertRulesetUsableForCreate(player, fields.ruleset_id);
+
+  const created = await createLeagueFromFormat({ actor: player, season: fields, fromFormat });
+
+  // Committed: the league list, the new league's pages and (for a fork) the format library show it on the next view.
+  expireSeasonReads(created.season_id, created.stage_ids);
+  if (forks) expireFormatLibraryReads();
+  if (created.ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
+
+  logAuditEvent({
+    actor_id: player.playerId,
+    actor_name: player.name,
+    action: 'season.create_from_format',
+    resource_type: 'season',
+    resource_id: created.season_id,
+    resource_name: fields.name,
+    metadata: {
+      definition_id: created.format.definition_id,
+      version_no: created.format.version_no,
+      preset_id: created.preset_id,
+      stage_count: created.stages.length,
+    },
+  });
+
+  const season = await getSeasonById(created.season_id);
+  if (season === null) throw new Error('Created league not found after create');
+  return NextResponse.json<ApiResult<SeasonFromFormatResult>>(
+    { success: true, data: { season, format: created.format, stages: created.stages, warnings: created.warnings } },
+    { status: 201 },
+  );
+}
+
+/**
+ * Admin — create league. At most 20 per admin and hour (`season-create`).
  *
  * `clone_from` starts the league from an existing one: after the normal
  * creation below, the source's phases (and on request its roster and, for
  * site admins, its league admins) are copied, and a failure removes the new
  * league again (`src/lib/season/clone.ts`). The 201 body then carries
  * `data.clone`, the copy report.
+ *
+ * `from_format` (the new-competition wizard, `format_type: 'custom'`, never
+ * with `clone_from`) creates the league with its format and stages in one
+ * transaction; the 201 body is `{ season, format, stages, warnings }`.
  */
 export async function POST(request: NextRequest) {
   try {
     const player = await requireAnyAdmin();
+
+    const rate = await checkRateLimit('season-create', player.playerId, SEASON_CREATE_LIMIT);
+    if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
+
     const rawBody = await request.json();
-    const zodResult = seasonCreateRequestSchema.safeParse(rawBody);
+    const zodResult = seasonCreateWithFormatSchema.safeParse(rawBody);
 
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
@@ -88,11 +156,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { clone_from: cloneFrom, ...seasonFields } = zodResult.data;
+    const { clone_from: cloneFrom, from_format: fromFormat, ...seasonFields } = zodResult.data;
 
     // The schema checks each date alone; the order of the two is checked here
     // (a refine on the schema would stop PATCH from extending it).
     assertSeasonDateRange(seasonFields.start_date, seasonFields.end_date);
+
+    if (fromFormat !== undefined) return await createFromFormat(player, seasonFields, fromFormat);
 
     // A refusal comes before any write: nothing is created for a source the
     // caller may not copy (the ruleset ensure below is a write too).
