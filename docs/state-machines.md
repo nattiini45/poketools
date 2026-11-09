@@ -12,6 +12,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 
 - [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
 - [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
+- [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
 
 ## Match
 
@@ -141,3 +142,33 @@ stateDiagram-v2
 | `set_forfeit` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `forfeit` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/format-engine/runtime/cron.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records a forfeit, or the format cron a deadline forfeit. |
 | `set_no_show` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `no_show` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` |  |
 | `take_back` | `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `none` | system, admin | `src/lib/match/outcome-takeback.ts`<br>`src/lib/match/finalize.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/supabase/queries/match-outcomes.ts` | The match leaves completed or disputed (reset, reopen, a game change), or a staged admin row whose status write lost; deleted by its set_at. |
+
+## Match proposal
+
+- **Id:** `match_proposal`
+- **State lives in:** match_proposals.status (enum match_proposal_status) with expires_at
+- **Module doc:** `docs/match.md`
+- **States:** `pending`, `accepted`, `rejected`, `expired`, `cancelled`
+- **Actors:** `responder`, `admin`, `system`
+
+A time one player proposes and the other answers within 48 h. A pending proposal past expires_at counts as expired: it can no longer be answered, and the row is moved to expired when its responder answers it or when a new proposal is made for the match. Accepting it schedules the match and cancels the other pending proposals.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> accepted: accept (responder)
+  pending --> rejected: reject (responder)
+  pending --> expired: expire (system)
+  pending --> cancelled: cancel (admin, system)
+  accepted --> [*]
+  rejected --> [*]
+  expired --> [*]
+  cancelled --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `accept` | `pending` | `accepted` | responder | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The responder accepts before expires_at; the match is scheduled at the proposed time. |
+| `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
+| `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
+| `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |

@@ -2,6 +2,10 @@ import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import type { Tables } from '@/types/database';
 import type { MatchProposal, MatchProposalStatus, MatchProposalWithPlayers } from '@/types/match-proposal';
+import { matchProposalMachine } from '@/lib/match/proposal-state';
+
+/** The only state an answer, an expiry or a cancellation leaves (`matchProposalMachine.sourcesOf`). */
+const [PENDING] = matchProposalMachine.sourcesOf('cancelled');
 
 type MatchProposalRow = Tables<'match_proposals'>;
 type PlayerJoin = { name: string };
@@ -134,15 +138,15 @@ export async function listPendingMatchProposalsForPlayer(
 }
 
 export async function acceptMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'accepted');
+  return updateMatchProposalStatus(id, 'accepted', 'responder');
 }
 
 export async function rejectMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'rejected');
+  return updateMatchProposalStatus(id, 'rejected', 'responder');
 }
 
 export async function expireMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'expired');
+  return updateMatchProposalStatus(id, 'expired', 'system');
 }
 
 export async function cancelPendingMatchProposalsForMatch(matchId: string): Promise<MatchProposal[]> {
@@ -152,7 +156,7 @@ export async function cancelPendingMatchProposalsForMatch(matchId: string): Prom
     .from('match_proposals')
     .update({ status: 'cancelled', responded_at: new Date().toISOString() })
     .eq('match_id', matchId)
-    .eq('status', 'pending')
+    .eq('status', PENDING)
     .select();
 
   if (error) throw error;
@@ -178,17 +182,20 @@ export async function deleteMatchProposalsByMatch(matchId: string): Promise<numb
   return count ?? 0;
 }
 
+/** An answer to a pending proposal (match proposal machine): written only while the row is still pending. */
 async function updateMatchProposalStatus(
   id: string,
-  status: Exclude<MatchProposalStatus, 'pending'>
+  status: Exclude<MatchProposalStatus, 'pending'>,
+  actor: 'responder' | 'system'
 ): Promise<MatchProposal> {
   assertValidUuid(id, 'proposal id');
+  matchProposalMachine.assertTransition(PENDING, status, actor);
 
   const { data, error } = await supabase
     .from('match_proposals')
     .update({ status, responded_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('status', 'pending')
+    .eq('status', PENDING)
     .select()
     .single();
 
