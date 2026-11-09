@@ -115,14 +115,30 @@ export async function bootDevServer({ appDir, port, logPath }) {
   return { baseUrl, stop: () => child.kill('SIGTERM') };
 }
 
+/** The cached body and its metadata, or null when the image was never cached (read without a separate existence check). */
+async function readCached(file) {
+  try {
+    return { meta: JSON.parse(await readFile(file + '.json', 'utf8')), body: await readFile(file) };
+  } catch (err) {
+    if (err && err.code === 'ENOENT') return null;
+    throw err;
+  }
+}
+
+/** The app answered 429: the capture would show a page without its data, so the job is run again later. */
+class RateLimitedError extends Error {
+  constructor(url, retryAfterSeconds) {
+    super('visual: rate limited by the app: ' + url);
+    this.retryAfterSeconds = retryAfterSeconds;
+  }
+}
+
 /** Serves an allow-listed external image from the disk cache, fetching it once. */
 async function serveCached(route, cacheDir) {
   const url = route.request().url();
   const file = join(cacheDir, createHash('sha256').update(url).digest('hex'));
-  if (existsSync(file)) {
-    const meta = await readJson(file + '.json');
-    return route.fulfill({ status: meta.status, headers: { 'content-type': meta.contentType }, body: await readFile(file) });
-  }
+  const cached = await readCached(file);
+  if (cached) return route.fulfill({ status: cached.meta.status, headers: { 'content-type': cached.meta.contentType }, body: cached.body });
   const response = await route.fetch();
   const body = await response.body();
   const meta = { url, status: response.status(), contentType: response.headers()['content-type'] ?? 'application/octet-stream' };
@@ -145,20 +161,33 @@ async function waitQuiet(inflight, { quietMs = 600, timeoutMs = 20_000 } = {}) {
   return false;
 }
 
-async function settlePage(page) {
+async function settlePage(page, { fakeClock = false } = {}) {
   await page.addStyleTag({ content: DEV_OVERLAY_HIDE_CSS });
-  await page.evaluate(async () => {
+  // Image loads are real events, so this resolves under a fake clock too; the bound runs in Node.
+  const loaded = page.evaluate(async () => {
     await document.fonts.ready;
     for (const img of document.images) if (img.loading === 'lazy') img.loading = 'eager';
-    const images = [...document.images].filter((img) => !img.complete);
-    await Promise.all(images.map((img) => new Promise((done) => {
+    const settle = () => Promise.all([...document.images].filter((img) => !img.complete).map((img) => new Promise((done) => {
       img.addEventListener('load', done, { once: true });
       img.addEventListener('error', done, { once: true });
-      setTimeout(done, 10_000);
     })));
+    await settle();
+    // A sprite the busy dev server failed once is requested again, so a capture never shows a hole by chance.
+    for (let retry = 0; retry < 2; retry += 1) {
+      const broken = [...document.images].filter((img) => img.complete && img.naturalWidth === 0 && img.currentSrc);
+      if (broken.length === 0) break;
+      for (const img of broken) {
+        const src = img.src;
+        img.src = '';
+        img.src = src;
+      }
+      await settle();
+    }
     await Promise.all([...document.images].filter((img) => img.complete && img.naturalWidth > 0).map((img) => img.decode().catch(() => undefined)));
-    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   });
+  await Promise.race([loaded, new Promise((done) => setTimeout(done, 15_000))]);
+  if (fakeClock) await page.clock.runFor(50);
+  else await page.evaluate(() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done))));
 }
 
 /** One sign-in per role and run, shared by the jobs that need it (concurrent jobs await the same promise). */
@@ -220,7 +249,12 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
         // storage unavailable: colorScheme still applies
       }
     }, job.theme);
-    if (job.clock) await context.clock.setFixedTime(new Date(job.clock));
+    // advanceMs: fake timers from the pinned instant, run forward by that much once the page has its data.
+    if (job.advanceMs != null) {
+      await context.clock.install({ time: new Date(job.clock) });
+      await context.clock.pauseAt(new Date(Date.parse(job.clock) + 1));
+    }
+    else if (job.clock) await context.clock.setFixedTime(new Date(job.clock));
     await context.route('**/*', async (route) => {
       const request = route.request();
       const policy = requestPolicy(request.url(), request.resourceType());
@@ -241,19 +275,37 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
       if (!QUIET_IGNORE.some((re) => re.test(r.url()))) inflight.add(r);
     });
     const done = (r) => inflight.delete(r);
+    let rateLimited = null;
+    page.on('response', (r) => {
+      if (r.status() === 429 && !rateLimited) rateLimited = new RateLimitedError(r.url(), Number(r.headers()['retry-after']) || 30);
+    });
     page.on('requestfinished', done);
     page.on('requestfailed', done);
     const response = await page.goto(baseUrl + job.url, { waitUntil: 'load', timeout: 240_000 });
     if (!response || response.status() >= 400) throw new Error('HTTP ' + (response ? response.status() : 'no response'));
     if (job.waitFor) await page.locator(job.waitFor).first().waitFor({ state: 'visible', timeout: 60_000 });
     await waitQuiet(inflight);
-    await settlePage(page);
+    const fakeClock = job.advanceMs != null;
+    if (fakeClock) {
+      // The paused clock holds the page's timers: step it until the overlay has rendered its data, so the
+      // rotation timer starts at a known instant, then run forward by exactly advanceMs.
+      const ready = page.locator(job.waitFor ?? 'div[lang] > :not(style)').first();
+      for (let step = 0; step < 400 && !rateLimited && !(await ready.isVisible()); step += 1) {
+        await page.clock.runFor(50);
+        await waitQuiet(inflight, { quietMs: 300, timeoutMs: 10_000 });
+      }
+      if (rateLimited) throw rateLimited;
+      if (!(await ready.isVisible())) throw new Error('visual: the page never rendered ' + (job.waitFor ?? 'its overlay content') + ' under the paused clock');
+      await page.clock.runFor(job.advanceMs);
+      await waitQuiet(inflight, { quietMs: 300, timeoutMs: 10_000 });
+    }
+    await settlePage(page, { fakeClock });
     await waitQuiet(inflight, { quietMs: 300, timeoutMs: 10_000 });
     await page.waitForTimeout(job.settleMs);
     if (job.click) {
       await page.locator(job.click).first().click();
       await waitQuiet(inflight, { quietMs: 300, timeoutMs: 10_000 });
-      await settlePage(page);
+      await settlePage(page, { fakeClock });
       await page.waitForTimeout(job.settleMs);
     }
     const shots = [];
@@ -272,6 +324,7 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
         }
       }
     }
+    if (rateLimited) throw rateLimited;
     if (shots.length < job.minRoots) throw new Error('found ' + shots.length + ' frozen roots, expected at least ' + job.minRoots + ' (' + job.roots.join(' | ') + ')');
     const files = [];
     for (let i = 0; i < shots.length; i += 1) {
@@ -325,6 +378,11 @@ async function runPool(items, concurrency, worker) {
 }
 
 export async function capture({ label, sets, only = [], appDir = REPO, port = DEFAULT_PORT, baseUrl = null, concurrency = 4, out = join(REPO, '.visual'), withSeed = true }) {
+  if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('visual: --concurrency must be a whole number of at least 1');
+  const manifests = Object.fromEntries(await Promise.all(sets.map(async (set) => [set, await readJson(join(HERE, set === 'frozen' ? 'frozen.json' : 'routes.json'))])));
+  const known = Object.values(manifests).flatMap((m) => m.targets.map((t) => t.id));
+  const unknown = only.filter((pattern) => pattern !== 'social-image' && !known.some((id) => id === pattern || id.startsWith(pattern + '/')));
+  if (unknown.length) throw new Error('visual: --only names no target: ' + unknown.join(', '));
   const runDir = join(out, label);
   const cacheDir = join(out, 'cache');
   const authDir = join(runDir, '.auth');
@@ -342,12 +400,13 @@ export async function capture({ label, sets, only = [], appDir = REPO, port = DE
   let failed = false;
   try {
     for (const set of sets) {
-      const manifest = await readJson(join(HERE, set === 'frozen' ? 'frozen.json' : 'routes.json'));
+      const manifest = manifests[set];
       const setDir = join(runDir, set);
       await mkdir(setDir, { recursive: true });
       const jobs = expandTargets(manifest, { ids, now: manifest.now ?? '', only });
       const skippedTargets = manifest.targets.filter((t) => (t.needs ?? []).some((id) => !(id in ids))).map((t) => t.id);
       const skipped = skippedTargets.length;
+      if (jobs.length === 0 && !(set === 'frozen' && only.includes('social-image'))) throw new Error('visual: ' + set + ': no capture selected (missing seed ids or --only)');
       if (skipped) console.warn('visual: ' + set + ': ' + skipped + ' targets skipped, their seed ids are missing (npm run visual:seed): ' + skippedTargets.join(', '));
       for (const job of jobs) job.clock = manifest.targets.find((t) => t.id === job.target)?.clock ? manifest.now : null;
       const entries = [];
@@ -367,7 +426,17 @@ export async function capture({ label, sets, only = [], appDir = REPO, port = DE
       await runPool(jobs, concurrency, async (job) => {
         const started = Date.now();
         try {
-          const { files, violations } = await captureJob(browser, job, { baseUrl, outDir: setDir, cacheDir, authDir, roles: manifest.roles ?? {} });
+          let result;
+          for (let attempt = 1; ; attempt += 1) {
+            try {
+              result = await captureJob(browser, job, { baseUrl, outDir: setDir, cacheDir, authDir, roles: manifest.roles ?? {} });
+              break;
+            } catch (err) {
+              if (!(err instanceof RateLimitedError) || attempt === 4) throw err;
+              await new Promise((wake) => setTimeout(wake, (Math.min(err.retryAfterSeconds, 60) + 1) * 1000));
+            }
+          }
+          const { files, violations } = result;
           entries.push({ key: job.key, target: job.target, url: job.url, viewport: job.viewportName, theme: job.theme, tolerance: job.tolerance, files, violations, ms: Date.now() - started });
           if (violations.length) failed = true;
         } catch (err) {

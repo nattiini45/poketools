@@ -2,13 +2,12 @@
  * Visual-capture harness: renders the Discord/social match card (src/lib/discord/match-card-image.tsx, next/og) for
  * fixed fixtures, so its PNGs join the frozen baselines (docs/visual-harness.md). Run by scripts/visual/run.mjs:
  *
- *   npx tsx --tsconfig scripts/visual/tsconfig.json scripts/visual/social-images.tsx <out dir> <cache dir>
+ *   npx --no-install tsx --tsconfig scripts/visual/tsconfig.json scripts/visual/social-images.tsx <out dir> <cache dir>
  *
  * No database and no Supabase: avatars are null, and the Pokémon renders the card fetches come from the
  * allow-listed sprite host through the harness's disk cache (fetched once, then offline).
  */
 import { createHash } from 'node:crypto';
-import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { MatchConfirmedData } from '../../src/types/discord';
@@ -58,9 +57,11 @@ globalThis.fetch = async (input: string | URL | Request, init?: RequestInit): Pr
   const host = new URL(url).hostname;
   if (!EXTERNAL_IMAGE_HOSTS.includes(host)) throw new Error('visual: social image fetch blocked: ' + url);
   const file = join(cacheDir, createHash('sha256').update(url).digest('hex'));
-  if (existsSync(file)) {
+  try {
     const meta = JSON.parse(await readFile(file + '.json', 'utf8')) as { status: number; contentType: string };
     return new Response(new Uint8Array(await readFile(file)), { status: meta.status, headers: { 'content-type': meta.contentType } });
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
   }
   const response = await realFetch(input, init);
   const body = Buffer.from(await response.arrayBuffer());

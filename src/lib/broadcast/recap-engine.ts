@@ -240,7 +240,10 @@ async function computeStatLeaders(
     // Most KOs: find pokemon with highest total_kos_dealt
     const mostKosPokemon = aggregates.length > 0
       ? aggregates.reduce((best, curr) =>
-          curr.total_kos_dealt > best.total_kos_dealt ? curr : best
+          curr.total_kos_dealt > best.total_kos_dealt
+            || (curr.total_kos_dealt === best.total_kos_dealt && curr.pokemon_name < best.pokemon_name)
+            ? curr
+            : best
         )
       : null;
 
@@ -250,7 +253,7 @@ async function computeStatLeaders(
       ? qualifiedPokemon.reduce((best, curr) => {
           const currWR = curr.total_wins / curr.total_games;
           const bestWR = best.total_wins / best.total_games;
-          return currWR > bestWR ? curr : best;
+          return currWR > bestWR || (currWR === bestWR && curr.pokemon_name < best.pokemon_name) ? curr : best;
         })
       : null;
 
