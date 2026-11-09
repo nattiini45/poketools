@@ -45,7 +45,7 @@ export default function SoloMyTeamPanel() {
       <div className="flex items-center gap-2">
         <button
           onClick={() => setPickerOpen(true)}
-          className="rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary hover:bg-poke-accent/20 transition-colors"
+          className="rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
         >
           {t('solo.loadTeam')}
         </button>
@@ -53,8 +53,8 @@ export default function SoloMyTeamPanel() {
           onClick={() => setImporterOpen(!importerOpen)}
           className={`rounded-poke-md px-3 py-1.5 text-xs font-heading font-bold transition-colors ${
             importerOpen
-              ? 'bg-poke-accent/20 text-poke-accent'
-              : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-accent/20'
+              ? 'text-poke-accent'
+              : 'bg-poke-muted text-poke-text-secondary'
           }`}
         >
           {t('solo.import')}
@@ -64,8 +64,8 @@ export default function SoloMyTeamPanel() {
             onClick={() => setEditorOpen(!editorOpen)}
             className={`rounded-poke-md px-3 py-1.5 text-xs font-heading font-bold transition-colors ${
               editorOpen
-                ? 'bg-poke-accent/20 text-poke-accent'
-                : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-accent/20'
+                ? 'text-poke-accent'
+                : 'bg-poke-muted text-poke-text-secondary'
             }`}
           >
             {editorOpen ? t('solo.closeEditor') : t('solo.editSets')}

@@ -320,7 +320,7 @@ export default function OverlayUrlBuilder({
                     value={config.accent ?? OVERLAY_DEFAULTS.accent}
                     onChange={(e) => updateConfig('accent', e.target.value)}
                     placeholder="#EF4444"
-                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-none focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20"
+                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-none focus:border-poke-border-focus focus:ring-2"
                   />
                 </div>
               </div>
@@ -338,7 +338,7 @@ export default function OverlayUrlBuilder({
                     value={config.accent2 ?? OVERLAY_DEFAULTS.accent2}
                     onChange={(e) => updateConfig('accent2', e.target.value)}
                     placeholder="#3B82F6"
-                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-none focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20"
+                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-none focus:border-poke-border-focus focus:ring-2"
                   />
                 </div>
               </div>

@@ -39,7 +39,7 @@ export default function EvolutionRosterCard({
     <Card
       variant="outlined"
       padding="sm"
-      className={isCurrentPicker ? 'border-poke-border-focus ring-1 ring-poke-border-focus/30' : ''}
+      className={isCurrentPicker ? 'border-poke-border-focus ring-1' : ''}
     >
       <div className="flex items-center justify-between mb-2">
         <span className="font-heading font-medium text-sm text-poke-text-primary">{playerName}</span>

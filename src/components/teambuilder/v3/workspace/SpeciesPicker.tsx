@@ -430,7 +430,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded-lg px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 focus:ring-poke-focus/40 focus:border-poke-focus/40 transition-all outline-none"
+          className="w-full bg-poke-surface border border-poke-border rounded-lg px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-none"
           placeholder={t('speciesPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -500,7 +500,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       </div>
 
       {/* Column headers — tap any column to build the sort stack (all breakpoints) */}
-      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1 border-b border-poke-border bg-poke-surface/50 text-[9px] sm:text-[10px] font-medium text-poke-text-muted select-none shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1 border-b border-poke-border text-[9px] sm:text-[10px] font-medium text-poke-text-muted select-none shrink-0">
         <div className="shrink-0" style={{ width: 32 }} />
         <div className="flex-1 min-w-0" />
         <div className="flex items-center shrink-0">

@@ -22,7 +22,7 @@ export default function IntelSubjectStrip() {
   if (filled.length === 0) return null;
 
   return (
-    <div className="flex items-center gap-1 px-2 py-1.5 border-b border-poke-border bg-poke-surface/60 shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-1 px-2 py-1.5 border-b border-poke-border shrink-0 overflow-x-auto">
       {state.team.map((set, i) => {
         if (!set?.species) return null;
         const isSubject = subject.slot === i;

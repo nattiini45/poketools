@@ -433,7 +433,7 @@ export default function TournamentTabsUnified({
                         round.status === 'active'
                           ? 'bg-green-500/15 text-green-400'
                           : round.status === 'completed'
-                            ? 'bg-poke-text-muted/15 text-poke-text-muted'
+                            ? 'text-poke-text-muted'
                             : 'bg-yellow-500/15 text-yellow-400'
                       }`}>
                         {enumLabel(tEnum, 'roundStatus', round.status)}

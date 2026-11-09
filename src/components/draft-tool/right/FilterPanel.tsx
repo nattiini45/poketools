@@ -83,7 +83,7 @@ export default function FilterPanel(props: FilterPanelProps) {
   return (
     <Dialog.Root open={view.filterPanelOpen} onOpenChange={(next) => (next ? undefined : close())}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-poke-inverse/20" />
+        <Dialog.Overlay className="fixed inset-0 z-50" />
         <Dialog.Content
           data-frozen="draft-room"
           id={id}

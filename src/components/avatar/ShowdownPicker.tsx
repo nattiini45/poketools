@@ -127,7 +127,7 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-4 py-2 pl-10 text-sm bg-poke-elevated border border-poke-border
                      rounded-poke-lg text-poke-text-primary placeholder:text-poke-text-muted
-                     focus:outline-none focus:ring-2 focus:ring-poke-accent/50 focus:border-poke-accent"
+                     focus:outline-none focus:ring-2 focus:border-poke-accent"
         />
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poke-text-muted"
@@ -243,7 +243,7 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
             onClick={save}
             disabled={saving}
             className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md shrink-0
-                     bg-poke-accent text-poke-surface hover:bg-poke-accent/90
+                     bg-poke-accent text-poke-surface
                      transition-colors disabled:opacity-50"
           >
             {saving ? t('showdown.saving') : t('showdown.useThis')}

@@ -500,7 +500,7 @@ function ReportTable({ headers, rows, empty }: { headers: string[]; rows: Cell[]
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={i} className="border-t border-poke-border/50">
+            <tr key={i} className="border-t">
               {row.map((cell, j) => (
                 <td key={j} className="pr-3 align-top">
                   {cell === null || cell === undefined ? '—' : cell}

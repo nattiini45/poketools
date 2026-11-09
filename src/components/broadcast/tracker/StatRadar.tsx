@@ -60,7 +60,6 @@ export default function StatRadar({ stats, size = 80 }: StatRadarProps) {
           fill="none"
           stroke="currentColor"
           strokeWidth={0.5}
-          className="text-poke-border/30"
         />
       ))}
 
@@ -76,7 +75,6 @@ export default function StatRadar({ stats, size = 80 }: StatRadarProps) {
             y2={y}
             stroke="currentColor"
             strokeWidth={0.3}
-            className="text-poke-border/20"
           />
         );
       })}

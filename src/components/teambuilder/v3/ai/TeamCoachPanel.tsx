@@ -100,7 +100,7 @@ export default function TeamCoachPanel({
       )}
 
       {error && (
-        <div className="p-2 text-xs text-poke-danger bg-poke-danger-light/20 rounded mb-2">
+        <div className="p-2 text-xs text-poke-danger rounded mb-2">
           {errorText(error)}
         </div>
       )}

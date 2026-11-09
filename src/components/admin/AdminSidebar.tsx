@@ -86,7 +86,7 @@ export default function AdminSidebar({
                         item.sub ? 'pl-7' : 'pl-3'
                       } ${FOCUS_RING} ${
                         active
-                          ? 'border-poke-accent text-poke-accent bg-poke-accent-light/60'
+                          ? 'border-poke-accent text-poke-accent'
                           : 'border-transparent text-poke-text-secondary hover:text-poke-text-primary hover:bg-poke-elevated'
                       }`}
                     >
@@ -124,7 +124,7 @@ export default function AdminSidebar({
                     aria-current={active ? 'page' : undefined}
                     className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-heading font-semibold transition-colors ${FOCUS_RING} ${
                       active
-                        ? 'border-poke-accent/40 bg-poke-accent-light text-poke-accent-strong'
+                        ? 'bg-poke-accent-light text-poke-accent-strong'
                         : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-accent hover:text-poke-text-primary'
                     }`}
                   >

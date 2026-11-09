@@ -50,8 +50,8 @@ export default function PoolsCard({ view }: { view: RunningView }) {
   if (groups.size === 0 && pools.length === 0) return null;
 
   return (
-    <div className="mb-3 rounded bg-poke-elevated/40 px-2 py-2" data-pools-card>
-      <p className="text-[10px] uppercase text-poke-text-muted/60 mb-1 tracking-wider">{t('validation.pools.title')}</p>
+    <div className="mb-3 rounded px-2 py-2" data-pools-card>
+      <p className="text-[10px] uppercase mb-1 tracking-wider">{t('validation.pools.title')}</p>
       {[...groups.entries()].map(([resource, rows]) => (
         <p key={resource} className="text-[11px] text-poke-text-secondary">
           {labelOf(rows[0]!.resource_label)}:{' '}

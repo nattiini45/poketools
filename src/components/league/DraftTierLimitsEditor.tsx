@@ -100,7 +100,7 @@ export function DraftTierLimitsEditorView({
                   min={0}
                   value={limits[pt]}
                   onChange={(e) => onChange(pt, Number(e.target.value))}
-                  className="w-16 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                  className="w-16 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 transition-colors"
                 />
                 <span className="text-xs text-poke-text-muted">
                   {limits[pt] === 0 ? t('tierLimits.unlimited') : t('tierLimits.max', { count: limits[pt] })}

@@ -47,7 +47,7 @@ function Bubble({ role, children }: { role: 'user' | 'assistant'; children: Reac
       </span>
       <div
         className={`max-w-full rounded-poke-lg border px-3 py-2 text-poke-text-primary ${
-          user ? 'border-poke-accent/30 bg-poke-accent-light' : 'border-poke-border bg-poke-surface'
+          user ? 'bg-poke-accent-light' : 'border-poke-border bg-poke-surface'
         }`}
       >
         {children}

@@ -28,7 +28,7 @@ export default function SignatureTeam({ signatures, compact = false }: Signature
             return (
               <div
                 key={slot}
-                className={`rounded-poke-lg border border-dashed border-poke-border bg-poke-elevated/40 text-center ${
+                className={`rounded-poke-lg border border-dashed border-poke-border text-center ${
                   compact ? 'p-2' : 'p-3'
                 }`}
               >

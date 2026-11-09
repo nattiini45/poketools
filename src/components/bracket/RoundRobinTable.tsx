@@ -89,7 +89,7 @@ export default function RoundRobinTable({
         </thead>
         <tbody>
           {participants.map((row) => (
-            <tr key={row.id} className="border-t border-poke-border/50">
+            <tr key={row.id} className="border-t">
               <td className="py-1 px-2 font-heading font-semibold text-poke-text-primary whitespace-nowrap">
                 {row.name}
               </td>

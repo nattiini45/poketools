@@ -174,7 +174,7 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
       {/* Conversation thread (appears once a turn exists) */}
       {expanded && (
         <div
-          className="mt-4 max-h-80 overflow-y-auto space-y-3 rounded-poke-md bg-poke-base/40 p-3 border border-poke-border"
+          className="mt-4 max-h-80 overflow-y-auto space-y-3 rounded-poke-md p-3 border border-poke-border"
           aria-live="polite"
         >
           <AgentChatThread
@@ -203,7 +203,7 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
             rows={2}
             disabled={streaming}
             placeholder={t('placeholder', { pokemon: localizeSpecies(PLACEHOLDER_SPECIES, dataLocale) })}
-            className="w-full resize-none px-3 py-2 text-sm bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:outline-none focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 disabled:opacity-60"
+            className="w-full resize-none px-3 py-2 text-sm bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:outline-none focus:border-poke-border-focus focus:ring-2 disabled:opacity-60"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
             <span className="text-[10px] text-poke-text-muted italic">

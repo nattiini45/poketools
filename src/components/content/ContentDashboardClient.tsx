@@ -115,7 +115,7 @@ export default function ContentDashboardClient({
           </div>
           <Link
             href="/dashboard/broadcast"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-poke-md bg-poke-accent text-poke-surface font-heading font-semibold text-sm hover:bg-poke-accent/90 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-poke-md bg-poke-accent text-poke-surface font-heading font-semibold text-sm transition-colors"
           >
             {t('dashboard.openTracker')}
           </Link>

@@ -33,7 +33,7 @@ export default function BulkBar({ selectedCount, hiddenCount, filteredCount, nar
   if (!hasSelection && !hasFiltered) return null;
 
   return (
-    <section aria-label={t('bulk.heading')} className="space-y-2 rounded-poke-md border border-poke-accent/40 bg-poke-accent-light/60 p-3">
+    <section aria-label={t('bulk.heading')} className="space-y-2 rounded-poke-md border p-3">
       {hasSelection && (
         <div className="flex flex-wrap items-center gap-2">
           <p className="mr-1 text-sm font-semibold text-poke-text-primary" role="status">

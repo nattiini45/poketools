@@ -106,7 +106,7 @@ export default function TeamPicker({ open, onClose, onSelect }: TeamPickerProps)
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t('picker.filterPlaceholder')}
-          className="w-full px-3 py-2 text-sm rounded-poke-md border border-poke-border bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors"
+          className="w-full px-3 py-2 text-sm rounded-poke-md border border-poke-border bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors"
         />
       )}
 
@@ -149,7 +149,7 @@ export default function TeamPicker({ open, onClose, onSelect }: TeamPickerProps)
             <button
               key={team.id}
               onClick={() => onSelect(team.pokemon)}
-              className="w-full text-left border border-poke-border rounded-poke-lg p-4 hover:border-poke-border-focus hover:bg-poke-elevated/50 hover:shadow-poke-card transition-all group"
+              className="w-full text-left border border-poke-border rounded-poke-lg p-4 hover:border-poke-border-focus hover:shadow-poke-card transition-all group"
             >
               {/* Header */}
               <div className="flex items-center justify-between mb-3">
@@ -174,7 +174,7 @@ export default function TeamPicker({ open, onClose, onSelect }: TeamPickerProps)
                 {team.pokemon.slice(0, 6).map((p, i) => (
                   <div
                     key={i}
-                    className="w-10 h-10 flex items-center justify-center bg-poke-elevated/50 rounded-poke border border-poke-border/50 group-hover:border-poke-border-focus/30 transition-colors"
+                    className="w-10 h-10 flex items-center justify-center rounded-poke border transition-colors"
                   >
                     <PokemonSprite name={p.species} size={36} />
                   </div>

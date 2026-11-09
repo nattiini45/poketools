@@ -300,7 +300,7 @@ export default async function ReplaysPage({ searchParams }: PageProps) {
                   {pageRows.map((row) => (
                     <tr
                       key={row.replayUrl}
-                      className="border-b border-poke-border last:border-b-0 hover:bg-poke-elevated/40"
+                      className="border-b border-poke-border last:border-b-0"
                     >
                       <td className="px-4 py-3 text-poke-text-secondary">
                         <LocalTime value={row.date} preset="date" />

@@ -179,7 +179,7 @@ export default function ArmedConfirmDialog({ open, ...rest }: ArmedConfirmDialog
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-poke-inverse/40 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-sm" />
         <ArmedConfirmContent {...rest} />
       </Dialog.Portal>
     </Dialog.Root>

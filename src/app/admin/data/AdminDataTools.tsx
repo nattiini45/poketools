@@ -628,7 +628,7 @@ export default function AdminDataTools() {
               value={csv}
               onChange={(event) => setCsv(event.target.value)}
               rows={10}
-              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20"
+              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2"
               // i18n-ignore: CSV column header names, read by the importer verbatim
               placeholder="name,discord_id,ps_username,champions_username"
             />

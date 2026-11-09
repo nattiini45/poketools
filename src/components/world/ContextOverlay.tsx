@@ -227,7 +227,7 @@ export default function ContextOverlay({
       className={
         docked
           ? 'world-focus-panel'
-          : 'w-full max-w-lg rounded-xl border border-arena-border bg-arena-surface p-0 shadow-poke-lg backdrop:bg-poke-inverse/40 backdrop:backdrop-blur-sm'
+          : 'w-full max-w-lg rounded-xl border border-arena-border bg-arena-surface p-0 shadow-poke-lg backdrop:backdrop-blur-sm'
       }
     >
       <div

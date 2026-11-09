@@ -544,7 +544,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('poolEditor.searchPlaceholder')}
-                  className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                  className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
                 />
 
                 {(searchResults.length > 0 || searching) && (
@@ -600,7 +600,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                     <select
                       value={addTier}
                       onChange={(e) => setAddTier(e.target.value)}
-                      className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                      className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                     >
                       <TierOptions />
                     </select>
@@ -617,7 +617,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                         setAddCost(e.target.value === '' ? '' : Number(e.target.value))
                       }
                       placeholder="—"
-                      className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                      className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 transition-colors"
                     />
                   </div>
                   <Button
@@ -790,7 +790,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                       value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
                       placeholder={t('poolEditor.templateNamePlaceholder')}
-                      className="flex-1 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                      className="flex-1 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
                     />
                     <Button
                       variant="secondary"

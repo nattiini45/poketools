@@ -287,7 +287,7 @@ export default function PickSelector({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={hasPool || isEvoLeague ? t('picker.filterPool') : t('picker.searchPokemon')}
-          className="w-full px-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors"
+          className="w-full px-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors"
         />
         {(hasPool || isEvoLeague) && (
           <p className="text-xs text-poke-text-muted mt-1">
@@ -496,7 +496,7 @@ export function AuctionBidField({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-invalid={problems.length > 0 || undefined}
         aria-describedby={problems.length > 0 ? 'pick-bid-min pick-bid-status' : 'pick-bid-min'}
-        className="w-20 px-2 py-1 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors"
+        className="w-20 px-2 py-1 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 transition-colors"
       />
       <span
         id="pick-bid-min"

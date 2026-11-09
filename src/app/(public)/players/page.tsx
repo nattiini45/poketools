@@ -58,7 +58,7 @@ export default async function PlayersDirectoryPage({ searchParams }: PageProps) 
             <Link
               key={player.id}
               href={`/players/${player.id}`}
-              className="flex items-center gap-3 p-4 bg-poke-surface border border-poke-border rounded-poke-lg hover:border-poke-accent/40 transition-colors"
+              className="flex items-center gap-3 p-4 bg-poke-surface border border-poke-border rounded-poke-lg transition-colors"
             >
               <PlayerAvatar avatarUrl={player.avatar_url} name={player.name} size={44} />
               <div className="min-w-0 flex-1">

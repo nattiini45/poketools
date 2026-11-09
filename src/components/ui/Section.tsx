@@ -53,7 +53,7 @@ export default function Section({
       )}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border bg-poke-elevated/50">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border">
           <div>
             {title && (
               <h2 className="text-lg font-heading font-bold tracking-tight text-poke-text-primary">

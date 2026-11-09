@@ -173,7 +173,7 @@ function readNumberField(target: HTMLInputElement): NumberFieldState {
 }
 
 const INPUT_CLASS =
-  'w-32 px-3 py-1.5 border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors';
+  'w-32 px-3 py-1.5 border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 transition-colors';
 
 interface DraftPoolManagerProps {
   seasonId: string;

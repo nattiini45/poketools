@@ -17,8 +17,8 @@ const IMPORTANCE_COLORS: Record<number, string> = {
   5: "text-red-400 bg-red-500/10 border-red-500/30",
   4: "text-orange-400 bg-orange-500/10 border-orange-500/30",
   3: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
-  2: "text-poke-text-secondary bg-poke-surface border-poke-border/30",
-  1: "text-poke-text-muted bg-poke-surface border-poke-border/20",
+  2: "text-poke-text-secondary bg-poke-surface",
+  1: "text-poke-text-muted bg-poke-surface",
 };
 
 export default function WinConditions() {

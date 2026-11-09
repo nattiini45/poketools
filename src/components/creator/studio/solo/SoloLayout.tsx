@@ -94,13 +94,13 @@ export default function SoloLayout() {
             <div key={path} className="flex gap-1">
               <button
                 onClick={() => window.open(overlayPath(path), '_blank')}
-                className="flex-1 rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary hover:bg-poke-accent/20 transition-colors"
+                className="flex-1 rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
               >
                 {t(`solo.overlays.${labelKey}`)}
               </button>
               <button
                 onClick={() => copyUrl(path)}
-                className="rounded-poke-md bg-poke-muted px-2 py-1.5 text-xs text-poke-text-secondary hover:bg-poke-accent/20 transition-colors"
+                className="rounded-poke-md bg-poke-muted px-2 py-1.5 text-xs text-poke-text-secondary transition-colors"
                 title={t('solo.copyUrlTitle')}
               >
                 {copiedUrl === path ? '✓' : '⎘'}

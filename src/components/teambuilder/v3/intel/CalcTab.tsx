@@ -363,7 +363,7 @@ export default function CalcTab() {
                 return (
                   <div
                     key={threat.species}
-                    className="flex items-center gap-2 py-1 border-b border-poke-border/30 last:border-0"
+                    className="flex items-center gap-2 py-1 border-b last:border-0"
                   >
                     <PokemonSprite name={threat.species} size={24} />
                     <div className="flex-1 min-w-0">

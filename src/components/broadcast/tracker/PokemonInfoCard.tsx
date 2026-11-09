@@ -99,7 +99,7 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
 
       {/* Player-specific stats */}
       {(info.koDealt > 0 || info.koReceived > 0 || info.bringPct !== null) && (
-        <div className="flex gap-3 text-[10px] pt-1 border-t border-poke-border/30">
+        <div className="flex gap-3 text-[10px] pt-1 border-t">
           {playerName && (
             <span className="text-poke-text-secondary">{playerName}:</span>
           )}

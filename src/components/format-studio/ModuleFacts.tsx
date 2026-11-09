@@ -45,7 +45,7 @@ export default function ModuleFacts({ modules, editorLinks, parentLevel }: Modul
                   </thead>
                   <tbody>
                     {mod.facts.map((fact) => (
-                      <tr key={fact.key} className="border-b border-poke-border/60 last:border-0">
+                      <tr key={fact.key} className="border-b last:border-0">
                         <th scope="row" className="py-1 pr-4 font-normal text-poke-text-secondary">
                           {fact.label}
                         </th>

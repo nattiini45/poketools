@@ -246,7 +246,7 @@ export default function InlinePokemonPicker({
         aria-controls={listboxId}
         aria-activedescendant={open && results[highlight] ? `${listboxId}-${highlight}` : undefined}
         data-testid={testId}
-        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm focus:outline-none focus:ring-2 focus:ring-poke-focus/40"
+        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm focus:outline-none focus:ring-2"
       />
       {open && (results.length > 0 || loading) && (
         <ul

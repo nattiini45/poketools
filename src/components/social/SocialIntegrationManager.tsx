@@ -400,7 +400,7 @@ export default function SocialIntegrationManager() {
                       px-2.5 py-1 text-xs rounded-full border transition-colors
                       ${
                         formEventFilter.includes(eventType)
-                          ? 'bg-poke-primary/20 border-poke-primary text-poke-primary'
+                          ? 'border-poke-primary text-poke-primary'
                           : 'bg-poke-surface border-poke-border text-poke-text-secondary hover:border-poke-border-hover'
                       }
                     `}
@@ -422,10 +422,10 @@ export default function SocialIntegrationManager() {
                       type="checkbox"
                       checked={formPostOptions[key]}
                       onChange={() => togglePostOption(key)}
-                      className="mt-0.5 rounded border-poke-border bg-poke-surface text-poke-primary focus:ring-poke-primary/50"
+                      className="mt-0.5 rounded border-poke-border bg-poke-surface text-poke-primary"
                     />
                     <div>
-                      <span className="text-sm text-poke-text-primary group-hover:text-poke-text-primary/80">
+                      <span className="text-sm text-poke-text-primary">
                         {t(`social.postOptionLabels.${key}.label`)}
                       </span>
                       <p className="text-xs text-poke-text-muted">{t(`social.postOptionLabels.${key}.description`)}</p>
@@ -580,7 +580,7 @@ export default function SocialIntegrationManager() {
                         key={key}
                         className={`px-1.5 py-0.5 text-[10px] rounded ${
                           integration.post_options[key]
-                            ? 'bg-poke-primary/10 text-poke-primary border border-poke-primary/30'
+                            ? 'text-poke-primary border'
                             : 'bg-poke-surface text-poke-text-muted border border-poke-border line-through'
                         }`}
                       >

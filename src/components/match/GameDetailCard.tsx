@@ -234,7 +234,7 @@ export default function GameDetailCard({
           <motion.span
             animate={{ rotate: bodyExpanded ? 180 : 0 }}
             transition={{ duration: DURATION.state }}
-            className={`text-sm ${editing ? 'text-poke-text-muted/40' : 'text-poke-text-muted'}`}
+            className={`text-sm ${editing ? '' : 'text-poke-text-muted'}`}
           >
             ▾
           </motion.span>

@@ -180,7 +180,7 @@ export default function ScheduleSection({
               {standings.map((row, i) => (
                 <tr
                   key={row.player_id}
-                  className="border-b border-arena-border/60 last:border-b-0 odd:bg-arena-elevated/40"
+                  className="border-b last:border-b-0"
                 >
                   <th
                     scope="row"

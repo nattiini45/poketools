@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,13 +69,77 @@ describe('tailwind.config status colours', () => {
     for (const value of Object.values(art)) expect(value).not.toContain('var(');
   });
 
-  it('every other poke token stays a plain var() (no alpha: 185 dropped utilities must stay dropped)', () => {
+  it('every other poke token stays a plain var() (no alpha: only the status hues honour /NN)', () => {
     const poke = colors().poke;
     const statusKeys = new Set(['blue', 'blue-hover', 'green', 'green-hover', 'yellow', 'danger', 'danger-hover']);
     for (const [key, value] of Object.entries(poke)) {
       if (statusKeys.has(key) || key.startsWith('type-')) continue;
       expect(value, key).toMatch(/^var\(--[a-z0-9-]+\)$/);
     }
+  });
+});
+
+describe('source stays free of dead opacity modifiers', () => {
+  const REPO = join(SRC, '..');
+  const PREFIXES =
+    'bg|text|border|ring-offset|ring|divide|fill|stroke|outline|from|via|to|placeholder|decoration|shadow|accent|caret';
+
+  /** Colours whose value is a plain var(): Tailwind 3.4 cannot alpha-blend them, so a /NN modifier on one generates nothing. */
+  function plainVarColours(): string[] {
+    const names = new Set(['poke-primary']);
+    for (const [key, value] of Object.entries(colors() as Record<string, string | ColorScale>)) {
+      if (typeof value === 'string') {
+        if (value.startsWith('var(')) names.add(key);
+        continue;
+      }
+      for (const [shade, shadeValue] of Object.entries(value)) {
+        if (shadeValue.startsWith('var(')) names.add(shade === 'DEFAULT' ? key : `${key}-${shade}`);
+      }
+    }
+    return [...names];
+  }
+
+  function deadModifiers(source: string, names: string[]): string[] {
+    const alternation = [...names]
+      .sort((a, b) => b.length - a.length)
+      .map((name) => name.replace(/-/g, '\\-'))
+      .join('|');
+    const pattern = new RegExp(
+      `(?<![\\w-])(?:[^\\s"'\`:]+:)*(?:${PREFIXES})(?:-[trblxyse])?-(?:${alternation})/(?:\\d+(?:\\.\\d+)?|\\[[^\\]]+\\])(?![\\w-])`,
+      'g',
+    );
+    return [...source.matchAll(pattern)].map((match) => match[0]);
+  }
+
+  it('the scan finds a dead modifier and ignores the status hues and the art statics', () => {
+    const names = plainVarColours();
+    expect(names).toEqual(expect.arrayContaining(['poke-surface', 'poke-primary', 'arena-ground', 'muted-foreground']));
+    expect(deadModifiers('hover:bg-poke-surface/50 md:ring-poke-border-focus/20 bg-arena-ground/80', names)).toEqual([
+      'hover:bg-poke-surface/50',
+      'md:ring-poke-border-focus/20',
+      'bg-arena-ground/80',
+    ]);
+    expect(
+      deadModifiers('bg-poke-blue/20 border-poke-danger-hover/40 bg-art-card-blue/10 bg-poke-surface', names),
+    ).toEqual([]);
+  });
+
+  it('no tracked source file under src/ (tests excluded) puts an opacity modifier on a plain var() colour', () => {
+    const names = plainVarColours();
+    const files = execFileSync('git', ['ls-files', '-z', '--', 'src'], {
+      cwd: REPO,
+      encoding: 'utf8',
+      maxBuffer: 1 << 28,
+    })
+      .split('\0')
+      .filter((file) => /\.(tsx?|jsx?|mjs|cjs|css|mdx?)$/.test(file) && !/(\.test\.|__tests__\/)/.test(file));
+    expect(files.length).toBeGreaterThan(1000);
+    const offenders: string[] = [];
+    for (const file of files) {
+      const found = deadModifiers(read(join(REPO, file)), names);
+      if (found.length > 0) offenders.push(`${file}: ${[...new Set(found)].join(', ')}`);
+    }
+    expect(offenders, 'Tailwind 3 drops <var colour>/NN silently: use a solid token or a tokenColor() hue').toEqual([]);
   });
 });
 
@@ -107,8 +172,8 @@ describe('generated utilities (postcss + tailwindcss)', () => {
     expect(ruleBody(css, '.border-poke-blue\\/40')).toContain('calc(0.4 * 100%)');
     expect(ruleBody(css, '.text-poke-on-blue')).toContain('var(--poke-on-blue)');
     expect(ruleBody(css, '.bg-art-card-blue\\/10')).toContain('rgb(59 130 246 / 0.1)');
-    // §1g defect pinned: a variable token with /NN generates nothing. Fixing it
-    // silently would make ~185 invisible styles appear in plaza.
+    // §1g defect pinned: a variable token with /NN generates nothing, which is
+    // why the source scan below forbids such classes.
     expect(ruleBody(css, '.bg-poke-surface\\/50')).toBeNull();
     expect(css).not.toContain('bg-poke-surface\\/50');
   });

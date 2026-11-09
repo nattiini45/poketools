@@ -116,7 +116,7 @@ export default function StatStepInput({
         step={step}
         className="w-full bg-poke-elevated border border-poke-border rounded-poke-sm px-0.5 py-1.5
           text-center text-xs text-poke-text-primary tabular-nums
-          focus:ring-1 focus:ring-poke-focus/40 focus:border-poke-focus/40 transition-all
+          focus:ring-1 transition-all
           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         value={value}
         onChange={(e) => onChange(clamp(parseInt(e.target.value) || 0))}

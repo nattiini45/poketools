@@ -263,7 +263,7 @@ export default function DashboardContent({
           </div>
 
           {/* Subtle decorative gradient */}
-          <div className="absolute -top-20 -right-20 w-60 h-60 bg-poke-accent/5 rounded-full blur-3xl pointer-events-none" />
+          <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full blur-3xl pointer-events-none" />
         </div>
       </motion.div>
 

@@ -162,7 +162,7 @@ export default function PokemonAutocomplete({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="w-full px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20"
+        className="w-full px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-1"
       />
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-poke-elevated border border-poke-border rounded-poke-md shadow-lg max-h-[300px] overflow-y-auto">
@@ -181,11 +181,7 @@ export default function PokemonAutocomplete({
                 onMouseDown={(e) => e.preventDefault()}
                 onClick={() => selectItem(species.name)}
                 onMouseEnter={() => setHighlightedIndex(idx)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors ${
-                  idx === highlightedIndex
-                    ? 'bg-poke-elevated/70'
-                    : 'hover:bg-poke-elevated/70'
-                }`}
+                className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors"
               >
                 <PokemonSprite name={species.name} size={24} />
                 <span className="text-poke-text-primary truncate flex-1">

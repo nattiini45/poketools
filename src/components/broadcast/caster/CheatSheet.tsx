@@ -88,7 +88,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
       {/* Roster */}
       <div className="grid grid-cols-2 gap-2">
         {player.pokemon.map((p) => (
-          <div key={p.species} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-poke-surface/50 border border-poke-border/20">
+          <div key={p.species} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border">
             <div className="flex-1 min-w-0">
               <div className="text-xs font-semibold text-poke-text truncate">{species(p.species)}</div>
               <div className="flex items-center gap-0.5 mt-0.5">
@@ -180,7 +180,7 @@ export default function CheatSheet({ data }: CheatSheetProps) {
               return (
                 <div
                   key={s.playerId}
-                  className={`flex items-center justify-between px-2 py-1 rounded ${isInMatch ? 'bg-poke-accent/10 text-poke-accent font-medium' : 'text-poke-text-secondary'}`}
+                  className={`flex items-center justify-between px-2 py-1 rounded ${isInMatch ? 'text-poke-accent font-medium' : 'text-poke-text-secondary'}`}
                 >
                   <span>#{s.rank} {s.playerName}</span>
                   <span className="font-mono">{s.wins}-{s.losses}</span>

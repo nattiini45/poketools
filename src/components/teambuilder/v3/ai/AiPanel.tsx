@@ -30,7 +30,7 @@ export default function AiPanel() {
   return (
     <div className="space-y-3">
       {/* Tab switcher — keeps the chat and the heuristic coaches one click apart. */}
-      <div className="flex gap-1 rounded-poke-md bg-poke-base/40 p-1 border border-poke-border">
+      <div className="flex gap-1 rounded-poke-md p-1 border border-poke-border">
         {(['assistant', 'coach'] as const).map((tabId) => (
           <button
             key={tabId}
