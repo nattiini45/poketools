@@ -182,6 +182,8 @@ describe.skipIf(!optIn)('competition_create_from_format (local stack)', () => {
 
     const season = await client.from('seasons').select('format_type, name, language, ruleset_id').eq('id', created.season_id).single();
     expect(season.data).toEqual({ format_type: 'custom', name: `Wichtelcup ${RUN}`, language: 'en', ruleset_id: null });
+    // The function hands back the stored row, so the route answers without a read after the commit.
+    expect(created.season).toMatchObject({ id: created.season_id, format_type: 'custom', language: 'en', route_theme: 'auto', status: 'upcoming' });
 
     const definition = await client
       .from('format_definitions')

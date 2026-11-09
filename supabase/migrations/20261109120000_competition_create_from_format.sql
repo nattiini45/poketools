@@ -157,7 +157,9 @@ BEGIN
     v_season_id, v_definition_id, v_version_no, p_format -> 'spec', p_format ->> 'spec_hash', p_format ->> 'seed',
     v_stages, v_preset_map, false);
 
+  -- The league row as stored, so the caller answers without a read after the commit.
   RETURN jsonb_build_object(
+    'season', (SELECT to_jsonb(s) FROM public.seasons s WHERE s.id = v_season_id),
     'season_id', v_season_id,
     'definition_id', v_definition_id,
     'version_no', v_version_no,

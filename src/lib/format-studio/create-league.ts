@@ -43,6 +43,7 @@ import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } 
 import { resolveNamedRulesets } from '@/lib/supabase/queries/ruleset-definitions';
 import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import type { SessionPlayer } from '@/types/auth';
+import type { Season } from '@/types/season';
 import type { AttachedStage } from './attach';
 import { canAttachDefinition } from './access';
 import { FormatStudioError, mapFormatDbError } from './errors';
@@ -72,6 +73,8 @@ export interface CreateLeagueInput {
 }
 
 export interface CreatedLeague {
+  /** The league row as the transaction stored it. */
+  season: Season;
   season_id: string;
   format: { definition_id: string; version_no: number };
   /** The example the format was forked from (null for a stored format). */
@@ -262,13 +265,25 @@ export async function createLeagueFromFormat(input: CreateLeagueInput): Promise<
   }
   stages.sort((a, b) => a.stage_order - b.stage_order);
 
-  const summary = await getSeasonFormatSummary(result.season_id);
+  // The league exists from here on: a failed read of the engine must not turn the create into an error (a retry would make a
+  // second league), so it falls back to every gap the plan found.
+  let warnings: EngineGap[] = planned.warnings;
+  try {
+    const summary = await getSeasonFormatSummary(result.season_id);
+    if (summary !== null) warnings = engineGaps(planned.warnings, summary.engine);
+  } catch (err) {
+    logger.warn('format-studio/create-league', 'engine read after the create failed; reporting every engine gap', {
+      seasonId: result.season_id,
+      error: err,
+    });
+  }
   return {
+    season: result.season,
     season_id: result.season_id,
     format: { definition_id: result.definition_id, version_no: result.version_no },
     preset_id: 'preset_id' in fromFormat ? fromFormat.preset_id : null,
     stages,
-    warnings: summary === null ? planned.warnings : engineGaps(planned.warnings, summary.engine),
+    warnings,
     stage_ids: result.stages.map((stage) => stage.id),
     ruleset_ids: result.ruleset_ids,
   };

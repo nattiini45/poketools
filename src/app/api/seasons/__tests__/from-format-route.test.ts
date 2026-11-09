@@ -30,7 +30,6 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   listArchivedSeasons: vi.fn(),
   listSeasonsByIds: vi.fn(),
   createSeason: vi.fn(),
-  getSeasonById: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ addResourceAdmin: vi.fn() }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
@@ -40,7 +39,7 @@ import { revalidatePath, revalidateTag } from 'next/cache';
 import { AuthError, requireAnyAdmin } from '@/lib/auth/helpers';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
-import { createSeason, getSeasonById } from '@/lib/supabase/queries/seasons';
+import { createSeason } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { logAuditEvent } from '@/lib/audit/log';
 import { createLeagueFromFormat, type CreatedLeague } from '@/lib/format-studio/create-league';
@@ -92,6 +91,7 @@ const season: Season = {
 } as Season;
 
 const created = (overrides: Partial<CreatedLeague> = {}): CreatedLeague => ({
+  season,
   season_id: SEASON,
   format: { definition_id: DEFINITION, version_no: 1 },
   preset_id: 'wichtelcup',
@@ -116,7 +116,6 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue(allowed);
   vi.mocked(assertRulesetUsableForCreate).mockResolvedValue(undefined);
   vi.mocked(createLeagueFromFormat).mockResolvedValue(created());
-  vi.mocked(getSeasonById).mockResolvedValue(season);
 });
 
 describe('POST /api/seasons with from_format: guard and rate limits', () => {

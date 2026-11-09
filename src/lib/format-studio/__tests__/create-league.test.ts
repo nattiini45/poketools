@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { PRESETS, compile, contentHash, type FormatDefinition } from '@/lib/format-kit';
 import type { SessionPlayer } from '@/types/auth';
+import type { Season } from '@/types/season';
 import { FormatStudioError } from '../errors';
 import type { FormatDefinitionMeta, FormatVersion, SeasonFormatSummary } from '../library-types';
 
@@ -92,6 +93,7 @@ beforeEach(() => {
   vi.mocked(canUseDefinitions).mockResolvedValue(true);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary('kit'));
   vi.mocked(createCompetitionFromFormat).mockImplementation(async (input) => ({
+    season: { id: input.season.id, name: input.season.name } as Season,
     season_id: input.season.id,
     definition_id: input.format.definition_id,
     version_no: input.format.version_no ?? 1,
@@ -289,5 +291,13 @@ describe('createLeagueFromFormat: database failures', () => {
     vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary('legacy'));
     const created = await run();
     expect(Array.isArray(created.warnings)).toBe(true);
+  });
+
+  it('still answers the committed league when the engine read after the commit fails', async () => {
+    vi.mocked(getSeasonFormatSummary).mockRejectedValue(new Error('read timed out'));
+    const created = await run();
+    expect(created.season).toMatchObject({ id: created.season_id, name: 'Winter Cup' });
+    expect(Array.isArray(created.warnings)).toBe(true);
+    expect(logger.warn).toHaveBeenCalledWith('format-studio/create-league', expect.any(String), expect.objectContaining({ seasonId: created.season_id }));
   });
 });

@@ -7,11 +7,13 @@
 import 'server-only';
 
 import { supabase } from '../client';
-import type { Json } from '@/types/database';
+import type { Database, Json } from '@/types/database';
+import type { Season } from '@/types/season';
 import type { LText } from '@/lib/studio-core/ltext';
 import type { ResolvedRules, RulesetDocument } from '@/lib/ruleset-kit/types';
 import type { FormatDefinition } from '@/lib/format-kit/client';
 import type { AttachStageRow } from './season-formats';
+import { toSeason } from './seasons';
 
 /** The league row to insert. `route_theme` and `language` are omitted to keep their column defaults. */
 export interface CompetitionSeasonInput {
@@ -71,6 +73,8 @@ export interface CompetitionCreateInput {
 }
 
 export interface CompetitionCreateResult {
+  /** The league row as the function stored it. */
+  season: Season;
   season_id: string;
   definition_id: string;
   version_no: number;
@@ -94,7 +98,14 @@ export async function createCompetitionFromFormat(input: CompetitionCreateInput)
   });
   if (error) throw error;
   const result = (data ?? {}) as Record<string, unknown>;
-  if (typeof result.season_id !== 'string' || typeof result.definition_id !== 'string' || typeof result.version_no !== 'number') {
+  const seasonRow = result.season;
+  if (
+    typeof seasonRow !== 'object' ||
+    seasonRow === null ||
+    typeof result.season_id !== 'string' ||
+    typeof result.definition_id !== 'string' ||
+    typeof result.version_no !== 'number'
+  ) {
     throw new Error('competition_create_from_format returned an unexpected shape');
   }
   const stages = Array.isArray(result.stages)
@@ -105,6 +116,7 @@ export async function createCompetitionFromFormat(input: CompetitionCreateInput)
       )
     : [];
   return {
+    season: toSeason(seasonRow as Database['public']['Tables']['seasons']['Row']),
     season_id: result.season_id,
     definition_id: result.definition_id,
     version_no: result.version_no,

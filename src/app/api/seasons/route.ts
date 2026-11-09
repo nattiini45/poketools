@@ -12,7 +12,6 @@ import {
   listArchivedSeasons,
   listSeasonsByIds,
   createSeason,
-  getSeasonById,
 } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
@@ -117,10 +116,8 @@ async function createFromFormat(player: SessionPlayer, fields: LeagueFields, fro
     },
   });
 
-  const season = await getSeasonById(created.season_id);
-  if (season === null) throw new Error('Created league not found after create');
   return NextResponse.json<ApiResult<SeasonFromFormatResult>>(
-    { success: true, data: { season, format: created.format, stages: created.stages, warnings: created.warnings } },
+    { success: true, data: { season: created.season, format: created.format, stages: created.stages, warnings: created.warnings } },
     { status: 201 },
   );
 }
