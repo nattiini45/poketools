@@ -20,7 +20,7 @@ function job(name) {
 }
 
 describe('advisory local-stack CI jobs', () => {
-  it.each(['database', 'e2e'])('%s is advisory, secretless and loopback-only', (name) => {
+  it.each(['database', 'e2e', 'visual'])('%s is advisory, secretless and loopback-only', (name) => {
     const body = job(name);
     expect(body).toMatch(/^ {4}continue-on-error: true$/m);
     expect(body).not.toMatch(/secrets\./);
@@ -29,7 +29,7 @@ describe('advisory local-stack CI jobs', () => {
   });
 
   it('each advisory job is documented as such above its definition', () => {
-    for (const name of ['database', 'e2e']) {
+    for (const name of ['database', 'e2e', 'visual']) {
       const above = ci.slice(0, ci.search(new RegExp(`^  ${name}:\\n`, 'm')));
       expect(above.trimEnd().split('\n').slice(-6).join('\n')).toMatch(/ADVISORY: not a required check/);
     }

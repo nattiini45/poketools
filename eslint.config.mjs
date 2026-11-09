@@ -43,6 +43,7 @@ export const SCRIPT_BROWSER_CONTEXT_FILES = [
   'scripts/lib/look-r6-evidence.mjs',
   'scripts/lib/reveal-anchors.mjs',
   'scripts/lib/w1-evidence.mjs',
+  'scripts/visual/run.mjs',
   'scripts/world-assets/capture-props-c107.mjs',
 ];
 

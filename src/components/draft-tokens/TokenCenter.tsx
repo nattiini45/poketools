@@ -152,7 +152,7 @@ export default function TokenCenter({ seasonId, catalog, source: injected, playe
   const cosmoLine = data.cosmo ? (data.lines.find((l) => l.line_id === data.cosmo?.line_id) ?? null) : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-frozen="draft-room">
       {readOnly ? <p className={NOTE}>{t('center.adminView')}</p> : null}
       <div role="status" aria-live="polite">
         {notice ? <NoticeBar notice={notice} catalog={catalog} onDismiss={dismiss} /> : null}

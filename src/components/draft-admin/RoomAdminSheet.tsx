@@ -157,6 +157,7 @@ export default function RoomAdminSheet({
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-poke-inverse/30 backdrop-blur-[2px]" />
         <Dialog.Content
+          data-frozen="draft-room"
           // `.tokens`, not `.root` (see PlayersSheet): the root's `position: relative` would beat `fixed`.
           className={`${styles.tokens} fixed inset-y-0 right-0 z-50 flex w-full max-w-xl flex-col border-l border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] shadow-poke-lg`}
           onCloseAutoFocus={onCloseAutoFocus}

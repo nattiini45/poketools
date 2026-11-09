@@ -1,0 +1,586 @@
+{
+  "$comment": "Frozen surfaces (docs/visual-harness.md): every capture here must stay pixel-identical across a PR unless the PR is meant to change a frozen surface. Captures are clipped to the frozen roots ([data-frozen] or the surface's own root), so site chrome may change around them.",
+  "version": 1,
+  "now": "2026-10-15T12:00:00.000Z",
+  "viewports": {
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844
+    },
+    "overlay": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "defaults": {
+    "settleMs": 400
+  },
+  "targets": [
+    {
+      "id": "draft-room",
+      "url": "/draft-preview?scenario={scenario}&world={world}&lang=en&now={now}",
+      "clock": true,
+      "matrix": {
+        "scenario": [
+          "live-my-turn",
+          "live-waiting",
+          "live-up-next",
+          "live-paused",
+          "live-makeup",
+          "live-ext-used",
+          "live-reasons",
+          "live-filters",
+          "live-confirm",
+          "live-wall",
+          "live-roster",
+          "live-filters-more",
+          "live-index-loading",
+          "live-index-failed",
+          "slow-my-turn",
+          "slow-penalty",
+          "redraft-submission",
+          "redraft-locked",
+          "redraft-reveal",
+          "redraft-picking",
+          "complete",
+          "spectator",
+          "signed-out",
+          "admin-room",
+          "admin-room-sheet",
+          "admin-room-refused",
+          "tokens-before",
+          "tokens-open",
+          "tokens-comeback",
+          "many-drafted"
+        ],
+        "world": [
+          "evoliga",
+          "none"
+        ]
+      },
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"draft-room\"]"
+      ]
+    },
+    {
+      "id": "draft-room-sakura",
+      "url": "/draft-preview?scenario={scenario}&world=sakura&lang=en&now={now}",
+      "clock": true,
+      "matrix": {
+        "scenario": [
+          "live-my-turn",
+          "live-filters",
+          "live-confirm",
+          "redraft-reveal",
+          "tokens-open",
+          "admin-room-sheet"
+        ]
+      },
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"draft-room\"]"
+      ]
+    },
+    {
+      "id": "draft-room-de",
+      "url": "/draft-preview?scenario={scenario}&lang=de&now={now}",
+      "clock": true,
+      "matrix": {
+        "scenario": [
+          "live-my-turn",
+          "live-filters",
+          "redraft-submission",
+          "tokens-open",
+          "admin-room-sheet"
+        ],
+        "lang": [
+          "de"
+        ]
+      },
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"draft-room\"]"
+      ]
+    },
+    {
+      "id": "route-world-plaza",
+      "url": "/route-preview?tier=lite",
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "route-world",
+      "url": "/route-preview?world={world}&scenario={scenario}&tier=lite",
+      "matrix": {
+        "world": [
+          "sakura",
+          "mountain",
+          "clouds"
+        ],
+        "scenario": [
+          "populated",
+          "empty",
+          "long-names"
+        ]
+      },
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "route-world-open",
+      "url": "/route-preview?world={world}&format=open&tier=lite",
+      "matrix": {
+        "world": [
+          "sakura",
+          "mountain",
+          "clouds"
+        ]
+      },
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "broadcast-wiki-moves",
+      "url": "/broadcast/wiki/moves/earthquake?theme={theme}&lang=en",
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 1500
+    },
+    {
+      "id": "broadcast-wiki-items",
+      "url": "/broadcast/wiki/items/choice-scarf?theme={theme}&lang=en",
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 1500
+    },
+    {
+      "id": "broadcast-wiki-abilities",
+      "url": "/broadcast/wiki/abilities/intimidate?theme={theme}&lang=en",
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 1500
+    },
+    {
+      "id": "broadcast-wiki-tera",
+      "url": "/broadcast/wiki/tera/fire?theme={theme}&lang=en",
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 1500
+    },
+    {
+      "id": "league-world-sakura",
+      "url": "/leagues/{leagueSakura}?tier=lite",
+      "needs": [
+        "leagueSakura"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "league-world-plaza-epb",
+      "url": "/leagues/{leagueEpb}?tier=lite",
+      "needs": [
+        "leagueEpb"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "league-world-mountain",
+      "url": "/leagues/{leagueMountain}?tier=lite",
+      "needs": [
+        "leagueMountain"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "league-world-clouds",
+      "url": "/leagues/{leagueClouds}?tier=lite",
+      "needs": [
+        "leagueClouds"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-world]"
+      ]
+    },
+    {
+      "id": "broadcast-match-results",
+      "url": "/broadcast/match/{matchCompletedBo3}/results?theme={theme}&lang=en",
+      "needs": [
+        "matchCompletedBo3"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-match-story",
+      "url": "/broadcast/match/{matchCompletedBo3}/story?theme={theme}&lang=en",
+      "needs": [
+        "matchCompletedBo3"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 6000
+    },
+    {
+      "id": "broadcast-match-moments",
+      "url": "/broadcast/match/{matchCompletedBo3}/moments?theme={theme}&lang=en",
+      "needs": [
+        "matchCompletedBo3"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-match-live",
+      "url": "/broadcast/match/{matchLive}/live?theme={theme}&lang=en",
+      "needs": [
+        "matchLive"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-match-h2h",
+      "url": "/broadcast/match/{matchLive}/h2h?theme={theme}&lang=en",
+      "needs": [
+        "matchLive"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-match-preview",
+      "url": "/broadcast/match/{matchScheduled}/preview?theme={theme}&lang=en",
+      "needs": [
+        "matchScheduled"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-match-teams",
+      "url": "/broadcast/match/{matchScheduled}/teams?theme={theme}&lang=en",
+      "needs": [
+        "matchScheduled"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-league-standings",
+      "url": "/broadcast/league/{leagueSakura}/standings?theme={theme}&lang=en",
+      "needs": [
+        "leagueSakura"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-league-attract",
+      "url": "/broadcast/league/{leagueSakura}/attract?theme={theme}&lang=en",
+      "needs": [
+        "leagueSakura"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-league-recap",
+      "url": "/broadcast/league/{leagueSakura}/recap?tournament_id={stageSakura}&round_id={roundSakura1}&theme={theme}&lang=en",
+      "needs": [
+        "leagueSakura",
+        "stageSakura",
+        "roundSakura1"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-league-usage",
+      "url": "/broadcast/league/{leagueSakura}/usage?tournament_id={stageSakura}&round_id={roundSakura1}&theme={theme}&lang=en",
+      "needs": [
+        "leagueSakura",
+        "stageSakura",
+        "roundSakura1"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-solo-ko-stats",
+      "url": "/broadcast/solo/{castSessionSolo}/ko-stats?theme={theme}&lang=en",
+      "needs": [
+        "castSessionSolo"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-solo-live",
+      "url": "/broadcast/solo/{castSessionSolo}/live?theme={theme}&lang=en",
+      "needs": [
+        "castSessionSolo"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-solo-session-record",
+      "url": "/broadcast/solo/{castSessionSolo}/session-record?theme={theme}&lang=en",
+      "needs": [
+        "castSessionSolo"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-solo-team-preview",
+      "url": "/broadcast/solo/{castSessionSolo}/team-preview?theme={theme}&lang=en",
+      "needs": [
+        "castSessionSolo"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-draft-replay",
+      "url": "/broadcast/draft/{draftPool}/replay?theme={theme}&lang=en",
+      "needs": [
+        "draftPool"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500
+    },
+    {
+      "id": "broadcast-draft-live",
+      "url": "/broadcast/draft/{draftPool}/live?theme={theme}&lang=en",
+      "needs": [
+        "draftPool"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500,
+      "signIn": "admin"
+    },
+    {
+      "id": "broadcast-draft-pick",
+      "url": "/broadcast/draft/{draftPool}/pick?theme={theme}&lang=en",
+      "needs": [
+        "draftPool"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500,
+      "signIn": "admin"
+    },
+    {
+      "id": "broadcast-player-spotlight",
+      "url": "/broadcast/player/{playerAria}/spotlight?theme={theme}&lang=en",
+      "needs": [
+        "playerAria"
+      ],
+      "viewports": [
+        "overlay"
+      ],
+      "fullPage": true,
+      "settleMs": 2500,
+      "signIn": "admin"
+    },
+    {
+      "id": "match-highlight-card-bo3",
+      "url": "/tournaments/{stageSakura}/matches/{matchCompletedBo3}",
+      "needs": [
+        "stageSakura",
+        "matchCompletedBo3"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "#match-highlight-card"
+      ]
+    },
+    {
+      "id": "match-highlight-card-bo1",
+      "url": "/tournaments/{stageSakura}/matches/{matchCompletedBo1}",
+      "needs": [
+        "stageSakura",
+        "matchCompletedBo1"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "#match-highlight-card"
+      ]
+    },
+    {
+      "id": "match-highlight-card-epb",
+      "url": "/tournaments/{stageEpb}/matches/{matchEpbCompleted}",
+      "needs": [
+        "stageEpb",
+        "matchEpbCompleted"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "#match-highlight-card"
+      ]
+    },
+    {
+      "id": "epb-replay",
+      "url": "/tournaments/{stageEpb}/matches/{matchEpbCompleted}",
+      "needs": [
+        "stageEpb",
+        "matchEpbCompleted"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"epb-replay\"]"
+      ]
+    },
+    {
+      "id": "epb-replay-open",
+      "url": "/tournaments/{stageEpb}/matches/{matchEpbCompleted}",
+      "needs": [
+        "stageEpb",
+        "matchEpbCompleted"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"epb-replay\"]"
+      ],
+      "click": "[data-frozen=\"epb-replay\"] button",
+      "settleMs": 3000
+    }
+  ],
+  "roles": {
+    "admin": {
+      "email": "local-admin@poketools.test",
+      "password": "poketools-local-admin"
+    }
+  }
+}

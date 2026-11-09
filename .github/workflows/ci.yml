@@ -196,3 +196,53 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 7
+
+  # ADVISORY: not a required check and never added to the main-protection ruleset. The visual-capture harness
+  # (docs/visual-harness.md): its own ephemeral Supabase stack on the runner (loopback only, no hosted project, no
+  # secrets, no Storage), the deterministic visual seed, then frozen-surface captures of the PR's base and head and a
+  # pixel diff. A frozen surface that changed fails this job; the report and the changed images are uploaded.
+  visual:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # A red job here is information, not a gate: the workflow run stays green.
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - name: Start the local Supabase stack
+        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+
+      - name: Replay every migration on an empty database
+        run: npx supabase db reset --local
+
+      - name: Deterministic visual seed
+        run: node scripts/visual/seed.mjs
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Frozen surfaces, base vs head
+        run: node scripts/visual/compare.mjs --base "origin/${{ github.base_ref }}" --head HEAD --concurrency 2
+        env:
+          LOCAL_STACK_CI: '1'
+
+      - name: Upload the visual report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: visual-report
+          path: .visual/diff-*/
+          retention-days: 7
+

@@ -424,7 +424,7 @@ function computeRoundUsage(
       win_rate: stats.games > 0 ? stats.wins / stats.games : 0,
       total_kos: stats.kos,
     }))
-    .sort((a, b) => b.games - a.games);
+    .sort((a, b) => b.games - a.games || (a.pokemon_name < b.pokemon_name ? -1 : a.pokemon_name > b.pokemon_name ? 1 : 0));
 }
 
 // ─── AI Narrative Generation ──────────────────────────────────────────

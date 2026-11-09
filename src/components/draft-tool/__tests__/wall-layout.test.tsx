@@ -131,7 +131,7 @@ describe('wall layout CSS', () => {
     expect(CSS).not.toMatch(/\.clockBar \{[^}]*position: sticky;/);
     // The row is a direct child of the screen (the tall containing block it sticks within), right after the header.
     expect(SCREEN_SRC).toMatch(
-      /<div ref=\{rootRef\} className=\{screenClass\}>\s*\{header \? <div className=\{styles\.screenHeader\}>\{header\}<\/div> : null\}\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/,
+      /<div ref=\{rootRef\} className=\{screenClass\} data-frozen="draft-room">\s*\{header \? <div className=\{styles\.screenHeader\}>\{header\}<\/div> : null\}\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/,
     );
   });
 
@@ -484,7 +484,7 @@ describe('DraftToolScreen page header', () => {
 
   it('renders the host header as the first row of the screen, before the clock row', () => {
     const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} header={<h1>Room title</h1>} />);
-    const root = html.indexOf(`<div class="${styles.root} ${styles.screen} ${styles.screenWithHeader}">`);
+    const root = html.indexOf(`<div class="${styles.root} ${styles.screen} ${styles.screenWithHeader}" data-frozen="draft-room">`);
     const header = html.indexOf(`<div class="${styles.screenHeader}"><h1>Room title</h1></div>`);
     const clock = html.indexOf(`class="${styles.clockRow}"`);
     expect(root).toBe(0);
@@ -494,7 +494,7 @@ describe('DraftToolScreen page header', () => {
 
   it('adds no header row or track without one (the dev preview keeps its picker outside)', () => {
     const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} />);
-    expect(html.startsWith(`<div class="${styles.root} ${styles.screen}">`)).toBe(true);
+    expect(html.startsWith(`<div class="${styles.root} ${styles.screen}" data-frozen="draft-room">`)).toBe(true);
     expect(html).not.toContain(`class="${styles.screenHeader}"`);
     expect(html).not.toContain(styles.screenWithHeader);
   });

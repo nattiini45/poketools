@@ -227,6 +227,21 @@ describe('composeWeeklyRecap', () => {
     expect(recap.pokemon_usage.length).toBeGreaterThan(0);
   });
 
+  it('breaks usage ties by name, whatever order the games arrive in', async () => {
+    vi.mocked(getMatchesByRound).mockResolvedValue([makeMatch('m1')] as never);
+    vi.mocked(getBattleStatsByMatch).mockResolvedValue({
+      'game-1': [
+        { pokemon_name: 'Tyranitar', was_brought: true, kos_dealt: 1, match_won: true },
+        { pokemon_name: 'Amoonguss', was_brought: true, kos_dealt: 0, match_won: true },
+        { pokemon_name: 'Garchomp', was_brought: true, kos_dealt: 2, match_won: true },
+      ],
+    } as never);
+
+    const recap = await composeWeeklyRecap(DEFAULT_OPTIONS);
+
+    expect(recap.pokemon_usage.map((u) => u.pokemon_name)).toEqual(['Amoonguss', 'Garchomp', 'Tyranitar']);
+  });
+
   it('does not generate narrative by default', async () => {
     vi.mocked(getMatchesByRound).mockResolvedValue([makeMatch('m1')] as never);
 

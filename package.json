@@ -34,7 +34,11 @@
     "eval:ai-flows": "npx --no-install tsx --tsconfig scripts/tsconfig.ai-flow-eval.json scripts/ai-flow-eval.ts",
     "eval:ai-flows:fixtures": "node scripts/ai-flow-eval-fixtures.mjs",
     "capture": "node scripts/capture.mjs",
-    "capture:route": "node scripts/capture-route.mjs"
+    "capture:route": "node scripts/capture-route.mjs",
+    "visual:seed": "node scripts/visual/seed.mjs",
+    "visual:capture": "node scripts/visual/run.mjs",
+    "visual:diff": "node scripts/visual/diff.mjs",
+    "visual:compare": "node scripts/visual/compare.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "3.0.121",
