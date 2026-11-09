@@ -96,23 +96,17 @@ render nothing today.
 
 **Artwork statics (`art.*`).** Colours that must never follow a palette live
 in a separate static hex group: `art-ball-red` (`#DC2626`, the Pokéball's red
-half) and `art-card-blue` (`#3B82F6`, the `MatchHighlightCard` glow).
-
-**html2canvas rule.** `getComputedStyle` serialises a `color-mix()` status
-utility as `color(srgb …)`, which html2canvas 1.4.1 rejects. No
-`poke-{blue,blue-hover,green,green-hover,yellow,danger,danger-hover}` class may
-appear inside a node passed to `renderNodeAsPng` (`src/lib/utils/export-node.ts`);
-use the `art.*` statics there. `html-to-image` (`capture-node.ts`) is unaffected.
+half) and `art-card-blue` (`#3B82F6`).
 
 `src/lib/design/tokens.ts` mirrors the sunlit values as TS constants for
 charts and inline styles; prefer the CSS-variable-backed Tailwind classes
 wherever possible (they swap with the theme, the constants cannot).
 
 ### Typography
-- `font-heading` → `--font-heading` (Nunito, self-hosted variable woff2 via
+- `font-heading` → `--font-heading-face` (Nunito, self-hosted variable woff2 via
   `next/font/local`; fetched from Google at build time broke cold-cache CI
   builds). Used for headings, badges, table headers, labels.
-- `font-body` → `--font-body` (DM Sans, self-hosted variable woff2). Body text.
+- `font-body` → `--font-body-face` (DM Sans, self-hosted variable woff2). Body text.
 - Base font-size is 18px (112.5%) for readability at 100% OS scaling.
 
 ### Shape & elevation
@@ -243,7 +237,7 @@ Token usage in className:
 
 - **Tailwind CSS 3** — token mapping in `tailwind.config.ts`.
 - **`next/font/local`** — self-hosted Nunito (heading) and DM Sans (body)
-  variable woff2; exposed as `--font-heading` / `--font-body`.
+  variable woff2; exposed as `--font-heading-face` / `--font-body-face`.
 - Every feature module — these are the lowest-level building blocks.
 
 ## Related Modules

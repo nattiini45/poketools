@@ -235,7 +235,6 @@ TeamImporter    TeamDisplay    SetEditor    TypeAnalysisPanel
 | `LegalityBadge` | `src/components/teambuilder/LegalityBadge.tsx` | Green "Legal" or red/yellow with issue list. Shows team-level + per-set issues. |
 | `TypeAnalysisPanel` | `src/components/teambuilder/TypeAnalysisPanel.tsx` | Sidebar (~320px). Per-Pokémon types, team weaknesses (2+ members weak), resistances. |
 | `TeamsheetView` | `src/components/teambuilder/TeamsheetView.tsx` | Printable grid. Modes: 'full' (all details) or 'open' (items + ability + tera only). |
-| `TeamExporter` | `src/components/teambuilder/TeamExporter.tsx` | html2canvas PNG export. Download or copy to clipboard. |
 | `TeamPicker` | `src/components/teambuilder/TeamPicker.tsx` | Load existing team modal. Searches player's teams by tournament name or species. |
 
 ---

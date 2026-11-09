@@ -87,7 +87,7 @@ export default function PlayerAvatar({
 
   return (
     <div
-      className={`rounded-full ring-2 ring-poke-border flex items-center justify-center font-heading font-bold text-white flex-shrink-0 ${className}`}
+      className={`rounded-full ring-2 ring-poke-border flex items-center justify-center font-heading font-bold text-white shrink-0 ${className}`}
       style={{
         width: size,
         height: size,

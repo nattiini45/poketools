@@ -14,7 +14,7 @@ const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const lock = JSON.parse(readFileSync(join(ROOT, 'package-lock.json'), 'utf8'));
 
 describe('package.json dependencies', () => {
-  it.each(['@dnd-kit/core', '@dnd-kit/utilities', '@react-three/rapier', 'zustand'])('does not list the unused %s', (name) => {
+  it.each(['@dnd-kit/core', '@dnd-kit/utilities', '@react-three/rapier', 'zustand', 'html2canvas'])('does not list the unused %s', (name) => {
     expect(pkg.dependencies?.[name]).toBeUndefined();
     expect(pkg.devDependencies?.[name]).toBeUndefined();
     expect(lock.packages[''].dependencies?.[name]).toBeUndefined();
@@ -35,9 +35,8 @@ describe('package.json dependencies', () => {
     expect(lock.packages['node_modules/tsx']?.version).toBeDefined();
   });
 
-  it('keeps both DOM-to-image libraries (Firefox blocks foreignObject, see src/lib/utils/export-node.ts)', () => {
+  it('keeps html-to-image, the DOM-to-image library of the PNG exports (src/lib/utils/capture-node.ts)', () => {
     expect(pkg.dependencies['html-to-image']).toBeDefined();
-    expect(pkg.dependencies.html2canvas).toBeDefined();
   });
 });
 

@@ -267,7 +267,7 @@ export default function TeamsEditor({
           </div>
 
           {/* Right column: Intel / Scout / Validation / AI */}
-          <div className="w-[320px] border-l border-poke-border flex-shrink-0 hidden lg:flex lg:flex-col">
+          <div className="w-[320px] border-l border-poke-border shrink-0 hidden lg:flex lg:flex-col">
             {state.rightPanelTab === 'intel' ? (
               <IntelPanel />
             ) : state.rightPanelTab === 'opponent' ? (

@@ -28,6 +28,7 @@ import {
 } from '../scene-progress';
 import { beginSceneGeneration, resetSceneReadiness } from '../world-readiness';
 import { canvasSource, warmSource } from './route-sources';
+import { inReducedMotion, keyframesOf, parseCssRules, readGlobalsCss } from '@/test/css-rules';
 
 /**
  * ENGINE-FIX (rollout part A2). D32: a day/night swap of a live world is a
@@ -256,15 +257,28 @@ describe('the host wiring (RouteWorldCanvas, provider, CSS)', () => {
   });
 
   it('the veil shows its Pokéball from 600 ms into the opaque hold, still under reduced motion', () => {
-    const globals = read(join(ROUTE, '..', '..', '..', 'app', 'globals.css'));
-    const status = globals.match(/html\[data-route-veil\] \.route-theme-veil-status \{[\s\S]*?\}/)?.[0] ?? '';
-    expect(status).toMatch(new RegExp(`animation: route-veil-status-in 240ms ease-out ${THEME_VEIL.inMs + 600}ms both`));
-    const block = globals.slice(globals.indexOf('=== D32 veil Pokéball'), globals.indexOf('=== end D32 veil Pokéball'));
-    expect(block).toMatch(/\.route-theme-veil-ball \{[\s\S]*?animation: route-veil-ball-rock/);
-    expect(block).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*html\[data-route-veil\] \.route-theme-veil-ball\s*\{\s*animation: none;/);
+    const globals = readGlobalsCss();
+    const status = parseCssRules(globals).filter(
+      (rule) => rule.selector === 'html[data-route-veil] .route-theme-veil-status' && !inReducedMotion(rule),
+    );
+    expect(status).toHaveLength(1);
+    expect(status[0].decls.get('animation')).toBe(`route-veil-status-in 240ms ease-out ${THEME_VEIL.inMs + 600}ms both`);
+    const block = parseCssRules(globals.slice(globals.indexOf('=== D32 veil Pokéball'), globals.indexOf('=== end D32 veil Pokéball')));
+    expect(
+      block.some((rule) => rule.selector.endsWith('.route-theme-veil-ball') && /^route-veil-ball-rock\b/.test(rule.decls.get('animation') ?? '')),
+    ).toBe(true);
+    expect(
+      block.some(
+        (rule) =>
+          inReducedMotion(rule) &&
+          rule.selector === 'html[data-route-veil] .route-theme-veil-ball' &&
+          rule.decls.get('animation') === 'none',
+      ),
+    ).toBe(true);
     // Transform only (a compositor rock), no slab behind it (D25).
-    const keyframes = block.match(/@keyframes route-veil-ball-rock \{[\s\S]*?\n\}/)?.[0] ?? '';
-    expect(keyframes).not.toMatch(/opacity|background/);
+    const keyframes = block.filter((rule) => keyframesOf(rule) === 'route-veil-ball-rock');
+    expect(keyframes.length).toBeGreaterThan(0);
+    for (const step of keyframes) expect(step.body).not.toMatch(/opacity|background/);
   });
 
   it('a marked beam part is pre-rastered in one pulse, not composited for the rest of the load', () => {

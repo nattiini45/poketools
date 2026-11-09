@@ -11,7 +11,6 @@ src/lib/utils/
 ├── crypto.ts  # timingSafeCompare, secretsEqual (length-independent) + HMAC-signed expiring link tokens
 ├── csv.ts  # parseCsv / recordsToCsv
 ├── rate-limit.ts  # fixed-window checkRateLimit (Postgres rate_limit_hit RPC or in-process, RATE_LIMIT_STORE), getClientIp, checkPublicRateLimit (per-IP limit of a public route; a local run without an address header is not throttled), 429 helper
-├── export-node.ts  # DOM node export to PNG blob URL
 ├── hidden-text.ts  # Invisible-character matcher (bidi, zero-width, Unicode tag characters) shared by the Admin Assistant fences
 ├── node-image.ts  # Cross-origin image proxying shared by both exporters
 ├── uuid.ts  # UUID assertion helpers
@@ -36,14 +35,9 @@ src/lib/utils/
 - **Purpose**: Capture node images via html-to-image
 - **Key Methods**: `captureNodeAsDataUrl()`
 
-### Node Export
-- **File**: `export-node.ts`
-- **Purpose**: Export nodes as PNG blob URLs via html2canvas (Canvas 2D). It is not folded into `capture-node.ts` because Firefox blocks `foreignObject` with cross-origin content
-- **Key Methods**: `renderNodeAsPng()`
-
 ### Node Image Proxy
 - **File**: `node-image.ts`
-- **Purpose**: The cross-origin `<img>` handling both exporters share: swap each image for a data URL fetched through `/api/proxy-image` so the canvas is not tainted, then put `src` and `srcset` back
+- **Purpose**: The cross-origin `<img>` handling of `capture-node.ts`: swap each image for a data URL fetched through `/api/proxy-image` so the canvas is not tainted, then put `src` and `srcset` back
 - **Key Methods**: `toDataUrl()`, `proxyCrossOriginImages(node, { onFailure: 'keep' | 'transparent' })` (`capture-node` keeps the original source of an image the proxy cannot fetch, `export-node` swaps in a transparent pixel), `restoreImages()`
 
 ### LRU Cache
@@ -73,7 +67,7 @@ Dates and numbers render through the formatter of [`i18n.md`](./i18n.md) (`src/i
 - **Output**: Validated IDs and image export artifacts
 
 ## Dependencies
-- **External Libraries**: `html-to-image`, `html2canvas`, `clsx`, `tailwind-merge`
+- **External Libraries**: `html-to-image`, `clsx`, `tailwind-merge`
 - **Internal Modules**: Consumed by UI and broadcast/export features
 
 ## API Routes

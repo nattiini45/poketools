@@ -60,6 +60,6 @@ describe('frozen-surface pins (redesign F1)', () => {
   it('gives frozen roots the colour and font they inherit from <body> today, at zero specificity', () => {
     const inherited = RULES.find((rule) => rule.selector === `:where(${OUT_OF_WORLD})`);
     expect(inherited?.decls.get('color')).toBe('var(--poke-text-primary)');
-    expect(inherited?.decls.get('font-family')).toBe('var(--font-body), system-ui, sans-serif');
+    expect(inherited?.decls.get('font-family')).toBe('var(--font-body-face), system-ui, sans-serif');
   });
 });

@@ -8,10 +8,7 @@ import tailwindcssAnimate from "tailwindcss-animate";
  *  same pixels as the old `rgb(r g b / 0.2)`. Used ONLY for the status
  *  hues (they were static hex, so their `/NN` classes already render):
  *  switching the other `poke-*` tokens would make ~185 currently dropped
- *  utilities appear and change plaza (docs/design.md § Site palettes).
- *  Chrome serialises the computed value as `color(srgb …)`, which
- *  html2canvas rejects: never use these inside a renderNodeAsPng subtree
- *  (use the static `art.*` colours there). */
+ *  utilities appear and change plaza (docs/design.md § Site palettes). */
 const tokenColor = (name: string) =>
   `color-mix(in srgb, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
 
@@ -156,17 +153,16 @@ const config: Config = {
         },
 
         // ─── Static artwork colours (never variable-backed) ───
-        // For artwork that must not follow a site palette, or must stay rgb()
-        // for html2canvas (MatchHighlightCard export). Values equal the old
-        // static poke.danger / poke.blue, so plaza pixels are unchanged.
+        // For artwork that must not follow a site palette. Values equal the
+        // old static poke.danger / poke.blue, so plaza pixels are unchanged.
         art: {
           "ball-red": "#DC2626",
           "card-blue": "#3B82F6",
         },
       },
       fontFamily: {
-        heading: ["var(--font-heading)", "system-ui", "sans-serif"],
-        body: ["var(--font-body)", "system-ui", "sans-serif"],
+        heading: ["var(--font-heading-face)", "system-ui", "sans-serif"],
+        body: ["var(--font-body-face)", "system-ui", "sans-serif"],
       },
       boxShadow: {
         "poke-sm": "0 1px 2px rgba(26, 23, 20, 0.05)",

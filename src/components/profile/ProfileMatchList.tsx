@@ -47,11 +47,11 @@ function MatchResult({ match, playerId }: { match: ProfileMatch; playerId: strin
         className="absolute inset-0 z-0"
         aria-label={t('matchList.viewMatch', { opponent: match.opponent_name })}
       />
-      <div className="w-7 flex justify-center flex-shrink-0">{resultBadge}</div>
+      <div className="w-7 flex justify-center shrink-0">{resultBadge}</div>
 
       <Link
         href={`/players/${match.opponent_id}`}
-        className="relative z-10 flex items-center gap-2 min-w-0 flex-shrink-0 hover:opacity-80 transition-opacity"
+        className="relative z-10 flex items-center gap-2 min-w-0 shrink-0 hover:opacity-80 transition-opacity"
       >
         <PlayerAvatar
           avatarUrl={match.opponent_avatar_url}
@@ -64,7 +64,7 @@ function MatchResult({ match, playerId }: { match: ProfileMatch; playerId: strin
       </Link>
 
       {!isScheduled && (
-        <span className="text-sm font-heading font-bold text-poke-text-primary flex-shrink-0">
+        <span className="text-sm font-heading font-bold text-poke-text-primary shrink-0">
           {match.game_score}
         </span>
       )}
@@ -77,7 +77,7 @@ function MatchResult({ match, playerId }: { match: ProfileMatch; playerId: strin
       </Link>
 
       {match.date_played && (
-        <span className="text-[10px] text-poke-text-tertiary flex-shrink-0">
+        <span className="text-[10px] text-poke-text-tertiary shrink-0">
           {formatter.instant(match.date_played, 'date')}
         </span>
       )}

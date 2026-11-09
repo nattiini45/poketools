@@ -2,10 +2,8 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import postcss from 'postcss';
-import tailwindcss from 'tailwindcss';
 import { describe, expect, it } from 'vitest';
-import config from '../../../../tailwind.config';
+import { compileUtilities, themeColors } from '@/test/tailwind-theme';
 
 /**
  * Site palettes — Tailwind status colours (docs/design.md § Site palettes).
@@ -13,68 +11,52 @@ import config from '../../../../tailwind.config';
  * The status hues (poke.blue/green/yellow/danger and their hovers) follow
  * the site palette through `color-mix(… var(--poke-x) calc(<alpha-value> *
  * 100%) …)`, so `/NN` modifiers keep working. The `art.*` statics stay hex:
- * html2canvas (the MatchHighlightCard export) cannot parse the `color(srgb
- * …)` value Chrome computes for color-mix, and the franchise ball red must
- * not follow a palette.
+ * artwork such as the franchise ball red must not follow a palette.
  *
- * The pipeline runs through the typed public API (postcss + tailwindcss);
- * never import tailwindcss/lib/* (no .d.ts, breaks tsc).
+ * The theme and the pipeline come from src/test/tailwind-theme.ts, so this
+ * file does not depend on where the theme is declared.
  */
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const SRC = join(HERE, '..', '..', '..');
 const read = (path: string) => readFileSync(path, 'utf8');
 
-type ColorScale = Record<string, string>;
+const STATUS_HUES = ['blue', 'blue-hover', 'green', 'green-hover', 'yellow', 'danger', 'danger-hover'];
 
-function colors(): Record<string, ColorScale> {
-  const extend = config.theme?.extend as { colors?: Record<string, ColorScale> } | undefined;
-  expect(extend?.colors, 'theme.extend.colors').toBeDefined();
-  return extend?.colors ?? {};
-}
-
-describe('tailwind.config status colours', () => {
+describe('theme status colours', () => {
   it('the status hues are variable-backed and keep <alpha-value>', () => {
-    const poke = colors().poke;
-    const tokens: Record<string, string> = {
-      blue: '--poke-blue',
-      'blue-hover': '--poke-blue-hover',
-      green: '--poke-green',
-      'green-hover': '--poke-green-hover',
-      yellow: '--poke-yellow',
-      danger: '--poke-danger',
-      'danger-hover': '--poke-danger-hover',
-    };
-    for (const [key, variable] of Object.entries(tokens)) {
-      expect(poke[key], key).toContain(`var(${variable})`);
-      expect(poke[key], key).toContain('<alpha-value>');
+    const colors = themeColors();
+    for (const hue of STATUS_HUES) {
+      expect(colors[`poke-${hue}`], hue).toContain(`var(--poke-${hue})`);
+      expect(colors[`poke-${hue}`], hue).toContain('<alpha-value>');
     }
   });
 
   it('the on-colours and the Alert ink are plain var() tokens', () => {
-    const poke = colors().poke;
-    expect(poke['on-blue']).toBe('var(--poke-on-blue)');
-    expect(poke['on-green']).toBe('var(--poke-on-green)');
-    expect(poke['on-danger']).toBe('var(--poke-on-danger)');
-    expect(poke['yellow-ink']).toBe('var(--poke-yellow-ink)');
-    expect(poke['danger-ink']).toBe('var(--poke-danger-ink)');
-    expect(poke['danger-tint-ink']).toBe('var(--poke-danger-tint-ink)');
-    expect(poke['amber-ink']).toBe('var(--poke-amber-ink)');
+    const colors = themeColors();
+    expect(colors['poke-on-blue']).toBe('var(--poke-on-blue)');
+    expect(colors['poke-on-green']).toBe('var(--poke-on-green)');
+    expect(colors['poke-on-danger']).toBe('var(--poke-on-danger)');
+    expect(colors['poke-yellow-ink']).toBe('var(--poke-yellow-ink)');
+    expect(colors['poke-danger-ink']).toBe('var(--poke-danger-ink)');
+    expect(colors['poke-danger-tint-ink']).toBe('var(--poke-danger-tint-ink)');
+    expect(colors['poke-amber-ink']).toBe('var(--poke-amber-ink)');
   });
 
   it('the art statics are hex, never var()', () => {
-    const art = colors().art;
-    expect(art['ball-red']).toBe('#DC2626');
-    expect(art['card-blue']).toBe('#3B82F6');
-    for (const value of Object.values(art)) expect(value).not.toContain('var(');
+    const colors = themeColors();
+    expect(colors['art-ball-red']).toBe('#DC2626');
+    expect(colors['art-card-blue']).toBe('#3B82F6');
+    const art = Object.entries(colors).filter(([name]) => name.startsWith('art-'));
+    expect(art.length).toBeGreaterThan(0);
+    for (const [, value] of art) expect(value).not.toContain('var(');
   });
 
   it('every other poke token stays a plain var() (no alpha: only the status hues honour /NN)', () => {
-    const poke = colors().poke;
-    const statusKeys = new Set(['blue', 'blue-hover', 'green', 'green-hover', 'yellow', 'danger', 'danger-hover']);
-    for (const [key, value] of Object.entries(poke)) {
-      if (statusKeys.has(key) || key.startsWith('type-')) continue;
-      expect(value, key).toMatch(/^var\(--[a-z0-9-]+\)$/);
+    const statusNames = new Set(STATUS_HUES.map((hue) => `poke-${hue}`));
+    for (const [name, value] of Object.entries(themeColors())) {
+      if (!name.startsWith('poke-') || statusNames.has(name) || name.startsWith('poke-type-')) continue;
+      expect(value, name).toMatch(/^var\(--[a-z0-9-]+\)$/);
     }
   });
 });
@@ -87,15 +69,7 @@ describe('source stays free of dead opacity modifiers', () => {
   /** Colours whose value is a plain var(): Tailwind 3.4 cannot alpha-blend them, so a /NN modifier on one generates nothing. */
   function plainVarColours(): string[] {
     const names = new Set(['poke-primary']);
-    for (const [key, value] of Object.entries(colors() as Record<string, string | ColorScale>)) {
-      if (typeof value === 'string') {
-        if (value.startsWith('var(')) names.add(key);
-        continue;
-      }
-      for (const [shade, shadeValue] of Object.entries(value)) {
-        if (shadeValue.startsWith('var(')) names.add(shade === 'DEFAULT' ? key : `${key}-${shade}`);
-      }
-    }
+    for (const [name, value] of Object.entries(themeColors())) if (value.startsWith('var(')) names.add(name);
     return [...names];
   }
 
@@ -144,17 +118,6 @@ describe('source stays free of dead opacity modifiers', () => {
 });
 
 describe('generated utilities (postcss + tailwindcss)', () => {
-  async function generate(raw: string): Promise<string> {
-    const result = await postcss([
-      tailwindcss({
-        ...config,
-        content: [{ raw, extension: 'html' }],
-        corePlugins: { preflight: false },
-      }),
-    ]).process('@tailwind utilities;', { from: undefined });
-    return result.css;
-  }
-
   function ruleBody(css: string, selector: string): string | null {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
     const m = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
@@ -162,7 +125,7 @@ describe('generated utilities (postcss + tailwindcss)', () => {
   }
 
   it('emits color-mix rules for the status hues and rgb() for art, and still drops var()/NN', async () => {
-    const css = await generate(
+    const css = await compileUtilities(
       'bg-poke-blue bg-poke-blue/20 border-poke-blue/40 from-poke-blue text-poke-on-blue bg-art-card-blue/10 bg-poke-surface/50',
     );
     expect(ruleBody(css, '.bg-poke-blue\\/20')).toContain(
@@ -180,23 +143,6 @@ describe('generated utilities (postcss + tailwindcss)', () => {
 });
 
 describe('artwork stays off the palette', () => {
-  const STATUS_CLASS = /poke-(blue|blue-hover|green|green-hover|yellow|danger|danger-hover)\b/;
-
-  it('nothing inside the MatchHighlightCard export subtree uses a variable-backed status class', () => {
-    const source = read(join(SRC, 'components', 'replay', 'MatchHighlightCard.tsx'));
-    const refAt = source.indexOf('ref={cardRef}');
-    expect(refAt, 'ref={cardRef}').toBeGreaterThan(0);
-    const openAt = source.lastIndexOf('<div', refAt);
-    const lineStart = source.lastIndexOf('\n', openAt) + 1;
-    const indent = source.slice(lineStart, openAt);
-    expect(indent).toMatch(/^ +$/);
-    const closeAt = source.indexOf(`\n${indent}</div>`, refAt);
-    expect(closeAt, 'closing </div> of the card').toBeGreaterThan(refAt);
-    const card = source.slice(openAt, closeAt);
-    expect(card).toContain('bg-art-card-blue/10');
-    expect(card).not.toMatch(STATUS_CLASS);
-  });
-
   it('the Pokéball red half is the static art colour', () => {
     const source = read(join(SRC, 'components', 'shared', 'Pokeball.tsx'));
     expect(source).toContain('bg-art-ball-red');

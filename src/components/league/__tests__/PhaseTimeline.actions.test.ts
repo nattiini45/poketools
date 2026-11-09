@@ -14,5 +14,6 @@ describe('PhaseTimeline action row', () => {
     expect(classes).toContain('flex-wrap');
     expect(classes).toContain('min-w-0');
     expect(classes).not.toContain('flex-shrink-0');
+    expect(classes).not.toContain('shrink-0');
   });
 });

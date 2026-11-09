@@ -11,7 +11,7 @@ Module rules for `src/components/` (337 source files). Load when a task touches 
 
 - `MatchHighlightCard` shows games-won (e.g. 2-1) for Bo3+ and surviving-Pokémon score for Bo1, with in-card Overview + per-game tabs that swap content inside `id="match-highlight-card"`.
 - Moves render through `MovesOverflowList` (one row + `+N` popover, tap-toggle on touch) instead of being hard-truncated.
-- PNG exports in `src/lib/utils/capture-node.ts` (html-to-image) and `src/lib/utils/export-node.ts` (html2canvas) honor `data-export-hide`. Both libraries stay on purpose (html2canvas renders the highlight card because Firefox blocks `foreignObject` with cross-origin content); the cross-origin image proxy they share is `src/lib/utils/node-image.ts`.
+- PNG exports go through `src/lib/utils/capture-node.ts` (html-to-image) and honor `data-export-hide`; its cross-origin image proxy is `src/lib/utils/node-image.ts`.
 - Per-game helpers (`computeMatchGamesWon`, `aggregateTeamFromGame`, `computePokemonScoreForGame`, `computeQuickStatsForGame`) live in `src/lib/match/aggregation.ts`.
 
 ## Per-game inline edit (admin-only)

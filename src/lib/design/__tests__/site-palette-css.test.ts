@@ -16,11 +16,13 @@ import {
 } from '../site-palette-tokens';
 import { getRegisteredRouteThemeIds, getWorldByRouteThemeId, resolveWorld } from '@/lib/worlds/registry';
 import type { RouteThemeId } from '@/types/season';
+import { parseCssRules, readGlobalsCss, stripCssComments, type CssRule } from '@/test/css-rules';
 
 /**
  * Site palettes — globals.css contract (docs/design.md § Site palettes).
  *
- * Reads src/app/globals.css as text (comments stripped) and locks:
+ * Reads the rules of src/app/globals.css (src/test/css-rules.ts: comments,
+ * indentation and @layer / @media wrappers do not matter) and locks:
  * - Layer 0: every palette core declared once per mode, nowhere else;
  * - Layer 1 / Layer 2: every palette declares every base token in both
  *   modes, and the CSS resolves to the TS mirror (site-palette-tokens.ts);
@@ -32,76 +34,18 @@ import type { RouteThemeId } from '@/types/season';
  * - the dark navbar glass reads the token, and the scene observer (I3)
  *   still ignores data-palette.
  *
- * Honest limit: a regex/brace parser over source, not a browser cascade.
+ * Honest limit: a brace parser over source, not a browser cascade.
  * The lead's visual pass is the runtime proof.
  */
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const SRC = join(HERE, '..', '..', '..');
 const read = (path: string) => readFileSync(path, 'utf8');
-const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-const CSS = stripComments(read(join(SRC, 'app', 'globals.css')));
+const CSS = stripCssComments(readGlobalsCss());
 
-interface Rule {
-  selector: string;
-  decls: Map<string, string>;
-  /** Raw declaration list in source order (duplicates kept). */
-  list: Array<[string, string]>;
-}
-
-function parseDecls(body: string): Array<[string, string]> {
-  const out: Array<[string, string]> = [];
-  let depth = 0;
-  let start = 0;
-  const push = (chunk: string) => {
-    const i = chunk.indexOf(':');
-    if (i > 0) out.push([chunk.slice(0, i).trim(), chunk.slice(i + 1).trim()]);
-  };
-  for (let i = 0; i < body.length; i++) {
-    const ch = body[i];
-    if (ch === '(') depth++;
-    else if (ch === ')') depth--;
-    else if (ch === ';' && depth === 0) {
-      push(body.slice(start, i));
-      start = i + 1;
-    }
-  }
-  push(body.slice(start));
-  return out;
-}
-
-const normalizeSelector = (s: string) => s.replace(/\s+/g, ' ').replace(/\s*,\s*/g, ', ').trim();
-
-/** Leaf rules (no nested blocks), with at-rule wrappers flattened away. */
-function parseRules(css: string): Rule[] {
-  const rules: Rule[] = [];
-  const stack: Array<{ prelude: string; bodyStart: number; hasChild: boolean }> = [];
-  let preludeStart = 0;
-  for (let i = 0; i < css.length; i++) {
-    const ch = css[i];
-    if (ch === '{') {
-      if (stack.length) stack[stack.length - 1].hasChild = true;
-      stack.push({ prelude: css.slice(preludeStart, i), bodyStart: i + 1, hasChild: false });
-      preludeStart = i + 1;
-    } else if (ch === '}') {
-      const top = stack.pop();
-      if (!top) throw new Error(`unbalanced } at ${i}`);
-      if (!top.hasChild) {
-        const list = parseDecls(css.slice(top.bodyStart, i));
-        rules.push({ selector: normalizeSelector(top.prelude), decls: new Map(list), list });
-      }
-      preludeStart = i + 1;
-    } else if (ch === ';' && stack.length > 0) {
-      preludeStart = i + 1;
-    }
-  }
-  expect(stack, 'balanced braces').toHaveLength(0);
-  return rules;
-}
-
-const RULES = parseRules(CSS);
+const RULES = parseCssRules(CSS);
 const rulesFor = (selector: string) => RULES.filter((r) => r.selector === selector);
-function onlyRule(selector: string): Rule {
+function onlyRule(selector: string): CssRule {
   const found = rulesFor(selector);
   expect(found, `exactly one rule "${selector}"`).toHaveLength(1);
   return found[0];
@@ -161,7 +105,7 @@ function fallbackNamespace(): string {
   return fallback.tokenNamespace;
 }
 
-function layer1(mode: SitePaletteMode): Rule {
+function layer1(mode: SitePaletteMode): CssRule {
   const found = RULES.filter((r) =>
     mode === 'light'
       ? r.selector.startsWith(':root, :where(')
@@ -181,7 +125,7 @@ function whereList(selector: string): string[] {
   });
 }
 
-function paletteBlock(id: Exclude<SitePaletteId, 'plaza'>, mode: SitePaletteMode): Rule {
+function paletteBlock(id: Exclude<SitePaletteId, 'plaza'>, mode: SitePaletteMode): CssRule {
   return onlyRule(mode === 'light' ? `html[data-palette="${id}"]` : `html[data-palette="${id}"][data-theme="dark"]`);
 }
 

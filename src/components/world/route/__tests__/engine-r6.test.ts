@@ -19,6 +19,7 @@ import {
 import { BEAM_PRERASTER, beamPrerasterStep, beamPrerasterSteps, type BeamPart } from '@/lib/route-world/ball-loader-state';
 import { compileWeight, createLoadWarmIO } from '../useStationWarmup';
 import { warmSource } from './route-sources';
+import { parseCssRules, readGlobalsCss } from '@/test/css-rules';
 
 vi.mock('@react-three/drei', () => {
   const useGLTF = Object.assign(
@@ -569,9 +570,9 @@ describe('E8 part 2: the route-HUD primer links the glass programs while docked'
     expect(primer).toMatch(/opacity: 0;/);
     expect(primer).toMatch(/pointer-events: none;/);
     // The same effects as the real HUD bar (globals.css .world-nav-hud-bar).
-    const globals = read(join(SRC, 'app', 'globals.css'));
-    const bar = globals.match(/\.world-nav-hud-bar \{([\s\S]*?)\r?\n\}/)?.[1] ?? '';
-    expect(bar).toMatch(/backdrop-filter: blur\(18px\) saturate\(1\.25\);/);
+    const bar = parseCssRules(readGlobalsCss()).filter((rule) => rule.selector === '.world-nav-hud-bar' && rule.context.length === 0);
+    expect(bar).toHaveLength(1);
+    expect(bar[0].decls.get('backdrop-filter')).toBe('blur(18px) saturate(1.25)');
     expect(css).toMatch(/\.hudPrimer\[data-warm\] \{\s*animation: hudPrime 400ms steps\(1, end\) forwards;/);
     const tsx = read(join(ROUTE, 'BallLoader.tsx'));
     expect(tsx).toMatch(/className=\{styles\.hudPrimer\} data-beam-step=\{beamPrerasterStep\('hud', 0, RAY_COUNT\)\}/);

@@ -56,7 +56,7 @@ export default function WinConditions() {
             key={i}
             className={`flex items-start gap-2 px-2.5 py-2 rounded-lg border ${colors}`}
           >
-            <span className="text-sm flex-shrink-0">
+            <span className="text-sm shrink-0">
               {TYPE_ICONS[cond.type] ?? "•"}
             </span>
             <div className="min-w-0">
