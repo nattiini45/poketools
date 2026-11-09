@@ -223,7 +223,7 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.create"],
       "emits": [],
-      "importFingerprint": "d67f73c4351b9ee4",
+      "importFingerprint": "cd1509713d8a674f",
       "importFiles": 201,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -233,8 +233,8 @@
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": {
           "names": ["formatCreateSchema", "formatListQuerySchema", "validationFailedResponse"],
-          "closure": "7d6579b14d9e0f6f",
-          "files": 36
+          "closure": "25a24f2f8c85551d",
+          "files": 43
         },
         "src/lib/format-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "59ec327f1bc874be", "files": 135 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
@@ -251,14 +251,14 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "906b9444dca2d133",
+      "importFingerprint": "79e2152d070d08ba",
       "importFiles": 199,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireFormatViewer"], "closure": "bd4b4302c30fa3b9", "files": 80 },
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["formatForkSchema", "validationFailedResponse"], "closure": "7d6579b14d9e0f6f", "files": 36 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["formatForkSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
         "src/lib/format-studio/library.ts": { "names": ["forkDefinition"], "closure": "59ec327f1bc874be", "files": 135 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
@@ -273,14 +273,14 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "ad4e69b76d681894",
+      "importFingerprint": "cc095e5223e423c0",
       "importFiles": 199,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "bd4b4302c30fa3b9", "files": 80 },
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "7d6579b14d9e0f6f", "files": 36 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
         "src/lib/format-studio/library.ts": { "names": ["forkPreset"], "closure": "59ec327f1bc874be", "files": 135 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
@@ -492,20 +492,22 @@
     "POST /api/seasons": {
       "file": "src/app/api/seasons/route.ts",
       "guards": ["requireAnyAdmin"],
-      "schemas": ["seasonCreateRequestSchema"],
-      "rateLimits": [],
-      "expires": ["expireSeasonReads"],
-      "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create"],
+      "schemas": ["seasonCreateWithFormatSchema"],
+      "rateLimits": ["format-create", "season-create"],
+      "expires": ["expireFormatLibraryReads", "expireSeasonReads", "revalidatePath"],
+      "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create", "season.create_from_format"],
       "emits": [],
-      "importFingerprint": "ef08d3d727c1ef9d",
-      "importFiles": 229,
+      "importFingerprint": "13f88604e824f3a3",
+      "importFiles": 301,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "bd4b4302c30fa3b9", "files": 80 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["seasonCreateWithFormatSchema"], "closure": "25a24f2f8c85551d", "files": 43 },
+        "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "fdf30f932089b37c", "files": 232 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "15d7b742f293570f", "files": 12 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads", "expireSeasonReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "39a6d63f7e116d0c", "files": 88 },
         "src/lib/season/clone.ts": {
           "names": ["assertCloneAllowed", "copyLeagueStructure", "createCloneTracker", "rollbackClonedLeague"],
@@ -523,9 +525,10 @@
           "closure": "7a8f3e45a6e4f3d7",
           "files": 27
         },
-        "src/lib/validation/index.ts": { "names": ["formatZodErrors", "seasonCreateRequestSchema"], "closure": "549662de2f15c47a", "files": 25 }
+        "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 },
+        "src/lib/validation/index.ts": { "names": ["formatZodErrors"], "closure": "549662de2f15c47a", "files": 25 }
       },
-      "packages": ["next/server"]
+      "packages": ["next/cache", "next/server"]
     },
     "POST /api/seasons/[id]/participants": {
       "file": "src/app/api/seasons/[id]/participants/route.ts",
@@ -724,13 +727,13 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "7fc4b5791d9d5894",
+      "importFingerprint": "c557e1fac46c4f98",
       "importFiles": 197,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/auth/helpers.ts": { "names": ["requireFormatViewer"], "closure": "bd4b4302c30fa3b9", "files": 80 },
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["formatDraftSchema", "validationFailedResponse"], "closure": "7d6579b14d9e0f6f", "files": 36 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["formatDraftSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
         "src/lib/format-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "59ec327f1bc874be", "files": 135 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
