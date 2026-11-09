@@ -415,3 +415,25 @@ describe('generateEliminationBracket', () => {
     expect(result.started_round_id).toBe('round-1');
   });
 });
+
+describe('generateEliminationBracket: the tournament status write', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+  });
+
+  it('moves an upcoming tournament to active on its first round', async () => {
+    await generateEliminationBracket({ ...makeTournament(), status: 'upcoming', current_round: 0 }, makeParticipants(4));
+    const write = vi.mocked(updateTournament).mock.calls.find(([, input]) => input.status !== undefined);
+    expect(write?.[0]).toBe('t1');
+    expect(write?.[1]).toEqual({ status: 'active', current_round: 1 });
+  });
+
+  it('keeps a regenerated active tournament active', async () => {
+    await generateEliminationBracket(makeTournament(), makeParticipants(4));
+    const write = vi.mocked(updateTournament).mock.calls.find(([, input]) => input.status !== undefined);
+    expect(write?.[1]).toEqual({ status: 'active', current_round: 1 });
+  });
+});
+
