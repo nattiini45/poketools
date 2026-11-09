@@ -1,4 +1,5 @@
 import type { MachineSpec } from './machine';
+import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { matchMachine } from '@/lib/tournament/match-state';
 
 /**
@@ -7,4 +8,4 @@ import { matchMachine } from '@/lib/tournament/match-state';
  * each spec's structure. A new machine is added here in the same change that
  * defines it.
  */
-export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [matchMachine.spec];
+export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [matchMachine.spec, playerStatusMachine.spec];

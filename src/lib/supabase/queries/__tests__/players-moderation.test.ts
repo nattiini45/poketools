@@ -180,3 +180,64 @@ describe('moderation writers', () => {
     await expect(write('p-404')).rejects.toBe(missing);
   });
 });
+
+describe('moderation writers go through playerStatusMachine', () => {
+  const missing = { code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    for (const m of Object.keys(mockBuilder)) mockBuilder[m].mockReturnValue(mockBuilder);
+    mockBuilder.single.mockResolvedValue({ data: null, error: missing });
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+  });
+
+  it.each<[string, () => Promise<unknown>, string[]]>([
+    ['banPlayer', () => banPlayer('p-1', 'cheating'), ['active']],
+    ['suspendPlayer', () => suspendPlayer('p-1', '2026-12-01T00:00:00.000Z'), ['active']],
+    ['unsuspendPlayer', () => unsuspendPlayer('p-1'), ['suspended', 'banned']],
+  ])('%s guards the UPDATE with the states the move leaves', async (_name, write, sources) => {
+    await write().catch(() => undefined);
+    expect(mockBuilder.in).toHaveBeenCalledWith('status', sources);
+  });
+
+  it.each<[string, () => Promise<unknown>, string, string]>([
+    ['suspending a banned player', () => suspendPlayer('p-1', '2026-12-01T00:00:00.000Z'), 'banned', 'suspended'],
+    ['banning a suspended player', () => banPlayer('p-1', 'cheating'), 'suspended', 'banned'],
+    ['suspending a suspended player again', () => suspendPlayer('p-1', '2026-12-01T00:00:00.000Z'), 'suspended', 'suspended'],
+    ['reinstating an active player', () => unsuspendPlayer('p-1'), 'active', 'active'],
+  ])('refuses %s with state_transition_invalid (409)', async (_name, write, from, to) => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { status: from }, error: null });
+
+    await expect(write()).rejects.toMatchObject({
+      name: 'IllegalTransitionError',
+      statusCode: 409,
+      code: 'state_transition_invalid',
+      params: { machine: 'player.status', from, to },
+    });
+    expect(mockBuilder.select).toHaveBeenCalledWith('status');
+  });
+
+  it('answers player_status_changed (409) when the move is legal from the status read after the guard missed', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { status: 'active' }, error: null });
+
+    await expect(suspendPlayer('p-1', '2026-12-01T00:00:00.000Z')).rejects.toMatchObject({
+      statusCode: 409,
+      code: 'player_status_changed',
+    });
+  });
+
+  it('throws the read error when the status cannot be read back', async () => {
+    const failure = new Error('read failed');
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: failure });
+
+    await expect(banPlayer('p-1', 'cheating')).rejects.toBe(failure);
+  });
+
+  it('throws any other write error without reading back', async () => {
+    const failure = { code: '57014', message: 'canceling statement due to statement timeout' };
+    mockBuilder.single.mockResolvedValue({ data: null, error: failure });
+
+    await expect(banPlayer('p-1', 'cheating')).rejects.toBe(failure);
+    expect(mockBuilder.maybeSingle).not.toHaveBeenCalled();
+  });
+});
