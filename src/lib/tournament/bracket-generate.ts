@@ -150,8 +150,9 @@ export async function generateEliminationBracket(
 
   // Start the first round when asked. Best effort: the bracket exists either way, and a round that is still
   // pending shows the Start banner. Later rounds are started by the admin.
+  // Not after a status another writer moved meanwhile (an admin completed the tournament): no round is opened under it.
   const firstRoundId = roundIdByGlobalNumber.get(firstRoundNumber);
-  if (options.startFirstRound && firstRoundId) {
+  if (options.startFirstRound && firstRoundId && !statusMovedElsewhere) {
     try {
       await updateRoundStatus(firstRoundId, 'active', 'pending');
       result.started_round_id = firstRoundId;
@@ -197,8 +198,9 @@ export async function regenerateEliminationBracket(
   bracketStructureOrRefuse(tournament, participants);
 
   // The status is claimed after the refusals and before the first write (a reset, a delete), so a status that moved since
-  // the caller's read refuses the regenerate before anything changed.
-  await claimBracketStart(tournament, 0);
+  // the caller's read refuses the regenerate before anything changed. The round counter is kept until the old bracket is
+  // gone, so a reset or delete that fails part-way does not leave the existing bracket with a counter of 0.
+  await claimBracketStart(tournament, tournament.current_round);
 
   let formatRevertFailed = false;
   if (rounds.length > 0) {
@@ -222,6 +224,8 @@ export async function regenerateEliminationBracket(
       .in('id', roundIds);
     if (roundErr) throw roundErr;
   }
+
+  await updateTournament(tournament.id, { current_round: 0 });
 
   const generated = await generateEliminationBracket({ ...tournament, status: 'active' }, participants, {
     startFirstRound: options.startFirstRound,
