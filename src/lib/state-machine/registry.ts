@@ -4,6 +4,7 @@ import { pickFlowMachine } from '@/lib/draft-ui/pick-flow-state';
 import { armedConfirmMachine } from '@/lib/draft-ui/armed-confirm';
 import { pollerMachine } from '@/lib/draft/poller-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
+import { pushDeviceMachine } from '@/lib/push/device-state';
 
 /**
  * Every explicit state machine in the app. docs/state-machines.md is generated
@@ -17,4 +18,5 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   armedConfirmMachine.spec,
   pollerMachine.spec,
   teamSaveMachine.spec,
+  pushDeviceMachine.spec,
 ];

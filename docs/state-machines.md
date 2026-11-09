@@ -14,6 +14,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Draft room armed confirm](#draft-room-armed-confirm) — `client: armedConfirmReducer phase in ArmedConfirmDialog`
 - [Draft room pick dialog](#draft-room-pick-dialog) — `client: pickFlowReducer state (open, submitting) in DraftToolClient`
 - [Match](#match) — `matches.status (enum match_status)`
+- [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
 
 ## Visible poller
@@ -162,6 +163,95 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## Push device (this browser)
+
+- **Id:** `push.device`
+- **State lives in:** client: NotifyState in usePushAlerts (browser permission + PushManager subscription)
+- **Module doc:** `docs/push.md`
+- **States:** `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed`
+- **Actors:** `browser`, `viewer`, `switch`
+
+Whether THIS browser gets push alerts. The browser read on mount (and on a language change) sets the state from the permission and the subscription; a click on the bell switches it through busy. A server that answers push_disabled hides the control for good.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unsupported
+  unsupported --> unsupported: read_unsupported (browser)
+  install-required --> unsupported: read_unsupported (browser)
+  denied --> unsupported: read_unsupported (browser)
+  ask --> unsupported: read_unsupported (browser)
+  off --> unsupported: read_unsupported (browser)
+  on --> unsupported: read_unsupported (browser)
+  busy --> unsupported: read_unsupported (browser)
+  failed --> unsupported: read_unsupported (browser)
+  unsupported --> install-required: read_install-required (browser)
+  install-required --> install-required: read_install-required (browser)
+  denied --> install-required: read_install-required (browser)
+  ask --> install-required: read_install-required (browser)
+  off --> install-required: read_install-required (browser)
+  on --> install-required: read_install-required (browser)
+  busy --> install-required: read_install-required (browser)
+  failed --> install-required: read_install-required (browser)
+  unsupported --> denied: read_denied (browser)
+  install-required --> denied: read_denied (browser)
+  denied --> denied: read_denied (browser)
+  ask --> denied: read_denied (browser)
+  off --> denied: read_denied (browser)
+  on --> denied: read_denied (browser)
+  busy --> denied: read_denied (browser)
+  failed --> denied: read_denied (browser)
+  unsupported --> ask: read_ask (browser)
+  install-required --> ask: read_ask (browser)
+  denied --> ask: read_ask (browser)
+  ask --> ask: read_ask (browser)
+  off --> ask: read_ask (browser)
+  on --> ask: read_ask (browser)
+  busy --> ask: read_ask (browser)
+  failed --> ask: read_ask (browser)
+  unsupported --> off: read_off (browser)
+  install-required --> off: read_off (browser)
+  denied --> off: read_off (browser)
+  ask --> off: read_off (browser)
+  off --> off: read_off (browser)
+  on --> off: read_off (browser)
+  busy --> off: read_off (browser)
+  failed --> off: read_off (browser)
+  unsupported --> on: read_on (browser)
+  install-required --> on: read_on (browser)
+  denied --> on: read_on (browser)
+  ask --> on: read_on (browser)
+  off --> on: read_on (browser)
+  on --> on: read_on (browser)
+  busy --> on: read_on (browser)
+  failed --> on: read_on (browser)
+  ask --> busy: toggle (viewer)
+  off --> busy: toggle (viewer)
+  on --> busy: toggle (viewer)
+  failed --> busy: toggle (viewer)
+  busy --> on: enabled (switch)
+  busy --> off: disabled (switch)
+  busy --> ask: dismissed (switch)
+  busy --> denied: refused (switch)
+  busy --> failed: fail (switch)
+  busy --> unsupported: push_disabled (switch)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `read_unsupported` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `unsupported` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_install-required` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `install-required` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_denied` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `denied` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_ask` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `ask` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_off` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `off` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_on` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `on` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `toggle` | `ask`, `off`, `on`, `failed` | `busy` | viewer | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/components/draft-tool/feedback/NotifyToggle.tsx` | Only a click; install-required and denied open their hint instead. |
+| `enabled` | `busy` | `on` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` |  |
+| `disabled` | `busy` | `off` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` |  |
+| `dismissed` | `busy` | `ask` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | The permission prompt was closed without an answer. |
+| `refused` | `busy` | `denied` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` |  |
+| `fail` | `busy` | `failed` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | Keeps the previous on/off; retryable. |
+| `push_disabled` | `busy` | `unsupported` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | The server has no push configuration, or the browser cannot subscribe. |
 
 ## Teambuilder save
 
