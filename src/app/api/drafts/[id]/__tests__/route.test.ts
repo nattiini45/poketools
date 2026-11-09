@@ -219,6 +219,41 @@ describe('PATCH /api/drafts/[id]', () => {
     const json = await (await PATCH(makeRequest({}), routeParams)).json();
     expect(json.code).toBe('validation_failed');
   });
+
+  describe('legacy status moves (draft_pool.status machine)', () => {
+    beforeEach(() => {
+      vi.mocked(requireDraftAdmin).mockResolvedValue(undefined as never);
+      vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', format_type: 'round_robin' } as never);
+    });
+
+    it.each([
+      ['pending', 'in_progress'],
+      ['in_progress', 'complete'],
+      ['complete', 'in_progress'],
+      ['in_progress', 'pending'],
+      ['complete', 'pending'],
+    ] as const)('lets an admin move a legacy pool %s → %s and expires the draft reads', async (from, to) => {
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: from } as never);
+      vi.mocked(updateDraftPoolStatus).mockResolvedValue({ ...mockPool, status: to } as never);
+
+      const res = await PATCH(makeRequest({ status: to }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(json).toMatchObject({ success: true, data: { status: to } });
+      expect(updateDraftPoolStatus).toHaveBeenCalledTimes(1);
+      expect(revalidateTag).toHaveBeenCalledWith('season:season-1', { expire: 0 });
+    });
+
+    it('pending → complete', async () => {
+      vi.mocked(getDraftPoolById).mockResolvedValue({ ...mockPool, engine: 'legacy', status: 'pending' } as never);
+      vi.mocked(updateDraftPoolStatus).mockResolvedValue({ ...mockPool, status: 'complete' } as never);
+
+      const res = await PATCH(makeRequest({ status: 'complete' }), routeParams);
+
+      expect(res.status).toBe(200);
+    });
+  });
 });
 
 describe('DELETE /api/drafts/[id]', () => {
