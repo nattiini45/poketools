@@ -16,7 +16,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 const label = (spec: MachineSpec<string, string>, actors: readonly string[], event: string) =>
   actors.length === spec.actors.length ? event : `${event} (${actors.join(', ')})`;
 
-const cell = (value: string) => value.replace(/\|/g, '\\|');
+const cell = (value: string) => value.replace(/[\\|]/g, '\\$&');
 
 function renderMachine(spec: MachineSpec<string, string>): string {
   const lines: string[] = [];
