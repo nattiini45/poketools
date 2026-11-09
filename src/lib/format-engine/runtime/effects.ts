@@ -12,6 +12,7 @@
  * exclusive item somebody holds (the database would roll the whole event back on that); both are skipped and reported.
  * Pure and client-safe.
  */
+import type { Expr } from '@/lib/format-kit/expr/ast';
 import { evaluate } from '@/lib/format-kit/expr/eval';
 import { relationsRead } from '@/lib/format-kit/expr/relations-read';
 import type { Effect, EffectTarget, FormatDefinition, LText, ResourceDef } from '@/lib/format-kit/types';
@@ -57,6 +58,7 @@ class Planner {
   private readonly held: Held[];
   private readonly generated = new Set<string>();
   private rule: string | undefined;
+  private when: Expr | undefined;
   private effectIndex = 0;
 
   constructor(
@@ -193,13 +195,14 @@ class Planner {
   }
 
   /**
-   * A relation the target of a `notify` reads and a player may not fully see yet, or undefined. Being on the list of a
-   * notice selected by such a relation would tell the recipient who is linked to whom, so the notice is not delivered. The
+   * A relation the target of a `notify` or its rule's condition reads and a player may not fully see yet, or undefined. Being
+   * on the list of a notice selected by such a relation, or being told at all when the relation decided that the rule fires,
+   * would tell the recipient who is linked to whom, so the notice is not delivered. The
    * event still fires and its key is spent: a later reveal does not bring the notice back.
    */
   private hiddenRelationIn(target: EffectTarget): string | undefined {
-    if (target.where === undefined) return undefined;
-    return relationsRead(target.where, this.def.attributes, this.def.rules).find((key) => {
+    const read = [this.when, target.where].flatMap((expr) => (expr === undefined ? [] : relationsRead(expr, this.def.attributes, this.def.rules)));
+    return read.find((key) => {
       const visibility = (this.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
       if (visibility?.from === 'all' && visibility.to === 'all') return false;
       return this.state.links.some((link) => link.relation === key && !link.revealed);
@@ -261,6 +264,7 @@ class Planner {
     for (const rule of this.def.rules) {
       if (rule.kind !== 'rule.on_event' || !eventMatches(rule.on, this.event)) continue;
       this.rule = rule.id;
+      this.when = rule.when;
       if (rule.when !== undefined) {
         const result = evaluate(rule.when, whenCtx, 'boolean');
         if (!result.ok) {
@@ -275,6 +279,7 @@ class Planner {
       }
     }
     this.rule = undefined;
+    this.when = undefined;
     for (const relation of this.def.relations ?? []) {
       if (relation.reveal_on !== undefined && eventMatches(relation.reveal_on, this.event)) {
         this.push({ op: 'reveal_relation', relation: relation.key });

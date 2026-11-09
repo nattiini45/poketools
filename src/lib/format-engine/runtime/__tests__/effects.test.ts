@@ -107,6 +107,17 @@ describe('planEffects on the gift exchange', () => {
       expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
     });
 
+    it('is not delivered to everybody either when the rule only fires because of the relation', () => {
+      const format: FormatDefinition = {
+        ...def,
+        rules: def.rules.map((rule) => (rule.kind === 'rule.on_event' && rule.id === 'kickoff' ? { ...rule, when: { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'str', v: 'p2' } } as Expr } : rule)),
+      };
+      const out = planWith(format, false);
+      expect(out.notifications).toEqual([]);
+      expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
+      expect(planWith(format, true).notifications[0].players).toEqual([...PLAYERS]);
+    });
+
     it('is delivered once every link is revealed', () => {
       expect(planWith(withWhere(), true).notifications[0].players).toEqual(['p2']);
     });

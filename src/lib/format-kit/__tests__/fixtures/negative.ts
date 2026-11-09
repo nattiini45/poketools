@@ -536,6 +536,9 @@ export const NEGATIVE_FIXTURES: ReadonlyArray<NegativeFixture> = [
     { op: 'add', path: '/rules/1/effects/1/to/where', value: { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'ref', name: 'player', t: 'text' } } },
     { op: 'add', path: '/rules/0/effects/4/to/where', value: { k: 'ref', name: 'attr.veteran', t: 'boolean' } },
   ]), { params: { relation: 'santa' } }),
+  fx('warning', 'notify-relation-hidden-rule-when', 'notify_relation_hidden', '/rules/0/when', mutate(G, [
+    { op: 'add', path: '/rules/0/when', value: { k: 'rel', relation: 'santa', a: { k: 'str', v: 'p1' }, b: { k: 'str', v: 'p2' } } },
+  ]), { params: { relation: 'santa' } }),
   fx('error', 'effect-set-attr-invalid', 'effect_set_attr_invalid', '/rules/1/effects/1/attr', mutate(G, [
     { op: 'replace', path: '/rules/1/effects/1/value', value: 'maybe' },
   ]), { params: { attr: 'veteran', reason: 'type' } }),
