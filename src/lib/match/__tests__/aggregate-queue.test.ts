@@ -29,6 +29,7 @@ import {
   enqueueAggregateJob,
   processAggregateJobs,
   cancelAggregateJobsForGame,
+  requeueFailedIncrementJobsForSeason,
   getAggregateJobHealth,
   getAggregateJobStats,
   type AggregateJob,
@@ -122,6 +123,44 @@ describe('enqueueAggregateJob', () => {
     await enqueueAggregateJob('game-1', 'tourney-1', null);
 
     expect(mockSupabase.from).toHaveBeenCalledWith('aggregate_jobs');
+  });
+
+  it('inserts a pending increment job (the queue machine starts a queued game in pending)', async () => {
+    await enqueueAggregateJob('game-1', 'tourney-1', 'season-1');
+
+    expect(mockSupabase.insert).toHaveBeenCalledWith({
+      game_id: 'game-1',
+      tournament_id: 'tourney-1',
+      season_id: 'season-1',
+      operation: 'increment',
+      status: 'pending',
+    });
+  });
+});
+
+// ─── requeueFailedIncrementJobsForSeason (league restore rebuild) ──
+
+describe('requeueFailedIncrementJobsForSeason', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSupabase.__reset();
+  });
+
+  it("moves only the season's failed increment jobs back to pending with fresh attempts", async () => {
+    mockSupabase.__setResult(null);
+    (mockSupabase.then as ReturnType<typeof vi.fn>).mockImplementationOnce((resolve: (value: unknown) => void) =>
+      resolve({ data: null, error: null, count: 2 }),
+    );
+
+    await expect(requeueFailedIncrementJobsForSeason('season-1')).resolves.toBe(2);
+
+    expect(mockSupabase.from).toHaveBeenCalledWith('aggregate_jobs');
+    expect(updatePayloads()).toEqual([
+      expect.objectContaining({ status: 'pending', attempts: 0, last_error: null }),
+    ]);
+    expect(mockSupabase.eq).toHaveBeenCalledWith('season_id', 'season-1');
+    expect(mockSupabase.eq).toHaveBeenCalledWith('operation', 'increment');
+    expect(mockSupabase.eq).toHaveBeenCalledWith('status', 'failed');
   });
 });
 
