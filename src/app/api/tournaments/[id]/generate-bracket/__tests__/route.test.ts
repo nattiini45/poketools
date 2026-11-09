@@ -374,6 +374,15 @@ describe('POST /api/tournaments/[id]/generate-bracket', () => {
       expect(vi.mocked(generateEliminationBracket).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(announceKitRound).mock.invocationCallOrder[0]);
     });
 
+    it('does not replay stage_start when another writer moved the status while the bracket was written', async () => {
+      vi.mocked(generateEliminationBracket).mockResolvedValue({ rounds_created: 2, matches_materialized: 1, status_moved_elsewhere: true });
+
+      const response = await POST(request(), params);
+
+      expect(response.status).toBe(201);
+      expect(announceKitRound).toHaveBeenCalledWith(kitTournament, kitPhase, { roundNumber: 1 }, false, null);
+    });
+
     it('does not announce when the bracket refuses to generate', async () => {
       vi.mocked(generateEliminationBracket).mockRejectedValue(new UserFacingError('Bracket already generated', { code: 'bracket_already_generated', status: 409 }));
 

@@ -26,6 +26,12 @@ export interface GenerateBracketResult {
    * warning `admin_game_format_revert_failed`.
    */
   format_revert_failed?: boolean;
+  /**
+   * Present (true) only when another writer moved the tournament's status while the bracket was written, so this call
+   * did not move it: the caller's status read is stale then, and nothing may be derived from it (a `stage_start` for a
+   * phase that was upcoming).
+   */
+  status_moved_elsewhere?: true;
 }
 
 export interface GenerateBracketOptions {
@@ -46,26 +52,11 @@ async function claimBracketStart(tournament: Tournament, currentRound: number): 
   await updateTournament(tournament.id, { status: 'active', current_round: currentRound }, { from: tournament.status });
 }
 
-/**
- * Generate the full elimination bracket: all round rows + initial match materialization.
- */
-export async function generateEliminationBracket(
-  tournament: Tournament,
-  participants: ParticipantWithSeed[],
-  options: GenerateBracketOptions = {}
-): Promise<GenerateBracketResult> {
+/** The bracket of these participants, or the refusal of a tournament that is not elimination or has too few of them. */
+function bracketStructureOrRefuse(tournament: Tournament, participants: ParticipantWithSeed[]) {
   if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
     throw new Error('Full bracket generation only applies to elimination formats');
   }
-
-  const existingRounds = await getRoundsByTournament(tournament.id);
-  if (existingRounds.length > 0) {
-    throw new UserFacingError('Bracket already generated', {
-      code: 'bracket_already_generated',
-      status: 409,
-    });
-  }
-
   const structure = buildBracketStructureForParticipants(
     tournament.bracket_type,
     participants,
@@ -77,6 +68,26 @@ export async function generateEliminationBracket(
       status: 400,
     });
   }
+  return structure;
+}
+
+/**
+ * Generate the full elimination bracket: all round rows + initial match materialization.
+ */
+export async function generateEliminationBracket(
+  tournament: Tournament,
+  participants: ParticipantWithSeed[],
+  options: GenerateBracketOptions = {}
+): Promise<GenerateBracketResult> {
+  const existingRounds = await getRoundsByTournament(tournament.id);
+  if (existingRounds.length > 0) {
+    throw new UserFacingError('Bracket already generated', {
+      code: 'bracket_already_generated',
+      status: 409,
+    });
+  }
+
+  const structure = bracketStructureOrRefuse(tournament, participants);
 
   const roundIdByGlobalNumber = new Map<number, string>();
 
@@ -115,6 +126,7 @@ export async function generateEliminationBracket(
   // The bracket is written: the status follows it. A status another writer moved since the caller's read (an admin completed
   // the tournament meanwhile) is kept, not overwritten, and the written bracket is not reported as a failure.
   const firstRoundNumber = structure.rounds[0]?.round_number ?? 1;
+  let statusMovedElsewhere = false;
   if (options.statusClaimed) {
     await updateTournament(tournament.id, { current_round: firstRoundNumber });
   } else {
@@ -122,6 +134,7 @@ export async function generateEliminationBracket(
       await claimBracketStart(tournament, firstRoundNumber);
     } catch (err) {
       if (!(err instanceof UserFacingError) || err.code !== 'tournament_status_changed') throw err;
+      statusMovedElsewhere = true;
       logger.warn('tournament/bracket-generate', 'the status moved while the bracket was written; kept it', {
         tournamentId: tournament.id,
         from: tournament.status,
@@ -132,6 +145,7 @@ export async function generateEliminationBracket(
   const result: GenerateBracketResult = {
     rounds_created: structure.rounds.length,
     matches_materialized: created.length,
+    ...(statusMovedElsewhere ? { status_moved_elsewhere: true as const } : {}),
   };
 
   // Start the first round when asked. Best effort: the bracket exists either way, and a round that is still
@@ -178,6 +192,9 @@ export async function regenerateEliminationBracket(
       { code: 'REGENERATE_PLAYED', params: { count: played.length }, status: 409 }
     );
   }
+
+  // The structure is checked here as well: a regenerate it would refuse leaves the bracket and the status as they were.
+  bracketStructureOrRefuse(tournament, participants);
 
   // The status is claimed after the refusals and before the first write (a reset, a delete), so a status that moved since
   // the caller's read refuses the regenerate before anything changed.

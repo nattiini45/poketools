@@ -459,7 +459,23 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
     );
     const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
     expect(result.rounds_created).toBeGreaterThan(0);
+    expect(result.status_moved_elsewhere).toBe(true);
     expect(updateTournament).toHaveBeenCalledTimes(1);
+  });
+
+  it('a generate that moved the status itself does not report it moved elsewhere', async () => {
+    const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
+    expect(result.status_moved_elsewhere).toBeUndefined();
+  });
+
+  it('a regenerate refused for too few participants leaves the status and the bracket untouched', async () => {
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    await expect(
+      regenerateEliminationBracket({ ...makeTournament(), status: 'completed' }, makeParticipants(1)),
+    ).rejects.toMatchObject({ code: 'tournament_participants_too_few' });
+    expect(updateTournament).not.toHaveBeenCalled();
+    expect(resetMatch).not.toHaveBeenCalled();
+    expect(createRound).not.toHaveBeenCalled();
   });
 
   it('a regenerate claims the status before any reset or delete, and a moved status refuses it untouched', async () => {
