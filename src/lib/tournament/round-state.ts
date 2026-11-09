@@ -12,7 +12,7 @@ export const roundMachine = defineMachine({
   title: 'Round',
   storage: 'rounds.status (enum round_status)',
   summary:
-    'A round of a tournament or phase: written pending, started to open it to play, completed by an admin. A match reopened in a completed round reopens the round; an admin reset of its matches puts it back to pending.',
+    'A round of a tournament or phase: written pending, started to open it to play, completed by an admin. A match reopened in a completed round reopens the round to active; an admin reset of its matches puts it back to pending.',
   doc: 'docs/tournament.md',
   states: ['pending', 'active', 'completed'],
   initial: ['pending'],
@@ -59,10 +59,10 @@ export const roundMachine = defineMachine({
     {
       event: 'revert',
       from: ['completed'],
-      to: 'pending',
+      to: 'active',
       actors: ['system'],
       writers: ['src/lib/pkmn/game-pipeline.ts'],
-      note: 'revertRoundIfCompleted: a match of a completed round changed (reopened, a game deleted or edited).',
+      note: 'revertRoundIfCompleted: a match of a completed round changed (reopened, a game deleted or edited), so the round is open to play again (players see Submit only in an active round).',
     },
   ],
 });

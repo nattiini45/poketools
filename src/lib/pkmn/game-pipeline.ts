@@ -1352,16 +1352,17 @@ export async function rebuildGamificationAfterUncomplete(
 }
 
 /**
- * Helper: revert round status to 'pending' if it was 'completed'. A fresh read
+ * Helper: reopen a completed round to 'active' (roundMachine `revert`): one of its matches is open again, and players see
+ * Submit only in an active round (a 'pending' round hides it). A fresh read
  * at revert time (the games are already gone); a failed read throws instead of
  * silently skipping the revert.
  */
 export async function revertRoundIfCompleted(roundId: string): Promise<void> {
   const round = await requireRound(roundId);
   if (round.status !== 'completed') return;
-  roundMachine.assertTransition('completed', 'pending', 'system');
+  roundMachine.assertTransition('completed', 'active', 'system');
   try {
-    await updateRoundStatus(roundId, 'pending', 'completed');
+    await updateRoundStatus(roundId, 'active', 'completed');
   } catch (err) {
     // Another writer moved the round since the read (an admin reset or reopened it): its status stands.
     if (!(err instanceof UserFacingError) || err.code !== 'round_status_changed') throw err;
