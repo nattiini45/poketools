@@ -81,6 +81,8 @@ export interface EditorState {
   // ── Save status ─────────────────────────────────────────────────────
   /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. Moves only as `teamSaveMachine` allows. */
   saveStatus: TeamSaveStatus;
+  /** What the save in flight sends (its team and name); an edit made meanwhile keeps the editor dirty after it lands. */
+  inFlightSave: { team: (PokemonSet | null)[]; teamName: string } | null;
 }
 
 // ============================================================
@@ -362,11 +364,16 @@ export function editorReducer(
     // ── Save ─────────────────────────────────────────────────────
     case 'SET_SAVE_STATUS': {
       const actor = action.status === 'saving' ? 'player' : 'server';
-      return teamSaveMachine.can(state.saveStatus, action.status, actor) ? { ...state, saveStatus: action.status } : state;
+      if (!teamSaveMachine.can(state.saveStatus, action.status, actor)) return state;
+      const inFlightSave = action.status === 'saving' ? { team: state.team, teamName: state.teamName } : null;
+      return { ...state, saveStatus: action.status, inFlightSave };
     }
 
     case 'MARK_SAVED': {
-      return teamSaveMachine.can(state.saveStatus, 'saved', 'server') ? { ...state, saveStatus: 'saved', dirty: false } : state;
+      if (!teamSaveMachine.can(state.saveStatus, 'saved', 'server')) return state;
+      const sent = state.inFlightSave;
+      const editedSince = sent !== null && (state.team !== sent.team || state.teamName !== sent.teamName);
+      return { ...state, saveStatus: 'saved', dirty: editedSince, inFlightSave: null };
     }
 
     // ── Meta ───────────────────────────────────────────────────────
@@ -432,5 +439,6 @@ export function createInitialState(params?: {
     mobilePane: 'team',
     draft: null,
     saveStatus: 'idle',
+    inFlightSave: null,
   };
 }

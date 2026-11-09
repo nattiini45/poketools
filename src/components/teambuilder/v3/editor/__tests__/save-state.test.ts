@@ -38,6 +38,16 @@ describe('teambuilder save state', () => {
     expect(editorReducer(saving, { type: 'SET_SAVE_STATUS', status: 'idle' })).toBe(saving);
   });
 
+  it('an edit made while the save is in flight stays dirty after the save lands', () => {
+    const saving = editorReducer(edited(), { type: 'SET_SAVE_STATUS', status: 'saving' });
+    const typed = editorReducer(saving, { type: 'SET_TEAM_NAME', name: 'Sand' });
+    expect(editorReducer(typed, { type: 'MARK_SAVED' })).toMatchObject({ saveStatus: 'saved', dirty: true, teamName: 'Sand' });
+    const added = editorReducer(saving, { type: 'ADD_SLOT', species: 'Tyranitar' });
+    expect(editorReducer(added, { type: 'MARK_SAVED' })).toMatchObject({ saveStatus: 'saved', dirty: true });
+    const selected = editorReducer(saving, { type: 'SELECT_SLOT', slot: 0 });
+    expect(editorReducer(selected, { type: 'MARK_SAVED' })).toMatchObject({ saveStatus: 'saved', dirty: false });
+  });
+
   it('an edit after a save leaves the save status and marks the team dirty', () => {
     const saved = run(edited(), [{ type: 'SET_SAVE_STATUS', status: 'saving' }, { type: 'MARK_SAVED' }]);
     const next = editorReducer(saved, { type: 'SET_TEAM_NAME', name: 'Sand' });
