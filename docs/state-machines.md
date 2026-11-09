@@ -13,7 +13,10 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Admin Assistant ledger row](#admin-assistant-ledger-row) — `admin_agent_actions.status`
 - [Admin Assistant plan](#admin-assistant-plan) — `admin_agent_plans.status`
 - [Admin Assistant proposal](#admin-assistant-proposal) — `admin_agent_proposals.status`
+- [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
+- [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
 - [Match](#match) — `matches.status (enum match_status)`
+- [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 
 ## Admin Assistant ledger row
 
@@ -131,6 +134,70 @@ stateDiagram-v2
 | `refuse_stale` | `executing` | `stale` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | The recheck after the claim (hash, acknowledgements, registry, preconditions) or a stale precondition during the run; the claim is consumed. |
 | `lose_track` | `executing` | `unknown` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/proposals/reaper.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | A Go-live step with an unknown outcome, or the reaper (reapExecutingProposals) ending an execution older than the resume window plus one request. |
 
+## Cast session
+
+- **Id:** `cast_session`
+- **State lives in:** cast_sessions.status (CHECK cast_sessions_status_check)
+- **Module doc:** `docs/cast-studio.md`
+- **States:** `draft`, `live`, `archived`
+- **Actors:** `owner`, `admin`
+
+The lifecycle label of a Cast Studio session. A session is created as draft; no screen moves the status today, only a PATCH /api/cast-sessions/[id] that names one, which is guarded with the current status (a status equal to the current one is not a move). The dashboard broadcast page links a match to its first session that is not archived. mode (cast, solo, replaycast) is a type tag picked at creation and edited in the studio, not a lifecycle: it has no machine.
+
+```mermaid
+stateDiagram-v2
+  [*] --> draft
+  draft --> live: go_live
+  live --> draft: end_live
+  draft --> archived: archive
+  live --> archived: archive
+  archived --> draft: unarchive
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `go_live` | `draft` | `live` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The cast starts. |
+| `end_live` | `live` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The cast ends and the session stays in use. |
+| `archive` | `draft`, `live` | `archived` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The session is put away; the dashboard no longer reuses it for its match. |
+| `unarchive` | `archived` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | An archived session comes back as a draft; it goes live from there. |
+
+## Cast Studio autosave
+
+- **Id:** `cast_studio_save`
+- **State lives in:** CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)
+- **Module doc:** `docs/cast-studio.md`
+- **States:** `idle`, `dirty`, `saving`, `error`
+- **Actors:** `caster`, `autosave`
+
+The save badge of the Cast Studio (CastToolbar). Edits from this tab and from another tab over the cast channel both count; one request runs at a time, and its answer is compared with the session as it is when the answer lands (the sent signature). A pagehide sends any unsaved snapshot with keepalive and does not move the state.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> dirty: edit (caster)
+  dirty --> dirty: edit (caster)
+  error --> dirty: edit (caster)
+  saving --> saving: edit (caster)
+  dirty --> saving: save_start (autosave)
+  saving --> idle: save_ok (autosave)
+  saving --> dirty: save_ok_outdated (autosave)
+  saving --> error: save_fail (autosave)
+  idle --> idle: load (caster)
+  dirty --> idle: load (caster)
+  saving --> idle: load (caster)
+  error --> idle: load (caster)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `edit` | `idle`, `dirty`, `error` | `dirty` | caster | `src/components/creator/studio/CastStudioContext.tsx` | Any studio action; after a failed save the edit schedules the retry. |
+| `edit` | `saving` | `saving` | caster | `src/components/creator/studio/CastStudioContext.tsx` | The running request keeps its snapshot; the sent signature decides when it answers. |
+| `save_start` | `dirty` | `saving` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | 5 s after the last edit; never while another save runs. |
+| `save_ok` | `saving` | `idle` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | The server stored the snapshot and the session has not changed since it was sent. |
+| `save_ok_outdated` | `saving` | `dirty` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | The server stored the snapshot but the session changed while the request ran: the next save follows. |
+| `save_fail` | `saving` | `error` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | An HTTP error, success: false, or no answer: the badge shows the failure. |
+| `load` | `idle`, `dirty`, `saving`, `error` | `idle` | caster | `src/components/creator/studio/CastStudioContext.tsx` | A stored session replaces the studio state (the load_session action). |
+
 ## Match
 
 - **Id:** `match`
@@ -173,3 +240,30 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## Player moderation status
+
+- **Id:** `player.status`
+- **State lives in:** players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after
+- **Module doc:** `docs/admin.md`
+- **States:** `active`, `suspended`, `banned`
+- **Actors:** `admin`, `system`
+
+A player is active, suspended until a time, or banned. Only an active player is suspended or banned, and a sanction ends only by reinstating the player (an admin, or the cron once suspended_until has passed). The live require* guards (src/lib/auth/helpers.ts) refuse every status but active; site admins pass the standing check whatever their status (isInGoodStanding), so a sanctioned admin keeps admin access until is_admin is removed. The superadmin row is changed by the superadmin only (superadminPlayerProtectedResponse).
+
+```mermaid
+stateDiagram-v2
+  [*] --> active
+  active --> suspended: suspend (admin)
+  active --> banned: ban (admin)
+  suspended --> active: reinstate (admin)
+  banned --> active: reinstate (admin)
+  suspended --> active: expire (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `suspend` | `active` | `suspended` | admin | `src/app/api/admin/players/[id]/suspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Stores suspended_until (a future time), clears ban_reason and ends the sessions the player holds. |
+| `ban` | `active` | `banned` | admin | `src/app/api/admin/players/[id]/suspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Stores ban_reason, clears suspended_until and ends the sessions the player holds. |
+| `reinstate` | `suspended`, `banned` | `active` | admin | `src/app/api/admin/players/[id]/unsuspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Clears suspended_until and ban_reason; the session epoch stays, so tokens from before the sanction stay dead. |
+| `expire` | `suspended` | `active` | system | `src/app/api/cron/expire-suspensions/route.ts`<br>`src/lib/supabase/queries/players.ts` | The cron (every 15 min) lifts suspensions whose suspended_until has passed; a banned player has no suspended_until and is never lifted. |
