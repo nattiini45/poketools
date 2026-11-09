@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { MatchProposal, MatchProposalStatus, MatchProposalWithPlayers } from '@/types/match-proposal';
 import { matchProposalMachine } from '@/lib/match/proposal-state';
@@ -203,6 +204,14 @@ export async function deleteMatchProposalsByMatch(matchId: string): Promise<numb
   return count ?? 0;
 }
 
+/** The proposal left pending between the caller's read and its answer (another answer, an expiry, a cancellation). HTTP 409. */
+export class MatchProposalNotPendingError extends UserFacingError<'match_proposal_not_pending'> {
+  constructor() {
+    super('Proposal is no longer pending', { code: 'match_proposal_not_pending', status: 409 });
+    this.name = 'MatchProposalNotPendingError';
+  }
+}
+
 /** An answer to a pending proposal (match proposal machine): written only while the row is still pending. */
 async function updateMatchProposalStatus(
   id: string,
@@ -218,8 +227,10 @@ async function updateMatchProposalStatus(
     .eq('id', id)
     .eq('status', PENDING)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  // A concurrent answer, expiry or cancellation got there first: the row is no longer pending.
+  if (!data) throw new MatchProposalNotPendingError();
   return toMatchProposal(data);
 }

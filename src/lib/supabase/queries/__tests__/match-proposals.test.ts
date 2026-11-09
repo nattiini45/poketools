@@ -100,7 +100,7 @@ describe('queries/match-proposals', () => {
   });
 
   it('accepts a pending proposal with responded_at metadata', async () => {
-    mockBuilder.single.mockResolvedValue({ data: { ...proposalRow, status: 'accepted', responded_at: 'now' }, error: null });
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...proposalRow, status: 'accepted', responded_at: 'now' }, error: null });
 
     const result = await acceptMatchProposal('proposal-1');
 
@@ -120,6 +120,16 @@ describe('queries/match-proposals', () => {
     expect(mockBuilder.eq).toHaveBeenCalledWith('match_id', 'match-1');
     expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
     expect(mockBuilder.lte).toHaveBeenCalledWith('expires_at', '2026-05-23T00:00:00.000Z');
+  });
+
+  it('answers 409 match_proposal_not_pending when the row left pending before the answer landed', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+
+    await expect(acceptMatchProposal('proposal-1')).rejects.toMatchObject({
+      message: 'Proposal is no longer pending',
+      code: 'match_proposal_not_pending',
+      statusCode: 409,
+    });
   });
 
   it('cancels pending proposals for a repaired or reset match', async () => {
