@@ -985,3 +985,33 @@ describe('upsertTeamForMatch lookup errors', () => {
     expect(mockBuilder.insert).not.toHaveBeenCalled();
   });
 });
+
+// ── Characterization: the manual lock on the correction paths (machine team.roster) ──
+describe('manual lock on the admin correction paths (characterization)', () => {
+  it('refuses an admin correction of a locked roster before calling the correction function', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: LOCKED_TEAM_ROW, error: null });
+
+    await expect(
+      updateTeamPokemon('team-locked', [] as unknown as PokemonSet[], 'manual', undefined, { correction: true }),
+    ).rejects.toThrow('Team is locked and cannot be edited');
+    expect(mockBuilder.rpc).not.toHaveBeenCalled();
+  });
+
+  it('match-prep sync skips a locked match row even for an admin correction', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: { ...LOCKED_TEAM_ROW, match_id: 'match1' }, error: null });
+
+    const result = await upsertTeamForMatch('p1', 'match1', 't1', [] as unknown as PokemonSet[], 'manual', {
+      correction: true,
+    });
+    expect(result).toBeNull();
+    expect(mockBuilder.rpc).not.toHaveBeenCalled();
+    expect(mockBuilder.update).not.toHaveBeenCalled();
+  });
+
+  it('an admin force-delete of a locked team throws before it reads the correction flag (the route answers 500)', async () => {
+    mockBuilder.maybeSingle.mockResolvedValueOnce({ data: LOCKED_TEAM_ROW, error: null });
+
+    await expect(deleteTeam('team-locked', { correction: true })).rejects.toThrow('Team is locked and cannot be deleted');
+    expect(mockBuilder.rpc).not.toHaveBeenCalled();
+  });
+});
