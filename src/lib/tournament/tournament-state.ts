@@ -41,8 +41,9 @@ export const tournamentMachine = defineMachine({
       writers: [
         'src/lib/tournament/tournament-transition.ts',
         'supabase/migrations/20261106090000_format_challenges.sql#phase_complete_at_stage_end',
+        'src/lib/tournament/bracket-generate.ts',
       ],
-      note: 'Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement.',
+      note: 'Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement. bracket-generate only undoes its own regenerate claim when the first reset refused (nothing fires).',
     },
     {
       event: 'complete',
