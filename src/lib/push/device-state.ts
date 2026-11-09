@@ -17,7 +17,7 @@ export interface PushDeviceFacts {
   support: 'unsupported' | 'install-required' | 'default' | 'granted' | 'denied';
   optedIn: boolean;
   busy?: boolean;
-  error?: { code?: string } | null;
+  error?: { code?: string | null } | null;
 }
 
 /** The state without a running or failed switch: what the control says it would switch. */
