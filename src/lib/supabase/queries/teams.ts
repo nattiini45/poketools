@@ -441,7 +441,10 @@ export async function updateTeamPokemon(
 export async function deleteTeam(id: string, opts: TeamWriteOptions = {}): Promise<void> {
   const existing = await getTeamById(id);
   if (!existing) throw new Error('Team not found');
-  if (existing.locked) throw new Error('Team is locked and cannot be deleted');
+  // A site admin's correction force-deletes a locked team (machine `team.roster`: `force_delete`).
+  if (!canWriteTeam(existing.locked ? 'locked' : 'open', 'delete', opts.correction ? 'admin' : 'owner')) {
+    throw new Error('Team is locked and cannot be deleted');
+  }
 
   if (opts.correction) {
     const { data: found, error } = await supabase.rpc('team_correct_delete', { p_team_id: id });

@@ -1060,10 +1060,13 @@ describe('manual lock on the admin correction paths (characterization)', () => {
     expect(mockBuilder.update).not.toHaveBeenCalled();
   });
 
-  it('an admin force-delete of a locked team throws before it reads the correction flag (the route answers 500)', async () => {
+  it('an admin force-delete of a locked team goes through team_correct_delete (behaviour fix: it threw before reading the correction flag, a 500)', async () => {
     mockBuilder.maybeSingle.mockResolvedValueOnce({ data: LOCKED_TEAM_ROW, error: null });
+    mockBuilder.rpc.mockResolvedValueOnce({ data: true, error: null });
 
-    await expect(deleteTeam('team-locked', { correction: true })).rejects.toThrow('Team is locked and cannot be deleted');
-    expect(mockBuilder.rpc).not.toHaveBeenCalled();
+    await deleteTeam('team-locked', { correction: true });
+
+    expect(mockBuilder.rpc).toHaveBeenCalledWith('team_correct_delete', { p_team_id: 'team-locked' });
+    expect(mockBuilder.delete).not.toHaveBeenCalled();
   });
 });
