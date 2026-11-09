@@ -460,7 +460,8 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
     const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
     expect(result.rounds_created).toBeGreaterThan(0);
     expect(result.status_moved_elsewhere).toBe(true);
-    expect(updateTournament).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(updateTournament).mock.calls[1]).toEqual(['t1', { current_round: 1 }]);
+    expect(updateTournament).toHaveBeenCalledTimes(2);
   });
 
   it('a generate whose status moved meanwhile does not start its first round', async () => {
@@ -503,6 +504,21 @@ describe('bracket status claim: no failure after bracket writes, no overwrite', 
       ['t1', { status: 'completed' }, { from: 'active' }],
     ]);
     expect(createRound).not.toHaveBeenCalled();
+  });
+
+  it('a regenerate keeps a completed tournament active when the first reset fails after its cascade may have written', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    vi.mocked(getMatchesByTournament).mockResolvedValueOnce([played]);
+    vi.mocked(getMatchById).mockResolvedValue(played);
+    vi.mocked(resetMatch).mockRejectedValueOnce(new UserFacingError('moved', { code: 'match_state_changed', status: 409 }));
+    await expect(
+      regenerateEliminationBracket({ ...makeTournament(), status: 'completed', current_round: 2 }, makeParticipants(2), {
+        cascade: true,
+        adminId: 'admin-1',
+      }),
+    ).rejects.toMatchObject({ code: 'match_state_changed' });
+    expect(vi.mocked(updateTournament).mock.calls).toEqual([['t1', { status: 'active', current_round: 2 }, { from: 'completed' }]]);
   });
 
   it('a regenerate keeps a completed tournament active once a reset committed, even when a later reset refuses', async () => {

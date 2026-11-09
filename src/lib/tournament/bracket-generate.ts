@@ -53,6 +53,12 @@ async function claimBracketStart(tournament: Tournament, currentRound: number): 
 }
 
 /**
+ * The `resetMatch` refusals raised before it writes anything, its downstream cascade included (its first check: the match
+ * is already scheduled). Any other failure may follow committed downstream resets, so the restart stands then.
+ */
+const RESET_REFUSALS_BEFORE_ANY_WRITE = new Set(['match_already_scheduled']);
+
+/**
  * Undoes a regenerate's claim of a completed tournament when the first reset refused (a `UserFacingError` writes nothing)
  * and nothing was reset or deleted yet: the tournament keeps its old bracket and results, so it stays completed. A
  * compare-and-set from `active`, the status the claim wrote; a failed restore is logged and the refusal still reported.
@@ -154,6 +160,7 @@ export async function generateEliminationBracket(
     } catch (err) {
       if (!(err instanceof UserFacingError) || err.code !== 'tournament_status_changed') throw err;
       statusMovedElsewhere = true;
+      await updateTournament(tournament.id, { current_round: firstRoundNumber });
       logger.warn('tournament/bracket-generate', 'the status moved while the bracket was written; kept it', {
         tournamentId: tournament.id,
         from: tournament.status,
@@ -231,7 +238,9 @@ export async function regenerateEliminationBracket(
         const reset = await resetMatch(match.id, options.adminId!, true);
         if (reset?.format_revert_failed) formatRevertFailed = true;
       } catch (err) {
-        if (!resetCommitted && err instanceof UserFacingError) await restoreCompletedStatus(tournament);
+        if (!resetCommitted && err instanceof UserFacingError && RESET_REFUSALS_BEFORE_ANY_WRITE.has(err.code ?? '')) {
+          await restoreCompletedStatus(tournament);
+        }
         throw err;
       }
       resetCommitted = true;
