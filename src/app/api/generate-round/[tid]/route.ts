@@ -517,7 +517,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // hide them; the round stays pending and the round manager offers Start.
       if (options.startRound) {
         try {
-          round = await updateRoundStatus(round.id, 'active');
+          round = await updateRoundStatus(round.id, 'active', 'pending');
           started = true;
         } catch (startErr) {
           logger.error('generate-round', 'Failed to start the new round', { tournamentId: tid, roundId: round.id, error: startErr });

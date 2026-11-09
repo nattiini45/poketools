@@ -370,18 +370,32 @@ function parseRoundWrite(data: unknown): Round {
   return toRound(body.round as RoundRow);
 }
 
+/**
+ * Moves a round's status as a compare-and-set on `from`, the status the writer read (roundMachine,
+ * src/lib/tournament/round-state.ts; the writer checks the move). A round that moved on in between is not overwritten:
+ * nothing is written and a 409 `round_status_changed` is thrown. Completion goes through `completeRound`.
+ */
 export async function updateRoundStatus(
   id: string,
-  status: RoundStatus
+  status: RoundStatus,
+  from: RoundStatus
 ): Promise<Round> {
   const { data, error } = await supabase
     .from('rounds')
     .update({ status })
     .eq('id', id)
+    .eq('status', from)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw new UserFacingError('This round changed its status in the meantime. Reload the page and try again.', {
+      code: 'round_status_changed',
+      params: { from },
+      status: 409,
+    });
+  }
   return toRound(data);
 }
 

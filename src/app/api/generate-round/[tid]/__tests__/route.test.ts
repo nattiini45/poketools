@@ -1261,7 +1261,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(201);
       expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-      expect(updateRoundStatus).toHaveBeenCalledWith('r-2', 'active');
+      expect(updateRoundStatus).toHaveBeenCalledWith('r-2', 'active', 'pending');
       expect(payload.data.status).toBe('active');
       expect(vi.mocked(createRoundWithMatches).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(updateRoundStatus).mock.invocationCallOrder[0]
@@ -1279,7 +1279,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST(bodyRequest({ start_round: true }), routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(updateRoundStatus).toHaveBeenCalledWith('r-2-empty', 'active');
+      expect(updateRoundStatus).toHaveBeenCalledWith('r-2-empty', 'active', 'pending');
     });
 
     it.each([

@@ -2,6 +2,7 @@ import type { MachineSpec } from './machine';
 import { matchMachine } from '@/lib/tournament/match-state';
 import { tournamentMachine } from '@/lib/tournament/tournament-state';
 import { seasonMachine } from '@/lib/season/season-state';
+import { roundMachine } from '@/lib/tournament/round-state';
 
 /**
  * Every explicit state machine in the app. docs/state-machines.md is generated
@@ -9,4 +10,4 @@ import { seasonMachine } from '@/lib/season/season-state';
  * each spec's structure. A new machine is added here in the same change that
  * defines it.
  */
-export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [matchMachine.spec, tournamentMachine.spec, seasonMachine.spec];
+export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [matchMachine.spec, tournamentMachine.spec, seasonMachine.spec, roundMachine.spec];

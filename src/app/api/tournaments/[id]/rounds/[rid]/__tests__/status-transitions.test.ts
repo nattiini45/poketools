@@ -71,3 +71,26 @@ describe('PATCH rounds/[rid]: legal non-completing status moves', () => {
     expect(vi.mocked(updateRoundStatus).mock.calls[0].slice(0, 2)).toEqual([R_ID, to]);
   });
 });
+
+describe('PATCH rounds/[rid]: refused and guarded moves', () => {
+  it('reopening a completed round to active is 409 state_transition_invalid, nothing written', async () => {
+    vi.mocked(getRoundById).mockResolvedValue(round('completed'));
+    const res = await patch({ status: 'active' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('state_transition_invalid');
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it('writes as a compare-and-set on the status read, and answers the 409 of a round that moved on', async () => {
+    const { UserFacingError } = await import('@/lib/api/user-facing-error');
+    vi.mocked(getRoundById).mockResolvedValue(round('pending'));
+    vi.mocked(updateRoundStatus).mockRejectedValueOnce(
+      new UserFacingError('changed', { code: 'round_status_changed', status: 409 }),
+    );
+    const res = await patch({ status: 'active' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('round_status_changed');
+    expect(updateRoundStatus).toHaveBeenCalledWith(R_ID, 'active', 'pending');
+  });
+});
+

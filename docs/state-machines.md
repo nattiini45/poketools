@@ -11,6 +11,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 ## Machines
 
 - [Match](#match) — `matches.status (enum match_status)`
+- [Round](#round) — `rounds.status (enum round_status)`
 - [League](#league) — `seasons.status (enum season_status)`
 - [Tournament and league phase](#tournament-and-league-phase) — `tournaments.status (enum tournament_status)`
 
@@ -56,6 +57,35 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## Round
+
+- **Id:** `round`
+- **State lives in:** rounds.status (enum round_status)
+- **Module doc:** `docs/tournament.md`
+- **States:** `pending`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A round of a tournament or phase: written pending, started to open it to play, completed by an admin. A match reopened in a completed round reopens the round; an admin reset of its matches puts it back to pending.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> active: start
+  active --> completed: complete (admin)
+  pending --> completed: complete_unstarted (admin)
+  active --> pending: reset (admin)
+  completed --> pending: reset (admin)
+  completed --> pending: revert (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `pending` | `active` | admin, system | `src/app/api/tournaments/[id]/rounds/[rid]/route.ts`<br>`src/app/api/generate-round/[tid]/route.ts`<br>`src/app/api/tournaments/[id]/generate-all-rounds/route.ts`<br>`src/lib/tournament/bracket-generate.ts` | Start in the round manager, or a generate that was asked to start its round (best effort). |
+| `complete` | `active` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | Refused while a match is unfinished unless forced with a reason (audited round.force_complete). |
+| `complete_unstarted` | `pending` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | The API accepts completing a round that was never started (round_complete only refuses a completed one); the round manager does not offer it. |
+| `reset` | `active`, `completed` | `pending` | admin | `src/lib/pkmn/game-pipeline.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/route.ts` | Reset in the round manager (resetRound: every played match back to scheduled), or a status PATCH. |
+| `revert` | `completed` | `pending` | system | `src/lib/pkmn/game-pipeline.ts` | revertRoundIfCompleted: a match of a completed round changed (reopened, a game deleted or edited). |
 
 ## League
 
