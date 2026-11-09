@@ -18,7 +18,7 @@ const game = (n: number): GameSummary => ({
   id: `g${n}`,
   game_number: n,
   winner_id: 'p1',
-  replay_url: null,
+  replay_url: `https://replay.pokemonshowdown.com/x-${n}`,
   source: 'manual',
   stats_locked: false,
 });
