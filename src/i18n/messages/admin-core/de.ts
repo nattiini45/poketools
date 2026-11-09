@@ -126,6 +126,7 @@ export default defineDe<typeof en>()({
     season__create: 'Liga angelegt',
     season__update: 'Liga-Einstellungen geändert',
     season__clone: 'Liga aus einer anderen Liga erstellt',
+    season__create_from_format: 'Liga aus einem Format erstellt',
     season__clone_failed: 'Liga-Kopie fehlgeschlagen',
     season__set_test_flag: 'Testmarkierung geändert',
     season__delete: 'Saison gelöscht',
