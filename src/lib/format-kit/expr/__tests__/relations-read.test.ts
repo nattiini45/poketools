@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AttributeDef } from '../../types';
+import type { AttributeDef, RuleEntry } from '../../types';
 import type { Expr } from '../ast';
 import { relationsRead } from '../relations-read';
 
@@ -41,6 +41,23 @@ describe('relationsRead', () => {
 
   it('follows a player attribute computed from a relation', () => {
     expect(relationsRead(attr, [computed])).toEqual(['santa']);
+  });
+
+  const stored = { key: 'gifted', on: 'player', type: 'bool', assign: { kind: 'manual' } } as unknown as AttributeDef;
+  const writer = (to: object, when?: Expr): RuleEntry =>
+    ({ kind: 'rule.on_event', id: 'mark', on: { event: 'stage_start', stage: 'main' }, ...(when ? { when } : {}), effects: [{ effect: 'set_attr', attr: 'gifted', to, value: true }] }) as unknown as RuleEntry;
+
+  it('follows a stored attribute to the relations its set_attr writers read in their target or their rule condition', () => {
+    expect(relationsRead(attr, [stored], [writer({ who: 'all', where: r })])).toEqual(['santa']);
+    expect(relationsRead(attr, [stored], [writer({ who: 'all' }, rel('pact'))])).toEqual(['pact']);
+    expect(relationsRead(attr, [stored], [writer({ who: 'all', where: num })])).toEqual([]);
+  });
+
+  it('follows a stored attribute written from another attribute, and stops on a cycle', () => {
+    const other = { key: 'other', on: 'player', type: 'bool', assign: { kind: 'manual' } } as unknown as AttributeDef;
+    const readOther: Expr = { k: 'ref', name: 'attr.other', t: 'boolean' };
+    const writesOther = { kind: 'rule.on_event', id: 'o', on: { event: 'stage_start', stage: 'main' }, effects: [{ effect: 'set_attr', attr: 'other', to: { who: 'all', where: { k: 'and', args: [r, attr] } }, value: true }] } as unknown as RuleEntry;
+    expect(relationsRead(attr, [stored, other], [writer({ who: 'all', where: readOther }), writesOther])).toEqual(['santa']);
   });
 
   it('does not follow an attribute that is stored, or that belongs to an entry', () => {

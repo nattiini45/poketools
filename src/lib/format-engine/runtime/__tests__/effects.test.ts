@@ -88,6 +88,25 @@ describe('planEffects on the gift exchange', () => {
       expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
     });
 
+    it('is not delivered either when it reads a stored attribute that a set_attr wrote through the relation', () => {
+      const format: FormatDefinition = {
+        ...def,
+        attributes: [...(def.attributes ?? []), { key: 'gifted', on: 'player', type: 'bool' } as NonNullable<FormatDefinition['attributes']>[number]],
+        rules: [
+          ...def.rules.map((rule) =>
+            rule.kind === 'rule.on_event' && rule.id === 'kickoff'
+              ? { ...rule, effects: rule.effects.map((effect) => (effect.effect === 'notify' ? { ...effect, to: { who: 'all' as const, where: { k: 'ref', name: 'attr.gifted', t: 'boolean' } as Expr } } : effect)) }
+              : rule,
+          ),
+          { kind: 'rule.on_event', id: 'mark_gifted', on: { event: 'round_start', stage: 'main' }, effects: [{ effect: 'set_attr', attr: 'gifted', to: { who: 'all', where }, value: true }] },
+        ],
+      };
+      const state = stateFor(format, { links: [link('p1', 'p2')], attrs: { p2: { gifted: true } } });
+      const out = planEffects(format, { event: 'stage_start', stage: 'main' }, state, PLAYERS, SEED, {});
+      expect(out.notifications).toEqual([]);
+      expect(out.issues).toContainEqual({ code: 'notify_relation_hidden', rule: 'kickoff', detail: 'santa' });
+    });
+
     it('is delivered once every link is revealed', () => {
       expect(planWith(withWhere(), true).notifications[0].players).toEqual(['p2']);
     });

@@ -199,7 +199,7 @@ class Planner {
    */
   private hiddenRelationIn(target: EffectTarget): string | undefined {
     if (target.where === undefined) return undefined;
-    return relationsRead(target.where, this.def.attributes).find((key) => {
+    return relationsRead(target.where, this.def.attributes, this.def.rules).find((key) => {
       const visibility = (this.def.relations ?? []).find((relation) => relation.key === key)?.visibility;
       if (visibility?.from === 'all' && visibility.to === 'all') return false;
       return this.state.links.some((link) => link.relation === key && !link.revealed);

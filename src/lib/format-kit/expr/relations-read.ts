@@ -2,7 +2,7 @@
  * The relations an expression depends on, wherever in the tree. Used to keep a hidden relation out of what a player can
  * infer from the expression's result. Pure and client-safe.
  */
-import type { AttributeDef } from '../types';
+import type { AttributeDef, RuleEntry } from '../types';
 import type { Expr } from './ast';
 
 function children(expr: Expr): readonly Expr[] {
@@ -40,14 +40,28 @@ function children(expr: Expr): readonly Expr[] {
 /**
  * The keys of the relations `expr` reads, without repeats, in the order they first appear. A player attribute computed by
  * an expression (`assign: { kind: 'expr' }`) counts with what that expression reads: its value depends on the relation just the same.
+ * A stored player attribute counts with what every `set_attr` of `rules` that writes it reads in its rule's `when` and its
+ * target's `where`: which players hold the value can depend on the relation through the players that effect picked.
  */
-export function relationsRead(expr: Expr, attributes: readonly AttributeDef[] = []): string[] {
+export function relationsRead(expr: Expr, attributes: readonly AttributeDef[] = [], rules: readonly RuleEntry[] = []): string[] {
   const found = new Set<string>();
+  const followed = new Set<string>();
   const visit = (node: Expr): void => {
     if (node.k === 'rel') found.add(node.relation);
     if (node.k === 'ref' && node.name.startsWith('attr.')) {
-      const assign = attributes.find((attr) => attr.on === 'player' && `attr.${attr.key}` === node.name)?.assign;
-      if (assign?.kind === 'expr') visit(assign.expr);
+      const attr = attributes.find((a) => a.on === 'player' && `attr.${a.key}` === node.name);
+      if (attr !== undefined && !followed.has(attr.key)) {
+        followed.add(attr.key);
+        if (attr.assign?.kind === 'expr') visit(attr.assign.expr);
+        for (const rule of rules) {
+          if (rule.kind !== 'rule.on_event') continue;
+          for (const effect of rule.effects) {
+            if (effect.effect !== 'set_attr' || effect.attr !== attr.key) continue;
+            if (rule.when !== undefined) visit(rule.when);
+            if (effect.to.where !== undefined) visit(effect.to.where);
+          }
+        }
+      }
     }
     children(node).forEach(visit);
   };
