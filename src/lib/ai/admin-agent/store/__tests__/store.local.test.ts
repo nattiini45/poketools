@@ -352,10 +352,15 @@ describe.skipIf(!optIn)('Admin Assistant store on the local stack', () => {
 
       const done = await store.actions.completeAction(admin, first.action.id, { status: 'ok', httpStatus: 200, entityType: 'format', entityId: randomUUID(), result: { ok: true } });
       expect(done).toMatchObject({ status: 'ok', http_status: 200 });
+      // The ledger machine refuses the move before the UPDATE can match (nothing leads back to executing); the guard trigger,
+      // proved directly in admin-agent-tables.local.test.ts, refuses a raw UPDATE that bypasses the store.
       await expect(store.actions.completeAction(admin, first.action.id, { status: 'executing' })).rejects.toMatchObject({
-        name: 'AdminAgentStoreDbError',
-        dbCode: 'ADMIN_AGENT_STATUS_REGRESS',
+        name: 'IllegalTransitionError',
+        code: 'state_transition_invalid',
+        from: 'ok',
+        to: 'executing',
       });
+      expect((await store.actions.getAction(admin, first.action.id))?.status).toBe('ok');
       expect((await store.actions.getActionByToolUse(admin, id, 'toolu_1'))?.id).toBe(first.action.id);
       expect((await store.actions.listActions(admin, id)).map((a) => a.id)).toEqual([first.action.id]);
 

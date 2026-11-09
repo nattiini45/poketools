@@ -130,6 +130,8 @@ export interface PlanView {
   assumptions: PlanAssumptionView[];
   /** True when no blocker counts against a build. */
   ready: boolean;
+  /** True when the plan's status can move to `building` (`planMachine`, `store/plan-state.ts`): not while building, built or abandoned. */
+  buildable: boolean;
   blockers: PlanBlockerView[];
   warnings: PlanBlockerView[];
 }

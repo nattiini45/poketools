@@ -17,6 +17,8 @@
  * A SQL function would make all three one transaction (open item for the schema owner).
  */
 import { isValidUuid } from '@/lib/utils/uuid';
+import { planMachine } from './plan-state';
+import { proposalMachine } from './proposal-state';
 import { PLAN_COLUMNS, PLAN_REVISION_COLUMNS } from './columns';
 import { ownedConversation, type StoreContext } from './context';
 import { AdminAgentStoreError, unwrap, unwrapRow } from './errors';
@@ -103,6 +105,7 @@ export function planRepository(ctx: StoreContext) {
       if (write.patch) assertPayloadAllowed('plan.patch', write.patch);
       const next = write.expectedRevision + 1;
 
+      proposalMachine.assertTransition('proposed', 'superseded', 'system');
       const superseded = unwrap(
         'plans.supersedeBuilds',
         await ctx.db
@@ -117,20 +120,19 @@ export function planRepository(ctx: StoreContext) {
           .select('id'),
       );
 
-      const plan = unwrap(
-        'plans.writeRevision',
-        await ctx.db
-          .from('admin_agent_plans')
-          .update({ doc: write.doc, doc_hash: write.docHash, revision: next, ...(write.status ? { status: write.status } : {}) })
-          .eq('id', planId)
-          .eq('admin_id', adminId)
-          .eq('revision', write.expectedRevision)
-          .select(PLAN_COLUMNS)
-          .maybeSingle(),
-      );
+      let advance = ctx.db
+        .from('admin_agent_plans')
+        .update({ doc: write.doc, doc_hash: write.docHash, revision: next, ...(write.status ? { status: write.status } : {}) })
+        .eq('id', planId)
+        .eq('admin_id', adminId)
+        .eq('revision', write.expectedRevision);
+      // A revision that also moves the status does so only from a state the plan machine allows.
+      if (write.status) advance = advance.in('status', planMachine.sourcesOf(write.status));
+      const plan = unwrap('plans.writeRevision', await advance.select(PLAN_COLUMNS).maybeSingle());
       if (!plan) {
         const current = await getPlan(adminId, planId);
         if (!current) throw new AdminAgentStoreError('conversation_not_found', undefined, { reason: 'plan_not_found' });
+        if (write.status && current.revision === write.expectedRevision) planMachine.assertTransition(current.status as PlanStatus, write.status, 'system');
         throw new AdminAgentStoreError('plan_stale', undefined, { detail: { expectedRevision: write.expectedRevision, currentRevision: current.revision } });
       }
 
@@ -145,7 +147,11 @@ export function planRepository(ctx: StoreContext) {
       return { plan, supersededProposals: superseded?.length ?? 0 };
     },
 
-    /** Moves the plan through its lifecycle (`ready`, `building`, `partial`, `built`, `abandoned`). */
+    /**
+     * Moves the plan through its lifecycle (`plan-state.ts`): the UPDATE matches only a plan in a state from which `status`
+     * is legal. A plan in another state is refused with `state_transition_invalid`; one that changed between the two
+     * statements is `plan_stale`.
+     */
     async setPlanStatus(
       adminId: AdminId,
       planId: string,
@@ -165,11 +171,15 @@ export function planRepository(ctx: StoreContext) {
           })
           .eq('id', planId)
           .eq('admin_id', adminId)
+          .in('status', planMachine.sourcesOf(status))
           .select(PLAN_COLUMNS)
           .maybeSingle(),
       );
-      if (!plan) throw new AdminAgentStoreError('conversation_not_found', undefined, { reason: 'plan_not_found' });
-      return plan;
+      if (plan) return plan;
+      const current = await getPlan(adminId, planId);
+      if (!current) throw new AdminAgentStoreError('conversation_not_found', undefined, { reason: 'plan_not_found' });
+      planMachine.assertTransition(current.status as PlanStatus, status, 'system');
+      throw new AdminAgentStoreError('plan_stale', undefined, { detail: { status: current.status } });
     },
 
     /** The plan's history, newest first. */

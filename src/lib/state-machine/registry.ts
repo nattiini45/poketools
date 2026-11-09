@@ -1,4 +1,7 @@
 import type { MachineSpec } from './machine';
+import { actionMachine } from '@/lib/ai/admin-agent/store/action-state';
+import { planMachine } from '@/lib/ai/admin-agent/store/plan-state';
+import { proposalMachine } from '@/lib/ai/admin-agent/store/proposal-state';
 import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
 import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
 import { draftPoolPauseMachine, draftPoolPhaseMachine, redraftSubmissionWindowMachine } from '@/lib/draft/pool-phase-state';
@@ -16,6 +19,9 @@ import { matchMachine } from '@/lib/tournament/match-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  proposalMachine.spec,
+  actionMachine.spec,
+  planMachine.spec,
   castSessionMachine.spec,
   castStudioSaveMachine.spec,
   playerStatusMachine.spec,
