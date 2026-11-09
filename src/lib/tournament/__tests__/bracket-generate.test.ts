@@ -445,3 +445,36 @@ describe('generateEliminationBracket: the tournament status write', () => {
   });
 });
 
+
+describe('bracket status claim: no failure after bracket writes, no overwrite', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getRoundsByTournament).mockResolvedValue([]);
+    vi.mocked(getMatchesByTournament).mockResolvedValue([]);
+  });
+
+  it('a generate whose status moved meanwhile keeps the bracket and the other status, without failing', async () => {
+    vi.mocked(updateTournament).mockRejectedValueOnce(
+      new UserFacingError('changed', { code: 'tournament_status_changed', status: 409 }),
+    );
+    const result = await generateEliminationBracket({ ...makeTournament(), status: 'upcoming' }, makeParticipants(4));
+    expect(result.rounds_created).toBeGreaterThan(0);
+    expect(updateTournament).toHaveBeenCalledTimes(1);
+  });
+
+  it('a regenerate claims the status before any reset or delete, and a moved status refuses it untouched', async () => {
+    const played = makeMatch({ id: 'm-played', status: 'completed', winner_id: 'p1' });
+    vi.mocked(getRoundsByTournament).mockResolvedValueOnce(existingRounds);
+    vi.mocked(getMatchesByTournament).mockResolvedValueOnce([played]);
+    vi.mocked(updateTournament).mockRejectedValueOnce(
+      new UserFacingError('changed', { code: 'tournament_status_changed', status: 409 }),
+    );
+    await expect(
+      regenerateEliminationBracket(makeTournament(), makeParticipants(2), { cascade: true, adminId: 'admin-1' }),
+    ).rejects.toMatchObject({ code: 'tournament_status_changed' });
+    expect(vi.mocked(updateTournament).mock.calls[0]).toEqual(['t1', { status: 'active', current_round: 0 }, { from: 'active' }]);
+    expect(resetMatch).not.toHaveBeenCalled();
+    expect(createRound).not.toHaveBeenCalled();
+  });
+});
+
