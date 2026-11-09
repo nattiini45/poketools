@@ -191,3 +191,26 @@ describe('the status write is a compare-and-set on the status read', () => {
   });
 });
 
+
+describe('PATCH /api/seasons/[id]/phases/[phaseId]: the same status effects as the tournament route', () => {
+  it('completing a phase runs the format reaction, the auto advance and the completion announcement', async () => {
+    const { emitDiscordEvent } = await import('@/lib/discord/notify');
+    const { emitSocialEvent } = await import('@/lib/social/notify');
+    vi.mocked(getTournamentById).mockResolvedValue(row('active', SEASON) as never);
+    const res = await phaseRequest({ status: 'completed' });
+    expect(res.status).toBe(200);
+    expect(onPhaseStatusChanged).toHaveBeenCalledWith(expect.objectContaining({ from: 'active', to: 'completed' }));
+    expect(advanceAfterStageEnd).toHaveBeenCalledWith({ seasonId: SEASON, phaseId: ID, retry: false });
+    expect(emitDiscordEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'tournament_completed', tournament_id: ID }));
+    expect(emitSocialEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'tournament_completed', tournament_id: ID }));
+  });
+
+  it('reports a failed format reaction as a warning, the status change stands', async () => {
+    vi.mocked(getTournamentById).mockResolvedValue(row('upcoming', SEASON) as never);
+    vi.mocked(onPhaseStatusChanged).mockResolvedValue(false);
+    const res = await phaseRequest({ status: 'active' });
+    expect(res.status).toBe(200);
+    expect((await res.json()).warnings).toEqual([{ code: 'format_reaction_failed' }]);
+  });
+});
+
