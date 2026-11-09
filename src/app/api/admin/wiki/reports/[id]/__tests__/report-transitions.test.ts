@@ -50,3 +50,54 @@ describe('wiki report moderation: legal moves', () => {
     }));
   });
 });
+
+describe('wiki report moderation: compare-and-set and refused moves', () => {
+  it('guards the write with the status it read', async () => {
+    await patch({ status: 'dismissed' });
+    expect(updateNoteReportStatus).toHaveBeenCalledWith(REPORT_ID, 'dismissed', 'open');
+  });
+
+  it('allows repeating the close a moderator already made', async () => {
+    vi.mocked(getNoteReportStatus).mockResolvedValue('reviewed');
+    const res = await patch({ status: 'reviewed' });
+    expect(res.status).toBe(200);
+    expect(updateNoteReportStatus).toHaveBeenCalledWith(REPORT_ID, 'reviewed', 'reviewed');
+  });
+
+  it.each([
+    ['reviewed', 'dismissed'],
+    ['dismissed', 'reviewed'],
+  ] as const)('refuses to move a %s report to %s (state_transition_invalid)', async (from, to) => {
+    vi.mocked(getNoteReportStatus).mockResolvedValue(from);
+    const res = await patch({ status: to });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ code: 'state_transition_invalid', params: { machine: 'wiki_note_report.status', from, to } });
+    expect(updateNoteReportStatus).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a moderator reopening a report: only the reporter reopens it (state_transition_forbidden)', async () => {
+    vi.mocked(getNoteReportStatus).mockResolvedValue('dismissed');
+    const res = await patch({ status: 'open' });
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('state_transition_forbidden');
+    expect(updateNoteReportStatus).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 wiki_report_not_found for an unknown report and writes nothing', async () => {
+    vi.mocked(getNoteReportStatus).mockResolvedValue(null);
+    const res = await patch({ status: 'reviewed' });
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('wiki_report_not_found');
+    expect(updateNoteReportStatus).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('answers 409 wiki_report_changed when another moderator closed it between the read and the write', async () => {
+    vi.mocked(updateNoteReportStatus).mockResolvedValue(false as never);
+    const res = await patch({ status: 'reviewed' });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('wiki_report_changed');
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+});

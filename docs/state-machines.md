@@ -11,6 +11,8 @@ Each machine below is a column, timestamp or flag combination that moves through
 ## Machines
 
 - [Match](#match) — `matches.status (enum match_status)`
+- [Wiki note report](#wiki-note-report) — `wiki_note_reports.status`
+- [Wiki note moderation](#wiki-note-moderation) — `wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
 
 ## Match
 
@@ -54,3 +56,65 @@ stateDiagram-v2
 | `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+
+## Wiki note report
+
+- **Id:** `wiki_note_report.status`
+- **State lives in:** wiki_note_reports.status
+- **Module doc:** `docs/wiki.md`
+- **States:** `open`, `reviewed`, `dismissed`
+- **Actors:** `reporter`, `admin`
+
+A player report on a live note. A moderator closes an open report as reviewed or dismissed, compare-and-set against the status read, so two moderators cannot close one report two ways; repeating the same close is allowed. Reporting the same note again reopens the reporter's report (UPSERT on note_id, reporter_id).
+
+```mermaid
+stateDiagram-v2
+  [*] --> open
+  open --> open: report (reporter)
+  reviewed --> open: report (reporter)
+  dismissed --> open: report (reporter)
+  open --> reviewed: review (admin)
+  reviewed --> reviewed: review (admin)
+  open --> dismissed: dismiss (admin)
+  dismissed --> dismissed: dismiss (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `report` | `open`, `reviewed`, `dismissed` | `open` | reporter | `src/app/api/wiki/notes/[id]/report/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The reporter reports the note again: the report reopens with the new reason. |
+| `review` | `open`, `reviewed` | `reviewed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The moderator acted on the report (for example unpublished the note). |
+| `dismiss` | `open`, `dismissed` | `dismissed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |
+
+## Wiki note moderation
+
+- **Id:** `wiki_note.moderation`
+- **State lives in:** wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)
+- **Module doc:** `docs/wiki.md`
+- **States:** `pending`, `approved`, `rejected`, `blocked`
+- **Actors:** `author`, `admin`, `superadmin`
+
+A community note from submission to a moderator verdict. Only an approved note is public. A moderator approve or reject is compare-and-set against the state and the updated_at the moderator saw, so a verdict on text the author edited meanwhile is refused (wiki_note_changed). A site admin editing the text keeps the state (not a transition); deleting a note removes the row from any state.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> pending: resubmit (author)
+  approved --> pending: resubmit (author)
+  rejected --> pending: resubmit (author)
+  pending --> approved: approve (admin)
+  rejected --> approved: approve (admin)
+  blocked --> approved: approve (admin)
+  pending --> rejected: reject (admin)
+  approved --> rejected: unpublish (admin)
+  rejected --> blocked: block (superadmin)
+  blocked --> rejected: unblock (superadmin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `resubmit` | `pending`, `approved`, `rejected` | `pending` | author | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The author edits the text: the note goes back to the queue until a moderator sees it. A blocked note refuses it (wiki_note_resubmission_blocked). |
+| `approve` | `pending`, `rejected`, `blocked` | `approved` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Publishes the note; approving a blocked note clears the block. |
+| `reject` | `pending` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |
+| `unpublish` | `approved` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Takes a live note out of public view, usually in answer to a report. |
+| `block` | `rejected` | `blocked` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Closes a rejected note for resubmission; it stays rejected. |
+| `unblock` | `blocked` | `rejected` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |

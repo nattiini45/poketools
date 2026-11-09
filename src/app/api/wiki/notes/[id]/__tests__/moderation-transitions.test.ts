@@ -141,3 +141,82 @@ describe('wiki note moderation: legal moves', () => {
     expect(setNoteResubmissionBlock).toHaveBeenCalledWith(NOTE_ID, false, 'admin1');
   });
 });
+
+describe('wiki note moderation: compare-and-set and refused moves', () => {
+  it('passes the state and version the moderator saw to the guarded write', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES.pending as never);
+    const res = await patch({ approved: true, expected_state: 'pending', expected_updated_at: base.updated_at });
+    expect(res.status).toBe(200);
+    expect(approveNote).toHaveBeenCalledWith(NOTE_ID, 'admin1', { from: 'pending', updatedAt: base.updated_at });
+  });
+
+  it('refuses to approve text the author edited after the moderator loaded it (wiki_note_changed)', async () => {
+    vi.mocked(getNoteById).mockResolvedValue({ ...NOTES.pending, content: 'Edited', updated_at: '2026-01-05T00:00:00.000Z' } as never);
+    const res = await patch({ approved: true, expected_state: 'pending', expected_updated_at: base.updated_at });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ success: false, code: 'wiki_note_changed' });
+    expect(approveNote).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a verdict on a note whose state moved since the moderator loaded it (wiki_note_changed)', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES.rejected as never);
+    const res = await patch({ approved: true, expected_state: 'pending', expected_updated_at: base.updated_at });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('wiki_note_changed');
+    expect(approveNote).not.toHaveBeenCalled();
+  });
+
+  it('accepts the same instant written with another offset', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES.pending as never);
+    const res = await patch({ rejected: true, expected_state: 'pending', expected_updated_at: '2026-01-01T01:00:00.000+01:00' });
+    expect(res.status).toBe(200);
+    expect(rejectNote).toHaveBeenCalledWith(NOTE_ID, 'admin1', null, { from: 'pending', updatedAt: '2026-01-01T01:00:00.000+01:00' });
+  });
+
+  it('answers wiki_note_changed when the guarded write matched no row and the note still exists', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES.pending as never);
+    vi.mocked(approveNote).mockResolvedValue(false as never);
+    const res = await patch({ approved: true });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('wiki_note_changed');
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it('answers 404 when the guarded write matched no row because the note is gone', async () => {
+    vi.mocked(getNoteById).mockResolvedValueOnce(NOTES.pending as never).mockResolvedValueOnce(null);
+    vi.mocked(rejectNote).mockResolvedValue(false as never);
+    const res = await patch({ rejected: true });
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('wiki_note_not_found');
+  });
+
+  it.each([
+    ['approve', 'approved', { approved: true }],
+    ['reject', 'rejected', { rejected: true }],
+  ] as const)('refuses to %s a note that is already %s (state_transition_invalid)', async (_verb, state, body) => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES[state] as never);
+    const res = await patch(body);
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ success: false, code: 'state_transition_invalid', params: { machine: 'wiki_note.moderation', from: state } });
+    expect(approveNote).not.toHaveBeenCalled();
+    expect(rejectNote).not.toHaveBeenCalled();
+  });
+
+  it('refuses a site admin rejecting a blocked note: only the superadmin moves it back (state_transition_forbidden)', async () => {
+    vi.mocked(getNoteById).mockResolvedValue(NOTES.blocked as never);
+    const res = await patch({ rejected: true });
+    expect(res.status).toBe(403);
+    expect((await res.json()).code).toBe('state_transition_forbidden');
+    expect(rejectNote).not.toHaveBeenCalled();
+  });
+
+  it('rejects a malformed expected state or version with 400 before any write', async () => {
+    for (const body of [{ approved: true, expected_state: 'live' }, { approved: true, expected_updated_at: 'yesterday' }]) {
+      const res = await patch(body);
+      expect(res.status).toBe(400);
+      expect((await res.json()).code).toBe('validation_failed');
+    }
+    expect(approveNote).not.toHaveBeenCalled();
+  });
+});
