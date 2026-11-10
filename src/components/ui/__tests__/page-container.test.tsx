@@ -89,9 +89,9 @@ describe('PageContainer title row', () => {
   it('keeps the width classes', () => {
     const wide = renderToStaticMarkup(<PageContainer>x</PageContainer>);
     const narrow = renderToStaticMarkup(<PageContainer maxWidth="md">x</PageContainer>);
-    expect(wide).toContain('max-w-7xl');
-    expect(narrow).toContain('max-w-4xl');
-    expect(narrow).not.toContain('max-w-7xl');
+    expect(wide).toContain('max-w-[1440px]');
+    expect(narrow).toContain('max-w-[1008px]');
+    expect(narrow).not.toContain('max-w-[1440px]');
   });
 });
 

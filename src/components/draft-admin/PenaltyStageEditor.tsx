@@ -71,7 +71,7 @@ function PenaltyRow({
       </td>
       <td className={TD}>{tScreen('players.timeouts', { count: participant.timeout_count })}</td>
       <td className={TD}>
-        <div className="flex min-w-[14rem] flex-col gap-1">
+        <div className="flex min-w-56 flex-col gap-1">
           <select
             aria-label={t('penalties.col.change')}
             value={stage}

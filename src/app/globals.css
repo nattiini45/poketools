@@ -427,9 +427,21 @@
   --radius-sm: calc(var(--radius) - 4px);
 }
 
+/* Plain `rounded` (and its side variants) is one spacing step, as in Tailwind 3 (0.25rem at a 16 px root). Tailwind 4
+   inlines the deprecated `--radius` key as a literal 0.25rem, which a frozen root could not pin. */
+@theme inline reference {
+  --radius: var(--spacing);
+}
+
 @layer base {
   html {
-    font-size: 18px; /* 112.5% — improves readability at 100% OS scaling */
+    font-size: 100%; /* 16 px; frozen surfaces keep 18 px through frozen-scale.css */
+  }
+
+  /* A draft room fills the page under the nav, and its sticky clock bar only paints pixel-identical at the root it
+     was built against: frozen-scale.css keeps its geometry, not Chrome's edge snapping. Its pages keep 18 px. */
+  html:has([data-frozen="draft-room"]) {
+    font-size: 18px;
   }
 
   * {
@@ -1035,7 +1047,7 @@ option {
   color: var(--poke-text-primary);
   background-color: var(--poke-surface);
   border: 1px solid var(--poke-border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
 }
 
 input,
@@ -1043,7 +1055,7 @@ textarea {
   color: var(--poke-text-primary);
   background-color: var(--poke-surface);
   border: 1px solid var(--poke-border);
-  border-radius: 0.5rem;
+  border-radius: var(--radius);
 }
 
 input::placeholder,

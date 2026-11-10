@@ -21,7 +21,7 @@ export default async function CreatorLayout({
     <>
       <SkipToContent />
       <NavBar extraLinks={navExtraLinks} />
-      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="max-w-[1440px] mx-auto px-[18px] sm:px-[27px] lg:px-[36px] py-[27px] focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         <PageTransitionWrapper>
           <section className="space-y-4">
             <CreatorNav playerName={player?.name} />

@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import localFont from "next/font/local";
 import "./globals.css";
 import "./frozen-pins.css";
+import "./frozen-scale.css";
 import SessionProvider from "@/components/shared/SessionProvider";
 import ThemeProvider from "@/components/shared/ThemeProvider";
 import AppTooltipProvider from "@/components/ui/AppTooltipProvider";

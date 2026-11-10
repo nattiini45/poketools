@@ -79,7 +79,7 @@ export default function RoundRobinTable({
             {participants.map((p) => (
               <th
                 key={p.id}
-                className="py-1 px-2 text-center text-poke-text-secondary max-w-[4rem] truncate"
+                className="py-1 px-2 text-center text-poke-text-secondary max-w-16 truncate"
                 title={p.name}
               >
                 {p.name}
