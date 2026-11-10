@@ -6,6 +6,7 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import GameList from '@/components/match/GameList';
 import ConfirmMatchClient from './ConfirmMatchClient';
+import { availableMatchActions } from '@/lib/match/match-actions';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import { getT } from '@/i18n/server';
@@ -37,10 +38,11 @@ export default async function ConfirmMatchPage({ params }: PageProps) {
   }
 
   const isPending = match.status === 'pending_confirmation';
-  const isSubmitter = match.submitter_id === player.playerId;
+  const actions = availableMatchActions(match, { playerId: player.playerId, isAdmin: player.isAdmin });
 
-  const canConfirm = isPending && (!isSubmitter || player.isAdmin);
-  const canDispute = isPending && isParticipant;
+  const canConfirm = actions.has('confirm');
+  // An admin who does not play is not offered the dispute here (the admin match page has it).
+  const canDispute = isParticipant && actions.has('dispute');
 
   const [t, tForms, tEnum] = await Promise.all([getT(matchMessages), getT(matchFormsMessages), getT(enumMessages)]);
 

@@ -174,6 +174,8 @@ function resolveByeChains(
  * Materialize bracket slots whose feeders are fully resolved.
  * Skips bye-only advances; creates matches when both players are known.
  * Never rewrites a non-scheduled match or a match that already has games.
+ * `createMatches` writes each new match; a bracket generate passes a collector instead, to write the whole bracket in one
+ * locked transaction (`bracket-generate.ts`).
  */
 export async function materializeReadySlots(
   tournamentId: string,
@@ -182,7 +184,8 @@ export async function materializeReadySlots(
   structure: ReturnType<typeof buildBracketStructureForParticipants>,
   roundIdByGlobalNumber: Map<number, string>,
   existingMatches: MatchWithPlayers[],
-  slotResolutions: Map<string, SlotResolution>
+  slotResolutions: Map<string, SlotResolution>,
+  createMatches: typeof createMatchBatch = createMatchBatch
 ): Promise<MatchWithPlayers[]> {
   if (!structure) return [];
 
@@ -241,7 +244,7 @@ export async function materializeReadySlots(
       continue;
     }
 
-    const batch = await createMatchBatch([
+    const batch = await createMatches([
       {
         round_id: roundId,
         tournament_id: tournamentId,

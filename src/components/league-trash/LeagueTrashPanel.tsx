@@ -46,6 +46,7 @@ import {
   type LeagueTrashRowView,
 } from '@/lib/league-trash/client';
 import type { LeagueTrashRestoreWarning } from '@/lib/league-trash/restore-warnings';
+import { leagueTrashLifecycleState, leagueTrashMachine, type LeagueTrashBinState } from '@/lib/league-trash/lifecycle-state';
 
 type T = Translator<typeof en>;
 
@@ -60,11 +61,20 @@ const COLUMNS = ['league', 'format', 'deletedBy', 'deletedAt', 'restorableUntil'
  */
 const CELL = "flex items-baseline gap-3 py-0.5 before:w-24 before:shrink-0 before:text-xs before:text-poke-text-muted before:content-[attr(data-label)] xl:table-cell xl:px-3 xl:py-3 xl:before:content-none";
 
+/** Whether the superadmin can restore an entry in `state`, and why not (`leagueTrashMachine`). */
+function restoreAvailability(state: LeagueTrashBinState): { canRestore: boolean; blockedKey: 'trash.restore.blocked' | 'trash.restore.expired' | null } {
+  const canRestore = leagueTrashMachine.transitionsFrom(state, 'superadmin').some((t) => t.event === 'restore');
+  if (canRestore) return { canRestore, blockedKey: null };
+  return { canRestore, blockedKey: state === 'rebuild_pending' ? 'trash.restore.blocked' : 'trash.restore.expired' };
+}
+
 const COUNT_KEYS = ['players', 'phases', 'matches', 'games', 'draftPools'] as const satisfies readonly (keyof LeagueTrashHeadlineCounts)[];
 
 export interface LeagueTrashViewProps {
   rows: readonly LeagueTrashRowView[];
   pending: readonly LeagueTrashPendingView[];
+  /** The time the page was read (ISO): an entry at or past its purge date can no longer be restored. */
+  now: string;
   state: LeagueTrashPageState;
   /** The action that runs now (`restore:<trashId>` or `rebuild:<kind>:<trashId>`), or null. */
   busy: string | null;
@@ -204,6 +214,7 @@ function CountsView({ counts, t }: { counts: LeagueTrashHeadlineCounts; t: T }) 
 export function LeagueTrashView({
   rows,
   pending,
+  now,
   state,
   busy,
   confirming,
@@ -219,7 +230,10 @@ export function LeagueTrashView({
 
   const visibleRows = rows
     .filter((row) => !state.restored.includes(row.id))
-    .map((row) => ({ ...row, rebuildPending: row.rebuildPending && !state.rebuilt.includes(pendingKey('delete', row.id)) }));
+    .map((row) => {
+      const rebuildPending = row.rebuildPending && !state.rebuilt.includes(pendingKey('delete', row.id));
+      return { ...row, rebuildPending, ...restoreAvailability(leagueTrashLifecycleState({ rebuildPending, purgeAfter: row.purgeAfter }, now)) };
+    });
   const visiblePending = pending.filter((item) => !state.rebuilt.includes(pendingKey(item.kind, item.trashId)));
   const anySchemaChanged = visibleRows.some((row) => row.schemaChanged);
   const busyNow = busy !== null;
@@ -309,7 +323,7 @@ export function LeagueTrashView({
                       <div className="flex flex-wrap gap-1.5">
                         {row.rebuildPending && <Badge variant="blue">{t('trash.badges.rebuildPending')}</Badge>}
                         {row.schemaChanged && <Badge variant="yellow">{t('trash.badges.schemaChanged')}</Badge>}
-                        {!row.rebuildPending && !row.schemaChanged && <Badge variant="green">{t('trash.badges.ready')}</Badge>}
+                        {row.canRestore && !row.schemaChanged && <Badge variant="green">{t('trash.badges.ready')}</Badge>}
                       </div>
                     </td>
                     <td className="block pt-2 xl:table-cell xl:px-3 xl:py-3">
@@ -318,8 +332,8 @@ export function LeagueTrashView({
                         size="sm"
                         className={TOUCH}
                         loading={busy === restoreBusyKey(row.id)}
-                        disabled={busyNow || row.rebuildPending}
-                        title={row.rebuildPending ? t('trash.restore.blocked') : undefined}
+                        disabled={busyNow || !row.canRestore}
+                        title={row.blockedKey ? t(row.blockedKey) : undefined}
                         aria-label={t('trash.restore.buttonLabel', { name: row.name })}
                         onClick={() => onAskRestore(row)}
                       >
@@ -352,9 +366,11 @@ export function LeagueTrashView({
 export interface LeagueTrashPanelProps {
   rows: readonly LeagueTrashRowView[];
   pending: readonly LeagueTrashPendingView[];
+  /** The time the page was read (ISO). */
+  now: string;
 }
 
-export default function LeagueTrashPanel({ rows, pending }: LeagueTrashPanelProps) {
+export default function LeagueTrashPanel({ rows, pending, now }: LeagueTrashPanelProps) {
   const router = useRouter();
   const [state, dispatch] = useReducer(leagueTrashReducer, INITIAL_LEAGUE_TRASH_STATE);
   const [busy, setBusy] = useState<string | null>(null);
@@ -401,6 +417,7 @@ export default function LeagueTrashPanel({ rows, pending }: LeagueTrashPanelProp
     <LeagueTrashView
       rows={rows}
       pending={pending}
+      now={now}
       state={state}
       busy={busy}
       confirming={confirming}

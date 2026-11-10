@@ -326,6 +326,11 @@ export async function createSeason(input: SeasonFormData): Promise<Season> {
   return toSeason(data);
 }
 
+/**
+ * Updates the given fields. With `guard` the UPDATE is a compare-and-set on the status the caller read (seasonMachine,
+ * src/lib/season/season-state.ts): when another writer moved it in between, nothing is written and a 409
+ * `season_status_changed` is thrown.
+ */
 export async function updateSeason(
   id: string,
   input: Partial<SeasonFormData> & {
@@ -333,7 +338,8 @@ export async function updateSeason(
     archived?: boolean;
     /** Site-admin only; the route enforces it (`PATCH /api/seasons/[id]`). */
     is_test_season?: boolean;
-  }
+  },
+  guard?: { from: SeasonStatus }
 ): Promise<Season> {
   const updates: Record<string, unknown> = {};
   if (input.name !== undefined) updates.name = input.name;
@@ -349,16 +355,21 @@ export async function updateSeason(
   if (input.route_theme !== undefined) updates.route_theme = input.route_theme;
   if (input.language !== undefined) updates.language = input.language;
 
-  const { data, error } = await supabase
-    .from('seasons')
-    .update(updates)
-    .eq('id', id)
-    .select()
-    .single();
+  const query = supabase.from('seasons').update(updates).eq('id', id);
+  const { data, error } = guard
+    ? await query.eq('status', guard.from).select().maybeSingle()
+    : await query.select().single();
 
   // A custom league without an attached format cannot become active (trigger on `seasons`): FORMAT_NOT_ATTACHED
   // becomes a typed 409. Every other error is returned unchanged by the mapper, so legacy leagues behave as before.
   if (error) throw mapFormatDbError(error);
+  if (!data) {
+    throw new UserFacingError('This league changed its status in the meantime. Reload the page and try again.', {
+      code: 'season_status_changed',
+      params: { from: guard?.from ?? '' },
+      status: 409,
+    });
+  }
   return toSeason(data);
 }
 

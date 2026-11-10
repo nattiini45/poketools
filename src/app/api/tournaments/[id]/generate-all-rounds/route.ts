@@ -365,7 +365,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (options.startRound && createdRounds.length > 0) {
       const first = createdRounds.reduce((lowest, round) => (round.round_number < lowest.round_number ? round : lowest));
       try {
-        const started = await updateRoundStatus(first.id, 'active');
+        const started = await updateRoundStatus(first.id, 'active', 'pending');
         createdRounds[createdRounds.indexOf(first)] = started;
         startedRoundNumber = first.round_number;
       } catch (startErr) {

@@ -31,7 +31,7 @@ import { finishLeagueDeleteRebuild, trashLeague } from '@/lib/league-trash/servi
 import { getLatestPublishedRulesetVersion } from '@/lib/supabase/queries/ruleset-definitions';
 import { addSeasonParticipant, getSeasonParticipants, updateSeason } from '@/lib/supabase/queries/seasons';
 import { addParticipant, archiveTournamentsBySeason, updateTournament } from '@/lib/supabase/queries/tournaments';
-import { updateRoundStatus } from '@/lib/supabase/queries/rounds';
+import { completeRound } from '@/lib/supabase/queries/rounds';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { createTeam, getPlayerTeamForTournament } from '@/lib/supabase/queries/teams';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
@@ -400,9 +400,8 @@ async function playMatch(spec: MatchSpec, admin: SessionPlayer): Promise<string[
 
 async function completeRounds(roundIds: readonly string[]): Promise<void> {
   for (const roundId of roundIds) {
-    const { data, error } = await supabase.from('rounds').select('status').eq('id', roundId).single();
-    if (error) throw error;
-    if (data.status !== 'completed') await updateRoundStatus(roundId, 'completed');
+    const result = await completeRound(roundId, { force: false });
+    if (result.outcome === 'unfinished') throw new Error(`round ${roundId} still has ${result.unfinished} unfinished matches`);
   }
 }
 
@@ -665,7 +664,12 @@ async function seedEpbBoardLeague(versionId: string): Promise<void> {
   tally('draft pools', inserted.data.length > 0);
   const pool = await getDraftPoolById(ID.draftPoolEpbBoard);
   if (!pool) throw new Error('the legacy EPB pool is missing after its insert');
-  if (pool.status === 'pending') await updateDraftPoolStatus(ID.draftPoolEpbBoard, 'in_progress');
+  if (pool.status === 'pending') {
+    draftPoolStatusMachine.assertTransition('pending', 'in_progress', 'admin');
+    if (!(await updateDraftPoolStatus(ID.draftPoolEpbBoard, 'pending', 'in_progress'))) {
+      throw new Error('the legacy EPB pool moved on before the seed started it');
+    }
+  }
   const live = { ...pool, status: 'in_progress' as const };
 
   // Picks in the seat order the state route uses, so each pick is the turn the board computes.

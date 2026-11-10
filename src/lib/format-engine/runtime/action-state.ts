@@ -9,6 +9,7 @@ import { defineMachine } from '@/lib/state-machine/machine';
  */
 
 const RUNTIME_SQL = 'supabase/migrations/20261105090000_format_runtime.sql';
+const SAVE_SQL = 'supabase/migrations/20261109090000_format_action_save_draft_only.sql';
 
 /**
  * `format_flags` key `action:<id>` ("open" | "locked" | absent) read together with the rule's `window.opens_on`:
@@ -73,7 +74,7 @@ export const actionSubmissionMachine = defineMachine({
   title: 'Format action submission',
   storage: 'format_action_submissions.status',
   summary:
-    "A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save would also turn a submitted pick back into a draft (dropping the items it granted), which saveAction refuses first (format_action_already_submitted).",
+    "A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save writes only a draft and refuses a submitted pick under the action's lock (action_already_submitted, answered as format_action_already_submitted), so a save never demotes a submission.",
   doc: 'docs/format-kit.md',
   states: ['draft', 'submitted', 'locked'],
   initial: ['draft'],
@@ -85,7 +86,7 @@ export const actionSubmissionMachine = defineMachine({
       from: ['draft'],
       to: 'draft',
       actors: ['player'],
-      writers: ['src/lib/format-engine/runtime/actions-server.ts', `${RUNTIME_SQL}#format_action_save`],
+      writers: ['src/lib/format-engine/runtime/actions-server.ts', `${SAVE_SQL}#format_action_save`],
       note: 'Save draft. The first save inserts the row.',
     },
     {

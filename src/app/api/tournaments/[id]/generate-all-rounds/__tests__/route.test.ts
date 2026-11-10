@@ -716,7 +716,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds — start_round and aud
 
     expect(res.status).toBe(201);
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'pending');
     expect(json.data).toHaveLength(3);
     expect(json.data.map((round: { status: string }) => round.status)).toEqual(['active', 'pending', 'pending']);
     // The start comes after every round and its matches are written.
@@ -736,7 +736,7 @@ describe('POST /api/tournaments/[id]/generate-all-rounds — start_round and aud
 
     expect(res.status).toBe(201);
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-2', 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-2', 'active', 'pending');
   });
 
   it('leaves every round pending without a body, with start_round false and with an unparsable body', async () => {

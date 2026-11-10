@@ -5,7 +5,8 @@ import type { Tables, Json } from '@/types/database';
 import type { AggregateScope } from '@/types/game';
 import type { MatchStatus } from '@/types/match';
 import type { TeamVisibility } from '@/types/tournament';
-import { isCompletedMatchLocked, throwTeamWriteError } from '@/lib/team/completed-match-lock';
+import { isCompletedMatchLocked, TeamChangedError, throwTeamWriteError } from '@/lib/team/completed-match-lock';
+import { canWriteTeam, teamLockState } from '@/lib/team/team-roster-state';
 import type {
   Team,
   TeamFormData,
@@ -393,8 +394,10 @@ async function correctTeamRoster(
 }
 
 /**
- * Update a team's Pokémon (only if not locked). A row linked to a completed
- * match is refused with `TeamMatchCompletedError` unless `opts.correction`.
+ * Update a team's Pokémon (only if not locked: machine `team.roster`). A row
+ * linked to a completed match is refused with `TeamMatchCompletedError` unless
+ * `opts.correction`. The UPDATE is guarded with `locked = false`; a row
+ * locked or deleted after the read answers `TeamChangedError` (409).
  */
 export async function updateTeamPokemon(
   id: string,
@@ -406,7 +409,9 @@ export async function updateTeamPokemon(
   // First verify the team is not locked
   const existing = await getTeamById(id);
   if (!existing) throw new Error('Team not found');
-  if (existing.locked) throw new Error('Team is locked and cannot be edited');
+  if (!canWriteTeam(existing.locked ? 'locked' : 'open', 'edit', opts.correction ? 'admin' : 'owner')) {
+    throw new Error('Team is locked and cannot be edited');
+  }
 
   if (opts.correction) return correctTeamRoster(id, pokemon, importSource, name);
 
@@ -419,6 +424,7 @@ export async function updateTeamPokemon(
       ...(name !== undefined ? { name } : {}),
     })
     .eq('id', id)
+    .eq('locked', false)
     .select(TEAM_COLUMNS)
     .single();
 
@@ -427,13 +433,18 @@ export async function updateTeamPokemon(
 }
 
 /**
- * Delete a team (only if not locked). A row linked to a completed match is
- * refused with `TeamMatchCompletedError` unless `opts.correction`.
+ * Delete a team (only if not locked: machine `team.roster`). A row linked to
+ * a completed match is refused with `TeamMatchCompletedError` unless
+ * `opts.correction`. The DELETE is guarded with `locked = false`; a row
+ * locked or deleted after the read answers `TeamChangedError` (409).
  */
 export async function deleteTeam(id: string, opts: TeamWriteOptions = {}): Promise<void> {
   const existing = await getTeamById(id);
   if (!existing) throw new Error('Team not found');
-  if (existing.locked) throw new Error('Team is locked and cannot be deleted');
+  // A site admin's correction force-deletes a locked team (machine `team.roster`: `force_delete`).
+  if (!canWriteTeam(existing.locked ? 'locked' : 'open', 'delete', opts.correction ? 'admin' : 'owner')) {
+    throw new Error('Team is locked and cannot be deleted');
+  }
 
   if (opts.correction) {
     const { data: found, error } = await supabase.rpc('team_correct_delete', { p_team_id: id });
@@ -442,18 +453,22 @@ export async function deleteTeam(id: string, opts: TeamWriteOptions = {}): Promi
     return;
   }
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('teams')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('locked', false)
+    .select('id');
 
   if (error) throwTeamWriteError(error);
+  if ((data ?? []).length === 0) throw new TeamChangedError();
 }
 
 /**
  * Upsert a team linked to a specific match (used by match-prep sync).
- * - If a team already exists for (player_id, match_id) and is unlocked, updates it.
- * - If it exists but is locked, returns null (skip silently).
+ * - If a team already exists for (player_id, match_id) and is unlocked, updates it
+ *   (guarded with `locked = false`; a row locked after the read answers `TeamChangedError`).
+ * - If it exists but is locked (machine `team.roster`: nobody edits a locked roster), returns null (skip silently).
  * - If it doesn't exist, creates a new row.
  * Rewriting a row of a COMPLETED match is refused with
  * `TeamMatchCompletedError` unless `opts.correction` (a site-admin correction).
@@ -477,7 +492,7 @@ export async function upsertTeamForMatch(
   if (existingError) throw existingError;
 
   if (existing) {
-    if (existing.locked) return null;
+    if (!canWriteTeam(existing.locked ? 'locked' : 'open', 'edit', opts.correction ? 'admin' : 'participant')) return null;
 
     if (opts.correction) return correctTeamRoster(existing.id, pokemon, importSource);
 
@@ -489,6 +504,7 @@ export async function upsertTeamForMatch(
         updated_at: new Date().toISOString(),
       })
       .eq('id', existing.id)
+      .eq('locked', false)
       .select(TEAM_COLUMNS)
       .single();
 
@@ -693,22 +709,38 @@ export async function getTeamByShareToken(shareToken: string): Promise<Team | nu
 }
 
 /**
- * Enable or regenerate a share link for a team. The returned link is the
- * only place a share token leaves this module: the owner's share route hands
- * it to the owner and nobody else.
+ * Enable or regenerate a share link for a team (machine `team.share`: off -> on,
+ * or on -> on with a new token). The token read first is the compare-and-set
+ * guard of the UPDATE: a link changed in between answers `TeamChangedError`
+ * (409) instead of handing out a token that is already dead. The returned link
+ * is the only place a share token leaves this module: the owner's share route
+ * hands it to the owner and nobody else.
  */
 export async function setTeamShareToken(teamId: string): Promise<TeamShareLink> {
-  const { data, error } = await supabase
+  const { data: current, error: readError } = await supabase
+    .from('teams')
+    .select('share_token')
+    .eq('id', teamId)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!current) throw new TeamChangedError();
+
+  const update = supabase
     .from('teams')
     .update({
       share_token: crypto.randomUUID(),
       share_enabled_at: new Date().toISOString(),
     })
-    .eq('id', teamId)
+    .eq('id', teamId);
+  const { data, error } = await (current.share_token === null
+    ? update.is('share_token', null)
+    : update.eq('share_token', current.share_token)
+  )
     .select('id, share_token, share_enabled_at')
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) throw new TeamChangedError();
   if (!data.share_token || !data.share_enabled_at) {
     throw new Error(`setTeamShareToken: team ${teamId} came back without a share link`);
   }
@@ -719,7 +751,10 @@ export async function setTeamShareToken(teamId: string): Promise<TeamShareLink> 
   };
 }
 
-/** Disable a share link for a team. */
+/**
+ * Disable a share link for a team (machine `team.share`: on or off -> off;
+ * every state may move there, so the UPDATE needs no state guard).
+ */
 export async function disableTeamShareToken(teamId: string): Promise<void> {
   const { error } = await supabase
     .from('teams')
@@ -777,12 +812,19 @@ export async function listLibraryTeams(
   };
 }
 
-/** Publish a team to the public library */
+/**
+ * Publish a team to the public library, or rewrite its entry (machine
+ * `team.library`: unpublished -> published, or published -> published).
+ * `publishedAt` is the `library_published_at` the caller read: the
+ * compare-and-set guard of the UPDATE, so a publish racing another publish or
+ * an unpublish answers `TeamChangedError` (409).
+ */
 export async function publishTeamToLibrary(
   teamId: string,
-  metadata: { title?: string; description?: string; tags?: string[] }
+  metadata: { title?: string; description?: string; tags?: string[] },
+  publishedAt: string | null
 ): Promise<Team> {
-  const { data, error } = await supabase
+  const update = supabase
     .from('teams')
     .update({
       library_published_at: new Date().toISOString(),
@@ -790,15 +832,24 @@ export async function publishTeamToLibrary(
       library_description: metadata.description ?? null,
       library_tags: metadata.tags ?? [],
     })
-    .eq('id', teamId)
+    .eq('id', teamId);
+  const { data, error } = await (publishedAt === null
+    ? update.is('library_published_at', null)
+    : update.eq('library_published_at', publishedAt)
+  )
     .select(TEAM_COLUMNS)
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) throw new TeamChangedError();
   return toTeam(data);
 }
 
-/** Unpublish a team from the public library */
+/**
+ * Unpublish a team from the public library (machine `team.library`: published
+ * or unpublished -> unpublished; every state may move there, so the UPDATE
+ * needs no state guard).
+ */
 export async function unpublishTeamFromLibrary(
   teamId: string
 ): Promise<Team> {
@@ -884,7 +935,19 @@ export async function listTeamsForPinImpact(
     },
     { label: 'listTeamsForPinImpact', maxPages: pages }
   );
-  const open = rows.filter((row) => !isCompletedMatchLocked(row.match?.status));
+  // The roster of a row that its owner can no longer edit is history (machine `team.roster`).
+  const open = rows.filter((row) =>
+    canWriteTeam(
+      teamLockState({
+        locked: false,
+        linkedToMatch: row.match !== null,
+        closure: null,
+        matchCompleted: isCompletedMatchLocked(row.match?.status),
+      }),
+      'edit',
+      'owner'
+    )
+  );
   return {
     teams: open.slice(0, limit).map((row) => ({ id: row.id, player_id: row.player_id, pokemon: row.pokemon as unknown as PokemonSet[] })),
     truncated: truncated || open.length > limit,

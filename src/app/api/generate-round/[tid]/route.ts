@@ -8,7 +8,7 @@ import {
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
 import { kitWriteFence } from '@/lib/format-engine/write-fence';
-import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
+import { startSeasonIfUpcoming } from '@/lib/season/start-season';
 import {
   getRoundsByTournament,
   createRoundWithMatches,
@@ -510,17 +510,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       // dies here leaves no phase `upcoming` with committed matches, and a completion by an admin is never overwritten
       // by a status written from this request's stale read. Only the league is left to move.
       if (tournament.status === 'upcoming' && tournament.season_id) {
-        // Bubble up: if parent league is still upcoming, transition it to active
-        const season = await getSeasonById(tournament.season_id);
-        if (season && season.status === 'upcoming') {
-          await updateSeason(season.id, { status: 'active' });
-        }
+        // Bubble up: an upcoming league becomes active (a compare-and-set: an admin's move in between wins).
+        await startSeasonIfUpcoming(tournament.season_id);
       }
       // Start the round when asked, once the tournament itself has moved. Best effort: the round and its matches are written, so a failed start must not
       // hide them; the round stays pending and the round manager offers Start.
       if (options.startRound) {
         try {
-          round = await updateRoundStatus(round.id, 'active');
+          round = await updateRoundStatus(round.id, 'active', 'pending');
           started = true;
         } catch (startErr) {
           logger.error('generate-round', 'Failed to start the new round', { tournamentId: tid, roundId: round.id, error: startErr });
