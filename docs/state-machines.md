@@ -13,6 +13,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Admin Assistant ledger row](#admin-assistant-ledger-row) — `admin_agent_actions.status`
 - [Admin Assistant plan](#admin-assistant-plan) — `admin_agent_plans.status`
 - [Admin Assistant proposal](#admin-assistant-proposal) — `admin_agent_proposals.status`
+- [Aggregate job](#aggregate-job) — `aggregate_jobs.status`
 - [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
@@ -31,12 +32,25 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Format check](#format-check) — `format_checks.status`
 - [Format notification read](#format-notification-read) — `format_notifications.read_at`
 - [Format relation reveal](#format-relation-reveal) — `format_relation_links.revealed_at`
-- [Match](#match) — `matches.status (enum match_status)`
+- [Game aggregate marker](#game-aggregate-marker) — `games.aggregate_applied_at (NULL = uncounted)`
+- [Game edit lease](#game-edit-lease) — `games.edit_lease_token + games.edit_lease_until (both NULL or both set)`
+- [Game evolution credit marker](#game-evolution-credit-marker) — `games.evolution_applied_at + games.evolution_credits`
+- [Game stats lock](#game-stats-lock) — `games.stats_locked`
+- [League recycle bin](#league-recycle-bin) — `derived: seasons row + league_trash (rebuild_pending, purge_after) + league_trash_restore_rebuilds`
+- [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
+- [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
+- [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
+- [Round](#round) — `rounds.status (enum round_status)`
+- [League](#league) — `seasons.status (enum season_status)`
 - [Season format engine](#season-format-engine) — `season_formats.engine`
+- [Team library publication](#team-library-publication) — `teams.library_published_at (published = set) + library_title, library_description, library_tags`
+- [Team roster write locks](#team-roster-write-locks) — `derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived`
+- [Team share link](#team-share-link) — `teams.share_token + teams.share_enabled_at (on = both set)`
 - [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
+- [Tournament and league phase](#tournament-and-league-phase) — `tournaments.status (enum tournament_status)`
 - [Wiki note report](#wiki-note-report) — `wiki_note_reports.status`
 - [Wiki note moderation](#wiki-note-moderation) — `wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
 
@@ -155,6 +169,40 @@ stateDiagram-v2
 | `fail` | `executing` | `failed` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | No step ok and one failed or was skipped, or the blast-radius counter was at its cap after the claim. |
 | `refuse_stale` | `executing` | `stale` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | The recheck after the claim (hash, acknowledgements, registry, preconditions) or a stale precondition during the run; the claim is consumed. |
 | `lose_track` | `executing` | `unknown` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/proposals/reaper.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | A Go-live step with an unknown outcome, or the reaper (reapExecutingProposals) ending an execution older than the resume window plus one request. |
+
+## Aggregate job
+
+- **Id:** `aggregate_job`
+- **State lives in:** aggregate_jobs.status
+- **Module doc:** `docs/match.md`
+- **States:** `pending`, `processing`, `completed`, `failed`, `cancelled`
+- **Actors:** `queue`, `admin`
+
+One queued game count. `enqueueAggregateJob` and `league_trash_restore` insert it `pending`; `applyGameAggregatesNow` (admin game edit) inserts it already `processing` with attempts = 1, so no worker claims it. A claim adds one attempt; a failed run goes back to `pending` while attempts < max_attempts, else to `failed`. Rows go with their game (ON DELETE CASCADE). Whether a game is counted is the game marker, not the job.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  [*] --> processing
+  pending --> processing: claim (queue)
+  processing --> completed: complete
+  processing --> pending: retry (queue)
+  processing --> failed: fail (queue)
+  failed --> pending: requeue (admin)
+  pending --> cancelled: cancel (admin)
+  processing --> cancelled: cancel (admin)
+  completed --> [*]
+  cancelled --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `claim` | `pending` | `processing` | queue | `supabase/migrations/20260723205115_fix_claim_aggregate_jobs.sql#claim_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | The worker (cron every 10 min, `after()`, the admin drain) claims pending rows with attempts left, FOR UPDATE SKIP LOCKED, and adds one attempt. |
+| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job`<br>`src/lib/match/aggregate-queue.ts` | apply_aggregate_job completes the job in the transaction that adds the counts and sets the game marker; `completeJob` completes a job with nothing to apply (game gone, already counted, no stats). |
+| `retry` | `processing` | `pending` | queue | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#reclaim_stale_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | A failed run (`markJobFailed`) or a run idle for 5 minutes (reclaim) with attempts < max_attempts. |
+| `fail` | `processing` | `failed` | queue | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#reclaim_stale_aggregate_jobs`<br>`src/lib/match/aggregate-queue.ts` | The same two writers once attempts reach max_attempts: the game stays uncounted until a scope rebuild or a requeue. |
+| `requeue` | `failed` | `pending` | admin | `src/lib/match/aggregate-queue.ts`<br>`src/lib/reconcile/entity-delete-rebuild.ts` | A league restore rebuild puts the league's failed increment jobs back with attempts = 0 (`requeueFailedIncrementJobsForSeason`). |
+| `cancel` | `pending`, `processing` | `cancelled` | admin | `supabase/migrations/20260608100000_baseline_professional_schema.sql#cancel_aggregate_jobs_for_game`<br>`src/lib/match/aggregate-queue.ts` | An admin game edit, game delete or match reset cancels the live jobs of the game before it rolls the game back. |
 
 ## AI artifact
 
@@ -534,7 +582,7 @@ stateDiagram-v2
 - **States:** `draft`, `submitted`, `locked`
 - **Actors:** `player`, `admin`, `system`
 
-A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save would also turn a submitted pick back into a draft (dropping the items it granted), which saveAction refuses first (format_action_already_submitted).
+A player's pick for one player action. A draft is saved, a submission grants the pick's items, and a lock makes it final. Every writer in SQL refuses a locked row (action_locked); format_action_save writes only a draft and refuses a submitted pick under the action's lock (action_already_submitted, answered as format_action_already_submitted), so a save never demotes a submission.
 
 ```mermaid
 stateDiagram-v2
@@ -552,7 +600,7 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `save` | `draft` | `draft` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_save` | Save draft. The first save inserts the row. |
+| `save` | `draft` | `draft` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261109090000_format_action_save_draft_only.sql#format_action_save` | Save draft. The first save inserts the row. |
 | `submit` | `draft`, `submitted` | `submitted` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | Submit, or submit again: the new picks replace the old ones and their items; submitted_at records the last submission. |
 | `submit_final` | `draft`, `submitted` | `locked` | player | `src/lib/format-engine/runtime/actions-server.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | Submit on an action whose lock is on_submit: the pick is final at once. |
 | `draw` | `draft` | `submitted` | system | `src/lib/format-engine/runtime/cron.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_action_submit` | The cron's deadline pick (seeded_random_pick) for a player who has not submitted: p_only_if_unsubmitted refuses anything but a draft or no row (action_already_submitted). |
@@ -623,7 +671,7 @@ stateDiagram-v2
 | `withdraw` | `open` | `cancelled` | challenger, admin | `src/lib/supabase/queries/format-challenges.ts`<br>`supabase/migrations/20261108090000_format_notifications.sql#format_challenge_cancel` | The challenger withdraws, or an admin for them. |
 | `void` | `open` | `cancelled` | defender, system | `supabase/migrations/20261106090000_format_challenges.sql#format_challenge_respond`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_create` | A player left the phase: found by an accept (stored, then challenge_player_not_enrolled) or swept by the next create in the phase. |
 | `expire` | `open` | `expired` | challenger, defender, admin, system | `src/lib/format-engine/challenge-server.ts`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenges_expire`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_create`<br>`supabase/migrations/20261106090000_format_challenges.sql#format_challenge_respond`<br>`supabase/migrations/20261108090000_format_notifications.sql#format_challenge_cancel` | The accept window ran out: the cron sweep, a create in the phase, or a late answer or withdrawal (stored, then challenge_expired). |
-| `cancel_match` | `accepted` | `cancelled` | system | `supabase/migrations/20261106090000_format_challenges.sql#round_delete` | Deleting a round with only scheduled matches cancels the challenges whose match it deletes. The UPDATE keys on match_id with no status guard; only an accept sets match_id, so it reaches accepted rows only. |
+| `cancel_match` | `accepted` | `cancelled` | system | `supabase/migrations/20261109090000_format_action_save_draft_only.sql#round_delete` | Deleting a round with only scheduled matches cancels the accepted challenges whose match it deletes (the UPDATE is guarded by status = 'accepted'). |
 
 ## Format check
 
@@ -691,28 +739,169 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `reveal` | `hidden` | `revealed` | admin, system | `src/lib/format-engine/runtime/adjust.ts`<br>`src/lib/format-engine/runtime/effects.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format__apply_ops` | A relation adjustment with reveal, or the event the relation's reveal_on matches. |
 
+## Game aggregate marker
+
+- **Id:** `game.aggregate_applied_at`
+- **State lives in:** games.aggregate_applied_at (NULL = uncounted)
+- **Module doc:** `docs/match.md`
+- **States:** `uncounted`, `counted`
+- **Actors:** `queue`, `admin`
+
+Whether a game's battle stats are counted in `aggregates` and `player_aggregates`. The counts and the marker change in one transaction under the game row lock. A game is deleted only while uncounted (`deleteUncountedGameRow`); a league restore re-inserts its games uncounted and queues one job each. A scope rebuild re-derives the counts without touching the marker, so it skips games with a live job.
+
+```mermaid
+stateDiagram-v2
+  [*] --> uncounted
+  uncounted --> counted: apply
+  counted --> uncounted: rollback (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261018130100_aggregate_apply_atomic.sql#apply_aggregate_job`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/match/aggregate-queue.ts` | The queue worker, or an admin game edit re-applying the new stats; a counted game answers already_applied. |
+| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261018170000_aggregate_rollback_atomic.sql#rollback_game_aggregates`<br>`src/lib/supabase/queries/aggregates.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Admin game edit, game delete or match reset; fenced on the marker the deltas were built under (marker_changed otherwise). |
+
+## Game edit lease
+
+- **Id:** `game.edit_lease`
+- **State lives in:** games.edit_lease_token + games.edit_lease_until (both NULL or both set)
+- **Module doc:** `docs/match.md`
+- **States:** `free`, `leased`, `expired`
+- **Actors:** `admin`, `clock`
+
+One admin edit of a game at a time. Only `editGame` takes the lease; game delete, match reset and winner edits rely on the aggregate marker fence instead. `expired` is a lease whose edit_lease_until has passed: free in effect, cleared lazily by the next claim or the release.
+
+```mermaid
+stateDiagram-v2
+  [*] --> free
+  free --> leased: claim (admin)
+  expired --> leased: claim (admin)
+  leased --> free: release (admin)
+  expired --> free: release (admin)
+  leased --> expired: lapse (clock)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `claim` | `free`, `expired` | `leased` | admin | `supabase/migrations/20261019100000_games_edit_lease.sql#claim_game_edit_lease`<br>`src/lib/supabase/queries/games.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Together with the editor's version (updated_at): leased or stale otherwise (409 admin_game_edit_in_progress / admin_game_edit_stale). |
+| `release` | `leased`, `expired` | `free` | admin | `supabase/migrations/20261019100000_games_edit_lease.sql#release_game_edit_lease`<br>`src/lib/supabase/queries/games.ts`<br>`src/lib/pkmn/game-pipeline.ts` | The edit releases its own token in finally; another token releases nothing. |
+| `lapse` | `leased` | `expired` | clock | `supabase/migrations/20261019100000_games_edit_lease.sql` | edit_lease_until passes (TTL 120 s), for example after a crashed edit. |
+
+## Game evolution credit marker
+
+- **Id:** `game.evolution_applied_at`
+- **State lives in:** games.evolution_applied_at + games.evolution_credits
+- **Module doc:** `docs/evolution-point-buy.md`
+- **States:** `uncredited`, `credited`, `legacy_credited`
+- **Actors:** `system`, `admin`, `rebuild`
+
+Whether the real kills of an Evolution Point Buy game are credited to the trackers. `credited` holds the ledger of what was credited (evolution_credits); `legacy_credited` is a marker from before the ledger (evolution_credits NULL), debited from the caller's debits until the season is rebuilt once. Credit, uncredit and the season sync lock the game rows; the sync is fenced on the season epoch.
+
+```mermaid
+stateDiagram-v2
+  [*] --> uncredited
+  [*] --> legacy_credited
+  uncredited --> credited: credit (system)
+  credited --> uncredited: uncredit (admin)
+  legacy_credited --> uncredited: uncredit (admin)
+  uncredited --> credited: sync_mark (rebuild)
+  credited --> credited: sync_rewrite (rebuild)
+  legacy_credited --> credited: sync_rewrite (rebuild)
+  credited --> uncredited: sync_clear (rebuild)
+  legacy_credited --> uncredited: sync_clear (rebuild)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `credit` | `uncredited` | `credited` | system | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_credit_game_kills`<br>`src/lib/supabase/queries/evolutions.ts`<br>`src/lib/match/evolution-match-evaluator.ts`<br>`src/lib/match/finalize.ts` | The finalize step epb_real_kills, once the match is completed (match_not_completed otherwise). |
+| `uncredit` | `credited`, `legacy_credited` | `uncredited` | admin | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_uncredit_game_kills`<br>`src/lib/supabase/queries/evolutions.ts`<br>`src/lib/match/evolution-match-evaluator.ts`<br>`src/lib/pkmn/game-pipeline.ts` | An admin game edit that moves a completed match out of completed; fenced on the expected marker. |
+| `sync_mark` | `uncredited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The season evolution rebuild marks the games of completed matches it credited. |
+| `sync_rewrite` | `credited`, `legacy_credited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild rewrites the ledger of a credited game (a legacy marker gets its ledger). |
+| `sync_clear` | `credited`, `legacy_credited` | `uncredited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild clears games of matches that are no longer completed. |
+
+## Game stats lock
+
+- **Id:** `game.stats_locked`
+- **State lives in:** games.stats_locked
+- **Module doc:** `docs/match.md`
+- **States:** `unlocked`, `locked`
+- **Actors:** `admin`
+
+An admin replaced the battle stats of a game by hand, so re-parse tooling (scripts/reparse-game.ts) leaves it alone unless forced. Advisory: no route checks it. One-way in the app; an unlock is a manual database edit.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unlocked
+  unlocked --> locked: lock
+  locked --> locked: lock
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `lock` | `unlocked`, `locked` | `locked` | admin | `src/lib/supabase/queries/games.ts`<br>`src/lib/pkmn/game-pipeline.ts` | An admin game edit that replaces the battle stats (not a winner-only edit), after the re-apply. |
+
+## League recycle bin
+
+- **Id:** `league_trash`
+- **State lives in:** derived: seasons row + league_trash (rebuild_pending, purge_after) + league_trash_restore_rebuilds
+- **Module doc:** `docs/season.md`
+- **States:** `live`, `rebuild_pending`, `in_bin`, `expired_rebuild_pending`, `purgeable`, `purged`, `restored_rebuild_pending`
+- **Actors:** `admin`, `superadmin`, `system`, `clock`
+
+A deleted league waits in the bin for LEAGUE_TRASH_RETENTION_DAYS. It can be restored only while its delete rebuild is confirmed and its purge date has not passed; the expiry cron purges it only once the rebuild is confirmed. `expired_rebuild_pending` is the limbo between the two: past its purge date with the delete rebuild still pending, neither restorable (LEAGUE_TRASH_EXPIRED) nor purgeable until a superadmin runs the rebuild.
+
+```mermaid
+stateDiagram-v2
+  [*] --> live
+  live --> rebuild_pending: delete (admin)
+  restored_rebuild_pending --> rebuild_pending: delete (admin)
+  rebuild_pending --> in_bin: rebuild_done (system, superadmin)
+  expired_rebuild_pending --> purgeable: rebuild_done (superadmin)
+  rebuild_pending --> expired_rebuild_pending: purge_date_passes (clock)
+  in_bin --> purgeable: purge_date_passes (clock)
+  in_bin --> restored_rebuild_pending: restore (superadmin)
+  restored_rebuild_pending --> live: restore_rebuild_done (system, superadmin)
+  purgeable --> purged: purge (system)
+  purged --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `delete` | `live`, `restored_rebuild_pending` | `rebuild_pending` | admin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_delete`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/seasons/[id]/route.ts` | DELETE /api/seasons/[id] (site admins). Deleting a restored league again drops its restore tombstone. |
+| `rebuild_done` | `rebuild_pending` | `in_bin` | system, superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The delete's derived-data rebuild is confirmed: right after the delete, or later from the trash page's Run rebuild. |
+| `rebuild_done` | `expired_rebuild_pending` | `purgeable` | superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The way out of the limbo: the rebuild works whatever the purge date. |
+| `purge_date_passes` | `rebuild_pending` | `expired_rebuild_pending` | clock | `src/lib/league-trash/lifecycle-state.ts` | purge_after <= now while the delete rebuild is pending. |
+| `purge_date_passes` | `in_bin` | `purgeable` | clock | `src/lib/league-trash/lifecycle-state.ts` | purge_after <= now: the entry can no longer be restored. |
+| `restore` | `in_bin` | `restored_rebuild_pending` | superadmin | `supabase/migrations/20261106090000_format_challenges.sql#league_trash_restore`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/restore/route.ts` | Refused past the purge date (LEAGUE_TRASH_EXPIRED) and while the delete rebuild is pending (LEAGUE_TRASH_REBUILD_PENDING). Writes the restore tombstone and queues the aggregate jobs of the counted games. |
+| `restore_rebuild_done` | `restored_rebuild_pending` | `live` | system, superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_restore_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The restore's derived-data rebuild is confirmed and the tombstone deleted. |
+| `purge` | `purgeable` | `purged` | system | `supabase/migrations/20261026091000_league_trash.sql#league_trash_expire`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/app/api/cron/expire-league-trash/route.ts` | The daily expire-league-trash cron; irreversible. |
+
 ## Match
 
 - **Id:** `match`
-- **State lives in:** matches.status (enum match_status)
+- **State lives in:** matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at
 - **Module doc:** `docs/match.md`
 - **States:** `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed`
-- **Actors:** `player`, `admin`
+- **Actors:** `player`, `admin`, `system`
 
-A pairing from scheduling to a confirmed result (spec Section 8). Every status write clears finalized_at; a completion stamps confirmed_at and date_played and clears auto_confirm_at.
+A pairing from scheduling to a confirmed result (spec Section 8). Every status write takes its timestamps from matchTimestampsFor: it clears finalized_at, a completion stamps confirmed_at and date_played and clears auto_confirm_at, a move into pending_confirmation starts the auto-confirm deadline of the result source, and a move back clears the result timestamps.
 
 ```mermaid
 stateDiagram-v2
   [*] --> scheduled
-  scheduled --> in_progress: record_game
-  in_progress --> in_progress: record_game
-  in_progress --> pending_confirmation: reach_threshold
-  pending_confirmation --> completed: confirm
-  pending_confirmation --> disputed: dispute
+  scheduled --> in_progress: record_game (player, admin)
+  in_progress --> in_progress: record_game (player, admin)
+  in_progress --> pending_confirmation: reach_threshold (player, admin)
+  pending_confirmation --> completed: confirm (player, admin)
+  pending_confirmation --> completed: auto_confirm (system)
+  pending_confirmation --> disputed: dispute (player, admin)
   disputed --> completed: resolve_dispute (admin)
-  scheduled --> completed: set_result (admin)
+  scheduled --> completed: settle (admin)
   in_progress --> completed: set_result (admin)
-  in_progress --> disputed: flag_tie (admin)
+  scheduled --> completed: forfeit (system)
+  in_progress --> completed: forfeit (system)
+  in_progress --> disputed: flag_dispute (admin)
+  in_progress --> disputed: flag_tie (system)
   pending_confirmation --> in_progress: reopen (admin)
   completed --> in_progress: reopen (admin)
   disputed --> in_progress: reopen (admin)
@@ -720,19 +909,131 @@ stateDiagram-v2
   pending_confirmation --> scheduled: reset (admin)
   completed --> scheduled: reset (admin)
   disputed --> scheduled: reset (admin)
+  scheduled --> in_progress: recount (system)
+  in_progress --> in_progress: recount (system)
+  pending_confirmation --> in_progress: recount (system)
+  completed --> in_progress: recount (system)
+  disputed --> in_progress: recount (system)
+  scheduled --> pending_confirmation: recount (system)
+  in_progress --> pending_confirmation: recount (system)
+  pending_confirmation --> pending_confirmation: recount (system)
+  completed --> pending_confirmation: recount (system)
+  disputed --> pending_confirmation: recount (system)
+  scheduled --> scheduled: recount (system)
+  in_progress --> scheduled: recount (system)
+  pending_confirmation --> scheduled: recount (system)
+  completed --> scheduled: recount (system)
+  disputed --> scheduled: recount (system)
 ```
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
 | `record_game` | `scheduled`, `in_progress` | `in_progress` | player, admin | `src/lib/pkmn/game-pipeline.ts` | A game is submitted and the series has no winner yet. |
-| `reach_threshold` | `in_progress` | `pending_confirmation` | player, admin | `src/lib/pkmn/game-pipeline.ts` | A game gives one player the wins the best-of needs; auto_confirm_at starts the 24 h clock. |
-| `confirm` | `pending_confirmation` | `completed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/app/api/cron/auto-confirm/route.ts` | The opponent (not the submitter) or an admin confirms, or the auto-confirm cron does after 24 h. |
-| `dispute` | `pending_confirmation` | `disputed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts` | A participant flags the result. |
-| `resolve_dispute` | `disputed` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts` |  |
-| `set_result` | `scheduled`, `in_progress` | `completed` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/format-engine/runtime/cron.ts` | An admin settles a no-show, a drop or a result agreed outside the app; no confirmation step. |
-| `flag_tie` | `in_progress` | `disputed` | admin | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie. |
+| `reach_threshold` | `in_progress` | `pending_confirmation` | player, admin | `src/lib/pkmn/game-pipeline.ts` | A game gives one player the wins the best-of needs; auto_confirm_at starts the deadline of the result source (24 h for a replay, 48 h for a screenshot, none for a manual result without one). |
+| `confirm` | `pending_confirmation` | `completed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/bulk-actions.ts` | The opponent (not the submitter) or an admin confirms the reported result. |
+| `auto_confirm` | `pending_confirmation` | `completed` | system | `src/app/api/cron/auto-confirm/route.ts` | The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person. |
+| `dispute` | `pending_confirmation` | `disputed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts` | A participant (or an admin) flags the reported result. |
+| `resolve_dispute` | `disputed` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts` |  |
+| `settle` | `scheduled` | `completed` | admin | `src/app/api/admin/matches/[id]/result/route.ts` | An admin records a result for a match that was never played (a no-show, a drop, a result agreed outside the app), with a reason; no confirmation step. |
+| `set_result` | `in_progress` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts` | An admin completes a running series directly; no confirmation step. |
+| `forfeit` | `scheduled`, `in_progress` | `completed` | system | `src/lib/format-engine/runtime/cron.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_forfeit_complete` | The format cron completes a match as a deadline forfeit when one side registered no team. |
+| `flag_dispute` | `in_progress` | `disputed` | admin | `src/app/api/confirm-match/[mid]/route.ts` | An admin marks a running series disputed. |
+| `flag_tie` | `in_progress` | `disputed` | system | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie (no draws are scored). |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `in_progress` | system | `src/lib/pkmn/game-pipeline.ts` | After an admin edits or deletes a game, the status follows the remaining games (reevaluateMatchStatus): games left, best-of not reached. |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `pending_confirmation` | system | `src/lib/pkmn/game-pipeline.ts` | As above, best-of still reached: the result waits for a confirmation again, without an auto-confirm deadline (one already running is kept). |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | system | `src/lib/pkmn/game-pipeline.ts` | As above, no game left. |
+
+## Match outcome
+
+- **Id:** `match_outcome`
+- **State lives in:** match_outcomes.kind with source = 'admin' (row absent = none)
+- **Module doc:** `docs/match.md`
+- **States:** `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show`
+- **Actors:** `system`, `admin`
+
+How a decided or unresolvable match ended, next to matches.winner_id. A system write never replaces an admin row (it is kept, the RPC answers kept); an admin result is staged before its status write and only while the match is not completed (p_open_only), and is taken back when that write loses. Standings score the outcome of a completed match only.
+
+```mermaid
+stateDiagram-v2
+  [*] --> none
+  none --> played: record_played (system)
+  played --> played: record_played (system)
+  unresolved --> played: record_played (system)
+  none --> played: replace_admin_row (admin)
+  played --> played: replace_admin_row (admin)
+  unresolved --> played: replace_admin_row (admin)
+  admin_played --> played: replace_admin_row (admin)
+  forfeit --> played: replace_admin_row (admin)
+  no_show --> played: replace_admin_row (admin)
+  none --> unresolved: flag_unresolved (system)
+  played --> unresolved: flag_unresolved (system)
+  unresolved --> unresolved: flag_unresolved (system)
+  none --> admin_played: set_played (admin)
+  played --> admin_played: set_played (admin)
+  unresolved --> admin_played: set_played (admin)
+  admin_played --> admin_played: set_played (admin)
+  forfeit --> admin_played: set_played (admin)
+  no_show --> admin_played: set_played (admin)
+  none --> forfeit: set_forfeit (admin)
+  played --> forfeit: set_forfeit (admin)
+  unresolved --> forfeit: set_forfeit (admin)
+  admin_played --> forfeit: set_forfeit (admin)
+  forfeit --> forfeit: set_forfeit (admin)
+  no_show --> forfeit: set_forfeit (admin)
+  none --> no_show: set_no_show (admin)
+  played --> no_show: set_no_show (admin)
+  unresolved --> no_show: set_no_show (admin)
+  admin_played --> no_show: set_no_show (admin)
+  forfeit --> no_show: set_no_show (admin)
+  no_show --> no_show: set_no_show (admin)
+  played --> none: take_back
+  unresolved --> none: take_back
+  admin_played --> none: take_back
+  forfeit --> none: take_back
+  no_show --> none: take_back
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `record_played` | `none`, `played`, `unresolved` | `played` | system | `src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize of a completed match: the faint tally of its games (source replay or manual). |
+| `replace_admin_row` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `played` | admin | `src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize asked to replace an admin row (replaceAdminRow): a forced write of the played tally. |
+| `flag_unresolved` | `none`, `played`, `unresolved` | `unresolved` | system | `src/lib/pkmn/game-pipeline.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | A replay engine tie disputes the match; the row is never scored. |
+| `set_played` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `admin_played` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records the result as played, with a reason. |
+| `set_forfeit` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `forfeit` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/format-engine/runtime/cron.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records a forfeit, or the format cron a deadline forfeit. |
+| `set_no_show` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `no_show` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` |  |
+| `take_back` | `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `none` | system, admin | `src/lib/match/outcome-takeback.ts`<br>`src/lib/match/finalize.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/supabase/queries/match-outcomes.ts` | The match leaves completed or disputed (reset, reopen, a game change), or a staged admin row whose status write lost; deleted by its set_at. |
+
+## Match proposal
+
+- **Id:** `match_proposal`
+- **State lives in:** match_proposals.status (enum match_proposal_status) with expires_at
+- **Module doc:** `docs/match.md`
+- **States:** `pending`, `accepted`, `rejected`, `expired`, `cancelled`
+- **Actors:** `responder`, `admin`, `system`
+
+A time one player proposes and the other answers within 48 h. A pending proposal past expires_at counts as expired: it can no longer be answered, and the row is moved to expired when its responder answers it or when a new proposal is made for the match. Accepting it schedules the match and cancels the other pending proposals.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> accepted: accept (responder)
+  pending --> rejected: reject (responder)
+  pending --> expired: expire (system)
+  pending --> cancelled: cancel (admin, system)
+  accepted --> [*]
+  rejected --> [*]
+  expired --> [*]
+  cancelled --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `accept` | `pending` | `accepted` | responder | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The responder accepts before expires_at; the match is scheduled at the proposed time. |
+| `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
+| `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
+| `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
 
 ## Player moderation status
 
@@ -872,6 +1173,63 @@ stateDiagram-v2
 | `lock` | `open` | `locked` | system | `supabase/migrations/20261018180000_league_groups.sql#draft__build_snapshot`<br>`supabase/migrations/20261018180000_league_groups.sql#redraft_set_submission`<br>`src/lib/supabase/queries/drafts-redraft.ts` | The deadline passes (derived where it is read). |
 | `move_deadline` | `locked` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/redraft/route.ts` | PATCH /api/drafts/[id]/redraft with a future deadline_at (submissions phase only). |
 
+## Round
+
+- **Id:** `round`
+- **State lives in:** rounds.status (enum round_status)
+- **Module doc:** `docs/tournament.md`
+- **States:** `pending`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A round of a tournament or phase: written pending, started to open it to play, completed by an admin. A match reopened in a completed round reopens the round to active; an admin reset of its matches puts it back to pending.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> active: start
+  active --> completed: complete (admin)
+  pending --> completed: complete_unstarted (admin)
+  active --> pending: reset (admin)
+  completed --> pending: reset (admin)
+  completed --> active: revert (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `pending` | `active` | admin, system | `src/app/api/tournaments/[id]/rounds/[rid]/route.ts`<br>`src/app/api/generate-round/[tid]/route.ts`<br>`src/app/api/tournaments/[id]/generate-all-rounds/route.ts`<br>`src/lib/tournament/bracket-generate.ts` | Start in the round manager, or a generate that was asked to start its round (best effort). |
+| `complete` | `active` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | Refused while a match is unfinished unless forced with a reason (audited round.force_complete). |
+| `complete_unstarted` | `pending` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | The API accepts completing a round that was never started (round_complete only refuses a completed one); the round manager does not offer it. |
+| `reset` | `active`, `completed` | `pending` | admin | `src/lib/pkmn/game-pipeline.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/route.ts` | Reset in the round manager (resetRound: every played match back to scheduled), or a status PATCH. |
+| `revert` | `completed` | `active` | system | `src/lib/pkmn/game-pipeline.ts` | revertRoundIfCompleted: a match of a completed round changed (reopened, a game deleted or edited), so the round is open to play again (players see Submit only in an active round). |
+
+## League
+
+- **Id:** `season`
+- **State lives in:** seasons.status (enum season_status)
+- **Module doc:** `docs/season.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A league from set-up to its end. The first round or bracket of a phase starts it; an admin sets any status from the status control. Nothing completes a league automatically, and a completed league leaves its phases as they are. Closed (isSeasonClosed) means completed or archived.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  upcoming --> completed: complete (admin)
+  active --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  active --> upcoming: reset (admin)
+  completed --> upcoming: reset (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `src/app/api/seasons/[id]/route.ts`<br>`src/lib/season/start-season.ts`<br>`src/lib/dev-seed/seed.ts` | The first round (generate-round) or bracket (generate-bracket) of a phase, as a compare-and-set on upcoming; or the admin status control. A custom league needs an attached format (FORMAT_NOT_ATTACHED). |
+| `complete` | `upcoming`, `active` | `completed` | admin | `src/app/api/seasons/[id]/route.ts` | The admin closes the league; its phases keep their status. |
+| `reopen` | `completed` | `active` | admin | `src/app/api/seasons/[id]/route.ts` |  |
+| `reset` | `active`, `completed` | `upcoming` | admin | `src/app/api/seasons/[id]/route.ts` | Offered by the admin status control. A league with phases past upcoming or with rounds still counts as started (isSeasonStarted). |
+
 ## Season format engine
 
 - **Id:** `season_format_engine`
@@ -898,6 +1256,94 @@ stateDiagram-v2
 | `use_legacy` | `shadow`, `kit` | `legacy` | admin | `src/app/api/seasons/[id]/format/engine/route.ts`<br>`src/lib/supabase/queries/season-formats.ts` |  |
 | `use_shadow` | `legacy`, `kit` | `shadow` | admin | `src/app/api/seasons/[id]/format/engine/route.ts`<br>`src/lib/supabase/queries/season-formats.ts` | Legacy tables stay in charge; the kit is computed alongside for the admin diff. |
 | `use_kit` | `legacy`, `shadow` | `kit` | admin | `src/app/api/seasons/[id]/format/engine/route.ts`<br>`src/lib/supabase/queries/season-formats.ts` | The docs advise going through shadow first; legacy to kit directly stays allowed. |
+
+## Team library publication
+
+- **Id:** `team.library`
+- **State lives in:** teams.library_published_at (published = set) + library_title, library_description, library_tags
+- **Module doc:** `docs/teambuilder-reference.md`
+- **States:** `unpublished`, `published`
+- **Actors:** `owner`, `admin`
+
+A team listed in the public library (/teams/library), forkable by anyone. The owner or a site admin publishes it, and publishing again rewrites the title, description and tags and moves it to the top (library_published_at = now()). The UPDATE is guarded with the library_published_at the route read, so a publish racing another publish or an unpublish answers 409 team_changed. Unpublishing is idempotent and has no UI caller today. Open product question: a team linked to a match that is not played yet (or in a hidden tournament) can be published; kept as is.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unpublished
+  unpublished --> published: publish
+  published --> published: republish
+  published --> unpublished: unpublish
+  unpublished --> unpublished: unpublish
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `publish` | `unpublished` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` |  |
+| `republish` | `published` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` | Rewrites the metadata and the timestamp. |
+| `unpublish` | `published`, `unpublished` | `unpublished` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` | DELETE /api/teams/library clears the timestamp and the metadata. |
+
+## Team roster write locks
+
+- **Id:** `team.roster`
+- **State lives in:** derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived
+- **Module doc:** `docs/teambuilder-reference.md`
+- **States:** `open`, `match_completed`, `closed`, `closed_planned`, `locked`, `deleted`
+- **Actors:** `owner`, `participant`, `admin`
+
+Whether a team row may still be edited or deleted, and by whom. The lock is derived on every write from the manual flag teams.locked (no code path sets it today), the closure of its tournament or league (completed or archived) and the status of its linked match, in that order of precedence (teamLockState), so every lock state is an initial state and only the writes themselves are transitions (an edit is a self-loop). Routes ask resolveTeamWriteVerdict, which reads only the facts that can still change the answer. A refusal answers 409 team_locked, 403 with the closure code (team_submission_closed, team_submission_tournament_archived, team_submission_league_closed) or 409 team_match_completed. Creating a team (POST /api/teams) is gated by the closure before any row exists and is not part of this machine. teams.is_draft_team and teams.draft_pool_id are written by no code path and take part in no lock.
+
+```mermaid
+stateDiagram-v2
+  [*] --> open
+  [*] --> match_completed
+  [*] --> closed
+  [*] --> closed_planned
+  [*] --> locked
+  open --> open: edit
+  match_completed --> match_completed: correct (admin)
+  closed --> closed: edit_closed (participant, admin)
+  closed_planned --> closed_planned: correct_planned (admin)
+  open --> deleted: delete (owner, admin)
+  closed_planned --> deleted: delete (owner, admin)
+  match_completed --> deleted: force_delete (admin)
+  closed --> deleted: force_delete (admin)
+  locked --> deleted: force_delete (admin)
+  deleted --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `edit` | `open` | `open` | owner, participant, admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`src/lib/supabase/queries/teams.ts` | The UPDATE is guarded with locked = false; a row locked or deleted in between answers 409 team_changed. |
+| `correct` | `match_completed` | `match_completed` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | Only an admin correction passes the teams_completed_match_lock trigger; the owner gets 409 team_match_completed, a participant 409 match_prep_match_completed. |
+| `edit_closed` | `closed` | `closed` | participant, admin | `src/app/api/match-prep/route.ts`<br>`src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | The owner gets 403 with the closure code; match prep does not read the closure, so a participant may still save the team of a match that is not completed. |
+| `correct_planned` | `closed_planned` | `closed_planned` | admin | `src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | A planned team (no match) of a closed tournament or league; the owner gets 403 with the closure code. |
+| `delete` | `open`, `closed_planned` | `deleted` | owner, admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete` | The owner may delete a planned team nobody played with even in a closed tournament; the DELETE is guarded with locked = false. |
+| `force_delete` | `match_completed`, `closed`, `locked` | `deleted` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete` | A site admin deletes any team as a correction. |
+
+## Team share link
+
+- **Id:** `team.share`
+- **State lives in:** teams.share_token + teams.share_enabled_at (on = both set)
+- **Module doc:** `docs/teambuilder-reference.md`
+- **States:** `off`, `on`
+- **Actors:** `owner`, `admin`
+
+A secret link that shows the whole roster to anyone holding it (GET /api/teams/shared/[token], /teams/shared/[token]). The owner or a site admin turns it on, and every further POST rotates the token, so the previous link stops working. A link is served only while both columns are set; a row with only one of them reads as off. The token is the compare-and-set guard of the write: a POST whose row changed its token in between answers 409 team_changed. Disabling is idempotent and has no UI caller today.
+
+```mermaid
+stateDiagram-v2
+  [*] --> off
+  off --> on: enable
+  on --> on: rotate
+  on --> off: disable
+  off --> off: disable
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `enable` | `off` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | POST /api/teams/share: a fresh UUID token and share_enabled_at = now(). |
+| `rotate` | `on` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | The editor's Generate link button POSTs again: a new token replaces the old one. |
+| `disable` | `on`, `off` | `off` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | DELETE /api/teams/share clears both columns; on a row without a link it changes nothing and answers 200. |
 
 ## Teambuilder save
 
@@ -930,6 +1376,34 @@ stateDiagram-v2
 | `fail` | `saving` | `error` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | One generic label; a 409 for a completed match also locks the editor. |
 | `warn` | `saved` | `warned` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules are not met (the verdict goes to the validation panel). |
 | `uncheck` | `saved` | `unchecked` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules could not be checked. |
+
+## Tournament and league phase
+
+- **Id:** `tournament`
+- **State lives in:** tournaments.status (enum tournament_status)
+- **Module doc:** `docs/tournament.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A standalone tournament or a league phase from set-up to its result. The first round (or the bracket) starts it; an admin, or the format at a stage end, completes it; an admin may reopen it. Re-sending the current status (active or completed) through the admin route is no move: it replays the format reaction. Nothing moves a phase back to upcoming.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  active --> completed: complete
+  upcoming --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  completed --> active: regenerate_bracket (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `supabase/migrations/20261106090000_format_challenges.sql#round_write`<br>`supabase/migrations/20261109210000_bracket_write.sql#bracket_write`<br>`src/lib/tournament/tournament-transition.ts`<br>`src/lib/dev-seed/seed.ts` | The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start. The bracket generate writes the bracket and the move in one transaction under the phase row lock (bracket_write). |
+| `complete` | `active` | `completed` | admin, system | `src/lib/tournament/tournament-transition.ts`<br>`supabase/migrations/20261106090000_format_challenges.sql#phase_complete_at_stage_end` | Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement. |
+| `complete` | `upcoming` | `completed` | admin | `src/lib/tournament/tournament-transition.ts` | Mark completed on a phase or tournament that never started (the admin page offers it). |
+| `reopen` | `completed` | `active` | admin | `src/lib/tournament/tournament-transition.ts` | Writes the status only: matches, results and standings are kept; completing again announces again. |
+| `regenerate_bracket` | `completed` | `active` | system | `supabase/migrations/20261109210000_bracket_write.sql#bracket_write` | Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase). The old bracket is replaced and the status moved in one transaction under the phase row lock, only while the status is still the one the regenerate read. |
 
 ## Wiki note report
 

@@ -378,20 +378,20 @@ describe('createMatchBatch', () => {
 
 describe('updateMatchStatus', () => {
   it('sets status and winnerId when provided', async () => {
-    mockBuilder.single.mockResolvedValue({
+    mockBuilder.maybeSingle.mockResolvedValue({
       data: { ...MATCH_ROW, status: 'completed', winner_id: 'p1' },
       error: null,
     });
 
-    const result = await updateMatchStatus('m1', 'completed' as never, 'p1', 'p1');
+    const result = await updateMatchStatus('m1', 'completed' as never, 'p1', 'p1', undefined, 'pending_confirmation' as never);
     expect(mockBuilder.update).toHaveBeenCalled();
-    expect(result.winner_id).toBe('p1');
+    expect(result?.winner_id).toBe('p1');
   });
 
   it('sets date_played when status is completed', async () => {
-    mockBuilder.single.mockResolvedValue({ data: MATCH_ROW, error: null });
+    mockBuilder.maybeSingle.mockResolvedValue({ data: MATCH_ROW, error: null });
 
-    await updateMatchStatus('m1', 'completed' as never);
+    await updateMatchStatus('m1', 'completed' as never, undefined, undefined, undefined, 'in_progress' as never);
     const updateArg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
     expect(updateArg.date_played).toBeDefined();
     expect(updateArg.confirmed_at).toBeDefined();
@@ -400,19 +400,21 @@ describe('updateMatchStatus', () => {
   });
 
   it('does not set date_played for non-completed status', async () => {
-    mockBuilder.single.mockResolvedValue({
+    mockBuilder.maybeSingle.mockResolvedValue({
       data: { ...MATCH_ROW, status: 'in_progress' },
       error: null,
     });
 
-    await updateMatchStatus('m1', 'in_progress' as never);
+    await updateMatchStatus('m1', 'in_progress' as never, undefined, undefined, undefined, 'scheduled' as never);
     const updateArg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
     expect(updateArg.date_played).toBeUndefined();
   });
 
   it('throws on error', async () => {
-    mockBuilder.single.mockResolvedValue({ data: null, error: new Error('update err') });
-    await expect(updateMatchStatus('m1', 'completed' as never)).rejects.toThrow('update err');
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: new Error('update err') });
+    await expect(
+      updateMatchStatus('m1', 'completed' as never, undefined, undefined, undefined, 'in_progress' as never),
+    ).rejects.toThrow('update err');
   });
 
   it('returns null when compare-and-set expectedStatus misses', async () => {
@@ -452,13 +454,13 @@ describe('updateMatchStatus', () => {
   });
 
   it('clears the finalize marker with every status write (C2)', async () => {
-    mockBuilder.single.mockResolvedValue({ data: MATCH_ROW, error: null });
+    mockBuilder.maybeSingle.mockResolvedValue({ data: MATCH_ROW, error: null });
 
-    await updateMatchStatus('m1', 'completed' as never, 'p1');
+    await updateMatchStatus('m1', 'completed' as never, 'p1', undefined, undefined, 'pending_confirmation' as never);
     expect((mockBuilder.update.mock.calls[0][0] as Record<string, unknown>).finalized_at).toBeNull();
 
-    mockBuilder.single.mockResolvedValue({ data: { ...MATCH_ROW, status: 'in_progress' }, error: null });
-    await updateMatchStatus('m1', 'in_progress' as never);
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_ROW, status: 'in_progress' }, error: null });
+    await updateMatchStatus('m1', 'in_progress' as never, undefined, undefined, undefined, 'scheduled' as never);
     expect((mockBuilder.update.mock.calls[1][0] as Record<string, unknown>).finalized_at).toBeNull();
   });
 });
@@ -476,7 +478,6 @@ describe('transitionMatchStatus (M3: one row update)', () => {
       winnerId: 'p1',
       submitterId: 'p2',
       autoConfirmAt: '2026-05-22T00:00:00.000Z',
-      confirmedAt: null,
     });
 
     expect(mockBuilder.update).toHaveBeenCalledTimes(1);
@@ -507,20 +508,18 @@ describe('transitionMatchStatus (M3: one row update)', () => {
     expect('auto_confirm_at' in updateArg).toBe(false);
   });
 
-  it('writes date_played only when datePlayed is given (null clears it)', async () => {
+  it('takes the timestamps of the move from matchTimestampsFor (a move back from a result clears them)', async () => {
     mockBuilder.maybeSingle.mockResolvedValue({ data: { ...MATCH_ROW, status: 'in_progress' }, error: null });
 
-    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress', datePlayed: null });
+    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress' });
     expect(mockBuilder.update.mock.calls[0][0]).toEqual({
       status: 'in_progress',
       finalized_at: null,
+      auto_confirm_at: null,
+      confirmed_at: null,
       date_played: null,
     });
 
-    mockBuilder.update.mockClear();
-    await transitionMatchStatus('m1', { expectedStatus: 'completed', status: 'in_progress' });
-    const arg = mockBuilder.update.mock.calls[0][0] as Record<string, unknown>;
-    expect('date_played' in arg).toBe(false);
   });
 
   it('returns null and writes nothing else when the compare-and-set misses', async () => {

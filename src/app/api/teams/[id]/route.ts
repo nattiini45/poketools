@@ -2,44 +2,20 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { teamUpdateSchema, formatZodErrors } from '@/lib/validation';
-import { getTeamById, getTeamVisibilityFacts, updateTeamPokemon, deleteTeam } from '@/lib/supabase/queries/teams';
-import { isCompletedMatchLocked } from '@/lib/team/completed-match-lock';
+import { getTeamById, updateTeamPokemon, deleteTeam } from '@/lib/supabase/queries/teams';
 import { resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
 import { toPublicTeam, type PublicTeam } from '@/lib/team/public-team';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
 import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
 import { roundOfMatch } from '@/lib/team/match-round';
 import { logger } from '@/lib/logger';
-import { teamWritesClosed } from '../team-writes-closed';
-import { teamWritesClosedResponse } from '../team-writes-closed-response';
+import { teamWriteRefusal } from '../team-write-verdict';
 import type { ApiResult } from '@/types/api';
-import type { PokemonSet, Team, TeamImportSource } from '@/types/team';
+import type { PokemonSet, TeamImportSource } from '@/types/team';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
-}
-
-/**
- * Whether the row is linked to a COMPLETED match (lead ruling round 5): its
- * roster is public and final, so only a site admin may still change or
- * delete it. A row with no match link needs no read.
- */
-async function linkedToCompletedMatch(team: Team): Promise<boolean> {
-  if (!team.match_id) return false;
-  const facts = await getTeamVisibilityFacts([team.id]);
-  return isCompletedMatchLocked(facts.get(team.id)?.match_status);
-}
-
-function completedMatchResponse(): NextResponse<ApiResult<never>> {
-  return NextResponse.json<ApiResult<never>>(
-    {
-      success: false,
-      error: 'This team belongs to a completed match and can no longer be changed',
-      code: 'team_match_completed',
-    },
-    { status: 409 }
-  );
 }
 
 /**
@@ -75,9 +51,12 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 /**
  * PATCH /api/teams/[id] — update team pokemon (only owner, only if unlocked).
- * A team linked to a completed match answers 409 `team_match_completed` for
- * its owner; a site admin's edit is a correction (the database lock lets it
- * through). The teambuilder library save (`useTeamSave`) lands here.
+ * The write locks are the machine `team.roster` (`teamWriteRefusal`): a
+ * manually locked team answers 409 `team_locked` for everyone; a closed
+ * tournament or league answers 403 and a team linked to a completed match 409
+ * `team_match_completed` for its owner; a site admin's edit is a correction
+ * (the database lock lets it through). The teambuilder library save
+ * (`useTeamSave`) lands here.
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
@@ -116,22 +95,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (team.locked) {
-      return NextResponse.json<ApiResult<never>>(
-        { success: false, error: 'Team is locked', code: 'team_locked' },
-        { status: 409 }
-      );
-    }
-
-    // A completed or archived tournament or league takes no more team edits from its players.
-    if (!player.isAdmin && team.tournament_id) {
-      const closed = await teamWritesClosed(team.tournament_id);
-      if (closed) return teamWritesClosedResponse(closed);
-    }
-
-    if (!player.isAdmin && (await linkedToCompletedMatch(team))) {
-      return completedMatchResponse();
-    }
+    const refusal = await teamWriteRefusal(team, 'edit', player);
+    if (refusal) return refusal;
 
     // A kit league's stage constraints and the owner's resources: advice, never a refusal. The verdict reads the OWNER's
     // gifts and pools (own-visibility resources whose giver is hidden), so only the owner gets it: a site admin
@@ -176,12 +141,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 }
 
 /**
- * DELETE /api/teams/[id] — delete a team (owner or admin, only if unlocked).
- * A team linked to a completed match answers 409 `team_match_completed` for
- * its owner; a site admin may still delete it (a correction). In a closed
- * (completed or archived) tournament or league the owner may still delete a
- * team that is linked to no match; one linked to a match answers 403 with the
- * code of the closure.
+ * DELETE /api/teams/[id] — delete a team (owner or admin; machine
+ * `team.roster`, `teamWriteRefusal`). A manually locked team answers 409
+ * `team_locked` and a team linked to a completed match 409
+ * `team_match_completed` for its owner; a site admin may still delete either
+ * (a correction). In a closed (completed or archived) tournament or league the
+ * owner may still delete a team that is linked to no match; one linked to a
+ * match answers 403 with the code of the closure.
  */
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -205,29 +171,13 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    if (team.locked) {
-      // Admins can force-delete locked teams
-      if (!player.isAdmin) {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Team is locked', code: 'team_locked' },
-          { status: 409 }
-        );
-      }
-      // For admin deletion of locked teams, bypass the lock check
-      await requireAdmin();
-    }
+    // A site admin's force-delete of a locked team re-checks the live admin role first.
+    if (team.locked && player.isAdmin) await requireAdmin();
 
-    // A completed or archived tournament or league takes no more team writes from its players, with one exception: the
-    // owner may still delete a team of theirs that is linked to no match (a planned team nobody played with). A team
-    // that belongs to a match stays: the match record needs it. A site admin's delete is a correction and always passes.
-    if (!player.isAdmin && team.tournament_id && team.match_id) {
-      const closed = await teamWritesClosed(team.tournament_id);
-      if (closed) return teamWritesClosedResponse(closed);
-    }
-
-    if (!player.isAdmin && (await linkedToCompletedMatch(team))) {
-      return completedMatchResponse();
-    }
+    // A closed tournament or league keeps the teams that belong to a match (the match record needs them), but the
+    // owner may still delete a planned team nobody played with. A site admin's delete is a correction and always passes.
+    const refusal = await teamWriteRefusal(team, 'delete', player);
+    if (refusal) return refusal;
 
     await deleteTeam(id, { correction: player.isAdmin });
     await expireItemUsageReads(team, 'api/teams/[id]');

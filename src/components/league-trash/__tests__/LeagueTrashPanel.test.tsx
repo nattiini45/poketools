@@ -51,6 +51,7 @@ function render(props: Partial<ComponentProps<typeof LeagueTrashView>> = {}, loc
     <LeagueTrashView
       rows={[row()]}
       pending={[]}
+      now="2026-11-09T12:00:00Z"
       state={INITIAL_LEAGUE_TRASH_STATE}
       busy={null}
       confirming={null}
@@ -121,6 +122,27 @@ describe('the trashed leagues table', () => {
     expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Restore league Summer League S3"|<button[^>]*aria-label="Restore league Summer League S3"[^>]*disabled=""/);
     expect(html).toContain('Run the pending rebuild of this delete first.');
     expect(html).not.toContain('Ready to restore');
+  });
+
+  it('a league ready to restore offers an enabled Restore', () => {
+    const html = render();
+    expect(html).toContain('Ready to restore');
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*aria-label="Restore league Summer League S3"|<button[^>]*aria-label="Restore league Summer League S3"[^>]*disabled=""/);
+  });
+
+  it('a league past its purge date cannot be restored and says why (the restore would answer LEAGUE_TRASH_EXPIRED)', () => {
+    const html = render({ rows: [row({ purgeAfter: '2026-11-09T12:00:00Z' })] });
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Restore league Summer League S3"|<button[^>]*aria-label="Restore league Summer League S3"[^>]*disabled=""/);
+    expect(html).toContain('Its restore deadline has passed.');
+    expect(html).not.toContain('Ready to restore');
+    expect(render({ rows: [row({ purgeAfter: '2026-11-01T00:00:00Z' })] }, 'de')).toContain('Die Frist zum Wiederherstellen ist abgelaufen.');
+  });
+
+  it('past its purge date with the delete rebuild pending: the expiry is the reason, the rebuild badge stays', () => {
+    const html = render({ rows: [row({ purgeAfter: '2026-11-01T00:00:00Z', rebuildPending: true })] });
+    expect(html).toContain('Rebuild pending');
+    expect(html).toContain('Its restore deadline has passed.');
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-label="Restore league Summer League S3"|<button[^>]*aria-label="Restore league Summer League S3"[^>]*disabled=""/);
   });
 
   it('every button is disabled while an action runs, the running one shows its spinner', () => {

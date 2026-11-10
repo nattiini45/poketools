@@ -122,9 +122,14 @@ interface ShareDialogProps {
 export function ShareDialog({ open, onClose, teamId }: ShareDialogProps) {
   const t = useT(teambuilderMessages);
   const errorText = useTeambuilderErrorText(errorsTeams);
-  const [shareUrl, setShareUrl] = useState('');
+  // The link and the failure belong to the team they were made for: after "New team" (or a switch to another team)
+  // the dialog shows that team's state, never the previous team's link.
+  const [link, setLink] = useState<{ teamId: string; url: string } | null>(null);
+  const shareUrl = link !== null && link.teamId === teamId ? link.url : '';
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<TeambuilderError | null>(null);
+  const [failure, setFailure] = useState<{ teamId: string; error: TeambuilderError } | null>(null);
+  const error = failure !== null && failure.teamId === teamId ? failure.error : null;
+  const setError = useCallback((next: TeambuilderError | null) => setFailure(next && teamId ? { teamId, error: next } : null), [teamId]);
   const [copied, setCopied] = useState(false);
 
   const handleGenerate = useCallback(async () => {
@@ -142,13 +147,13 @@ export function ShareDialog({ open, onClose, teamId }: ShareDialogProps) {
         setError(apiFailure(json, 'shareFailed'));
         return;
       }
-      setShareUrl(json.shareUrl ?? '');
+      setLink({ teamId, url: json.shareUrl ?? '' });
     } catch (err) {
       setError(err instanceof TypeError ? { kind: 'api', error: toApiErrorLike(err) } : errorKey('shareFailed'));
     } finally {
       setLoading(false);
     }
-  }, [teamId]);
+  }, [teamId, setError]);
 
   const handleCopy = useCallback(async () => {
     if (!shareUrl) return;
@@ -206,8 +211,12 @@ export function PublishDialog({ open, onClose, teamId }: PublishDialogProps) {
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<TeambuilderError | null>(null);
-  const [published, setPublished] = useState(false);
+  // Like the share link: the outcome belongs to the team it was made for, so "New team" opens a fresh dialog.
+  const [failure, setFailure] = useState<{ teamId: string; error: TeambuilderError } | null>(null);
+  const error = failure !== null && failure.teamId === teamId ? failure.error : null;
+  const setError = useCallback((next: TeambuilderError | null) => setFailure(next && teamId ? { teamId, error: next } : null), [teamId]);
+  const [publishedTeamId, setPublishedTeamId] = useState<string | null>(null);
+  const published = publishedTeamId !== null && publishedTeamId === teamId;
 
   const handlePublish = useCallback(async () => {
     if (!teamId) return;
@@ -230,13 +239,13 @@ export function PublishDialog({ open, onClose, teamId }: PublishDialogProps) {
         setError(apiFailure(json, 'publishFailed'));
         return;
       }
-      setPublished(true);
+      setPublishedTeamId(teamId);
     } catch (err) {
       setError(err instanceof TypeError ? { kind: 'api', error: toApiErrorLike(err) } : errorKey('publishFailed'));
     } finally {
       setLoading(false);
     }
-  }, [teamId, title, description, tags]);
+  }, [teamId, title, description, tags, setError]);
 
   if (published) {
     return (

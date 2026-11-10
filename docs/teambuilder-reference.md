@@ -70,9 +70,11 @@ type TeamImportSource = 'ps_text' | 'pokepast_url' | 'manual';
 | `season_id` | UUID? | FK → seasons (draft context) |
 | `pokemon` | JSONB | Array of `PokemonSet` |
 | `import_source` | enum | `'ps_text' \| 'pokepast_url' \| 'manual'` |
-| `locked` | boolean | Immutable after tournament begins |
-| `is_draft_team` | boolean | Bound to draft pool ownership |
-| `draft_pool_id` | UUID? | FK → draft_pools |
+| `locked` | boolean | Manual write lock (no code path sets it today); one of the write locks of the `team.roster` machine (below) |
+| `is_draft_team` | boolean | Meant to mark a team built from a draft pool; no code path writes it (always `false`) |
+| `draft_pool_id` | UUID? | FK → draft_pools; no code path writes it |
+| `share_token`, `share_enabled_at` | UUID?, timestamp? | Share link (machine `team.share`); never in a `Team` read |
+| `library_published_at`, `library_*` | timestamp?, text | Library publication (machine `team.library`) |
 | `created_at` | timestamp | |
 | `updated_at` | timestamp | |
 
@@ -109,9 +111,13 @@ interface Team {
 
 **POST `/api/teams`** — Create team. Body: `{ tournament_id?, pokemon[], import_source }`. Validates player doesn't already have team for tournament.
 
-**PATCH `/api/teams/[id]`** — Update `pokemon[]` and `import_source`. Owner-only, rejects if locked (admins bypass).
+**PATCH `/api/teams/[id]`** — Update `pokemon[]` and `import_source`. Owner or admin. Refused for everyone when manually locked (409 `team_locked`); for the owner also in a closed tournament or league (403 with the closure code) and on a row linked to a completed match (409 `team_match_completed`). An admin edit is a correction.
 
-**DELETE `/api/teams/[id]`** — Owner or admin. Rejects if locked (admins bypass).
+**DELETE `/api/teams/[id]`** — Owner or admin. The owner gets the same refusals as for PATCH, except that a planned team (no match) of a closed tournament may still be deleted; an admin deletes any team as a correction.
+
+### Write locks, share link and library publication (state machines)
+
+The three are explicit state machines (`docs/state-machines.md`, sections "Team roster write locks", "Team share link" and "Team library publication"; definitions in `src/lib/team/team-roster-state.ts` and `src/lib/team/team-share-state.ts`). The roster lock is derived on every write from the manual flag, the closure of the tournament or league and the linked match (`teamLockState`, precedence in that order); `PATCH`/`DELETE /api/teams/[id]` ask `teamWriteRefusal` (`src/app/api/teams/team-write-verdict.ts`), which reads only the facts that can still change the answer. Guarded writes that find the row changed in between answer 409 `team_changed`. `teams.is_draft_team` and `teams.draft_pool_id` take part in no machine: nothing writes them.
 
 ### Page Routes
 
@@ -375,7 +381,7 @@ User → Dashboard "Plan Team" button or Tournament match "Plan Team" link
 ## 8. Key Constraints to Remember
 
 1. **`@pkmn/dex` is server-side only** — never import in client components. All access through `/api/pkmn/*` routes.
-2. **Teams lock** after tournament starts — `locked: true` prevents PATCH/DELETE (admins bypass).
+2. **Teams lock** — `locked: true` (set by no code path today) prevents PATCH for everyone and DELETE for the owner (an admin may still delete); a closed tournament or league and a completed match lock the roster for its owner (machine `team.roster`, `docs/state-machines.md`).
 3. **Visibility** — non-owner/non-admin sees `pokemon: ['hidden']` until match completion.
 4. **Draft ownership** — draft teams validate all species are in the player's draft roster.
 5. **Prep teams are always mutable** — no lock mechanism, designed for iterative planning.

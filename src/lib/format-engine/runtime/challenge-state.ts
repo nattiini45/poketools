@@ -2,6 +2,7 @@ import { defineMachine } from '@/lib/state-machine/machine';
 
 const CHALLENGES_SQL = 'supabase/migrations/20261106090000_format_challenges.sql';
 const NOTIFICATIONS_SQL = 'supabase/migrations/20261108090000_format_notifications.sql';
+const GUARDS_SQL = 'supabase/migrations/20261109090000_format_action_save_draft_only.sql';
 
 /**
  * `format_challenges.status`: one challenge of a `pairing.challenge` ladder stage (docs/format-kit.md). Every write
@@ -71,8 +72,8 @@ export const formatChallengeMachine = defineMachine({
       from: ['accepted'],
       to: 'cancelled',
       actors: ['system'],
-      writers: [`${CHALLENGES_SQL}#round_delete`],
-      note: "Deleting a round with only scheduled matches cancels the challenges whose match it deletes. The UPDATE keys on match_id with no status guard; only an accept sets match_id, so it reaches accepted rows only.",
+      writers: [`${GUARDS_SQL}#round_delete`],
+      note: "Deleting a round with only scheduled matches cancels the accepted challenges whose match it deletes (the UPDATE is guarded by status = 'accepted').",
     },
   ],
 });
