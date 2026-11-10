@@ -140,7 +140,7 @@ export default function BoardPanel({ kind, league, stages, standings, fixtures, 
                   >
                     {index + 1}
                   </th>
-                  <td className="max-w-[10rem] truncate px-2 py-1.5 font-medium text-arena-ink">
+                  <td className="max-w-[180px] truncate px-2 py-1.5 font-medium text-arena-ink">
                     {row.player_name}
                   </td>
                   <td className="px-2 py-1.5 text-right tabular-nums text-arena-ink-secondary">

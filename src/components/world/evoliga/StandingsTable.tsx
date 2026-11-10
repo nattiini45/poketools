@@ -66,7 +66,7 @@ export default function StandingsTable({
                 className={leader ? 'bg-white text-teal-950' : 'bg-arena-elevated text-arena-ink'}
               >
                 <td className="rounded-l-lg px-2 py-1.5 tabular-nums">{index + 1}</td>
-                <td className="max-w-[10rem] truncate px-2 py-1.5 font-medium">{row.player_name}</td>
+                <td className="max-w-[180px] truncate px-2 py-1.5 font-medium">{row.player_name}</td>
                 <td className="px-2 py-1.5 text-right tabular-nums">
                   {row.wins}-{row.losses}
                 </td>

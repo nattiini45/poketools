@@ -711,7 +711,7 @@ export default function MatchHighlightCard({
       : `${idPrefix}-tab-${resolvedTab}`;
 
   return (
-    <Card id={`${idPrefix}-highlight-card`} variant="elevated" padding="none" className="relative overflow-hidden">
+    <Card id={`${idPrefix}-highlight-card`} data-frozen="match-highlight-card" variant="elevated" padding="none" className="relative overflow-hidden">
       <MetadataStrip
         tournamentName={tournamentName}
         seasonName={seasonName}

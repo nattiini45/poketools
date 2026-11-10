@@ -87,7 +87,7 @@ export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessSta
               >
                 <span className="flex flex-col items-center">
                   <PokemonSprite name={entry.stages[0].name} size={36} />
-                  <span className="text-[0.6875rem] font-bold leading-none">{tShared('points', { n: entry.price })}</span>
+                  <span className="text-[12.375px] font-bold leading-none">{tShared('points', { n: entry.price })}</span>
                 </span>
               </button>
             </li>
@@ -95,7 +95,7 @@ export default function MyRosterDock({ vm, catalog, ix, indexFailed, weaknessSta
         })}
         {openRedraft.map((slot) => (
           <li key={slot.redraftSlotId} className={`${styles.dockTile} ${styles.dockEmpty} px-1.5`}>
-            <span className="text-center text-[0.6875rem] font-semibold leading-tight">
+            <span className="text-center text-[12.375px] font-semibold leading-tight">
               {t('roster.redraftSlot', { label: slot.label, count: slot.transferredRealKills })}
             </span>
           </li>

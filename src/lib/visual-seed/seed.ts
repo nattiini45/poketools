@@ -20,7 +20,7 @@ import { FORMAT_DEFAULTS } from '@/lib/pkmn/formats';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { finalizeMatchCompletion } from '@/lib/match/finalize';
 import { drainPendingAggregateJobs } from '@/lib/match/aggregate-rebuild';
-import { computeDraftState } from '@/lib/draft/engine';
+import { computeDraftState, legacySeatOrder } from '@/lib/draft/engine';
 import { defaultPickOrder } from '@/lib/draft/pool-format';
 import { lineIdOfEntry } from '@/lib/draft/line-identity';
 import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
@@ -39,13 +39,14 @@ import { createDraftPick, getDraftPoolById, getPicksByPool, updateDraftPoolStatu
 import { createReplayEvent } from '@/lib/supabase/queries/draft-replay-events';
 import { bindSeasonToList, bulkCreateListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { upsertFormatRules } from '@/lib/supabase/queries/format-rules';
-import { createTracker, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
+import { bulkCreateTiers, createTracker, getAllTiers, getSeasonTrackers, updateTracker } from '@/lib/supabase/queries/evolutions';
 import { getFormatDefinitionDraft, getFormatDefinitionMeta } from '@/lib/supabase/queries/format-definitions';
 import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { getLeagueTrashBySeason } from '@/lib/supabase/queries/league-trash';
 import { VISUAL_SEED_DATES, VISUAL_SEED_FORMAT_SLUG, VISUAL_SEED_IDS as ID, matchPlayedAt } from './ids';
 import {
   VISUAL_SEED_DRAFT_PICKS,
+  VISUAL_SEED_EPB_BOARD_PROGRESS,
   VISUAL_SEED_EPB_LINES,
   VISUAL_SEED_SOLO_OPPONENT,
   VISUAL_SEED_TEAMS,
@@ -57,6 +58,8 @@ import type { BracketType, TeamVisibility } from '@/types/tournament';
 import type { RouteThemeId, SeasonFormatType } from '@/types/season';
 import type { Json } from '@/types/database';
 import type { TrackerState } from '@/types/broadcast';
+import type { EvolutionTierFormData, PowerTier } from '@/types/evolution';
+import type { PriceGroup } from '@/types/point-buy';
 
 /** Created / skipped count per kind of row: the runner prints it, and a second run shows no created rows. */
 export type VisualSeedCounts = Record<string, { created: number; skipped: number }>;
@@ -610,6 +613,154 @@ async function seedEpbLeague(versionId: string, admin: SessionPlayer): Promise<v
   await playMatch({ ...base, id: ID.matchEpbScheduled, p1: 'playerAria', p2: 'playerCleo', games: [], day: 10 }, admin);
 }
 
+// ─── Legacy EPB draft board (EvolutionRosterCard) ─────────────────────────────────
+
+/** Point budget and picks per trainer of the legacy board's pool, and the one regular (untiered) pick it holds. */
+const EPB_BOARD_BUDGET = 60;
+const EPB_BOARD_PICKS = 4;
+const EPB_BOARD_REGULAR_PICK = { pokemon: 'Great Tusk', price: 10 } as const;
+/** The line drafted as a wildcard (a tier of its own picker) instead of from the tier list. */
+const EPB_BOARD_WILDCARD_LINE = 12;
+
+const POWER_TIER_OF: Readonly<Record<PriceGroup, PowerTier>> = { premium: 'S', hoch: 'A', mittel: 'B', guenstig: 'C', budget: 'C' };
+
+/**
+ * An Evolution Point Buy league whose draft still runs on the legacy engine, as EvoLiga's initial draft did: the
+ * only path to `/leagues/<id>/draft` showing `EvolutionRosterCard`. Evolution tiers (cumulative thresholds, one line
+ * as a picker's wildcard), a running snake pool with three lines per trainer plus one regular pick, and one tracker per
+ * drafted line at the progress of `VISUAL_SEED_EPB_BOARD_PROGRESS`. Separate from the EvoLiga league so no other
+ * frozen surface changes.
+ */
+async function seedEpbBoardLeague(versionId: string): Promise<void> {
+  const players = ['playerElin', 'playerFinn', 'playerGreta', 'playerHugo'] as const;
+  const seasonId = ID.leagueEpbBoard;
+  await ensureLeague({ id: seasonId, name: 'EvoLiga Legacy Draft (visual seed)', format: 'evolution_point_buy', theme: 'auto', players }, versionId);
+  await activateLeague(seasonId);
+  const bound = await supabase.from('seasons').select('point_buy_list_id').eq('id', seasonId).single();
+  if (bound.error) throw bound.error;
+  if (bound.data.point_buy_list_id !== ID.pointBuyList) await bindSeasonToList(seasonId, ID.pointBuyList);
+  const rules = await supabase.from('format_rules').select('id').eq('season_id', seasonId).maybeSingle();
+  if (rules.error) throw rules.error;
+  if (!rules.data) await upsertFormatRules(seasonId, { draft_budget: EPB_BOARD_BUDGET, draft_picks: EPB_BOARD_PICKS });
+
+  // The participants join before the pool runs: a running legacy pool locks the roster (SEASON_DRAFT_LOCKED).
+  const inserted = await supabase
+    .from('draft_pools')
+    .upsert(
+      {
+        id: ID.draftPoolEpbBoard,
+        season_id: seasonId,
+        engine: 'legacy',
+        draft_type: 'snake',
+        pick_order: defaultPickOrder('snake'),
+        point_budget: EPB_BOARD_BUDGET,
+        created_at: VISUAL_SEED_DATES.draftStart,
+        started_at: VISUAL_SEED_DATES.draftStart,
+      },
+      { onConflict: 'id', ignoreDuplicates: true },
+    )
+    .select('id');
+  if (inserted.error) throw inserted.error;
+  tally('draft pools', inserted.data.length > 0);
+  const pool = await getDraftPoolById(ID.draftPoolEpbBoard);
+  if (!pool) throw new Error('the legacy EPB pool is missing after its insert');
+  if (pool.status === 'pending') {
+    draftPoolStatusMachine.assertTransition('pending', 'in_progress', 'admin');
+    if (!(await updateDraftPoolStatus(ID.draftPoolEpbBoard, 'pending', 'in_progress'))) {
+      throw new Error('the legacy EPB pool moved on before the seed started it');
+    }
+  }
+  const live = { ...pool, status: 'in_progress' as const };
+
+  // Picks in the seat order the state route uses, so each pick is the turn the board computes.
+  const participants = await getSeasonParticipants(seasonId);
+  const seats = legacySeatOrder(ID.draftPoolEpbBoard, participants.map((participant) => participant.id));
+  const draft = [
+    ...VISUAL_SEED_EPB_LINES.map((line) => ({ pokemon: line.base_pokemon, price: line.price })),
+    EPB_BOARD_REGULAR_PICK,
+  ];
+  let picks = await getPicksByPool(ID.draftPoolEpbBoard);
+  if (picks.length === draft.length) {
+    tally('draft picks', false);
+  } else {
+    // An interrupted seed: start the draft over, with the trackers its picks created.
+    if (picks.length > 0) {
+      const clearPicks = await supabase.from('draft_picks').delete().eq('draft_pool_id', ID.draftPoolEpbBoard);
+      if (clearPicks.error) throw clearPicks.error;
+      const clearTrackers = await supabase.from('evolution_tracker').delete().eq('season_id', seasonId);
+      if (clearTrackers.error) throw clearTrackers.error;
+      picks = [];
+    }
+    for (const [index, { pokemon, price }] of draft.entries()) {
+      const playerId = computeDraftState(live, picks, seats, EPB_BOARD_PICKS).current_picker;
+      if (!playerId) throw new Error('the draft engine has no current picker at legacy EPB pick ' + (index + 1));
+      await createDraftPick({
+        draft_pool_id: ID.draftPoolEpbBoard,
+        player_id: playerId,
+        pokemon_name: pokemon,
+        points_spent: price,
+        pick_number: index + 1,
+        round: Math.floor(index / seats.length) + 1,
+      });
+      picks = await getPicksByPool(ID.draftPoolEpbBoard);
+      tally('draft picks', true);
+    }
+  }
+  const pickerOf = new Map(picks.map((pick) => [pick.pokemon_name, pick.player_id]));
+
+  // Evolution tiers: stage thresholds are cumulative, as the evolution_tiers table stores them.
+  const tiers = await getAllTiers(seasonId);
+  const missingTiers: EvolutionTierFormData[] = [];
+  for (const line of VISUAL_SEED_EPB_LINES) {
+    const playerId = line.line_number === EPB_BOARD_WILDCARD_LINE ? (pickerOf.get(line.base_pokemon) ?? null) : null;
+    if (tiers.some((tier) => tier.base_pokemon === line.base_pokemon && tier.player_id === playerId)) {
+      tally('evolution tiers', false);
+      continue;
+    }
+    missingTiers.push({
+      season_id: seasonId,
+      player_id: playerId,
+      base_pokemon: line.base_pokemon,
+      stage2_pokemon: line.stage2_pokemon,
+      stage2_kos: line.kills_to_stage2,
+      stage3_pokemon: line.stage3_pokemon,
+      stage3_kos: line.additional_kills_to_stage3 === null ? null : line.kills_to_stage2 + line.additional_kills_to_stage3,
+      power_tier: POWER_TIER_OF[line.price_group],
+    });
+    tally('evolution tiers', true);
+  }
+  if (missingTiers.length > 0) await bulkCreateTiers(missingTiers);
+
+  // One tracker per drafted line (what the legacy picks route creates), then its fixed progress.
+  const trackers = await getSeasonTrackers(seasonId);
+  for (const line of VISUAL_SEED_EPB_LINES) {
+    const playerId = pickerOf.get(line.base_pokemon);
+    if (!playerId) throw new Error('no legacy EPB pick holds ' + line.base_pokemon);
+    const progress = VISUAL_SEED_EPB_BOARD_PROGRESS[line.line_number];
+    const form = progress.stage === 3 ? line.stage3_pokemon : progress.stage === 2 ? line.stage2_pokemon : line.base_pokemon;
+    if (!form) throw new Error('line ' + line.line_number + ' has no stage ' + progress.stage);
+    const want = {
+      current_form: form,
+      current_stage: progress.stage,
+      total_kos: progress.real_kills + progress.draft_tokens + progress.kill_tokens + progress.cosmo_points,
+      real_kills: progress.real_kills,
+      draft_tokens: progress.draft_tokens,
+      kill_tokens: progress.kill_tokens,
+      cosmo_points: progress.cosmo_points,
+      evolved_at: progress.stage > 1 ? matchPlayedAt(progress.stage) : null,
+    };
+    let tracker = trackers.find((row) => row.player_id === playerId && row.base_pokemon === line.base_pokemon);
+    tally('evolution trackers', !tracker);
+    tracker ??= await createTracker({ season_id: seasonId, player_id: playerId, base_pokemon: line.base_pokemon });
+    const current = tracker;
+    // Postgres returns the timestamp in its own notation: compare the instant.
+    const evolvedAt = current.evolved_at === null ? null : new Date(current.evolved_at).toISOString();
+    const stale = evolvedAt !== want.evolved_at || (Object.keys(want) as (keyof typeof want)[]).some((key) => key !== 'evolved_at' && current[key] !== want[key]);
+    if (stale) await updateTracker(tracker.id, want);
+    tally('evolution tracker progress', stale);
+  }
+}
+
 // ─── Custom league (format kit) ─────────────────────────────────────────────────
 
 async function seedCustomLeague(versionId: string, admin: SessionPlayer): Promise<void> {
@@ -837,6 +988,7 @@ export async function runVisualSeed(): Promise<VisualSeedReport> {
   );
   await seedCustomLeague(versionId, admin);
   await seedDraftLeague(versionId);
+  await seedEpbBoardLeague(versionId);
   await seedArchivedLeague(versionId, admin);
   await seedSmallStage(
     { leagueId: '', stageId: ID.tournamentStandalone, roundId: ID.roundStandalone1, name: 'Friday Night Open (visual seed)', theme: 'auto', players: ['playerBram', 'playerDario', 'playerFinn', 'playerHugo'], matchIds: [ID.matchStandalone1, ID.matchStandalone2, ID.matchStandalone3], day: 11 },

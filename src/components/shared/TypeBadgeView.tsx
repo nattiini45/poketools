@@ -25,8 +25,8 @@ const TYPE_STYLES: Record<string, string> = {
 
 // Box metrics per size: `compact` is the narrow pill of dense layouts (the team weakness table's column heads).
 const SIZE_CLASSES = {
-  default: 'min-w-[4.5rem] px-2.5 py-0.5 text-xs tracking-wide',
-  compact: 'min-w-0 px-0.5 py-1.5 text-[0.625rem] leading-[1.1] tracking-normal',
+  default: 'min-w-[81px] px-2.5 py-0.5 text-xs tracking-wide',
+  compact: 'min-w-0 px-0.5 py-1.5 text-[11.25px] leading-[1.1] tracking-normal',
 } as const;
 
 export type TypeBadgeSize = keyof typeof SIZE_CLASSES;

@@ -40,7 +40,7 @@ function PickRow({ pick, entry, onPin }: { pick: PickVM; entry: DraftLineCatalog
         </span>
         <span className="shrink-0 text-xs text-[var(--draft-ink-2)]">{tShared('points', { n: pick.price })}</span>
         {pick.admin_override ? (
-          <span className="shrink-0 rounded border border-[var(--draft-border)] px-1 text-[0.625rem] uppercase">{t('recent.adminMark')}</span>
+          <span className="shrink-0 rounded border border-[var(--draft-border)] px-1 text-[11.25px] uppercase">{t('recent.adminMark')}</span>
         ) : null}
       </button>
     </li>

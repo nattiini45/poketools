@@ -15,6 +15,7 @@ Two manifests, both expanded into one job per page load (target × matrix × vie
   | Themed world league pages | `/leagues/<seeded id>` | `[data-world]` |
   | Broadcast overlays | `/broadcast/…` with seeded ids, 1920×1080 | full page |
   | EPB match replay (XP bars, evolution reveal), closed and opened | seeded EPB match page | `[data-frozen="epb-replay"]` |
+  | EPB roster cards (`EvolutionRosterCard`: every stage, progress band and source, wildcard, regular pick, current picker) | `/leagues/<seeded legacy EPB league>/draft`, signed in as the admin (the legacy board renders only for a signed-in viewer) | `[data-frozen="epb-roster-card"]`, one capture per card |
   | Match highlight card | seeded match page | `#match-highlight-card` |
   | Social match card (next/og) | `social-images.tsx` renders fixed fixtures, no browser | the PNG itself |
 
@@ -74,8 +75,6 @@ Output goes to `.visual/` (gitignored): `<label>/<set>/*.png` with a `manifest.j
 Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the matrix, the seed ids in `seed-ids.json` and `now`/`theme`/`viewport`), `roots` or `fullPage`, and optionally `matrix`, `viewports`, `themes`, `needs` (seed ids it requires), `mask` (selectors painted over, for content that cannot be pinned), `clock`, `waitFor` (a selector to wait for before the capture, e.g. until a confirm dialog has armed), `advanceMs` (with `clock`: fake timers, run forward this many ms once the page has rendered `waitFor` or its overlay content; may be a `{matrix}` placeholder), `settleMs` and `tolerance` (`{ maxChangedPct, threshold }`, only for GPU-drawn content). Mark a new frozen component root with `data-frozen="<surface>"`; the attribute carries no styles.
 
 ## Not covered
-
-- `EvolutionRosterCard`: it renders only on the legacy EPB draft board (`/leagues/<id>/draft` with a legacy pool and tiers), which the visual seed does not create yet. It gets a seeded target before F3 changes any token it reads.
 
 - The WebGL route tier: GPU output is not bit-stable across machines. `scripts/capture-route.mjs` remains the tool for route-tier stills; the DOM it draws over the canvas (HUD, Station Card, focus panel) is covered here through the lite tier and the league pages.
 - The private format pack: captures run with the example pack, as CI does. A maintainer run with the companion attached compares the same way (`FORMAT_PACK` stays `example` in the harness; change it locally to capture the private pack).

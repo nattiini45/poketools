@@ -81,11 +81,11 @@ describe('LinePreview', () => {
 
   it('sizes the picture from its field: a size container, the picture fitted by width AND height, container units only', () => {
     expect(rule('.previewArea')).toMatch(/container-type: size;/);
-    expect(rule('.previewArea')).toMatch(/min-height: 11rem;/);
+    expect(rule('.previewArea')).toMatch(/min-height: 198px;/);
     // The picture is as wide as the field's width allows and as the field's height allows (the aspect token).
     const stage = rule('.previewStage').replace(/\s+/g, ' ');
     expect(stage).toMatch(/container-type: inline-size;/);
-    expect(stage).toMatch(/width: min\(100cqi, 30rem, calc\(100cqh \* 100 \/ var\(--draft-preview-h\)\)\);/);
+    expect(stage).toMatch(/width: min\(100cqi, 540px, calc\(100cqh \* 100 \/ var\(--draft-preview-h\)\)\);/);
     expect(stage).toMatch(/aspect-ratio: 100 \/ var\(--draft-preview-h\);/);
     const slots = [...CSS.matchAll(/\.previewStage\[data-stages="(\d)"\] > \.previewSlot\[data-slot="(\d)"\] \{([^}]*)\}/g)];
     // Three slots for a three-stage line, two for a pair.

@@ -2,7 +2,7 @@
 
 /**
  * Base-stat thresholds (`>=`) for the six stats and BST (draft-frontend §4.4; each is its own criterion).
- * The body of the "Base stats" group (its header is the heading); the grid fits as many 4.5rem fields per
+ * The body of the "Base stats" group (its header is the heading); the grid fits as many 81 px fields per
  * row as the sheet allows, so it never squeezes the inputs.
  */
 import { useT } from '@/i18n/client';
@@ -30,7 +30,7 @@ export default function StatFilter({ view, dispatch, names, dl }: FilterSectionP
   const heading = t('filters.stats');
   return (
     <section aria-label={heading}>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(4.5rem,1fr))] gap-2">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(81px,1fr))] gap-2">
         {FIELDS.map((stat) => {
           const short = stat === 'bst' ? t('sort.bst') : names.stat(stat, dl, 'short');
           const long = stat === 'bst' ? t('sort.bst') : names.stat(stat, dl, 'long');

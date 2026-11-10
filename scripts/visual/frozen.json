@@ -615,6 +615,24 @@
       ],
       "click": "[data-frozen=\"epb-replay\"] button",
       "settleMs": 3000
+    },
+    {
+      "id": "epb-roster-card",
+      "url": "/leagues/{leagueEpbBoard}/draft",
+      "needs": [
+        "leagueEpbBoard",
+        "draftPoolEpbBoard"
+      ],
+      "viewports": [
+        "desktop",
+        "mobile"
+      ],
+      "roots": [
+        "[data-frozen=\"epb-roster-card\"]"
+      ],
+      "minRoots": 4,
+      "waitFor": "[data-frozen=\"epb-roster-card\"]",
+      "signIn": "admin"
     }
   ],
   "roles": {

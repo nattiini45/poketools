@@ -344,7 +344,7 @@ export default function DraftToolScreen({
                 <LinePreview entry={pinned} />
               </PhoneSection>
             ) : (
-              <div className={`${styles.halftone} flex min-h-[8rem] flex-col items-center justify-center gap-1 rounded-lg p-4 text-center`}>
+              <div className={`${styles.halftone} flex min-h-[144px] flex-col items-center justify-center gap-1 rounded-lg p-4 text-center`}>
                 <p className="font-semibold">{t('stage.empty')}</p>
                 <p className="text-sm text-[var(--draft-ink-2)]">{t('stage.emptyHint')}</p>
               </div>

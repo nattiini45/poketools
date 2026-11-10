@@ -113,7 +113,7 @@ function ArmedConfirmContent({
   return (
     <Dialog.Content
       data-frozen="draft-room"
-      className="fixed left-1/2 top-1/2 z-50 grid max-h-[90dvh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-poke-xl border border-poke-border bg-poke-surface p-6 shadow-poke-lg"
+      className="fixed left-1/2 top-1/2 z-50 grid max-h-[90dvh] w-[calc(100%-36px)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 overflow-y-auto rounded-poke-xl border border-poke-border bg-poke-surface p-6 shadow-poke-lg"
       onOpenAutoFocus={(e) => {
         e.preventDefault();
         cancelRef.current?.focus();

@@ -37,6 +37,7 @@ export default function EvolutionRosterCard({
   const dataLocale = useDataLocale();
   return (
     <Card
+      data-frozen="epb-roster-card"
       variant="outlined"
       padding="sm"
       className={isCurrentPicker ? 'border-poke-border-focus ring-1' : ''}

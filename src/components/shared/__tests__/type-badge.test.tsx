@@ -25,9 +25,9 @@ describe('<TypeBadge>', () => {
   it('the compact size drops the minimum width and tightens the box; the default keeps the pill metrics', () => {
     const compact = renderToStaticMarkup(<TypeBadge type="Fire" size="compact" />);
     expect(compact).toContain('min-w-0');
-    expect(compact).not.toContain('min-w-[4.5rem]');
+    expect(compact).not.toContain('min-w-[81px]');
     const normal = renderToStaticMarkup(<TypeBadge type="Fire" />);
-    expect(normal).toContain('min-w-[4.5rem]');
+    expect(normal).toContain('min-w-[81px]');
     expect(normal).toContain('tracking-wide');
   });
 

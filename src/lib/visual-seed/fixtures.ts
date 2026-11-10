@@ -126,6 +126,28 @@ export const VISUAL_SEED_EPB_LINES: readonly VisualSeedLine[] = [
   { line_number: 12, base_pokemon: 'Pawniard', stage2_pokemon: 'Bisharp', stage3_pokemon: 'Kingambit', price: 9, price_group: 'guenstig', kills_to_stage2: 2, additional_kills_to_stage3: 3, moves: ['Kowtow Cleave', 'Sucker Punch', 'Iron Head', 'Swords Dance'] },
 ];
 
+/**
+ * Progress of each line's tracker on the legacy EPB draft board, by `line_number` of `VISUAL_SEED_EPB_LINES`: every
+ * stage, a bar in each colour band (below 50 %, from 50 %, from 80 %), every progress source and the final form.
+ * The total progress (`total_kos`) is the sum of the sources.
+ */
+export const VISUAL_SEED_EPB_BOARD_PROGRESS: Readonly<
+  Record<number, { stage: 1 | 2 | 3; real_kills: number; draft_tokens: number; kill_tokens: number; cosmo_points: number }>
+> = {
+  1: { stage: 1, real_kills: 3, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  2: { stage: 2, real_kills: 3, draft_tokens: 1, kill_tokens: 0, cosmo_points: 0 },
+  3: { stage: 2, real_kills: 2, draft_tokens: 0, kill_tokens: 2, cosmo_points: 0 },
+  4: { stage: 1, real_kills: 1, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  5: { stage: 3, real_kills: 4, draft_tokens: 0, kill_tokens: 0, cosmo_points: 1 },
+  6: { stage: 1, real_kills: 1, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  7: { stage: 2, real_kills: 3, draft_tokens: 1, kill_tokens: 0, cosmo_points: 0 },
+  8: { stage: 1, real_kills: 0, draft_tokens: 0, kill_tokens: 1, cosmo_points: 0 },
+  9: { stage: 3, real_kills: 3, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  10: { stage: 1, real_kills: 2, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  11: { stage: 1, real_kills: 0, draft_tokens: 0, kill_tokens: 0, cosmo_points: 0 },
+  12: { stage: 2, real_kills: 2, draft_tokens: 0, kill_tokens: 0, cosmo_points: 2 },
+};
+
 /** The draft league's picks, in pick order (the snake order decides who makes each one). */
 export const VISUAL_SEED_DRAFT_PICKS: readonly string[] = [
   'Great Tusk', 'Gholdengo', 'Kingambit', 'Dragapult', 'Garchomp', 'Iron Valiant', 'Raging Bolt', 'Gliscor',

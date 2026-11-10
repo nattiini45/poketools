@@ -63,6 +63,7 @@ export default function WorldShell({ world, worldExperience, routeData, children
   return (
     <div
       data-world={world.tokenNamespace}
+      {...(themed ? { 'data-frozen': 'world' } : {})}
       {...(world.routeThemeId ? { 'data-world-route': '' } : {})}
       className={`world world-${world.tokenNamespace} ${themed ? 'relative text-arena-ink' : ''}`}
     >

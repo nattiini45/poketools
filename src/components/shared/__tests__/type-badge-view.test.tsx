@@ -9,7 +9,7 @@ describe('TypeBadgeView', () => {
     const html = renderToStaticMarkup(<TypeBadgeView type="Fire" label="Feuer" />);
     expect(html).toContain('Feuer');
     expect(html).toContain('bg-poke-type-fire');
-    expect(html).toContain('min-w-[4.5rem]');
+    expect(html).toContain('min-w-[81px]');
   });
 
   it('falls back to the muted style for an unknown type and honours size and className', () => {
