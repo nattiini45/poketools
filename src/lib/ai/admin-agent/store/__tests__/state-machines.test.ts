@@ -3,7 +3,7 @@
  * against the TypeScript unions and the CHECK constraints, their parity with the guard triggers of the migration, the
  * derived `expired` and the guarded writers in the store.
  */
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, expectTypeOf, it } from 'vitest';
 import { IllegalTransitionError } from '@/lib/state-machine/machine';
@@ -17,16 +17,41 @@ import { ACTION, ADMIN, CONVERSATION, FakeDb, HASH, NOW, PLAN, PROPOSAL, hasStep
 
 const admin = adminIdOf(ADMIN);
 const ROOT = process.cwd();
-const MIGRATION = readFileSync(path.join(ROOT, 'supabase/migrations/20261027100000_admin_agent_tables.sql'), 'utf8')
-  .split('\n')
-  .map((line) => line.replace(/--.*$/, ''))
-  .join('\n');
+const uncommented = (text: string): string =>
+  text
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n');
+const MIGRATIONS_DIR = path.join(ROOT, 'supabase/migrations');
+const MIGRATIONS = readdirSync(MIGRATIONS_DIR)
+  .filter((name) => name.endsWith('.sql'))
+  .sort()
+  .map((name) => ({ name, text: uncommented(readFileSync(path.join(MIGRATIONS_DIR, name), 'utf8')) }));
+const MIGRATION = uncommented(readFileSync(path.join(MIGRATIONS_DIR, '20261027100000_admin_agent_tables.sql'), 'utf8'));
 
-/** The body of the last `CREATE OR REPLACE FUNCTION public.<name>` of the migration (the definition that wins). */
-function functionBody(name: string): string {
-  const start = MIGRATION.lastIndexOf(`CREATE OR REPLACE FUNCTION public.${name}(`);
-  expect(start, name).toBeGreaterThan(-1);
-  return MIGRATION.slice(start, MIGRATION.indexOf('END $$;', start));
+/** The last `CREATE OR REPLACE FUNCTION public.<name>` across the migrations (the definition that wins) and its file. */
+function lastDefinition(name: string): { file: string; body: string } {
+  const head = `CREATE OR REPLACE FUNCTION public.${name}(`;
+  for (let i = MIGRATIONS.length - 1; i >= 0; i -= 1) {
+    const { name: file, text } = MIGRATIONS[i];
+    const start = text.lastIndexOf(head);
+    if (start !== -1) return { file, body: text.slice(start, text.indexOf('END $$;', start)) };
+  }
+  throw new Error(`no definition of ${name}`);
+}
+const functionBody = (name: string): string => lastDefinition(name).body;
+
+/** The (from, to) pairs a guard trigger allows as a status change, from its `NOT IN (VALUES ...)` list, sorted. */
+function triggerMatrix(body: string): string[] {
+  const list = /\(OLD\.status, NEW\.status\) NOT IN \(VALUES([\s\S]*?)\) THEN/.exec(body);
+  expect(list).not.toBeNull();
+  return [...list![1].matchAll(/\('([a-z_]+)', '([a-z_]+)'\)/g)].map((m) => `${m[1]}>${m[2]}`).sort();
+}
+
+/** The status changes a machine declares (a transition to the state it starts in changes nothing), sorted. */
+function machineMatrix(machine: typeof proposalMachine | typeof actionMachine | typeof planMachine): string[] {
+  const pairs = machine.spec.transitions.flatMap((t) => (t.from as readonly string[]).filter((from) => from !== t.to).map((from) => `${from}>${t.to}`));
+  return [...new Set(pairs)].sort();
 }
 
 /** The values of a `CONSTRAINT <name> CHECK (status IN (...))`. */
@@ -62,7 +87,27 @@ describe('the states', () => {
   });
 });
 
-describe('parity with the guard triggers (the SQL is not changed here)', () => {
+describe('parity with the guard triggers', () => {
+  it.each([
+    ['admin_agent_proposals__guard', proposalMachine],
+    ['admin_agent_actions__guard', actionMachine],
+    ['admin_agent_plans__guard', planMachine],
+  ] as const)('%s allows exactly the status changes of the machine, after the purge bypass, and leaves a same-status write alone', (fn, machine) => {
+    const { file, body } = lastDefinition(fn);
+    expect(file).toBe('20261109100000_admin_agent_status_matrix_guards.sql');
+    expect(triggerMatrix(body)).toEqual(machineMatrix(machine));
+    const guard = body.indexOf('IF NEW.status IS DISTINCT FROM OLD.status AND (OLD.status, NEW.status) NOT IN (VALUES');
+    expect(guard).toBeGreaterThan(body.indexOf('IF public.admin_agent__purging() THEN\n    RETURN NEW;'));
+    expect(body.slice(guard)).toMatch(/^[^;]*THEN\s+RAISE EXCEPTION 'ADMIN_AGENT_STATUS_REGRESS' USING ERRCODE = 'P0001'/);
+    // A terminal state has no way out.
+    for (const terminal of machine.spec.terminal) expect(triggerMatrix(body).filter((pair) => pair.startsWith(`${terminal}>`)), terminal).toEqual([]);
+  });
+
+  it('keeps the rules each trigger had: the approval lock, the revision that never goes down', () => {
+    expect(functionBody('admin_agent_proposals__guard')).toMatch(/RAISE EXCEPTION 'ADMIN_AGENT_APPROVAL_LOCKED'/);
+    expect(functionBody('admin_agent_plans__guard')).toMatch(/IF NEW\.revision < OLD\.revision THEN\s+RAISE EXCEPTION 'ADMIN_AGENT_COUNTER_DECREASE'/);
+  });
+
   it('admin_agent_proposals__guard refuses every move back to proposed, and the machine has none', () => {
     expect(functionBody('admin_agent_proposals__guard')).toMatch(/IF NEW\.status = 'proposed' AND OLD\.status <> 'proposed' THEN\s+RAISE EXCEPTION 'ADMIN_AGENT_STATUS_REGRESS'/);
     expect(proposalMachine.sourcesOf('proposed')).toEqual([]);
@@ -80,9 +125,6 @@ describe('parity with the guard triggers (the SQL is not changed here)', () => {
     expect(actionMachine.sourcesOf('undone')).toEqual(['ok']);
   });
 
-  it('admin_agent_plans__guard does not police the status (the store guard is the only one)', () => {
-    expect(functionBody('admin_agent_plans__guard')).not.toMatch(/status/);
-  });
 });
 
 describe('the derived expired state and the card actions', () => {

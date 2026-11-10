@@ -7,7 +7,8 @@ import { defineMachine } from '@/lib/state-machine/machine';
  * `propose_build` treats a plan as buildable while it is drafting, ready or partial. The readers already act on the
  * machine (`propose_build` stages from `sourcesOf('building')`, `plan_create` starts a new plan only once the active one
  * is terminal, the Plan panel offers Build only where `building` is reachable). Every write is guarded with
- * `.in('status', planMachine.sourcesOf(to))` in `store/plans.ts`. The guard trigger only keeps `revision` monotonic.
+ * `.in('status', planMachine.sourcesOf(to))` in `store/plans.ts`. The guard trigger `admin_agent_plans__guard` keeps
+ * `revision` monotonic and allows only the status changes listed here (ADMIN_AGENT_STATUS_REGRESS otherwise).
  */
 export const planMachine = defineMachine({
   id: 'admin_agent_plan',
