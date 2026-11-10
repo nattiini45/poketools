@@ -341,7 +341,20 @@ describe('POST /api/generate-round/[tid]', () => {
     const request = {} as NextRequest;
     await POST(request, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
 
-    expect(updateSeason).toHaveBeenCalledWith('s-1', { status: 'active' });
+    expect(updateSeason).toHaveBeenCalledWith('s-1', { status: 'active' }, { from: 'upcoming' });
+  });
+
+  it('keeps a league status an admin set after the read: the bubble-up is a compare-and-set on upcoming', async () => {
+    const { UserFacingError } = await import('@/lib/api/user-facing-error');
+    vi.mocked(getTournamentById).mockResolvedValue({ ...baseTournament, status: 'upcoming', current_round: 0 } as never);
+    vi.mocked(getRoundsByTournament).mockResolvedValue([] as never);
+    vi.mocked(getSeasonById).mockResolvedValue({ id: 's-1', status: 'upcoming' } as never);
+    vi.mocked(updateSeason).mockRejectedValueOnce(new UserFacingError('changed', { code: 'season_status_changed', status: 409 }));
+
+    const response = await POST({} as NextRequest, routeParams('ae13bc20-d43b-42b5-8de0-4944cb4025e3'));
+
+    expect(response.status).toBe(201);
+    expect(updateSeason).toHaveBeenCalledWith('s-1', { status: 'active' }, { from: 'upcoming' });
   });
 
   it('expires the public reads when the league status write fails after the round committed', async () => {
@@ -1248,7 +1261,7 @@ describe('POST /api/generate-round/[tid]', () => {
 
       expect(response.status).toBe(201);
       expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-      expect(updateRoundStatus).toHaveBeenCalledWith('r-2', 'active');
+      expect(updateRoundStatus).toHaveBeenCalledWith('r-2', 'active', 'pending');
       expect(payload.data.status).toBe('active');
       expect(vi.mocked(createRoundWithMatches).mock.invocationCallOrder[0]).toBeLessThan(
         vi.mocked(updateRoundStatus).mock.invocationCallOrder[0]
@@ -1266,7 +1279,7 @@ describe('POST /api/generate-round/[tid]', () => {
       const response = await POST(bodyRequest({ start_round: true }), routeParams(baseTournament.id));
 
       expect(response.status).toBe(201);
-      expect(updateRoundStatus).toHaveBeenCalledWith('r-2-empty', 'active');
+      expect(updateRoundStatus).toHaveBeenCalledWith('r-2-empty', 'active', 'pending');
     });
 
     it.each([

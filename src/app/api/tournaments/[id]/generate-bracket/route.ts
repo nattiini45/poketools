@@ -5,7 +5,7 @@ import {
   getTournamentById,
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
-import { getSeasonById, updateSeason } from '@/lib/supabase/queries/seasons';
+import { startSeasonIfUpcoming } from '@/lib/season/start-season';
 import { generateEliminationBracket } from '@/lib/tournament/bracket-generate';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import { emitDiscordEvent } from '@/lib/discord/notify';
@@ -90,12 +90,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         startFirstRound: options.startRound,
       });
 
-      if (tournament.season_id) {
-        const season = await getSeasonById(tournament.season_id);
-        if (season && season.status === 'upcoming') {
-          await updateSeason(season.id, { status: 'active' });
-        }
-      }
+      if (tournament.season_id) await startSeasonIfUpcoming(tournament.season_id);
     } finally {
       expireTournamentReads(id, tournament.season_id);
     }

@@ -20,6 +20,12 @@ type FormError =
   | { kind: 'submitFailed' }
   | { kind: 'api'; error: ApiErrorLike };
 
+/**
+ * The request: `done` once a game was recorded and the page is about to redirect, so the same game cannot be sent
+ * twice (a manual game has no content dedupe). Without a redirect the form stays usable for the next game.
+ */
+type SubmitPhase = 'idle' | 'submitting' | 'done';
+
 interface PlayerInfo {
   id: string;
   name: string;
@@ -93,7 +99,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
   const [playerPokemon, setPlayerPokemon] = useState<[PokemonStatInput[], PokemonStatInput[]]>(
     () => buildInitialPokemon(initialTeams)
   );
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<SubmitPhase>('idle');
   const [error, setError] = useState<FormError | null>(null);
   const [successKey, setSuccessKey] = useState<'resultRecorded' | 'gameRecorded' | null>(null);
 
@@ -129,6 +135,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (phase !== 'idle') return;
     setError(null);
     setSuccessKey(null);
 
@@ -145,7 +152,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
       }
     }
 
-    setLoading(true);
+    setPhase('submitting');
     try {
       const pokemon_stats = players.map((player, idx) => ({
         player_id: player.id,
@@ -180,6 +187,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
         setSuccessKey(json.data.bo_reached ? 'resultRecorded' : 'gameRecorded');
         onSuccess?.();
         if (redirectTo) {
+          setPhase('done');
           setTimeout(() => router.push(redirectTo), 1500);
         } else {
           router.refresh();
@@ -190,7 +198,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
     } catch {
       setError({ kind: 'submitFailed' });
     } finally {
-      setLoading(false);
+      setPhase((current) => (current === 'submitting' ? 'idle' : current));
     }
   }
 
@@ -322,7 +330,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
       {error && <Alert variant="error">{errorMessage(error)}</Alert>}
       {successKey && <Alert variant="success">{t(`manual.${successKey}`)}</Alert>}
 
-      <Button type="submit" variant="primary" loading={loading}>
+      <Button type="submit" variant="primary" loading={phase === 'submitting'} disabled={phase === 'done'}>
         {t('common.submitResult')}
       </Button>
     </form>

@@ -14,6 +14,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { canTournamentEvent } from '@/lib/tournament/tournament-state';
 import { patchTournamentStatus } from './lifecycle-requests';
 import type { UiError } from './ui-error';
 
@@ -44,6 +45,8 @@ export default function TournamentLifecycleActions({
   const t = useT(tournamentsAdminMessages);
   const errorText = useApiErrorText(errorsTournaments);
   const isPhase = seasonId !== null;
+  const canComplete = canTournamentEvent(status, 'complete', 'admin');
+  const canReopen = canTournamentEvent(status, 'reopen', 'admin');
 
   async function handleComplete() {
     const confirmed = window.confirm(
@@ -103,12 +106,12 @@ export default function TournamentLifecycleActions({
 
   return (
     <div className="flex flex-wrap items-center gap-2">
-      {status !== 'completed' && (
+      {canComplete && (
         <Button variant="success" size="sm" onClick={handleComplete} loading={completing}>
           {t('lifecycle.markCompleted')}
         </Button>
       )}
-      {status === 'completed' && (
+      {canReopen && (
         <Button
           variant="secondary"
           size="sm"
@@ -129,7 +132,7 @@ export default function TournamentLifecycleActions({
           redirectTo={seasonId ? leagueAdminHref(seasonId, 'phases') : '/admin/tournaments'}
         />
       )}
-      {status === 'completed' && (
+      {canReopen && (
         <ConfirmDialog
           open={reopenOpen}
           onClose={() => setReopenOpen(false)}

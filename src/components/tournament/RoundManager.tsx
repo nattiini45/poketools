@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
+import { canRoundEvent } from '@/lib/tournament/round-state';
 import type { PublicMatch } from '@/lib/match/public-match';
 import type { Tournament } from '@/types/tournament';
 import type { ApiResult, ApiWarning } from '@/types/api';
@@ -1180,7 +1181,7 @@ export default function RoundManager({
                         </span>
                       </>
                     )}
-                    {round.status === 'pending' && (
+                    {canRoundEvent(round.status, 'start', 'admin') && (
                       <Button
                         variant="secondary"
                         size="sm"
@@ -1190,7 +1191,7 @@ export default function RoundManager({
                         {t('rounds.start')}
                       </Button>
                     )}
-                    {round.status === 'active' && (() => {
+                    {canRoundEvent(round.status, 'complete', 'admin') && (() => {
                       const open = openMatchCount(round.id);
                       const blocked = open !== null && open > 0;
                       const blockedId = `${startNowHintId}-open-${round.id}`;
@@ -1226,7 +1227,7 @@ export default function RoundManager({
                         </>
                       );
                     })()}
-                    {round.status !== 'pending' && (
+                    {canRoundEvent(round.status, 'reset', 'admin') && (
                       <Button
                         variant="danger"
                         size="sm"

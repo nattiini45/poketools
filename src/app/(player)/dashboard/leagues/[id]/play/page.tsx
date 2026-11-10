@@ -9,6 +9,7 @@ import { getSeasonWithDetails, isSeasonPlayer } from '@/lib/supabase/queries/sea
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getT } from '@/i18n/server';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
+import { isSeasonClosed } from '@/lib/season/season-state';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -70,7 +71,7 @@ export default async function PlayPage({ params }: PageProps) {
   const view = await loadPlayerView(seasonId, player.playerId);
   if (!view.running) return shell(<Alert variant="info">{t('page.notRunning')}</Alert>);
 
-  const closed = league.status === 'completed' || league.archived;
+  const closed = isSeasonClosed(league);
   return shell(
     <>
       {closed && <Alert variant="info">{t('page.closed')}</Alert>}

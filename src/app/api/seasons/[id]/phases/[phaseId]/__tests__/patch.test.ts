@@ -219,7 +219,7 @@ describe('PATCH /api/seasons/[id]/phases/[phaseId]: completed phase', () => {
 
     expect(response.status).toBe(200);
     expect(updateTournament).toHaveBeenCalledTimes(1);
-    expect(updateTournament).toHaveBeenCalledWith(PHASE_ID, { status: 'active' });
+    expect(updateTournament).toHaveBeenCalledWith(PHASE_ID, { status: 'active' }, { from: 'completed' });
     // The module mocks expose only reads for rounds; the writers a reopen must never call are absent.
     expect(Object.keys(roundQueries)).toEqual(['getRoundsByTournament']);
     expect(getRoundsByTournament).toHaveBeenCalledTimes(1);
