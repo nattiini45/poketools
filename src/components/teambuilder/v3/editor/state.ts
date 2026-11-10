@@ -2,6 +2,7 @@ import type { PokemonSet, TeamImportSource, TeamMode, TeamValidationResult } fro
 import { generationOrDefault } from '@/lib/pkmn/format-id';
 import type { CalcField } from '@/types/calc';
 import type { DraftPoolEntry } from '@/types/draft-pool';
+import { teamSaveMachine, type TeamSaveStatus } from '@/lib/team/editor-save-state';
 
 // ── Draft context loaded by useDraftContext ──────────────────────────
 export interface DraftEditorContext {
@@ -68,9 +69,6 @@ export interface EditorState {
   /** 'grid' = 6-card overview; 'set' = inline set editor */
   workspaceView: 'grid' | 'set';
 
-  // ── Validation status (separate from the validation result object) ──
-  validationStatus: 'idle' | 'pending' | 'fresh' | 'stale';
-
   // ── Mobile pane ────────────────────────────────────────────────────
   mobilePane: 'team' | 'browser' | 'intel' | 'ai';
 
@@ -78,8 +76,10 @@ export interface EditorState {
   draft: DraftEditorContext | null;
 
   // ── Save status ─────────────────────────────────────────────────────
-  /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. */
-  saveStatus: 'idle' | 'saving' | 'saved' | 'warned' | 'unchecked' | 'error';
+  /** `warned`: saved, but the league rules are not met; `unchecked`: saved, the rules could not be checked. Moves only as `teamSaveMachine` allows. */
+  saveStatus: TeamSaveStatus;
+  /** What the save in flight sends (its team and name); an edit made meanwhile keeps the editor dirty after it lands. */
+  inFlightSave: { team: (PokemonSet | null)[]; teamName: string } | null;
 }
 
 // ============================================================
@@ -127,9 +127,6 @@ export type EditorAction =
   // ── Field / speed ─────────────────────────────────────────────────
   | { type: 'SET_FIELD_CONDITIONS'; conditions: CalcField }
   | { type: 'SET_SPEED_TARGET'; target: EditorState['speedCalcTarget'] }
-
-  // ── Validation status ─────────────────────────────────────────────
-  | { type: 'SET_VALIDATION_STATUS'; status: EditorState['validationStatus'] }
 
   // ── Mobile ────────────────────────────────────────────────────────
   | { type: 'SET_MOBILE_PANE'; pane: EditorState['mobilePane'] }
@@ -187,8 +184,7 @@ export function editorReducer(
     // ── Format ─────────────────────────────────────────────────────
     case 'SET_FORMAT': {
       const gen = generationOrDefault(action.format);
-      // Legality differs per format — force revalidation
-      return { ...state, format: action.format, generation: gen, validationStatus: 'stale' };
+      return { ...state, format: action.format, generation: gen };
     }
 
     // ── Team mutations ─────────────────────────────────────────────
@@ -197,20 +193,20 @@ export function editorReducer(
       if (emptyIndex === -1) return state; // Team full
       const team = [...state.team];
       team[emptyIndex] = makeBlankSet(action.species);
-      return { ...state, team, activeSlot: emptyIndex, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, activeSlot: emptyIndex, dirty: true };
     }
 
     case 'REMOVE_SLOT': {
       const team = [...state.team];
       team[action.slot] = null;
       const activeSlot = state.activeSlot === action.slot ? null : state.activeSlot;
-      return { ...state, team, activeSlot, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, activeSlot, dirty: true };
     }
 
     case 'SET_SLOT': {
       const team = [...state.team];
       team[action.slot] = action.set;
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     case 'UPDATE_SLOT': {
@@ -218,7 +214,7 @@ export function editorReducer(
       const existing = team[action.slot];
       if (!existing) return state;
       team[action.slot] = { ...existing, ...action.patch };
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     case 'LOAD_TEAM': {
@@ -230,7 +226,6 @@ export function editorReducer(
         teamId: action.teamId ?? state.teamId,
         dirty: false,
         validation: null,
-        validationStatus: 'stale',
         workspaceView: 'grid',
       };
     }
@@ -243,7 +238,6 @@ export function editorReducer(
         teamName: '',
         dirty: true,
         validation: null,
-        validationStatus: 'stale',
         workspaceView: 'grid',
       };
     }
@@ -251,7 +245,7 @@ export function editorReducer(
     case 'SWAP_SLOTS': {
       const team = [...state.team];
       [team[action.slotA], team[action.slotB]] = [team[action.slotB], team[action.slotA]];
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     // ── Slot selection ─────────────────────────────────────────────
@@ -327,11 +321,6 @@ export function editorReducer(
       return { ...state, speedCalcTarget: action.target };
     }
 
-    // ── Validation status ─────────────────────────────────────────
-    case 'SET_VALIDATION_STATUS': {
-      return { ...state, validationStatus: action.status };
-    }
-
     // ── Mobile ────────────────────────────────────────────────────
     case 'SET_MOBILE_PANE': {
       return { ...state, mobilePane: action.pane };
@@ -340,7 +329,7 @@ export function editorReducer(
     // ── AI proposal ───────────────────────────────────────────────
     case 'APPLY_TEAM_PROPOSAL': {
       if (action.mode === 'replace') {
-        return { ...state, team: padTo6(action.team), dirty: true, validationStatus: 'stale' };
+        return { ...state, team: padTo6(action.team), dirty: true };
       }
       // fill: only overwrite empty slots
       const team = [...state.team];
@@ -350,7 +339,7 @@ export function editorReducer(
           team[i] = action.team[teamIdx++];
         }
       }
-      return { ...state, team, dirty: true, validationStatus: 'stale' };
+      return { ...state, team, dirty: true };
     }
 
     // ── Draft ─────────────────────────────────────────────────────
@@ -360,11 +349,17 @@ export function editorReducer(
 
     // ── Save ─────────────────────────────────────────────────────
     case 'SET_SAVE_STATUS': {
-      return { ...state, saveStatus: action.status };
+      const actor = action.status === 'saving' ? 'player' : 'server';
+      if (!teamSaveMachine.can(state.saveStatus, action.status, actor)) return state;
+      const inFlightSave = action.status === 'saving' ? { team: state.team, teamName: state.teamName } : null;
+      return { ...state, saveStatus: action.status, inFlightSave };
     }
 
     case 'MARK_SAVED': {
-      return { ...state, saveStatus: 'saved', dirty: false };
+      if (!teamSaveMachine.can(state.saveStatus, 'saved', 'server')) return state;
+      const sent = state.inFlightSave;
+      const editedSince = sent !== null && (state.team !== sent.team || state.teamName !== sent.teamName);
+      return { ...state, saveStatus: 'saved', dirty: editedSince, inFlightSave: null };
     }
 
     // ── Meta ───────────────────────────────────────────────────────
@@ -426,9 +421,9 @@ export function createInitialState(params?: {
     rulesetId: params?.rulesetId ?? null,
     dirty: false,
     workspaceView: 'grid',
-    validationStatus: 'idle',
     mobilePane: 'team',
     draft: null,
     saveStatus: 'idle',
+    inFlightSave: null,
   };
 }

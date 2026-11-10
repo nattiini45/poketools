@@ -232,7 +232,7 @@ export default {
     openAria: 'Open {action}',
     lockAria: 'Lock {action}',
     openTitle: 'Open {action}?',
-    openBody: 'Players can pick again. The change is recorded with your reason.',
+    openBody: 'Players whose pick is not final yet can pick again; picks that are already locked stay locked. The change is recorded with your reason.',
     lockTitle: 'Lock {action}?',
     lockBody: 'No player can pick or change a pick any more. The change is recorded with your reason.',
     lockFollowUp: 'What the format does after a lock runs now, or on the next scheduled pass if it cannot finish now.',

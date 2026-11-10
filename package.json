@@ -30,6 +30,7 @@
     "mirror:overlay": "node scripts/mirror-private-overlay.mjs",
     "db:types": "node scripts/db-types.mjs",
     "db:types:check": "node scripts/db-types.mjs --check",
+    "docs:state-machines": "tsx scripts/state-machines-doc.ts",
     "audit:seasons": "npx --no-install tsx --tsconfig scripts/tsconfig.audit.json scripts/run-season-audit.ts",
     "eval:ai-flows": "npx --no-install tsx --tsconfig scripts/tsconfig.ai-flow-eval.json scripts/ai-flow-eval.ts",
     "eval:ai-flows:fixtures": "node scripts/ai-flow-eval-fixtures.mjs",

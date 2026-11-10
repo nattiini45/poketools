@@ -238,6 +238,21 @@ describe('action adjustments', () => {
     expect(fireLockedActionEvents).toHaveBeenCalledWith(SEASON, 'admin-1');
   });
 
+  it.each([
+    // [flag, requested, accepted]: no flag reads as not open yet (the gift action opens on an event).
+    [undefined, 'open', true],
+    [undefined, 'locked', true],
+    ['open', 'open', false],
+    ['open', 'locked', true],
+    ['locked', 'open', true],
+    ['locked', 'locked', false],
+  ] as const)('window flag %s, requested %s: accepted %s', async (flag, state, accepted) => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context(flag === undefined ? {} : { flags: { 'action:choose_gift': flag } }));
+    const result = await applyAdjustment(request({ kind: 'action', action: 'choose_gift', state }));
+    if (accepted) expect(result).toMatchObject({ ok: true });
+    else expect(result).toEqual({ ok: false, issue: 'action_state_unchanged' });
+  });
+
   it('refuses a lock on a locked action and an open on an open one (the history never records a change that did not happen)', async () => {
     const withFlag = (value: string) => context({ flags: { 'action:choose_gift': value } });
     vi.mocked(loadFreshKitContext).mockResolvedValue(withFlag('locked'));

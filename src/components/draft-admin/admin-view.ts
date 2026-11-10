@@ -6,6 +6,7 @@
  * rule mirrored here (BE §8.2).
  */
 import { invalidDraftConfigField, type DraftConfigCore } from '@/lib/draft/schemas';
+import { draftPoolPhaseMachine } from '@/lib/draft/pool-phase-state';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import {
@@ -30,9 +31,13 @@ export function reasonValid(reason: string): boolean {
   return n >= REASON_MIN && n <= REASON_MAX;
 }
 
-/** Void / correct need a paused or complete draft (BR-8, `CORRECTION_REQUIRES_PAUSE`). */
-export function correctionsAllowed(vm: Pick<DraftViewModel, 'paused' | 'status'>): boolean {
-  return vm.paused || vm.status === 'complete';
+/**
+ * Void / correct need a paused drafting pool or a complete one (BR-8, `CORRECTION_REQUIRES_PAUSE`): a complete pool
+ * offers the `reopen` move of `draftPoolPhaseMachine`. A cancelled pool has none (its status twin reads complete).
+ */
+export function correctionsAllowed(vm: Pick<DraftViewModel, 'paused' | 'phase'>): boolean {
+  if (vm.phase === 'drafting') return vm.paused;
+  return draftPoolPhaseMachine.transitionsFrom(vm.phase, 'admin').some((t) => t.event === 'reopen');
 }
 
 /** The settings form is editable in setup (initial) or in the redraft's submission phase. */

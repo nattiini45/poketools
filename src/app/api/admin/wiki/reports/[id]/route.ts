@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { wikiReportUpdateSchema, formatZodErrors } from '@/lib/validation';
-import { updateNoteReportStatus } from '@/lib/supabase/queries/wiki-notes';
+import { getNoteReportStatus, updateNoteReportStatus } from '@/lib/supabase/queries/wiki-notes';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
+import { noteReportMachine } from '@/lib/wiki/note-report-state';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
@@ -26,7 +28,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await updateNoteReportStatus(id, zodResult.data.status);
+    const to = zodResult.data.status;
+    const from = await getNoteReportStatus(id);
+    if (!from) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Report not found', code: 'wiki_report_not_found' },
+        { status: 404 },
+      );
+    }
+    noteReportMachine.assertTransition(from, to, 'admin');
+    if (!(await updateNoteReportStatus(id, to, from))) {
+      logger.warn('api/admin/wiki/reports', 'report update refused: the status changed since it was read', { reportId: id, from, to });
+      return NextResponse.json<ApiResult<never>>(
+        {
+          success: false,
+          error: 'Another moderator already closed this report. Reload to see its current status.',
+          code: 'wiki_report_changed',
+        },
+        { status: 409 },
+      );
+    }
     logAuditEvent({
       actor_id: admin.playerId,
       actor_name: admin.name,

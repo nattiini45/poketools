@@ -8,6 +8,7 @@ The Team module enforces visibility/redaction rules for team Pokémon details ba
 src/lib/team/
 ├── visibility.ts  # Team visibility and redaction helpers
 ├── check.server.ts  # The one server-side team check (checkTeam)
+├── editor-save-state.ts  # Teambuilder save machine (teambuilder.save): no overlapping saves
 ├── completed-match-lock.ts  # Teams linked to a completed match are immutable for non-admins
 ├── item-usage-cache.ts  # Expires the public cached reads built from a team roster
 ├── kit-team-gate.ts  # Advisory verdict of a kit league's team rules (adviseKitTeam, kitTeamVerdict); never refuses a team
