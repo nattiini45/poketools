@@ -984,7 +984,7 @@ describe('createTournamentReport', () => {
 
 describe('updateTournamentReport', () => {
   it('updates specified fields', async () => {
-    mockBuilder.eq.mockReturnValue({ error: null });
+    mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
 
     await updateTournamentReport('rpt1', {
       status: 'completed' as never,
@@ -1001,7 +1001,7 @@ describe('updateTournamentReport', () => {
   });
 
   it('stores the model that answered when the patch carries model_id', async () => {
-    mockBuilder.eq.mockReturnValue({ error: null });
+    mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
 
     await updateTournamentReport('rpt1', { status: 'completed' as never, model_id: 'claude-haiku-4-5-20251001' });
 
@@ -1010,7 +1010,7 @@ describe('updateTournamentReport', () => {
   });
 
   it('leaves model_id out of a patch that does not carry it', async () => {
-    mockBuilder.eq.mockReturnValue({ error: null });
+    mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
 
     await updateTournamentReport('rpt1', { status: 'failed' as never });
 
@@ -1018,7 +1018,7 @@ describe('updateTournamentReport', () => {
   });
 
   it('throws on error', async () => {
-    mockBuilder.eq.mockReturnValue({ error: new Error('upd err') });
+    mockBuilder.select.mockResolvedValue({ data: null, error: new Error('upd err') });
     await expect(
       updateTournamentReport('rpt1', { status: 'failed' as never }),
     ).rejects.toThrow('upd err');

@@ -79,15 +79,16 @@ describe('PATCH /api/wiki/notes/[id]', () => {
 
   it('approves a note when approved=true (admin path)', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN as never);
-    vi.mocked(getNoteById).mockResolvedValue(fakeNote as never);
-    vi.mocked(approveNote).mockResolvedValue(undefined as never);
+    // A pending note: approving an approved one is not a move (wiki_note.moderation).
+    vi.mocked(getNoteById).mockResolvedValue({ ...fakeNote, approved: false, rejected_at: null } as never);
+    vi.mocked(approveNote).mockResolvedValue(true);
 
     const res = await PATCH(makeRequest({ approved: true }), makeParams('c3a68c4f-2629-4673-845a-8984a71168c1'));
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.data.updated).toBe(true);
     expect(vi.mocked(requireAdmin)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(approveNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1');
+    expect(vi.mocked(approveNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', { from: 'pending', updatedAt: fakeNote.updated_at });
     expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
       action: 'wiki.note.approve',
       resource_id: 'c3a68c4f-2629-4673-845a-8984a71168c1',
@@ -97,12 +98,12 @@ describe('PATCH /api/wiki/notes/[id]', () => {
   it('rejects a note when rejected=true (admin path)', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getNoteById).mockResolvedValue(fakeNote as never);
-    vi.mocked(rejectNote).mockResolvedValue(undefined as never);
+    vi.mocked(rejectNote).mockResolvedValue(true);
 
     const res = await PATCH(makeRequest({ rejected: true, rejection_reason: 'Needs sources' }), makeParams('c3a68c4f-2629-4673-845a-8984a71168c1'));
     const body = await res.json();
     expect(body.success).toBe(true);
-    expect(vi.mocked(rejectNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', 'Needs sources');
+    expect(vi.mocked(rejectNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', 'Needs sources', { from: 'approved', updatedAt: fakeNote.updated_at });
     expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
       action: 'wiki.note.reject',
       resource_id: 'c3a68c4f-2629-4673-845a-8984a71168c1',
@@ -112,11 +113,11 @@ describe('PATCH /api/wiki/notes/[id]', () => {
   it('stores a null reason (no English default) when rejected without one', async () => {
     vi.mocked(requireAdmin).mockResolvedValue(ADMIN as never);
     vi.mocked(getNoteById).mockResolvedValue(fakeNote as never);
-    vi.mocked(rejectNote).mockResolvedValue(undefined as never);
+    vi.mocked(rejectNote).mockResolvedValue(true);
 
     const res = await PATCH(makeRequest({ rejected: true }), makeParams('c3a68c4f-2629-4673-845a-8984a71168c1'));
     expect((await res.json()).success).toBe(true);
-    expect(vi.mocked(rejectNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', null);
+    expect(vi.mocked(rejectNote)).toHaveBeenCalledWith('c3a68c4f-2629-4673-845a-8984a71168c1', 'admin1', null, { from: 'approved', updatedAt: fakeNote.updated_at });
     expect(vi.mocked(logAuditEvent)).toHaveBeenCalledWith(expect.objectContaining({
       action: 'wiki.note.reject',
       metadata: { reason: null, was_approved: true },

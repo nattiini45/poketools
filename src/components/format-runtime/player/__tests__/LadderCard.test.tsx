@@ -152,6 +152,14 @@ describe('LadderCard: the viewer\'s challenges', () => {
     expect(screen.queryByRole('button', { name: t('ladder.withdrawAria', { name: 'Ben' }) })).toBeNull();
   });
 
+  it.each(['accepted', 'declined', 'expired', 'cancelled'] as const)('a %s challenge offers no answer to either side', (state) => {
+    const incoming = challenge({ id: '5e150000-0000-4000-8000-0000000000c2', state, challenger: { id: CARA, name: 'Cara' }, defender: { id: ME, name: 'Me' } });
+    const { t } = setup({ challenges: [challenge({ state }), incoming] });
+    expect(screen.queryByRole('button', { name: t('ladder.withdrawAria', { name: 'Ben' }) })).toBeNull();
+    expect(screen.queryByRole('button', { name: t('ladder.acceptAria', { name: 'Cara' }) })).toBeNull();
+    expect(screen.queryByRole('button', { name: t('ladder.declineAria', { name: 'Cara' }) })).toBeNull();
+  });
+
   it('answers are not offered in a closed league', () => {
     const incoming = challenge({ challenger: { id: CARA, name: 'Cara' }, defender: { id: ME, name: 'Me' } });
     const { t } = setup({ challenges: [incoming] }, { closed: true });

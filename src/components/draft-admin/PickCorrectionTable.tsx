@@ -81,7 +81,9 @@ export default function PickCorrectionTable({ vm, catalog, onVoid, onCorrect, on
     <div className="space-y-3">
       {!allowed ? (
         <div className="flex flex-wrap items-center gap-2 rounded-poke-md border border-poke-border p-2" role="note">
-          <p className="text-sm text-poke-text-secondary">{t('corrections.pauseFirst')}</p>
+          <p className="text-sm text-poke-text-secondary">
+            {vm.phase === 'cancelled' ? t('live.status.cancelled') : t('corrections.pauseFirst')}
+          </p>
           {vm.phase === 'drafting' ? (
             <Button size="sm" variant="secondary" disabled={pauseCall.busy} onClick={() => pauseCall.run(onPause)}>
               {t('corrections.pauseNow')}

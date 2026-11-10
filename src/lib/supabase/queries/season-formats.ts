@@ -15,7 +15,8 @@ import { supabase } from '../client';
 import type { Json } from '@/types/database';
 import type { BracketType } from '@/types/tournament';
 import type { FormatDefinition } from '@/lib/format-kit/client';
-import { mapFormatDbError } from '@/lib/format-studio/errors';
+import { FormatStudioError, mapFormatDbError } from '@/lib/format-studio/errors';
+import { seasonFormatEngineMachine } from '@/lib/format-studio/engine-state';
 import type {
   SeasonFormatEngine,
   SeasonFormatRow,
@@ -66,20 +67,29 @@ export async function getSeasonFormatSummary(seasonId: string): Promise<SeasonFo
   return data ? toSummary(data as unknown as SummaryRow) : null;
 }
 
-/** Switch the engine that runs the league's attached format. Null when none is attached. */
+/**
+ * Switch the engine that runs the league's attached format from `from` (the engine the caller read) to `to`, as an
+ * admin (`seasonFormatEngineMachine`). The UPDATE is guarded with `from`, so a switch another admin made in between is
+ * never overwritten: it throws `format_engine_changed` (409). Null when no format is attached.
+ */
 export async function setSeasonFormatEngine(
   seasonId: string,
-  engine: SeasonFormatEngine,
+  from: SeasonFormatEngine,
+  to: SeasonFormatEngine,
 ): Promise<SeasonFormatSummary | null> {
   if (!isValidUuid(seasonId)) return null;
+  seasonFormatEngineMachine.assertTransition(from, to, 'admin');
   const { data, error } = await supabase
     .from('season_formats')
-    .update({ engine })
+    .update({ engine: to })
     .eq('season_id', seasonId)
+    .eq('engine', from)
     .select(SUMMARY_COLUMNS)
     .maybeSingle();
   if (error) throw error;
-  return data ? toSummary(data as unknown as SummaryRow) : null;
+  if (data) return toSummary(data as unknown as SummaryRow);
+  if ((await getSeasonFormatSummary(seasonId)) === null) return null;
+  throw new FormatStudioError('format_engine_changed');
 }
 
 /**

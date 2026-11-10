@@ -26,6 +26,8 @@ export default {
   creator_status_superadmin_only: 'Only the superadmin can manage creator status',
   admin_status_superadmin_only: 'Only the superadmin can manage site admin status',
   superadmin_player_protected: "Only the superadmin can change the superadmin's player",
+  // A suspend, ban or reinstate found the player in another status than the one it read (409).
+  player_status_changed: "The player's status changed in the meantime. Reload the list and try again.",
   player_update_empty: 'No changes to apply',
   player_has_match_history: {
     one: 'Cannot delete a player with match history ({count} match). Suspend or ban them instead.',

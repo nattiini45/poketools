@@ -82,6 +82,15 @@ describe('getCard: the frozen preview plus live status', () => {
     expect(await h.stager.getApprovalToken(id, ADMIN)).toBeNull();
   });
 
+  it.each(['executing', 'completed', 'partial', 'failed', 'declined', 'expired', 'superseded', 'stale', 'unknown'] as const)(
+    'offers approve and decline only on a pending card, never on a %s one',
+    async (status) => {
+      const { h, id } = await stagedBuild();
+      h.store.proposals[0].status = status;
+      expect(await h.stager.getCard(id, ADMIN)).toMatchObject({ status, effectiveStatus: status, actionable: false });
+    },
+  );
+
   it("another admin's proposal does not exist (404), for the card and for the token", async () => {
     const { h, id } = await stagedBuild();
     await expect(h.stager.getCard(id, OTHER_ADMIN)).rejects.toMatchObject({ code: 'proposal_not_found' });

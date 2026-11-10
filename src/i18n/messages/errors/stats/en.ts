@@ -59,6 +59,9 @@ export default {
   wiki_note_resubmission_blocked: 'A moderator closed this note for resubmission',
   wiki_note_block_superadmin_only: 'Only the superadmin can block a note from resubmitting',
   wiki_note_block_not_rejected: 'Only a rejected note can be blocked from resubmitting',
+  wiki_note_changed: 'This note changed after you loaded it. Reload and review it again.',
+  wiki_report_not_found: 'Report not found',
+  wiki_report_changed: 'Another moderator already closed this report. Reload to see its current status.',
 
   // Damage calc per-item errors (`api/calc/**` result `error`, AI calc tool;
   // `unknown_species` above is shared). `{type}` is the English Tera type name.

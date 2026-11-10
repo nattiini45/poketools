@@ -6,6 +6,7 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { useLocale, useT } from '@/i18n/client';
 import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin';
+import { actionWindowMachine } from '@/lib/format-engine/runtime/action-state';
 import { applyAdjustmentRequest } from '@/lib/format-engine/runtime/client-api-admin';
 import type { ActionWindow, AdminActionView } from '@/lib/format-engine/runtime/view-types';
 import { BUTTON_TOUCH, labelText } from './admin-shared';
@@ -97,7 +98,7 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
                   variant="secondary"
                   size="sm"
                   className={BUTTON_TOUCH}
-                  disabled={pending || action.window === 'open'}
+                  disabled={pending || !actionWindowMachine.can(action.window, 'open', 'admin')}
                   aria-label={t('actions.openAria', { action: name(action) })}
                   onClick={() => setDialog({ action, state: 'open' })}
                 >
@@ -107,7 +108,7 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
                   variant="secondary"
                   size="sm"
                   className={BUTTON_TOUCH}
-                  disabled={pending || action.window === 'locked'}
+                  disabled={pending || !actionWindowMachine.can(action.window, 'locked', 'admin')}
                   aria-label={t('actions.lockAria', { action: name(action) })}
                   onClick={() => setDialog({ action, state: 'locked' })}
                 >

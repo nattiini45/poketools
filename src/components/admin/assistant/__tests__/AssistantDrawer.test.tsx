@@ -549,7 +549,7 @@ describe('the conversation: sending and following a turn', () => {
   it('shows the plan as a chip that unfolds in the drawer', async () => {
     const { user } = await open(summary(C1), {
       plan: {
-        id: 'p', mode: 'create', status: 'drafting', revision: 2, code: 'abcdef01', title: 'Gen 9 OU league', contentLocale: 'en', ready: true,
+        id: 'p', mode: 'create', status: 'drafting', revision: 2, code: 'abcdef01', title: 'Gen 9 OU league', contentLocale: 'en', ready: true, buildable: true,
         sections: [{ section: 'league', state: 'ready', blockers: 0, rows: [{ label: 'name', value: { kind: 'text', text: 'Spring OU' } }], items: [] }],
         assumptions: [], blockers: [], warnings: [],
       },
