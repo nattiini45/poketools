@@ -7,7 +7,8 @@
  *   in a hidden tab, so the board has data the moment it is shown.
  * - Once a tick reports `'complete'`, slows to at least 60 s, or stops when the
  *   caller passes `completeIntervalMs: null`. A tab refocus still refetches once.
- * - A tick that reports `'stop'` (401/403) halts the poller; only an explicit
+ * - A tick that reports `'stop'` (401/403; the hidden-tab turn watch also
+ *   404/409) halts the poller; only an explicit
  *   `refresh()` revives it.
  *
  * Ticks are chained with setTimeout (never setInterval), so a slow request can

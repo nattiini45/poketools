@@ -7,8 +7,8 @@ import type { DraftPhase } from '@/types/draft-queue';
  *
  * - `live`: every `liveIntervalMs` (3 s by default) while the tab is visible.
  * - `complete`: every `completeIntervalMs` (at least 60 s), or no timed read when the consumer passes `null`.
- * - `halted`: a tick answered `stop` (401/403, or a consumer's own stop): no timed read and no refocus read; only
- *   `refresh()` revives it.
+ * - `halted`: a tick answered `stop` (401/403; the hidden-tab turn watch also on 404/409; or a consumer's own stop): no
+ *   timed read and no refocus read; only `refresh()` revives it.
  * - `stopped`: not started, or stopped by the consumer (unmount, `resetKey` change).
  *
  * A hidden tab is not a state of its own: in `live` and `complete` it only pauses the timer, and the return to the tab
@@ -42,7 +42,7 @@ export const pollerMachine = defineMachine({
     { event: 'start', from: ['stopped'], to: 'live', actors: ['consumer'], writers: [POLLER], note: 'Reads at once, also in a hidden tab.' },
     { event: 'live', from: ['live', 'complete'], to: 'live', actors: ['tick'], writers: TICKS, note: 'Next read after liveIntervalMs.' },
     { event: 'complete', from: ['live', 'complete'], to: 'complete', actors: ['tick'], writers: TICKS, note: 'Next read after completeIntervalMs (>= 60 s), or none when it is null.' },
-    { event: 'stop', from: ['live', 'complete'], to: 'halted', actors: ['tick'], writers: TICKS, note: '401/403: asking again cannot help.' },
+    { event: 'stop', from: ['live', 'complete'], to: 'halted', actors: ['tick'], writers: TICKS, note: '401/403 (the turn watch also 404/409): asking again cannot help.' },
     { event: 'refresh', from: ['halted'], to: 'live', actors: ['consumer'], writers: [POLLER], note: 'refresh() after a write reads now; the read decides the next state.' },
     { event: 'unmount', from: ['live', 'complete', 'halted'], to: 'stopped', actors: ['consumer'], writers: [POLLER], note: 'Aborts the running tick.' },
   ],
