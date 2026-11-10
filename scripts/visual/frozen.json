@@ -26,6 +26,7 @@
   "targets": [
     {
       "id": "draft-room",
+      "waitFor": "body:not(:has([data-armed=\"false\"]))",
       "url": "/draft-preview?scenario={scenario}&world={world}&lang=en&now={now}",
       "clock": true,
       "matrix": {
@@ -76,6 +77,7 @@
     },
     {
       "id": "draft-room-sakura",
+      "waitFor": "body:not(:has([data-armed=\"false\"]))",
       "url": "/draft-preview?scenario={scenario}&world=sakura&lang=en&now={now}",
       "clock": true,
       "matrix": {
