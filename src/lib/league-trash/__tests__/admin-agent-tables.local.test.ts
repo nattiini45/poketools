@@ -330,9 +330,10 @@ describe.skipIf(!optIn)('Admin Assistant tables on the local stack', () => {
         'proposal',
       );
       await ok(
-        db.from('admin_agent_proposals').update({ approved_by: adminId, approved_at: new Date().toISOString(), status: 'completed' }).eq('id', proposalId).select('id'),
+        db.from('admin_agent_proposals').update({ approved_by: adminId, approved_at: new Date().toISOString(), status: 'executing' }).eq('id', proposalId).select('id'),
         'approve',
       );
+      await ok(db.from('admin_agent_proposals').update({ status: 'completed' }).eq('id', proposalId).select('id'), 'complete');
       const actionId = await newAction(convId, adminId);
       await ok(
         db.from('admin_agent_usage').insert({ admin_id: adminId, admin_name: 'Leaver', conversation_id: convId, purpose: 'turn', model: 'test-model', settled_at: new Date().toISOString() }).select('id'),
@@ -540,11 +541,12 @@ describe.skipIf(!optIn)('Admin Assistant tables on the local stack', () => {
       await ok(
         db
           .from('admin_agent_proposals')
-          .update({ approved_by: adminId, approved_at: ago(100), approved_ip_hash: 'iphash', approved_user_agent: 'ua', status: 'completed' })
+          .update({ approved_by: adminId, approved_at: ago(100), approved_ip_hash: 'iphash', approved_user_agent: 'ua', status: 'executing' })
           .eq('id', proposalId)
           .select('id'),
         'approve',
       );
+      await ok(db.from('admin_agent_proposals').update({ status: 'completed' }).eq('id', proposalId).select('id'), 'complete');
       const actionId = await newAction(id, adminId, { proposal_id: proposalId, step_key: 's1' });
       await ok(db.from('admin_agent_snapshots').insert({ action_id: actionId, document: { a: 1 }, doc_hash: HASH('f'), expires_at: ago(1) }).select('id'), 'snapshot');
       await ok(db.from('admin_agent_refs').insert({ conversation_id: id, ref_kind: 'season', ref_id: randomUUID(), source: 'user_message' }).select('ref_id'), 'ref');
