@@ -665,7 +665,12 @@ async function seedEpbBoardLeague(versionId: string): Promise<void> {
   tally('draft pools', inserted.data.length > 0);
   const pool = await getDraftPoolById(ID.draftPoolEpbBoard);
   if (!pool) throw new Error('the legacy EPB pool is missing after its insert');
-  if (pool.status === 'pending') await updateDraftPoolStatus(ID.draftPoolEpbBoard, 'in_progress');
+  if (pool.status === 'pending') {
+    draftPoolStatusMachine.assertTransition('pending', 'in_progress', 'admin');
+    if (!(await updateDraftPoolStatus(ID.draftPoolEpbBoard, 'pending', 'in_progress'))) {
+      throw new Error('the legacy EPB pool moved on before the seed started it');
+    }
+  }
   const live = { ...pool, status: 'in_progress' as const };
 
   // Picks in the seat order the state route uses, so each pick is the turn the board computes.
