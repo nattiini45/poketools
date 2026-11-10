@@ -70,7 +70,7 @@ Output goes to `.visual/` (gitignored): `<label>/<set>/*.png` with a `manifest.j
 
 ## Adding a frozen target
 
-Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the matrix, the seed ids in `seed-ids.json` and `now`/`theme`/`viewport`), `roots` or `fullPage`, and optionally `matrix`, `viewports`, `themes`, `needs` (seed ids it requires), `mask` (selectors painted over, for content that cannot be pinned), `clock`, `advanceMs` (with `clock`: fake timers, run forward this many ms once the page has rendered `waitFor` or its overlay content; may be a `{matrix}` placeholder), `settleMs` and `tolerance` (`{ maxChangedPct, threshold }`, only for GPU-drawn content). Mark a new frozen component root with `data-frozen="<surface>"`; the attribute carries no styles.
+Add an entry to `frozen.json`: `id`, `url` (`{name}` placeholders come from the matrix, the seed ids in `seed-ids.json` and `now`/`theme`/`viewport`), `roots` or `fullPage`, and optionally `matrix`, `viewports`, `themes`, `needs` (seed ids it requires), `mask` (selectors painted over, for content that cannot be pinned), `clock`, `waitFor` (a selector to wait for before the capture, e.g. until a confirm dialog has armed), `advanceMs` (with `clock`: fake timers, run forward this many ms once the page has rendered `waitFor` or its overlay content; may be a `{matrix}` placeholder), `settleMs` and `tolerance` (`{ maxChangedPct, threshold }`, only for GPU-drawn content). Mark a new frozen component root with `data-frozen="<surface>"`; the attribute carries no styles.
 
 ## Not covered
 
