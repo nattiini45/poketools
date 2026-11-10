@@ -27,6 +27,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Json } from '@/types/database';
 import type { JsonValue } from '@/lib/studio-core/json';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
+import { effectiveProposalStatus, isProposalActionable } from '../store/proposal-state';
 import { toolErrorFromThrown } from '../registry/errors';
 import type { AdminId } from '../store/ids';
 import type { ProposalRecord, ProposalStatus } from '../store/types';
@@ -84,7 +85,7 @@ export interface CardView {
   class: 'B' | 'G';
   /** The stored status. */
   status: ProposalStatus;
-  /** `expired` once a `proposed` card is past its expiry, before the next sweep writes it. */
+  /** `expired` once a `proposed` card is past its expiry (`effectiveProposalStatus`; nothing writes the stored value today). */
   effectiveStatus: ProposalStatus;
   /** Approve and Decline are offered. */
   actionable: boolean;
@@ -336,8 +337,7 @@ export function createProposalStager(deps: StagerDeps) {
     const now = deps.now().getTime();
     const expiresMs = new Date(proposal.expires_at).getTime();
     const status = proposal.status as ProposalStatus;
-    const expired = status === 'proposed' && expiresMs <= now;
-    const effectiveStatus: ProposalStatus = expired ? 'expired' : status;
+    const effectiveStatus = effectiveProposalStatus({ status, expires_at: proposal.expires_at }, new Date(now));
     const byStep = new Map(actions.map((action) => [action.step_key ?? '', action]));
 
     return {
@@ -346,7 +346,7 @@ export function createProposalStager(deps: StagerDeps) {
       class: proposal.class as 'B' | 'G',
       status,
       effectiveStatus,
-      actionable: effectiveStatus === 'proposed',
+      actionable: isProposalActionable(effectiveStatus),
       createdAt: proposal.created_at,
       expiresAt: proposal.expires_at,
       secondsLeft: status === 'proposed' ? Math.max(0, Math.ceil((expiresMs - now) / 1000)) : null,

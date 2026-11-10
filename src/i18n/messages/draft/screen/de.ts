@@ -49,6 +49,7 @@ export default defineDe<typeof en>()({
     next: 'Danach: {player}',
     nextFive: 'Nächste {n}:',
     complete: 'Draft abgeschlossen',
+    cancelled: 'Draft abgebrochen',
     pending: 'Der Draft hat noch nicht begonnen',
     toTokens: 'Zu deinen Tokens',
     until: 'bis <time></time>',

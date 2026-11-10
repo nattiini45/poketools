@@ -12,6 +12,7 @@ const view = (overrides: Partial<PlanView> = {}): PlanView => ({
   title: 'Gen 9 OU league',
   contentLocale: 'en',
   ready: true,
+  buildable: true,
   assumptions: [{ key: 'league.language', source: 'inferred', confirmed: false, value: { kind: 'word', group: 'languages', value: 'de' } }],
   blockers: [],
   warnings: [],
@@ -127,5 +128,19 @@ describe('PlanPanel', () => {
     const out = renderWithI18n(<PlanPanel plan={view({ warnings: [{ code: 'league_name_in_use', section: 'league', path: '/slots/league/name', params: {} }] })} />);
     expect(out).toContain('A league with this name was created recently.');
     expect(out).toContain('Nothing blocks a build.');
+  });
+
+  it.each([
+    ['drafting', true],
+    ['ready', true],
+    ['partial', true],
+    ['building', false],
+    ['built', false],
+    ['abandoned', false],
+  ] as const)('offers Build on a %s plan: %s', (status, offered) => {
+    const out = renderWithI18n(<PlanPanel plan={view({ status, buildable: offered })} onAsk={() => undefined} canAsk />);
+    const button = out.match(/<button[^>]*>Build<\/button>/)?.[0];
+    expect(button).toBeDefined();
+    expect(/\sdisabled=""/.test(button ?? '')).toBe(!offered);
   });
 });

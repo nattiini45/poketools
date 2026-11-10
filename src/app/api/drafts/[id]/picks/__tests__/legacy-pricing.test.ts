@@ -28,7 +28,7 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
   getPicksByPool: vi.fn(),
   createDraftPick: vi.fn(),
-  updateDraftPoolStatus: vi.fn(),
+  completeLegacyPoolIfRunning: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonParticipants: vi.fn(), getSeasonById: vi.fn() }));
 vi.mock('@/lib/draft/evolution-engine', () => ({ isEvoLeague: vi.fn() }));

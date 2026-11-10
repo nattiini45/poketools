@@ -36,6 +36,8 @@ export default {
   INVALID_SESSION_ID: 'Session not found',
   INVALID_STORYLINE_ID: 'Storyline not found',
   cast_session_forbidden: 'Not authorized',
+  // The session's status moved between the read and the guarded write (castSessionMachine)
+  cast_session_changed: 'Session changed in the meantime',
 
   // Discord webhooks (`api/discord-webhooks/**`)
   webhook_not_found: 'Webhook not found',

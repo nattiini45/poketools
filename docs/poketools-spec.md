@@ -996,7 +996,12 @@ POST /api/seasons                           Create a league (any admin). Optiona
                                             for site admins, its league admins) after the create; 403 SEASON_CLONE_FORBIDDEN /
                                             SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND, 409
                                             SEASON_CLONE_CUSTOM_FORMAT (a custom-format source); a failed copy is rolled back
-                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too)
+                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too).
+                                            Optional `from_format` (`format_type: 'custom'`, never with `clone_from`):
+                                            { preset_id, ruleset_preset_id? } or { definition_id, version_no? } creates the
+                                            league, its format and its stages in one transaction (RPC
+                                            competition_create_from_format); 201 { season, format, stages, warnings }.
+                                            At most 20 creates per admin and hour (429, `season-create`)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)
