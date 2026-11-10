@@ -22,12 +22,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useLocale } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
-import { createVisiblePoller, type PollOutcome, type PollTick } from '@/lib/draft/use-visible-poll';
+import { createVisiblePoller, pollOutcomeForPool, type PollOutcome, type PollTick } from '@/lib/draft/use-visible-poll';
 import { TURN_WATCH_INTERVAL_MS } from '@/lib/draft-ui/constants';
 import type { MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
 import type { MyTurnResult } from '@/components/draft-tool/data-source';
 import { clearLegacyNotifyKeys } from '@/lib/draft-ui/storage';
 import { disablePush, enablePush, readPushState } from '@/lib/push/client';
+import { pushDeviceMachine, pushDeviceState } from '@/lib/push/device-state';
 
 export type NotifySupport = 'unsupported' | 'install-required' | 'default' | 'granted' | 'denied';
 
@@ -65,7 +66,7 @@ export function createTurnWatchTick(deps: TurnWatchTickDeps): PollTick {
     if (result.kind === 'error') return 'live';
     const dto = result.dto;
     deps.onResult?.(dto);
-    return dto.status === 'complete' ? 'complete' : 'live';
+    return pollOutcomeForPool(dto);
   };
 }
 
@@ -129,7 +130,7 @@ export function usePushAlerts(): { state: NotifyState; toggle(): void } {
 
   const toggle = useCallback(() => {
     const current = stateRef.current;
-    if (current.busy || current.support === 'unsupported' || current.support === 'denied' || current.support === 'install-required') return;
+    if (!pushDeviceMachine.can(pushDeviceState(current), 'busy', 'viewer')) return;
     setState({ ...current, busy: true, error: null });
 
     if (current.optedIn) {

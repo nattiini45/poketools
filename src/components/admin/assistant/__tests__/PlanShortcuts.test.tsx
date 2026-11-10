@@ -17,6 +17,7 @@ const plan = (overrides: Partial<PlanView> = {}): PlanView => ({
   title: 'Gen 9 OU league',
   contentLocale: 'en',
   ready: true,
+  buildable: true,
   assumptions: [],
   blockers: [],
   warnings: [],
@@ -57,7 +58,7 @@ describe('the Plan panel footer and its Fix shortcuts', () => {
     const { unmount } = render(withI18n(<PlanPanel plan={blocked} onAsk={vi.fn()} canAsk={false} />));
     expect((screen.getByRole('button', { name: 'Fix' }) as HTMLButtonElement).disabled).toBe(true);
     unmount();
-    const done = render(withI18n(<PlanPanel plan={plan({ status: 'built' })} onAsk={vi.fn()} canAsk />));
+    const done = render(withI18n(<PlanPanel plan={plan({ status: 'built', buildable: false })} onAsk={vi.fn()} canAsk />));
     expect((screen.getByRole('button', { name: 'Build' }) as HTMLButtonElement).disabled).toBe(true);
     done.unmount();
     render(withI18n(<PlanPanel plan={blocked} />));

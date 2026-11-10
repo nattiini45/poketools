@@ -18,6 +18,9 @@ import {
   createNote,
   createNoteReport,
   getApprovedNotes,
+  getNoteReportStatus,
+  rejectNote,
+  updateNoteReportStatus,
   listNoteReports,
   listNotesForModeration,
   setNoteResubmissionBlock,
@@ -82,9 +85,11 @@ describe('wiki note moderation queries', () => {
   });
 
   it('marks notes approved with moderator metadata', async () => {
-    mockBuilder.eq.mockReturnValue({ error: null });
+    mockBuilder.select.mockResolvedValueOnce({ data: [{ id: 'note-1' }], error: null });
 
-    await approveNote('note-1', 'admin-1');
+    const applied = await approveNote('note-1', 'admin-1', { from: 'pending', updatedAt: noteRow.updated_at });
+
+    expect(applied).toBe(true);
 
     expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({
       approved: true,
@@ -95,6 +100,57 @@ describe('wiki note moderation queries', () => {
       resubmission_blocked_by: null,
     }));
     expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'note-1');
+  });
+
+  describe('verdict compare-and-set (wiki_note.moderation)', () => {
+    const guard = (from: 'pending' | 'approved' | 'rejected' | 'blocked') => ({ from, updatedAt: noteRow.updated_at });
+
+    it.each([
+      ['pending', [['eq', 'approved', false]], [['is', 'rejected_at', null]], []],
+      ['approved', [['eq', 'approved', true]], [], []],
+      ['rejected', [['eq', 'approved', false]], [['is', 'resubmission_blocked_at', null]], [['not', 'rejected_at', 'is', null]]],
+      ['blocked', [['eq', 'approved', false]], [], [['not', 'resubmission_blocked_at', 'is', null]]],
+    ] as const)('filters a verdict on a %s note on that state and the version seen', async (from, eqs, iss, nots) => {
+      mockBuilder.select.mockResolvedValueOnce({ data: [{ id: 'note-1' }], error: null });
+      await rejectNote('note-1', 'admin-1', null, guard(from));
+      expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'note-1');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('updated_at', noteRow.updated_at);
+      for (const [, ...args] of eqs) expect(mockBuilder.eq).toHaveBeenCalledWith(...args);
+      for (const [, ...args] of iss) expect(mockBuilder.is).toHaveBeenCalledWith(...args);
+      for (const [, ...args] of nots) expect(mockBuilder.not).toHaveBeenCalledWith(...args);
+      expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ approved: false, rejected_by: 'admin-1', rejection_reason: null }));
+    });
+
+    it('reports false when no row matched (the note changed or is gone)', async () => {
+      mockBuilder.select.mockResolvedValueOnce({ data: [], error: null });
+      expect(await approveNote('note-1', 'admin-1', guard('pending'))).toBe(false);
+    });
+
+    it('rethrows a Supabase error', async () => {
+      mockBuilder.select.mockResolvedValueOnce({ data: null, error: new Error('boom') });
+      await expect(rejectNote('note-1', 'admin-1', null, guard('approved'))).rejects.toThrow('boom');
+    });
+  });
+
+  describe('report status compare-and-set (wiki_note_report.status)', () => {
+    it('reads one report status, null when missing', async () => {
+      mockBuilder.maybeSingle = vi.fn().mockResolvedValueOnce({ data: { status: 'open' }, error: null }).mockResolvedValueOnce({ data: null, error: null });
+      expect(await getNoteReportStatus('report-1')).toBe('open');
+      expect(await getNoteReportStatus('report-2')).toBeNull();
+    });
+
+    it('filters the update on the status it moves from', async () => {
+      mockBuilder.select.mockResolvedValueOnce({ data: [{ id: 'report-1' }], error: null });
+      expect(await updateNoteReportStatus('report-1', 'reviewed', 'open')).toBe(true);
+      expect(mockBuilder.update).toHaveBeenCalledWith(expect.objectContaining({ status: 'reviewed' }));
+      expect(mockBuilder.eq).toHaveBeenCalledWith('id', 'report-1');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'open');
+    });
+
+    it('reports false when the report moved on', async () => {
+      mockBuilder.select.mockResolvedValueOnce({ data: [], error: null });
+      expect(await updateNoteReportStatus('report-1', 'dismissed', 'open')).toBe(false);
+    });
   });
 
   it('exposes the block fields only on a blocked note, so the public note shape is unchanged', async () => {
@@ -237,7 +293,7 @@ describe('wiki note moderation queries', () => {
 
       const reports = await listNoteReports();
 
-      expect(mockBuilder.select.mock.calls[0][0]).toContain('author_id, approved)');
+      expect(mockBuilder.select.mock.calls[0][0]).toContain('author_id, approved, rejected_at, resubmission_blocked_at, updated_at)');
       expect(reports[0].note?.approved).toBe(true);
     });
 

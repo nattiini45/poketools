@@ -5,6 +5,8 @@
  */
 import { z } from 'zod';
 import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
+import { PRESETS } from '@/lib/format-kit/presets';
+import { seasonCreateRequestSchema } from '@/lib/validation/schemas';
 import { SEASON_FORMAT_ENGINES } from './library-types';
 import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
 import {
@@ -75,6 +77,38 @@ export const seasonFormatAttachSchema = z.strictObject({
   version_no: z.number().int().min(1).max(MAX_REVISION).optional(),
 });
 export type SeasonFormatAttachBody = z.infer<typeof seasonFormatAttachSchema>;
+
+/**
+ * `from_format` of `POST /api/seasons` (the new-competition wizard): a shipped example by id (optionally with a rule preset
+ * pre-picked on every stage), or a stored format with an optional published version.
+ */
+export const seasonFromFormatSchema = z.union([
+  z.strictObject({
+    preset_id: z.string().refine((id) => PRESETS.some((preset) => preset.id === id), { message: 'Unknown example format' }),
+    ruleset_preset_id: z.string().refine(isRulesetPresetId, { message: 'Unknown rule preset' }).optional(),
+  }),
+  z.strictObject({
+    definition_id: uuidSchema,
+    version_no: z.number().int().min(1).max(MAX_REVISION).optional(),
+  }),
+]);
+export type SeasonFromFormatBody = z.infer<typeof seasonFromFormatSchema>;
+
+/**
+ * The `POST /api/seasons` body with the wizard's `from_format`: the league is then `custom`, and `clone_from` is a different
+ * way to start, so the two never come together.
+ */
+export const seasonCreateWithFormatSchema = seasonCreateRequestSchema
+  .extend({ from_format: seasonFromFormatSchema.optional() })
+  .superRefine((body, ctx) => {
+    if (body.from_format === undefined) return;
+    if (body.format_type !== 'custom') {
+      ctx.addIssue({ code: 'custom', path: ['format_type'], message: 'A league created from a format must use the custom format type' });
+    }
+    if (body.clone_from !== undefined) {
+      ctx.addIssue({ code: 'custom', path: ['from_format'], message: 'from_format and clone_from cannot be combined' });
+    }
+  });
 
 /** `PUT /api/seasons/[id]/format/engine`. */
 export const seasonFormatEngineSchema = z.strictObject({

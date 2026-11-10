@@ -44,8 +44,28 @@ describe('useDraftSnapshot transitions (§5.1)', () => {
 
   it('reports a complete pool so the poller stops its cadence', () => {
     const base = snapshot();
-    const done = reduceSnapshotResult(seeded, { kind: 'full', dto: snapshot({ state_version: 60, pool: { ...base.pool, status: 'complete' } }) }, NOW);
+    const done = reduceSnapshotResult(
+      seeded,
+      { kind: 'full', dto: snapshot({ state_version: 60, pool: { ...base.pool, status: 'complete', phase: 'complete' } }) },
+      NOW,
+    );
     expect(done.outcome).toBe('complete');
+  });
+
+  it('keys the outcome on the phase: a cancelled pool is finished too, a reopened (drafting) one is live', () => {
+    const base = snapshot();
+    const cancelled = reduceSnapshotResult(
+      seeded,
+      { kind: 'full', dto: snapshot({ state_version: 61, pool: { ...base.pool, status: 'complete', phase: 'cancelled' } }) },
+      NOW,
+    );
+    expect(cancelled.outcome).toBe('complete');
+    const reopened = reduceSnapshotResult(
+      seeded,
+      { kind: 'full', dto: snapshot({ state_version: 62, pool: { ...base.pool, status: 'in_progress', phase: 'drafting', paused: true } }) },
+      NOW,
+    );
+    expect(reopened.outcome).toBe('live');
   });
 });
 
