@@ -15,6 +15,7 @@ export default defineDe<typeof en>()({
   team_not_owner: 'Das ist nicht dein Team.',
   team_locked: 'Das Team ist gesperrt.',
   team_match_completed: 'Dieses Team gehört zu einem abgeschlossenen Spiel und kann nicht mehr geändert werden.',
+  team_changed: 'Das Team wurde in der Zwischenzeit geändert. Lade es neu und versuch es noch einmal.',
 
   team_library_entry_not_found: 'Team nicht gefunden oder nicht veröffentlicht.',
   team_fork_source_not_found: 'Das Ausgangsteam wurde nicht gefunden.',

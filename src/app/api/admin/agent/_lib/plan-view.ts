@@ -26,7 +26,8 @@ import {
   type PlanRosterEntry,
   type RulesetDocumentDelta,
 } from '@/lib/ai/admin-agent/plans/schema';
-import type { PlanRecord } from '@/lib/ai/admin-agent/store/types';
+import { planMachine } from '@/lib/ai/admin-agent/store/plan-state';
+import type { PlanRecord, PlanStatus } from '@/lib/ai/admin-agent/store/types';
 import { logger } from '@/lib/logger';
 
 type SectionName = Exclude<PlanSection, 'plan'>;
@@ -222,6 +223,7 @@ export function toPlanView(record: PlanRecord): PlanView | null {
     sections,
     assumptions,
     ready: counted.length === 0,
+    buildable: planMachine.isState(record.status) && planMachine.nextStates(record.status as PlanStatus).includes('building'),
     blockers: counted.map(blockerView),
     warnings: readiness.warnings.map(blockerView),
   };
