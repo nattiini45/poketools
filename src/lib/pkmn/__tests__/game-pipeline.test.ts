@@ -2642,7 +2642,19 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
 
     await deleteGame('game-1', 'admin-1');
 
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'completed');
+  });
+
+  it('deleteGame: a round another writer moved since the read keeps its status (the revert is a compare-and-set)', async () => {
+    vi.mocked(getGameWinCounts).mockResolvedValueOnce({ player_1_wins: 0, player_2_wins: 0, player_ids: ['p1', 'p2'] });
+    vi.mocked(getRoundById)
+      .mockResolvedValueOnce(round())
+      .mockResolvedValueOnce(round({ status: 'completed' }));
+    vi.mocked(updateRoundStatus).mockRejectedValueOnce(
+      new UserFacingError('changed', { code: 'round_status_changed', status: 409 }),
+    );
+
+    await expect(deleteGame('game-1', 'admin-1')).resolves.toBeDefined();
   });
 
   it('deleteGame: back to in_progress clears any auto-confirm timer in the same write, CAS on the read status', async () => {
@@ -2739,7 +2751,7 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
 
     expect(result.match_status).toBe('completed');
     expect(result.match_status_conflict).toBe(true);
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'completed');
     consoleError.mockRestore();
   });
 
@@ -2864,7 +2876,7 @@ describe('an admin game change on a COMPLETED match takes back what the result l
     expect(deleteMatchPrepAnalysesByMatch).toHaveBeenCalledWith('match-1');
     expect(deleteMatchSnapshots).toHaveBeenCalledWith('match-1');
     expect(clearMatchSocialImage).toHaveBeenCalledWith('match-1');
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'completed');
     // After the status moved, so a failed take-back never leaves a completed match.
     expect(vi.mocked(transitionMatchStatus).mock.invocationCallOrder[0])
       .toBeLessThan(vi.mocked(unpropagateBracketOnMatchReset).mock.invocationCallOrder[0]);
@@ -2881,7 +2893,7 @@ describe('an admin game change on a COMPLETED match takes back what the result l
     const result = await editGame({ game_id: 'game-1', admin_id: 'admin-1', winner_id: 'player-2' });
 
     expect(result.match_status).toBe('pending_confirmation');
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'pending');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'completed');
     expect(unpropagateBracketOnMatchReset).toHaveBeenCalledTimes(1);
     expect(deleteMatchAnalysis).toHaveBeenCalledWith('match-1');
     expect(deleteMatchPrepAnalysesByMatch).toHaveBeenCalledWith('match-1');

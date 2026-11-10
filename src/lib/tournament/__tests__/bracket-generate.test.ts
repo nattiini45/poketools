@@ -384,7 +384,7 @@ describe('generateEliminationBracket', () => {
     });
 
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith('round-1', 'active', 'pending');
     expect(result.started_round_id).toBe('round-1');
     expect(result.rounds_created).toBeGreaterThan(1);
   });

@@ -160,6 +160,8 @@ export default {
   rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
   // The status of the tournament or phase moved (another admin, a round written, a stage end) between the read and the guarded write; nothing was written (409).
   tournament_status_changed: 'This tournament or phase changed its status in the meantime. Reload the page and try again.',
+  // The status of the round moved (another admin, a reopened match) between the read and the guarded write; nothing was written (409).
+  round_status_changed: 'This round changed its status in the meantime. Reload the page and try again.',
 
   // Resource admins
   resource_admin_target_required: 'resource_type and resource_id are required',

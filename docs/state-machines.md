@@ -43,6 +43,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
+- [Round](#round) — `rounds.status (enum round_status)`
 - [League](#league) — `seasons.status (enum season_status)`
 - [Season format engine](#season-format-engine) — `season_formats.engine`
 - [Team library publication](#team-library-publication) — `teams.library_published_at (published = set) + library_title, library_description, library_tags`
@@ -1171,6 +1172,35 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `lock` | `open` | `locked` | system | `supabase/migrations/20261018180000_league_groups.sql#draft__build_snapshot`<br>`supabase/migrations/20261018180000_league_groups.sql#redraft_set_submission`<br>`src/lib/supabase/queries/drafts-redraft.ts` | The deadline passes (derived where it is read). |
 | `move_deadline` | `locked` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/redraft/route.ts` | PATCH /api/drafts/[id]/redraft with a future deadline_at (submissions phase only). |
+
+## Round
+
+- **Id:** `round`
+- **State lives in:** rounds.status (enum round_status)
+- **Module doc:** `docs/tournament.md`
+- **States:** `pending`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A round of a tournament or phase: written pending, started to open it to play, completed by an admin. A match reopened in a completed round reopens the round to active; an admin reset of its matches puts it back to pending.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> active: start
+  active --> completed: complete (admin)
+  pending --> completed: complete_unstarted (admin)
+  active --> pending: reset (admin)
+  completed --> pending: reset (admin)
+  completed --> active: revert (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `pending` | `active` | admin, system | `src/app/api/tournaments/[id]/rounds/[rid]/route.ts`<br>`src/app/api/generate-round/[tid]/route.ts`<br>`src/app/api/tournaments/[id]/generate-all-rounds/route.ts`<br>`src/lib/tournament/bracket-generate.ts` | Start in the round manager, or a generate that was asked to start its round (best effort). |
+| `complete` | `active` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | Refused while a match is unfinished unless forced with a reason (audited round.force_complete). |
+| `complete_unstarted` | `pending` | `completed` | admin | `supabase/migrations/20261106090000_format_challenges.sql#round_complete` | The API accepts completing a round that was never started (round_complete only refuses a completed one); the round manager does not offer it. |
+| `reset` | `active`, `completed` | `pending` | admin | `src/lib/pkmn/game-pipeline.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/route.ts` | Reset in the round manager (resetRound: every played match back to scheduled), or a status PATCH. |
+| `revert` | `completed` | `active` | system | `src/lib/pkmn/game-pipeline.ts` | revertRoundIfCompleted: a match of a completed round changed (reopened, a game deleted or edited), so the round is open to play again (players see Submit only in an active round). |
 
 ## League
 

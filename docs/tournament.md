@@ -47,6 +47,7 @@ src/lib/tournament/
 ├── season-standings.ts, standings-rules.ts  # Format-aware standings entry point and the scoring rules it follows
 ├── seed-errors.ts  # Domain errors of the participant seed update
 ├── settings-patch.ts, standalone-lock.ts  # Standalone settings fields and their lock after the start
+├── round-state.ts  # roundMachine: the status moves of a round (docs/state-machines.md); the round manager's actions
 ├── tournament-state.ts  # tournamentMachine: the status moves of a tournament or phase (docs/state-machines.md)
 ├── tournament-transition.ts  # updateTournamentWithStatus: checked, guarded status write and its effects (both PATCH routes)
 └── startup-checklist.server.ts  # The server side of the start-up checklist

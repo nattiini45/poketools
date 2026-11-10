@@ -30,6 +30,7 @@ import { teamSaveMachine } from '@/lib/team/editor-save-state';
 import { teamRosterMachine } from '@/lib/team/team-roster-state';
 import { teamLibraryMachine, teamShareMachine } from '@/lib/team/team-share-state';
 import { matchMachine } from '@/lib/tournament/match-state';
+import { roundMachine } from '@/lib/tournament/round-state';
 import { tournamentMachine } from '@/lib/tournament/tournament-state';
 import { submitPhaseMachine } from '@/lib/ui/submit-phase-state';
 import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
@@ -45,6 +46,7 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
   tournamentMachine.spec,
   seasonMachine.spec,
+  roundMachine.spec,
   matchOutcomeMachine.spec,
   matchProposalMachine.spec,
   teamRosterMachine.spec,
