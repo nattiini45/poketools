@@ -13,6 +13,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Admin Assistant ledger row](#admin-assistant-ledger-row) — `admin_agent_actions.status`
 - [Admin Assistant plan](#admin-assistant-plan) — `admin_agent_plans.status`
 - [Admin Assistant proposal](#admin-assistant-proposal) — `admin_agent_proposals.status`
+- [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
 - [Draft pool pause](#draft-pool-pause) — `draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'`
@@ -141,6 +142,34 @@ stateDiagram-v2
 | `fail` | `executing` | `failed` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | No step ok and one failed or was skipped, or the blast-radius counter was at its cap after the claim. |
 | `refuse_stale` | `executing` | `stale` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | The recheck after the claim (hash, acknowledgements, registry, preconditions) or a stale precondition during the run; the claim is consumed. |
 | `lose_track` | `executing` | `unknown` | system | `src/lib/ai/admin-agent/proposals/executor.ts`<br>`src/lib/ai/admin-agent/proposals/reaper.ts`<br>`src/lib/ai/admin-agent/store/proposals.ts` | A Go-live step with an unknown outcome, or the reaper (reapExecutingProposals) ending an execution older than the resume window plus one request. |
+
+## AI artifact
+
+- **Id:** `ai_artifact.status`
+- **State lives in:** match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)
+- **Module doc:** `docs/ai.md`
+- **States:** `absent`, `pending`, `completed`, `failed`
+- **Actors:** `player`, `admin`, `system`
+
+A stored AI generation from request to result. A request inserts a pending row (absent → pending), the generation settles it as completed or failed with UPDATE … WHERE id AND status = 'pending' and a row-count check, and a pending row older than AI_ANALYSIS_STALE_MS is failed by the next request. Regenerating (force, retry after a failure) and a result change on the match delete the row first. A settle that matches no row (the row was deleted or replaced meanwhile) writes nothing and is logged.
+
+```mermaid
+stateDiagram-v2
+  [*] --> absent
+  absent --> pending: start
+  pending --> completed: complete (system)
+  pending --> failed: fail (system)
+  pending --> absent: discard
+  completed --> absent: discard
+  failed --> absent: discard
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `absent` | `pending` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/supabase/queries/match-analyses.ts`<br>`src/lib/supabase/queries/match-prep-analyses.ts`<br>`src/lib/supabase/queries/tournament-reports.ts` | A request (or the round trigger) inserts a pending row; the unique key allows one per scope. |
+| `complete` | `pending` | `completed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts` |  |
+| `fail` | `pending` | `failed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts` | The generation failed, or a request found the pending row older than AI_ANALYSIS_STALE_MS. |
+| `discard` | `pending`, `completed`, `failed` | `absent` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/match/reopen.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Regenerate (force, retry after failure, stale pending) deletes the row before the new insert; a match reset or result change deletes its analyses. |
 
 ## Cast session
 

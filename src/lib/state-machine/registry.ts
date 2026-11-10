@@ -2,6 +2,7 @@ import type { MachineSpec } from './machine';
 import { actionMachine } from '@/lib/ai/admin-agent/store/action-state';
 import { planMachine } from '@/lib/ai/admin-agent/store/plan-state';
 import { proposalMachine } from '@/lib/ai/admin-agent/store/proposal-state';
+import { aiArtifactMachine } from '@/lib/ai/artifact-state';
 import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
 import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
 import { draftPoolPauseMachine, draftPoolPhaseMachine, redraftSubmissionWindowMachine } from '@/lib/draft/pool-phase-state';
@@ -21,6 +22,7 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  aiArtifactMachine.spec,
   noteModerationMachine.spec,
   noteReportMachine.spec,
   proposalMachine.spec,
