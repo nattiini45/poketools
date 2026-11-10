@@ -880,8 +880,9 @@
 }
 
 /* A draft room fills the page and leaves its ground transparent, so its page keeps the plaza ground it was built
-   on (as it keeps the 18 px root). A site palette keeps its own ground. */
-:root:not([data-palette]):has([data-frozen="draft-room"]) {
+   on (as it keeps the 18 px root). The site palette blocks below come later at the same specificity, so a palette
+   keeps its own ground. */
+html:has([data-frozen="draft-room"]) {
   --background: var(--palette-plaza-ground);
   --poke-base: var(--palette-plaza-ground);
 }
