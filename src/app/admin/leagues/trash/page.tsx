@@ -75,7 +75,8 @@ export default async function LeagueTrashPage() {
           </Link>
         }
       >
-        <LeagueTrashPanel rows={rows} pending={pending} />
+        {/* i18n-ignore: force-dynamic server page; the read time decides whether an entry is past its purge date and reaches the client as a prop, never re-read there */}
+        <LeagueTrashPanel rows={rows} pending={pending} now={new Date().toISOString()} />
       </PageContainer>
     </SuperadminGuard>
   );

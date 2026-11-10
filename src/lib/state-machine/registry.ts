@@ -18,6 +18,9 @@ import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-st
 import { formatCheckMachine } from '@/lib/format-engine/runtime/check-state';
 import { relationRevealMachine } from '@/lib/format-engine/runtime/relation-state';
 import { seasonFormatEngineMachine } from '@/lib/format-studio/engine-state';
+import { leagueTrashMachine } from '@/lib/league-trash/lifecycle-state';
+import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
+import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMachine, gameStatsLockMachine } from '@/lib/match/game-marker-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { pushDeviceMachine } from '@/lib/push/device-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
@@ -34,6 +37,12 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  aggregateJobMachine.spec,
+  gameAggregateMarkerMachine.spec,
+  gameEvolutionCreditMachine.spec,
+  gameEditLeaseMachine.spec,
+  gameStatsLockMachine.spec,
+  leagueTrashMachine.spec,
   actionWindowMachine.spec,
   actionSubmissionMachine.spec,
   formatChallengeMachine.spec,

@@ -25,7 +25,7 @@ src/lib/season/
 └── substitute.ts  # Substituting a participant: the affected matches and the apply steps
 
 src/lib/supabase/queries/seasons.ts  # Typed season/participant/core queries
-src/lib/league-trash/                # League recycle bin: constants, service, errors, social-image sweep (below)
+src/lib/league-trash/                # League recycle bin: constants, service, errors, lifecycle state, social-image sweep (below)
 
 src/app/api/seasons/                 # Route tree (see API Routes)
 ```
@@ -154,6 +154,8 @@ A restore whose answer is lost to a request timeout (`LEAGUE_TRASH_TIMEOUT`) is 
 A restore of a league whose delete rebuild is still pending is refused by `league_trash_restore` itself, under the row lock (409 `LEAGUE_TRASH_REBUILD_PENDING`): its statistics would be counted twice. Known non-identical outcomes: a tracker row without a group gets its group from the existing trigger when its player is in a group; `updated_at` of other players' teams that are re-linked; win-streak pointers are not re-linked (streaks are recomputed).
 
 **Expiry** (`GET|POST /api/cron/expire-league-trash`, daily 03:40 UTC): `league_trash_expire` deletes due entries (oldest first, `SKIP LOCKED` so a restore in progress wins, at most 20 per run, entries with an unconfirmed rebuild skipped), then the **social-image sweep** removes the `matches/<matchId>/*.png` objects of those matches from the `social-images` bucket (`social-image-sweep.ts`, best effort: a failure is logged with its own code, reported in the body and never undoes the expiry; matches not reached inside the time budget stay in the bucket). One System `season.purge` audit event per removed league, written before the sweep starts; the route answers 5xx when the expiry itself fails. The `audit_log` and `draft_action_log` rows of a purged league stay, append-only by design; achievements are untouched. Backups outlive the purge ([operations-backup.md](./operations-backup.md)).
+
+**Lifecycle.** The state of an entry is derived, not stored: `leagueTrashLifecycleState(entry, now)` and `leagueTrashMachine` (`src/lib/league-trash/lifecycle-state.ts`, section "League recycle bin" of [State machines](./state-machines.md)) name it from `rebuild_pending` and `purge_after <= now`: `rebuild_pending`, `in_bin` (restorable), `purgeable` (past the purge date, rebuild confirmed) and `expired_rebuild_pending`. The trash page offers **Restore** only in `in_bin`; past the purge date the button is disabled with the reason, as the restore would answer `LEAGUE_TRASH_EXPIRED`. `expired_rebuild_pending` is a limbo: the restore refuses it (expired) and the expiry skips it (rebuild pending), so it stays in the bin until a superadmin runs **Run rebuild**, which works whatever the purge date and makes it purgeable. Nothing alerts on it today; closing it needs a SQL change.
 
 **Blocks.** While a league is in the trash, a delete of a player, a ruleset version or a point-buy list version it references fails with 23503; `leagueTrashBlockOf` turns that into a precise answer (`claim_guest_player` maps it to its existing `SOURCE_HAS_ACTIVITY` path, the players DELETE route answers `player_still_referenced`, the ruleset delete its own 409). Polymorphic rows (resource admins, webhooks, wiki notes) have no foreign key: they are deleted and captured with the league, but a row inserted during the delete transaction is neither captured nor deleted.
 
