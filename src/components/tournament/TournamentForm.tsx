@@ -17,6 +17,7 @@ import { errorsTournaments } from '@/i18n/messages/errors';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import type { UiError } from './ui-error';
+import { useSubmitPhase } from '@/lib/ui/use-submit-phase';
 
 interface TournamentFormProps {
   rulesets: readonly RulesetOption[];
@@ -69,7 +70,7 @@ export default function TournamentForm({
   const [teamVisibility, setTeamVisibility] = useState<TeamVisibility>(
     initialData?.team_visibility ?? 'hidden_until_match'
   );
-  const [submitting, setSubmitting] = useState(false);
+  const submit = useSubmitPhase();
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
   const errorText = useApiErrorText(errorsTournaments);
@@ -82,32 +83,33 @@ export default function TournamentForm({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      const overrides = Object.fromEntries(
-        Object.entries(boOverrides).filter(([, v]) => v > 0)
-      );
-      await onSubmit({
-        name,
-        description: description || undefined,
-        bracket_type: bracketType,
-        ruleset_id: rulesetId,
-        best_of_default: bestOf,
-        bo_overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
-        is_doubles: isDoubles,
-        team_visibility: teamVisibility,
-        bracket_reset_enabled:
-          bracketType === 'double_elim' ? bracketResetEnabled : undefined,
-        third_place_enabled: bracketType === 'single_elim' ? thirdPlaceEnabled : undefined,
-      });
-    } catch (err) {
-      // The creator throws the API failure (English `error` + `code`); anything else is generic.
-      setError(err instanceof Error && err.message ? { api: toApiErrorLike(err) } : { key: 'form.saveFailed' });
-    } finally {
-      setSubmitting(false);
-    }
+    await submit.run(async () => {
+      setError(null);
+      try {
+        const overrides = Object.fromEntries(
+          Object.entries(boOverrides).filter(([, v]) => v > 0)
+        );
+        await onSubmit({
+          name,
+          description: description || undefined,
+          bracket_type: bracketType,
+          ruleset_id: rulesetId,
+          best_of_default: bestOf,
+          bo_overrides: Object.keys(overrides).length > 0 ? overrides : undefined,
+          is_doubles: isDoubles,
+          team_visibility: teamVisibility,
+          bracket_reset_enabled:
+            bracketType === 'double_elim' ? bracketResetEnabled : undefined,
+          third_place_enabled: bracketType === 'single_elim' ? thirdPlaceEnabled : undefined,
+        });
+        // A create navigates to the new tournament: its button stays disabled until the page changes. An edit stays.
+        return isEdit ? 'idle' : 'done';
+      } catch (err) {
+        // The creator throws the API failure (English `error` + `code`); anything else is generic.
+        setError(err instanceof Error && err.message ? { api: toApiErrorLike(err) } : { key: 'form.saveFailed' });
+        return 'failed';
+      }
+    });
   }
 
   return (
@@ -236,7 +238,7 @@ export default function TournamentForm({
       <Button
         type="submit"
         variant="secondary"
-        loading={submitting}
+        loading={!submit.canSubmit}
         disabled={!name.trim() || !rulesetId}
       >
         {submitLabel ?? t('form.submit')}

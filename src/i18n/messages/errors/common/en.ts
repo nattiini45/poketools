@@ -27,4 +27,7 @@ export default {
   sprite_style_cross_origin: 'Cross-origin sprite style change refused.',
   sprite_style_save_failed: 'Failed to save the sprite style',
   sprite_style_load_failed: 'Failed to load the sprite style',
+  // Refused state transitions (`assertTransition`, src/lib/state-machine/machine.ts)
+  state_transition_invalid: 'This is not possible in the current state ({from} → {to}). Reload the page and try again.',
+  state_transition_forbidden: 'You are not allowed to do this ({from} → {to}).',
 } as const;

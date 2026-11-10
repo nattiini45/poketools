@@ -1,6 +1,6 @@
 # src/lib — Domain Module Rules
 
-Module rules for `src/lib/` (265 source files). Load when a task touches domain modules here. Root policy (hard rules, pre-computed aggregates, match-state transitions) lives in [`../../AGENTS.md`](../../AGENTS.md). Each module has a doc — start at [`../../docs/modules-index.md`](../../docs/modules-index.md).
+Module rules for `src/lib/` (265 source files). Load when a task touches domain modules here. Root policy (hard rules, pre-computed aggregates, state-machine transitions) lives in [`../../AGENTS.md`](../../AGENTS.md). Each module has a doc — start at [`../../docs/modules-index.md`](../../docs/modules-index.md).
 
 ## pkmn lookups
 

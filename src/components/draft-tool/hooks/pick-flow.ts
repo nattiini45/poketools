@@ -13,6 +13,7 @@
  *   same id.
  */
 import type { ApiErrorLike } from '@/i18n/api-errors';
+import { pickFlowMachine, type PickFlowPhase } from '@/lib/draft-ui/pick-flow-state';
 import type { DraftSnapshotDTO, LineId } from '@/lib/draft-ui/snapshot-types';
 import type { ApiCall, PickRequest, PickResult } from '../data-source';
 
@@ -54,10 +55,16 @@ export const INITIAL_PICK_FLOW: PickFlowState = Object.freeze({
   retryable: false,
 });
 
+export function pickFlowPhase(s: PickFlowState): PickFlowPhase {
+  return !s.open ? 'closed' : s.submitting ? 'submitting' : 'open';
+}
+
+/** Applies an action the machine (`pickFlowMachine`) allows from the current phase; any other leaves the state as is. */
 export function pickFlowReducer(s: PickFlowState, a: PickFlowAction): PickFlowState {
+  const can = (to: PickFlowPhase, actor: 'viewer' | 'server') => pickFlowMachine.can(pickFlowPhase(s), to, actor);
   switch (a.type) {
     case 'open':
-      if (s.open) return s;
+      if (!can('open', 'viewer')) return s;
       return {
         open: true,
         openCount: s.openCount + 1,
@@ -68,14 +75,13 @@ export function pickFlowReducer(s: PickFlowState, a: PickFlowAction): PickFlowSt
         retryable: false,
       };
     case 'submit':
-      return s.open && !s.submitting ? { ...s, submitting: true, error: null, retryable: false } : s;
+      return can('submitting', 'viewer') ? { ...s, submitting: true, error: null, retryable: false } : s;
     case 'failed':
-      if (!s.open) return s;
-      if (a.close) return { ...s, open: false, submitting: false, error: null, retryable: false };
-      return { ...s, submitting: false, error: a.error, retryable: a.error.code === 'network_error' };
+      if (a.close) return can('closed', 'server') ? { ...s, open: false, submitting: false, error: null, retryable: false } : s;
+      return can('open', 'server') ? { ...s, submitting: false, error: a.error, retryable: a.error.code === 'network_error' } : s;
     case 'succeeded':
     case 'cancel':
-      if (!s.open || (a.type === 'cancel' && s.submitting)) return s;
+      if (!can('closed', a.type === 'cancel' ? 'viewer' : 'server')) return s;
       return { ...s, open: false, submitting: false, error: null, retryable: false };
   }
 }

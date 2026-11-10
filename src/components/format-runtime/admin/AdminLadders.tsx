@@ -9,6 +9,7 @@ import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useLocale, useT } from '@/i18n/client';
 import { RelativeTime } from '@/i18n/LocalTime';
 import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin';
+import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-state';
 import { withdrawChallengeRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ChallengeView } from '@/lib/format-engine/runtime/view-types';
 import type { LText } from '@/lib/studio-core/ltext';
@@ -103,7 +104,7 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
                           {challenge.lapsed ? <Badge variant="gray">{t('challenges.expired')}</Badge> : <RelativeTime value={challenge.expires_at} />}
                         </td>
                         <td className="px-3 py-2 text-right">
-                          {challenge.state === 'open' && !challenge.lapsed && (
+                          {formatChallengeMachine.can(challenge.state, 'cancelled', 'admin') && !challenge.lapsed && (
                             <Button
                               variant="secondary"
                               size="sm"

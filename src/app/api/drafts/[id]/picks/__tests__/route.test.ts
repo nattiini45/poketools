@@ -27,7 +27,7 @@ vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolById: vi.fn(),
   getPicksByPool: vi.fn(),
   createDraftPick: vi.fn(),
-  updateDraftPoolStatus: vi.fn(),
+  completeLegacyPoolIfRunning: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({
@@ -94,7 +94,7 @@ import {
   getDraftPoolById,
   getPicksByPool,
   createDraftPick,
-  updateDraftPoolStatus,
+  completeLegacyPoolIfRunning,
 } from '@/lib/supabase/queries/drafts';
 import { getSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
 import {
@@ -364,7 +364,7 @@ describe('POST /api/drafts/[id]/picks', () => {
     vi.mocked(getSeasonById).mockResolvedValue({ id: 'season-1', name: 'Season 5' } as never);
     vi.mocked(getPlayerById).mockResolvedValue({ name: 'Ash', discord_id: 'disc-1' } as never);
 
-    const { updateDraftPoolStatus } = await import('@/lib/supabase/queries/drafts');
+    const { completeLegacyPoolIfRunning } = await import('@/lib/supabase/queries/drafts');
     const { emitDiscordEvent } = await import('@/lib/discord/notify');
     const { emitSocialEvent } = await import('@/lib/social/notify');
 
@@ -373,7 +373,7 @@ describe('POST /api/drafts/[id]/picks', () => {
 
     expect(res.status).toBe(201);
     expect(json.success).toBe(true);
-    expect(vi.mocked(updateDraftPoolStatus)).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111', 'complete');
+    expect(vi.mocked(completeLegacyPoolIfRunning)).toHaveBeenCalledWith('11111111-1111-4111-8111-111111111111');
     // Two events: draft_pick_made + draft_completed
     expect(vi.mocked(emitDiscordEvent)).toHaveBeenCalledTimes(2);
     expect(vi.mocked(emitSocialEvent)).toHaveBeenCalledTimes(2);
@@ -892,7 +892,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
     vi.mocked(isResourceAdminFor).mockResolvedValue(false);
     vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'player-1' } as never);
     vi.mocked(createDraftPick).mockImplementation(async (input) => ({ id: 'new-pick', ...input }) as never);
-    vi.mocked(updateDraftPoolStatus).mockResolvedValue({} as never);
+    vi.mocked(completeLegacyPoolIfRunning).mockResolvedValue(true);
   });
 
   describe('a collision on the pick number', () => {
@@ -958,7 +958,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
 
       expect(res.status).toBeLessThan(500);
       expect(createTracker).not.toHaveBeenCalled();
-      expect(updateDraftPoolStatus).not.toHaveBeenCalled();
+      expect(completeLegacyPoolIfRunning).not.toHaveBeenCalled();
       expect(revalidateTag).not.toHaveBeenCalled();
     });
   });
@@ -1033,7 +1033,7 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
       vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }] as never);
       vi.mocked(resolveTotalRounds).mockReturnValue(1);
       const failure = new Error('statement timeout');
-      vi.mocked(updateDraftPoolStatus).mockRejectedValue(failure);
+      vi.mocked(completeLegacyPoolIfRunning).mockRejectedValue(failure);
 
       const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
       const json = await res.json();
@@ -1046,6 +1046,26 @@ describe('POST /api/drafts/[id]/picks — conflicts and post-insert failures (#4
         { error: failure }
       );
       error.mockRestore();
+    });
+
+    it('does not overwrite a pool that is no longer running (guarded completion): 201, no warning, a log line', async () => {
+      const warn = vi.spyOn(logger, 'warn').mockImplementation(() => {});
+      vi.mocked(getSeasonParticipants).mockResolvedValue([{ id: 'player-1' }] as never);
+      vi.mocked(resolveTotalRounds).mockReturnValue(1);
+      vi.mocked(completeLegacyPoolIfRunning).mockResolvedValue(false);
+
+      const res = await POST(makeRequest({ pokemon_name: 'Garchomp' }), routeParams);
+      const json = await res.json();
+
+      expect(res.status).toBe(201);
+      expect(json.warnings).toBeUndefined();
+      expect(completeLegacyPoolIfRunning).toHaveBeenCalledTimes(1);
+      expect(warn).toHaveBeenCalledWith(
+        'api/drafts/picks',
+        'last pick committed but the pool was no longer running, so it was not completed',
+        { poolId: '11111111-1111-4111-8111-111111111111' }
+      );
+      warn.mockRestore();
     });
 
     it('carries no warnings on a clean pick', async () => {
