@@ -13,6 +13,7 @@
  */
 import { timingSafeEqual } from 'node:crypto';
 import { isValidUuid } from '@/lib/utils/uuid';
+import { proposalMachine } from './proposal-state';
 import { PROPOSAL_COLUMNS, PROPOSAL_SUMMARY_COLUMNS } from './columns';
 import { ownedConversation, type StoreContext } from './context';
 import { AdminAgentStoreError, isUniqueViolation, unwrap, unwrapRow } from './errors';
@@ -109,6 +110,7 @@ export function proposalRepository(ctx: StoreContext) {
       // Supersede before the insert (the order `writePlanRevision` uses): a failure here refuses a staging that wrote nothing,
       // and a failed insert afterwards leaves at worst the older card retired, never a live card the caller was told failed.
       if (input.supersedeKey) {
+        proposalMachine.assertTransition('proposed', 'superseded', 'system');
         unwrap(
           'proposals.supersede',
           await ctx.db
@@ -203,6 +205,7 @@ export function proposalRepository(ctx: StoreContext) {
     async expireProposals(adminId: AdminId, conversationId?: string): Promise<string[]> {
       assertAdminId(adminId);
       if (conversationId !== undefined) await ownedConversation(ctx, adminId, conversationId);
+      proposalMachine.assertTransition('proposed', 'expired', 'system');
       let query = ctx.db
         .from('admin_agent_proposals')
         .update({ status: 'expired' })
@@ -217,6 +220,7 @@ export function proposalRepository(ctx: StoreContext) {
     async declineProposal(adminId: AdminId, proposalId: string): Promise<ProposalRecord> {
       assertAdminId(adminId);
       if (!isValidUuid(proposalId)) throw new AdminAgentStoreError('proposal_not_found');
+      proposalMachine.assertTransition('proposed', 'declined', 'admin');
       const row = unwrap(
         'proposals.decline',
         await ctx.db
@@ -244,6 +248,7 @@ export function proposalRepository(ctx: StoreContext) {
     async claimProposal(adminId: AdminId, proposalId: string, claim: ProposalClaim): Promise<ProposalRecord> {
       assertAdminId(adminId);
       if (!isValidUuid(proposalId)) throw new AdminAgentStoreError('proposal_not_found');
+      proposalMachine.assertTransition('proposed', 'executing', 'admin');
       const now = ctx.now().toISOString();
       const { data, error } = await ctx.db
         .from('admin_agent_proposals')
@@ -274,6 +279,7 @@ export function proposalRepository(ctx: StoreContext) {
     async finishProposal(adminId: AdminId, proposalId: string, status: ProposalFinalStatus): Promise<ProposalRecord> {
       assertAdminId(adminId);
       if (!isValidUuid(proposalId)) throw new AdminAgentStoreError('proposal_not_found');
+      proposalMachine.assertTransition('executing', status, 'system');
       const row = unwrap(
         'proposals.finish',
         await ctx.db
@@ -298,6 +304,7 @@ export function proposalRepository(ctx: StoreContext) {
      */
     async reapExecutingProposals(adminId: AdminId, olderThan: Date): Promise<string[]> {
       assertAdminId(adminId);
+      proposalMachine.assertTransition('executing', 'unknown', 'system');
       const rows = unwrap(
         'proposals.reap',
         await ctx.db

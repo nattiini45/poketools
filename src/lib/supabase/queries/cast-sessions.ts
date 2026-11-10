@@ -3,6 +3,7 @@ import type { Json } from '@/types/database';
 import type {
   CastSession,
   CastSessionInsert,
+  CastSessionStatus,
   CastSessionUpdate,
 } from '@/types/cast-session';
 import type { PokemonSet } from '@/types/team';
@@ -135,11 +136,7 @@ export async function createCastSession(
   return toCastSession(data as unknown as CastSessionRow);
 }
 
-/** Update a cast session (partial update). */
-export async function updateCastSession(
-  id: string,
-  update: CastSessionUpdate
-): Promise<CastSession> {
+function castSessionUpdatePayload(update: CastSessionUpdate): Record<string, unknown> {
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
 
   // Only include fields that are explicitly provided
@@ -162,16 +159,45 @@ export async function updateCastSession(
   if (update.caster_notes !== undefined) payload.caster_notes = update.caster_notes;
   if (update.format !== undefined) payload.format = update.format;
   if (update.generation !== undefined) payload.generation = update.generation;
+  return payload;
+}
 
+/** Update a cast session (partial update). */
+export async function updateCastSession(
+  id: string,
+  update: CastSessionUpdate
+): Promise<CastSession> {
   const { data, error } = await supabase
     .from('cast_sessions')
-    .update(payload)
+    .update(castSessionUpdatePayload(update))
     .eq('id', id)
     .select()
     .single();
 
   if (error) throw error;
   return toCastSession(data as unknown as CastSessionRow);
+}
+
+/**
+ * Update a cast session whose status moves: the write is guarded with the
+ * status the caller read (`castSessionMachine`, src/lib/broadcast/cast-session-state.ts).
+ * Returns null when the session's status changed in between (no row written).
+ */
+export async function updateCastSessionFromStatus(
+  id: string,
+  update: CastSessionUpdate,
+  fromStatus: CastSessionStatus
+): Promise<CastSession | null> {
+  const { data, error } = await supabase
+    .from('cast_sessions')
+    .update(castSessionUpdatePayload(update))
+    .eq('id', id)
+    .eq('status', fromStatus)
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data ? toCastSession(data as unknown as CastSessionRow) : null;
 }
 
 /** Delete a cast session. */

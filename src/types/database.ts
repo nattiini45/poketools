@@ -6669,6 +6669,17 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      competition_create_from_format: {
+        Args: {
+          p_actor: string
+          p_format: Json
+          p_grant_creator: boolean
+          p_rulesets: Json
+          p_season: Json
+          p_stages: Json
+        }
+        Returns: Json
+      }
       draft__activate_next: {
         Args: { p_at: string; p_pool_id: string }
         Returns: string

@@ -44,6 +44,7 @@ export default defineDe<typeof en>()({
     saving: 'Wird gespeichert …',
     unsaved: 'Nicht gespeichert',
     saved: 'Gespeichert',
+    saveFailed: 'Speichern fehlgeschlagen',
     sync: {
       connected: 'Echtzeit',
       localOnly: 'Lokal',

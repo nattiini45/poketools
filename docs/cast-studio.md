@@ -41,7 +41,8 @@ src/app/broadcast/solo/[sessionId]/ko-stats/page.tsx  # Public KO stats overlay
 
 ### CastStudioContext
 - **Provider**: `CastStudioProvider` wraps session data into a `useReducer` state machine
-- **Auto-save**: 5s debounce → PATCH, `sendBeacon` on unload, `sessionStorage` backup
+- **Auto-save** (`castStudioSaveMachine` in `src/lib/broadcast/cast-studio-save-state.ts`; [state machines](./state-machines.md#cast-studio-autosave)): 5 s after the last edit one PATCH sends the whole snapshot, never two at once. The request keeps the body it sent, so an edit made while it runs is still unsaved when it answers. An HTTP error, `success: false` or no answer shows "Save failed" in `CastToolbar` (the API error as its title) until the next edit retries. A `pagehide` sends any unsaved snapshot with `keepalive`. "Change Match" saves `match_id: null` (tests: `src/components/creator/studio/__tests__/CastStudioContext.autosave.test.tsx`)
+- **Session status** (`castSessionMachine` in `src/lib/broadcast/cast-session-state.ts`; [state machines](./state-machines.md#cast-session)): `draft` / `live` / `archived`. No screen sets it; a PATCH that names a different status is checked against the machine (409 `state_transition_invalid`, e.g. `archived → live`) and guarded with the status it read (409 `cast_session_changed`). `mode` is a type tag, not a lifecycle
 - **BroadcastChannel**: Real-time sync between main studio and tools tabs
 - **Key actions**: `set_player1_team`, `set_player2_team`, `update_player1_set`, `update_player2_set`, `set_facing`, `toggle_show_facing`, `set_match`, `set_format`
 

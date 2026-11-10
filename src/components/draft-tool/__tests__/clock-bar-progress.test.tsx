@@ -43,6 +43,32 @@ describe('ClockBar round progress', () => {
     expect(html).toContain('Make-up pick (round 2)');
   });
 
+  it('reads a complete pool as complete with the tokens link, and a cancelled one (status twin complete) as cancelled without it', () => {
+    const dto = snapshot();
+    const ended = (phase: 'complete' | 'cancelled') =>
+      renderWithI18n(
+        <ClockBar
+          vm={toDraftViewModel({ ...dto, active_slot: null, pool: { ...dto.pool, status: 'complete', phase } })}
+          clock={null}
+          notify={NOTIFY_UNSUPPORTED}
+          onNotifyToggle={noop}
+          onExtension={noop}
+          onOpenPlayers={noop}
+          tokensHref="/leagues/l1/tokens"
+        />,
+      );
+    const done = ended('complete');
+    expect(done).toContain('Draft complete');
+    expect(done).toContain('Go to your tokens');
+    const cancelled = ended('cancelled');
+    expect(cancelled).toContain('Draft cancelled');
+    expect(cancelled).not.toContain('Draft complete');
+    expect(cancelled).not.toContain('Go to your tokens');
+    expect(clockBar({ ...dto, active_slot: null, pool: { ...dto.pool, status: 'complete', phase: 'cancelled' } }, 'de')).toContain(
+      'Draft abgebrochen',
+    );
+  });
+
   it('speaks German', () => {
     expect(clockBar(snapshot(), 'de')).toContain('Runde 2 von 9 · Pick 1 von 2');
     expect(clockBar(makeupSnapshot(), 'de')).toContain('Nachhol-Pick (Runde 2)');

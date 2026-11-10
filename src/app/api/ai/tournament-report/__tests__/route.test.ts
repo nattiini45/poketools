@@ -446,7 +446,7 @@ describe('POST /api/ai/tournament-report — hardening', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(updateTournamentReport).mockResolvedValue(undefined);
+    vi.mocked(updateTournamentReport).mockResolvedValue(true);
   });
 
   it('keeps a stored report completed when the client has already left', async () => {
