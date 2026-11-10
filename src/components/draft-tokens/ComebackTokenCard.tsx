@@ -49,7 +49,7 @@ export interface ComebackTokenCardProps {
 }
 
 const STEP =
-  'inline-flex h-11 w-11 items-center justify-center rounded-lg border border-poke-border bg-poke-surface text-poke-text-primary disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus';
+  'inline-flex h-11 w-11 items-center justify-center rounded-lg border border-poke-border bg-poke-surface text-poke-text-primary disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
 
 function Balance({ data }: { data: TokenOverviewDTO['comeback'] }) {
   const t = useT(draftTokensMessages);

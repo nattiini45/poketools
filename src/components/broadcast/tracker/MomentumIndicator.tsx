@@ -42,9 +42,9 @@ export default function MomentumIndicator({ state }: MomentumIndicatorProps) {
 
   return (
     <div className="px-2">
-      <div className="h-2 rounded-full bg-gradient-to-r from-blue-500 via-poke-surface to-red-500 relative overflow-hidden">
+      <div className="h-2 rounded-full bg-linear-to-r/srgb from-blue-500 via-poke-surface to-red-500 relative overflow-hidden">
         <div
-          className="absolute top-0 w-1 h-full bg-white rounded-full shadow-sm transition-all duration-500"
+          className="absolute top-0 w-1 h-full bg-white rounded-full shadow-xs transition-all duration-500"
           style={{ left: `${leftPct}%` }}
         />
       </div>

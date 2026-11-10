@@ -68,8 +68,8 @@ export default function MatchupRosterPanel({
               type="button"
               onClick={() => onSelect(tracker.current_form)}
               className={`w-full px-4 py-2 text-left transition-colors ${
-                isSuspended ? 'bg-red-900/10' : ''
-              } ${isSelected ? 'ring-1 ring-inset ring-cyan-600/50' : ''}`}
+                isSuspended ? 'bg-[rgb(127_29_29/0.1)]' : ''
+              } ${isSelected ? 'ring-1 ring-inset ring-[rgb(8_145_178/0.5)]' : ''}`}
             >
               <div className="flex gap-2">
                 <PokemonSprite name={tracker.current_form} size={36} />
@@ -90,12 +90,12 @@ export default function MatchupRosterPanel({
                       <span className="text-xs text-poke-text-muted">{tLegacy('pts', { n: price })}</span>
                     )}
                     {tera !== 'none' && (
-                      <span className={`rounded px-1.5 py-0.5 text-xs ${tera === 'any' ? 'bg-green-900/30 text-green-400' : 'bg-yellow-900/30 text-yellow-400'}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-xs ${tera === 'any' ? 'bg-[rgb(20_83_45/0.3)] text-green-400' : 'bg-[rgb(113_63_18/0.3)] text-yellow-400'}`}>
                         {tLegacy(`tera.${tera}`)}
                       </span>
                     )}
                     {isSuspended && (
-                      <span className="rounded bg-red-900/30 px-1.5 py-0.5 text-xs text-red-400">{tLegacy('suspended')}</span>
+                      <span className="rounded bg-[rgb(127_29_29/0.3)] px-1.5 py-0.5 text-xs text-red-400">{tLegacy('suspended')}</span>
                     )}
                   </div>
                   {/* Total progress, then the self-earned KOs (`real_kills`) and one chip per other source (§8.3). */}

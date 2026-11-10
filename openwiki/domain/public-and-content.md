@@ -154,7 +154,7 @@ Dedicated dashboard for league organizers and casters at `/creator`.
 
 Warm "Pokémon Center" palette (cream backgrounds, soft shadows, rounded corners).
 
-### Tokens (`src/app/globals.css` → `tailwind.config.ts`)
+### Tokens (`src/app/globals.css`, `@theme` blocks)
 - `poke-base` — App background (`#FAF7F2`)
 - `poke-surface` — Card fill (`#FFFFFF`)
 - `poke-elevated` — Raised surfaces (`#F5F0E8`)

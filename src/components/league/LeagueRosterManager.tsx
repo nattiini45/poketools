@@ -563,7 +563,7 @@ export default function LeagueRosterManager({
                       <select
                         value={p.gym_type ?? ''}
                         onChange={(e) => setGymType(p.id, e.target.value || null)}
-                        className="text-xs bg-poke-base border border-poke-border rounded-poke-md px-1.5 py-1 text-poke-text-secondary focus:border-poke-border-focus focus:outline-none"
+                        className="text-xs bg-poke-base border border-poke-border rounded-poke-md px-1.5 py-1 text-poke-text-secondary focus:border-poke-border-focus focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
                         title={t('roster.gymTypeTitle')}
                       >
                         <option value="">{t('roster.noType')}</option>

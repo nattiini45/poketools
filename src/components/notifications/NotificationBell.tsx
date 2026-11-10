@@ -268,7 +268,7 @@ export default function NotificationBell() {
           className="fixed inset-x-2 top-16 z-50 flex max-h-[min(32rem,calc(100dvh-5rem))] flex-col rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-lg sm:absolute sm:inset-x-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96"
         >
           <div className="flex items-center justify-between gap-3 border-b border-poke-border px-3 py-2">
-            <h2 id={titleId} ref={titleRef} tabIndex={-1} className="font-heading text-sm font-bold text-poke-text-primary outline-none">
+            <h2 id={titleId} ref={titleRef} tabIndex={-1} className="font-heading text-sm font-bold text-poke-text-primary outline-2 outline-offset-2 outline-transparent">
               {t('panel.title')}
             </h2>
             {unread > 0 && (

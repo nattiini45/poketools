@@ -22,7 +22,7 @@ export default function ScrollRegion({ label, children, className = '', ...rest 
       role="region"
       aria-label={label}
       tabIndex={0}
-      className={`overflow-x-auto rounded-poke-md border border-poke-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus ${className}`.trim()}
+      className={`overflow-x-auto rounded-poke-md border border-poke-border focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus ${className}`.trim()}
     >
       {children}
     </div>

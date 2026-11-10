@@ -9,10 +9,10 @@ import { localizeSpecies } from "@/lib/pkmn/i18n/names/species";
 
 function effColor(eff: number): string {
   if (eff === 0) return "bg-gray-900 text-gray-600";
-  if (eff < 1) return "bg-red-950/50 text-red-400";
+  if (eff < 1) return "bg-[rgb(69_10_10/0.5)] text-red-400";
   if (eff === 1) return "bg-poke-surface text-poke-text-secondary";
-  if (eff === 2) return "bg-emerald-950/50 text-emerald-400";
-  return "bg-emerald-900/60 text-emerald-300"; // 4x
+  if (eff === 2) return "bg-[rgb(2_44_34/0.5)] text-emerald-400";
+  return "bg-[rgb(6_78_59/0.6)] text-emerald-300"; // 4x
 }
 
 function effLabel(eff: number): string {
@@ -97,13 +97,13 @@ export default function TypeMatchupMatrix() {
 
       <div className="flex gap-3 mt-2 text-[9px] text-poke-text-secondary justify-center">
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-sm bg-emerald-950/50" /> {t("matrix.superEffective")}
+          <span className="w-3 h-3 rounded-sm bg-[rgb(2_44_34/0.5)]" /> {t("matrix.superEffective")}
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-sm bg-poke-surface" /> {t("matrix.neutral")}
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-sm bg-red-950/50" /> {t("matrix.notVeryEffective")}
+          <span className="w-3 h-3 rounded-sm bg-[rgb(69_10_10/0.5)]" /> {t("matrix.notVeryEffective")}
         </span>
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-sm bg-gray-900" /> {t("matrix.immune")}

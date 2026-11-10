@@ -88,7 +88,7 @@ export default function HoverDetails({ lineId, anchor, entry, ...content }: Hove
           collisionPadding={8}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onCloseAutoFocus={(e) => e.preventDefault()}
-          className="pointer-events-none z-[9998] max-w-xs rounded-poke-lg border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-glass,var(--poke-surface))] shadow-poke-lg backdrop-blur"
+          className="pointer-events-none z-[9998] max-w-xs rounded-poke-lg border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-glass,var(--poke-surface))] shadow-poke-lg backdrop-blur-xs"
         >
           <HoverDetailsContent entry={entry} {...content} />
         </PopoverPrimitive.Content>

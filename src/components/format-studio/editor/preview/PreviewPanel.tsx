@@ -77,7 +77,7 @@ export default function PreviewPanel({ doc, previewDoc = doc, result, rows, coun
             aria-controls={`fe-panel-${id}`}
             tabIndex={tab === id ? 0 : -1}
             className={cn(
-              '-mb-px min-h-11 rounded-t-poke-md border-b-2 px-3 py-2 text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-9',
+              '-mb-px min-h-11 rounded-t-poke-md border-b-2 px-3 py-2 text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-9',
               tab === id ? 'border-poke-accent text-poke-text-primary' : 'border-transparent text-poke-text-secondary hover:text-poke-text-primary',
             )}
             onClick={() => setTab(id)}

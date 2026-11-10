@@ -135,7 +135,7 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
 
       <div className="space-y-2">
-        <h4 ref={challengesHeadingRef} tabIndex={-1} className="font-heading text-sm font-semibold text-poke-text-primary focus:outline-none">
+        <h4 ref={challengesHeadingRef} tabIndex={-1} className="font-heading text-sm font-semibold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {t('ladder.yours')}
         </h4>
         {challenges.length === 0 ? (

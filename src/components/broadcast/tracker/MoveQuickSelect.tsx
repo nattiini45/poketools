@@ -105,7 +105,7 @@ export default function MoveQuickSelect({
             }
           }}
           placeholder={t("moveSelect.customPlaceholder")}
-          className="flex-1 px-2 py-0.5 text-[10px] rounded bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-none"
+          className="flex-1 px-2 py-0.5 text-[10px] rounded bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
         {customMove.trim() && (
           <button

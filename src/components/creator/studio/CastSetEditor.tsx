@@ -49,7 +49,7 @@ function SpeciesPicker({ onSelect, onCancel }: { onSelect: (species: string) => 
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder={t('setEditor.searchSpecies')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-none focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
       />
       {results.length > 0 && (
         <div className="max-h-48 overflow-y-auto space-y-0.5">
@@ -111,7 +111,7 @@ function MoveSearchPicker({ species, generation, onSelect, onCancel }: {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={t('setEditor.searchMoves')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-none focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
       />
       <div className="max-h-48 overflow-y-auto space-y-0.5">
         {moves.map((m) => (
@@ -184,7 +184,7 @@ function GenericPicker({ type, species, generation, onSelect, onCancel }: {
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder={type === 'item' ? t('setEditor.searchItems') : t('setEditor.searchAbilities')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-none focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
       />
       <div className="max-h-48 overflow-y-auto space-y-0.5">
         {results.map((r) => (

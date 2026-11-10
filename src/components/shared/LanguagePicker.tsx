@@ -42,7 +42,7 @@ export interface LanguageChange {
 const ROW =
   'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary ' +
   'hover:bg-poke-elevated has-[:checked]:bg-poke-accent-light ' +
-  'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
+  'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
   'has-[:focus-visible]:outline-poke-focus';
 
 const LEGEND_PANEL =
@@ -109,7 +109,7 @@ export function LanguageOptions({
         <label className="mt-2 flex items-start gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary hover:bg-poke-elevated">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
             checked={pkmnTerms === 'en'}
             aria-describedby={hintId}
             onChange={(event) => onChange({ pkmnTerms: event.target.checked ? 'en' : 'follow' })}

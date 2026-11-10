@@ -376,7 +376,7 @@ export default function CalcTab() {
                             <TypeBadge
                               key={t}
                               type={t}
-                              className="!text-[7px] !px-0.5 !py-0 !min-w-[2rem]"
+                              className="text-[7px]! px-0.5! py-0! min-w-[2rem]!"
                             />
                           ))}
                         </div>

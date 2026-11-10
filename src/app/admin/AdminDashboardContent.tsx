@@ -43,7 +43,7 @@ function StatCard({ label, value, href }: { label: string; value: number; href?:
   return (
     <Link
       href={href}
-      className="block rounded-poke-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+      className="block rounded-poke-lg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
     >
       {card}
     </Link>

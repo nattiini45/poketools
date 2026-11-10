@@ -68,7 +68,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
         value={label}
         onChange={(e) => setCustomLabel(e.target.value)}
         placeholder={t("timer.labelPlaceholder")}
-        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-none"
+        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       />
 
       {/* Display */}
@@ -99,7 +99,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
           <button
             type="button"
             onClick={stopTimer}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-[rgb(239_68_68/0.2)] text-red-400 hover:bg-[rgb(239_68_68/0.3)] transition-colors"
           >
             {t("timer.stop")}
           </button>

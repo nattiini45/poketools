@@ -32,7 +32,7 @@ const SORT_KEYS = {
 
 const CONTROL_CLASS =
   'rounded-lg border border-arena-border bg-arena-elevated px-3 py-1.5 text-sm text-arena-ink ' +
-  'placeholder:text-arena-ink-secondary focus:border-arena-accent focus:outline-none ' +
+  'placeholder:text-arena-ink-secondary focus:border-arena-accent focus:outline-2 focus:outline-offset-2 focus:outline-transparent ' +
   FOCUS_RING;
 
 /**

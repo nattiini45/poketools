@@ -94,7 +94,7 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
                       disabled={rowDisabled}
                       aria-describedby={attrs.length > 0 || reason !== undefined ? noteId : undefined}
                       onChange={() => toggle(entry.id)}
-                      className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+                      className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
                     />
                     <label htmlFor={inputId} className={`text-sm ${rowDisabled ? 'text-poke-text-muted' : 'text-poke-text-primary'}`}>
                       <SpeciesLabel id={entry.id} />

@@ -99,7 +99,7 @@ export default function ReasonDialog({
         placeholder={reasonPlaceholder}
         aria-required={reasonRequired}
         aria-describedby={showRequired ? `${requiredId} ${counterId}` : counterId}
-        className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2 disabled:opacity-50"
+        className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2 disabled:opacity-50"
       />
       <div className="mt-1 mb-4 flex justify-between gap-3 text-xs text-poke-text-muted">
         <span id={requiredId}>{showRequired ? tMatch('reason.required') : ''}</span>

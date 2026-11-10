@@ -63,7 +63,7 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
         ★ {localizeType(type, dl)}
       </span>
     ) : (
-      <TypeBadge type={type} className="!text-[8px] !px-1 !py-0 !min-w-[2.5rem]" />
+      <TypeBadge type={type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
     );
 
   return (

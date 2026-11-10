@@ -20,7 +20,7 @@ const TIER_STYLES: Record<EarnedAchievement['tier'], string> = {
   bronze: 'border-amber-700/40 bg-amber-50',
   silver: 'border-slate-400 bg-slate-50',
   gold: 'border-yellow-500/60 bg-yellow-50',
-  platinum: 'border-cyan-400/60 bg-gradient-to-br from-slate-50 via-cyan-50 to-sky-50',
+  platinum: 'border-cyan-400/60 bg-linear-to-br/srgb from-slate-50 via-cyan-50 to-sky-50',
 };
 
 export default function AchievementBadge({ achievement, size = 'md' }: AchievementBadgeProps) {

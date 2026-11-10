@@ -259,7 +259,7 @@ export function FormatRulesEditorView({
                   aria-invalid={fieldError ? true : undefined}
                   aria-describedby={describedBy}
                   className={cn(
-                    'flex h-10 w-full rounded-poke-md border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    'flex h-10 w-full rounded-poke-md border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
                     fieldError ? 'border-poke-danger' : 'border-poke-border',
                   )}
                 />

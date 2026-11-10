@@ -183,7 +183,7 @@ export default function GameDetailCard({
             setCollapsed((prev) => !prev);
           }
         }}
-        className="flex items-center justify-between w-full text-left cursor-pointer select-none focus:outline-none"
+        className="flex items-center justify-between w-full text-left cursor-pointer select-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         aria-expanded={bodyExpanded}
         aria-disabled={editing}
       >

@@ -14,9 +14,9 @@ const TYPE_ICONS: Record<string, string> = {
 };
 
 const IMPORTANCE_COLORS: Record<number, string> = {
-  5: "text-red-400 bg-red-500/10 border-red-500/30",
-  4: "text-orange-400 bg-orange-500/10 border-orange-500/30",
-  3: "text-yellow-400 bg-yellow-500/10 border-yellow-500/30",
+  5: "text-red-400 bg-[rgb(239_68_68/0.1)] border-[rgb(239_68_68/0.3)]",
+  4: "text-orange-400 bg-[rgb(249_115_22/0.1)] border-[rgb(249_115_22/0.3)]",
+  3: "text-yellow-400 bg-[rgb(234_179_8/0.1)] border-[rgb(234_179_8/0.3)]",
   2: "text-poke-text-secondary bg-poke-surface",
   1: "text-poke-text-muted bg-poke-surface",
 };

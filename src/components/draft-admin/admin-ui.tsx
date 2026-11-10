@@ -15,7 +15,7 @@ import { REASON_MAX } from './admin-view';
 export const LABEL = 'block text-sm font-heading font-semibold text-poke-text-primary';
 export const HINT = 'text-xs text-poke-text-secondary';
 export const FIELD =
-  'w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
+  'w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50';
 export const TABLE = 'w-full text-left text-sm';
 export const TH = 'px-2 py-1.5 text-xs font-semibold text-poke-text-secondary';
 export const TD = 'px-2 py-1.5 align-top text-poke-text-primary';

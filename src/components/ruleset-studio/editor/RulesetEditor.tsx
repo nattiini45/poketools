@@ -294,7 +294,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
       outline={<OutlineNav doc={doc} selected={section} diagnostics={model.result.diagnostics} onSelect={select} />}
       main={
         <section aria-labelledby={SECTION_HEADING_ID} className="min-w-0 space-y-4">
-          <h2 id={SECTION_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-none">
+          <h2 id={SECTION_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
             {t(`outline.${section}`)}
           </h2>
           {content}

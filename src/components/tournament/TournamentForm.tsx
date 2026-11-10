@@ -137,7 +137,7 @@ export default function TournamentForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('form.descriptionPlaceholder')}
             rows={2}
-            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-none text-sm resize-y"
+            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-2 outline-offset-2 outline-transparent text-sm resize-y"
           />
         </div>
       )}

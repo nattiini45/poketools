@@ -462,7 +462,7 @@ function MatchResultCard({
             avatarUrl={matchData.player_1_avatar_url}
             name={matchData.player_1_name}
             size={36}
-            className={isP1Winner ? '!ring-2 !ring-poke-green' : ''}
+            className={isP1Winner ? 'ring-2! ring-poke-green!' : ''}
           />
           <div>
             <PlayerNameLink
@@ -503,7 +503,7 @@ function MatchResultCard({
             avatarUrl={matchData.player_2_avatar_url}
             name={matchData.player_2_name}
             size={36}
-            className={!isP1Winner ? '!ring-2 !ring-poke-green' : ''}
+            className={!isP1Winner ? 'ring-2! ring-poke-green!' : ''}
           />
         </div>
       </div>

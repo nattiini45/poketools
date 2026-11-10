@@ -40,7 +40,7 @@ export interface RedraftSubmissionPanelProps {
 }
 
 const BUTTON =
-  'min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus';
+  'min-h-[44px] rounded-lg px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
 
 export default function RedraftSubmissionPanel({
   vm,

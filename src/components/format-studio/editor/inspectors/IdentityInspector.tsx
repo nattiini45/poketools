@@ -81,7 +81,7 @@ export default function IdentityInspector({ doc, diagnostics, authorBase, onChan
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-4" data-inspector={part}>
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-none">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {part === 'identity' ? t('inspector.identity.heading') : t('inspector.identity.lookHeading')}
         </h2>
         {part === 'identity' ? (

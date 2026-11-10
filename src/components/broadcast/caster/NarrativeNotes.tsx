@@ -77,7 +77,7 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("player1", e.target.value)}
           placeholder={t("notes.playerPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-none"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
 
@@ -90,7 +90,7 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("player2", e.target.value)}
           placeholder={t("notes.playerPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-none"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
 
@@ -103,7 +103,7 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("match", e.target.value)}
           placeholder={t("notes.matchPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-none"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
     </div>

@@ -43,7 +43,7 @@ type EditorError = EditorWriteError;
 const TOUCH = 'min-h-11 sm:min-h-0';
 const MEMBER_SELECT =
   `${TOUCH} max-w-full rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-sm text-poke-text-primary ` +
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50';
+  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50';
 
 /**
  * League groups editor (Participants tab of the admin league page; league groups design §7). Loads its data from

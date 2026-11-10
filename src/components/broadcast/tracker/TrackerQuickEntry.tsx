@@ -89,7 +89,7 @@ export default function TrackerQuickEntry({
           value={query}
           onChange={handleInput}
           placeholder={t('quickEntry.searchPlaceholder')}
-          className="flex-1 bg-transparent text-sm text-poke-text placeholder:text-poke-text-muted outline-none"
+          className="flex-1 bg-transparent text-sm text-poke-text placeholder:text-poke-text-muted outline-2 outline-offset-2 outline-transparent"
           onKeyDown={(e) => {
             if (e.key === 'Escape') onClose();
             if (e.key === 'Enter' && results.length > 0) {

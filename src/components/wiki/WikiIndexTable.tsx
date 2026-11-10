@@ -29,7 +29,7 @@ export type WikiIndexColumn<T> = Column<T> & { primary?: boolean };
 
 /** The row's only focusable element; its `::after` covers the row so a click anywhere on it opens the entry. */
 const ROW_LINK_CLASS =
-  'font-medium text-poke-text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus after:absolute after:inset-0 after:z-10 after:content-[""]';
+  'font-medium text-poke-text-primary hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus after:absolute after:inset-0 after:z-10 after:content-[""]';
 
 // `isolate` makes the row its own stacking context: the link's `z-10` then stays inside the row (the sticky header and
 // popovers are not covered) and still paints above positioned cell content such as a type badge.
@@ -285,7 +285,7 @@ export default function WikiIndexTable<T extends object>({
                         onClick={() => toggleFacetValue(facet.key, opt.value)}
                         aria-pressed={isSelected}
                         className={`
-                          rounded-full transition-all focus:outline-none focus:ring-2 focus:ring-poke-border-focus
+                          rounded-full transition-all focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-border-focus
                           ${isSelected ? 'ring-2 ring-poke-accent shadow-poke-sm' : 'opacity-55 hover:opacity-100'}
                         `}
                       >

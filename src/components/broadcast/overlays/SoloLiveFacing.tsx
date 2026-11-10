@@ -45,10 +45,10 @@ export default function SoloLiveFacing({ sessionId, pollInterval = 3000 }: SoloL
       key={slot.pokemon_name}
       className={`flex items-center gap-1.5 rounded-lg px-2 py-1 ${
         slot.was_koed
-          ? 'bg-red-900/40'
+          ? 'bg-[rgb(127_29_29/0.4)]'
           : slot.was_brought
-            ? 'bg-green-900/30'
-            : 'bg-white/5'
+            ? 'bg-[rgb(20_83_45/0.3)]'
+            : 'bg-[rgb(255_255_255/0.05)]'
       }`}
     >
       <SpriteImg
@@ -70,7 +70,7 @@ export default function SoloLiveFacing({ sessionId, pollInterval = 3000 }: SoloL
   const p2KOs = p2Slots.filter((s) => !s.was_koed).length;
 
   return (
-    <div className="flex items-center justify-between h-[120px] px-6 bg-gradient-to-r from-black/80 via-black/60 to-black/80 backdrop-blur-sm">
+    <div className="flex items-center justify-between h-[120px] px-6 bg-linear-to-r/srgb from-[rgb(0_0_0/0.8)] via-[rgb(0_0_0/0.6)] to-[rgb(0_0_0/0.8)] backdrop-blur-xs">
       {/* Player 1 side */}
       <div className="flex items-center gap-4">
         <div className="text-center">
@@ -83,7 +83,7 @@ export default function SoloLiveFacing({ sessionId, pollInterval = 3000 }: SoloL
       </div>
 
       {/* Score */}
-      <div className="text-white/40 font-bold text-lg">{t('common.vs')}</div>
+      <div className="text-[rgb(255_255_255/0.4)] font-bold text-lg">{t('common.vs')}</div>
 
       {/* Player 2 side */}
       <div className="flex items-center gap-4">

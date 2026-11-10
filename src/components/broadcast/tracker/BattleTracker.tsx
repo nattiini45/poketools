@@ -150,7 +150,7 @@ export default function BattleTracker({
 
       {/* Error banner */}
       {error && (
-        <div className="px-4 py-2 rounded-lg bg-red-500/10 border border-red-500/30 text-sm text-red-400">
+        <div className="px-4 py-2 rounded-lg bg-[rgb(239_68_68/0.1)] border border-[rgb(239_68_68/0.3)] text-sm text-red-400">
           {error === SUBMIT_FAILED ? t('tracker.submitFailed') : errorText(error)}
           <button
             type="button"
@@ -181,7 +181,7 @@ export default function BattleTracker({
       {/* Match complete banner */}
       {matchComplete && (
         <div className="space-y-3">
-          <div className="px-4 py-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-center">
+          <div className="px-4 py-3 rounded-xl bg-[rgb(16_185_129/0.1)] border border-[rgb(16_185_129/0.3)] text-center">
             <div className="text-lg font-bold text-emerald-400">{t('tracker.matchComplete')}</div>
             <div className="text-sm text-poke-text-secondary mt-1">
               {t('tracker.matchWinner', {
@@ -236,7 +236,7 @@ export default function BattleTracker({
             {/* Quick entry overlay */}
             {quickEntry && (
               <div
-                className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 rounded-xl"
+                className="absolute inset-0 z-20 flex items-center justify-center bg-[rgb(0_0_0/0.4)] rounded-xl"
                 onClick={() => setQuickEntry(null)}
               >
                 <div

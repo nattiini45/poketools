@@ -21,7 +21,7 @@ export default async function PlayerLayout({
     <>
       <SkipToContent />
       <NavBar extraLinks={navExtraLinks} />
-      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 focus:outline-none">
+      <main id={MAIN_CONTENT_ID} tabIndex={-1} className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         <PageTransitionWrapper>{children}</PageTransitionWrapper>
       </main>
     </>

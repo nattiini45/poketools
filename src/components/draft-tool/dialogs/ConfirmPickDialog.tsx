@@ -138,7 +138,7 @@ export default function ConfirmPickDialog({
             minLength={OVERRIDE_REASON_MIN}
             disabled={submitting}
             aria-invalid={reasonMissing && reason.length > 0 ? true : undefined}
-            className="rounded-lg border border-poke-border bg-poke-surface px-3 py-2 text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+            className="rounded-lg border border-poke-border bg-poke-surface px-3 py-2 text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
           />
           <span className="text-xs text-poke-text-secondary">{t('confirm.reasonHint')}</span>
         </label>

@@ -261,7 +261,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
                         parseInt(e.target.value) || 0
                       )
                     }
-                    className="w-12 px-1 py-1 border border-poke-border rounded-poke-md text-sm text-center bg-poke-surface text-poke-text-primary focus:outline-none focus:border-poke-border-focus focus:ring-1"
+                    className="w-12 px-1 py-1 border border-poke-border rounded-poke-md text-sm text-center bg-poke-surface text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
                   />
                 </div>
                 <label className="col-span-2 flex items-center gap-1 text-xs text-poke-text-secondary">
@@ -293,7 +293,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
                   onChange={(e) =>
                     updatePokemon(playerIdx as 0 | 1, pokeIdx, 'moves_used', e.target.value)
                   }
-                  className="col-span-2 px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-1"
+                  className="col-span-2 px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
                 />
                 <button
                   type="button"

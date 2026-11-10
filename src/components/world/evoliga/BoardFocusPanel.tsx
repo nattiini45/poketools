@@ -133,19 +133,19 @@ export default function BoardFocusPanel({ kind, league, stages, standings, fixtu
         </span>
         <label
           htmlFor="board-schedule-page-spielplan"
-          className={`col-start-2 ${TAB} peer-checked/spielplan:bg-[var(--hud-chip-active)] peer-checked/spielplan:text-[var(--hud-chip-active-ink)] peer-checked/spielplan:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/spielplan:outline peer-focus-visible/spielplan:outline-2 peer-focus-visible/spielplan:outline-offset-2 peer-focus-visible/spielplan:outline-arena-focus`}
+          className={`col-start-2 ${TAB} peer-checked/spielplan:bg-[var(--hud-chip-active)] peer-checked/spielplan:text-[var(--hud-chip-active-ink)] peer-checked/spielplan:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/spielplan:outline-solid peer-focus-visible/spielplan:outline-2 peer-focus-visible/spielplan:outline-offset-2 peer-focus-visible/spielplan:outline-arena-focus`}
         >
           {t('board.tabSchedule')}
         </label>
         <label
           htmlFor="board-schedule-page-tabelle"
-          className={`col-start-3 ${TAB} peer-checked/tabelle:bg-[var(--hud-chip-active)] peer-checked/tabelle:text-[var(--hud-chip-active-ink)] peer-checked/tabelle:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/tabelle:outline peer-focus-visible/tabelle:outline-2 peer-focus-visible/tabelle:outline-offset-2 peer-focus-visible/tabelle:outline-arena-focus`}
+          className={`col-start-3 ${TAB} peer-checked/tabelle:bg-[var(--hud-chip-active)] peer-checked/tabelle:text-[var(--hud-chip-active-ink)] peer-checked/tabelle:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/tabelle:outline-solid peer-focus-visible/tabelle:outline-2 peer-focus-visible/tabelle:outline-offset-2 peer-focus-visible/tabelle:outline-arena-focus`}
         >
           {t('board.tabTable')}
         </label>
         <label
           htmlFor="board-schedule-page-ergebnisse"
-          className={`col-start-4 ${TAB} peer-checked/ergebnisse:bg-[var(--hud-chip-active)] peer-checked/ergebnisse:text-[var(--hud-chip-active-ink)] peer-checked/ergebnisse:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/ergebnisse:outline peer-focus-visible/ergebnisse:outline-2 peer-focus-visible/ergebnisse:outline-offset-2 peer-focus-visible/ergebnisse:outline-arena-focus`}
+          className={`col-start-4 ${TAB} peer-checked/ergebnisse:bg-[var(--hud-chip-active)] peer-checked/ergebnisse:text-[var(--hud-chip-active-ink)] peer-checked/ergebnisse:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/ergebnisse:outline-solid peer-focus-visible/ergebnisse:outline-2 peer-focus-visible/ergebnisse:outline-offset-2 peer-focus-visible/ergebnisse:outline-arena-focus`}
         >
           {t('board.tabResults')}
         </label>

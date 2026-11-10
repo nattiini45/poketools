@@ -97,7 +97,7 @@ export default function FilterPanel(props: FilterPanelProps) {
           className={cn(
             styles.tokens,
             styles.filterSheet,
-            'fixed inset-0 z-50 flex flex-col bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink,var(--poke-text-primary))] outline-none',
+            'fixed inset-0 z-50 flex flex-col bg-[var(--draft-surface,var(--poke-surface))] text-[var(--draft-ink,var(--poke-text-primary))] outline-2 outline-offset-2 outline-transparent',
             'md:inset-y-0 md:left-0 md:right-auto md:w-full md:max-w-md md:border-r md:border-[var(--draft-border,var(--poke-border))] md:shadow-poke-lg',
           )}
         >

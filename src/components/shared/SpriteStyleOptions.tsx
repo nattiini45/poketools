@@ -128,7 +128,7 @@ export default function SpriteStyleOptions({
 }
 
 const FOCUS_WITHIN =
-  'has-[:focus-visible]:outline has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
+  'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
   'has-[:focus-visible]:outline-poke-focus';
 
 const COMPACT_ROW =

@@ -347,7 +347,7 @@ export function BulkResultsPanel({
   useEffect(() => container.current?.focus(), []);
 
   return (
-    <div ref={container} tabIndex={-1} className="space-y-4 focus:outline-none">
+    <div ref={container} tabIndex={-1} className="space-y-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
       <p className="text-sm font-heading font-semibold text-poke-text-primary">
         {summaryText(results)}
       </p>

@@ -111,7 +111,7 @@ export default function MatchEvolutionReplay({
 
   if (!expanded) {
     return (
-      <div className="rounded-lg border border-cyan-800/40 bg-cyan-950/20 p-3" data-frozen="epb-replay">
+      <div className="rounded-lg border border-[rgb(21_94_117/0.4)] bg-[rgb(8_51_68/0.2)] p-3" data-frozen="epb-replay">
         <button
           type="button"
           onClick={() => { setOverride(true); setCurrentIndex(0); }}
@@ -131,7 +131,7 @@ export default function MatchEvolutionReplay({
   const evolvedLabel = step.evolvedInto ? localizeSpecies(step.evolvedInto, dataLocale) : null;
 
   return (
-    <div className="rounded-lg border border-cyan-800/40 bg-cyan-950/20 p-4" data-frozen="epb-replay">
+    <div className="rounded-lg border border-[rgb(21_94_117/0.4)] bg-[rgb(8_51_68/0.2)] p-4" data-frozen="epb-replay">
       <div className="mb-3 flex items-center justify-between">
         <h4 className="text-sm font-heading font-semibold text-cyan-300">
           {t('replay.title')}

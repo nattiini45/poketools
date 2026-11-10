@@ -8,10 +8,13 @@ import { compileUtilities, themeColors } from '@/test/tailwind-theme';
 /**
  * Site palettes — Tailwind status colours (docs/design.md § Site palettes).
  *
- * The status hues (poke.blue/green/yellow/danger and their hovers) follow
- * the site palette through `color-mix(… var(--poke-x) calc(<alpha-value> *
- * 100%) …)`, so `/NN` modifiers keep working. The `art.*` statics stay hex:
- * artwork such as the franchise ball red must not follow a palette.
+ * Every site colour is a plain `var(--poke-x)` token that follows the site
+ * palette; Tailwind 4 alpha-blends any colour, so `/NN` modifiers work on all
+ * of them. On Tailwind 3 only the status hues (poke.blue/green/yellow/danger
+ * and their hovers) rendered `/NN`, so the source scan below keeps the other
+ * tokens free of modifiers until they come back as deliberate changes. The
+ * `art.*` statics stay hex: artwork such as the franchise ball red must not
+ * follow a palette.
  *
  * The theme and the pipeline come from src/test/tailwind-theme.ts, so this
  * file does not depend on where the theme is declared.
@@ -24,12 +27,9 @@ const read = (path: string) => readFileSync(path, 'utf8');
 const STATUS_HUES = ['blue', 'blue-hover', 'green', 'green-hover', 'yellow', 'danger', 'danger-hover'];
 
 describe('theme status colours', () => {
-  it('the status hues are variable-backed and keep <alpha-value>', () => {
+  it('the status hues are plain var() tokens', () => {
     const colors = themeColors();
-    for (const hue of STATUS_HUES) {
-      expect(colors[`poke-${hue}`], hue).toContain(`var(--poke-${hue})`);
-      expect(colors[`poke-${hue}`], hue).toContain('<alpha-value>');
-    }
+    for (const hue of STATUS_HUES) expect(colors[`poke-${hue}`], hue).toBe(`var(--poke-${hue})`);
   });
 
   it('the on-colours and the Alert ink are plain var() tokens', () => {
@@ -52,10 +52,9 @@ describe('theme status colours', () => {
     for (const [, value] of art) expect(value).not.toContain('var(');
   });
 
-  it('every other poke token stays a plain var() (no alpha: only the status hues honour /NN)', () => {
-    const statusNames = new Set(STATUS_HUES.map((hue) => `poke-${hue}`));
+  it('every poke token except the type colours is a plain var()', () => {
     for (const [name, value] of Object.entries(themeColors())) {
-      if (!name.startsWith('poke-') || statusNames.has(name) || name.startsWith('poke-type-')) continue;
+      if (!name.startsWith('poke-') || name.startsWith('poke-type-')) continue;
       expect(value, name).toMatch(/^var\(--[a-z0-9-]+\)$/);
     }
   });
@@ -66,10 +65,11 @@ describe('source stays free of dead opacity modifiers', () => {
   const PREFIXES =
     'bg|text|border|ring-offset|ring|divide|fill|stroke|outline|from|via|to|placeholder|decoration|shadow|accent|caret';
 
-  /** Colours whose value is a plain var(): Tailwind 3.4 cannot alpha-blend them, so a /NN modifier on one generates nothing. */
+  /** Colours whose /NN modifier generated nothing on Tailwind 3.4 (a plain var() other than the status hues) and renders on Tailwind 4. */
   function plainVarColours(): string[] {
+    const statusNames = new Set(STATUS_HUES.map((hue) => `poke-${hue}`));
     const names = new Set(['poke-primary']);
-    for (const [name, value] of Object.entries(themeColors())) if (value.startsWith('var(')) names.add(name);
+    for (const [name, value] of Object.entries(themeColors())) if (value.startsWith('var(') && !statusNames.has(name)) names.add(name);
     return [...names];
   }
 
@@ -113,32 +113,28 @@ describe('source stays free of dead opacity modifiers', () => {
       const found = deadModifiers(read(join(REPO, file)), names);
       if (found.length > 0) offenders.push(`${file}: ${[...new Set(found)].join(', ')}`);
     }
-    expect(offenders, 'Tailwind 3 drops <var colour>/NN silently: use a solid token or a tokenColor() hue').toEqual([]);
+    expect(offenders, 'Tailwind 3 dropped <var colour>/NN and Tailwind 4 renders it, so each one is a visible change: use a solid token or a status hue').toEqual([]);
   });
 });
 
-describe('generated utilities (postcss + tailwindcss)', () => {
+describe('generated utilities (postcss + @tailwindcss/postcss)', () => {
   function ruleBody(css: string, selector: string): string | null {
     const escaped = selector.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&');
-    const m = new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`).exec(css);
+    const m = new RegExp(`(?:^|\\n)\\s*${escaped}\\s*\\{([^}]*)\\}`).exec(css);
     return m ? m[1] : null;
   }
 
-  it('emits color-mix rules for the status hues and rgb() for art, and still drops var()/NN', async () => {
+  it('reads every colour through its variable, mixes /NN with transparent, and keeps art hex', async () => {
     const css = await compileUtilities(
       'bg-poke-blue bg-poke-blue/20 border-poke-blue/40 from-poke-blue text-poke-on-blue bg-art-card-blue/10 bg-poke-surface/50',
     );
-    expect(ruleBody(css, '.bg-poke-blue\\/20')).toContain(
-      'color-mix(in srgb, var(--poke-blue) calc(0.2 * 100%), transparent)',
-    );
-    expect(ruleBody(css, '.bg-poke-blue')).toContain('calc(var(--tw-bg-opacity, 1) * 100%)');
-    expect(ruleBody(css, '.border-poke-blue\\/40')).toContain('calc(0.4 * 100%)');
+    expect(ruleBody(css, '.bg-poke-blue')).toContain('background-color: var(--poke-blue)');
+    expect(ruleBody(css, '.bg-poke-blue\\/20')).toContain('color-mix(in oklab, var(--poke-blue) 20%, transparent)');
+    expect(ruleBody(css, '.border-poke-blue\\/40')).toContain('var(--poke-blue) 40%');
     expect(ruleBody(css, '.text-poke-on-blue')).toContain('var(--poke-on-blue)');
-    expect(ruleBody(css, '.bg-art-card-blue\\/10')).toContain('rgb(59 130 246 / 0.1)');
-    // §1g defect pinned: a variable token with /NN generates nothing, which is
-    // why the source scan below forbids such classes.
-    expect(ruleBody(css, '.bg-poke-surface\\/50')).toBeNull();
-    expect(css).not.toContain('bg-poke-surface\\/50');
+    expect(ruleBody(css, '.bg-art-card-blue\\/10')).toContain('#3B82F6 10%');
+    // A plain token with /NN now renders, which is why the source scan above forbids such classes.
+    expect(ruleBody(css, '.bg-poke-surface\\/50')).toContain('var(--poke-surface) 50%');
   });
 });
 

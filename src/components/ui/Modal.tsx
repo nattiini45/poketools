@@ -47,7 +47,7 @@ export default function Modal({
   return (
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
+        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
         <Dialog.Content
           onCloseAutoFocus={onCloseAutoFocus}
           className={cn(
@@ -67,7 +67,7 @@ export default function Modal({
               {title ?? t("modal.untitled")}
             </Dialog.Title>
             <Dialog.Close
-              className="rounded-poke-sm p-1 text-poke-text-muted hover:text-poke-text-primary transition-colors focus:outline-none focus:ring-2 focus:ring-ring shrink-0 ml-auto"
+              className="rounded-poke-sm p-1 text-poke-text-muted hover:text-poke-text-primary transition-colors focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring shrink-0 ml-auto"
               aria-label={t("modal.close")}
             >
               <X className="h-4 w-4" />

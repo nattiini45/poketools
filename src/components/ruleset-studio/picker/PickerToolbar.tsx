@@ -36,7 +36,7 @@ interface PickerToolbarProps {
 }
 
 const DENSITY_ICON = { grid: LayoutGrid, compact: Rows3, table: Table2 } as const;
-const BUTTON = 'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-poke-md border px-3 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9';
+const BUTTON = 'inline-flex min-h-11 shrink-0 items-center justify-center gap-1.5 rounded-poke-md border px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-9';
 
 /**
  * The picker's control bar: search, sort, density, the filter toggle, undo and redo, and (for Pokémon) the "include all
@@ -107,7 +107,7 @@ export default function PickerToolbar({
                 else onSearchEscape();
               }
             }}
-            className="h-11 w-full rounded-poke-md border border-poke-border bg-poke-surface pl-9 pr-9 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-9 [&::-webkit-search-cancel-button]:hidden"
+            className="h-11 w-full rounded-poke-md border border-poke-border bg-poke-surface pl-9 pr-9 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-9 [&::-webkit-search-cancel-button]:hidden"
           />
           {query !== '' && (
             <button
@@ -117,7 +117,7 @@ export default function PickerToolbar({
                 onQuery('');
                 searchRef.current?.focus();
               }}
-              className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-poke-md text-poke-text-muted hover:text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-7 sm:w-7"
+              className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-poke-md text-poke-text-muted hover:text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-7 sm:w-7"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -154,7 +154,7 @@ export default function PickerToolbar({
             value={sort.key}
             disabled={queryDecidesOrder}
             onChange={(event) => onSort({ key: event.target.value as SortKey, direction: event.target.value === 'bst' || event.target.value === 'power' ? 'desc' : 'asc' })}
-            className="h-11 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus disabled:opacity-50 sm:h-9"
+            className="h-11 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus disabled:opacity-50 sm:h-9"
           >
             {sorts.map((key) => (
               <option key={key} value={key}>
@@ -190,7 +190,7 @@ export default function PickerToolbar({
                 onClick={() => onDensity(option)}
                 onKeyDown={onDensityKey}
                 className={cn(
-                  'inline-flex min-h-11 items-center gap-1.5 px-3 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
+                  'inline-flex min-h-11 items-center gap-1.5 px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
                   checked ? 'bg-poke-accent text-poke-surface' : 'bg-poke-surface text-poke-text-secondary hover:bg-poke-muted',
                 )}
               >

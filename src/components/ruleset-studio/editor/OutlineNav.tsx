@@ -52,7 +52,7 @@ export default function OutlineNav({ doc, selected, diagnostics, onSelect }: Out
         aria-expanded={open}
         aria-controls="rf-outline-list"
         onClick={() => setOpen((value) => !value)}
-        className="flex min-h-11 w-full items-center justify-between rounded-poke-md border border-poke-border bg-poke-surface px-3 text-sm font-semibold text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus lg:hidden"
+        className="flex min-h-11 w-full items-center justify-between rounded-poke-md border border-poke-border bg-poke-surface px-3 text-sm font-semibold text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus lg:hidden"
       >
         <span>{open ? t('outline.hide') : `${t('outline.show')}: ${t(`outline.${selected}`)}`}</span>
         <ChevronDown className={cn('h-4 w-4 transition-transform motion-reduce:transition-none', open && 'rotate-180')} aria-hidden="true" />
@@ -74,7 +74,7 @@ export default function OutlineNav({ doc, selected, diagnostics, onSelect }: Out
                   setOpen(false);
                 }}
                 className={cn(
-                  'flex min-h-11 w-full items-center justify-between gap-2 rounded-poke-md border px-3 text-left text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-9',
+                  'flex min-h-11 w-full items-center justify-between gap-2 rounded-poke-md border px-3 text-left text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-9',
                   current ? 'border-poke-accent bg-poke-accent-light text-poke-text-primary' : 'border-transparent text-poke-text-secondary hover:border-poke-border hover:bg-poke-surface hover:text-poke-text-primary',
                 )}
               >

@@ -13,14 +13,14 @@ interface CommentaryPromptsProps {
 }
 
 const TYPE_COLORS: Record<CommentaryPrompt["type"], string> = {
-  series: "bg-purple-500/15 border-purple-500/30 text-purple-300",
-  milestone: "bg-orange-500/15 border-orange-500/30 text-orange-300",
-  advantage: "bg-emerald-500/15 border-emerald-500/30 text-emerald-300",
-  streak: "bg-blue-500/15 border-blue-500/30 text-blue-300",
-  h2h: "bg-cyan-500/15 border-cyan-500/30 text-cyan-300",
-  off_meta: "bg-amber-500/15 border-amber-500/30 text-amber-300",
-  signature: "bg-pink-500/15 border-pink-500/30 text-pink-300",
-  first_meeting: "bg-indigo-500/15 border-indigo-500/30 text-indigo-300",
+  series: "bg-[rgb(168_85_247/0.15)] border-[rgb(168_85_247/0.3)] text-purple-300",
+  milestone: "bg-[rgb(249_115_22/0.15)] border-[rgb(249_115_22/0.3)] text-orange-300",
+  advantage: "bg-[rgb(16_185_129/0.15)] border-[rgb(16_185_129/0.3)] text-emerald-300",
+  streak: "bg-[rgb(59_130_246/0.15)] border-[rgb(59_130_246/0.3)] text-blue-300",
+  h2h: "bg-[rgb(6_182_212/0.15)] border-[rgb(6_182_212/0.3)] text-cyan-300",
+  off_meta: "bg-[rgb(245_158_11/0.15)] border-[rgb(245_158_11/0.3)] text-amber-300",
+  signature: "bg-[rgb(236_72_153/0.15)] border-[rgb(236_72_153/0.3)] text-pink-300",
+  first_meeting: "bg-[rgb(99_102_241/0.15)] border-[rgb(99_102_241/0.3)] text-indigo-300",
 };
 
 export default function CommentaryPrompts({ state, seriesScore }: CommentaryPromptsProps) {

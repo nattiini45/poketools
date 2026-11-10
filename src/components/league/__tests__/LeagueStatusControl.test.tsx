@@ -13,7 +13,7 @@ import LeagueStatusControl from '../LeagueStatusControl';
 const maskIds = (html: string) => html.replace(/_R_[0-9a-z]+_/g, 'ID');
 
 const BUTTON =
-  'class="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"';
+  'class="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"';
 const CURRENT_BADGE = (variant: string, text: string) =>
   `<span class="inline-flex items-center border font-heading font-semibold rounded-full ${variant} px-2 py-0.5 text-xs ring-2 ring-offset-1 ring-poke-border">${text}</span>`;
 const OTHER_BADGE = (variant: string, text: string) =>

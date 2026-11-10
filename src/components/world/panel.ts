@@ -28,7 +28,7 @@ export const PANEL_HOVER =
 
 /** Focus ring used by every interactive element inside the world. */
 export const FOCUS_RING =
-  'focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-arena-focus';
 
 /** Table header row treatment shared by the roster and standings tables. */

@@ -233,7 +233,7 @@ export default function PhotoTransformPanel({
             />
           ) : transforming ? (
             <div className="flex flex-col items-center gap-3 text-poke-text-muted">
-              <div className="w-10 h-10 border-3 border-poke-accent border-t-transparent rounded-full animate-spin" />
+              <div className="w-10 h-10 border-poke-accent border-t-transparent rounded-full animate-spin" />
               <span className="text-xs font-heading text-center px-2">
                 {t(`transform.loading.${PHOTO_TRANSFORM_LOADING_MESSAGE_KEYS[loadingIndex] ?? PHOTO_TRANSFORM_LOADING_MESSAGE_KEYS[0]}`)}
               </span>

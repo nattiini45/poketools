@@ -37,7 +37,7 @@ export default function RouteSceneRecovery() {
         type="button"
         onClick={retryRouteScene}
         aria-describedby="route-scene-recovery-reason"
-        className="shrink-0 rounded-poke-md border border-poke-border bg-poke-card px-3 py-2 font-heading text-xs font-semibold text-poke-text-primary transition-colors hover:bg-poke-hover focus:border-poke-focus focus:outline-none focus:ring-1 focus:ring-poke-focus"
+        className="shrink-0 rounded-poke-md border border-poke-border bg-poke-card px-3 py-2 font-heading text-xs font-semibold text-poke-text-primary transition-colors hover:bg-poke-hover focus:border-poke-focus focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-focus"
       >
         {copy.retry}
       </button>

@@ -203,7 +203,7 @@ export default function DashboardContent({
     >
       {/* ─── Greeting Banner ─── */}
       <motion.div variants={staggerItem}>
-        <div className="relative overflow-hidden rounded-poke-xl bg-gradient-to-br from-poke-elevated via-poke-surface to-poke-muted border border-poke-border shadow-poke-md p-6 sm:p-8">
+        <div className="relative overflow-hidden rounded-poke-xl bg-linear-to-br/srgb from-poke-elevated via-poke-surface to-poke-muted border border-poke-border shadow-poke-md p-6 sm:p-8">
           <div className="flex items-center gap-4">
             <Link href="/dashboard/avatar" className="group relative" aria-label={t('editAvatar')}>
               <PlayerAvatar

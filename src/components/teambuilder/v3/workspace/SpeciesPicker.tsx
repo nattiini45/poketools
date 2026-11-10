@@ -430,7 +430,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded-lg px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-none"
+          className="w-full bg-poke-surface border border-poke-border rounded-lg px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent"
           placeholder={t('speciesPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}

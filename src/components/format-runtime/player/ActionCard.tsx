@@ -180,7 +180,7 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
   return (
     <article aria-labelledby={headingId} className="space-y-3 rounded-poke-lg border border-poke-border bg-poke-surface p-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={headingId} ref={headingRef} tabIndex={-1} className="font-heading text-base font-bold text-poke-text-primary focus:outline-none">
+        <h3 id={headingId} ref={headingRef} tabIndex={-1} className="font-heading text-base font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {labelOf(action.label)}
         </h3>
         <div className="flex flex-wrap gap-2">

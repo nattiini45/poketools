@@ -131,7 +131,7 @@ export default function OverviewTab() {
           <div className="flex flex-wrap gap-1">
             {notableWeaknesses.map((w) => (
               <div key={w.type} className="flex items-center gap-0.5">
-                <TypeBadge type={w.type} className="!text-[8px] !px-1 !py-0 !min-w-[2.5rem]" />
+                <TypeBadge type={w.type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
                 <span className="text-[10px] text-red-400 font-mono">×{w.count}</span>
               </div>
             ))}
@@ -148,7 +148,7 @@ export default function OverviewTab() {
           <div className="flex flex-wrap gap-1">
             {sortedResistances.slice(0, 8).map((r) => (
               <div key={r.type} className="flex items-center gap-0.5">
-                <TypeBadge type={r.type} className="!text-[8px] !px-1 !py-0 !min-w-[2.5rem]" />
+                <TypeBadge type={r.type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
                 <span className="text-[10px] text-blue-400 font-mono">×{r.count}</span>
               </div>
             ))}
@@ -205,7 +205,7 @@ export default function OverviewTab() {
                     <TypeBadge
                       key={type}
                       type={type}
-                      className="!text-[7px] !px-0.5 !py-0 !min-w-[2rem] opacity-80"
+                      className="text-[7px]! px-0.5! py-0! min-w-[2rem]! opacity-80"
                     />
                   ))}
                 </div>

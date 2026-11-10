@@ -269,7 +269,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
                       </span>
                       {leagueManaged ? null : (
                         <select
-                          className={`${TOUCH} max-w-full rounded border border-poke-border bg-poke-surface px-1 py-0.5 text-xs text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus`}
+                          className={`${TOUCH} max-w-full rounded border border-poke-border bg-poke-surface px-1 py-0.5 text-xs text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus`}
                           value={group.id}
                           disabled={moving === m.player_id}
                           onChange={(e) => moveMember(m.player_id, group.id, e.target.value)}
