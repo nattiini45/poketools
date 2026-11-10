@@ -21,8 +21,8 @@ const CURRENT_BADGE = (variant: string, text: string) =>
 const OTHER_BADGE = (variant: string, text: string) =>
   `<span class="${BADGE} opacity-40 hover:opacity-70 cursor-pointer" style="${variant}"><span class="[text-box:trim-both_cap_alphabetic]">${text}</span></span>`;
 const GRAY = 'background-color:var(--accent);color:var(--foreground)';
-const GREEN = 'color:var(--foreground);background-color:color-mix(in srgb, #22c55e 15%, var(--background))';
-const BLUE = 'color:var(--foreground);background-color:color-mix(in srgb, #3b82f6 15%, var(--background))';
+const GREEN = 'background-color:var(--win-bg);color:var(--win)';
+const BLUE = 'background-color:color-mix(in srgb, var(--poke-blue) 15%, var(--background));color:var(--poke-blue)';
 
 /** The render of an upcoming league before the `blocked` prop was added. */
 const UPCOMING_BEFORE =

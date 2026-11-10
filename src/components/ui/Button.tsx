@@ -18,7 +18,7 @@ const FLUID_VARIANT = {
   primary: "primary",
   secondary: "tertiary",
   ghost: "ghost",
-  danger: "destructive",
+  danger: "primary",
   success: "primary",
 } as const satisfies Record<ButtonVariant, string>;
 
@@ -29,12 +29,13 @@ const INLINE_CHILDREN = "[&>span>span]:inline-flex [&>span>span]:items-center [&
 const FILL: Partial<Record<ButtonVariant, string>> = {
   primary: "[--foreground:var(--accent-fill)] [--background:var(--tier-ink)]",
   success: "[--foreground:var(--poke-green)] [--background:var(--poke-on-green)]",
+  danger: "[--foreground:var(--poke-danger)] [--background:var(--poke-on-danger)]",
 };
 
 /**
  * The site button on the @fluid button (docs/design.md, "Direction B primitives"). The props are the pre-redesign
- * ones; primary and success recolour @fluid's primary fill (amber accent fill with plate ink, green), secondary is
- * @fluid's bordered tertiary and danger its destructive wash. @fluid wraps the label in one span for its text trim,
+ * ones; primary, success and danger recolour @fluid's primary fill (amber accent fill with plate ink, green, solid
+ * red), secondary is @fluid's bordered tertiary. @fluid wraps the label in one span for its text trim,
  * so a label that carries an icon element lays that span out as a row. Frozen surfaces import ./frozen/Button instead.
  */
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(

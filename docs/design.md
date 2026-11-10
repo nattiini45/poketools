@@ -332,11 +332,14 @@ its container API on the B surfaces (`surface`, `elevated`, `hairline`) with @fl
 the lift (the @fluid `Card` in `fluid/card.tsx` is the clickable tile for new layouts).
 
 - `Button`: `primary` is @fluid's primary fill recoloured to `accent-fill` with plate ink, `success` the same fill
-  in `poke-green`, `secondary` @fluid's bordered `tertiary`, `danger` its red `destructive` wash, `ghost` its
-  ghost. `sm` is the compact 28 px step, `md` and `lg` the 36 px step. `getButtonClasses` still returns the
+  in `poke-green`, `danger` the same fill in `poke-danger` with `poke-on-danger` ink, `secondary` @fluid's
+  bordered `tertiary`, `ghost` its ghost. `sm` is the compact 28 px step, `md` and `lg` the 36 px step. `getButtonClasses` still returns the
   pre-redesign classes for links styled as buttons; the surface tracks move those onto `<Button asChild>`.
-- `Badge`: the @fluid solid badge; `default` and `gray` are the neutral fill, `yellow` is amber. `xs` and `sm` are
-  the 20 px step, `md` the 24 px step.
+- `Badge`: the @fluid solid badge in the B status colours: `green` and `red` are `win` and `loss` on their `-bg`,
+  `blue`, `yellow` and `purple` the `poke-blue`, `poke-yellow-ink` and `poke-plum` inks on 15 % of their hue mixed
+  into the ground,
+  `accent` `accent-ink` on `accent-subtle`, `default` and `gray` the neutral fill. `xs` and `sm` are the 20 px step,
+  `md` the 24 px step.
 - `Input` and `Textarea` keep the label, hint and error wiring of `field-a11y.tsx` around the @fluid field.
 - Frozen surfaces keep the pre-redesign `Button`, `Card`, `Badge` and `buttonStyles` from
   `src/components/ui/frozen/`. Every module a frozen source reaches imports them from there

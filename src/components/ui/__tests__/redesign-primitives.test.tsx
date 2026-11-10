@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import ItemIcon from '../ItemIcon';
 import SkewChip from '../SkewChip';
 import SkewPlate from '../SkewPlate';
+import Badge from '../Badge';
 import Button from '../Button';
 import { ITEM_ICON_IDS, itemIconSource } from '@/lib/pkmn/item-icons';
 
@@ -93,5 +94,35 @@ describe('Button', () => {
   it('leaves a text-only label to the @fluid text trim', () => {
     render(<Button>Save</Button>);
     expect(screen.getByRole('button', { name: 'Save' }).className).not.toContain('[&>span>span]:inline-flex');
+  });
+
+  it('fills a danger button solid red with its on-danger ink', () => {
+    render(<Button variant="danger">Delete player</Button>);
+    const className = screen.getByRole('button', { name: 'Delete player' }).className;
+    expect(className).toContain('[--foreground:var(--poke-danger)]');
+    expect(className).toContain('[--background:var(--poke-on-danger)]');
+  });
+});
+
+describe('Badge', () => {
+  it.each([
+    ['green', 'var(--win-bg)', 'var(--win)'],
+    ['red', 'var(--loss-bg)', 'var(--loss)'],
+    ['blue', 'color-mix(in srgb, var(--poke-blue) 15%, var(--background))', 'var(--poke-blue)'],
+    ['yellow', 'color-mix(in srgb, var(--poke-yellow) 15%, var(--background))', 'var(--poke-yellow-ink)'],
+    ['purple', 'color-mix(in srgb, var(--poke-plum) 15%, var(--background))', 'var(--poke-plum)'],
+    ['accent', 'var(--accent-subtle)', 'var(--accent-ink)'],
+  ] as const)('tints a %s badge with the direction B status colours', (variant, background, ink) => {
+    render(<Badge variant={variant}>Active</Badge>);
+    const badge = screen.getByText('Active').parentElement as HTMLElement;
+    expect(badge.style.backgroundColor).toBe(background);
+    expect(badge.style.color).toBe(ink);
+  });
+
+  it('keeps default and gray on the neutral fill', () => {
+    render(<Badge variant="gray">Player</Badge>);
+    const badge = screen.getByText('Player').parentElement as HTMLElement;
+    expect(badge.style.backgroundColor).toBe('var(--accent)');
+    expect(badge.style.color).toBe('var(--foreground)');
   });
 });
