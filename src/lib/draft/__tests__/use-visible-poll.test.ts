@@ -3,7 +3,7 @@ import {
   COMPLETE_POLL_INTERVAL_MS,
   LIVE_POLL_INTERVAL_MS,
   createVisiblePoller,
-  outcomeForPoolStatus,
+  pollOutcomeForPool,
   type PollOutcome,
   type VisibilitySource,
 } from '../use-visible-poll';
@@ -353,10 +353,19 @@ describe('createVisiblePoller: stop, refresh and teardown', () => {
   });
 });
 
-describe('outcomeForPoolStatus', () => {
+describe('pollOutcomeForPool', () => {
   it('maps complete to complete and everything else to live', () => {
-    expect(outcomeForPoolStatus('complete')).toBe('complete');
-    expect(outcomeForPoolStatus('in_progress')).toBe('live');
-    expect(outcomeForPoolStatus('pending')).toBe('live');
+    expect(pollOutcomeForPool({ status: 'complete' })).toBe('complete');
+    expect(pollOutcomeForPool({ status: 'in_progress' })).toBe('live');
+    expect(pollOutcomeForPool({ status: 'pending' })).toBe('live');
+  });
+
+  it('reads a queue pool by its phase: complete and cancelled are finished, a reopened pool is live', () => {
+    expect(pollOutcomeForPool({ status: 'complete', phase: 'complete' })).toBe('complete');
+    expect(pollOutcomeForPool({ status: 'complete', phase: 'cancelled' })).toBe('complete');
+    expect(pollOutcomeForPool({ status: 'in_progress', phase: 'drafting' })).toBe('live');
+    expect(pollOutcomeForPool({ status: 'in_progress', phase: 'submissions' })).toBe('live');
+    expect(pollOutcomeForPool({ status: 'pending', phase: 'setup' })).toBe('live');
+    expect(pollOutcomeForPool({ status: 'complete', phase: null })).toBe('complete');
   });
 });

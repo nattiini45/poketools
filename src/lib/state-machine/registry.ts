@@ -5,6 +5,9 @@ import { proposalMachine } from '@/lib/ai/admin-agent/store/proposal-state';
 import { aiArtifactMachine } from '@/lib/ai/artifact-state';
 import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
 import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
+import { armedConfirmMachine } from '@/lib/draft-ui/armed-confirm';
+import { pickFlowMachine } from '@/lib/draft-ui/pick-flow-state';
+import { pollerMachine } from '@/lib/draft/poller-state';
 import { draftPoolPauseMachine, draftPoolPhaseMachine, redraftSubmissionWindowMachine } from '@/lib/draft/pool-phase-state';
 import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import { draftSlotMachine } from '@/lib/draft/slot-state';
@@ -22,6 +25,9 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  pickFlowMachine.spec,
+  armedConfirmMachine.spec,
+  pollerMachine.spec,
   aiArtifactMachine.spec,
   noteModerationMachine.spec,
   noteReportMachine.spec,

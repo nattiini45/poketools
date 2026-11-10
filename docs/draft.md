@@ -16,6 +16,7 @@ src/lib/draft/
 ├── sql-fallbacks.ts  # Literal fallbacks of the applied draft RPCs, mirrored for the app
 ├── completability.ts  # Pool completability gate (twin of draft__pool_completable)
 ├── draftability.ts  # Viewer draftability
+├── poller-state.ts  # Poller lifecycle machine (client.visible_poller) and pollOutcomeForPool
 ├── time.ts  # League time helpers and quiet hours (TS mirror of the SQL clock)
 ├── use-visible-poll.ts  # Visibility-aware poller of the live draft screens
 ├── notify.ts  # Draft-tool Discord notifications

@@ -16,9 +16,12 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
+- [Visible poller](#visible-poller) — `client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)`
 - [Draft pool pause](#draft-pool-pause) — `draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'`
 - [Draft pool (queue engine)](#draft-pool-queue-engine) — `draft_pools.phase where engine = 'queue' (+ the status twin)`
 - [Draft pool (legacy engine)](#draft-pool-legacy-engine) — `draft_pools.status (enum draft_pool_status) where engine = 'legacy'`
+- [Draft room armed confirm](#draft-room-armed-confirm) — `client: armedConfirmReducer phase in ArmedConfirmDialog`
+- [Draft room pick dialog](#draft-room-pick-dialog) — `client: pickFlowReducer state (open, submitting) in DraftToolClient`
 - [Draft slot](#draft-slot) — `draft_slots.status`
 - [Draft Kill Token window](#draft-kill-token-window) — `derived: the initial pool's phase, draft_pools.token_purchase_closes_at and the league's completed matches`
 - [Match](#match) — `matches.status (enum match_status)`
@@ -235,6 +238,41 @@ stateDiagram-v2
 | `save_fail` | `saving` | `error` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | An HTTP error, success: false, or no answer: the badge shows the failure. |
 | `load` | `idle`, `dirty`, `saving`, `error` | `idle` | caster | `src/components/creator/studio/CastStudioContext.tsx` | A stored session replaces the studio state (the load_session action). |
 
+## Visible poller
+
+- **Id:** `client.visible_poller`
+- **State lives in:** client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)
+- **Module doc:** `docs/draft-room.md`
+- **States:** `stopped`, `live`, `complete`, `halted`
+- **Actors:** `consumer`, `tick`
+
+One poller per live draft screen (and the notification bell, the OBS draft overlay, the hidden-tab turn watch). A tick reports live, complete or stop; the poller schedules the next read from that. Ticks chain with setTimeout and never overlap.
+
+```mermaid
+stateDiagram-v2
+  [*] --> stopped
+  stopped --> live: start (consumer)
+  live --> live: live (tick)
+  complete --> live: live (tick)
+  live --> complete: complete (tick)
+  complete --> complete: complete (tick)
+  live --> halted: stop (tick)
+  complete --> halted: stop (tick)
+  halted --> live: refresh (consumer)
+  live --> stopped: unmount (consumer)
+  complete --> stopped: unmount (consumer)
+  halted --> stopped: unmount (consumer)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `stopped` | `live` | consumer | `src/lib/draft/use-visible-poll.ts` | Reads at once, also in a hidden tab. |
+| `live` | `live`, `complete` | `live` | tick | `src/lib/draft/use-visible-poll.ts`<br>`src/components/draft-tool/hooks/use-draft-snapshot.ts`<br>`src/components/draft/draft-board-sync.ts`<br>`src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/components/draft-admin/pool-admin.tsx`<br>`src/components/notifications/NotificationBell.tsx`<br>`src/components/broadcast/overlays/DraftViewer.tsx` | Next read after liveIntervalMs. |
+| `complete` | `live`, `complete` | `complete` | tick | `src/lib/draft/use-visible-poll.ts`<br>`src/components/draft-tool/hooks/use-draft-snapshot.ts`<br>`src/components/draft/draft-board-sync.ts`<br>`src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/components/draft-admin/pool-admin.tsx`<br>`src/components/notifications/NotificationBell.tsx`<br>`src/components/broadcast/overlays/DraftViewer.tsx` | Next read after completeIntervalMs (>= 60 s), or none when it is null. |
+| `stop` | `live`, `complete` | `halted` | tick | `src/lib/draft/use-visible-poll.ts`<br>`src/components/draft-tool/hooks/use-draft-snapshot.ts`<br>`src/components/draft/draft-board-sync.ts`<br>`src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/components/draft-admin/pool-admin.tsx`<br>`src/components/notifications/NotificationBell.tsx`<br>`src/components/broadcast/overlays/DraftViewer.tsx` | 401/403 (the turn watch also 404/409): asking again cannot help. |
+| `refresh` | `halted` | `live` | consumer | `src/lib/draft/use-visible-poll.ts` | refresh() after a write reads now; the read decides the next state. |
+| `unmount` | `live`, `complete`, `halted` | `stopped` | consumer | `src/lib/draft/use-visible-poll.ts` | Aborts the running tick. |
+
 ## Draft pool pause
 
 - **Id:** `draft_pool.pause`
@@ -319,6 +357,75 @@ stateDiagram-v2
 | `complete` | `in_progress` | `complete` | admin, system | `src/app/api/drafts/[id]/route.ts`<br>`src/app/api/drafts/[id]/picks/route.ts`<br>`src/app/api/drafts/[id]/state/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | An admin ends the draft (DraftBoard End draft), or the system after the last pick: the pick route, else the first GET /api/drafts/[id]/state. |
 | `reopen` | `complete` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): reopens a finished draft, e.g. to undo its last pick. The next state read completes it again while every pick is made. |
 | `reset` | `in_progress`, `complete` | `pending` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): docs/draft-room.md moves a legacy pool of a point-buy season back to pending so it can be deleted. |
+
+## Draft room armed confirm
+
+- **Id:** `draft_room.armed_confirm`
+- **State lives in:** client: armedConfirmReducer phase in ArmedConfirmDialog
+- **Module doc:** `docs/draft-room.md`
+- **States:** `closed`, `arming`, `armed`, `submitting`
+- **Actors:** `viewer`, `timer`, `flow`
+
+The confirm button of a pick or token dialog is enabled only in armed: it stays disabled for CONFIRM_ARM_MS after every open and after every re-arming failure, and while a submission is in flight. A timer for an older arm token is ignored.
+
+```mermaid
+stateDiagram-v2
+  [*] --> closed
+  closed --> arming: open (viewer)
+  arming --> armed: elapsed (timer)
+  armed --> submitting: submit (viewer)
+  arming --> submitting: busy (flow)
+  armed --> submitting: busy (flow)
+  submitting --> arming: fail_rearm (flow)
+  submitting --> armed: fail (flow)
+  arming --> closed: succeed (flow)
+  armed --> closed: succeed (flow)
+  submitting --> closed: succeed (flow)
+  arming --> closed: close (viewer)
+  armed --> closed: close (viewer)
+  submitting --> closed: close (viewer)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `open` | `closed` | `arming` | viewer | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` |  |
+| `elapsed` | `arming` | `armed` | timer | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` | Only the timer of the current arm token. |
+| `submit` | `armed` | `submitting` | viewer | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` |  |
+| `busy` | `arming`, `armed` | `submitting` | flow | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` | The caller reports a submission in flight. |
+| `fail_rearm` | `submitting` | `arming` | flow | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` | Default after a failure: a new arm token. |
+| `fail` | `submitting` | `armed` | flow | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` | `failed` with `rearm: false`. |
+| `succeed` | `arming`, `armed`, `submitting` | `closed` | flow | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` |  |
+| `close` | `arming`, `armed`, `submitting` | `closed` | viewer | `src/lib/draft-ui/armed-confirm.ts`<br>`src/components/draft-tool/shared/ArmedConfirmDialog.tsx` |  |
+
+## Draft room pick dialog
+
+- **Id:** `draft_room.pick_flow`
+- **State lives in:** client: pickFlowReducer state (open, submitting) in DraftToolClient
+- **Module doc:** `docs/draft-room.md`
+- **States:** `closed`, `open`, `submitting`
+- **Actors:** `viewer`, `server`
+
+The confirm dialog of one pick. The request id minted on open is reused for every retry of that dialog (idempotent on the server); a cancel is refused while a pick is in flight. A server answer either closes the dialog (success, or an error that makes it moot: CLOSING_PICK_ERRORS) or reopens it with the error inline (network errors offer Retry).
+
+```mermaid
+stateDiagram-v2
+  [*] --> closed
+  closed --> open: open (viewer)
+  open --> submitting: submit (viewer)
+  open --> closed: cancel (viewer)
+  open --> closed: settle (server)
+  submitting --> closed: settle (server)
+  open --> open: reject (server)
+  submitting --> open: reject (server)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `open` | `closed` | `open` | viewer | `src/components/draft-tool/hooks/pick-flow.ts`<br>`src/components/draft-tool/DraftToolClient.tsx` | Mints the request id; an open dialog ignores a second open. |
+| `submit` | `open` | `submitting` | viewer | `src/components/draft-tool/hooks/pick-flow.ts`<br>`src/components/draft-tool/DraftToolClient.tsx` | Clears the previous error. |
+| `cancel` | `open` | `closed` | viewer | `src/components/draft-tool/hooks/pick-flow.ts`<br>`src/components/draft-tool/DraftToolClient.tsx` | Not while a pick is in flight. |
+| `settle` | `open`, `submitting` | `closed` | server | `src/components/draft-tool/hooks/pick-flow.ts`<br>`src/components/draft-tool/DraftToolClient.tsx` | Success, or a closing error (toast + refresh). |
+| `reject` | `open`, `submitting` | `open` | server | `src/components/draft-tool/hooks/pick-flow.ts`<br>`src/components/draft-tool/DraftToolClient.tsx` | A validation or network error stays inline; network errors set retryable. |
 
 ## Draft slot
 
