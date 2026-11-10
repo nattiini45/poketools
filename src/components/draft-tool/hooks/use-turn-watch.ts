@@ -28,6 +28,7 @@ import type { MyTurnDTO } from '@/lib/draft-ui/snapshot-types';
 import type { MyTurnResult } from '@/components/draft-tool/data-source';
 import { clearLegacyNotifyKeys } from '@/lib/draft-ui/storage';
 import { disablePush, enablePush, readPushState } from '@/lib/push/client';
+import { pushDeviceMachine, pushDeviceState } from '@/lib/push/device-state';
 
 export type NotifySupport = 'unsupported' | 'install-required' | 'default' | 'granted' | 'denied';
 
@@ -129,7 +130,7 @@ export function usePushAlerts(): { state: NotifyState; toggle(): void } {
 
   const toggle = useCallback(() => {
     const current = stateRef.current;
-    if (current.busy || current.support === 'unsupported' || current.support === 'denied' || current.support === 'install-required') return;
+    if (!pushDeviceMachine.can(pushDeviceState(current), 'busy', 'viewer')) return;
     setState({ ...current, busy: true, error: null });
 
     if (current.optedIn) {

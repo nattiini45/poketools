@@ -16,6 +16,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
+- [Form submission](#form-submission) — `client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)`
 - [Visible poller](#visible-poller) — `client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)`
 - [Draft pool pause](#draft-pool-pause) — `draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'`
 - [Draft pool (queue engine)](#draft-pool-queue-engine) — `draft_pools.phase where engine = 'queue' (+ the status twin)`
@@ -26,7 +27,9 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Draft Kill Token window](#draft-kill-token-window) — `derived: the initial pool's phase, draft_pools.token_purchase_closes_at and the league's completed matches`
 - [Match](#match) — `matches.status (enum match_status)`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
+- [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
+- [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
 - [Wiki note report](#wiki-note-report) — `wiki_note_reports.status`
 - [Wiki note moderation](#wiki-note-moderation) — `wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
 
@@ -237,6 +240,33 @@ stateDiagram-v2
 | `save_ok_outdated` | `saving` | `dirty` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | The server stored the snapshot but the session changed while the request ran: the next save follows. |
 | `save_fail` | `saving` | `error` | autosave | `src/components/creator/studio/CastStudioContext.tsx` | An HTTP error, success: false, or no answer: the badge shows the failure. |
 | `load` | `idle`, `dirty`, `saving`, `error` | `idle` | caster | `src/components/creator/studio/CastStudioContext.tsx` | A stored session replaces the studio state (the load_session action). |
+
+## Form submission
+
+- **Id:** `client.submit_phase`
+- **State lives in:** client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)
+- **States:** `idle`, `submitting`, `done`, `failed`
+- **Actors:** `viewer`, `request`
+
+One submission at a time. A failure stays retryable; a success that navigates away is final, so a second click while the next page loads cannot create the same tournament or league twice.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> submitting: submit (viewer)
+  failed --> submitting: submit (viewer)
+  submitting --> done: succeed (request)
+  submitting --> idle: settle (request)
+  submitting --> failed: fail (request)
+  done --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `submit` | `idle`, `failed` | `submitting` | viewer | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` |  |
+| `succeed` | `submitting` | `done` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A create that navigates, a live import. |
+| `settle` | `submitting` | `idle` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A success that keeps the form open: an edit save, a dry run. |
+| `fail` | `submitting` | `failed` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | The form shows the error; a retry is a new submit. |
 
 ## Visible poller
 
@@ -559,6 +589,95 @@ stateDiagram-v2
 | `reinstate` | `suspended`, `banned` | `active` | admin | `src/app/api/admin/players/[id]/unsuspend/route.ts`<br>`src/lib/supabase/queries/players.ts` | Clears suspended_until and ban_reason; the session epoch stays, so tokens from before the sanction stay dead. |
 | `expire` | `suspended` | `active` | system | `src/app/api/cron/expire-suspensions/route.ts`<br>`src/lib/supabase/queries/players.ts` | The cron (every 15 min) lifts suspensions whose suspended_until has passed; a banned player has no suspended_until and is never lifted. |
 
+## Push device (this browser)
+
+- **Id:** `push.device`
+- **State lives in:** client: NotifyState in usePushAlerts (browser permission + PushManager subscription)
+- **Module doc:** `docs/push.md`
+- **States:** `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed`
+- **Actors:** `browser`, `viewer`, `switch`
+
+Whether THIS browser gets push alerts. The browser read on mount (and on a language change) sets the state from the permission and the subscription; a click on the bell switches it through busy. A server that answers push_disabled hides the control for good.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unsupported
+  unsupported --> unsupported: read_unsupported (browser)
+  install-required --> unsupported: read_unsupported (browser)
+  denied --> unsupported: read_unsupported (browser)
+  ask --> unsupported: read_unsupported (browser)
+  off --> unsupported: read_unsupported (browser)
+  on --> unsupported: read_unsupported (browser)
+  busy --> unsupported: read_unsupported (browser)
+  failed --> unsupported: read_unsupported (browser)
+  unsupported --> install-required: read_install-required (browser)
+  install-required --> install-required: read_install-required (browser)
+  denied --> install-required: read_install-required (browser)
+  ask --> install-required: read_install-required (browser)
+  off --> install-required: read_install-required (browser)
+  on --> install-required: read_install-required (browser)
+  busy --> install-required: read_install-required (browser)
+  failed --> install-required: read_install-required (browser)
+  unsupported --> denied: read_denied (browser)
+  install-required --> denied: read_denied (browser)
+  denied --> denied: read_denied (browser)
+  ask --> denied: read_denied (browser)
+  off --> denied: read_denied (browser)
+  on --> denied: read_denied (browser)
+  busy --> denied: read_denied (browser)
+  failed --> denied: read_denied (browser)
+  unsupported --> ask: read_ask (browser)
+  install-required --> ask: read_ask (browser)
+  denied --> ask: read_ask (browser)
+  ask --> ask: read_ask (browser)
+  off --> ask: read_ask (browser)
+  on --> ask: read_ask (browser)
+  busy --> ask: read_ask (browser)
+  failed --> ask: read_ask (browser)
+  unsupported --> off: read_off (browser)
+  install-required --> off: read_off (browser)
+  denied --> off: read_off (browser)
+  ask --> off: read_off (browser)
+  off --> off: read_off (browser)
+  on --> off: read_off (browser)
+  busy --> off: read_off (browser)
+  failed --> off: read_off (browser)
+  unsupported --> on: read_on (browser)
+  install-required --> on: read_on (browser)
+  denied --> on: read_on (browser)
+  ask --> on: read_on (browser)
+  off --> on: read_on (browser)
+  on --> on: read_on (browser)
+  busy --> on: read_on (browser)
+  failed --> on: read_on (browser)
+  ask --> busy: toggle (viewer)
+  off --> busy: toggle (viewer)
+  on --> busy: toggle (viewer)
+  failed --> busy: toggle (viewer)
+  busy --> on: enabled (switch)
+  busy --> off: disabled (switch)
+  busy --> ask: dismissed (switch)
+  busy --> denied: refused (switch)
+  busy --> failed: fail (switch)
+  busy --> unsupported: push_disabled (switch)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `read_unsupported` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `unsupported` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_install-required` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `install-required` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_denied` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `denied` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_ask` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `ask` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_off` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `off` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `read_on` | `unsupported`, `install-required`, `denied`, `ask`, `off`, `on`, `busy`, `failed` | `on` | browser | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` | readPushState after mount or a language change. |
+| `toggle` | `ask`, `off`, `on`, `failed` | `busy` | viewer | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/components/draft-tool/feedback/NotifyToggle.tsx` | Only a click; install-required and denied open their hint instead. |
+| `enabled` | `busy` | `on` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` |  |
+| `disabled` | `busy` | `off` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts`<br>`src/lib/push/client.ts` |  |
+| `dismissed` | `busy` | `ask` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | The permission prompt was closed without an answer. |
+| `refused` | `busy` | `denied` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` |  |
+| `fail` | `busy` | `failed` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | Keeps the previous on/off; retryable. |
+| `push_disabled` | `busy` | `unsupported` | switch | `src/components/draft-tool/hooks/use-turn-watch.ts` | The server has no push configuration, or the browser cannot subscribe. |
+
 ## Redraft submission window
 
 - **Id:** `redraft.submission_window`
@@ -580,6 +699,38 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `lock` | `open` | `locked` | system | `supabase/migrations/20261018180000_league_groups.sql#draft__build_snapshot`<br>`supabase/migrations/20261018180000_league_groups.sql#redraft_set_submission`<br>`src/lib/supabase/queries/drafts-redraft.ts` | The deadline passes (derived where it is read). |
 | `move_deadline` | `locked` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/redraft/route.ts` | PATCH /api/drafts/[id]/redraft with a future deadline_at (submissions phase only). |
+
+## Teambuilder save
+
+- **Id:** `teambuilder.save`
+- **State lives in:** client: EditorState.saveStatus in TeamsEditor
+- **Module doc:** `docs/teambuilder-editor.md`
+- **States:** `idle`, `saving`, `saved`, `warned`, `unchecked`, `error`
+- **Actors:** `player`, `server`
+
+One save of the team (POST /api/teams, PATCH /api/teams/[id], or POST /api/match-prep in plan mode). A save never overlaps another one. An edit made while a save is in flight keeps the team dirty after the save lands.
+
+```mermaid
+stateDiagram-v2
+  [*] --> idle
+  idle --> saving: save (player)
+  saved --> saving: save (player)
+  warned --> saving: save (player)
+  unchecked --> saving: save (player)
+  error --> saving: save (player)
+  saving --> saved: saved (server)
+  saving --> error: fail (server)
+  saved --> warned: warn (server)
+  saved --> unchecked: uncheck (server)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `save` | `idle`, `saved`, `warned`, `unchecked`, `error` | `saving` | player | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | The Save button; disabled while saving. |
+| `saved` | `saving` | `saved` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | MARK_SAVED: clean unless the team was edited during the save. |
+| `fail` | `saving` | `error` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | One generic label; a 409 for a completed match also locks the editor. |
+| `warn` | `saved` | `warned` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules are not met (the verdict goes to the validation panel). |
+| `uncheck` | `saved` | `unchecked` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules could not be checked. |
 
 ## Wiki note report
 

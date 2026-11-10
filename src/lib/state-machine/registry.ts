@@ -13,7 +13,10 @@ import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import { draftSlotMachine } from '@/lib/draft/slot-state';
 import { draftKillTokenWindowMachine } from '@/lib/draft/token-window-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
+import { pushDeviceMachine } from '@/lib/push/device-state';
+import { teamSaveMachine } from '@/lib/team/editor-save-state';
 import { matchMachine } from '@/lib/tournament/match-state';
+import { submitPhaseMachine } from '@/lib/ui/submit-phase-state';
 import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
 
@@ -28,6 +31,9 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   pickFlowMachine.spec,
   armedConfirmMachine.spec,
   pollerMachine.spec,
+  teamSaveMachine.spec,
+  pushDeviceMachine.spec,
+  submitPhaseMachine.spec,
   aiArtifactMachine.spec,
   noteModerationMachine.spec,
   noteReportMachine.spec,
