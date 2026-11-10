@@ -7,7 +7,8 @@ import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
-import { useFormatter, useT } from '@/i18n/client';
+import { useFormatter, useRequestTime, useT } from '@/i18n/client';
+import { effectiveProposalStatus, matchProposalMachine } from '@/lib/match/proposal-state';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -85,7 +86,11 @@ export default function MatchSchedulingPanel({
   const [successKey, setSuccessKey] = useState<PanelSuccess | null>(null);
 
   const canPropose = canManage && status !== 'completed' && status !== 'disputed';
-  const pendingProposal = proposals.find((proposal) => proposal.status === 'pending') ?? null;
+  // A pending proposal past its expiry is expired in effect: it blocks no new proposal and takes no answer (the
+  // server expires the row when a new proposal is made).
+  const requestTime = useRequestTime();
+  const isOpen = (proposal: MatchProposalWithPlayers) => effectiveProposalStatus(proposal, requestTime) === 'pending';
+  const pendingProposal = proposals.find(isOpen) ?? null;
 
   function dateTime(value: string | null): string {
     return value ? formatter.instant(value, 'dateTime') : tCommon('states.notScheduled');
@@ -184,7 +189,9 @@ export default function MatchSchedulingPanel({
       {canManage && proposals.length > 0 && (
         <div className="space-y-2 mb-4">
           {proposals.map((proposal) => {
-            const canRespond = proposal.status === 'pending' && proposal.responder_id === currentPlayerId;
+            const canRespond =
+              proposal.responder_id === currentPlayerId &&
+              matchProposalMachine.nextStates(effectiveProposalStatus(proposal, requestTime), 'responder').length > 0;
             return (
               <div key={proposal.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-poke-md border border-poke-border bg-poke-elevated p-3">
                 <div className="min-w-0">

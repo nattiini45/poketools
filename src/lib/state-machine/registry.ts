@@ -22,6 +22,7 @@ import { leagueTrashMachine } from '@/lib/league-trash/lifecycle-state';
 import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
 import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMachine, gameStatsLockMachine } from '@/lib/match/game-marker-state';
 import { matchOutcomeMachine } from '@/lib/match/outcome-state';
+import { matchProposalMachine } from '@/lib/match/proposal-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { pushDeviceMachine } from '@/lib/push/device-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
@@ -41,6 +42,7 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
   matchOutcomeMachine.spec,
+  matchProposalMachine.spec,
   teamRosterMachine.spec,
   teamShareMachine.spec,
   teamLibraryMachine.spec,
