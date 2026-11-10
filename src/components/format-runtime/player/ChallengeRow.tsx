@@ -11,6 +11,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
+import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-state';
 import { answerChallengeRequest, withdrawChallengeRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ChallengeState, ChallengeView } from '@/lib/format-engine/runtime/view-types';
 import { usePlayerName } from './useLabels';
@@ -58,7 +59,7 @@ export default function ChallengeRow({ seasonId, challenge, viewerId, closed, on
   const other = outgoing ? challenge.defender : challenge.challenger;
   const otherName = nameOf(other);
   const state: ChallengeState = challenge.lapsed ? 'expired' : challenge.state;
-  const answerable = state === 'open' && !closed;
+  const answerable = !closed && formatChallengeMachine.transitionsFrom(state, outgoing ? 'challenger' : 'defender').length > 0;
 
   async function answer(accept: boolean) {
     const outcome = await run(() => answerChallengeRequest(seasonId, challenge.id, accept));

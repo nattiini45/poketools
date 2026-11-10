@@ -24,7 +24,7 @@ describe('code list', () => {
       'season_format_type_locked',
     ];
     expect([...FORMAT_ERROR_CODES].sort()).toEqual(fromCatalogs.sort());
-    expect(FORMAT_ERROR_CODES).toHaveLength(40);
+    expect(FORMAT_ERROR_CODES).toHaveLength(41);
     expect(FORMAT_ERROR_CODES).not.toContain('format_mismatch');
   });
 

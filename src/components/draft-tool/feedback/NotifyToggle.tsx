@@ -10,6 +10,8 @@
  * - granted → on/off switch for this device
  * - denied → "Blocked in browser settings" + how to unblock
  *
+ * The state comes from `pushDeviceState` (`src/lib/push/device-state.ts`, machine `push.device`).
+ *
  * The hint of the install and blocked states is real text, not a tooltip: touch screens (iOS above all) have no
  * hover. In the clock bar the control is a button that opens the hint under it; in the players sheet
  * (`showNotes`) the hint is always visible.
@@ -20,6 +22,7 @@ import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { errorsPlayers } from '@/i18n/messages/errors';
+import { pushDeviceState, restingPushDeviceState } from '@/lib/push/device-state';
 import type { NotifyState } from '../hooks/use-turn-watch';
 import styles from '../draft-tool.module.css';
 
@@ -40,19 +43,22 @@ export default function NotifyToggle({
   const errorText = useApiErrorText(errorsPlayers);
   const [hintOpen, setHintOpen] = useState(false);
   const hintId = useId();
-  if (state.support === 'unsupported' || state.error?.code === 'push_disabled') return null;
+  const device = pushDeviceState(state);
+  if (device === 'unsupported') return null;
 
-  const needsInstall = state.support === 'install-required';
-  const denied = state.support === 'denied';
-  const busy = state.busy === true;
-  const on = state.support === 'granted' && state.optedIn;
+  // A running or failed switch keeps what the control would switch (on/off, or the offer to ask).
+  const resting = restingPushDeviceState(state);
+  const needsInstall = device === 'install-required';
+  const denied = device === 'denied';
+  const busy = device === 'busy';
+  const on = resting === 'on';
   const label = needsInstall
     ? t('notify.installRequired')
     : denied
       ? t('notify.denied')
       : busy
         ? t('notify.busy')
-        : state.support === 'default'
+        : resting === 'ask'
           ? t('notify.enable')
           : on
             ? t('notify.on')
@@ -68,7 +74,7 @@ export default function NotifyToggle({
         type="button"
         onClick={hint !== null ? () => setHintOpen((open) => !open) : onToggle}
         disabled={busy}
-        aria-pressed={hint === null && state.support === 'granted' ? on : undefined}
+        aria-pressed={resting === 'on' || resting === 'off' ? on : undefined}
         aria-expanded={hint !== null && !showNotes ? hintOpen : undefined}
         aria-describedby={hintShown ? hintId : undefined}
         title={`${label}. ${hint ?? note}`}

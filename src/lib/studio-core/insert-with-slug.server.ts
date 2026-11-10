@@ -12,17 +12,26 @@ import { withSlugSuffix } from './slug';
 
 export type SlugRequest = { explicit: string } | { base: string };
 
+/**
+ * The slugs a generated insert tries, in order: the base, the base with -2 to -9, then (the last resort) the base plus four
+ * random hex digits. The new-competition function tries the same list inside its transaction.
+ */
+export function slugCandidates(base: string): string[] {
+  return [
+    base,
+    ...[2, 3, 4, 5, 6, 7, 8, 9].map((attempt) => withSlugSuffix(base, attempt)),
+    withSlugSuffix(base, 10, randomBytes(2).toString('hex')),
+  ];
+}
+
 export async function insertWithSlug<T>(
   create: (slug: string) => Promise<T>,
   isSlugTaken: (error: unknown) => boolean,
   slug: SlugRequest,
 ): Promise<T> {
   if ('explicit' in slug) return create(slug.explicit);
-  const candidates = [slug.base, ...[2, 3, 4, 5, 6, 7, 8, 9].map((attempt) => withSlugSuffix(slug.base, attempt))];
-  // The last resort: the base plus four random hex digits.
-  candidates.push(withSlugSuffix(slug.base, 10, randomBytes(2).toString('hex')));
   let lastError: unknown;
-  for (const candidate of candidates) {
+  for (const candidate of slugCandidates(slug.base)) {
     try {
       return await create(candidate);
     } catch (err) {

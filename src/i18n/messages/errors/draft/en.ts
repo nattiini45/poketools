@@ -94,6 +94,8 @@ export default {
   POOL_HAS_REDRAFT: 'This draft has a redraft attached. Delete the redraft first.',
   /** DELETE of a pool that teams were drafted from (FK fk_teams_draft_pool, SQLSTATE 23503). */
   POOL_HAS_TEAMS: 'Teams were drafted from this draft, so it cannot be deleted. It stays as the record of those teams.',
+  /** PATCH /api/drafts/[id] (legacy pool): the status changed between the route's read and its guarded write. */
+  POOL_STATUS_CHANGED: 'This draft changed in the meantime. Reload the page and try again.',
   SEASON_HAS_NO_LIST: 'This league has no bound point-buy list.',
   /** League groups (20261018180000): a league with groups drafts per group. */
   SEASON_GROUP_REQUIRED: 'This league has groups: create the draft for one of its groups.',

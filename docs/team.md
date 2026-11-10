@@ -8,6 +8,7 @@ The Team module enforces visibility/redaction rules for team Pokémon details ba
 src/lib/team/
 ├── visibility.ts  # Team visibility and redaction helpers
 ├── check.server.ts  # The one server-side team check (checkTeam)
+├── editor-save-state.ts  # Teambuilder save machine (teambuilder.save): no overlapping saves
 ├── completed-match-lock.ts  # Teams linked to a completed match are immutable for non-admins
 ├── item-usage-cache.ts  # Expires the public cached reads built from a team roster
 ├── kit-team-gate.ts  # Advisory verdict of a kit league's team rules (adviseKitTeam, kitTeamVerdict); never refuses a team
@@ -15,6 +16,8 @@ src/lib/team/
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
 ├── showdown-set.ts  # Showdown paste text (always English)
+├── team-roster-state.ts  # State machine team.roster: the roster write locks and the write verdict (docs/state-machines.md)
+├── team-share-state.ts  # State machines team.share and team.library: share link and library publication
 └── stat-spread.ts  # Localized stat spread text
 ```
 
@@ -60,7 +63,7 @@ const visibleTeams = await filterTeamVisibility(teams, ctx);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/team/__tests__/` (10 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts` and `visibility.test.ts`; `private-team-fields.ts` is the shared leak assertion
+- **Test Files**: `src/lib/team/__tests__/` (12 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts`, `visibility.test.ts`, `team-roster-state.test.ts` (the roster machine, its read-minimal verdict and the SQL parity) and `team-share-state.test.ts`; `private-team-fields.ts` is the shared leak assertion
 - **Testing Approach**: Unit tests of every helper; the team API routes and pages run the leak assertion on their payloads.
 
 ## Related Modules

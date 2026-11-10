@@ -45,6 +45,12 @@ describe('ActionsOverview', () => {
     expect(screen.getByRole('button', { name: 'Lock Gift' }).hasAttribute('disabled')).toBe(true);
   });
 
+  it('a window that has not opened yet can be opened and locked', () => {
+    mount({ actions: [actionView({ window: 'not_open_yet' })] });
+    expect(screen.getByRole('button', { name: 'Open Gift' }).hasAttribute('disabled')).toBe(false);
+    expect(screen.getByRole('button', { name: 'Lock Gift' }).hasAttribute('disabled')).toBe(false);
+  });
+
   it('offers no buttons when the format does not allow action adjustments', () => {
     mount({ canAdjust: false });
     expect(screen.queryByRole('button', { name: /Gift/ })).toBeNull();

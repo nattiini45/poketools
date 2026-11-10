@@ -80,7 +80,8 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(async () => []),
 }));
 
-vi.mock('@/lib/tournament/match-state', () => ({
+vi.mock('@/lib/tournament/match-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tournament/match-state')>()),
   hasReachedBoThreshold: vi.fn(() => ({ reached: false, winner_id_index: null })),
   validateTransition: vi.fn(() => ({ valid: true })),
 }));
@@ -390,7 +391,6 @@ describe('recordGameResult: replay binding', () => {
       expect(transitionMatchStatus).toHaveBeenCalledWith('match-1', {
         expectedStatus: 'in_progress',
         status: 'disputed',
-        autoConfirmAt: null,
       });
       expect(recordMatchOutcome).toHaveBeenCalledWith({
         matchId: 'match-1',
@@ -739,7 +739,6 @@ describe('recordGameResult', () => {
       winnerId: 'player-1',
       submitterId: 'player-1',
       autoConfirmAt: null,
-      confirmedAt: null,
     });
     expect(updateMatchStatus).not.toHaveBeenCalled();
   });
@@ -764,7 +763,6 @@ describe('recordGameResult', () => {
     expect(transitionMatchStatus).toHaveBeenCalledWith('match-1', expect.objectContaining({
       status: 'pending_confirmation',
       autoConfirmAt: '2026-05-23T00:00:00.000Z',
-      confirmedAt: null,
     }));
     vi.useRealTimers();
   });
@@ -2671,7 +2669,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'in_progress',
       winnerId: null,
       submitterId: 'admin-1',
-      autoConfirmAt: null,
     });
     expect(updateMatchStatus).not.toHaveBeenCalled();
     expect(result.match_status).toBe('in_progress');
@@ -2697,7 +2694,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'pending_confirmation',
       winnerId: 'player-1',
       submitterId: 'admin-1',
-      autoConfirmAt: null,
     });
     expect(result.match_status).toBe('pending_confirmation');
   });
@@ -2715,7 +2711,6 @@ describe('deleteGame / editGame: round read and status re-evaluation', () => {
       status: 'pending_confirmation',
       winnerId: 'player-2',
       submitterId: 'admin-1',
-      autoConfirmAt: undefined,
     });
   });
 

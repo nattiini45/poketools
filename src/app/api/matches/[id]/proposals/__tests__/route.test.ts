@@ -15,6 +15,7 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
 
 vi.mock('@/lib/supabase/queries/match-proposals', () => ({
   createMatchProposal: vi.fn(),
+  expireOverdueMatchProposals: vi.fn(),
   getPendingProposalForParticipant: vi.fn(),
   listMatchProposals: vi.fn(),
 }));
@@ -26,7 +27,12 @@ vi.mock('@/lib/audit/log', () => ({
 import { GET, POST } from '@/app/api/matches/[id]/proposals/route';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getMatchById } from '@/lib/supabase/queries/matches';
-import { createMatchProposal, getPendingProposalForParticipant, listMatchProposals } from '@/lib/supabase/queries/match-proposals';
+import {
+  createMatchProposal,
+  expireOverdueMatchProposals,
+  getPendingProposalForParticipant,
+  listMatchProposals,
+} from '@/lib/supabase/queries/match-proposals';
 import { logAuditEvent } from '@/lib/audit/log';
 
 const player = { playerId: 'player-1', name: 'Alice' };
@@ -66,6 +72,7 @@ describe('match proposal list/create route', () => {
     vi.mocked(getPendingProposalForParticipant).mockResolvedValue(null);
     vi.mocked(createMatchProposal).mockResolvedValue(proposal as never);
     vi.mocked(listMatchProposals).mockResolvedValue([]);
+    vi.mocked(expireOverdueMatchProposals).mockResolvedValue([]);
   });
 
   it('lists proposals for match participants', async () => {
@@ -118,6 +125,16 @@ describe('match proposal list/create route', () => {
     expect(body.error).toContain('pending proposal');
     expect(body.code).toBe('match_proposal_pending_exists');
     expect(createMatchProposal).not.toHaveBeenCalled();
+  });
+
+  it('expires overdue pending proposals of the match before it looks for a pending one', async () => {
+    const res = await POST(request({ proposed_at: '2099-05-21T18:00:00.000Z' }), params);
+
+    expect(res.status).toBe(201);
+    expect(expireOverdueMatchProposals).toHaveBeenCalledWith('daa274a2-59da-43fd-84a5-8cede96e15a4', expect.any(String));
+    expect(vi.mocked(expireOverdueMatchProposals).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(getPendingProposalForParticipant).mock.invocationCallOrder[0],
+    );
   });
 
   it('rejects past proposal times', async () => {
