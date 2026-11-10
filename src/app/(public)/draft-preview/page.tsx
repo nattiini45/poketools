@@ -218,7 +218,7 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
 
   const groups = Object.entries(SCENARIO_GROUPS) as [ScenarioGroup, readonly PreviewScenarioId[]][];
   const content = (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <header className="space-y-3 rounded-xl border border-poke-border p-3">
         <div>
           <h1 className="text-lg font-bold">{t('preview.title')}</h1>
