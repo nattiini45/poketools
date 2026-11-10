@@ -25,16 +25,40 @@ import { getSpriteStylePreference } from "@/lib/pkmn/sprite-style.server";
 // 404s. Local files make the build hermetic.
 const nunito = localFont({
   src: "./fonts/nunito-latin.woff2",
-  variable: "--font-heading-face",
+  variable: "--font-nunito",
   display: "swap",
   weight: "200 1000",
 });
 
 const dmSans = localFont({
   src: "./fonts/dm-sans-latin.woff2",
-  variable: "--font-body-face",
+  variable: "--font-dm-sans",
   display: "swap",
   weight: "100 1000",
+});
+
+// Direction B (redesign F3): Geist Pixel Square for display and title text, Geist Sans for everything else,
+// Geist Mono for number columns (OFL, src/app/fonts/OFL-Geist.txt). Nunito and DM Sans stay loaded for the
+// frozen surfaces, which keep them (globals.css, "Fonts").
+const geistPixel = localFont({
+  src: "./fonts/geist-pixel-square.woff2",
+  variable: "--font-geist-pixel",
+  display: "swap",
+  weight: "400",
+});
+
+const geist = localFont({
+  src: "./fonts/geist-variable.woff2",
+  variable: "--font-geist",
+  display: "swap",
+  weight: "100 900",
+});
+
+const geistMono = localFont({
+  src: "./fonts/geist-mono-variable.woff2",
+  variable: "--font-geist-mono",
+  display: "swap",
+  weight: "100 900",
 });
 
 // The root layout reads only the language cookies (i18n-core D6, §2.4) and the
@@ -94,7 +118,7 @@ export default async function RootLayout({
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SITE_PALETTE_PREPAINT_SCRIPT }} />
       </head>
       <body
-        className={`${nunito.variable} ${dmSans.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
+        className={`${nunito.variable} ${dmSans.variable} ${geistPixel.variable} ${geist.variable} ${geistMono.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
       >
         <I18nProvider {...i18n}>
           <ThemeProvider nonce={nonce}>

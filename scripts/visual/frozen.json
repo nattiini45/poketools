@@ -123,17 +123,6 @@
       ]
     },
     {
-      "id": "route-world-plaza",
-      "url": "/route-preview?tier=lite",
-      "viewports": [
-        "desktop",
-        "mobile"
-      ],
-      "roots": [
-        "[data-world]"
-      ]
-    },
-    {
       "id": "route-world",
       "url": "/route-preview?world={world}&scenario={scenario}&tier=lite",
       "matrix": {
@@ -215,20 +204,6 @@
       "url": "/leagues/{leagueSakura}?tier=lite",
       "needs": [
         "leagueSakura"
-      ],
-      "viewports": [
-        "desktop",
-        "mobile"
-      ],
-      "roots": [
-        "[data-world]"
-      ]
-    },
-    {
-      "id": "league-world-plaza-epb",
-      "url": "/leagues/{leagueEpb}?tier=lite",
-      "needs": [
-        "leagueEpb"
       ],
       "viewports": [
         "desktop",

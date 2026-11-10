@@ -47,6 +47,19 @@
   --text-8xl--line-height: 1;
   --text-9xl: 8rem;
   --text-9xl--line-height: 1;
+  /* Direction B type roles (redesign F3; typeClass() in src/lib/design/type.ts). */
+  --text-display: 1.75rem;
+  --text-display--line-height: 2.125rem;
+  --text-title: 1.125rem;
+  --text-title--line-height: 1.5rem;
+  --text-subtitle: 0.9375rem;
+  --text-subtitle--line-height: 1.375rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 0.875rem;
   --color-black: #000;
   --color-white: #fff;
   --color-slate-50: #f8fafc;
@@ -420,6 +433,34 @@
   --color-poke-border: var(--poke-border);
   --color-poke-border-strong: var(--poke-border-strong);
   --color-poke-border-focus: var(--poke-focus);
+  --color-page: var(--page);
+  --color-surface: var(--surface);
+  --color-elevated: var(--elevated);
+  --color-sunken: var(--sunken);
+  --color-hairline: var(--hairline);
+  --color-hairline-strong: var(--hairline-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-subtle: var(--accent-subtle);
+  --color-tier-1: var(--tier-1);
+  --color-tier-2: var(--tier-2);
+  --color-tier-3: var(--tier-3);
+  --color-tier-4: var(--tier-4);
+  --color-tier-1-soft: var(--tier-1-soft);
+  --color-tier-2-soft: var(--tier-2-soft);
+  --color-tier-3-soft: var(--tier-3-soft);
+  --color-tier-4-soft: var(--tier-4-soft);
+  --color-tier-ink: var(--tier-ink);
+  --color-live: var(--live);
+  --color-win: var(--win);
+  --color-win-bg: var(--win-bg);
+  --color-loss: var(--loss);
+  --color-loss-bg: var(--loss-bg);
+  --color-hover: var(--hover);
+  --color-selected: var(--selected);
+  --color-scrim: var(--scrim);
   --font-heading: var(--font-heading-face), system-ui, sans-serif;
   --font-body: var(--font-body-face), system-ui, sans-serif;
   --radius-lg: var(--radius);
@@ -442,6 +483,10 @@
      was built against: frozen-scale.css keeps its geometry, not Chrome's edge snapping. Its pages keep 18 px. */
   html:has([data-frozen="draft-room"]) {
     font-size: 18px;
+  }
+
+  :where([data-frozen]:not([data-frozen] *)) {
+    font-family: var(--font-body-face), system-ui, sans-serif;
   }
 
   * {
@@ -650,6 +695,61 @@
   --poke-moment-blue-bg: rgba(59, 130, 246, 0.15);
 }
 
+/* ─── Direction B tokens (redesign F3, plan addendum D) ───
+   The site's semantic set: one sand ground, three surfaces, two inks, one amber, four tier plates, status
+   pairs and two solid interaction tints. Today's --poke-* and shadcn names alias onto it on <html> only, so
+   redesigned pages restyle at once while themed worlds keep their plaza set (Layer 1 above) and frozen roots
+   keep their pins (frozen-pins.css). A site palette (html[data-palette], Layer 2) still overrides the aliases.
+   Every text pair is >= 4.5:1 (b-tokens.test.ts); --accent-fill is #CF660B instead of the render's #C05E0A,
+   which gave dark ink on the primary button 3.95:1. Washes are solid hex, never translucent (Q3). */
+:root {
+  --page: #EEE3CA;
+  --surface: #FFF8E9;
+  --elevated: #FAEED6;
+  --sunken: #E8D9B5;
+  --hairline: #E3D2AC;
+  --hairline-strong: #C9B183;
+  --fg: #241A0C;
+  --fg-muted: #5C4E37;
+  --accent-ink: #9A4806;
+  --accent-fill: #CF660B;
+  --accent-subtle: #F7E8CF;
+  --tier-1: #F2C14E;
+  --tier-2: #F4A97F;
+  --tier-3: #8EB4EA;
+  --tier-4: #9BD3A6;
+  --tier-1-soft: #FCE7A6;
+  --tier-2-soft: #FBCFA6;
+  --tier-3-soft: #C3DBF6;
+  --tier-4-soft: #C4E9CD;
+  --tier-ink: #241A0C;
+  --live: #166534;
+  --win: #166534;
+  --win-bg: #D7EED3;
+  --loss: #A91B1B;
+  --loss-bg: #F6D9D4;
+  --hover: #F4EDDE;
+  --selected: #E9E2D3;
+  --scrim: rgb(36 26 12 / 0.4);
+  --skew: -10deg;
+  --motion-fast: 80ms;
+  --motion-moderate: 160ms;
+  --motion-slow: 240ms;
+
+  --background: var(--page);
+  --foreground: var(--fg);
+  --poke-base: var(--page);
+  --poke-surface: var(--surface);
+  --poke-elevated: var(--elevated);
+  --poke-text-primary: var(--fg);
+  --poke-text-secondary: var(--fg-muted);
+  --poke-border: var(--hairline);
+  --poke-border-strong: var(--hairline-strong);
+  --poke-accent: var(--accent-ink);
+  --poke-accent-light: var(--accent-subtle);
+  --poke-live: var(--live);
+}
+
 /* ─── Moonlit variant (dark theme) ───
    Declares the full base set (status hues included, same values as the
    sunlit block) so each mode is complete on its own. */
@@ -737,6 +837,72 @@
   --poke-moment-emerald-bg: rgba(16, 185, 129, 0.2);
   --poke-moment-blue: #60a5fa;
   --poke-moment-blue-bg: rgba(59, 130, 246, 0.2);
+}
+
+/* Direction B, moonlit. Declared after the moonlit base set so it wins on <html>; same aliases as sunlit. */
+[data-theme="dark"] {
+  --page: #0E0B06;
+  --surface: #171208;
+  --elevated: #211A0D;
+  --sunken: #2A2110;
+  --hairline: #3A311C;
+  --hairline-strong: #5C5133;
+  --fg: #F5EDDD;
+  --fg-muted: #C4B596;
+  --accent-ink: #FFD166;
+  --accent-fill: #F5B84B;
+  --accent-subtle: #3B2D13;
+  --tier-1: #F5B84B;
+  --tier-2: #F09A6B;
+  --tier-3: #6E9BE0;
+  --tier-4: #5FBF7A;
+  --live: #6EE7A0;
+  --win: #6EE7A0;
+  --win-bg: #253420;
+  --loss: #F8A09B;
+  --loss-bg: #3B2920;
+  --hover: #241F15;
+  --selected: #2D281D;
+  --scrim: rgb(0 0 0 / 0.5);
+
+  --background: var(--page);
+  --foreground: var(--fg);
+  --poke-base: var(--page);
+  --poke-surface: var(--surface);
+  --poke-elevated: var(--elevated);
+  --poke-text-primary: var(--fg);
+  --poke-text-secondary: var(--fg-muted);
+  --poke-border: var(--hairline);
+  --poke-border-strong: var(--hairline-strong);
+  --poke-accent: var(--accent-ink);
+  --poke-accent-light: var(--accent-subtle);
+  --poke-live: var(--live);
+}
+
+/* A draft room fills the page and leaves its ground transparent, so its page keeps the plaza ground it was built
+   on (as it keeps the 18 px root). A site palette keeps its own ground. */
+:root:not([data-palette]):has([data-frozen="draft-room"]) {
+  --background: var(--palette-plaza-ground);
+  --poke-base: var(--palette-plaza-ground);
+}
+
+/* ─── Fonts (redesign F3) ───
+   Redesigned surfaces: Geist Pixel Square for display and title (font-heading; one weight, so no synthesised
+   bold), Geist Sans for everything else (font-body), Geist Mono for number columns (font-mono). Frozen roots
+   keep Nunito, DM Sans and the system mono stack they were built with. */
+body {
+  --font-heading-face: var(--font-geist-pixel), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-body-face: var(--font-geist), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-synthesis-weight: none;
+}
+
+[data-frozen],
+html:has([data-frozen="draft-room"]) body {
+  --font-heading-face: var(--font-nunito);
+  --font-body-face: var(--font-dm-sans);
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-synthesis-weight: auto;
 }
 
 /* ─── Site palettes (data-palette on <html>) ───

@@ -54,20 +54,32 @@ export const STAGGER = {
 } as const;
 
 /**
- * Spring presets in Apple's designer-facing parameters, expressed in the
- * `bounce` + `duration` form the `motion` library takes.
+ * Spring presets in the `bounce` + `duration` form the `motion` library takes, on Fluid Functionalism's three
+ * speeds (redesign F3): the bigger the thing that moves, the slower the spring. Exits are tweens one tier quicker
+ * (SPRING_EXIT), so a dismissal reads crisp instead of replaying the entrance. CSS reads the same speeds as
+ * --motion-fast, --motion-moderate and --motion-slow (globals.css).
  *
- * `bounce: 0` is critically damped and is the default for everything. Reserve
- * overshoot for motion the user physically initiated with a flick or drag —
- * bounce on a menu that merely faded in reads as wrong.
+ * bounce 0 is critically damped. Reserve overshoot for large surfaces and for motion the user physically
+ * initiated with a flick or drag: bounce on a menu that merely faded in reads as wrong.
  */
 export const SPRING = {
-  /** Default UI spring. No overshoot. */
-  default: { type: 'spring', bounce: 0, duration: 0.35 },
+  /** Hover, focus rings, fades, tooltips, selection indicators. */
+  fast: { type: 'spring', bounce: 0, duration: 0.08 },
+  /** Short travel and small expansion: indicators, switch thumbs, popovers, drawers that must land exactly. */
+  moderate: { type: 'spring', bounce: 0, duration: 0.16 },
+  /** Large surfaces: dialogs, side panels, stepped flows. */
+  slow: { type: 'spring', bounce: 0.12, duration: 0.24 },
   /** Momentum handoff after a gesture carried velocity. */
   momentum: { type: 'spring', bounce: 0.2, duration: 0.4 },
-  /** Slow, heavy surfaces: sheets and large panels. */
-  surface: { type: 'spring', bounce: 0.05, duration: 0.45 },
+  /** The pre-F3 default, kept for the frozen world HUD (WorldNav) only. */
+  default: { type: 'spring', bounce: 0, duration: 0.35 },
+} as const;
+
+/** The exit tween paired with each spring speed. */
+export const SPRING_EXIT = {
+  fast: { duration: 0.06 },
+  moderate: { duration: 0.12 },
+  slow: { duration: 0.16 },
 } as const;
 
 /**

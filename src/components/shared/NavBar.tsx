@@ -68,7 +68,7 @@ export function NavLink({
           layoutId={layoutId}
           aria-hidden="true"
           className="absolute inset-x-2 bottom-0 h-0.5 rounded-full bg-poke-accent"
-          transition={reduced ? { duration: 0 } : SPRING.default}
+          transition={reduced ? { duration: 0 } : SPRING.moderate}
         />
       )}
     </Link>
