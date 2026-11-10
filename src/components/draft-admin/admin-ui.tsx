@@ -6,7 +6,7 @@
  * Theme tokens only (no fixed dark fills).
  */
 import { createContext, useContext, useId, type ReactNode } from 'react';
-import type { ButtonVariant } from '@/components/ui/buttonStyles';
+import type { ButtonVariant } from '@/components/ui/frozen/buttonStyles';
 import { useT } from '@/i18n/client';
 import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import { cn } from '@/lib/utils/cn';

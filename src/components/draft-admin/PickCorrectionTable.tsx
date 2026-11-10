@@ -8,7 +8,7 @@
  * as `VOID_BLOCKED_PROGRESS` render through `useApiErrorText(errorsDraft)`.
  */
 import { useMemo, useState } from 'react';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import { LocalTime } from '@/i18n/LocalTime';
 import { useT } from '@/i18n/client';

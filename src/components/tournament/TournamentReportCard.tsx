@@ -8,7 +8,7 @@ import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import PokemonLink from '@/components/shared/PokemonLink';
 import TypeSprite from '@/components/shared/TypeSprite';
-import Badge from '@/components/ui/Badge';
+import Badge from '@/components/ui/frozen/Badge';
 import type {
   TournamentReport,
   RoundRecapContent,

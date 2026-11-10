@@ -25,7 +25,7 @@ import { errorsDraft } from '@/i18n/messages/errors/draft';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { LineId, TokenOverviewDTO } from '@/types/draft-queue';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import {
   allocatedTotal,

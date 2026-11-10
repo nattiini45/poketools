@@ -1,7 +1,7 @@
 'use client';
 
 import type { MatchStatus } from '@/types/match';
-import Badge from '@/components/ui/Badge';
+import Badge from '@/components/ui/frozen/Badge';
 import { useT } from '@/i18n/client';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';

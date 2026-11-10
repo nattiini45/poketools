@@ -14,6 +14,7 @@ export const FROZEN_SOURCE_PATHS = [
   'components/evolution/CrystalXPBar.tsx',
   'components/evolution/MatchEvolutionReplay.tsx',
   'components/draft/EvolutionRosterCard.tsx',
+  'components/ui/frozen/',
   'components/match/MatchHighlightCard.tsx',
   'lib/discord/match-card-image.tsx',
 ] as const;

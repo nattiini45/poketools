@@ -11,7 +11,7 @@
  */
 import { useId, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import { LocalTime } from '@/i18n/LocalTime';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';

@@ -6,7 +6,7 @@ import PokemonLink from '@/components/shared/PokemonLink';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeSprite from '@/components/shared/TypeSprite';
 import CategoryIcon from '@/components/shared/CategoryIcon';
-import Card from '@/components/ui/Card';
+import Card from '@/components/ui/frozen/Card';
 import Alert from '@/components/ui/Alert';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useDataLocale, useMessages } from '@/i18n/client';

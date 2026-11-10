@@ -20,7 +20,7 @@ import { draftTokensMessages } from '@/i18n/messages/draft/tokens';
 import { errorsDraft } from '@/i18n/messages/errors/draft';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { LineId, TokenOverviewDTO } from '@/types/draft-queue';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ComebackTokenCard from './ComebackTokenCard';
 import CosmoTokenCard from './CosmoTokenCard';
 import DraftKillTokenCard from './DraftKillTokenCard';
