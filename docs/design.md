@@ -235,7 +235,8 @@ Token usage in className:
 
 ## Dependencies
 
-- **Tailwind CSS 4** (`@tailwindcss/postcss`) — token mapping in the `@theme` blocks of `globals.css`; `tailwindcss-animate` through `@plugin`. Where Tailwind 4's defaults differ from 3's (colour palette, font stacks, type-scale line heights, px breakpoints) the theme keeps Tailwind 3's values.
+- **Tailwind CSS 4** (`@tailwindcss/postcss`) — token mapping in the `@theme` blocks of `globals.css`; enter/exit animations (`animate-in`, `fade-in-0`, `zoom-in-95`, `slide-in-from-*`) from `tw-animate-css`, imported after the utilities. Where Tailwind 4's defaults differ from 3's (colour palette, font stacks, type-scale line heights, px breakpoints) the theme keeps Tailwind 3's values.
+- **Browser support** (Q7): Tailwind 4 needs Safari 16.4+, Chrome 111+ and Firefox 128+ (`@property`, `color-mix()`, cascade layers). That is the supported matrix; older browsers get Tailwind's fallbacks, untested.
 - **`next/font/local`** — self-hosted Nunito (heading) and DM Sans (body)
   variable woff2; exposed as `--font-heading-face` / `--font-body-face`.
 - Every feature module — these are the lowest-level building blocks.
