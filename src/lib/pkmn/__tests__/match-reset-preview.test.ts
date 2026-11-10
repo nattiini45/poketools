@@ -52,7 +52,8 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundsByTournament: vi.fn(async () => []),
 }));
 
-vi.mock('@/lib/tournament/match-state', () => ({
+vi.mock('@/lib/tournament/match-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tournament/match-state')>()),
   hasReachedBoThreshold: vi.fn(() => ({ reached: false, winner_id_index: null })),
   validateTransition: vi.fn(() => ({ valid: true })),
 }));

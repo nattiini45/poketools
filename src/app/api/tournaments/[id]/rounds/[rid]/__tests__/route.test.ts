@@ -288,7 +288,7 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
     expect(response.status).toBe(200);
     expect(payload.success).toBe(true);
     expect(payload.data.status).toBe('active');
-    expect(vi.mocked(updateRoundStatus)).toHaveBeenCalledWith(R_ID, 'active');
+    expect(vi.mocked(updateRoundStatus)).toHaveBeenCalledWith(R_ID, 'active', 'pending');
   });
 
   it('expires the tournament and its league read-cache tags after the write (D37)', async () => {
@@ -1016,7 +1016,7 @@ describe('PATCH /api/tournaments/[id]/rounds/[rid]', () => {
 
       expect(response.status).toBe(200);
       expect(payload.data).toMatchObject({ status: 'active', deadline: DEADLINE });
-      expect(vi.mocked(updateRoundStatus)).toHaveBeenCalledWith(R_ID, 'active');
+      expect(vi.mocked(updateRoundStatus)).toHaveBeenCalledWith(R_ID, 'active', 'pending');
       expect(vi.mocked(updateRoundDeadline)).toHaveBeenCalledWith(R_ID, DEADLINE);
     });
 

@@ -11,6 +11,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { enumMessages } from '@/i18n/messages/enums';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
+import { seasonMachine } from '@/lib/season/season-state';
 
 const STATUS_OPTIONS: { value: SeasonStatus; variant: 'gray' | 'green' | 'blue' }[] = [
   { value: 'upcoming', variant: 'gray' },
@@ -72,6 +73,8 @@ export default function LeagueStatusControl({ seasonId, currentStatus, blocked }
     return status !== currentStatus && reason ? reason : null;
   }
   const reasonId = (status: SeasonStatus) => `${reasonIdBase}-${status}`;
+  /** Whether the league machine lets an admin move to `status` (every status today); the current one stays enabled. */
+  const offered = (status: SeasonStatus) => status === currentStatus || seasonMachine.can(currentStatus, status, 'admin');
 
   return (
     <div className="flex flex-wrap items-center gap-2" role="group" aria-labelledby={labelId}>
@@ -82,7 +85,7 @@ export default function LeagueStatusControl({ seasonId, currentStatus, blocked }
             key={option.value}
             type="button"
             onClick={() => handleChange(option.value)}
-            disabled={loading || reasonFor(option.value) !== null}
+            disabled={loading || reasonFor(option.value) !== null || !offered(option.value)}
             aria-pressed={option.value === currentStatus}
             aria-describedby={reasonFor(option.value) !== null ? reasonId(option.value) : undefined}
             // 44 px touch target on phones; the badge keeps its compact look inside it.

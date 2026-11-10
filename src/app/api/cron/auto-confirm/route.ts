@@ -15,6 +15,7 @@ import {
   type FinalizeWorklistCursor,
 } from '@/lib/supabase/queries/matches';
 import { logAuditEvent } from '@/lib/audit/log';
+import { AUTO_CONFIRM_FROM, matchMachine } from '@/lib/tournament/match-state';
 import { logger } from '@/lib/logger';
 import { secretsEqual } from '@/lib/utils/crypto';
 import { formatZodErrors } from '@/lib/validation';
@@ -173,15 +174,17 @@ async function handle(request: Request) {
       const winnerId = match.winner_id;
 
       try {
-        // Compare-and-set on pending_confirmation: a player confirm or dispute
-        // that landed after the list read wins, and finalize never runs twice.
+        // Compare-and-set on pending_confirmation (event auto_confirm of the
+        // match machine): a player confirm or dispute that landed after the list
+        // read wins, and finalize never runs twice.
+        matchMachine.assertTransition(AUTO_CONFIRM_FROM, 'completed', 'system');
         const updated = await updateMatchStatus(
           match.id,
           'completed',
           winnerId,
           undefined,
           match.notes ? `${match.notes}\nAuto-confirmed after timeout.` : 'Auto-confirmed after timeout.',
-          'pending_confirmation'
+          AUTO_CONFIRM_FROM
         );
         if (!updated) {
           result.skipped_conflict += 1;
@@ -191,7 +194,7 @@ async function handle(request: Request) {
         const finalize = await finalizeMatchCompletion({
           match: { ...match, winner_id: winnerId, status: 'completed' },
           winnerId,
-          previousStatus: 'pending_confirmation',
+          previousStatus: AUTO_CONFIRM_FROM,
         });
 
         logAuditEvent({

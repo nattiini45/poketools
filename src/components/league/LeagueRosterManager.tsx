@@ -37,6 +37,7 @@ import { errorsPlayers } from '@/i18n/messages/errors/players';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { leagueRosterMessages } from '@/i18n/messages/league-roster';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
+import { isSeasonClosed } from '@/lib/season/season-state';
 
 interface LeagueRosterManagerProps {
   seasonId: string;
@@ -85,7 +86,7 @@ export type PhaseEnrollment = Record<string, ReadonlyArray<{ id: string; name: s
 export function isSubstitutionClosed(
   season: Pick<SeasonWithDetails, 'status' | 'archived'> | null,
 ): boolean {
-  return season !== null && (season.status === 'completed' || season.archived);
+  return season !== null && isSeasonClosed(season);
 }
 
 /**

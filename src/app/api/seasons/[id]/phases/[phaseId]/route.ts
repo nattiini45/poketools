@@ -13,7 +13,6 @@ import {
   getTournamentById,
   getTournamentWithDetails,
   getStagesBySeasonId,
-  updateTournament,
   deleteTournament,
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
@@ -40,6 +39,7 @@ import {
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { statusEffectsAuditMetadata, updateTournamentWithStatus } from '@/lib/tournament/tournament-transition';
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;
@@ -149,14 +149,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       assertPhaseNameFree(body.name, await getStagesBySeasonId(id), phaseId);
     }
 
-    const tournament = await updateTournament(phaseId, body);
+    // The status moves through the tournament machine with the same effects as from the tournament route: the format
+    // reaction, the auto advance and the completion announcement.
+    const outcome = await updateTournamentWithStatus(before, body, { actor: 'admin' });
+    const { tournament, formatReactionFailed, autoAdvanceHeld, autoAdvanceRepeated } = outcome;
+    const statusEffects = statusEffectsAuditMetadata(outcome);
     expireTournamentReads(phaseId, id);
 
     const changes: Record<string, { before: unknown; after: unknown }> = {};
     diffField(changes, 'name', before.name, tournament.name);
     diffField(changes, 'status', before.status, tournament.status);
     diffField(changes, 'bracket_type', before.bracket_type, tournament.bracket_type);
-    if (Object.keys(changes).length > 0) {
+    if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'phase.update',
         actor_id: admin.playerId,
@@ -165,6 +169,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_id: phaseId,
         resource_name: tournament.name,
         changes,
+        ...(Object.keys(statusEffects).length > 0 ? { metadata: statusEffects } : {}),
       });
     }
 
@@ -173,6 +178,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     return NextResponse.json<ApiResult<LeaguePhase>>({
       success: true,
       data: buildLeaguePhase(withDetails!, rounds),
+      ...(formatReactionFailed ? { warnings: [{ code: 'format_reaction_failed' }] } : {}),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update phase');

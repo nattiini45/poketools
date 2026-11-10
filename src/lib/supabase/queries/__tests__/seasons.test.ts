@@ -412,6 +412,24 @@ describe('seasons', () => {
       expect(result.language).toBe('en');
     });
 
+    it('with a guard, writes only while the row still holds the status read', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: { ...seasonRow, status: 'completed' }, error: null });
+
+      const result = await updateSeason('s1', { status: 'completed' }, { from: 'active' });
+
+      expect(mockBuilder.eq).toHaveBeenCalledWith('id', 's1');
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'active');
+      expect(result.status).toBe('completed');
+    });
+
+    it('with a guard, a row that moved on is a 409 season_status_changed', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+      await expect(updateSeason('s1', { status: 'active' }, { from: 'upcoming' })).rejects.toMatchObject({
+        code: 'season_status_changed',
+        statusCode: 409,
+      });
+    });
+
     it('throws on database error', async () => {
       mockBuilder.single.mockResolvedValue({ data: null, error: dbError });
       await expect(updateSeason('s1', { name: 'Fail' })).rejects.toEqual(dbError);
