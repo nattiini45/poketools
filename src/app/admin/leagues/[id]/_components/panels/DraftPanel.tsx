@@ -9,8 +9,10 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
+import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import { draftPoolFormatText } from '@/i18n/content/draft-pool-format';
 import { DRAFT_CONFIG_LIMITS } from '@/lib/draft/schemas';
+import { draftPoolDisplayStatus } from '@/lib/draft/pool-phase-state';
 import { isLegacyPlaceholder } from '@/lib/draft-ui/select-pool';
 import { epbPack } from '@/lib/format-pack';
 import { toPublicPlayerRef } from '@/lib/players/public-player';
@@ -52,7 +54,7 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
   const isPointBuy = caps.pointBuyList;
   const showTokens = caps.draftTokens || caps.killTokens;
   const needsParticipants = isPointBuy || showTokens;
-  const [seasonPool, participants, formatRules, pools, tEnum, tBoard, tGlossary] = await Promise.all([
+  const [seasonPool, participants, formatRules, pools, tEnum, tBoard, tGlossary, tAdmin] = await Promise.all([
     getDraftPoolBySeason(id),
     needsParticipants ? getSeasonParticipants(id) : Promise.resolve([]),
     isPointBuy ? getFormatRules(id) : Promise.resolve(null),
@@ -60,6 +62,7 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
     getT(enumMessages),
     getT(draftLegacyBoardMessages),
     getT(glossaryMessages),
+    getT(draftAdminMessages),
   ]);
 
   // EPB: an unstarted pre-M2 placeholder pool is not a draft yet; the create form
@@ -79,10 +82,15 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
   // Token summary (draft-frontend §7.4): the Comeback switch hides once a Redraft has completed.
   const hasRedraft = pools.some((p) => p.kind === 'redraft' && p.phase === 'complete');
 
+  // A cancelled queue pool keeps the status twin `complete`: label it from its phase (draftPoolDisplayStatus).
+  const shownStatus = draftPool ? draftPoolDisplayStatus(draftPool) : null;
   const poolLabels = draftPool
     ? {
         type: draftPoolFormatText(tBoard, draftPool, { pointBuy: isPointBuy }),
-        status: enumLabel(tEnum, 'draftPoolStatus', draftPool.status),
+        status:
+          shownStatus === 'cancelled'
+            ? tAdmin('panel.phase.cancelled')
+            : enumLabel(tEnum, 'draftPoolStatus', draftPool.status),
       }
     : null;
   const roomLink = (chunks: ReactNode) => (

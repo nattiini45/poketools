@@ -18,6 +18,8 @@ src/lib/broadcast/
 ├── tracker-reducer.ts  # Live battle tracker state transitions
 ├── caster-data.ts  # Fetches the caster data (teams, stats, standings) of a match
 ├── channel.ts  # Cast Studio Realtime channel and message types (the browser Supabase exception)
+├── cast-session-state.ts  # castSessionMachine: cast_sessions.status (docs/state-machines.md)
+├── cast-studio-save-state.ts  # castStudioSaveMachine: the Cast Studio autosave (docs/state-machines.md)
 ├── commentary-prompts.ts  # Commentary prompts from caster data and the current game state
 ├── manual-result-response.ts  # Reads the body of a manual-result response for the battle tracker
 ├── moment-limits.ts  # Bounds on a moment marked in the tracker

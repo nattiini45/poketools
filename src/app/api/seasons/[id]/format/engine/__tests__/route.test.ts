@@ -30,6 +30,7 @@ import { revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import { logAuditEvent } from '@/lib/audit/log';
+import { FormatStudioError } from '@/lib/format-studio/errors';
 import type { SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import { getKitPhases } from '@/lib/supabase/queries/format-engine';
 import { getSeasonFormatSummary, setSeasonFormatEngine } from '@/lib/supabase/queries/season-formats';
@@ -76,7 +77,7 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 29, retryAfterSeconds: 0 });
   vi.mocked(getSeasonById).mockResolvedValue(season());
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary('legacy'));
-  vi.mocked(setSeasonFormatEngine).mockImplementation(async (_id, engine) => summary(engine));
+  vi.mocked(setSeasonFormatEngine).mockImplementation(async (_id, _from, engine) => summary(engine));
   vi.mocked(getKitPhases).mockResolvedValue([{ id: PHASE_ID, format_stage_key: 'league', stage_order: 1, stage_spec: null }]);
 });
 
@@ -94,11 +95,26 @@ describe('PUT /api/seasons/[id]/format/engine', () => {
     const response = await PUT(put({ engine: 'shadow' }), params);
     expect(response.status).toBe(200);
     expect((await response.json()).data.season_format.engine).toBe('shadow');
-    expect(setSeasonFormatEngine).toHaveBeenCalledWith(SEASON_ID, 'shadow');
+    expect(setSeasonFormatEngine).toHaveBeenCalledWith(SEASON_ID, 'legacy', 'shadow');
     expect(revalidateTag).toHaveBeenCalled();
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'season.format.engine', metadata: { from: 'legacy', to: 'shadow' } }),
     );
+  });
+
+  it.each([
+    ['legacy', 'shadow'],
+    ['legacy', 'kit'],
+    ['shadow', 'legacy'],
+    ['shadow', 'kit'],
+    ['kit', 'legacy'],
+    ['kit', 'shadow'],
+  ] as const)('accepts the switch %s -> %s', async (from, to) => {
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary(from));
+    const response = await PUT(put({ engine: to }), params);
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.season_format.engine).toBe(to);
+    expect(logAuditEvent).toHaveBeenCalledWith(expect.objectContaining({ metadata: { from, to } }));
   });
 
   it('writes nothing when the engine is already the one asked for', async () => {
@@ -120,6 +136,15 @@ describe('PUT /api/seasons/[id]/format/engine', () => {
     await PUT(put({ engine: 'kit' }), params);
     expect(setSeasonFormatEngine).toHaveBeenCalledTimes(1);
     expect(vi.mocked(revalidateTag).mock.calls.length).toBeGreaterThan(0);
+  });
+
+  it('answers 409 format_engine_changed when another admin switched the engine in between, and still expires the reads', async () => {
+    vi.mocked(setSeasonFormatEngine).mockRejectedValueOnce(new FormatStudioError('format_engine_changed'));
+    const response = await PUT(put({ engine: 'kit' }), params);
+    expect(response.status).toBe(409);
+    expect((await response.json()).code).toBe('format_engine_changed');
+    expect(vi.mocked(revalidateTag).mock.calls.length).toBeGreaterThan(0);
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   it('expires the league reads when the engine write itself throws', async () => {

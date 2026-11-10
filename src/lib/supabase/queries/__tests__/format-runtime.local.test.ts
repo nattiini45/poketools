@@ -286,23 +286,44 @@ describe.skipIf(!optIn)('format runtime (local stack)', () => {
       expect(await submissionOf(action, ids.p3)).toMatchObject({ status: 'locked', picks: [{ item_id: 'own' }] });
     });
 
-    it('turns a submitted pick back into a draft on a save, releasing its items and its submitted_at', async () => {
+    it('refuses a save over a submitted pick (action_already_submitted) and keeps the pick, its items and its submitted_at', async () => {
       const action = 'revise';
       const draft = await save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'x' }] }));
       const submitted = await submit({
-        ...input({ actionKey: action, actorId: ids.p2 }), items: [{ resource: 'gift2', item_id: 'x', exclusive: true }], lock: false,
+        ...input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'x' }] }), items: [{ resource: 'gift2', item_id: 'x', exclusive: true }], lock: false,
       });
       expect(submitted).toMatchObject({ id: draft.id, status: 'submitted' });
       expect((await held('gift2', ids.p2)).map((r) => r.item_id)).toEqual(['x']);
 
-      const revised = await save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'y' }] }));
-      expect(revised).toMatchObject({ id: draft.id, status: 'draft', submitted_at: null, locked_at: null });
-      expect(await held('gift2', ids.p2)).toEqual([]);
+      await expect(save(input({ actionKey: action, actorId: ids.p2, picks: [{ item_id: 'y' }] }))).rejects.toBeInstanceOf(
+        rt.FormatActionAlreadySubmittedError,
+      );
+      expect(await submissionOf(action, ids.p2)).toMatchObject({
+        id: draft.id, status: 'submitted', picks: [{ item_id: 'x' }], submitted_at: submitted.submitted_at,
+      });
+      expect((await held('gift2', ids.p2)).map((r) => r.item_id)).toEqual(['x']);
 
-      // The exclusive item is free again, the lock leaves the draft alone, and a resubmit takes the item once more.
-      await fire([grant('gift2', ids.p3, 'x', { exclusive: true })]);
+      // A locked pick still raises action_locked, not action_already_submitted.
       await fire([{ op: 'lock_action', action }]);
-      expect(await submissionOf(action, ids.p2)).toMatchObject({ status: 'draft' });
+      await fire([{ op: 'open_action', action }]);
+      await expect(save(input({ actionKey: action, actorId: ids.p2 }))).rejects.toMatchObject({ code: 'action_locked' });
+    });
+
+    it('never demotes a submitted pick, however a save and a submit of the same player interleave', async () => {
+      const keys = Array.from({ length: 12 }, (_, i) => `demote${i}`);
+      await Promise.all(
+        keys.flatMap((action) => [
+          submit({ ...input({ actionKey: action, actorId: ids.p3 }), items: [{ resource: `demote_gift${action}`, item_id: 'x', exclusive: false }], lock: false }),
+          save(input({ actionKey: action, actorId: ids.p3 })).catch((error) => {
+            if (!(error instanceof rt.FormatActionAlreadySubmittedError)) throw error;
+          }),
+        ]),
+      );
+      for (const action of keys) {
+        // A save that landed after the submit would have turned it back into a draft and dropped its item.
+        expect(await submissionOf(action, ids.p3)).toMatchObject({ status: 'submitted' });
+        expect((await held(`demote_gift${action}`, ids.p3)).map((r) => r.item_id)).toEqual(['x']);
+      }
     });
 
     it('never leaves a submitted pick behind a locked action, however save/submit and the lock interleave', async () => {

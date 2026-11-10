@@ -206,7 +206,7 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
               className="sticky bottom-0 z-10 -mx-3 -mb-3 flex flex-wrap items-center gap-2 border-t border-poke-border bg-poke-surface p-3 lg:static lg:m-0 lg:border-0 lg:p-0"
               data-plan-footer
             >
-              <Button size="sm" disabled={!plan.ready || !canAsk || plan.status === 'built' || plan.status === 'abandoned' || plan.status === 'building'} onClick={() => onAsk(t('plan.buildPrompt'))}>
+              <Button size="sm" disabled={!plan.ready || !canAsk || !plan.buildable} onClick={() => onAsk(t('plan.buildPrompt'))}>
                 {t('plan.build')}
               </Button>
               {!plan.ready && <p className="min-w-0 flex-1 text-xs text-poke-text-muted">{t('plan.buildBlocked')}</p>}

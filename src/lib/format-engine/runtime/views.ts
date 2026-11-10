@@ -36,6 +36,7 @@ import type { LText } from '@/lib/studio-core/ltext';
 import { ltext } from '@/lib/studio-core/ltext';
 import type { Json } from '@/types/database';
 import { challengeOf } from '../challenge';
+import { actionSubmissionMachine } from './action-state';
 import { actorAccess } from './actions';
 import { buildLateJoiners, type FiredEventRecord } from './late-joiners';
 import { domainView, findDomainView, visibleEntries, type DomainView } from './domains';
@@ -171,7 +172,8 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
   const ownLink = rule.via === undefined ? undefined : state.links.find((l) => l.relation === rule.via && l.from === viewer);
   const hasAccess = actorAccess(rule, viewer, state, roster).ok;
   const accessible = hasAccess && names.has(viewer);
-  const actionable = accessible && window === 'open' && submission?.state !== 'locked';
+  const actionable =
+    accessible && window === 'open' && (submission === null || actionSubmissionMachine.transitionsFrom(submission.state, 'player').length > 0);
 
   // The target is displayed through `visibleLinks`, never through the unfiltered links of the state.
   let target: PlayerRef | null = null;

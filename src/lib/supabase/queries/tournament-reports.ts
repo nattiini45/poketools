@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { settleAiArtifact } from './ai-artifacts';
 import type { Tables, Json } from '@/types/database';
 import type {
   TournamentReport,
@@ -99,7 +100,7 @@ export async function createTournamentReport(
   return toTournamentReport(data);
 }
 
-/** Update a tournament report (content, status, tokens, error) */
+/** Settles a pending report as completed or failed (compare-and-set: `settleAiArtifact`). False when no pending row matched. */
 export async function updateTournamentReport(
   id: string,
   updates: {
@@ -107,27 +108,17 @@ export async function updateTournamentReport(
     prompt_tokens?: number;
     completion_tokens?: number;
     generation_time_ms?: number;
-    status?: TournamentReportStatus;
+    status: Exclude<TournamentReportStatus, 'pending'>;
     error?: string | null;
     /** The model that actually answered (the row is created with the requested one). */
     model_id?: string;
   }
-): Promise<void> {
-  const { error } = await supabase
-    .from('tournament_reports')
-    .update({
-      ...(updates.content !== undefined && { content: updates.content as unknown as Json }),
-      ...(updates.model_id !== undefined && { model_id: updates.model_id }),
-      ...(updates.prompt_tokens !== undefined && { prompt_tokens: updates.prompt_tokens }),
-      ...(updates.completion_tokens !== undefined && { completion_tokens: updates.completion_tokens }),
-      ...(updates.generation_time_ms !== undefined && { generation_time_ms: updates.generation_time_ms }),
-      ...(updates.status !== undefined && { status: updates.status }),
-      ...(updates.error !== undefined && { error: updates.error }),
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id);
-
-  if (error) throw error;
+): Promise<boolean> {
+  const { status, content, ...rest } = updates;
+  return settleAiArtifact('tournament_reports', id, status, {
+    ...rest,
+    ...(content !== undefined && { content: content as unknown as Json }),
+  });
 }
 
 /** Delete a report for regeneration */

@@ -21,6 +21,8 @@ import {
   type CastChannelStatus,
 } from '@/lib/broadcast/channel';
 import { soloPlayerDefaults } from '@/lib/broadcast/solo-defaults';
+import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
+import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import type { TrackerState } from '@/types/broadcast';
 import type { PokemonSet } from '@/types/team';
 import type { GameSummary } from '@/types/match';
@@ -33,6 +35,16 @@ import type {
 } from '@/types/cast-session';
 
 // ─── Studio-level state (wraps tracker state + session metadata) ───
+
+/**
+ * The autosave (`castStudioSaveMachine`): a running save keeps the body it
+ * sent, so an edit made meanwhile is still unsaved when it answers.
+ */
+export type CastSaveState =
+  | { status: 'idle' }
+  | { status: 'dirty' }
+  | { status: 'saving'; sent: string }
+  | { status: 'error'; error: ApiErrorLike };
 
 export interface CastStudioState {
   sessionId: string;
@@ -48,8 +60,7 @@ export interface CastStudioState {
   tracker: TrackerState;
   facing: { player1Slot: number | null; player2Slot: number | null };
   showFacing: boolean;
-  dirty: boolean;
-  saving: boolean;
+  save: CastSaveState;
   syncStatus: CastChannelStatus;
   lastSavedAt: string | null;
 }
@@ -123,7 +134,7 @@ function buildCastSessionUpdate(state: CastStudioState): CastSessionUpdate {
   return {
     name: state.sessionName,
     mode: state.mode,
-    match_id: state.matchId,
+    match_id: state.matchId || null,
     tournament_id: state.tournamentId,
     season_id: state.seasonId,
     player1_id: state.tracker.current_game.player1.player_id || null,
@@ -153,8 +164,9 @@ type StudioAction =
   | { type: 'set_match'; matchId: string; tournamentId: string | null; seasonId: string | null }
   | { type: 'set_format'; format: string; generation: number }
   | { type: 'new_opponent' }
-  | { type: 'mark_saved'; timestamp: string }
-  | { type: 'mark_saving' }
+  | { type: 'save_start'; sent: string }
+  | { type: 'save_ok'; at: string }
+  | { type: 'save_fail'; error: ApiErrorLike }
   | { type: 'populate_match'; data: CastSessionPopulateResult }
   | { type: 'load_session'; session: CastSession }
   | { type: 'set_sync_status'; status: CastChannelStatus };
@@ -177,49 +189,75 @@ function updateTeamSet(team: PokemonSet[], slot: number, update: Partial<Pokemon
   ));
 }
 
+/** Moves the autosave only along `castStudioSaveMachine`; a move it does not list leaves the state as it is. */
+function moveSave(
+  state: CastStudioState,
+  next: CastSaveState,
+  actor: 'caster' | 'autosave',
+): CastStudioState {
+  return castStudioSaveMachine.can(state.save.status, next.status, actor) ? { ...state, save: next } : state;
+}
+
 function studioReducer(state: CastStudioState, action: StudioAction): CastStudioState {
   switch (action.type) {
+    case 'save_start':
+      return moveSave(state, { status: 'saving', sent: action.sent }, 'autosave');
+    case 'save_ok': {
+      if (state.save.status !== 'saving') return state;
+      const outdated = JSON.stringify(buildCastSessionUpdate(state)) !== state.save.sent;
+      const saved = moveSave(state, outdated ? { status: 'dirty' } : { status: 'idle' }, 'autosave');
+      return { ...saved, lastSavedAt: action.at };
+    }
+    case 'save_fail':
+      return moveSave(state, { status: 'error', error: action.error }, 'autosave');
+    case 'set_sync_status':
+      return { ...state, syncStatus: action.status };
+    case 'load_session':
+      return moveSave(loadSession(state, action.session), { status: 'idle' }, 'caster');
+    default: {
+      const edited = applyEdit(state, action);
+      if (edited === state) return state;
+      return moveSave(edited, state.save.status === 'saving' ? state.save : { status: 'dirty' }, 'caster');
+    }
+  }
+}
+
+/** A studio action that changes the session; the save state is left to `studioReducer`. */
+function applyEdit(state: CastStudioState, action: StudioAction): CastStudioState {
+  switch (action.type) {
     case 'tracker':
-      return { ...state, tracker: trackerReducer(state.tracker, action.action), dirty: true };
+      return { ...state, tracker: trackerReducer(state.tracker, action.action) };
 
     case 'set_player1_team':
-      return { ...state, player1Team: action.team, dirty: true };
+      return { ...state, player1Team: action.team };
     case 'set_player2_team':
-      return { ...state, player2Team: action.team, dirty: true };
+      return { ...state, player2Team: action.team };
 
     case 'update_player1_set':
-      return { ...state, player1Team: updateTeamSet(state.player1Team, action.slot, action.set), dirty: true };
+      return { ...state, player1Team: updateTeamSet(state.player1Team, action.slot, action.set) };
     case 'update_player2_set':
-      return { ...state, player2Team: updateTeamSet(state.player2Team, action.slot, action.set), dirty: true };
+      return { ...state, player2Team: updateTeamSet(state.player2Team, action.slot, action.set) };
 
     case 'set_facing':
-      return { ...state, facing: { player1Slot: action.player1Slot, player2Slot: action.player2Slot }, dirty: true };
+      return { ...state, facing: { player1Slot: action.player1Slot, player2Slot: action.player2Slot } };
     case 'toggle_show_facing':
-      return { ...state, showFacing: !state.showFacing, dirty: true };
+      return { ...state, showFacing: !state.showFacing };
 
     case 'set_session_name':
-      return { ...state, sessionName: action.name, dirty: true };
+      return { ...state, sessionName: action.name };
     case 'set_mode':
-      return { ...state, mode: action.mode, dirty: true };
+      return { ...state, mode: action.mode };
     case 'set_match':
-      return { ...state, matchId: action.matchId, tournamentId: action.tournamentId, seasonId: action.seasonId, dirty: true };
+      return { ...state, matchId: action.matchId, tournamentId: action.tournamentId, seasonId: action.seasonId };
     case 'set_format':
-      return { ...state, format: action.format, generation: action.generation, dirty: true };
+      return { ...state, format: action.format, generation: action.generation };
 
     case 'new_opponent':
       return {
         ...state,
         player2Team: ensureTeamSlots([], 6),
         tracker: trackerReducer(state.tracker, { type: 'reset_opponent' }),
-        dirty: true,
       };
-
-    case 'mark_saving':
-      return { ...state, saving: true };
-    case 'mark_saved':
-      return { ...state, dirty: false, saving: false, lastSavedAt: action.timestamp };
-    case 'set_sync_status':
-      return { ...state, syncStatus: action.status };
 
     case 'populate_match':
       return {
@@ -247,53 +285,49 @@ function studioReducer(state: CastStudioState, action: StudioAction): CastStudio
           },
           action.data.games,
         ),
-        dirty: true,
-        saving: false,
       };
-
-    case 'load_session': {
-      const s = action.session;
-      const defaults = s.mode === 'solo' ? soloPlayerDefaults(s) : null;
-      const trackerState = s.tracker_state
-        ? normalizeSessionTracker(s, s.tracker_state as unknown as TrackerState)
-        : buildTrackerState(
-            s.match_id,
-            {
-              id: defaults?.player1.id ?? s.player1_id,
-              name: defaults?.player1.name ?? s.player1_name,
-              avatar_url: s.player1_avatar_url,
-              team: s.player1_team,
-            },
-            {
-              id: defaults?.player2.id ?? s.player2_id,
-              name: defaults?.player2.name ?? s.player2_name,
-              avatar_url: s.player2_avatar_url,
-              team: s.player2_team,
-            },
-          );
-      return {
-        ...state,
-        sessionId: s.id,
-        sessionName: s.name,
-        mode: s.mode,
-        format: s.format,
-        generation: s.generation,
-        matchId: s.match_id,
-        tournamentId: s.tournament_id,
-        seasonId: s.season_id,
-        player1Team: s.player1_team,
-        player2Team: s.player2_team,
-        tracker: trackerState,
-        dirty: false,
-        saving: false,
-        syncStatus: state.syncStatus,
-        lastSavedAt: s.updated_at,
-      };
-    }
 
     default:
       return state;
   }
+}
+
+/** The studio state of a stored session (the load_session action). */
+function loadSession(state: CastStudioState, s: CastSession): CastStudioState {
+  const defaults = s.mode === 'solo' ? soloPlayerDefaults(s) : null;
+  const trackerState = s.tracker_state
+    ? normalizeSessionTracker(s, s.tracker_state as unknown as TrackerState)
+    : buildTrackerState(
+        s.match_id,
+        {
+          id: defaults?.player1.id ?? s.player1_id,
+          name: defaults?.player1.name ?? s.player1_name,
+          avatar_url: s.player1_avatar_url,
+          team: s.player1_team,
+        },
+        {
+          id: defaults?.player2.id ?? s.player2_id,
+          name: defaults?.player2.name ?? s.player2_name,
+          avatar_url: s.player2_avatar_url,
+          team: s.player2_team,
+        },
+      );
+  return {
+    ...state,
+    sessionId: s.id,
+    sessionName: s.name,
+    mode: s.mode,
+    format: s.format,
+    generation: s.generation,
+    matchId: s.match_id,
+    tournamentId: s.tournament_id,
+    seasonId: s.season_id,
+    player1Team: s.player1_team,
+    player2Team: s.player2_team,
+    tracker: trackerState,
+    syncStatus: state.syncStatus,
+    lastSavedAt: s.updated_at,
+  };
 }
 
 // ─── Context ───────────────────────────────────────────────────────
@@ -358,8 +392,7 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
     tracker: initialTracker,
     facing: { player1Slot: null, player2Slot: null },
     showFacing: false,
-    dirty: false,
-    saving: false,
+    save: { status: 'idle' },
     syncStatus: session.realtime_key ? 'connecting' : 'local-only',
     lastSavedAt: session.updated_at,
   });
@@ -373,22 +406,29 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
   });
 
   useEffect(() => {
-    if (!state.dirty) return;
+    if (state.save.status !== 'dirty') return;
 
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     saveTimerRef.current = setTimeout(async () => {
       const current = stateRef.current;
-      dispatch({ type: 'mark_saving' });
+      const sent = JSON.stringify(buildCastSessionUpdate(current));
+      dispatch({ type: 'save_start', sent });
 
       try {
-        await fetch(`/api/cast-sessions/${current.sessionId}`, {
+        const res = await fetch(`/api/cast-sessions/${current.sessionId}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(buildCastSessionUpdate(current)),
+          body: sent,
         });
-        dispatch({ type: 'mark_saved', timestamp: new Date().toISOString() });
-      } catch {
-        // Save failed — state remains dirty, will retry on next change
+        const data: unknown = await res.json().catch(() => null);
+        const accepted = typeof data === 'object' && data !== null && 'success' in data && data.success === true;
+        if (!res.ok || !accepted) {
+          dispatch({ type: 'save_fail', error: toApiErrorLike(data) });
+          return;
+        }
+        dispatch({ type: 'save_ok', at: new Date().toISOString() });
+      } catch (err) {
+        dispatch({ type: 'save_fail', error: toApiErrorLike(err) });
       }
     }, 5000);
 
@@ -400,7 +440,7 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
   // ── Save on unload ──
   useEffect(() => {
     const handleUnload = () => {
-      if (!stateRef.current.dirty) return;
+      if (stateRef.current.save.status === 'idle') return;
       const current = stateRef.current;
       void fetch(
         `/api/cast-sessions/${current.sessionId}`,

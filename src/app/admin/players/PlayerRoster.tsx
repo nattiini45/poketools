@@ -16,6 +16,7 @@ import Table, { type Column } from '@/components/ui/Table';
 import { useT } from '@/i18n/client';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import type { PlayerSortColumn } from '@/lib/players/player-sort';
+import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { cycleColumnSort } from '@/lib/ui/table-params';
 import {
   RosterActionAlert,
@@ -56,6 +57,11 @@ type PlayersPage = ApiResponse<Player[]> & { total?: number };
 const SEARCH_DEBOUNCE_MS = 300;
 /** The guest-link picker lists at most this many accounts per search. */
 const LINK_PICKER_LIMIT = 50;
+
+/** Whether the roster offers the moderation action `event` for this player: the admin moves of `playerStatusMachine`. */
+function canModerate(player: Player, event: 'suspend' | 'ban' | 'reinstate'): boolean {
+  return playerStatusMachine.transitionsFrom(player.status, 'admin').some((t) => t.event === event);
+}
 
 /** The confirm button colour: red where the click is hard to undo, plain where it only restores. */
 const CONFIRM_VARIANT: Record<RosterConfirmKind, 'danger' | 'primary'> = {
@@ -582,19 +588,20 @@ export default function PlayerRoster({ canManageCreators, protectedPlayerId = nu
             )}
             {player.id !== protectedPlayerId && (
               <>
-                {player.status !== 'active' ? (
+                {canModerate(player, 'reinstate') && (
                   <button type="button" onClick={() => askConfirm('reinstate', player)} className="text-poke-green text-sm hover:underline">
                     {t('players.rowActions.reinstate')}
                   </button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => openSuspendDialog(player)} className="text-poke-yellow text-sm hover:underline">
-                      {t('players.rowActions.suspend')}
-                    </button>
-                    <button type="button" onClick={() => openBanDialog(player)} className="text-poke-danger text-sm hover:underline">
-                      {t('players.rowActions.ban')}
-                    </button>
-                  </>
+                )}
+                {canModerate(player, 'suspend') && (
+                  <button type="button" onClick={() => openSuspendDialog(player)} className="text-poke-yellow text-sm hover:underline">
+                    {t('players.rowActions.suspend')}
+                  </button>
+                )}
+                {canModerate(player, 'ban') && (
+                  <button type="button" onClick={() => openBanDialog(player)} className="text-poke-danger text-sm hover:underline">
+                    {t('players.rowActions.ban')}
+                  </button>
                 )}
                 <button type="button" onClick={() => askConfirm('delete', player)} className="text-poke-danger text-sm hover:underline">
                   {t('players.rowActions.delete')}
