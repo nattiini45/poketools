@@ -194,7 +194,9 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
   const tGroups = await getT(draftGroupsMessages, locale);
   const tSprites = await getT(spriteStyleMessages, locale);
 
-  const scenario = buildPreviewScenario(state.scenario, previewNow());
+  // `?now=<ISO instant>` pins the fixture clock (the visual harness, docs/visual-harness.md); default: the real time.
+  const pinnedNow = Date.parse(firstParam(params.now) ?? '');
+  const scenario = buildPreviewScenario(state.scenario, Number.isFinite(pinnedNow) ? pinnedNow : previewNow());
   const catalog = buildLineCatalog(PREVIEW_ENTRIES, [], DEFAULT_BANNED_MOVES, locale);
   const index = await previewIndex();
   const world = worldOf(state.world);

@@ -1,0 +1,29 @@
+{
+  "$comment": "Run-only tsconfig for scripts/visual/social-images.tsx (the visual harness): same mapping as scripts/tsconfig.dev-seed.json, so the server-only marker and next/cache resolve to the test stubs under tsx.",
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "allowJs": true,
+    "paths": {
+      "@/*": [
+        "../../src/*"
+      ],
+      "@format-pack": [
+        "../../src/format-packs/example"
+      ],
+      "@pack-extensions": [
+        "../../src/format-packs/example/extensions"
+      ],
+      "server-only": [
+        "../../src/test/server-only-stub.ts"
+      ],
+      "next/cache": [
+        "../../src/test/next-cache-stub.ts"
+      ]
+    },
+    "jsx": "react-jsx"
+  },
+  "include": [
+    "./social-images.tsx"
+  ]
+}

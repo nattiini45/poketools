@@ -227,6 +227,21 @@ describe('composeWeeklyRecap', () => {
     expect(recap.pokemon_usage.length).toBeGreaterThan(0);
   });
 
+  it('breaks usage ties by name, whatever order the games arrive in', async () => {
+    vi.mocked(getMatchesByRound).mockResolvedValue([makeMatch('m1')] as never);
+    vi.mocked(getBattleStatsByMatch).mockResolvedValue({
+      'game-1': [
+        { pokemon_name: 'Tyranitar', was_brought: true, kos_dealt: 1, match_won: true },
+        { pokemon_name: 'Amoonguss', was_brought: true, kos_dealt: 0, match_won: true },
+        { pokemon_name: 'Garchomp', was_brought: true, kos_dealt: 2, match_won: true },
+      ],
+    } as never);
+
+    const recap = await composeWeeklyRecap(DEFAULT_OPTIONS);
+
+    expect(recap.pokemon_usage.map((u) => u.pokemon_name)).toEqual(['Amoonguss', 'Garchomp', 'Tyranitar']);
+  });
+
   it('does not generate narrative by default', async () => {
     vi.mocked(getMatchesByRound).mockResolvedValue([makeMatch('m1')] as never);
 
@@ -264,6 +279,20 @@ describe('composeWeeklyRecap', () => {
     expect(recap.stat_leaders).toBeDefined();
     expect(recap.stat_leaders.most_kos).not.toBeNull();
     expect(recap.stat_leaders.most_kos!.pokemon_name).toBe('Garchomp');
+  });
+
+  it('breaks stat leader ties by name, whatever order the aggregates arrive in', async () => {
+    vi.mocked(getMatchesByRound).mockResolvedValue([]);
+    vi.mocked(getAggregates).mockResolvedValue([
+      { pokemon_name: 'Kingambit', total_kos_dealt: 9, total_games: 5, total_wins: 4, total_appearances: 5, total_brought: 5 },
+      { pokemon_name: 'Dragonite', total_kos_dealt: 9, total_games: 5, total_wins: 4, total_appearances: 5, total_brought: 5 },
+      { pokemon_name: 'Corviknight', total_kos_dealt: 3, total_games: 5, total_wins: 4, total_appearances: 5, total_brought: 5 },
+    ] as never);
+
+    const recap = await composeWeeklyRecap(DEFAULT_OPTIONS);
+
+    expect(recap.stat_leaders.most_kos!.pokemon_name).toBe('Dragonite');
+    expect(recap.stat_leaders.pokemon_mvp!.pokemon_name).toBe('Corviknight');
   });
 
   it('handles stat leaders gracefully when aggregates are empty', async () => {

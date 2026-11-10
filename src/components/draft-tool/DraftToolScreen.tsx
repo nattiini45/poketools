@@ -288,7 +288,7 @@ export default function DraftToolScreen({
   );
 
   return (
-    <div ref={rootRef} className={screenClass}>
+    <div ref={rootRef} className={screenClass} data-frozen="draft-room">
       {header ? <div className={styles.screenHeader}>{header}</div> : null}
       <div ref={clockRowRef} className={styles.clockRow}>
         <ClockBar

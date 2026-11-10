@@ -1,0 +1,7 @@
+{
+  "$comment": "Run-only tsconfig for scripts/visual/seed-run.ts (node scripts/visual/seed.mjs), same mapping as tsconfig.dev-seed.json: the server-only marker and next/cache resolve to the test stubs under tsx, the root tsconfig stays untouched.",
+  "extends": "./tsconfig.dev-seed.json",
+  "include": [
+    "./visual/seed-run.ts"
+  ]
+}

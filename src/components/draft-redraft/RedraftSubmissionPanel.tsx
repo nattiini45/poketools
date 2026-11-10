@@ -120,7 +120,7 @@ export default function RedraftSubmissionPanel({
   );
 
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-4 rounded-xl border border-poke-border bg-poke-card p-4">
+    <section aria-labelledby={headingId} className="flex flex-col gap-4 rounded-xl border border-poke-border bg-poke-card p-4" data-frozen="draft-room">
       <header className="flex flex-col gap-1">
         <h2 id={headingId} className="text-lg font-bold">
           {t('panel.title')}

@@ -26,7 +26,7 @@ export const draftPoolStatusMachine = defineMachine({
       from: ['pending'],
       to: 'in_progress',
       actors: ['admin'],
-      writers: ['src/app/api/drafts/[id]/route.ts', 'src/lib/supabase/queries/drafts.ts'],
+      writers: ['src/app/api/drafts/[id]/route.ts', 'src/lib/supabase/queries/drafts.ts', 'src/lib/visual-seed/seed.ts'],
       note: 'DraftBoard Start (and the admin agent\'s staged propose_draft_activate_legacy_pool). A pool of a point-buy season answers POOL_ENGINE_LEGACY_EPB.',
     },
     {

@@ -194,3 +194,6 @@ scripts/pkmn-i18n/.cache/
 # Maintainer review deliverables (internal engineering reports that discuss the private history;
 # never published with the public repo)
 /deliverables/
+
+# visual-capture harness output (scripts/visual, docs/visual-harness.md)
+/.visual/

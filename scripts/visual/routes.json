@@ -1,0 +1,448 @@
+{
+  "$comment": "Surface captures for review (docs/visual-harness.md): never gated. Each page at four widths, both themes, en and de, as the role named.",
+  "version": 1,
+  "viewports": {
+    "phone": {
+      "width": 390,
+      "height": 844
+    },
+    "tablet": {
+      "width": 768,
+      "height": 1024
+    },
+    "laptop": {
+      "width": 1280,
+      "height": 800
+    },
+    "desktop": {
+      "width": 1440,
+      "height": 900
+    }
+  },
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "defaults": {
+    "settleMs": 600
+  },
+  "roles": {
+    "admin": {
+      "email": "local-admin@poketools.test",
+      "password": "poketools-local-admin"
+    },
+    "player": {
+      "email": "seed-player-1@poketools.test",
+      "password": "poketools-local-admin"
+    }
+  },
+  "targets": [
+    {
+      "id": "public-home",
+      "url": "/",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-leagues",
+      "url": "/leagues",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-tournaments",
+      "url": "/tournaments",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-league-sakura",
+      "url": "/leagues/{leagueSakura}?tier=lite",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "public-league-custom",
+      "url": "/leagues/{leagueCustom}?tier=lite",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "needs": [
+        "leagueCustom"
+      ]
+    },
+    {
+      "id": "public-tournament",
+      "url": "/tournaments/{tournamentStandalone}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "needs": [
+        "tournamentStandalone"
+      ]
+    },
+    {
+      "id": "public-match",
+      "url": "/tournaments/{stageSakura}/matches/{matchCompletedBo3}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "needs": [
+        "stageSakura",
+        "matchCompletedBo3"
+      ]
+    },
+    {
+      "id": "public-insights",
+      "url": "/insights",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-wiki",
+      "url": "/wiki/pokemon",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-pokemon",
+      "url": "/pokemon/garchomp",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-replays",
+      "url": "/replays",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-players",
+      "url": "/players",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "public-player",
+      "url": "/players/{playerAria}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "needs": [
+        "playerAria"
+      ]
+    },
+    {
+      "id": "public-signin",
+      "url": "/auth/signin",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "player-dashboard",
+      "url": "/dashboard",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player"
+    },
+    {
+      "id": "player-settings",
+      "url": "/dashboard/settings",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player"
+    },
+    {
+      "id": "player-teambuilder",
+      "url": "/teambuilder",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player"
+    },
+    {
+      "id": "player-draft-board",
+      "url": "/leagues/{leagueDraft}/draft",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player",
+      "needs": [
+        "leagueDraft"
+      ]
+    },
+    {
+      "id": "admin-overview",
+      "url": "/admin",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-leagues",
+      "url": "/admin/leagues",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-leagues-archived",
+      "url": "/admin/leagues/archived",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-tournaments",
+      "url": "/admin/tournaments",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-league-new",
+      "url": "/admin/leagues/new",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-league",
+      "url": "/admin/leagues/{leagueSakura}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "admin-league-custom",
+      "url": "/admin/leagues/{leagueCustom}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueCustom"
+      ]
+    },
+    {
+      "id": "admin-matches",
+      "url": "/admin/matches",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-players",
+      "url": "/admin/players",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-formats",
+      "url": "/admin/formats",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-rulesets",
+      "url": "/admin/rulesets",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-audit",
+      "url": "/admin/audit",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-data",
+      "url": "/admin/data",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "creator-studio",
+      "url": "/creator/studio",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    }
+  ]
+}
