@@ -47,6 +47,8 @@ src/lib/tournament/
 ├── season-standings.ts, standings-rules.ts  # Format-aware standings entry point and the scoring rules it follows
 ├── seed-errors.ts  # Domain errors of the participant seed update
 ├── settings-patch.ts, standalone-lock.ts  # Standalone settings fields and their lock after the start
+├── tournament-state.ts  # tournamentMachine: the status moves of a tournament or phase (docs/state-machines.md)
+├── tournament-transition.ts  # updateTournamentWithStatus: checked, guarded status write and its effects (both PATCH routes)
 └── startup-checklist.server.ts  # The server side of the start-up checklist
 ```
 
@@ -194,6 +196,7 @@ A value equal to the stored one passes (the settings form sends the whole object
 - **Best-of is odd, 1 to 15.** Every best-of in the API (`best_of_default`, the values of `bo_overrides`, a round's `best_of`, a manual round's `best_of`) goes through `bestOfSchema` (see [Validation](./validation.md)); even values are **400** `validation_failed`. The pickers offer `BEST_OF_VALUES` (`src/lib/tournament/best-of.ts`) and merge a stored legacy even value in (`bestOfChoices`), so editing an old record does not silently change it. A record that already holds an even value keeps it until someone saves a different best-of on it. The phase `PATCH` parses the best-of leniently (any integer 1 to 15) because the phase form sends the whole record back, then refuses an even `best_of_default` or `bo_overrides` value that is not the one the phase already holds (`newEvenBestOfIssues`): saving a rename on such a phase works, picking a different even value is **400** `validation_failed`.
 - **Group count is 2 to 26** (`phaseGroupsCreateSchema`, `MAX_SEASON_GROUPS`); the phase groups panel offers the same range.
 - **Reopen.** `PATCH` with `{ status: 'active' }` on a completed tournament or phase writes only the status column (the same call "Mark completed" uses the other way). Matches, results, standings and rounds are untouched, and players already advanced into the next phase stay there. Completing it again emits the completion Discord and social events again.
+- **Status moves.** The status goes through `tournamentMachine` (`src/lib/tournament/tournament-state.ts`, [State machines](./state-machines.md)): upcoming to active or completed, active to completed, completed to active. Nothing moves a tournament or phase back to `upcoming` (**409** `state_transition_invalid`). Both `PATCH /api/tournaments/[id]` and `PATCH /api/seasons/[id]/phases/[phaseId]` write it through `updateTournamentWithStatus` (`src/lib/tournament/tournament-transition.ts`): a compare-and-set on the status read (**409** `tournament_status_changed` when it moved meanwhile), then the format reaction, the auto advance and the completion announcement, so a phase completed from either page has the same effects.
 
 Tests: `src/lib/tournament/__tests__/standalone-lock.test.ts`, `src/app/api/tournaments/[id]/__tests__/standalone-guards.test.ts`, `src/app/api/seasons/[id]/phases/[phaseId]/__tests__/patch.test.ts`.
 

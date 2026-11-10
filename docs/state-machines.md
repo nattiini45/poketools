@@ -48,6 +48,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Team roster write locks](#team-roster-write-locks) — `derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived`
 - [Team share link](#team-share-link) — `teams.share_token + teams.share_enabled_at (on = both set)`
 - [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
+- [Tournament and league phase](#tournament-and-league-phase) — `tournaments.status (enum tournament_status)`
 - [Wiki note report](#wiki-note-report) — `wiki_note_reports.status`
 - [Wiki note moderation](#wiki-note-moderation) — `wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
 
@@ -1316,6 +1317,34 @@ stateDiagram-v2
 | `fail` | `saving` | `error` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | One generic label; a 409 for a completed match also locks the editor. |
 | `warn` | `saved` | `warned` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules are not met (the verdict goes to the validation panel). |
 | `uncheck` | `saved` | `unchecked` | server | `src/components/teambuilder/v3/hooks/useTeamSave.ts`<br>`src/components/teambuilder/v3/editor/state.ts` | Saved; the league rules could not be checked. |
+
+## Tournament and league phase
+
+- **Id:** `tournament`
+- **State lives in:** tournaments.status (enum tournament_status)
+- **Module doc:** `docs/tournament.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A standalone tournament or a league phase from set-up to its result. The first round (or the bracket) starts it; an admin, or the format at a stage end, completes it; an admin may reopen it. Re-sending the current status (active or completed) through the admin route is no move: it replays the format reaction. Nothing moves a phase back to upcoming.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  active --> completed: complete
+  upcoming --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  completed --> active: regenerate_bracket (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `supabase/migrations/20261106090000_format_challenges.sql#round_write`<br>`src/lib/tournament/bracket-generate.ts`<br>`src/lib/tournament/tournament-transition.ts`<br>`src/lib/dev-seed/seed.ts` | The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start. bracket-generate still writes active unguarded after the bracket; its guarded, locked writer is a follow-up. |
+| `complete` | `active` | `completed` | admin, system | `src/lib/tournament/tournament-transition.ts`<br>`supabase/migrations/20261106090000_format_challenges.sql#phase_complete_at_stage_end` | Mark completed, or the format at a stage end (only while no unseen match is unfinished). Fires stage_end, the auto advance and the tournament_completed announcement. |
+| `complete` | `upcoming` | `completed` | admin | `src/lib/tournament/tournament-transition.ts` | Mark completed on a phase or tournament that never started (the admin page offers it). |
+| `reopen` | `completed` | `active` | admin | `src/lib/tournament/tournament-transition.ts` | Writes the status only: matches, results and standings are kept; completing again announces again. |
+| `regenerate_bracket` | `completed` | `active` | system | `src/lib/tournament/bracket-generate.ts` | Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase). The active write is unguarded until the follow-up locked regenerate writer. |
 
 ## Wiki note report
 
