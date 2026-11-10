@@ -19,6 +19,10 @@ system"). Upstream's global `:focus-visible`, `::selection` and scrollbar rules 
 - `breadcrumb.tsx` (two places) and `sidebar-core.tsx` (two places): the dynamic tag is cast to
   `ComponentType<SlotProps & { ref?: Ref<HTMLElement> }>` instead of `ElementType`. The three.js JSX intrinsic
   elements in this project turn `ElementType`'s props into `never`; the cast changes no runtime behaviour.
+- `accordion.tsx` (`AccordionGroup` and `Accordion`) and `sidebar-core.tsx` (`SidebarProvider`): upstream treats a
+  component as controlled whenever a change callback is passed, so an uncontrolled one with an `onValueChange` /
+  `onOpenChange` observer never opened. Controlledness now follows whether `value` / `open` is passed: the internal
+  state updates when it is not, and the callback always fires. A bug fix; report it upstream when updating.
 - `combobox.tsx`: upstream joins item values with a raw NUL byte inside a string literal; it is written as the
   escape `"\0"` (the same string) because a raw NUL makes git treat the file as binary.
 

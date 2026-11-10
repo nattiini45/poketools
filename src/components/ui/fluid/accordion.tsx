@@ -214,6 +214,7 @@ const AccordionGroup = forwardRef<HTMLDivElement, AccordionGroupProps>(
     });
     const singleOnValueChange = (props as AccordionGroupSingleProps).onValueChange;
     const multipleOnValueChange = (props as AccordionGroupMultipleProps).onValueChange;
+    const groupControlled = (props as { value?: unknown }).value !== undefined;
 
     const openValuesList: string[] =
       type === "multiple"
@@ -236,18 +237,18 @@ const AccordionGroup = forwardRef<HTMLDivElement, AccordionGroupProps>(
 
     const handleSingleValueChange = useCallback(
       (value: string) => {
-        if (singleOnValueChange) singleOnValueChange(value);
-        else setInternalSingleValue(value);
+        if (!groupControlled) setInternalSingleValue(value);
+        singleOnValueChange?.(value);
       },
-      [singleOnValueChange]
+      [singleOnValueChange, groupControlled]
     );
 
     const handleMultipleValueChange = useCallback(
       (value: string[]) => {
-        if (multipleOnValueChange) multipleOnValueChange(value);
-        else setInternalMultipleValue(value);
+        if (!groupControlled) setInternalMultipleValue(value);
+        multipleOnValueChange?.(value);
       },
-      [multipleOnValueChange]
+      [multipleOnValueChange, groupControlled]
     );
 
     useEffect(() => {
@@ -532,6 +533,8 @@ const Accordion = forwardRef<HTMLDivElement, AccordionProps>(
       return [];
     });
 
+    const valueControlled = value !== undefined;
+
     const openValues = new Set<string>(
       type === "multiple"
         ? (value as string[] | undefined) ?? internalMultipleValue
@@ -543,18 +546,18 @@ const Accordion = forwardRef<HTMLDivElement, AccordionProps>(
 
     const handleSingleChange = useCallback(
       (v: string) => {
-        if (onValueChange) (onValueChange as (v: string) => void)(v);
-        else setInternalSingleValue(v);
+        if (!valueControlled) setInternalSingleValue(v);
+        (onValueChange as ((v: string) => void) | undefined)?.(v);
       },
-      [onValueChange]
+      [onValueChange, valueControlled]
     );
 
     const handleMultipleChange = useCallback(
       (v: string[]) => {
-        if (onValueChange) (onValueChange as (v: string[]) => void)(v);
-        else setInternalMultipleValue(v);
+        if (!valueControlled) setInternalMultipleValue(v);
+        (onValueChange as ((v: string[]) => void) | undefined)?.(v);
       },
-      [onValueChange]
+      [onValueChange, valueControlled]
     );
 
     // `value` is always defined here (internal state is seeded from
