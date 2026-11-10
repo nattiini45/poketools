@@ -318,7 +318,8 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
       // Chrome around a root is not part of it either, and its height would move the root on the page or change how
       // far the page scrolls (which moves a sticky part of the root): drop every element that precedes or follows the
       // root or one of its ancestors (unless it holds another root), and the vertical padding, margin and border of
-      // those ancestors, so each root starts near the top of a page that ends with it, whatever the chrome is.
+      // those ancestors and the root's own vertical margin (a sibling's spacing rule, which Tailwind 3 and 4 place on
+      // different sides), so each root starts near the top of a page that ends with it, whatever the chrome is.
       // The page ground is chrome too: ancestors paint no background, and the page shows the plaza ground, so a root
       // with transparent edges (rounded corners, an outlined card) reads the same backdrop on every run.
       await page.evaluate((selectors) => {
@@ -329,6 +330,7 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
               if (sib === el || ['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE'].includes(sib.tagName) || roots.some((r) => sib.contains(r) || r.contains(sib))) continue;
               sib.style.setProperty('display', 'none', 'important');
             }
+            if (el === root) for (const prop of ['margin-top', 'margin-bottom']) el.style.setProperty(prop, '0', 'important');
             if (el !== root && !roots.some((r) => el === r || r.contains(el))) {
               for (const prop of ['padding-top', 'margin-top', 'border-top-width', 'padding-bottom', 'margin-bottom', 'border-bottom-width']) el.style.setProperty(prop, '0', 'important');
               el.style.setProperty('background', 'none', 'important');
