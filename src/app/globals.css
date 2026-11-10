@@ -4,6 +4,7 @@
 @import "tailwindcss/utilities.css" source(none);
 @source "./";
 @source "../components";
+@source "../lib/design";
 @source "../format-packs/private/overlay";
 @import "tw-animate-css";
 
