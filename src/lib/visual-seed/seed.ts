@@ -23,6 +23,7 @@ import { drainPendingAggregateJobs } from '@/lib/match/aggregate-rebuild';
 import { computeDraftState } from '@/lib/draft/engine';
 import { defaultPickOrder } from '@/lib/draft/pool-format';
 import { lineIdOfEntry } from '@/lib/draft/line-identity';
+import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import { createInitialState, trackerReducer, type TrackerDispatchAction } from '@/lib/broadcast/tracker-reducer';
 import { forkPreset, publish } from '@/lib/format-studio/library';
 import { attachFormatToSeason } from '@/lib/format-studio/attach';
@@ -661,7 +662,10 @@ async function seedDraftLeague(versionId: string): Promise<void> {
 
   const pool = await getDraftPoolById(ID.draftPool);
   if (!pool) throw new Error('the draft pool is missing after its insert');
-  if (pool.status === 'pending') await updateDraftPoolStatus(ID.draftPool, 'in_progress');
+  if (pool.status === 'pending') {
+    draftPoolStatusMachine.assertTransition('pending', 'in_progress', 'admin');
+    if (!(await updateDraftPoolStatus(ID.draftPool, 'pending', 'in_progress'))) throw new Error('the draft pool moved on before the seed started it');
+  }
   const live = { ...pool, status: 'in_progress' as const };
 
   const participants = await getSeasonParticipants(ID.leagueDraft);

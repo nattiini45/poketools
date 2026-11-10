@@ -390,7 +390,7 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `start` | `pending` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | DraftBoard Start (and the admin agent's staged propose_draft_activate_legacy_pool). A pool of a point-buy season answers POOL_ENGINE_LEGACY_EPB. |
+| `start` | `pending` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts`<br>`src/lib/visual-seed/seed.ts` | DraftBoard Start (and the admin agent's staged propose_draft_activate_legacy_pool). A pool of a point-buy season answers POOL_ENGINE_LEGACY_EPB. |
 | `complete` | `in_progress` | `complete` | admin, system | `src/app/api/drafts/[id]/route.ts`<br>`src/app/api/drafts/[id]/picks/route.ts`<br>`src/app/api/drafts/[id]/state/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | An admin ends the draft (DraftBoard End draft), or the system after the last pick: the pick route, else the first GET /api/drafts/[id]/state. |
 | `reopen` | `complete` | `in_progress` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): reopens a finished draft, e.g. to undo its last pick. The next state read completes it again while every pick is made. |
 | `reset` | `in_progress`, `complete` | `pending` | admin | `src/app/api/drafts/[id]/route.ts`<br>`src/lib/supabase/queries/drafts.ts` | API only (no button): docs/draft-room.md moves a legacy pool of a point-buy season back to pending so it can be deleted. |
