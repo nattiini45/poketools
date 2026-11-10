@@ -10,6 +10,8 @@ import { draftSlotMachine } from '@/lib/draft/slot-state';
 import { draftKillTokenWindowMachine } from '@/lib/draft/token-window-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { matchMachine } from '@/lib/tournament/match-state';
+import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
+import { noteReportMachine } from '@/lib/wiki/note-report-state';
 
 /**
  * Every explicit state machine in the app. docs/state-machines.md is generated
@@ -19,6 +21,8 @@ import { matchMachine } from '@/lib/tournament/match-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  noteModerationMachine.spec,
+  noteReportMachine.spec,
   proposalMachine.spec,
   actionMachine.spec,
   planMachine.spec,

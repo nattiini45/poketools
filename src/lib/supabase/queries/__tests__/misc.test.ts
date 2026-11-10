@@ -1762,14 +1762,16 @@ describe('queries/wiki-notes', () => {
   });
 
   describe('approveNote', () => {
-    it('approves without error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
-      await expect(approveNote('wn1')).resolves.toBeUndefined();
+    const guard = { from: 'pending' as const, updatedAt: '2026-01-01T00:00:00.000Z' };
+
+    it('approves without error and reports that a row changed', async () => {
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'wn1' }], error: null });
+      await expect(approveNote('wn1', 'admin1', guard)).resolves.toBe(true);
     });
 
     it('throws on error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
-      await expect(approveNote('wn1')).rejects.toEqual({ message: 'err' });
+      mockBuilder.select.mockResolvedValue({ data: null, error: { message: 'err' } });
+      await expect(approveNote('wn1', 'admin1', guard)).rejects.toEqual({ message: 'err' });
     });
   });
 

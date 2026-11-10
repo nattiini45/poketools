@@ -878,6 +878,12 @@ export const wikiNotePatchSchema = z.object({
   approved: z.boolean().optional(),
   rejected: z.boolean().optional(),
   rejection_reason: z.string().trim().min(1).max(FIELD_LIMITS.DESCRIPTION).optional(),
+  /**
+   * The moderation state and the `updated_at` the moderator saw: an approve or reject is applied only while the note
+   * is still in that state and version (409 `wiki_note_changed` otherwise). Without them the route uses its own read.
+   */
+  expected_state: z.enum(['pending', 'approved', 'rejected', 'blocked']).optional(),
+  expected_updated_at: z.iso.datetime({ offset: true }).optional(),
 });
 
 /**
