@@ -363,7 +363,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
                 <h4 className="mb-2 text-sm font-heading font-semibold text-poke-text-primary">
                   {t('detail.evolutionProgress', { name: playerName })}
                 </h4>
-                <div className="divide-y divide-poke-border/50">
+                <div className="divide-y">
                   {broughtModels.map((m) => (
                     <EpbPokemonRow
                       key={m.snapshot.id}
@@ -379,7 +379,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
                     <summary className="cursor-pointer text-xs text-poke-text-muted hover:text-poke-text-secondary">
                       {t('detail.notBrought', { count: benchModels.length })}
                     </summary>
-                    <div className="divide-y divide-poke-border/50 opacity-60">
+                    <div className="divide-y opacity-60">
                       {benchModels.map((m) => (
                         <EpbPokemonRow
                           key={m.snapshot.id}

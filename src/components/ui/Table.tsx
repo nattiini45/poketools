@@ -543,7 +543,7 @@ export default function Table<T extends object>({
                     "border-b border-poke-border last:border-0 transition-colors duration-150",
                     hasRowClick
                       ? "hover:bg-poke-elevated cursor-pointer"
-                      : "hover:bg-poke-elevated/50",
+                      : "",
                     extraRowProps?.className
                   )}
                   onMouseEnter={extraRowProps?.onMouseEnter}

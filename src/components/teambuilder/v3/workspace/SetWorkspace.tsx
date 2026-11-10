@@ -189,7 +189,7 @@ export default function SetWorkspace() {
                 </svg>
                 {t('workspace.team')}
               </button>
-              <span className="text-[10px] text-poke-text-muted/60">
+              <span className="text-[10px]">
                 {t('workspace.slotCrumb', { n: slot + 1 })}
               </span>
             </div>
@@ -199,7 +199,7 @@ export default function SetWorkspace() {
               <div
                 className={`mb-3 px-3 py-2 rounded-lg border text-xs ${
                   jumpIssue.severity === 'error'
-                    ? 'border-poke-danger/50 bg-poke-danger-light/20 text-poke-danger'
+                    ? 'border-poke-danger/50 text-poke-danger'
                     : 'border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
                 }`}
                 role="alert"

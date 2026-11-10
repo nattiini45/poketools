@@ -142,7 +142,7 @@ export default function SessionManager() {
             {sessions.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between rounded-poke-md bg-poke-surface border border-poke-border px-4 py-3 hover:border-poke-accent/50 transition-colors"
+                className="flex items-center justify-between rounded-poke-md bg-poke-surface border border-poke-border px-4 py-3 transition-colors"
               >
                 <button
                   onClick={() => router.push(

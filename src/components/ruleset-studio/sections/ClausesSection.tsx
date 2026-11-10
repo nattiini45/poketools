@@ -41,7 +41,7 @@ export default function ClausesSection({ doc, preset, generation, onToggle }: Cl
               <label
                 className={cn(
                   'flex min-h-11 cursor-pointer items-start gap-3 rounded-poke-md border p-3 transition-colors',
-                  on ? 'border-poke-accent/50 bg-poke-accent-light/40' : 'border-poke-border bg-poke-surface hover:bg-poke-muted',
+                  on ? '' : 'border-poke-border bg-poke-surface hover:bg-poke-muted',
                   wrongGen && 'opacity-70',
                 )}
               >

@@ -133,7 +133,7 @@ function MetadataStrip({
   return (
     <div className="bg-poke-muted border-b border-poke-border rounded-t-poke-lg">
       {contextLabel && (
-        <div className="px-4 py-2 border-b border-poke-border/50">
+        <div className="px-4 py-2 border-b">
           <span className="text-[11px] font-heading font-semibold text-poke-text-secondary tracking-wide uppercase truncate block">
             {contextLabel}
           </span>
@@ -338,7 +338,7 @@ function PlayerColumn({
       </Link>
 
       <p className={`text-[9px] font-heading font-bold tracking-[0.15em] uppercase ${
-        isWinner ? 'text-poke-green/70' : isLoser ? 'text-poke-accent/50' : 'invisible'
+        isWinner ? 'text-poke-green/70' : isLoser ? '' : 'invisible'
       }`}>
         {isWinner ? t('card.winner') : t('card.loser')}
       </p>
@@ -428,7 +428,7 @@ function MatchNarrative({
         )}
 
         {content.turning_point && (
-          <div className="flex gap-2.5 items-start bg-poke-muted/50 rounded-poke-md p-3">
+          <div className="flex gap-2.5 items-start rounded-poke-md p-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src="/characters/professor-linden.png"

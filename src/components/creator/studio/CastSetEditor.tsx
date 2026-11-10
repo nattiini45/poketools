@@ -57,7 +57,7 @@ function SpeciesPicker({ onSelect, onCancel }: { onSelect: (species: string) => 
             <button
               key={r.name}
               onClick={() => onSelect(r.name)}
-              className="flex items-center gap-2 w-full px-2 py-1 text-left text-sm text-poke-text-primary hover:bg-poke-accent/10 rounded"
+              className="flex items-center gap-2 w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
             >
               <SpriteImg name={r.name} alt="" className="w-6 h-6" />
               {localizeSpecies(r.name, dataLocale)}
@@ -118,7 +118,7 @@ function MoveSearchPicker({ species, generation, onSelect, onCancel }: {
           <button
             key={m.name}
             onClick={() => onSelect(m.name)}
-            className="flex items-center justify-between w-full px-2 py-1 text-left text-sm text-poke-text-primary hover:bg-poke-accent/10 rounded"
+            className="flex items-center justify-between w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
           >
             <span>{localizeMove(m.name, dataLocale)}</span>
             <span className="text-xs text-poke-text-secondary">
@@ -191,7 +191,7 @@ function GenericPicker({ type, species, generation, onSelect, onCancel }: {
           <button
             key={r.name}
             onClick={() => onSelect(r.name)}
-            className="w-full px-2 py-1 text-left text-sm text-poke-text-primary hover:bg-poke-accent/10 rounded"
+            className="w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
           >
             {display(r.name, dataLocale)}
           </button>
@@ -320,14 +320,14 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setEditing('item')}
-              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary hover:border-poke-accent/50"
+              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary"
             >
               <span className="text-xs text-poke-text-secondary block">{t('setEditor.item')}</span>
               {set.item ? localizeItem(set.item, dataLocale) : t('setEditor.none')}
             </button>
             <button
               onClick={() => setEditing('ability')}
-              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary hover:border-poke-accent/50"
+              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary"
             >
               <span className="text-xs text-poke-text-secondary block">{t('setEditor.ability')}</span>
               {set.ability ? localizeAbility(set.ability, dataLocale) : t('setEditor.none')}
@@ -340,7 +340,7 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
               <button
                 key={i}
                 onClick={() => setEditing(`move${i}` as EditingField)}
-                className="rounded-poke-md border border-poke-border px-2 py-1 text-left text-sm text-poke-text-primary hover:border-poke-accent/50"
+                className="rounded-poke-md border border-poke-border px-2 py-1 text-left text-sm text-poke-text-primary"
               >
                 <span className="text-xs text-poke-text-secondary">{t('setEditor.move', { n: i + 1 })}</span>{' '}
                 {set.moves[i] ? localizeMove(set.moves[i], dataLocale) : '—'}

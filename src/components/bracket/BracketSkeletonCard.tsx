@@ -16,7 +16,7 @@ export default function BracketSkeletonCard({
 }: BracketSkeletonCardProps) {
   return (
     <div
-      className="rounded-poke-lg border border-dashed border-poke-border bg-poke-elevated/50 p-2 text-sm"
+      className="rounded-poke-lg border border-dashed border-poke-border p-2 text-sm"
       aria-label={matchNumber ? `${labels.match} ${matchNumber} ${labels.tbd}` : labels.tbdMatch}
     >
       {matchNumber !== undefined && (

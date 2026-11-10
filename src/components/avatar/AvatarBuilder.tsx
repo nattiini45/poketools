@@ -313,7 +313,7 @@ export default function AvatarBuilder({ playerId, initialConfig, onSaved }: Avat
                 onClick={save}
                 disabled={saving}
                 className="px-6 py-2 text-sm font-heading font-bold rounded-poke-md
-                         bg-poke-accent text-poke-surface hover:bg-poke-accent/90
+                         bg-poke-accent text-poke-surface
                          transition-colors disabled:opacity-50"
               >
                 {saving ? t('builder.saving') : t('builder.save')}

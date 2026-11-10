@@ -64,7 +64,7 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
       <button
         className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
           disabled
-            ? 'bg-poke-surface border-poke-border/50 text-poke-text-muted cursor-not-allowed'
+            ? 'bg-poke-surface text-poke-text-muted cursor-not-allowed'
             : 'bg-poke-surface border-poke-border text-poke-text-primary hover:border-poke-blue/40'
         }`}
         onClick={() => !disabled && setOpen(!open)}

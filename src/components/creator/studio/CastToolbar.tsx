@@ -48,7 +48,7 @@ export default function CastToolbar() {
         className={`rounded-poke-md px-3 py-1 text-xs font-heading font-bold transition-colors ${
           state.showFacing
             ? 'bg-poke-accent text-poke-surface'
-            : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-accent/20'
+            : 'bg-poke-muted text-poke-text-secondary'
         }`}
       >
         {t('toolbar.facing')}
@@ -57,7 +57,7 @@ export default function CastToolbar() {
       {/* Open tools in new tab */}
       <button
         onClick={() => window.open(`/creator/studio/${state.sessionId}/tools`, '_blank')}
-        className="rounded-poke-md bg-poke-muted px-3 py-1 text-xs font-heading font-bold text-poke-text-secondary hover:bg-poke-accent/20 transition-colors"
+        className="rounded-poke-md bg-poke-muted px-3 py-1 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
       >
         {t('toolbar.openTools')}
       </button>

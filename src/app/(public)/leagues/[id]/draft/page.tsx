@@ -118,7 +118,7 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
           {t('legacyPage.participants', { count: league.participant_count })}
           {league.ruleset_name && ` · ${league.ruleset_name}`}
           {isEvoLeague && (
-            <span className="ml-2 inline-block px-2 py-0.5 border border-poke-accent/50 bg-poke-accent/10 text-poke-accent rounded-full text-xs font-medium">
+            <span className="ml-2 inline-block px-2 py-0.5 border text-poke-accent rounded-full text-xs font-medium">
               {t('legacyPage.evoLeague')}
             </span>
           )}

@@ -70,7 +70,7 @@ export default function TrackerPokemonSlot({
   // Empty slot
   if (!slot.pokemon_name) {
     return (
-      <div className="relative flex items-center justify-center w-full min-h-[72px] rounded-xl border-2 border-dashed border-poke-border/40 bg-poke-surface/30 text-poke-text-muted text-xs">
+      <div className="relative flex items-center justify-center w-full min-h-[72px] rounded-xl border-2 border-dashed text-poke-text-muted text-xs">
         {t('tracker.emptySlot')}
       </div>
     );
@@ -83,7 +83,7 @@ export default function TrackerPokemonSlot({
       ? 'border-yellow-400/70'
       : slot.was_brought
         ? 'border-emerald-400/70'
-        : 'border-poke-border/50';
+        : '';
 
   const bgColor = slot.was_koed
     ? 'bg-red-950/30'
@@ -91,7 +91,7 @@ export default function TrackerPokemonSlot({
       ? 'bg-yellow-950/20'
       : slot.was_brought
         ? 'bg-emerald-950/20'
-        : 'bg-poke-surface/50';
+        : '';
 
   const opacity = slot.was_koed ? 'opacity-60' : '';
 

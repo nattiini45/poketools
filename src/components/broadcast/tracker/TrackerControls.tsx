@@ -150,7 +150,7 @@ export default function TrackerControls({
 
       {/* Producer Mode: Moment markers */}
       {producerMode && (
-        <div className="flex flex-col gap-2 pt-2 border-t border-poke-border/30">
+        <div className="flex flex-col gap-2 pt-2 border-t">
           <label className="text-xs text-poke-text-secondary uppercase tracking-wider font-semibold">
             {t('controls.markMoment')}
           </label>

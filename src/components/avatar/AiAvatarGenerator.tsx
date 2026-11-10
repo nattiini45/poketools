@@ -317,7 +317,7 @@ export default function AiAvatarGenerator({
             onClick={generate}
             disabled={generating || saving}
             className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                     bg-poke-accent text-poke-surface hover:bg-poke-accent/90
+                     bg-poke-accent text-poke-surface
                      transition-colors disabled:opacity-50"
           >
             {generating ? t('ai.generating') : generatedImage ? t('ai.regenerate') : t('ai.generate')}
@@ -455,7 +455,7 @@ export default function AiAvatarGenerator({
 
                 {/* Accordion body */}
                 {isOpen && (
-                  <div className="px-3 py-3 border-t border-poke-border bg-poke-elevated/50">
+                  <div className="px-3 py-3 border-t border-poke-border">
                     <div className="flex flex-wrap gap-1.5">
                       {cat.options.map((opt) => {
                         const isSelected = choices[cat.id] === opt.id;

@@ -47,7 +47,7 @@ export default function MatchupRosterPanel({
         <h3 className="text-sm font-semibold">{name}</h3>
         <p className="text-xs text-poke-text-secondary">{t('roster.lines', { count: trackers.length })}</p>
       </div>
-      <div className="divide-y divide-poke-border/50">
+      <div className="divide-y">
         {trackers.map((tracker) => {
           const tera = getTeraEligibility(tracker.current_stage);
           const isSuspended = tracker.suspended_until_matchday !== null;
@@ -67,7 +67,7 @@ export default function MatchupRosterPanel({
               key={tracker.id}
               type="button"
               onClick={() => onSelect(tracker.current_form)}
-              className={`w-full px-4 py-2 text-left transition-colors hover:bg-poke-elevated/40 ${
+              className={`w-full px-4 py-2 text-left transition-colors ${
                 isSuspended ? 'bg-red-900/10' : ''
               } ${isSelected ? 'ring-1 ring-inset ring-cyan-600/50' : ''}`}
             >

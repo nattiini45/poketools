@@ -35,7 +35,7 @@ export default function KOStatCard({
   return (
     <div className={`
       rounded-poke-lg border p-3 transition-colors
-      ${isActive ? 'border-poke-accent bg-poke-accent/5' : 'border-poke-border bg-poke-surface'}
+      ${isActive ? 'border-poke-accent' : 'border-poke-border bg-poke-surface'}
     `}>
       <div className="flex items-center gap-3">
         <SpriteImg

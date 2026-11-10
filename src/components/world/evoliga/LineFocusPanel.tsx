@@ -67,7 +67,7 @@ export default function LineFocusPanel({ entry, locale, dataLocale = locale }: L
         <div className="relative flex h-24 w-24 flex-none items-center justify-center rounded-full border border-arena-border bg-arena-elevated">
           <span
             aria-hidden="true"
-            className="absolute inset-[6px] rounded-full border border-arena-border/60 bg-arena-surface"
+            className="absolute inset-[6px] rounded-full border bg-arena-surface"
           />
           <PokemonSprite name={entry.base_pokemon} size={72} />
         </div>
@@ -93,7 +93,7 @@ export default function LineFocusPanel({ entry, locale, dataLocale = locale }: L
           <div
             key={row.key}
             className={`flex items-baseline justify-between gap-3 rounded-lg px-3 py-1.5 ${
-              row.lead ? 'bg-arena-accent/20 ring-1 ring-arena-border' : 'bg-arena-elevated'
+              row.lead ? 'ring-1 ring-arena-border' : 'bg-arena-elevated'
             }`}
           >
             <dt className="text-arena-ink-secondary">{row.label}</dt>

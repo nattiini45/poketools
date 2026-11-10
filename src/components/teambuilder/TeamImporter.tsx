@@ -110,7 +110,7 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
           value={text}
           onChange={e => setText(e.target.value)}
           placeholder={`${t('importer.textPlaceholder')}\n\n${SHOWDOWN_EXAMPLE}`}
-          className="w-full h-48 p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors font-mono resize-y"
+          className="w-full h-48 p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors font-mono resize-y"
         />
       ) : (
         <input
@@ -118,7 +118,7 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
           value={url}
           onChange={e => setUrl(e.target.value)}
           placeholder="https://pokepast.es/abc123"
-          className="w-full p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20 transition-colors"
+          className="w-full p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors"
         />
       )}
 

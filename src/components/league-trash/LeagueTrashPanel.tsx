@@ -289,7 +289,7 @@ export function LeagueTrashView({
           <div className="rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-card xl:overflow-x-auto">
             <table className="block w-full border-collapse text-left text-sm xl:table xl:min-w-[64rem]" data-trash-table>
               <caption className="sr-only">{t('trash.caption')}</caption>
-              <thead className="sr-only bg-poke-elevated/50 text-xs uppercase tracking-wide text-poke-text-muted xl:not-sr-only xl:table-header-group">
+              <thead className="sr-only text-xs uppercase tracking-wide text-poke-text-muted xl:not-sr-only xl:table-header-group">
                 <tr>
                   {COLUMNS.map((column) => (
                     <th key={column} scope="col" className="px-3 py-2 font-heading font-semibold">

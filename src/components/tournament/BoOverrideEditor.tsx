@@ -71,7 +71,7 @@ export default function BoOverrideEditor({
               id={`${idPrefix}-${index}`}
               value={overrides[name] ?? 0}
               onChange={(e) => handleChange(name, Number(e.target.value))}
-              className="border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+              className="border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
             >
               <option value={0}>{t('boOverrides.defaultOption', { bo: defaultBo })}</option>
               {bestOfChoices(overrides[name]).filter((v) => v !== defaultBo).map((v) => (

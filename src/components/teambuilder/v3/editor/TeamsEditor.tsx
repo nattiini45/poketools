@@ -179,7 +179,7 @@ export default function TeamsEditor({
               placeholder={t('editor.teamNamePlaceholder')}
               maxLength={80}
               disabled={state.locked}
-              className="w-32 sm:w-44 px-2 py-1 text-xs bg-poke-elevated border border-poke-border rounded-lg text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 focus:border-poke-focus/60 outline-none"
+              className="w-32 sm:w-44 px-2 py-1 text-xs bg-poke-elevated border border-poke-border rounded-lg text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-none"
               aria-label={t('editor.teamNameLabel')}
             />
           )}

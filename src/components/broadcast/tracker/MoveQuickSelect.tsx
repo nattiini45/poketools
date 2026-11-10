@@ -58,7 +58,7 @@ export default function MoveQuickSelect({
               onClick={() => handleToggle(move)}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                 usedSet.has(move)
-                  ? "bg-poke-accent/20 text-poke-accent border border-poke-accent/40"
+                  ? "text-poke-accent border"
                   : "bg-poke-elevated text-poke-text-secondary hover:text-poke-text border border-transparent"
               }`}
             >
@@ -76,7 +76,7 @@ export default function MoveQuickSelect({
             .map((move) => (
               <span
                 key={move}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-poke-elevated text-[10px] text-poke-text border border-poke-accent/30"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-poke-elevated text-[10px] text-poke-text border"
               >
                 {localizeMove(move, dataLocale)}
                 <button
@@ -105,13 +105,13 @@ export default function MoveQuickSelect({
             }
           }}
           placeholder={t("moveSelect.customPlaceholder")}
-          className="flex-1 px-2 py-0.5 text-[10px] rounded bg-poke-surface border border-poke-border/30 text-poke-text placeholder:text-poke-text-muted focus:outline-none focus:border-poke-accent/50"
+          className="flex-1 px-2 py-0.5 text-[10px] rounded bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-none"
         />
         {customMove.trim() && (
           <button
             type="button"
             onClick={handleCustomSubmit}
-            className="px-2 py-0.5 text-[10px] rounded bg-poke-accent/20 text-poke-accent font-medium"
+            className="px-2 py-0.5 text-[10px] rounded text-poke-accent font-medium"
           >
             {t("moveSelect.add")}
           </button>

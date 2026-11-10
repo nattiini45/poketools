@@ -61,7 +61,7 @@ export default function AchievementGrid({
                     return (
                       <div
                         key={definition.key}
-                        className="rounded-poke-lg border border-dashed border-poke-border bg-poke-elevated/40 p-3"
+                        className="rounded-poke-lg border border-dashed border-poke-border p-3"
                         title={t('achievements.hidden')}
                       >
                         <div className="font-heading font-semibold text-poke-text-secondary">???</div>
@@ -74,7 +74,7 @@ export default function AchievementGrid({
                   return (
                     <div
                       key={definition.key}
-                      className="rounded-poke-lg border border-poke-border bg-poke-elevated/40 p-3 opacity-70"
+                      className="rounded-poke-lg border border-poke-border p-3 opacity-70"
                       title={text.description}
                     >
                       <div className="font-heading font-semibold text-poke-text-secondary truncate">

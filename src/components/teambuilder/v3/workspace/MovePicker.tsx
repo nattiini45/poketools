@@ -146,7 +146,7 @@ export default function MovePicker({
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 focus:ring-poke-focus/40 focus:border-poke-focus/40 transition-all outline-none"
+          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-none"
           placeholder={t('movePicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -179,7 +179,7 @@ export default function MovePicker({
             </button>
           ))}
           <select
-            className="ml-auto text-[10px] bg-poke-surface border border-poke-border rounded px-1.5 py-0.5 text-poke-text-secondary focus:ring-1 focus:ring-poke-focus/40 outline-none"
+            className="ml-auto text-[10px] bg-poke-surface border border-poke-border rounded px-1.5 py-0.5 text-poke-text-secondary focus:ring-1 outline-none"
             value={typeFilter ?? ''}
             onChange={(e) => setTypeFilter(e.target.value || null)}
             aria-label={t('movePicker.filterByType')}

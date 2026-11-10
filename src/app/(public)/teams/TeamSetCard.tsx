@@ -32,7 +32,7 @@ export default function TeamSetCard({
 }) {
   if (!set.species || set.species === 'hidden') {
     return (
-      <div className="border border-poke-border rounded-poke-md p-4 bg-poke-surface/50 text-center">
+      <div className="border border-poke-border rounded-poke-md p-4 text-center">
         <p className="text-xs text-poke-text-muted">{t('set.slot', { n: index + 1 })}</p>
       </div>
     );

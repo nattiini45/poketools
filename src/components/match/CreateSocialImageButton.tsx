@@ -211,7 +211,7 @@ export default function CreateSocialImageButton({
           status === 'done'
             ? 'text-poke-green bg-poke-green/10'
             : status === 'error'
-              ? 'text-poke-accent bg-poke-accent/10'
+              ? 'text-poke-accent'
               : 'text-poke-text-muted hover:text-poke-text-secondary hover:bg-poke-muted'
         }`}
         title={existingUrl ? t('socialImage.titleUpdate') : t('socialImage.titleCreate')}

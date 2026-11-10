@@ -97,7 +97,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
             placeholder={t('speciesHeader.nickname')}
             maxLength={24}
             disabled={state.locked}
-            className="w-24 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 focus:border-poke-focus/60 outline-none"
+            className="w-24 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-none"
           />
           <label className="flex items-center gap-1 text-xs text-poke-text-muted">
             {t('speciesHeader.level')}
@@ -112,7 +112,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
                 dispatch({ type: 'UPDATE_SLOT', slot, patch: { level: v } });
               }}
               disabled={state.locked}
-              className="w-12 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary disabled:opacity-50 focus:border-poke-focus/60 outline-none"
+              className="w-12 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary disabled:opacity-50 outline-none"
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-poke-text-muted cursor-pointer select-none">

@@ -215,7 +215,7 @@ function WikiNotesAuthenticated({
                   <button
                     type="button"
                     onClick={() => void submitReport(note.id)}
-                    className="px-3 py-1 rounded-poke-md bg-poke-muted text-xs font-heading font-semibold text-poke-text-secondary hover:bg-poke-accent/20"
+                    className="px-3 py-1 rounded-poke-md bg-poke-muted text-xs font-heading font-semibold text-poke-text-secondary"
                   >
                     {t('notes.submitReport')}
                   </button>

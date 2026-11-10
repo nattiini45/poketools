@@ -422,7 +422,7 @@ export default function SpeedTab() {
                 return (
                   <div
                     key={row.key}
-                    className="flex items-center gap-2 py-0.5 px-1 rounded bg-poke-surface/60"
+                    className="flex items-center gap-2 py-0.5 px-1 rounded"
                   >
                     {content}
                   </div>

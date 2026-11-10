@@ -348,7 +348,7 @@ export default function GameDetailEditForm({
                   className={
                     rIdx === 0
                       ? 'space-y-2'
-                      : 'space-y-2 border-t border-poke-border/40 pt-3'
+                      : 'space-y-2 border-t pt-3'
                   }
                 >
                   {/* Sub-row 1: Pokémon picker + remove button */}

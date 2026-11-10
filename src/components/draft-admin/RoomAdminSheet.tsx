@@ -155,7 +155,7 @@ export default function RoomAdminSheet({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-poke-inverse/30 backdrop-blur-[2px]" />
+        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-[2px]" />
         <Dialog.Content
           data-frozen="draft-room"
           // `.tokens`, not `.root` (see PlayersSheet): the root's `position: relative` would beat `fixed`.

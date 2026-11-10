@@ -82,7 +82,7 @@ export default function TrackerQuickEntry({
 
   return (
     <div className="absolute inset-0 z-10 flex flex-col bg-poke-surface rounded-xl border border-poke-border shadow-poke-lg overflow-hidden">
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-poke-border/30">
+      <div className="flex items-center gap-2 px-3 py-2 border-b">
         <input
           ref={inputRef}
           type="text"

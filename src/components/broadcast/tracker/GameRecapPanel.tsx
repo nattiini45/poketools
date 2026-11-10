@@ -54,7 +54,7 @@ export default function GameRecapPanel({
   const [s1, s2] = seriesScore;
 
   return (
-    <div className="px-4 py-3 rounded-xl bg-poke-surface/50 border border-poke-border/30 text-center">
+    <div className="px-4 py-3 rounded-xl border text-center">
       <div className="text-xs text-poke-text-secondary mb-1">{t("recapPanel.title", { game: gameNumber })}</div>
       <div className="text-sm text-poke-text">
         {t.rich("recapPanel.summary", {

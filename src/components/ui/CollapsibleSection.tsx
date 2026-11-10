@@ -51,7 +51,7 @@ export default function CollapsibleSection({
       )}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border bg-poke-elevated/50">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border">
           <button
             type="button"
             className="flex items-center gap-2 text-left min-w-0 cursor-pointer"

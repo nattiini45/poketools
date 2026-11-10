@@ -43,8 +43,8 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
                 relative flex flex-col items-center justify-center
                 w-16 h-16 rounded-poke-md border transition-all
                 ${isActive
-                  ? 'border-poke-accent bg-poke-accent/10 shadow-poke-sm'
-                  : 'border-poke-border bg-poke-surface hover:border-poke-accent/50'
+                  ? 'border-poke-accent shadow-poke-sm'
+                  : 'border-poke-border bg-poke-surface'
                 }
                 ${isFacing ? 'ring-2 ring-yellow-400/60' : ''}
               `}

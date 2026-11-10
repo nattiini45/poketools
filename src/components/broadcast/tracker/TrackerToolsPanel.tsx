@@ -31,9 +31,9 @@ export default function TrackerToolsPanel({ sessionId }: TrackerToolsPanelProps)
   const active = tabs.find((tab) => tab.id === activeTab) ?? tabs[0];
 
   return (
-    <div className="bg-poke-surface/50 rounded-xl border border-poke-border/30 overflow-hidden">
+    <div className="rounded-xl border overflow-hidden">
       {/* Tab bar */}
-      <div className="flex border-b border-poke-border/30">
+      <div className="flex border-b">
         {tabs.map((tab) => (
           <button
             key={tab.id}
@@ -41,7 +41,7 @@ export default function TrackerToolsPanel({ sessionId }: TrackerToolsPanelProps)
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === tab.id
-                ? "text-poke-accent border-b-2 border-poke-accent bg-poke-accent/5"
+                ? "text-poke-accent border-b-2 border-poke-accent"
                 : "text-poke-text-secondary hover:text-poke-text"
             }`}
           >

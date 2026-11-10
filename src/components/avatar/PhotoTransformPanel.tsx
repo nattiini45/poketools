@@ -262,7 +262,7 @@ export default function PhotoTransformPanel({
               onClick={transform}
               disabled={!canTransform}
               className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                       bg-poke-accent text-poke-surface hover:bg-poke-accent/90
+                       bg-poke-accent text-poke-surface
                        transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {transforming ? t('transform.transforming') : t('transform.transform')}
@@ -316,7 +316,7 @@ export default function PhotoTransformPanel({
             onClick={() => fileInputRef.current?.click()}
             className="border-2 border-dashed border-poke-border rounded-poke-lg p-8
                      flex flex-col items-center justify-center gap-3
-                     cursor-pointer hover:border-poke-accent hover:bg-poke-elevated/50
+                     cursor-pointer hover:border-poke-accent
                      transition-colors"
           >
             {photoPreview ? (
@@ -375,7 +375,7 @@ export default function PhotoTransformPanel({
 
         {/* Consent checkbox */}
         {photoPreview && !resultImage && (
-          <section className="bg-poke-elevated/50 border border-poke-border rounded-poke-lg p-4">
+          <section className="border border-poke-border rounded-poke-lg p-4">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"

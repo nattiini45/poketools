@@ -133,7 +133,7 @@ export default function BoardPanel({ kind, league, stages, standings, fixtures, 
             </thead>
             <tbody>
               {standings.map((row, index) => (
-                <tr key={row.player_id} className="border-b border-arena-border/60 last:border-b-0">
+                <tr key={row.player_id} className="border-b last:border-b-0">
                   <th
                     scope="row"
                     className="px-2 py-1.5 text-left font-heading font-bold text-arena-accent-strong"

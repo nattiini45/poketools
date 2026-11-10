@@ -253,7 +253,7 @@ export default function MatchSchedulingPanel({
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               maxLength={1000}
-              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20"
+              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2"
             />
           </div>
           <Button onClick={handleCreateProposal} loading={loading === 'create'} disabled={!proposedAt}>

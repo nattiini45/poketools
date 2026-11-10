@@ -159,7 +159,7 @@ export default function AssistantDrawer() {
             onPointerMove={onResizeMove}
             onPointerUp={() => (drag.current = null)}
             onKeyDown={onResizeKey}
-            className={`absolute inset-y-0 left-0 hidden w-1.5 cursor-col-resize hover:bg-poke-accent/40 sm:block ${FOCUS_RING}`}
+            className={`absolute inset-y-0 left-0 hidden w-1.5 cursor-col-resize sm:block ${FOCUS_RING}`}
           />
 
           <header className="flex items-center gap-2 border-b border-poke-border px-3 py-2">

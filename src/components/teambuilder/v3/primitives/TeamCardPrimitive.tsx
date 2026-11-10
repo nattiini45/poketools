@@ -200,7 +200,7 @@ export default function TeamCardPrimitive({
 
       {/* Stat bars — only in md/lg */}
       {showStats && size !== 'sm' && set.evs && (
-        <div className="mt-2 pt-2 border-t border-poke-border/50">
+        <div className="mt-2 pt-2 border-t">
           <div className={`flex gap-3 ${metaClass} text-poke-text-muted`}>
             {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map((stat) => (
               <span key={stat} className="flex flex-col items-center">

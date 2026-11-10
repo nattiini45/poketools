@@ -84,7 +84,7 @@ export default function RatingHistoryChart({ history }: RatingHistoryChartProps)
       </div>
       <svg
         viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full h-56 rounded-poke-md bg-poke-elevated/30 border border-poke-border"
+        className="w-full h-56 rounded-poke-md border border-poke-border"
         role="img"
         aria-label={t('ratingHistory.chartAria')}
       >
@@ -107,7 +107,7 @@ export default function RatingHistoryChart({ history }: RatingHistoryChartProps)
           strokeWidth="1"
         />
 
-        <polygon points={confidenceBand} className="fill-poke-accent/15 stroke-none" />
+        <polygon points={confidenceBand} className="stroke-none" />
         <polyline
           points={linePath}
           fill="none"

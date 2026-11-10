@@ -73,7 +73,7 @@ const PANEL_FILTER_KEYS: readonly MatchListFilterKey[] = [
 ];
 
 const SELECT_CLASSES =
-  'border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full';
+  'border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full';
 /** A native date input needs room for the full date next to its calendar icon, so it gets less side padding than a select. */
 const DATE_INPUT_CLASSES = SELECT_CLASSES.replace('px-3', 'px-2');
 const FIELD_LABEL_CLASSES = 'block text-xs font-heading font-semibold text-poke-text-secondary mb-1';
@@ -124,7 +124,7 @@ function CheckboxField({
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="rounded border-poke-border bg-poke-surface text-poke-primary focus:ring-poke-primary/50"
+        className="rounded border-poke-border bg-poke-surface text-poke-primary"
       />
       <span>{label}</span>
     </label>
@@ -402,7 +402,7 @@ export default function AdminMatchFilters({
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t('admin.matches.searchPlaceholder')}
             aria-label={t('admin.matches.searchLabel')}
-            className="w-full pl-9 pr-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+            className="w-full pl-9 pr-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:w-[48rem]">

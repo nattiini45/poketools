@@ -123,7 +123,7 @@ export default function RulesSection({
             <span
               className={`inline-block rounded px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${
                 isConfigured
-                  ? 'bg-arena-accent/15 text-arena-accent-strong'
+                  ? 'text-arena-accent-strong'
                   : 'bg-arena-elevated text-arena-ink-secondary'
               }`}
             >

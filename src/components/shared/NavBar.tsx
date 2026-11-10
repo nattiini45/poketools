@@ -85,7 +85,7 @@ function MobileNavLink({ href, label, active, onClick }: { href: string; label: 
         block px-4 py-3 text-base font-heading font-semibold rounded-full
         transition-colors duration-200 ${FOCUS_RING}
         ${active
-          ? 'text-poke-accent border border-poke-accent/30 bg-poke-accent-light'
+          ? 'text-poke-accent border bg-poke-accent-light'
           : 'text-poke-text-secondary border border-transparent hover:text-poke-text-primary hover:bg-poke-elevated'
         }
       `}
@@ -274,7 +274,7 @@ export default function NavBar({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: DURATION.state }}
-              className="fixed inset-0 z-40 bg-poke-inverse/30 backdrop-blur-sm xl:hidden"
+              className="fixed inset-0 z-40 backdrop-blur-sm xl:hidden"
               onClick={() => setMobileOpen(false)}
             />
 
@@ -311,7 +311,7 @@ export default function NavBar({
                   <Link
                     href={`/players/${player.playerId}`}
                     onClick={() => setMobileOpen(false)}
-                    className={`block px-4 py-3 border-b border-poke-border bg-poke-elevated/50 hover:bg-poke-elevated transition-colors ${FOCUS_RING}`}
+                    className={`block px-4 py-3 border-b border-poke-border hover:bg-poke-elevated transition-colors ${FOCUS_RING}`}
                   >
                     <div className="flex items-center gap-3">
                       <PlayerAvatar

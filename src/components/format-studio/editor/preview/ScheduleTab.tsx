@@ -108,7 +108,7 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
               </thead>
               <tbody>
                 {estimate.stages.map((stage) => (
-                  <tr key={stage.key} className="border-b border-poke-border/60">
+                  <tr key={stage.key} className="border-b">
                     <th scope="row" className="min-w-0 break-words px-3 py-2 text-left font-medium text-poke-text-primary">
                       {stageName(stage.key)}
                       {stage.groups !== null && (

@@ -42,7 +42,7 @@ export default function RatingChangePreview() {
           </span>
         </div>
       </div>
-      <div className="w-px h-8 bg-poke-border/30" />
+      <div className="w-px h-8" />
       <div className="text-center">
         <div className="text-poke-text-secondary">{t("rating.wins", { name: data?.player2.name ?? "" })}</div>
         <div className="flex gap-3 mt-0.5">

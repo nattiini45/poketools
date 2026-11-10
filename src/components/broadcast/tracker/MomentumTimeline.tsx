@@ -25,7 +25,7 @@ export default function MomentumTimeline({ gamesSubmitted }: MomentumTimelinePro
       </span>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
         {/* Center line */}
-        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="currentColor" strokeWidth={0.5} className="text-poke-border/30" />
+        <line x1={0} y1={height / 2} x2={width} y2={height / 2} stroke="currentColor" strokeWidth={0.5} />
 
         {/* Game segments */}
         {gamesSubmitted.map((game, i) => {
@@ -45,7 +45,6 @@ export default function MomentumTimeline({ gamesSubmitted }: MomentumTimelinePro
                   y2={height - 2}
                   stroke="currentColor"
                   strokeWidth={0.5}
-                  className="text-poke-border/20"
                 />
               )}
               {/* Game dot */}

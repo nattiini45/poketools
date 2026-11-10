@@ -59,7 +59,7 @@ export default function SceneSwitcher({ matchId, seasonId }: SceneSwitcherProps)
                   className={`px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors border ${
                     copiedKey === overlay.key
                       ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
-                      : "bg-poke-surface border-poke-border/30 text-poke-text hover:border-poke-accent/40"
+                      : "bg-poke-surface text-poke-text"
                   }`}
                 >
                   <div>{overlayLabel(overlay)}</div>

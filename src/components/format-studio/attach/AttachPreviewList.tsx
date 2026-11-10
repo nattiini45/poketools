@@ -96,7 +96,7 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
         {preview.stages.map((stage) => (
           <li
             key={`${stage.key}:${stage.name}`}
-            className="min-w-0 rounded-poke-md border border-poke-border bg-poke-elevated/40 px-3 py-2"
+            className="min-w-0 rounded-poke-md border border-poke-border px-3 py-2"
             data-attach-stage={stage.key}
           >
             <p className="break-words text-sm font-medium text-poke-text-primary">

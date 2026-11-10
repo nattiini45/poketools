@@ -124,7 +124,7 @@ export default function RouteDebugOverlay() {
     <div
       aria-hidden="true"
       data-route-debug-overlay=""
-      className="pointer-events-none fixed bottom-3 left-3 z-50 rounded-lg border border-arena-border bg-arena-surface/90 p-3 shadow-poke-lg backdrop-blur-sm"
+      className="pointer-events-none fixed bottom-3 left-3 z-50 rounded-lg border border-arena-border p-3 shadow-poke-lg backdrop-blur-sm"
     >
       <pre ref={readoutRef} className="font-mono text-[11px] leading-snug text-arena-ink" />
     </div>

@@ -406,7 +406,7 @@ export default function Combobox(props: ComboboxProps) {
             w-full p-2 pr-8
             border border-poke-border bg-poke-surface rounded-poke-md
             text-sm text-poke-text-primary placeholder:text-poke-text-muted
-            focus:border-poke-border-focus focus:ring-2 focus:ring-poke-border-focus/20
+            focus:border-poke-border-focus focus:ring-2
             transition-colors disabled:opacity-50
             ${renderInlineTags && value && !open ? 'sr-only' : ''}
           `}
@@ -460,7 +460,7 @@ export default function Combobox(props: ComboboxProps) {
                 className={`
                   px-3 py-1.5 text-sm transition-colors
                   ${opt.disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : opt.disabled ? '' : 'hover:bg-poke-elevated/50'}
+                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : ''}
                 `}
               >
                 {(renderOption ?? defaultRenderOption)(opt, i === highlightIdx)}

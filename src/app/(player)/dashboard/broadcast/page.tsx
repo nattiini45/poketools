@@ -95,7 +95,7 @@ export default async function BroadcastHubPage() {
             {recentCompleted.map((match) => (
               <div
                 key={match.id}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-poke-surface/50 border border-poke-border/30"
+                className="flex items-center justify-between px-4 py-3 rounded-xl border"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-sm text-poke-text">

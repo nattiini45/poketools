@@ -409,7 +409,7 @@ export default function EvolutionTierEditor({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('tierEditor.searchBasePlaceholder', { example: species(SEARCH_EXAMPLE_SPECIES) })}
-                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
                   />
                   <p className="text-xs text-poke-text-muted mt-1">
                     {t('tierEditor.threeStageOnly')}
@@ -477,7 +477,7 @@ export default function EvolutionTierEditor({
                         value={stage2Kos}
                         onChange={(e) => setStage2Kos(Number(e.target.value))}
                         required
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                       />
                     </div>
                     <div>
@@ -490,7 +490,7 @@ export default function EvolutionTierEditor({
                         value={stage3Kos}
                         onChange={(e) => setStage3Kos(Number(e.target.value))}
                         required
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                       />
                     </div>
                     <div>
@@ -500,7 +500,7 @@ export default function EvolutionTierEditor({
                       <select
                         value={powerTier}
                         onChange={(e) => setPowerTier(e.target.value as PowerTier)}
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                       >
                         {POWER_TIERS.map((pt) => (
                           <option key={pt} value={pt}>{tShared('tier', { tier: pt })}</option>
@@ -620,7 +620,7 @@ export default function EvolutionTierEditor({
                     value={wildcardSearch}
                     onChange={(e) => setWildcardSearch(e.target.value)}
                     placeholder={t('tierEditor.searchPokemonPlaceholder')}
-                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
                   />
                   {(wildcardResults.length > 0 || wildcardSearching) && (
                     <div className="absolute z-10 left-0 right-0 mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-card max-h-48 overflow-y-auto">
@@ -667,7 +667,7 @@ export default function EvolutionTierEditor({
                       value={wildcardStage2Kos}
                       onChange={(e) => setWildcardStage2Kos(Number(e.target.value))}
                       required
-                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                     />
                   </div>
                   <div>
@@ -678,7 +678,7 @@ export default function EvolutionTierEditor({
                       value={wildcardStage3Kos}
                       onChange={(e) => setWildcardStage3Kos(Number(e.target.value))}
                       required
-                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 focus:ring-poke-border-focus/20 transition-colors"
+                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
                     />
                   </div>
                 </div>

@@ -199,7 +199,7 @@ export default function WorldNav({ sections, label, brand, variant = 'auto' }: W
   return (
     <nav
       aria-label={label}
-      className="sticky top-0 z-20 h-12 border-b border-arena-border bg-arena-ground/80 backdrop-blur-md"
+      className="sticky top-0 z-20 h-12 border-b border-arena-border backdrop-blur-md"
     >
       <ul className="flex h-full items-center gap-1 overflow-x-auto">
         {sections.map((section, index) => {
@@ -227,7 +227,7 @@ export default function WorldNav({ sections, label, brand, variant = 'auto' }: W
           );
         })}
       </ul>
-      <div className="absolute right-2 top-0 flex h-12 items-center bg-arena-ground/80 pl-2">
+      <div className="absolute right-2 top-0 flex h-12 items-center pl-2">
         <WorldThemeSwitcher className="inline-flex h-12 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 font-heading text-sm font-semibold text-arena-ink transition-colors duration-150 hover:text-arena-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus" />
       </div>
     </nav>

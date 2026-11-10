@@ -54,14 +54,14 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={t("lowerThird.textPlaceholder")}
-        className="w-full px-3 py-1.5 text-sm rounded-lg bg-poke-surface border border-poke-border/30 text-poke-text placeholder:text-poke-text-muted focus:outline-none focus:border-poke-accent/50"
+        className="w-full px-3 py-1.5 text-sm rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-none"
       />
       <input
         type="text"
         value={subtext}
         onChange={(e) => setSubtext(e.target.value)}
         placeholder={t("lowerThird.subtextPlaceholder")}
-        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border border-poke-border/30 text-poke-text placeholder:text-poke-text-muted focus:outline-none focus:border-poke-accent/50"
+        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-none"
       />
 
       {/* Presets */}
@@ -71,7 +71,7 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
             key={p}
             type="button"
             onClick={() => applyPreset(p)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-poke-elevated text-poke-text-secondary hover:text-poke-text border border-poke-border/30 hover:border-poke-accent/40 transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-poke-elevated text-poke-text-secondary hover:text-poke-text border transition-colors"
           >
             {presetText(p)}
           </button>
@@ -80,7 +80,7 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
 
       {/* Preview */}
       {text && (
-        <div className="rounded-lg bg-gradient-to-r from-poke-surface to-poke-elevated border border-poke-border/30 px-4 py-2.5">
+        <div className="rounded-lg bg-gradient-to-r from-poke-surface to-poke-elevated border px-4 py-2.5">
           <div className="text-sm font-bold text-poke-text">{text}</div>
           {subtext && (
             <div className="text-xs text-poke-text-secondary mt-0.5">{subtext}</div>

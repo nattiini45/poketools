@@ -102,11 +102,11 @@ export default async function Home() {
         {/* oversized decorative ball outline, far right */}
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border-[10px] border-poke-accent/15"
+          className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border-[10px]"
         />
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute -right-4 -top-10 h-44 w-44 rounded-full border-[6px] border-poke-accent/20"
+          className="pointer-events-none absolute -right-4 -top-10 h-44 w-44 rounded-full border-[6px]"
         />
         <div className="relative flex flex-wrap items-center gap-8">
           <div className="max-w-xl flex-1 basis-72">
@@ -139,7 +139,7 @@ export default async function Home() {
         <Card
           variant="default"
           padding="lg"
-          className="group relative overflow-hidden border-poke-accent/30"
+          className="group relative overflow-hidden"
         >
           {/* type-shimmer sweep across the featured spotlight on hover */}
           <span

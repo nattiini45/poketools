@@ -108,7 +108,7 @@ export default function SoloMetaPanel() {
                   <button
                     key={p.pokemon_name}
                     onClick={() => handleAddToOpponent(p.pokemon_name)}
-                    className="flex items-center gap-2 rounded-poke-md px-2 py-1 text-left hover:bg-poke-accent/10 transition-colors group"
+                    className="flex items-center gap-2 rounded-poke-md px-2 py-1 text-left transition-colors group"
                     title={t('solo.meta.addToOpponent', { pokemon: name })}
                   >
                     <SpriteImg
