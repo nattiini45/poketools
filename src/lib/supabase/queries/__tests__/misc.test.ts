@@ -1125,14 +1125,14 @@ describe('queries/match-analyses', () => {
 
   describe('updateMatchAnalysis', () => {
     it('updates without error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
       await expect(
         updateMatchAnalysis('ma1', { status: 'completed' }),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(true);
     });
 
     it('stores the model that answered when the patch carries model_id', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
       await updateMatchAnalysis('ma1', { status: 'completed', model_id: 'claude-haiku-4-5-20251001' });
       expect(mockBuilder.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
@@ -1140,7 +1140,7 @@ describe('queries/match-analyses', () => {
     });
 
     it('throws on error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
+      mockBuilder.select.mockResolvedValue({ data: null, error: { message: 'err' } });
       await expect(
         updateMatchAnalysis('ma1', { status: 'failed' }),
       ).rejects.toEqual({ message: 'err' });
@@ -1227,14 +1227,14 @@ describe('queries/match-prep-analyses', () => {
 
   describe('updateMatchPrepAnalysis', () => {
     it('updates without error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
       await expect(
         updateMatchPrepAnalysis('mpa1', { status: 'completed' }),
-      ).resolves.toBeUndefined();
+      ).resolves.toBe(true);
     });
 
     it('stores the model that answered when the patch carries model_id', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'row-1' }], error: null });
       await updateMatchPrepAnalysis('mpa1', { status: 'completed', model_id: 'claude-haiku-4-5-20251001' });
       expect(mockBuilder.update).toHaveBeenCalledWith(
         expect.objectContaining({ status: 'completed', model_id: 'claude-haiku-4-5-20251001' }),
@@ -1242,7 +1242,7 @@ describe('queries/match-prep-analyses', () => {
     });
 
     it('throws on error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
+      mockBuilder.select.mockResolvedValue({ data: null, error: { message: 'err' } });
       await expect(
         updateMatchPrepAnalysis('mpa1', { status: 'failed' }),
       ).rejects.toEqual({ message: 'err' });
@@ -1762,14 +1762,16 @@ describe('queries/wiki-notes', () => {
   });
 
   describe('approveNote', () => {
-    it('approves without error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: null });
-      await expect(approveNote('wn1')).resolves.toBeUndefined();
+    const guard = { from: 'pending' as const, updatedAt: '2026-01-01T00:00:00.000Z' };
+
+    it('approves without error and reports that a row changed', async () => {
+      mockBuilder.select.mockResolvedValue({ data: [{ id: 'wn1' }], error: null });
+      await expect(approveNote('wn1', 'admin1', guard)).resolves.toBe(true);
     });
 
     it('throws on error', async () => {
-      mockBuilder.eq.mockReturnValue({ error: { message: 'err' } });
-      await expect(approveNote('wn1')).rejects.toEqual({ message: 'err' });
+      mockBuilder.select.mockResolvedValue({ data: null, error: { message: 'err' } });
+      await expect(approveNote('wn1', 'admin1', guard)).rejects.toEqual({ message: 'err' });
     });
   });
 

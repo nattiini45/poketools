@@ -77,6 +77,7 @@ export default defineDe<typeof en>()({
   POOL_HAS_REDRAFT: 'An diesem Draft hängt ein Redraft. Lösch zuerst den Redraft.',
   POOL_HAS_TEAMS:
     'Aus diesem Draft wurden Teams gedraftet, deshalb lässt er sich nicht löschen. Er bleibt als Nachweis dieser Teams erhalten.',
+  POOL_STATUS_CHANGED: 'Dieser Draft hat sich inzwischen geändert. Lade die Seite neu und versuche es noch einmal.',
   SEASON_HAS_NO_LIST: 'Diese Liga hat keine verknüpfte Point-Buy-Liste.',
   SEASON_GROUP_REQUIRED: 'Diese Liga hat Gruppen: Leg den Draft für eine ihrer Gruppen an.',
   SEASON_GROUP_INVALID: 'Diese Gruppe gehört nicht zu dieser Liga.',

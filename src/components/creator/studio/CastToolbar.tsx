@@ -3,10 +3,13 @@
 import { useCastStudio } from './CastStudioContext';
 import { useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
+import { useApiErrorText } from '@/i18n/use-api-error';
+import { errorsBroadcast } from '@/i18n/messages/errors';
 
 export default function CastToolbar() {
   const { state, dispatch } = useCastStudio();
   const t = useT(creatorStudioMessages);
+  const errorText = useApiErrorText(errorsBroadcast);
   const syncLabel = state.syncStatus === 'connected'
     ? t('toolbar.sync.connected')
     : state.syncStatus === 'local-only'
@@ -61,10 +64,12 @@ export default function CastToolbar() {
 
       {/* Save indicator */}
       <div className="flex items-center gap-1.5 text-xs text-poke-text-secondary">
-        {state.saving ? (
+        {state.save.status === 'saving' ? (
           <span className="animate-pulse">{t('toolbar.saving')}</span>
-        ) : state.dirty ? (
+        ) : state.save.status === 'dirty' ? (
           <span className="text-yellow-500">{t('toolbar.unsaved')}</span>
+        ) : state.save.status === 'error' ? (
+          <span className="text-red-500" title={errorText(state.save.error)}>{t('toolbar.saveFailed')}</span>
         ) : (
           <span className="text-green-500">{t('toolbar.saved')}</span>
         )}

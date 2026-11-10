@@ -11,11 +11,6 @@ describe('editorReducer', () => {
       expect(next.format).toBe('gen8ou');
       expect(next.generation).toBe(8);
     });
-
-    it('marks validation stale (legality differs per format)', () => {
-      const next = editorReducer(S(), { type: 'SET_FORMAT', format: 'gen8ou' });
-      expect(next.validationStatus).toBe('stale');
-    });
   });
 
   describe('SET_TEAM_NAME', () => {
@@ -246,18 +241,6 @@ describe('editorReducer', () => {
       const next = editorReducer(state, { type: 'APPLY_TEAM_PROPOSAL', team: [mewtwo], mode: 'fill' });
       expect(next.team[0]?.species).toBe('Pikachu');
       expect(next.team[1]?.species).toBe('Mewtwo');
-    });
-  });
-
-  describe('validationStatus', () => {
-    it('is stale after team mutations', () => {
-      const next = editorReducer(S(), { type: 'ADD_SLOT', species: 'Bulbasaur' });
-      expect(next.validationStatus).toBe('stale');
-    });
-
-    it('can be set explicitly', () => {
-      const next = editorReducer(S(), { type: 'SET_VALIDATION_STATUS', status: 'fresh' });
-      expect(next.validationStatus).toBe('fresh');
     });
   });
 

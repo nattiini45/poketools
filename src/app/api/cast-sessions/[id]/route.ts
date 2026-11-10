@@ -5,8 +5,11 @@ import { castSessionUpdateSchema, formatZodErrors } from '@/lib/validation';
 import {
   getCastSessionById,
   updateCastSession,
+  updateCastSessionFromStatus,
   deleteCastSession,
 } from '@/lib/supabase/queries/cast-sessions';
+import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
+import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { CastSession, CastSessionUpdate } from '@/types/cast-session';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -76,7 +79,31 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
     const body = zodResult.data as CastSessionUpdate;
-    const updated = await updateCastSession(id, body);
+    if (body.status === undefined || body.status === existing.status) {
+      const updated = await updateCastSession(id, body);
+      return NextResponse.json<ApiResult<CastSession>>({
+        success: true,
+        data: updated,
+      });
+    }
+
+    castSessionMachine.assertTransition(
+      existing.status,
+      body.status,
+      existing.owner_id === player.playerId ? 'owner' : 'admin',
+    );
+    const updated = await updateCastSessionFromStatus(id, body, existing.status);
+    if (!updated) {
+      logger.warn('api/cast-sessions', 'Cast session status changed during the update', {
+        sessionId: id,
+        from: existing.status,
+        to: body.status,
+      });
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Session changed in the meantime', code: 'cast_session_changed' },
+        { status: 409 }
+      );
+    }
 
     return NextResponse.json<ApiResult<CastSession>>({
       success: true,

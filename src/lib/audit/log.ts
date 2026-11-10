@@ -104,6 +104,7 @@ export type AuditAction =
   | 'season.create'
   | 'season.update'
   | 'season.clone'
+  | 'season.create_from_format'
   | 'season.clone_failed'
   | 'season.set_test_flag'
   | 'season.delete'

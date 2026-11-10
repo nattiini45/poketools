@@ -53,6 +53,7 @@ export default {
     saving: 'Saving...',
     unsaved: 'Unsaved',
     saved: 'Saved',
+    saveFailed: 'Save failed',
     sync: {
       connected: 'Realtime',
       localOnly: 'Local',

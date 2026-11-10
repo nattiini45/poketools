@@ -133,6 +133,22 @@ describe('propose_build: refusals, each a catalogued code and nothing written', 
     expect(h.store.proposals).toHaveLength(0);
   });
 
+  it.each([
+    ['drafting', true],
+    ['ready', true],
+    ['partial', true],
+    ['building', false],
+    ['built', false],
+    ['abandoned', false],
+  ] as const)('stages a Build of a %s plan: %s', async (status, stages) => {
+    const h = makeHarness();
+    seeWorkedExample(h);
+    h.store.setPlan(workedExample(), { status });
+    const result = await h.stage('propose_build', { plan_revision: 1 });
+    if (stages) staged(result);
+    else expect(refused(result).code).toBe('plan_not_ready');
+  });
+
   it('lists the readiness blockers when the Plan cannot be built yet', async () => {
     const h = makeHarness();
     const plan = workedExample();

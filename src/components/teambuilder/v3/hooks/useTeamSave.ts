@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import type { EditorState, EditorAction } from '../editor/state';
 import type { PokemonSet, TeamValidationResult } from '@/types/team';
 import type { TeamCheckAdvisory } from '@/types/api';
+import { teamSaveMachine } from '@/lib/team/editor-save-state';
 
 /**
  * The `code` of a failed response body, if it has one (never its English text).
@@ -73,7 +74,8 @@ export function useTeamSave(
       onSaveSuccess?.();
     };
     const pokemon = state.team.filter((s): s is PokemonSet => s !== null);
-    if (pokemon.length === 0) return;
+    // An empty team has nothing to save, and a save never overlaps another one.
+    if (pokemon.length === 0 || !teamSaveMachine.can(state.saveStatus, 'saving', 'player')) return;
 
     dispatch({ type: 'SET_SAVE_STATUS', status: 'saving' });
 
