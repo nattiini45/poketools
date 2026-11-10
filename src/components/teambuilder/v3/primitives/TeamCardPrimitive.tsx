@@ -110,8 +110,8 @@ export default function TeamCardPrimitive({
   // Size-specific class maps
   const spriteSize = size === 'sm' ? 40 : size === 'lg' ? 96 : 72;
   const nameClass = size === 'sm' ? 'text-[11px]' : 'text-sm font-bold';
-  const badgeClass = size === 'sm' ? '!text-[7px] !px-1 !py-0 !min-w-[2.5rem]' : '!text-[9px] !px-1.5 !py-0 !min-w-[3.5rem]';
-  const moveBadgeClass = size === 'sm' ? '!text-[6px] !px-0.5 !py-0 !min-w-[2rem]' : '!text-[7px] !px-1 !py-0 !min-w-[3rem]';
+  const badgeClass = size === 'sm' ? 'text-[7px]! px-1! py-0! min-w-[2.5rem]!' : 'text-[9px]! px-1.5! py-0! min-w-[3.5rem]!';
+  const moveBadgeClass = size === 'sm' ? 'text-[6px]! px-0.5! py-0! min-w-[2rem]!' : 'text-[7px]! px-1! py-0! min-w-[3rem]!';
   const metaClass = size === 'sm' ? 'text-[9px]' : 'text-xs';
   const moveClass = size === 'sm' ? 'text-[9px]' : 'text-xs';
 
@@ -131,7 +131,7 @@ export default function TeamCardPrimitive({
       className={[
         'rounded-poke-lg border relative overflow-hidden transition-colors',
         hasErrors ? 'border-red-500/40 bg-red-500/[0.03]' : hasWarnings ? 'border-yellow-500/30 bg-yellow-500/[0.02]' : 'border-poke-border bg-poke-card',
-        onClick ? 'cursor-pointer hover:border-poke-border-focus hover:shadow-sm' : '',
+        onClick ? 'cursor-pointer hover:border-poke-border-focus hover:shadow-xs' : '',
         size === 'sm' ? 'p-2' : size === 'lg' ? 'p-5' : 'p-3',
         className,
       ].filter(Boolean).join(' ')}

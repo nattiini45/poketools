@@ -97,7 +97,7 @@ export default function WikiSearchBar() {
         placeholder={t('search.placeholder')}
         className="w-full px-4 py-2.5 rounded-poke-lg bg-poke-surface border border-poke-border
                    text-poke-text-primary font-body placeholder:text-poke-text-secondary
-                   focus:outline-none focus:ring-2 focus:ring-poke-accent shadow-poke-sm"
+                   focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent shadow-poke-sm"
       />
       {loading && (
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-poke-text-secondary text-xs">

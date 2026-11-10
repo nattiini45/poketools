@@ -94,7 +94,7 @@ export default function TeamPicker({ open, onClose, onSelect }: TeamPickerProps)
         <h3 className="font-heading font-semibold text-poke-text-primary">
           {t('picker.title')}
         </h3>
-        <Button variant="ghost" onClick={onClose} className="!p-1 !text-lg leading-none" aria-label={t('picker.close')}>
+        <Button variant="ghost" onClick={onClose} className="p-1! text-lg! leading-none" aria-label={t('picker.close')}>
           &times;
         </Button>
       </div>

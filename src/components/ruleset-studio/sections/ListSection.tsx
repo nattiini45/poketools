@@ -131,7 +131,7 @@ export default function ListSection({ category, model }: ListSectionProps) {
                 onClick={() => choose(mode)}
                 onKeyDown={onModeKey}
                 className={cn(
-                  'min-h-11 px-4 text-sm font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
+                  'min-h-11 px-4 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
                   checked ? 'bg-poke-accent text-poke-surface' : 'bg-poke-surface text-poke-text-secondary hover:bg-poke-muted',
                 )}
               >

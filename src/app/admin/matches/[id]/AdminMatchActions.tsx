@@ -632,7 +632,7 @@ export default function AdminMatchActions({
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-2"
+              className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
               placeholder={t('actions.notesPlaceholder')}
             />
           </div>

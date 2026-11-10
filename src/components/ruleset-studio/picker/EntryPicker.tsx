@@ -365,7 +365,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
           <button
             type="button"
             onClick={() => updateFilters(EMPTY_FILTERS)}
-            className="min-h-9 rounded-poke-md px-2 font-semibold text-poke-blue hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus"
+            className="min-h-9 rounded-poke-md px-2 font-semibold text-poke-blue hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
           >
             {t('filters.clear')}
           </button>

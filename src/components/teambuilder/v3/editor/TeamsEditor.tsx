@@ -179,7 +179,7 @@ export default function TeamsEditor({
               placeholder={t('editor.teamNamePlaceholder')}
               maxLength={80}
               disabled={state.locked}
-              className="w-32 sm:w-44 px-2 py-1 text-xs bg-poke-elevated border border-poke-border rounded-lg text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-none"
+              className="w-32 sm:w-44 px-2 py-1 text-xs bg-poke-elevated border border-poke-border rounded-lg text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
               aria-label={t('editor.teamNameLabel')}
             />
           )}
@@ -294,7 +294,7 @@ export default function TeamsEditor({
           <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 flex flex-col gap-2 z-20">
             <button
               onClick={() => setPublishOpen(true)}
-              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow-xs hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
               title={t('editor.fab.publish')}
               aria-label={t('editor.fab.publish')}
             >
@@ -305,7 +305,7 @@ export default function TeamsEditor({
             </button>
             <button
               onClick={() => setShareOpen(true)}
-              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow-xs hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
               title={t('editor.fab.share')}
               aria-label={t('editor.fab.share')}
             >
@@ -319,7 +319,7 @@ export default function TeamsEditor({
             </button>
             <button
               onClick={() => setExportOpen(true)}
-              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow-xs hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
               title={t('editor.fab.export')}
               aria-label={t('editor.fab.export')}
             >
@@ -331,7 +331,7 @@ export default function TeamsEditor({
             </button>
             <button
               onClick={() => setImportOpen(true)}
-              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
+              className="w-10 h-10 rounded-full bg-poke-surface border border-poke-border text-poke-text-muted shadow-xs hover:text-poke-text-primary hover:bg-poke-muted transition-colors flex items-center justify-center"
               title={t('editor.fab.import')}
               aria-label={t('editor.fab.import')}
             >

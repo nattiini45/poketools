@@ -165,7 +165,7 @@ export default function RosterCard({
       }}
       className={cn(
         styles.card,
-        'group relative cursor-pointer select-none outline-none',
+        'group relative cursor-pointer select-none outline-2 outline-offset-2 outline-transparent',
         'motion-safe:transition-transform motion-safe:[transition-duration:120ms] motion-safe:hover:-translate-y-0.5',
         state === 'blocked' && BLOCKED_DIM,
       )}

@@ -153,7 +153,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 value={ev}
                 onChange={(e) => handleEvChange(stat, e.target.value)}
                 disabled={state.locked}
-                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-primary disabled:opacity-50 outline-none"
+                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-primary disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
               />
               <input
                 type="number"
@@ -163,7 +163,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 value={iv}
                 onChange={(e) => handleIvChange(stat, e.target.value)}
                 disabled={state.locked}
-                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-muted disabled:opacity-50 outline-none"
+                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
               />
               <span
                 className={[

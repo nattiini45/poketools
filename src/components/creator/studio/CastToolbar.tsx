@@ -28,7 +28,7 @@ export default function CastToolbar() {
         type="text"
         value={state.sessionName}
         onChange={(e) => dispatch({ type: 'set_session_name', name: e.target.value })}
-        className="bg-transparent border-none text-poke-text-primary font-heading font-bold text-lg focus:outline-none focus:ring-0 min-w-0 flex-1"
+        className="bg-transparent border-none text-poke-text-primary font-heading font-bold text-lg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-0 min-w-0 flex-1"
         placeholder={t('toolbar.sessionNamePlaceholder')}
       />
 

@@ -916,6 +916,11 @@
   min-height: 85.5px;
 }
 
+/* Tailwind 4 pads with logical properties, which turn with the writing mode: keep the badge's physical padding (px-0.5 py-1.5). */
+.weaknessTable .weaknessTypeHead {
+  padding: 6.75px 2.25px;
+}
+
 .weaknessWeak,
 .weaknessQuad,
 .weaknessResist,

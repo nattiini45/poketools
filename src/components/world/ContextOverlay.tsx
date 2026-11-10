@@ -227,7 +227,7 @@ export default function ContextOverlay({
       className={
         docked
           ? 'world-focus-panel'
-          : 'w-full max-w-lg rounded-xl border border-arena-border bg-arena-surface p-0 shadow-poke-lg backdrop:backdrop-blur-sm'
+          : 'w-full max-w-lg rounded-xl border border-arena-border bg-arena-surface p-0 shadow-poke-lg backdrop:backdrop-blur-xs'
       }
     >
       <div
@@ -253,7 +253,7 @@ export default function ContextOverlay({
           className={
             docked
               ? 'world-focus-panel-close'
-              : 'rounded-md p-1 text-arena-ink-secondary transition-colors hover:text-arena-ink focus-visible:outline focus-visible:outline-2 focus-visible:outline-arena-focus'
+              : 'rounded-md p-1 text-arena-ink-secondary transition-colors hover:text-arena-ink focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-arena-focus'
           }
         >
           <svg aria-hidden="true" viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round">

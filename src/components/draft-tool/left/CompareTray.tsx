@@ -93,7 +93,7 @@ function Column({
                 <div key={s.stage} className="flex flex-wrap items-center gap-1">
                   <PokemonSprite name={s.name} size={24} />
                   {types.map((type) => (
-                    <TypeBadge key={type} type={type} className="!min-w-0 !px-1.5 !text-[11.25px]" />
+                    <TypeBadge key={type} type={type} className="min-w-0! px-1.5! text-[11.25px]!" />
                   ))}
                   {i > 0 && k[i - 1] !== null && k[i - 1] !== undefined ? (
                     <span className="text-[var(--draft-ink-2)]">{t('compare.evolveAt', { k: k[i - 1] as number })}</span>

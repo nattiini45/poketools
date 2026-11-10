@@ -69,7 +69,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
         {types.length > 0 && (
           <div className="flex gap-1 mb-2">
             {types.map((t) => (
-              <TypeBadge key={t} type={t} className="!text-[9px] !px-1.5 !py-0.5" />
+              <TypeBadge key={t} type={t} className="text-[9px]! px-1.5! py-0.5!" />
             ))}
           </div>
         )}
@@ -97,7 +97,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
             placeholder={t('speciesHeader.nickname')}
             maxLength={24}
             disabled={state.locked}
-            className="w-24 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-none"
+            className="w-24 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
           />
           <label className="flex items-center gap-1 text-xs text-poke-text-muted">
             {t('speciesHeader.level')}
@@ -112,7 +112,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
                 dispatch({ type: 'UPDATE_SLOT', slot, patch: { level: v } });
               }}
               disabled={state.locked}
-              className="w-12 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary disabled:opacity-50 outline-none"
+              className="w-12 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
             />
           </label>
           <label className="flex items-center gap-1.5 text-xs text-poke-text-muted cursor-pointer select-none">

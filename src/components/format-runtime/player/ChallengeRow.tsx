@@ -83,7 +83,7 @@ export default function ChallengeRow({ seasonId, challenge, viewerId, closed, on
     <li
       ref={rowRef}
       tabIndex={-1}
-      className="space-y-2 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+      className="space-y-2 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
       data-challenge={challenge.id}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

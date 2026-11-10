@@ -44,7 +44,7 @@ export default function SoloTeamPreview({ sessionId, pollInterval = 5000 }: Solo
     <div className="flex items-center justify-center gap-8 p-6">
       {/* Player 1 */}
       <div className="flex flex-col items-center gap-3">
-        <span className="text-white font-bold text-lg drop-shadow-lg">{p1Name}</span>
+        <span className="text-white font-bold text-lg [filter:drop-shadow(0_10px_8px_rgb(0_0_0/0.04))_drop-shadow(0_4px_3px_rgb(0_0_0/0.1))]">{p1Name}</span>
         <div className="flex gap-1">
           {p1Team.map((set, i) => (
             <div key={`p1-${i}`} className="flex flex-col items-center">
@@ -61,11 +61,11 @@ export default function SoloTeamPreview({ sessionId, pollInterval = 5000 }: Solo
       </div>
 
       {/* VS divider */}
-      <span className="text-white/60 font-bold text-2xl">{t('common.vs')}</span>
+      <span className="text-[rgb(255_255_255/0.6)] font-bold text-2xl">{t('common.vs')}</span>
 
       {/* Player 2 */}
       <div className="flex flex-col items-center gap-3">
-        <span className="text-white font-bold text-lg drop-shadow-lg">{p2Name}</span>
+        <span className="text-white font-bold text-lg [filter:drop-shadow(0_10px_8px_rgb(0_0_0/0.04))_drop-shadow(0_4px_3px_rgb(0_0_0/0.1))]">{p2Name}</span>
         <div className="flex gap-1">
           {p2Team.map((set, i) => (
             <div key={`p2-${i}`} className="flex flex-col items-center">

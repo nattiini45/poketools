@@ -70,7 +70,7 @@ export default function GroupPoolPicker({ options, labels }: GroupPoolPickerProp
               aria-current={option.current ? 'page' : undefined}
               className={
                 'inline-flex min-h-11 max-w-full items-center rounded-full border px-4 py-1 text-sm font-heading ' +
-                'break-words focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+                'break-words focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 ' +
                 'focus-visible:outline-[var(--draft-accent,var(--poke-focus))] motion-safe:transition-colors ' +
                 (option.current
                   ? 'border-[var(--draft-accent,var(--poke-accent))] bg-[var(--draft-elevated,var(--poke-elevated))] font-semibold text-[var(--draft-ink,var(--poke-text-primary))]'

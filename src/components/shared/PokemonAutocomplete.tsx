@@ -162,7 +162,7 @@ export default function PokemonAutocomplete({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="w-full px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-none focus:border-poke-border-focus focus:ring-1"
+        className="w-full px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
       />
       {open && (
         <div className="absolute z-50 mt-1 w-full bg-poke-elevated border border-poke-border rounded-poke-md shadow-lg max-h-[300px] overflow-y-auto">

@@ -53,7 +53,7 @@ export default function LeagueAdminTabs({ leagueId, tabs, activeTab, labels, nav
                 aria-current={active ? 'page' : undefined}
                 aria-controls={active ? LEAGUE_ADMIN_PANEL_ID : undefined}
                 data-admin-tab={tab}
-                className={`inline-flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2 font-heading text-sm font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-poke-focus motion-safe:transition-colors motion-safe:duration-150 sm:min-h-0 ${
+                className={`inline-flex min-h-11 items-center whitespace-nowrap border-b-2 px-3 py-2 font-heading text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-poke-focus motion-safe:transition-colors motion-safe:duration-150 sm:min-h-0 ${
                   active
                     ? 'border-poke-accent text-poke-text-primary'
                     : 'border-transparent text-poke-text-secondary hover:border-poke-border hover:text-poke-text-primary'

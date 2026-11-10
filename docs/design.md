@@ -10,7 +10,7 @@
 PokéTools uses one unified warm **arena-sand** palette — the EvoLiga plaza's
 fighting-game character-select language (sand grounds, cream panels, amber
 pick-energy accent) — defined as CSS custom properties in
-`src/app/globals.css` and surfaced to Tailwind via `tailwind.config.ts` under
+`src/app/globals.css` and surfaced to Tailwind by the `@theme` blocks at its top under
 the `poke-*` namespace. Every page and component should use these tokens
 rather than raw colors so theming stays consistent. The former brand red
 `#E3350D` survives only as `poke-danger` (destructive actions, loss/error
@@ -31,8 +31,8 @@ components.json              # ShadCN config (RSC-safe, aliases @/components/ui,
 src/lib/utils/cn.ts          # cn() helper (clsx + tailwind-merge)
 src/lib/ui/table-params.ts   # parseTableParams(), pagination + sort helpers
 src/lib/ui/use-client-table.ts # Client-side sort + pagination hook for data tables
-src/app/globals.css          # CSS custom properties (--poke-*, ShadCN semantic bridge)
-tailwind.config.ts           # maps CSS vars → Tailwind theme (poke + shadcn tokens)
+src/app/globals.css          # Tailwind 4 entry (@theme: CSS vars → utilities), CSS custom properties (--poke-*, ShadCN semantic bridge)
+src/app/tailwind-base.css    # Tailwind 3.4's preflight, the site's base layer (Tailwind 4's preflight is not imported)
 src/components/ui/           # primitive component library (see below)
 ```
 
@@ -86,13 +86,13 @@ badge): a static shade is tuned against one surface and falls under 4.5:1 on
 the others. The moonlit status hues are light, so a solid status fill carries
 dark ink (`poke-on-*`) there and white in the sunlit variant.
 
-The seven status tokens `poke-blue`, `-blue-hover`, `-green`, `-green-hover`,
-`-yellow`, `-danger` and `-danger-hover` are built with `tokenColor()` in
-`tailwind.config.ts` (`color-mix(in srgb, var(--poke-…) calc(<alpha-value> *
-100%), transparent)`), so they follow the palette and still honour opacity
-modifiers. Every other `poke-*` colour stays a plain `var()`: Tailwind 3.4
-silently drops `/NN` on those, and switching them would surface styles that
-render nothing today.
+Every `poke-*` colour is a plain `var()` in `@theme inline`, so it resolves
+where it is used (world, palette and frozen-root overrides apply) and Tailwind 4
+alpha-blends it with `/NN`. On Tailwind 3 only the seven status tokens
+`poke-blue`, `-blue-hover`, `-green`, `-green-hover`, `-yellow`, `-danger`
+and `-danger-hover` rendered `/NN`; a modifier on any other token rendered
+nothing, so `tailwind-status-tokens.test.ts` keeps those out of the source until
+they come back as deliberate visual changes.
 
 **Artwork statics (`art.*`).** Colours that must never follow a palette live
 in a separate static hex group: `art-ball-red` (`#DC2626`, the Pokéball's red
@@ -235,7 +235,7 @@ Token usage in className:
 
 ## Dependencies
 
-- **Tailwind CSS 3** — token mapping in `tailwind.config.ts`.
+- **Tailwind CSS 4** (`@tailwindcss/postcss`) — token mapping in the `@theme` blocks of `globals.css`; `tailwindcss-animate` through `@plugin`. Where Tailwind 4's defaults differ from 3's (colour palette, font stacks, type-scale line heights, px breakpoints) the theme keeps Tailwind 3's values.
 - **`next/font/local`** — self-hosted Nunito (heading) and DM Sans (body)
   variable woff2; exposed as `--font-heading-face` / `--font-body-face`.
 - Every feature module — these are the lowest-level building blocks.
@@ -249,7 +249,7 @@ Token usage in className:
 ## Notes
 
 - Do **not** introduce raw hex colors in components — extend the token set in
-  `globals.css` + `tailwind.config.ts` instead.
+  `globals.css` (custom property plus its `@theme` entry) instead.
 - Dark mode is app-wide via the `data-theme` attribute (`light` / `dark`):
   `globals.css` swaps the full `--poke-*` variable set under
   `[data-theme="dark"]`, and Tailwind colors reference the variables so
@@ -258,7 +258,7 @@ Token usage in className:
   `data-palette` on `<html>` (absent = plaza). Light/dark and the palette
   combine through CSS alone; neither attribute's owner touches the other
   ([Site palettes](#site-palettes)).
-- The 18 Pokémon type colors live in `tailwind.config.ts` as HSL-tuned
+- The 18 Pokémon type colors live in the `@theme` block of `globals.css` as HSL-tuned
   `poke-type-*` classes (normal … fairy); per-type contrast pairings
   (`text-white` vs `text-poke-text-primary`) are fixed in `TypeBadgeView.tsx` (the hook-free half that `TypeBadge.tsx` wraps with the localized label; a server component renders the view directly so no name table reaches the client).
 - When adding a new primitive, document it in the table above.

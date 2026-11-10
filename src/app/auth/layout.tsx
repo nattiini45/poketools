@@ -7,7 +7,7 @@ export const metadata: Metadata = { robots: NOINDEX };
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen flex flex-col items-center justify-center px-4 py-12 focus:outline-none">
+    <main id={MAIN_CONTENT_ID} tabIndex={-1} className="min-h-screen flex flex-col items-center justify-center px-4 py-12 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
       <Link
         href="/"
         className="mb-6 text-2xl font-heading font-extrabold uppercase tracking-[0.04em] text-poke-text-primary"

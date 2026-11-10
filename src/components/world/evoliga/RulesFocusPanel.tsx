@@ -127,19 +127,19 @@ export default function RulesFocusPanel({
         </span>
         <label
           htmlFor="rules-page-format"
-          className={`col-start-2 ${TAB} peer-checked/format:bg-[var(--hud-chip-active)] peer-checked/format:text-[var(--hud-chip-active-ink)] peer-checked/format:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/format:outline peer-focus-visible/format:outline-2 peer-focus-visible/format:outline-offset-2 peer-focus-visible/format:outline-arena-focus`}
+          className={`col-start-2 ${TAB} peer-checked/format:bg-[var(--hud-chip-active)] peer-checked/format:text-[var(--hud-chip-active-ink)] peer-checked/format:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/format:outline-solid peer-focus-visible/format:outline-2 peer-focus-visible/format:outline-offset-2 peer-focus-visible/format:outline-arena-focus`}
         >
           {t('rulesPanel.tabFormat')}
         </label>
         <label
           htmlFor="rules-page-klauseln"
-          className={`col-start-3 ${TAB} peer-checked/klauseln:bg-[var(--hud-chip-active)] peer-checked/klauseln:text-[var(--hud-chip-active-ink)] peer-checked/klauseln:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/klauseln:outline peer-focus-visible/klauseln:outline-2 peer-focus-visible/klauseln:outline-offset-2 peer-focus-visible/klauseln:outline-arena-focus`}
+          className={`col-start-3 ${TAB} peer-checked/klauseln:bg-[var(--hud-chip-active)] peer-checked/klauseln:text-[var(--hud-chip-active-ink)] peer-checked/klauseln:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/klauseln:outline-solid peer-focus-visible/klauseln:outline-2 peer-focus-visible/klauseln:outline-offset-2 peer-focus-visible/klauseln:outline-arena-focus`}
         >
           {t('rulesPanel.tabClauses')}
         </label>
         <label
           htmlFor="rules-page-draft"
-          className={`col-start-4 ${TAB} peer-checked/draft:bg-[var(--hud-chip-active)] peer-checked/draft:text-[var(--hud-chip-active-ink)] peer-checked/draft:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/draft:outline peer-focus-visible/draft:outline-2 peer-focus-visible/draft:outline-offset-2 peer-focus-visible/draft:outline-arena-focus`}
+          className={`col-start-4 ${TAB} peer-checked/draft:bg-[var(--hud-chip-active)] peer-checked/draft:text-[var(--hud-chip-active-ink)] peer-checked/draft:shadow-[inset_0_0_0_1px_var(--hud-chip-active-ring)] peer-focus-visible/draft:outline-solid peer-focus-visible/draft:outline-2 peer-focus-visible/draft:outline-offset-2 peer-focus-visible/draft:outline-arena-focus`}
         >
           {t('rulesPanel.tabDraft')}
         </label>

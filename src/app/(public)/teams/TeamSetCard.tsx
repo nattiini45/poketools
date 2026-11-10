@@ -63,7 +63,7 @@ export default function TeamSetCard({
       {set.tera_type && (
         <div className="flex items-center gap-1 mb-2">
           <span className="text-[10px] text-poke-text-muted">{t('set.tera')}</span>
-          <TypeBadgeView type={set.tera_type} label={localizeType(set.tera_type, dl)} className="!text-[9px] !px-1.5 !py-0" />
+          <TypeBadgeView type={set.tera_type} label={localizeType(set.tera_type, dl)} className="text-[9px]! px-1.5! py-0!" />
         </div>
       )}
 

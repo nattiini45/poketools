@@ -62,7 +62,7 @@ export function FieldMessages({
 }) {
   return (
     <>
-      <div aria-live="polite" className="empty:!mt-0">
+      <div aria-live="polite" className="empty:mt-0!">
         {error && (
           <p id={errorId} className="text-sm text-poke-danger">
             {error}

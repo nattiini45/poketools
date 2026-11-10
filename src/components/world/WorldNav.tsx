@@ -209,7 +209,7 @@ export default function WorldNav({ sections, label, brand, variant = 'auto' }: W
               <a
                 href={`#${section.id}`}
                 aria-current={active ? 'true' : undefined}
-                className={`inline-flex h-12 items-center whitespace-nowrap px-3 font-heading text-sm font-semibold transition-colors duration-150 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus ${
+                className={`inline-flex h-12 items-center whitespace-nowrap px-3 font-heading text-sm font-semibold transition-colors duration-150 focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus ${
                   active ? 'text-arena-accent-strong' : 'text-arena-ink hover:text-arena-accent-strong'
                 }`}
               >
@@ -228,7 +228,7 @@ export default function WorldNav({ sections, label, brand, variant = 'auto' }: W
         })}
       </ul>
       <div className="absolute right-2 top-0 flex h-12 items-center pl-2">
-        <WorldThemeSwitcher className="inline-flex h-12 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 font-heading text-sm font-semibold text-arena-ink transition-colors duration-150 hover:text-arena-accent-strong focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus" />
+        <WorldThemeSwitcher className="inline-flex h-12 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 font-heading text-sm font-semibold text-arena-ink transition-colors duration-150 hover:text-arena-accent-strong focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus" />
       </div>
     </nav>
   );

@@ -74,7 +74,7 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
   return (
     <div className="space-y-4" data-live-actions>
       <p className="text-sm text-poke-text-secondary">{t('actions.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-none">
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {done !== null ? t(done.state === 'open' ? 'actions.done.open' : 'actions.done.locked', { action: name(done.action) }) : ''}
       </div>
       <ul className="space-y-3">

@@ -236,9 +236,9 @@ export default function CrystalXPBar({
         </span>
       </div>
 
-      <div className="relative h-4 overflow-visible rounded-sm border-2 border-blue-900/60 bg-gray-900">
+      <div className="relative h-4 overflow-visible rounded-sm border-2 border-[rgb(30_58_138/0.6)] bg-gray-900">
         <div
-          className="absolute inset-y-0 left-0 bg-gradient-to-r from-blue-600 to-cyan-400"
+          className="absolute inset-y-0 left-0 bg-linear-to-r/srgb from-blue-600 to-cyan-400"
           style={{ width: `${percent}%` }}
         >
           <div
@@ -287,7 +287,7 @@ export default function CrystalXPBar({
       )}
 
       {phase === 'evolved' && (
-        <div className="absolute inset-0 motion-safe:animate-pulse rounded bg-white/15" aria-hidden />
+        <div className="absolute inset-0 motion-safe:animate-pulse rounded bg-[rgb(255_255_255/0.15)]" aria-hidden />
       )}
 
       {isAnimating && (

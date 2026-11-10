@@ -39,7 +39,7 @@ export default function MatchupPokemonDetail({
   const abilities = hasBaseStats(detail) ? detail.abilities : undefined;
 
   return (
-    <div className="rounded-lg border border-cyan-800/40 bg-cyan-950/10 p-4">
+    <div className="rounded-lg border border-[rgb(21_94_117/0.4)] bg-[rgb(8_51_68/0.1)] p-4">
       <div className="mb-3 flex items-start justify-between">
         <div className="flex items-center gap-3">
           <PokemonSprite name={detail.species} size={48} />

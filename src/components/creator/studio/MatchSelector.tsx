@@ -201,7 +201,7 @@ export default function MatchSelector() {
     }
   }, [state.sessionId, dispatch]);
 
-  const selectClass = 'w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent';
+  const selectClass = 'w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent';
 
   return (
     <div className="space-y-3">

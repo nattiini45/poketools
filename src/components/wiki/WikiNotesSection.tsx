@@ -196,7 +196,7 @@ function WikiNotesAuthenticated({
                     onChange={(event) => {
                       if (isReportReason(event.target.value)) setReportReason(event.target.value);
                     }}
-                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
+                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
                   >
                     {REPORT_REASONS.map((reason) => (
                       <option key={reason} value={reason}>
@@ -210,7 +210,7 @@ function WikiNotesAuthenticated({
                     maxLength={500}
                     rows={2}
                     placeholder={t('notes.reportDetails')}
-                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
+                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
                   />
                   <button
                     type="button"
@@ -243,7 +243,7 @@ function WikiNotesAuthenticated({
             rows={3}
             className="w-full px-4 py-2.5 rounded-poke-md bg-poke-surface border border-poke-border
                        text-poke-text-primary font-body text-sm placeholder:text-poke-text-secondary
-                       focus:outline-none focus:ring-2 focus:ring-poke-accent resize-y"
+                       focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent resize-y"
           />
           {error && (
             <p className="text-xs text-poke-danger-ink font-body" role="alert">{feedbackText(error)}</p>

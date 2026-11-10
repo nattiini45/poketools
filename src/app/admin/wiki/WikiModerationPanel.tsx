@@ -362,7 +362,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                 placeholder={t('wiki.rejectionReason')}
                 rows={2}
                 maxLength={500}
-                className="mt-4 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
+                className="mt-4 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
               />
               <div className="mt-3 flex flex-wrap gap-2">
                 {offers(note, 'approve') && (
@@ -410,7 +410,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                   placeholder={t('wiki.rejectionReason')}
                   rows={2}
                   maxLength={500}
-                  className="mt-3 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
+                  className="mt-3 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
                 />
               )}
               <div className="mt-3 flex flex-wrap gap-2">

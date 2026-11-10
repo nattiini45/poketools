@@ -189,7 +189,7 @@ export function MatchListSelectionHeader({
             onChange={onTogglePage}
             data-state={pageState}
             aria-label={t('admin.matches.bulk.selectPage', { count: pageCount })}
-            className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+            className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
           />
           <span>{t('admin.matches.range', { from: f.number(from), to: f.number(to), total: f.number(total) })}</span>
         </label>

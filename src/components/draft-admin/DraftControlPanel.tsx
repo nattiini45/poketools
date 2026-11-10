@@ -249,7 +249,7 @@ export default function DraftControlPanel({
                 aria-controls={selected ? poolPanelId(idBase) : undefined}
                 tabIndex={selected ? 0 : -1}
                 onClick={() => setActive(tab.id)}
-                className={`min-h-11 rounded-poke-md border px-3 py-1.5 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-0 ${
+                className={`min-h-11 rounded-poke-md border px-3 py-1.5 text-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-0 ${
                   selected
                     ? 'border-poke-accent bg-poke-accent text-poke-surface'
                     : 'border-poke-border bg-poke-elevated text-poke-text-primary hover:border-poke-accent'

@@ -47,7 +47,7 @@ export default function BringLeadStats({ player }: BringLeadStatsProps) {
                       <span className="text-[8px] text-poke-text-secondary w-6">{t("bringLead.bringShort")}</span>
                       <div className="flex-1 h-2 bg-poke-surface rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-emerald-500/60 rounded-full"
+                          className="h-full bg-[rgb(16_185_129/0.6)] rounded-full"
                           style={{ width: `${Math.min(p.bringPct, 100)}%` }}
                         />
                       </div>
@@ -62,7 +62,7 @@ export default function BringLeadStats({ player }: BringLeadStatsProps) {
                       <span className="text-[8px] text-poke-text-secondary w-6">{t("bringLead.leadShort")}</span>
                       <div className="flex-1 h-2 bg-poke-surface rounded-full overflow-hidden">
                         <div
-                          className="h-full bg-yellow-500/60 rounded-full"
+                          className="h-full bg-[rgb(234_179_8/0.6)] rounded-full"
                           style={{ width: `${Math.min(p.leadPct, 100)}%` }}
                         />
                       </div>

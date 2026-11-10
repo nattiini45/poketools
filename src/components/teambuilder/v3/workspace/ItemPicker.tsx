@@ -170,7 +170,7 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-none"
+          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent"
           placeholder={t('itemPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}

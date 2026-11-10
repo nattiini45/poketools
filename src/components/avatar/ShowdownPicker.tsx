@@ -127,7 +127,7 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
           onChange={(e) => setSearch(e.target.value)}
           className="w-full px-4 py-2 pl-10 text-sm bg-poke-elevated border border-poke-border
                      rounded-poke-lg text-poke-text-primary placeholder:text-poke-text-muted
-                     focus:outline-none focus:ring-2 focus:border-poke-accent"
+                     focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:border-poke-accent"
         />
         <svg
           className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poke-text-muted"
@@ -191,7 +191,7 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
               w-full h-[72px]
               ${selected === sprite.id
                 ? 'border-poke-accent shadow-poke-sm scale-105 z-10'
-                : 'border-transparent hover:border-poke-border hover:scale-102'
+                : 'border-transparent hover:border-poke-border'
               }
             `}
           >

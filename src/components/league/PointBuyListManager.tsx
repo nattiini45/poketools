@@ -85,7 +85,7 @@ export function PointBuyListManagerView({
             value={selectedId}
             onChange={(e) => onSelect(e.target.value)}
             disabled={failed}
-            className="w-full rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-none disabled:opacity-50"
+            className="w-full rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent disabled:opacity-50"
           >
             <option value="">{t('listManager.selectList')}</option>
             {versions.map((v) => (

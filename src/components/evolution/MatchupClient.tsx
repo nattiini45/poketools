@@ -233,7 +233,7 @@ function PlayerSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-none"
+        className="rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       >
         <option value="">{t('matchup.select')}</option>
         {participants.map((p) => (

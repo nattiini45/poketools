@@ -145,7 +145,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
   return (
     <div className="space-y-4" data-live-relations>
       <p className="text-sm text-poke-text-secondary">{t('relations.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-none">
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {revealed !== null ? t('relations.revealed', { relation: revealed }) : drawn !== null ? t('relations.drawn', { relation: drawn }) : ''}
       </div>
 

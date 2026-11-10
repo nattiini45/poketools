@@ -117,7 +117,7 @@ function VariantButton({
         overflow-hidden
         ${isSelected
           ? 'border-poke-accent bg-poke-accent-light shadow-poke-sm scale-105'
-          : 'border-poke-border bg-poke-elevated hover:border-poke-text-muted hover:scale-102'
+          : 'border-poke-border bg-poke-elevated hover:border-poke-text-muted'
         }
       `}
     >

@@ -58,7 +58,7 @@ export default function SceneSwitcher({ matchId, seasonId }: SceneSwitcherProps)
                   onClick={() => handleCopy(overlay)}
                   className={`px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors border ${
                     copiedKey === overlay.key
-                      ? "bg-emerald-500/15 border-emerald-500/30 text-emerald-400"
+                      ? "bg-[rgb(16_185_129/0.15)] border-[rgb(16_185_129/0.3)] text-emerald-400"
                       : "bg-poke-surface text-poke-text"
                   }`}
                 >

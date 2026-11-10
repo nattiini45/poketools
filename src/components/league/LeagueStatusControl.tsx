@@ -89,7 +89,7 @@ export default function LeagueStatusControl({ seasonId, currentStatus, blocked }
             aria-pressed={option.value === currentStatus}
             aria-describedby={reasonFor(option.value) !== null ? reasonId(option.value) : undefined}
             // 44 px touch target on phones; the badge keeps its compact look inside it.
-            className="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"
+            className="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"
           >
             <Badge
               variant={option.variant}

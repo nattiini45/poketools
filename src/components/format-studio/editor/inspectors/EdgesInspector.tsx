@@ -179,7 +179,7 @@ export default function EdgesInspector({ doc, diagnostics, onChange }: EdgesInsp
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-4" data-inspector="edges">
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-none">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {t('inspector.edges.heading')}
         </h2>
         <p className="text-sm text-poke-text-secondary">{t('inspector.edges.intro')}</p>

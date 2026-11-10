@@ -78,19 +78,19 @@ export default function TrackerPokemonSlot({
 
   // State-dependent styling
   const borderColor = slot.was_koed
-    ? 'border-red-500/70'
+    ? 'border-[rgb(239_68_68/0.7)]'
     : slot.was_lead
-      ? 'border-yellow-400/70'
+      ? 'border-[rgb(250_204_21/0.7)]'
       : slot.was_brought
-        ? 'border-emerald-400/70'
+        ? 'border-[rgb(52_211_153/0.7)]'
         : '';
 
   const bgColor = slot.was_koed
-    ? 'bg-red-950/30'
+    ? 'bg-[rgb(69_10_10/0.3)]'
     : slot.was_lead
-      ? 'bg-yellow-950/20'
+      ? 'bg-[rgb(66_32_6/0.2)]'
       : slot.was_brought
-        ? 'bg-emerald-950/20'
+        ? 'bg-[rgb(2_44_34/0.2)]'
         : '';
 
   const opacity = slot.was_koed ? 'opacity-60' : '';
@@ -140,12 +140,12 @@ export default function TrackerPokemonSlot({
             ))}
             {/* Usage badges (F8) */}
             {pokemonInfo.usagePct !== null && pokemonInfo.usagePct < 1 && (
-              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-purple-500/20 text-purple-300 border border-purple-500/30">
+              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-[rgb(168_85_247/0.2)] text-purple-300 border border-[rgb(168_85_247/0.3)]">
                 {t('tracker.ultraRare')}
               </span>
             )}
             {pokemonInfo.usagePct !== null && pokemonInfo.usagePct >= 1 && pokemonInfo.usagePct < 5 && (
-              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-amber-500/20 text-amber-300 border border-amber-500/30">
+              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-[rgb(245_158_11/0.2)] text-amber-300 border border-[rgb(245_158_11/0.3)]">
                 {t('tracker.spicy')}
               </span>
             )}
@@ -174,7 +174,7 @@ export default function TrackerPokemonSlot({
             px-2 py-1 rounded-lg text-xs font-bold transition-colors
             ${slot.was_koed
               ? 'bg-red-500 text-white'
-              : 'bg-poke-elevated text-poke-text-secondary hover:bg-red-500/20 hover:text-red-400'}
+              : 'bg-poke-elevated text-poke-text-secondary hover:bg-[rgb(239_68_68/0.2)] hover:text-red-400'}
           `}
           title={slot.was_koed ? t('tracker.undoKo') : t('tracker.markKoed')}
         >
@@ -183,7 +183,7 @@ export default function TrackerPokemonSlot({
         <button
           type="button"
           onClick={handleKoDeal}
-          className="px-2 py-1 rounded-lg text-xs font-bold bg-poke-elevated text-poke-text-secondary hover:bg-orange-500/20 hover:text-orange-400 transition-colors"
+          className="px-2 py-1 rounded-lg text-xs font-bold bg-poke-elevated text-poke-text-secondary hover:bg-[rgb(249_115_22/0.2)] hover:text-orange-400 transition-colors"
           title={t('tracker.recordKoDealt')}
         >
           +KO

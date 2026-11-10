@@ -58,7 +58,7 @@ export default function BottomSheet({
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay
-          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
+          className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
         />
         <Dialog.Content
           aria-describedby={undefined}
@@ -95,7 +95,7 @@ export default function BottomSheet({
               {title ?? t('modal.untitled')}
             </Dialog.Title>
             <Dialog.Close
-              className="ml-auto shrink-0 rounded-poke-sm p-1 text-poke-text-muted transition-colors hover:text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-ring"
+              className="ml-auto shrink-0 rounded-poke-sm p-1 text-poke-text-muted transition-colors hover:text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring"
               aria-label={t('modal.close')}
             >
               <X className="h-4 w-4" />

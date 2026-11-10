@@ -21,15 +21,15 @@ export default function SoloSessionRecord({ sessionId, pollInterval = 5000 }: So
 
   return (
     <div className="flex items-center justify-center p-4">
-      <div className="flex items-center gap-4 rounded-xl bg-black/70 backdrop-blur-sm px-8 py-4">
+      <div className="flex items-center gap-4 rounded-xl bg-[rgb(0_0_0/0.7)] backdrop-blur-xs px-8 py-4">
         <div className="flex items-center gap-2">
           <span className="text-green-400 font-bold text-4xl font-mono">{state.wins}</span>
-          <span className="text-green-400/60 font-bold text-lg">{t('common.winsShort')}</span>
+          <span className="text-[rgb(74_222_128/0.6)] font-bold text-lg">{t('common.winsShort')}</span>
         </div>
-        <span className="text-white/30 text-2xl font-bold">&ndash;</span>
+        <span className="text-[rgb(255_255_255/0.3)] text-2xl font-bold">&ndash;</span>
         <div className="flex items-center gap-2">
           <span className="text-red-400 font-bold text-4xl font-mono">{state.losses}</span>
-          <span className="text-red-400/60 font-bold text-lg">{t('common.lossesShort')}</span>
+          <span className="text-[rgb(248_113_113/0.6)] font-bold text-lg">{t('common.lossesShort')}</span>
         </div>
       </div>
     </div>

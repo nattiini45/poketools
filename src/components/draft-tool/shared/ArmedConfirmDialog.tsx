@@ -131,7 +131,7 @@ function ArmedConfirmContent({
       <div className="flex items-start justify-between gap-4">
         <Dialog.Title className="text-lg font-heading font-bold text-poke-text-primary">{title}</Dialog.Title>
         <Dialog.Close
-          className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-poke-sm p-1 text-poke-text-muted motion-safe:transition-colors md:min-h-0 md:min-w-0 hover:text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50"
+          className="ml-auto inline-flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-poke-sm p-1 text-poke-text-muted motion-safe:transition-colors md:min-h-0 md:min-w-0 hover:text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50"
           aria-label={tUi('modal.close')}
           disabled={busy}
         >
@@ -179,7 +179,7 @@ export default function ArmedConfirmDialog({ open, ...rest }: ArmedConfirmDialog
       }}
     >
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-sm" />
+        <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-xs" />
         <ArmedConfirmContent {...rest} />
       </Dialog.Portal>
     </Dialog.Root>

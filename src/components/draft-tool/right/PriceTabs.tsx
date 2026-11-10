@@ -123,7 +123,7 @@ export default function PriceTabs({ active, counts, filtersActive, onSelect, con
               // 44 px touch target on phones (the tabs scroll sideways there); compact from 768 px.
               'min-h-[44px] shrink-0 -skew-x-12 rounded-sm border px-3 py-1.5 text-sm font-semibold md:min-h-0 md:px-2.5 md:py-1',
               'text-[var(--draft-tab-ink,var(--poke-text-primary))]',
-              'outline-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--poke-focus)]',
+              'outline-2 outline-offset-2 outline-transparent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--poke-focus)]',
               tabFill(key),
               selected
                 ? 'border-2 border-[var(--draft-accent,var(--poke-accent))]'

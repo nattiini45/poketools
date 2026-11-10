@@ -65,7 +65,7 @@ function NoticeBar({ notice, catalog, onDismiss }: { notice: Notice; catalog: Dr
       <button
         type="button"
         onClick={onDismiss}
-        className="rounded p-1 text-poke-text-muted hover:text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus"
+        className="rounded p-1 text-poke-text-muted hover:text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
         aria-label={t('center.dismiss')}
       >
         <X className="h-4 w-4" aria-hidden="true" />

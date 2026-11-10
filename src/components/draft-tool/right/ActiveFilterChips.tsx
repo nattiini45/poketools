@@ -58,9 +58,9 @@ export default function ActiveFilterChips({ chips, count, onRemove, onClearAll, 
                 onClick={() => onRemove(chip.id)}
                 aria-label={t('chips.remove', { label: full })}
                 title={full}
-                className="group inline-flex min-h-[44px] max-w-full items-center outline-none md:min-h-0 md:py-0.5"
+                className="group inline-flex min-h-[44px] max-w-full items-center outline-2 outline-offset-2 outline-transparent md:min-h-0 md:py-0.5"
               >
-                <span className="inline-flex max-w-[252px] items-center gap-1 rounded-full border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-elevated,var(--poke-elevated))] py-0.5 pl-2 pr-1.5 text-xs text-[var(--draft-ink,var(--poke-text-primary))] group-hover:border-[var(--draft-ink-2,var(--poke-text-secondary))] group-focus-visible:outline group-focus-visible:outline-2 group-focus-visible:outline-[var(--poke-focus)]">
+                <span className="inline-flex max-w-[252px] items-center gap-1 rounded-full border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-elevated,var(--poke-elevated))] py-0.5 pl-2 pr-1.5 text-xs text-[var(--draft-ink,var(--poke-text-primary))] group-hover:border-[var(--draft-ink-2,var(--poke-text-secondary))] group-focus-visible:outline-solid group-focus-visible:outline-2 group-focus-visible:outline-[var(--poke-focus)]">
                   <span className="truncate">{chipLabel(chip.labelParts, ctx, 'short')}</span>
                   <X className="h-3 w-3 shrink-0 text-[var(--draft-ink-2,var(--poke-text-secondary))]" aria-hidden="true" />
                 </span>
@@ -70,7 +70,7 @@ export default function ActiveFilterChips({ chips, count, onRemove, onClearAll, 
           <button
             type="button"
             onClick={onClearAll}
-            className="min-h-[44px] whitespace-nowrap rounded px-1.5 text-xs text-[var(--draft-accent,var(--poke-accent))] underline-offset-2 outline-none hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[var(--poke-focus)] md:min-h-0"
+            className="min-h-[44px] whitespace-nowrap rounded px-1.5 text-xs text-[var(--draft-accent,var(--poke-accent))] underline-offset-2 outline-2 outline-offset-2 outline-transparent hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-[var(--poke-focus)] md:min-h-0"
           >
             {t('chips.clearAll')}
           </button>

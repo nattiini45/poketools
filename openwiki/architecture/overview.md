@@ -138,7 +138,7 @@ try {
 
 ### Design System
 - Warm "Pokémon Center" palette defined as CSS custom properties in `src/app/globals.css`
-- Tailwind tokens under `poke-*` namespace (defined in `tailwind.config.ts`)
+- Tailwind tokens under `poke-*` namespace (defined in the `@theme` blocks of `src/app/globals.css`)
 - UI primitives in `src/components/ui/` — see [Design](../domain/public-and-content.md#design-system)
 - See `docs/design.md` for full token reference
 

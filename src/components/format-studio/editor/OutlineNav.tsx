@@ -29,7 +29,7 @@ interface OutlineNavProps {
 }
 
 const ITEM =
-  'flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-poke-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9';
+  'flex min-h-11 w-full min-w-0 items-center justify-between gap-2 rounded-poke-md border px-3 py-2 text-left text-sm transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9';
 
 /**
  * The outline of the format: its name and look, the stages (with reorder, duplicate and delete), the

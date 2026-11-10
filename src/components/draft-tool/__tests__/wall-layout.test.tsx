@@ -405,7 +405,7 @@ describe('RosterCard structure', () => {
   it('shows the keyboard focus ring on the slanted frame, not on the unskewed option', () => {
     const html = card('mona--x');
     expect(rule('.card:focus-visible > .cardFrame')).toMatch(/outline: 2px solid var\(--poke-focus\);/);
-    expect(new RegExp(`class="${styles.card} [^"]*outline-none`).test(html)).toBe(true);
+    expect(new RegExp(`class="${styles.card} [^"]*outline-transparent`).test(html)).toBe(true);
     expect(html).not.toContain('focus-visible:outline');
   });
 });

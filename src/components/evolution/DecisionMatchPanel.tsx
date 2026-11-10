@@ -31,7 +31,7 @@ export default function DecisionMatchPanel({
   const names = [...new Set(tiedPlayers.map((p) => p.player_name))];
 
   return (
-    <div className="rounded-lg border border-amber-700/50 bg-amber-950/20 p-4">
+    <div className="rounded-lg border border-[rgb(180_83_9/0.5)] bg-[rgb(69_26_3/0.2)] p-4">
       <button
         type="button"
         onClick={() => setExpanded((e) => !e)}
@@ -58,7 +58,7 @@ export default function DecisionMatchPanel({
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
                 href={`/admin/tournaments/${tournamentId}/rounds`}
-                className="rounded-lg border border-amber-600/50 bg-amber-900/30 px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-amber-900/50"
+                className="rounded-lg border border-[rgb(217_119_6/0.5)] bg-[rgb(120_53_15/0.3)] px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-[rgb(120_53_15/0.5)]"
               >
                 {t('decision.enter')}
               </Link>

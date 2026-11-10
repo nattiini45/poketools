@@ -56,7 +56,7 @@ export default function TypeBadgeView({ type, label, className = '', size = 'def
       <span
         className="
           absolute inset-0 -translate-x-full
-          bg-gradient-to-r from-transparent via-white/25 to-transparent
+          bg-linear-to-r/srgb from-transparent via-[rgb(255_255_255/0.25)] to-transparent
           group-hover:animate-type-shimmer
         "
         aria-hidden="true"

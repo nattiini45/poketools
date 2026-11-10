@@ -328,7 +328,7 @@ function PlayerColumn({
           avatarUrl={avatarUrl}
           name={name}
           size={48}
-          className={isWinner ? '!ring-poke-green' : ''}
+          className={isWinner ? 'ring-poke-green!' : ''}
         />
         <p className={`font-heading text-sm truncate max-w-full group-hover:underline ${
           isWinner ? 'font-bold text-poke-green' : 'font-semibold text-poke-text-primary'

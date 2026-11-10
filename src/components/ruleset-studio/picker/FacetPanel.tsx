@@ -28,7 +28,7 @@ interface FacetPanelProps {
   itemCategories: readonly string[];
 }
 
-const CHIP = 'inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-7';
+const CHIP = 'inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-7';
 
 function Chip({ pressed, onClick, children, className }: { pressed: boolean; onClick: () => void; children: ReactNode; className?: string }) {
   return (
@@ -76,7 +76,7 @@ function RangeFields({ legend, range, onChange, idPrefix }: { legend: string; ra
     }
     onChange([Math.max(0, low ?? 0), Math.min(RANGE_LIMIT, high ?? RANGE_LIMIT)]);
   };
-  const box = 'h-9 w-20 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline focus-visible:outline-2 focus-visible:outline-poke-focus';
+  const box = 'h-9 w-20 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
   return (
     <fieldset className="min-w-0 space-y-1.5">
       <legend className="mb-1 text-xs font-semibold text-poke-text-secondary">{legend}</legend>

@@ -81,8 +81,8 @@ export function MatchListRow({
     <Card
       variant="outlined"
       padding="sm"
-      className={`group relative transition-colors hover:border-poke-border-focus focus-within:border-poke-border-focus${
-        selection?.checked ? ' border-poke-border-focus ring-1 ring-poke-border-focus' : ''
+      className={`group relative transition-colors hover:border-poke-border-focus focus-within:border-poke-border-focus ${
+        selection?.checked ? 'border-poke-border-focus ring-1 ring-poke-border-focus' : ''
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1">
@@ -94,13 +94,13 @@ export function MatchListRow({
                 checked={selection.checked}
                 onChange={(event) => selection.onChange(event.target.checked)}
                 aria-label={t('admin.matches.bulk.selectRow', { player1: row.player_1_name, player2: row.player_2_name })}
-                className="relative z-10 h-4 w-4 cursor-pointer rounded-poke-sm border-poke-border accent-poke-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+                className="relative z-10 h-4 w-4 cursor-pointer rounded-poke-sm border-poke-border accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
               />
             </label>
           )}
           <Link
             href={href}
-            className="font-heading font-medium text-sm text-poke-text-primary max-w-full truncate group-hover:text-poke-accent transition-colors focus-visible:outline-none after:absolute after:inset-0 after:rounded-poke-lg focus-visible:after:ring-2 focus-visible:after:ring-poke-border-focus"
+            className="font-heading font-medium text-sm text-poke-text-primary max-w-full truncate group-hover:text-poke-accent transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent after:absolute after:inset-0 after:rounded-poke-lg focus-visible:after:ring-2 focus-visible:after:ring-poke-border-focus"
           >
             {t('admin.matches.versus', { player1: row.player_1_name, player2: row.player_2_name })}
           </Link>

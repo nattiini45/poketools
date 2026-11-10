@@ -133,7 +133,7 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
                       setValue(option.value);
                       setMessage(null);
                     }}
-                    className="mt-1 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-accent"
+                    className="mt-1 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-accent"
                   />
                   <div className="min-w-0">
                     <label

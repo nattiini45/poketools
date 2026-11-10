@@ -22,7 +22,7 @@ export function TrackerWarningBannerView({ text, dismissLabel, onDismiss }: Trac
   return (
     <div
       role="status"
-      className="px-4 py-2 rounded-lg bg-amber-500/15 border border-amber-500/30 text-sm text-poke-amber-ink"
+      className="px-4 py-2 rounded-lg bg-[rgb(245_158_11/0.15)] border border-[rgb(245_158_11/0.3)] text-sm text-poke-amber-ink"
     >
       {text}
       <button

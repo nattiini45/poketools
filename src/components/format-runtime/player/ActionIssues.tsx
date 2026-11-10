@@ -51,7 +51,7 @@ export default function ActionIssues({ issues }: ActionIssuesProps) {
       tabIndex={-1}
       role="alert"
       aria-labelledby={headingId}
-      className="space-y-1 rounded-poke-md border border-poke-danger/20 bg-poke-danger-light px-3 py-2 text-sm text-poke-danger focus:outline-none focus-visible:ring-2 focus-visible:ring-poke-focus"
+      className="space-y-1 rounded-poke-md border border-poke-danger/20 bg-poke-danger-light px-3 py-2 text-sm text-poke-danger focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-focus"
     >
       <p id={headingId} className="font-heading font-semibold">
         {t('issue.heading')}

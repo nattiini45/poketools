@@ -35,8 +35,8 @@ export default function SoloKOStats({ sessionId, pollInterval = 5000 }: SoloKOSt
           key={slot.pokemon_name}
           className={`
             flex items-center gap-3 rounded-lg px-3 py-2
-            ${slot.was_koed ? 'bg-red-900/40' : 'bg-black/60'}
-            backdrop-blur-sm
+            ${slot.was_koed ? 'bg-[rgb(127_29_29/0.4)]' : 'bg-[rgb(0_0_0/0.6)]'}
+            backdrop-blur-xs
           `}
         >
           <SpriteImg
@@ -53,12 +53,12 @@ export default function SoloKOStats({ sessionId, pollInterval = 5000 }: SoloKOSt
           </div>
           <div className="flex items-center gap-2">
             {slot.kos_dealt > 0 && (
-              <span className="bg-green-500/30 text-green-300 text-xs font-mono rounded px-1.5 py-0.5">
+              <span className="bg-[rgb(34_197_94/0.3)] text-green-300 text-xs font-mono rounded px-1.5 py-0.5">
                 {t('common.kos', { count: slot.kos_dealt })}
               </span>
             )}
             {slot.was_koed && (
-              <span className="bg-red-500/30 text-red-300 text-xs font-mono rounded px-1.5 py-0.5">
+              <span className="bg-[rgb(239_68_68/0.3)] text-red-300 text-xs font-mono rounded px-1.5 py-0.5">
                 {t('statCard.koed')}
               </span>
             )}

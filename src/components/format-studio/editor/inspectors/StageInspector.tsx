@@ -92,7 +92,7 @@ interface StageInspectorProps {
 
 function Section({ pointer, legend, children }: { pointer: string; legend: string; children: ReactNode }) {
   return (
-    <fieldset id={fieldId(pointer)} tabIndex={-1} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4 focus:outline-none">
+    <fieldset id={fieldId(pointer)} tabIndex={-1} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
       <legend className="px-1 font-heading text-base font-semibold text-poke-text-primary">{legend}</legend>
       {children}
       <PointerMessage pointer={pointer} />
@@ -349,7 +349,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-4" data-inspector="stage">
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="break-words font-heading text-xl font-bold text-poke-text-primary focus:outline-none">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="break-words font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {name}
         </h2>
         <PointerMessage pointer={base} />

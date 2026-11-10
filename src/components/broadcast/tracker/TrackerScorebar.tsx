@@ -80,8 +80,8 @@ export default function TrackerScorebar({
                 key={g.id}
                 className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
                   isP1Win
-                    ? 'bg-blue-500/30 text-blue-300'
-                    : 'bg-red-500/30 text-red-300'
+                    ? 'bg-[rgb(59_130_246/0.3)] text-blue-300'
+                    : 'bg-[rgb(239_68_68/0.3)] text-red-300'
                 }`}
                 title={t('tracker.gameWonBy', {
                   game: i + 1,

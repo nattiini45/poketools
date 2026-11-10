@@ -69,7 +69,7 @@ function EvolutionEventBannerInner({
           className={`flex items-center gap-3 p-3 rounded-poke-lg border-2 text-sm ${
             event.is_devolution
               ? 'bg-poke-yellow-light border-yellow-600'
-              : 'bg-gradient-to-r from-poke-yellow-light to-orange-50 border-poke-yellow'
+              : 'bg-linear-to-r/srgb from-poke-yellow-light to-orange-50 border-poke-yellow'
           }`}
         >
           {/* Arrow visual: old form → new form */}
