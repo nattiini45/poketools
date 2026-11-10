@@ -140,6 +140,9 @@ export default {
     'This league already has data from its current format: {links} links, {items} items, {submissions} submissions and {adjustments} adjustments. Replacing or detaching the format deletes all of it. Confirm to continue.',
   season_format_type_locked:
     'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
+  // New-competition wizard (POST /api/seasons with from_format, src/lib/format-studio/create-league.ts): the one transaction
+  // failed for a reason no other code names (500); it rolled back, so nothing was created.
+  season_format_create_failed: 'The league could not be created from this format. Nothing was created. Try again.',
   action_locked: 'This action is locked, so it can no longer be changed.',
   resource_item_taken: 'Another player already holds this item, so it cannot be picked again.',
   resource_capacity_reached: 'This player already holds as many of this resource as it allows, so nothing more can be added.',

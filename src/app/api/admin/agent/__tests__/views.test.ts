@@ -198,6 +198,17 @@ describe('toPlanView', () => {
     expect(ruleset.state).toBe('needs_input');
   });
 
+  it.each([
+    ['drafting', true],
+    ['ready', true],
+    ['partial', true],
+    ['building', false],
+    ['built', false],
+    ['abandoned', false],
+  ] as const)('offers Build on a %s plan (from the plan machine): %s', (status, buildable) => {
+    expect(toPlanView(plan({ status, doc: workedExample() as never }))!.buildable).toBe(buildable);
+  });
+
   it('does not count the checks that need live facts against the plan', () => {
     const view = toPlanView(plan({ doc: workedExample() as never }))!;
     // Rulesets, players and the dex are looked up when the Build card is staged; without them readiness reports
