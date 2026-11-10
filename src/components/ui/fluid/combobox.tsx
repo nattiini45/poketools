@@ -1188,7 +1188,7 @@ const ComboboxList = forwardRef<HTMLDivElement, ComboboxListProps>(
     // glide must survive) and holds until the rects measured from that row
     // set land — measurement coalesces on a rAF, one render behind.
     const rowsSig = useMemo(
-      () => filteredItems.map(itemValue).join(" "),
+      () => filteredItems.map(itemValue).join("\0"),
       [filteredItems]
     );
     // `armedRects` holds the rects of the old row set while armed; the flag

@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { isVendoredFluidSource } from '@/lib/design/vendored';
 import { compileUtilities, themeColors } from '@/test/tailwind-theme';
 
 /**
@@ -106,7 +107,8 @@ describe('source stays free of dead opacity modifiers', () => {
       maxBuffer: 1 << 28,
     })
       .split('\0')
-      .filter((file) => /\.(tsx?|jsx?|mjs|cjs|css|mdx?)$/.test(file) && !/(\.test\.|__tests__\/)/.test(file));
+      .filter((file) => /\.(tsx?|jsx?|mjs|cjs|css|mdx?)$/.test(file) && !/(\.test\.|__tests__\/)/.test(file))
+      .filter((file) => !isVendoredFluidSource(file.slice('src/'.length)));
     expect(files.length).toBeGreaterThan(1000);
     const offenders: string[] = [];
     for (const file of files) {

@@ -19,6 +19,11 @@ system"). Upstream's global `:focus-visible`, `::selection` and scrollbar rules 
 - `breadcrumb.tsx` (two places) and `sidebar-core.tsx` (two places): the dynamic tag is cast to
   `ComponentType<SlotProps & { ref?: Ref<HTMLElement> }>` instead of `ElementType`. The three.js JSX intrinsic
   elements in this project turn `ElementType`'s props into `never`; the cast changes no runtime behaviour.
+- `combobox.tsx`: upstream joins item values with a raw NUL byte inside a string literal; it is written as the
+  escape `"\0"` (the same string) because a raw NUL makes git treat the file as binary.
+
+The Tailwind-3 opacity-modifier scan (`tailwind-status-tokens.test.ts`) skips these folders: upstream's `/NN`
+modifiers on its own theme colours are new code on Tailwind 4, not a change to an existing surface.
 
 To update an item, re-run the install in a scratch project with the same aliases, move the files the same way,
 reapply the patches above and diff.
