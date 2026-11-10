@@ -18,6 +18,7 @@ import { isSeasonPlayer } from '@/lib/supabase/queries/seasons';
 import { isValidUuid } from '@/lib/utils/uuid';
 import type { SessionPlayer } from '@/types/auth';
 import { requirePlayer } from './helpers';
+import { isSeasonClosed } from '@/lib/season/season-state';
 
 export interface SeasonMember {
   player: SessionPlayer;
@@ -46,5 +47,5 @@ export async function requireSeasonMember(rawId: string): Promise<SeasonMember> 
 export async function assertSeasonOpenForPlay(seasonId: string): Promise<void> {
   const state = await getSeasonPlayState(seasonId);
   if (state === null) throw new UserFacingError('League not found', { status: 404, code: 'SEASON_NOT_FOUND' });
-  if (state.status === 'completed' || state.archived) throw refuse('format_season_closed');
+  if (isSeasonClosed(state)) throw refuse('format_season_closed');
 }

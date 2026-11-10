@@ -43,6 +43,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
+- [League](#league) — `seasons.status (enum season_status)`
 - [Season format engine](#season-format-engine) — `season_formats.engine`
 - [Team library publication](#team-library-publication) — `teams.library_published_at (published = set) + library_title, library_description, library_tags`
 - [Team roster write locks](#team-roster-write-locks) — `derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived`
@@ -1170,6 +1171,34 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `lock` | `open` | `locked` | system | `supabase/migrations/20261018180000_league_groups.sql#draft__build_snapshot`<br>`supabase/migrations/20261018180000_league_groups.sql#redraft_set_submission`<br>`src/lib/supabase/queries/drafts-redraft.ts` | The deadline passes (derived where it is read). |
 | `move_deadline` | `locked` | `open` | admin | `supabase/migrations/20261018180000_league_groups.sql#draft_configure`<br>`src/app/api/drafts/[id]/redraft/route.ts` | PATCH /api/drafts/[id]/redraft with a future deadline_at (submissions phase only). |
+
+## League
+
+- **Id:** `season`
+- **State lives in:** seasons.status (enum season_status)
+- **Module doc:** `docs/season.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A league from set-up to its end. The first round or bracket of a phase starts it; an admin sets any status from the status control. Nothing completes a league automatically, and a completed league leaves its phases as they are. Closed (isSeasonClosed) means completed or archived.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  upcoming --> completed: complete (admin)
+  active --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  active --> upcoming: reset (admin)
+  completed --> upcoming: reset (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `src/app/api/seasons/[id]/route.ts`<br>`src/lib/season/start-season.ts`<br>`src/lib/dev-seed/seed.ts` | The first round (generate-round) or bracket (generate-bracket) of a phase, as a compare-and-set on upcoming; or the admin status control. A custom league needs an attached format (FORMAT_NOT_ATTACHED). |
+| `complete` | `upcoming`, `active` | `completed` | admin | `src/app/api/seasons/[id]/route.ts` | The admin closes the league; its phases keep their status. |
+| `reopen` | `completed` | `active` | admin | `src/app/api/seasons/[id]/route.ts` |  |
+| `reset` | `active`, `completed` | `upcoming` | admin | `src/app/api/seasons/[id]/route.ts` | Offered by the admin status control. A league with phases past upcoming or with rounds still counts as started (isSeasonStarted). |
 
 ## Season format engine
 

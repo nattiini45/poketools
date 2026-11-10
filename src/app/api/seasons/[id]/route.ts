@@ -13,6 +13,7 @@ import { logAuditEvent, diffField } from '@/lib/audit/log';
 import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
 import { assertFormatChangeAllowed, assertSeasonDateRange } from '@/lib/season/settings-guards';
 import { isSeasonStarted } from '@/lib/season/season-started';
+import { seasonMachine } from '@/lib/season/season-state';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import { finishLeagueDeleteRebuild, trashLeague } from '@/lib/league-trash/service';
 import { toLeagueTrashError } from '@/lib/league-trash/errors';
@@ -176,7 +177,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       delete body.point_buy_list_id;
     }
 
-    const season = await updateSeason(id, body);
+    // The status moves through the league machine, as a compare-and-set on the status read above (409
+    // season_status_changed when another writer moved it meanwhile).
+    if (body.status !== undefined && body.status !== before.status) {
+      seasonMachine.assertTransition(before.status, body.status, 'admin');
+    }
+    const season =
+      body.status === undefined ? await updateSeason(id, body) : await updateSeason(id, body, { from: before.status });
     if (body.archived !== undefined) {
       await archiveTournamentsBySeason(id, body.archived);
     }
