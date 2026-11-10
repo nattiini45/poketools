@@ -13,9 +13,9 @@ export interface ButtonMarkup {
 export function buttonsIn(html: string): ButtonMarkup[] {
   return [...html.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)].map(([whole, attrs, inner]) => ({
     html: whole,
-    label: inner
-      .replace(/<svg[\s\S]*?<\/svg>/g, '')
-      .replace(/<[^>]+>/g, '')
+    label: [...`>${inner}<`.matchAll(/>([^<]*)</g)]
+      .map((text) => text[1])
+      .join('')
       .trim(),
     disabled: /\sdisabled(=""|\s|$)/.test(attrs),
     busy: /\saria-busy="true"/.test(attrs),
