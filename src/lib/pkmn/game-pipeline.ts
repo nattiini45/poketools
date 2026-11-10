@@ -29,7 +29,7 @@ import {
 import { buildBracketStructureForParticipants } from '@/lib/tournament/bracket-structure';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById, getRoundsByTournament, updateRoundStatus } from '@/lib/supabase/queries/rounds';
-import { hasReachedBoThreshold, validateTransition } from '@/lib/tournament/match-state';
+import { hasReachedBoThreshold, matchMachine, validateTransition } from '@/lib/tournament/match-state';
 import { checkPlayerEvolutions } from '@/lib/draft/evolution-engine';
 import {
   creditMatchRealKills,
@@ -277,15 +277,9 @@ async function disputeUnresolvedMatch(match: MatchWithPlayers, input: ReplayGame
     status = 'in_progress';
   }
 
-  // No player chose this move: the engine disputes the match on the admins' behalf, and in_progress -> disputed
-  // is an admin transition.
-  const transition = validateTransition(status, 'disputed', { ...context, is_admin: true });
-  if (!transition.valid) throw new Error(transition.error ?? 'Cannot dispute match');
-  const disputed = await transitionMatchStatus(match.id, {
-    expectedStatus: status,
-    status: 'disputed',
-    autoConfirmAt: null,
-  });
+  // No player chose this move: the engine disputes the match itself (event flag_tie, actor system).
+  matchMachine.assertTransition(status, 'disputed', 'system');
+  const disputed = await transitionMatchStatus(match.id, { expectedStatus: status, status: 'disputed' });
   if (!disputed) throw new MatchStateConflictError();
 
   // After the status, so a lost race leaves no outcome row behind.
@@ -581,7 +575,6 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
       winnerId: matchWinnerId,
       submitterId: input.submitter_id,
       autoConfirmAt: getAutoConfirmAt(input.source, recorded.screenshot_url),
-      confirmedAt: null,
     });
     if (updated) {
       newStatus = targetStatus;
@@ -1064,6 +1057,7 @@ async function reevaluateMatchStatus(
 
   if (totalGames === 0) {
     // No games left → reset to scheduled
+    matchMachine.assertTransition(previousStatus, 'scheduled', 'system');
     const reset = await resetMatchFields(matchId, previousStatus);
     if (!reset) return currentMatchStatusAfterConflict(matchId, previousStatus);
     await takeBackMarkedOutcome(matchId, outcomeMark);
@@ -1074,12 +1068,13 @@ async function reevaluateMatchStatus(
 
   if (boResult.reached) {
     const winnerId = boResult.winner_id_index === 1 ? player1Id : player2Id;
+    matchMachine.assertTransition(previousStatus, 'pending_confirmation', 'system');
+    // No auto-confirm deadline: an admin decided this result; a match that stays pending keeps its running one.
     const updated = await transitionMatchStatus(matchId, {
       expectedStatus: previousStatus,
       status: 'pending_confirmation',
       winnerId,
       submitterId: adminId,
-      autoConfirmAt: previousStatus === 'pending_confirmation' ? undefined : null,
     });
     if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
     await takeBackMarkedOutcome(matchId, outcomeMark);
@@ -1087,12 +1082,12 @@ async function reevaluateMatchStatus(
   }
 
   // Games exist but Bo not reached → in_progress
+  matchMachine.assertTransition(previousStatus, 'in_progress', 'system');
   const updated = await transitionMatchStatus(matchId, {
     expectedStatus: previousStatus,
     status: 'in_progress',
     winnerId: null,
     submitterId: adminId,
-    autoConfirmAt: null,
   });
   if (!updated) return currentMatchStatusAfterConflict(matchId, previousStatus);
   await takeBackMarkedOutcome(matchId, outcomeMark);

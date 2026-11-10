@@ -32,7 +32,8 @@ vi.mock('@/lib/supabase/queries/games', () => ({
   getBattleStatsByMatch: vi.fn(),
 }));
 
-vi.mock('@/lib/tournament/match-state', () => ({
+vi.mock('@/lib/tournament/match-state', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tournament/match-state')>()),
   validateTransition: vi.fn(),
 }));
 
