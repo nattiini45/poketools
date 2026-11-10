@@ -55,14 +55,16 @@ import {
 import { MAX_DOMAIN_ENTRIES } from '@/lib/format-kit/limits';
 import type { CountSource, DomainEntry, RuleEntry, Stage } from '@/lib/format-kit/types';
 import type { Json } from '@/types/database';
-import { actionFlagKey, findAction, isActionWindowOpen } from './actions';
+import { actionWindowMachine } from './action-state';
+import { findAction } from './actions';
 import { amendEntries, findDomainView } from './domains';
 import { eventKey } from './events';
 import { logger } from '@/lib/logger';
 import { fireLockedActionEvents } from './fire';
 import { loadFreshKitContext, rosterOf, type KitContext } from './load';
 import { generateRelationLinks, validateRelationLinks } from './relations';
-import { own, type FormatOp } from './types';
+import type { FormatOp } from './types';
+import { windowOf } from './views';
 
 /** The most domain amendments a league stores (`season_formats.amendments`, re-read on every context load). */
 export const FORMAT_MAX_DOMAIN_AMENDMENTS = 64;
@@ -336,11 +338,9 @@ function prepare(ctx: KitContext, adjustment: AdjustmentInput): Prepared | Adjus
     case 'action': {
       const rule = findAction(def, adjustment.action);
       if (rule === null) return 'unknown_target';
-      // The action is already in the requested state: the flag write would change nothing, and the row (and the audit
-      // entry) would claim a lock or an opening that did not happen.
-      const already =
-        adjustment.state === 'locked' ? own(ctx.state.flags, actionFlagKey(rule.id)) === 'locked' : isActionWindowOpen(rule, ctx.state);
-      if (already) return 'action_state_unchanged';
+      // An admin moves the window only to a state it is not in (`actionWindowMachine`): the flag write would change nothing,
+      // and the row (and the audit entry) would claim a lock or an opening that did not happen.
+      if (!actionWindowMachine.can(windowOf(rule, ctx.state), adjustment.state, 'admin')) return 'action_state_unchanged';
       return {
         target: { action: adjustment.action },
         delta: { state: adjustment.state },

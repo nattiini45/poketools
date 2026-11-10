@@ -8,7 +8,9 @@ import WikiModerationPanel, {
   RejectedNoteCard,
   canAllowResubmission,
   canBlockResubmission,
+  canCloseReport,
   canUnpublishReportedNote,
+  noteApproveRequest,
   noteBlockRequest,
   noteRejectRequest,
 } from '../WikiModerationPanel';
@@ -203,5 +205,40 @@ describe('admin-tools keys for the wiki unpublish, export summary and audit filt
     expect(de('wiki.unpublish')).toBe('Notiz zurückziehen');
     expect(de('wiki.noteLive')).toBe('Diese Notiz ist öffentlich');
     expect(de('data.export.summaryLimited', { count: 1, total: 2 })).toContain('erhöhe');
+  });
+});
+
+describe('verdicts carry the note the moderator saw (compare-and-set)', () => {
+  const seen = { approved: false, rejected_at: null, resubmission_blocked_at: null, updated_at: '2026-01-01T00:00:00.123456+00:00' };
+
+  it('sends the derived state and the version with an approve', () => {
+    expect(JSON.parse(noteApproveRequest('n1', seen).init.body as string)).toEqual({
+      approved: true,
+      expected_state: 'pending',
+      expected_updated_at: '2026-01-01T00:00:00.123456+00:00',
+    });
+  });
+
+  it('sends them with a reject or an unpublish, next to the reason', () => {
+    expect(JSON.parse(noteRejectRequest('n1', 'spam', { ...seen, approved: true }).init.body as string)).toEqual({
+      rejected: true,
+      rejection_reason: 'spam',
+      expected_state: 'approved',
+      expected_updated_at: '2026-01-01T00:00:00.123456+00:00',
+    });
+  });
+
+  it('sends a bare verdict when the note carries no version', () => {
+    expect(JSON.parse(noteApproveRequest('n1').init.body as string)).toEqual({ approved: true });
+  });
+});
+
+describe('canCloseReport', () => {
+  it('offers reviewed and dismissed for an open report only', () => {
+    const open = reportOn(true);
+    expect(canCloseReport(open, 'reviewed')).toBe(true);
+    expect(canCloseReport(open, 'dismissed')).toBe(true);
+    expect(canCloseReport({ ...open, status: 'reviewed' }, 'dismissed')).toBe(false);
+    expect(canCloseReport({ ...open, status: 'dismissed' }, 'reviewed')).toBe(false);
   });
 });

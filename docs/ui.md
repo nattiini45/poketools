@@ -8,6 +8,8 @@ The UI Tables module provides the shared primitives for client-side table sortin
 src/lib/ui/
 ├── table-params.ts  # Pure table param/sort helpers (page sizes, sort cycle, comparator)
 ├── use-client-table.ts  # Client-side sortable + paginated table hook
+├── submit-phase-state.ts  # Form submission machine (client.submit_phase): idle, submitting, done, failed
+├── use-submit-phase.ts  # useSubmitPhase: one submission at a time; a success that navigates stays final
 └── main-content.ts  # The id of every layout's main element, the skip link target
 ```
 

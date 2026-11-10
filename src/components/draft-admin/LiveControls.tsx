@@ -29,6 +29,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import { errorsDraft } from '@/i18n/messages/errors/draft';
 import { glossaryMessages } from '@/i18n/messages/glossary';
+import { draftPoolPhaseMachine } from '@/lib/draft/pool-phase-state';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import { FIELD, HINT, InlineError, LABEL, ReasonField, useDestructiveButton, usePrimaryButton } from './admin-ui';
@@ -120,9 +121,11 @@ export default function LiveControls({
     pickFor.kind === 'link'
       ? drafting && vm.activeSlot !== null
       : vm.status === 'in_progress' && vm.activeSlot !== null && !vm.activeSlot.isViewer;
-  const canStart = vm.phase === 'setup';
+  const adminEvents = draftPoolPhaseMachine.transitionsFrom(vm.phase, 'admin').map((tr) => tr.event);
+  const canStart = adminEvents.includes('start');
   // Abort needs started picks to void: before the start the end route can only refuse, so setup shows a hint instead.
-  const canEnd = vm.phase === 'drafting';
+  // A Redraft still collecting drops is cancelled through the API only (`cancel_submissions`), so it shows no button.
+  const canEnd = adminEvents.includes('abort');
 
   const togglePause = async () => {
     const ok = await pauseCall.run(() => onPause(!vm.paused, pauseReason));
