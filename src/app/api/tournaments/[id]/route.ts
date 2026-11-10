@@ -9,7 +9,6 @@ import { z } from 'zod';
 import {
   getTournamentById,
   getTournamentWithDetails,
-  updateTournament,
   deleteTournament,
   getParticipants,
   getStagesBySeasonId,
@@ -27,8 +26,6 @@ import {
   type BracketResetSyncResult,
   type ThirdPlaceSyncResult,
 } from '@/lib/tournament/bracket-propagation';
-import { emitDiscordEvent } from '@/lib/discord/notify';
-import { emitSocialEvent } from '@/lib/social/notify';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
 import { expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
 import {
@@ -41,9 +38,7 @@ import {
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
 import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
-import type { AutoAdvanceResult } from '@/lib/format-engine/auto-advance';
-import { advanceAfterStageEnd, stageEndFired } from '@/lib/format-engine/runtime/stage-end-advance';
-import { onPhaseStatusChanged } from '@/lib/format-engine/runtime/hooks';
+import { statusEffectsAuditMetadata, updateTournamentWithStatus } from '@/lib/tournament/tournament-transition';
 import { assertFormatPhaseDeletable, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { Tournament, TournamentWithDetails } from '@/types/tournament';
@@ -196,8 +191,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const archivedBefore = before.archived;
     const archivedAfter = body.archived !== undefined ? body.archived : archivedBefore;
 
-    const tournament = await updateTournament(id, body);
-
     // Bracket reset toggle changed: apply it to an existing DE bracket now
     // (delete scheduled reset matches on disable; repair-materialize on enable).
     // Deliberately allowed at any phase status — the toggle only affects future
@@ -207,20 +200,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       body.bracket_reset_enabled !== (before.bracket_reset_enabled ?? true);
     let bracketResetSync: BracketResetSyncResult | null = null;
     let bracketResetSyncError: string | null = null;
-    if (resetToggleChanged) {
-      try {
-        bracketResetSync = await syncBracketResetSetting(
-          tournament,
-          await getParticipants(id)
-        );
-      } catch (err) {
-        logger.error('api/tournaments', 'bracket reset sync failed after tournament update', {
-          tournamentId: id,
-          error: err,
-        });
-        bracketResetSyncError = 'bracket_reset_sync_failed';
-      }
-    }
 
     // Third-place toggle changed: same idea for a single-elimination bracket
     // (delete a scheduled third-place match on disable; repair on enable).
@@ -229,52 +208,41 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       body.third_place_enabled !== (before.third_place_enabled ?? false);
     let thirdPlaceSync: ThirdPlaceSyncResult | null = null;
     let thirdPlaceSyncError: string | null = null;
-    if (thirdPlaceToggleChanged) {
-      try {
-        thirdPlaceSync = await syncThirdPlaceSetting(tournament, await getParticipants(id));
-      } catch (err) {
-        logger.error('api/tournaments', 'third-place sync failed after tournament update', {
-          tournamentId: id,
-          error: err,
-        });
-        thirdPlaceSyncError = 'third_place_sync_failed';
-      }
-    }
 
-    // A kit league's format reacts to a phase that starts or completes (stage_start, stage_end, standings tie checks).
-    // Best effort and logged inside: the hook never fails the status change. A repeat of the same status replays the
-    // reaction (its events and checks are keyed, so it is a no-op once applied): a first call whose reaction failed or died
-    // after the status committed is repaired by sending it again. A failed reaction is reported, not dropped.
-    let formatReactionFailed = false;
-    if (body.status !== undefined && (body.status !== before.status || body.status === 'active' || body.status === 'completed')) {
-      const repeat = body.status === before.status;
-      const from = repeat ? (body.status === 'completed' ? 'active' : 'upcoming') : before.status;
-      formatReactionFailed = !(await onPhaseStatusChanged({ tournament: before, from, to: body.status }));
-    }
-
-    // A kit league phase that completes runs the `auto` edges out of it, after the reaction above: a format can adjust stage
-    // points on stage_end, and the players who move on are picked from the standings as they are then. A reaction that
-    // failed holds the advance back (recorded in the audit entry; sending the same status again replays the reaction and,
-    // once it applies, the advance). Best effort: the status change stands, and a failed advance is logged, recorded in the
-    // audit entry and left to the admin's Advance button. A repeat of `completed` runs the advance only while no target holds
-    // this phase's players yet (the advance rewrites a target's enrollment from the current standings).
-    let autoAdvance: AutoAdvanceResult[] = [];
-    let autoAdvanceError: string | null = null;
-    let autoAdvanceHeld = false;
-    // A repeat that ran the held advance changes no field, but the advance must still leave an audit entry.
-    let autoAdvanceRepeated = false;
-    if (body.status === 'completed' && before.season_id && before.season_format_type === 'custom') {
-      // Only a reaction that failed before its event fired holds it back: after that the standings are final.
-      if (formatReactionFailed && !(await stageEndFired(before.season_id, id))) {
-        autoAdvanceHeld = true;
-      } else {
-        const retry = before.status === 'completed';
-        const advance = await advanceAfterStageEnd({ seasonId: before.season_id, phaseId: id, retry });
-        autoAdvance = advance.results;
-        autoAdvanceError = advance.error;
-        autoAdvanceRepeated = retry && advance.ran;
-      }
-    }
+    // The status moves through the tournament machine; the format reaction, the auto advance and the completion
+    // announcement run inside, after the bracket syncs below.
+    const outcome = await updateTournamentWithStatus(before, body, {
+      actor: 'admin',
+      afterWrite: async (tournament) => {
+        if (resetToggleChanged) {
+          try {
+            bracketResetSync = await syncBracketResetSetting(
+              tournament,
+              await getParticipants(id)
+            );
+          } catch (err) {
+            logger.error('api/tournaments', 'bracket reset sync failed after tournament update', {
+              tournamentId: id,
+              error: err,
+            });
+            bracketResetSyncError = 'bracket_reset_sync_failed';
+          }
+        }
+        if (thirdPlaceToggleChanged) {
+          try {
+            thirdPlaceSync = await syncThirdPlaceSetting(tournament, await getParticipants(id));
+          } catch (err) {
+            logger.error('api/tournaments', 'third-place sync failed after tournament update', {
+              tournamentId: id,
+              error: err,
+            });
+            thirdPlaceSyncError = 'third_place_sync_failed';
+          }
+        }
+      },
+    });
+    const { tournament, formatReactionFailed, autoAdvanceHeld, autoAdvanceRepeated } = outcome;
+    const statusEffects = statusEffectsAuditMetadata(outcome);
 
     // Status, name and settings show on the next view of the public pages.
     // Expired after the reset and third-place syncs, which can add or delete a match.
@@ -319,6 +287,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       changes.bo_overrides = { before: before.bo_overrides ?? {}, after: body.bo_overrides };
     }
     if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
+      const syncs = {
+        ...(bracketResetSync || bracketResetSyncError
+          ? { bracket_reset_sync: bracketResetSync, bracket_reset_sync_error: bracketResetSyncError }
+          : {}),
+        ...(thirdPlaceSync || thirdPlaceSyncError
+          ? { third_place_sync: thirdPlaceSync, third_place_sync_error: thirdPlaceSyncError }
+          : {}),
+      };
       logAuditEvent({
         action: 'tournament.update',
         actor_id: admin.playerId,
@@ -328,41 +304,10 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         resource_name: tournament.name,
         changes,
         metadata:
-          bracketResetSync || bracketResetSyncError || thirdPlaceSync || thirdPlaceSyncError || autoAdvance.length > 0 || autoAdvanceError || autoAdvanceHeld || formatReactionFailed || autoAdvanceRepeated
-            ? {
-                ...(formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
-                ...(autoAdvanceHeld ? { auto_advance_held: true } : {}),
-                ...(autoAdvanceRepeated ? { auto_advance_repeated: true } : {}),
-                ...(autoAdvance.length > 0 || autoAdvanceError
-                  ? { auto_advance: autoAdvance, auto_advance_error: autoAdvanceError }
-                  : {}),
-                ...(bracketResetSync || bracketResetSyncError
-                  ? { bracket_reset_sync: bracketResetSync, bracket_reset_sync_error: bracketResetSyncError }
-                  : {}),
-                ...(thirdPlaceSync || thirdPlaceSyncError
-                  ? { third_place_sync: thirdPlaceSync, third_place_sync_error: thirdPlaceSyncError }
-                  : {}),
-              }
+          Object.keys(statusEffects).length > 0 || Object.keys(syncs).length > 0
+            ? { ...statusEffects, ...syncs }
             : undefined,
       });
-    }
-
-    // Emit Discord + social event on status transition
-    if (body.status && before.status !== body.status) {
-      if (body.status === 'completed') {
-        const completedPayload = {
-          event_type: 'tournament_completed' as const,
-          tournament_id: id,
-          season_id: tournament.season_id,
-          data: {
-            kind: 'tournament_status' as const,
-            tournament_name: tournament.name,
-            new_status: 'completed' as const,
-          },
-        };
-        void emitDiscordEvent(completedPayload);
-        void emitSocialEvent(completedPayload);
-      }
     }
 
     return NextResponse.json<ApiResult<typeof tournament>>({

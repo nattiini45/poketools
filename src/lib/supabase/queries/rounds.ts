@@ -3,6 +3,7 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isUniqueViolationOf } from '../unique-violation';
 import type { Json, Tables } from '@/types/database';
 import type { Round, RoundStatus } from '@/types/round';
+import type { TournamentStatus } from '@/types/tournament';
 import type { RoundByeSource } from '@/lib/tournament/byes';
 
 type RoundRow = Tables<'rounds'>;
@@ -321,6 +322,86 @@ export async function createRoundWithMatches(input: {
   return parseRoundWrite(data);
 }
 
+/** A round of a planned elimination bracket, with the id the app chose (its matches name it). */
+export interface BracketRoundInput {
+  id: string;
+  name: string;
+  round_number: number;
+  best_of: number;
+  bracket_side: string | null;
+}
+
+/** A match of a planned elimination bracket. */
+export interface BracketMatchInput {
+  id: string;
+  round_id: string;
+  player_1_id: string;
+  player_2_id: string;
+  bracket_side: string | null;
+  bracket_pos: number | null;
+}
+
+function detailOf(error: { details?: string }): Record<string, unknown> {
+  try {
+    const parsed: unknown = JSON.parse(error.details ?? '');
+    return parsed !== null && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Writes (or, with `replace`, replaces) an elimination bracket in ONE transaction under the phase row lock
+ * (`bracket_write`, 20261109210000_bracket_write.sql): the rounds, the matches, the enrollment freeze and the move to
+ * `active` with `current_round`. The status must still be `expectedStatus` under the lock, so a completion (an admin's, or
+ * the format's stage end) that committed first refuses the write with 409 `tournament_status_changed` and nothing is
+ * written; one that comes second waits for the write. A first write refuses a phase that has rounds
+ * (409 `bracket_already_generated`); a replace refuses while a match is played (409 `REGENERATE_PLAYED`).
+ */
+export async function writeBracket(input: {
+  tournament_id: string;
+  expected_status: TournamentStatus;
+  replace: boolean;
+  rounds: readonly BracketRoundInput[];
+  matches: readonly BracketMatchInput[];
+  current_round: number;
+}): Promise<{ rounds: number; matches: number }> {
+  const { data, error } = await supabase.rpc('bracket_write', {
+    p_tournament_id: input.tournament_id,
+    p_expected_status: input.expected_status,
+    p_replace: input.replace,
+    p_rounds: input.rounds as unknown as Json,
+    p_matches: input.matches as unknown as Json,
+    p_current_round: input.current_round,
+  });
+  if (error) {
+    if (isRoundWriteSignal(error, 'tournament_status_changed')) {
+      throw new UserFacingError('This tournament or phase changed its status in the meantime. Reload the page and try again.', {
+        code: 'tournament_status_changed',
+        params: { from: input.expected_status },
+        status: 409,
+      });
+    }
+    if (isRoundWriteSignal(error, 'bracket_already_generated')) {
+      throw new UserFacingError('Bracket already generated', { code: 'bracket_already_generated', status: 409 });
+    }
+    if (isRoundWriteSignal(error, 'bracket_matches_played')) {
+      const count = Number(detailOf(error).count ?? 0);
+      throw new UserFacingError(`${count} played match(es) will be reset and all results rolled back.`, {
+        code: 'REGENERATE_PLAYED',
+        params: { count },
+        status: 409,
+      });
+    }
+    if (isRoundWriteSignal(error, 'tournament_not_found')) {
+      throw new UserFacingError('Tournament not found', { code: 'tournament_not_found', status: 404 });
+    }
+    throw error;
+  }
+  const result = (data ?? {}) as { rounds?: number; matches?: number };
+  return { rounds: result.rounds ?? input.rounds.length, matches: result.matches ?? input.matches.length };
+}
+
 /**
  * Writes the matches of a round that already exists (an interrupted call left it without matches) under the phase row
  * lock, like `createRoundWithMatches`: a completed phase refuses them (409 `rounds_phase_completed`) and the round is
@@ -370,18 +451,32 @@ function parseRoundWrite(data: unknown): Round {
   return toRound(body.round as RoundRow);
 }
 
+/**
+ * Moves a round's status as a compare-and-set on `from`, the status the writer read (roundMachine,
+ * src/lib/tournament/round-state.ts; the writer checks the move). A round that moved on in between is not overwritten:
+ * nothing is written and a 409 `round_status_changed` is thrown. Completion goes through `completeRound`.
+ */
 export async function updateRoundStatus(
   id: string,
-  status: RoundStatus
+  status: RoundStatus,
+  from: RoundStatus
 ): Promise<Round> {
   const { data, error } = await supabase
     .from('rounds')
     .update({ status })
     .eq('id', id)
+    .eq('status', from)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw new UserFacingError('This round changed its status in the meantime. Reload the page and try again.', {
+      code: 'round_status_changed',
+      params: { from },
+      status: 409,
+    });
+  }
   return toRound(data);
 }
 

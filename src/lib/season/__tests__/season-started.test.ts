@@ -38,3 +38,13 @@ describe('isSeasonStarted', () => {
     expect(isSeasonStarted(signals)).toBe(false);
   });
 });
+
+describe('isSeasonClosed', () => {
+  it('is true for a completed or archived league only', async () => {
+    const { isSeasonClosed } = await import('../season-state');
+    expect(isSeasonClosed({ status: 'completed', archived: false })).toBe(true);
+    expect(isSeasonClosed({ status: 'active', archived: true })).toBe(true);
+    expect(isSeasonClosed({ status: 'upcoming', archived: false })).toBe(false);
+    expect(isSeasonClosed({ status: 'active', archived: false })).toBe(false);
+  });
+});

@@ -101,9 +101,6 @@ export async function reopenMatch(matchId: string, adminId: string): Promise<Reo
     expectedStatus: fromStatus,
     status: 'in_progress',
     winnerId: null,
-    autoConfirmAt: null,
-    confirmedAt: null,
-    datePlayed: null,
   });
   if (!reopened) {
     const current = await getMatchById(matchId).catch(() => null);

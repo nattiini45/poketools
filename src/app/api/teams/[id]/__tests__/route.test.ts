@@ -732,3 +732,124 @@ describe('DELETE /api/teams/[id]', () => {
     });
   });
 });
+
+// ─── Characterization: the team write locks (machine team.roster) ──
+//
+// Pins the legal behaviour of PATCH / DELETE /api/teams/[id] before the locks moved into one machine-derived verdict
+// (src/lib/team/team-roster-state.ts): which lock refuses whom, which refusal wins when several apply, and which facts
+// each request reads.
+
+describe('team write locks: precedence and reads (characterization)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(teamWritesClosed).mockReset().mockResolvedValue(null);
+  });
+
+  it('a manually locked team refuses a site admin edit too (409 team_locked), without reading the closure', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'admin-1', isAdmin: true } as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, locked: true } as never);
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
+
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ success: false, error: 'Team is locked', code: 'team_locked' });
+    expect(updateTeamPokemon).not.toHaveBeenCalled();
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+  });
+
+  it('the manual lock wins over a closed tournament for the owner, and nothing else is read', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, locked: true, match_id: 'm-1' } as never);
+    vi.mocked(teamWritesClosed).mockResolvedValue('league_closed');
+    mockMatchStatus('completed');
+
+    const patch = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
+    expect(patch.status).toBe(409);
+    expect((await patch.json()).code).toBe('team_locked');
+
+    const del = await DELETE({} as NextRequest, routeParams);
+    expect(del.status).toBe(409);
+    expect((await del.json()).code).toBe('team_locked');
+
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+    expect(getTeamVisibilityFacts).not.toHaveBeenCalled();
+    expect(updateTeamPokemon).not.toHaveBeenCalled();
+    expect(deleteTeam).not.toHaveBeenCalled();
+  });
+
+  it('the closure wins over a completed match for the owner (403 with the closure code), without reading the match', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, match_id: 'm-1' } as never);
+    vi.mocked(teamWritesClosed).mockResolvedValue('tournament_archived');
+    mockMatchStatus('completed');
+
+    const patch = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
+    expect(patch.status).toBe(403);
+    expect((await patch.json()).code).toBe('team_submission_tournament_archived');
+
+    const del = await DELETE({} as NextRequest, routeParams);
+    expect(del.status).toBe(403);
+    expect((await del.json()).code).toBe('team_submission_tournament_archived');
+
+    expect(getTeamVisibilityFacts).not.toHaveBeenCalled();
+    expect(updateTeamPokemon).not.toHaveBeenCalled();
+    expect(deleteTeam).not.toHaveBeenCalled();
+  });
+
+  it('the owner deletes a team linked to no match without a closure or match read', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, match_id: null } as never);
+    vi.mocked(deleteTeam).mockResolvedValue(undefined as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+    expect(getTeamVisibilityFacts).not.toHaveBeenCalled();
+    expect(deleteTeam).toHaveBeenCalledWith(mockTeam.id, { correction: false });
+  });
+
+  it('the owner edits a personal team (no tournament) without a closure read', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, tournament_id: null, match_id: null } as never);
+    vi.mocked(updateTeamPokemon).mockResolvedValue({ ...mockTeam, tournament_id: null } as never);
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
+
+    expect(res.status).toBe(200);
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+    expect(getTeamVisibilityFacts).not.toHaveBeenCalled();
+    expect(updateTeamPokemon).toHaveBeenCalledWith(mockTeam.id, [makeSet('Pikachu')], 'manual', undefined, { correction: false });
+  });
+
+  it('the owner edits a team linked to a match that is not completed, after reading the closure and the match', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, match_id: 'm-1' } as never);
+    mockMatchStatus('in_progress');
+    vi.mocked(updateTeamPokemon).mockResolvedValue({ ...mockTeam, match_id: 'm-1' } as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 'tourney-1', season_id: null } as never);
+
+    const res = await PATCH(makeRequest({ pokemon: [makeSet('Pikachu')], import_source: 'manual' }), routeParams);
+
+    expect(res.status).toBe(200);
+    expect(teamWritesClosed).toHaveBeenCalledWith('tourney-1');
+    expect(getTeamVisibilityFacts).toHaveBeenCalledWith([mockTeam.id]);
+    expect(updateTeamPokemon).toHaveBeenCalledWith(mockTeam.id, [makeSet('Pikachu')], 'manual', undefined, { correction: false });
+  });
+
+  it('a site admin deletes a locked team through the correction path after the live admin re-check', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: 'admin-1', isAdmin: true } as never);
+    vi.mocked(requireAdmin).mockResolvedValue(undefined as never);
+    vi.mocked(getTeamById).mockResolvedValue({ ...mockTeam, locked: true, match_id: 'm-1' } as never);
+    vi.mocked(deleteTeam).mockResolvedValue(undefined as never);
+    vi.mocked(getTournamentById).mockResolvedValue({ id: 'tourney-1', season_id: null } as never);
+
+    const res = await DELETE({} as NextRequest, routeParams);
+
+    expect(res.status).toBe(200);
+    expect(requireAdmin).toHaveBeenCalled();
+    expect(teamWritesClosed).not.toHaveBeenCalled();
+    expect(getTeamVisibilityFacts).not.toHaveBeenCalled();
+    expect(deleteTeam).toHaveBeenCalledWith(mockTeam.id, { correction: true });
+  });
+});

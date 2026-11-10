@@ -230,6 +230,15 @@ describe('the RPC wrappers', () => {
     ).rejects.toBe(lookAlike);
   });
 
+  it('saveFormatAction turns the database refusal action_already_submitted into a FormatActionAlreadySubmittedError', async () => {
+    const saveInput = { seasonId: SEASON, actionKey: 'pick', actorId: P1, targetId: null, picks: [], revision: 7 };
+    state.rpcReply = { error: { code: 'P0001', message: 'action_already_submitted', details: '{"action":"pick"}' } };
+    await expect(saveFormatAction(saveInput)).rejects.toBeInstanceOf(FormatActionAlreadySubmittedError);
+    const lookAlike = { code: '23505', message: 'action_already_submitted' };
+    state.rpcReply = { error: lookAlike };
+    await expect(saveFormatAction(saveInput)).rejects.toBe(lookAlike);
+  });
+
   it('applyFormatAdjustment passes the guard actions and returns the id', async () => {
     state.rpcReply = { data: 'adj-1' };
     await expect(

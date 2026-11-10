@@ -8,12 +8,14 @@
  * validates again), so a pick is never stored against a format it was not validated for. The database also keeps the
  * capacity of a resource under a lock that every grant shares. A refusal of the database (`action_locked`,
  * `resource_item_taken`, `resource_capacity_reached`, `format_context_stale`) leaves as a `FormatRuntimeError`; a submit that asked to write only over a draft (`onlyIfUnsubmitted`) and met a submitted pick
- * leaves as a `FormatActionAlreadySubmittedError`. Server only.
+ * leaves as a `FormatActionAlreadySubmittedError`, and a save that met one (a submit after the context was read) as the
+ * `format_action_already_submitted` refusal. Server only.
  */
 import 'server-only';
 
 import { expireSeasonReads } from '@/lib/revalidation';
 import {
+  FormatActionAlreadySubmittedError,
   FormatRuntimeError,
   saveFormatAction,
   submitFormatAction,
@@ -79,10 +81,9 @@ export async function saveAction(request: ActionRequest): Promise<ActionWrite> {
   }
   if (issues.length > 0 || !access.ok) return { ok: false, issues };
 
-  // A submitted pick is not demoted by a save: the database would turn it into a draft and drop the items it granted, and
-  // a stale tab or a direct call must not be able to do that. The player submits again to change it. (A submit that lands
-  // between this read and the call below can still be demoted; that needs two requests of one account in the same few
-  // milliseconds and ends in a draft the player can submit again.)
+  // A submitted pick is not demoted by a save: the player submits again to change it. The read answers without a database
+  // call; a submit that lands between this read and the call below is refused by format_action_save under the action's
+  // lock (action_already_submitted), with the same answer.
   if (ctx.state.submissions.some((s) => s.action === request.actionId && s.actor === request.actorId && s.status === 'submitted')) {
     throw refuse('format_action_already_submitted');
   }
@@ -93,6 +94,9 @@ export async function saveAction(request: ActionRequest): Promise<ActionWrite> {
     targetId: access.target,
     picks: picksJson(request.picks),
     revision: ctx.revision,
+  }).catch((error: unknown) => {
+    if (error instanceof FormatActionAlreadySubmittedError) throw refuse('format_action_already_submitted');
+    throw error;
   });
   expireSeasonReads(request.seasonId, ctx.phases.map((phase) => phase.id));
   return { ok: true, submission };

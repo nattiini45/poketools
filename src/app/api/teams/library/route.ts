@@ -12,6 +12,7 @@ import {
 import { filterLibraryEntryForDisplay } from '@/lib/team/visibility';
 import { toPublicTeam } from '@/lib/team/public-team';
 import { requireTeamAccess } from '@/lib/api/team-auth';
+import { teamLibraryMachine, teamLibraryState } from '@/lib/team/team-share-state';
 import {
   teamLibraryPublishSchema,
   teamLibraryUnpublishSchema,
@@ -48,7 +49,10 @@ export async function GET(req: NextRequest) {
 }
 
 /**
- * POST /api/teams/library — publish a team to the library
+ * POST /api/teams/library — publish a team to the library, or rewrite its entry
+ * (machine `team.library`). The write is guarded with the publication state
+ * read here: a publish racing another publish or an unpublish answers 409
+ * `team_changed`.
  * Body: { teamId: string, title?: string, description?: string, tags?: string[] }
  */
 export async function POST(req: NextRequest) {
@@ -75,11 +79,9 @@ export async function POST(req: NextRequest) {
     const denied = requireTeamAccess(team, player);
     if (denied) return denied;
 
-    const updated = await publishTeamToLibrary(teamId, {
-      title,
-      description,
-      tags,
-    });
+    const actor = team.player_id === player.playerId ? 'owner' : 'admin';
+    teamLibraryMachine.assertTransition(teamLibraryState(team), 'published', actor);
+    const updated = await publishTeamToLibrary(teamId, { title, description, tags }, team.library_published_at ?? null);
 
     return NextResponse.json({ success: true, team: toPublicTeam(updated) });
   } catch (error) {
@@ -88,7 +90,8 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * DELETE /api/teams/library — unpublish a team from the library
+ * DELETE /api/teams/library — unpublish a team from the library (machine
+ * `team.library`; idempotent: an unpublished team answers 200 too)
  * Body: { teamId: string }
  */
 export async function DELETE(req: NextRequest) {
@@ -115,6 +118,11 @@ export async function DELETE(req: NextRequest) {
     const denied = requireTeamAccess(team, player);
     if (denied) return denied;
 
+    teamLibraryMachine.assertTransition(
+      teamLibraryState(team),
+      'unpublished',
+      team.player_id === player.playerId ? 'owner' : 'admin'
+    );
     await unpublishTeamFromLibrary(teamId);
     return NextResponse.json({ success: true });
   } catch (error) {

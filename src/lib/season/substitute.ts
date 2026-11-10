@@ -33,6 +33,7 @@ import {
 import type { ApiError } from '@/types/api';
 import type { MatchWithPlayers } from '@/types/match';
 import type { ParticipantWithSeed, TournamentStatus } from '@/types/tournament';
+import { isSeasonClosed } from './season-state';
 
 export interface SubstituteAffectedMatch {
   match_id: string;
@@ -304,7 +305,7 @@ async function assertSeasonOpen(seasonId: string): Promise<void> {
   if (!season) {
     throw new UserFacingError('League not found', { code: 'SEASON_NOT_FOUND', status: 404 });
   }
-  if (season.status === 'completed' || season.archived) {
+  if (isSeasonClosed(season)) {
     throw new UserFacingError(
       season.archived
         ? 'The league is archived; its roster can no longer be substituted'
