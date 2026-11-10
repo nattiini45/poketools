@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import PlanPanel from '../PlanPanel';
 import type { PlanView } from '../types';
+import { buttonLabelled } from '@/test/button-markup';
 
 const view = (overrides: Partial<PlanView> = {}): PlanView => ({
   id: 'p1',
@@ -139,8 +140,8 @@ describe('PlanPanel', () => {
     ['abandoned', false],
   ] as const)('offers Build on a %s plan: %s', (status, offered) => {
     const out = renderWithI18n(<PlanPanel plan={view({ status, buildable: offered })} onAsk={() => undefined} canAsk />);
-    const button = out.match(/<button[^>]*>Build<\/button>/)?.[0];
+    const button = buttonLabelled(out, 'Build');
     expect(button).toBeDefined();
-    expect(/\sdisabled=""/.test(button ?? '')).toBe(!offered);
+    expect(button?.disabled).toBe(!offered);
   });
 });

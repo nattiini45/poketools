@@ -8,6 +8,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 import { RosterActionAlert, RosterLoadError, type RosterActionNotice } from '../RosterNotices';
 import { RosterStatusCell } from '../RosterStatusCell';
+import { buttonLabelled } from '@/test/button-markup';
 
 const matchHistory: RosterActionNotice = {
   kind: 'action',
@@ -86,13 +87,13 @@ describe('RosterLoadError', () => {
 
     expect(html).toContain('role="alert"');
     expect(html).toContain('Failed to load players');
-    expect(html).toContain('>Retry</button>');
+    expect(buttonLabelled(html, 'Retry')).toBeDefined();
   });
 
   it('German', () => {
     const html = renderWithI18n(<RosterLoadError error={{ local: 'loadFailed' }} onRetry={noop} />, { locale: 'de' });
 
-    expect(html).toContain('>Erneut versuchen</button>');
+    expect(buttonLabelled(html, 'Erneut versuchen')).toBeDefined();
     expect(html).not.toContain('>Retry<');
   });
 });

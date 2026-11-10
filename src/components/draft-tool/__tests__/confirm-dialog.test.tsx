@@ -4,7 +4,7 @@ import { renderWithI18n } from '@/test/i18n';
 import { buildFixtureCatalog } from '@/lib/draft-finder/__tests__/fixture-index';
 import { snapshot } from '@/lib/draft-ui/__tests__/fixtures';
 import type { DraftSnapshotDTO } from '@/lib/draft-ui/snapshot-types';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import type { ApiCall, PickRequest, PickResult } from '../data-source';
 import ConfirmPickDialog, { type ConfirmPickDialogProps } from '../dialogs/ConfirmPickDialog';
 import { redraftSlotsForPick } from '../redraft-slots';

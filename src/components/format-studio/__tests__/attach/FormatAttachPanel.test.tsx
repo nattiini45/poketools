@@ -38,6 +38,7 @@ import {
   type AttachCandidateView,
   type AttachedFormatView,
 } from '../../attach/attach-state';
+import { buttonLabelled } from '@/test/button-markup';
 
 const S1 = '5e150000-0000-4000-8000-000000000001';
 const PHASES_HREF = `/admin/leagues/${S1}?tab=phases`;
@@ -376,7 +377,7 @@ describe('FormatAttachPanel', () => {
 
     it('shows the picker and an Attach button that is disabled, with the reason beside it', () => {
       expect(html).toContain('<select');
-      const button = /<button[^>]*>[^<]*(?:<svg[^>]*>.*?<\/svg>)?Attach<\/button>/.exec(html)?.[0];
+      const button = buttonLabelled(html, 'Attach')?.html;
       expect(button, html).toBeTruthy();
       expect(button).toContain('disabled=""');
       const describedBy = /aria-describedby="([^"]+)"/.exec(button as string)?.[1];
@@ -395,7 +396,7 @@ describe('FormatAttachPanel', () => {
       const withManual = render(<FormatAttachPanel {...PANEL} manualPhaseCount={2} />);
       expect(withManual).toContain('This league has 2 hand-made phases.');
       expect(withManual).toContain(`href="${PHASES_HREF}"`);
-      expect(withManual).toMatch(/<button[^>]*disabled=""[^>]*>[^<]*Attach<\/button>/);
+      expect(buttonLabelled(withManual, 'Attach')?.disabled).toBe(true);
     });
 
     it('a capped list says so', () => {

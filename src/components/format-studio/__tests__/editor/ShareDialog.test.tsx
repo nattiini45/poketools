@@ -10,6 +10,7 @@ import type { Locale } from '@/i18n/config';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import type { FormatVisibility } from '@/lib/format-studio/library-types';
 import { expectLabelledControls, expectNoLeftovers } from './test-helpers';
+import { buttonLabelled } from '@/test/button-markup';
 
 /** The shared dialog body with the Format Studio's words and ids. */
 function FormatShareBody(props: Omit<Parameters<typeof ShareDialogBody>[0], 'text' | 'idPrefix'>) {
@@ -74,7 +75,7 @@ describe('ShareDialogBody', () => {
     expect(radio(html, 'gallery')).toContain('checked');
     expect(radio(html, 'private')).toContain('disabled');
     expect(radio(html, 'league')).toContain('disabled');
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Apply</);
+    expect(buttonLabelled(html, 'Apply')?.disabled).toBe(true);
   });
 
   it('a site admin can move a gallery format back', () => {
@@ -92,7 +93,7 @@ describe('ShareDialogBody', () => {
   });
 
   it('Apply is disabled until the choice differs from the current visibility', () => {
-    expect(render({ visibility: 'private', selected: 'private' })).toMatch(/<button[^>]*disabled=""[^>]*>Apply</);
+    expect(buttonLabelled(render({ visibility: 'private', selected: 'private' }), 'Apply')?.disabled).toBe(true);
     expect(render({ visibility: 'private', selected: 'league' })).not.toMatch(/<button[^>]*disabled=""[^>]*>Apply</);
   });
 

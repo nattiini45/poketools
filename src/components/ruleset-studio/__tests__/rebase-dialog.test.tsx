@@ -17,6 +17,7 @@ vi.mock('@/components/ui/Modal', () => ({
 }));
 
 import RebaseDialog, { BLANK_TARGET } from '../sections/RebaseDialog';
+import { buttonLabelled } from '@/test/button-markup';
 
 const OU = resolvePresetRules('gen9ou');
 const doc = newRulesetDocument('Spring OU', 'en', 'gen9ou');
@@ -39,7 +40,7 @@ describe('RebaseDialog', () => {
     expect(html).toContain('Your ruleset keeps enforcing what it enforces today.');
     expect(html).toContain('Loading the preset…');
     // Nothing can be applied before the plan exists.
-    expect(/<button[^>]*>Switch to Gen 9 Ubers<\/button>/.exec(html)?.[0]).toContain(' disabled=""');
+    expect(buttonLabelled(html, 'Switch to Gen 9 Ubers')?.disabled).toBe(true);
     expect(html).not.toContain('What changes in the rules');
   });
 
@@ -51,7 +52,7 @@ describe('RebaseDialog', () => {
     expect(/<input[^>]*type="checkbox"[^>]*>/.exec(html)?.[0]).toContain('checked');
     // Ready: the apply button is enabled.
     const blank = createTranslator(rulesetStudioSectionsMessages, 'en')('base.blankHeading');
-    expect(new RegExp(`<button[^>]*>Switch to ${blank}</button>`).exec(html)?.[0]).not.toContain(' disabled=""');
+    expect(buttonLabelled(html, `Switch to ${blank}`)?.disabled).toBe(false);
   });
 
   it('speaks German', () => {

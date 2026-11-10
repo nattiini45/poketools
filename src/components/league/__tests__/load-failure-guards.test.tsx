@@ -10,6 +10,7 @@ import type { PointBuyListVersion } from '@/types/point-buy';
 import { draftLegacyLeagueAdminPoolMessages as pool } from '@/i18n/messages/draft/legacy/league-admin/pool';
 import { DraftTierLimitsEditorView } from '../DraftTierLimitsEditor';
 import { PointBuyListManagerView } from '../PointBuyListManager';
+import { buttonLabelled, type ButtonMarkup } from '@/test/button-markup';
 
 const noop = () => {};
 const LIMITS = Object.fromEntries(POWER_TIERS.map((tier, i) => [tier, i + 1])) as Record<PowerTier, number>;
@@ -35,10 +36,9 @@ const limitsView = (
   );
 
 /** Has the `disabled` attribute (the `disabled:` utility classes do not count). */
-const isDisabled = (tag: string | undefined) => /\sdisabled(=""|\s|>)/.test(tag ?? '');
+const isDisabled = (element: ButtonMarkup | string | undefined) =>
+  typeof element === 'string' ? /\sdisabled(=""|\s|>)/.test(element) : element?.disabled === true;
 
-/** The opening tag of the button with that label. */
-const buttonLabelled = (html: string, label: string) => html.match(new RegExp(`<button[^>]*>${label}</button>`))?.[0];
 
 describe('DraftTierLimitsEditorView', () => {
   it('failed read: the error, a Retry and why saving is off, but no inputs and no Save', () => {

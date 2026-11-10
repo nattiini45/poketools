@@ -8,7 +8,7 @@ import { isFrozenSource } from '@/lib/design/frozen-surfaces';
 /**
  * Frozen surfaces keep the pre-redesign primitives (docs/design.md, "Direction B primitives"): every module a frozen
  * source reaches imports Button, Card, Badge and buttonStyles from src/components/ui/frozen, never the wrappers on
- * @fluid. The walk follows static imports from the frozen sources and stops at src/components/ui.
+ * @fluid. The walk follows static imports from the frozen sources, through the other primitives too (Modal, Table…).
  */
 
 const REPO = join(fileURLToPath(import.meta.url), '..', '..', '..', '..', '..');
@@ -50,8 +50,8 @@ describe('frozen surfaces keep the pre-redesign primitives', () => {
       for (const spec of importsOf(file)) {
         const target = resolve(file, spec);
         if (!target) continue;
-        if (target.startsWith('src/components/ui/')) {
-          if (REWIRED.some((rewired) => target.replace(/\.tsx?$/, '') === rewired)) offenders.push(`${file} -> ${spec}`);
+        if (REWIRED.some((rewired) => target.replace(/\.tsx?$/, '') === rewired)) {
+          offenders.push(`${file} -> ${spec}`);
           continue;
         }
         if (!seen.has(target)) {

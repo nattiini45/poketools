@@ -270,7 +270,7 @@ describe('duplicate phase name error', () => {
   it('leaves the name input plain while the name is fine', () => {
     const html = renderWithI18n(<PhaseNameField value="Playoffs" onChange={() => {}} />);
 
-    expect(html).not.toContain('aria-invalid');
+    expect(html).not.toMatch(/\saria-invalid="/);
     expect(html).not.toContain('aria-describedby');
     expect(html).not.toContain('text-poke-danger');
   });

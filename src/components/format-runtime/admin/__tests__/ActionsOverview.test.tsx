@@ -27,7 +27,7 @@ describe('ActionsOverview', () => {
   it('shows the window, how many can act and the counts', () => {
     mount();
     expect(screen.getByRole('heading', { name: 'Gift' })).toBeTruthy();
-    expect(screen.getByText('Open', { selector: 'span' })).toBeTruthy();
+    expect(screen.getAllByText('Open', { selector: 'span > span' }).some((element) => !element.closest('button'))).toBe(true);
     expect(screen.getByText('Locks at the close')).toBeTruthy();
     const counts = Object.fromEntries(
       Array.from(document.querySelectorAll('dl > div')).map((div) => [div.querySelector('dt')?.textContent, div.querySelector('dd')?.textContent]),
