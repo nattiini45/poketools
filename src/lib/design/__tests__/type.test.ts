@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const GLOBALS = readFileSync(join(__dirname, '../../../app/globals.css'), 'utf8');
-const themeValue = (name: string) => GLOBALS.match(new RegExp(name.replace(/-/g, '\\-') + ':\\s*([\\d.]+)rem;'))?.[1];
+const themeValue = (name: string) => GLOBALS.match(new RegExp(name.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&') + ':\\s*([\\d.]+)rem;'))?.[1];
 
 describe('type roles (redesign F3)', () => {
   it('maps every role to its size utility, in the display face for display and title only', () => {
