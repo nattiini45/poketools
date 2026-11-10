@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import ItemIcon from '../ItemIcon';
 import SkewChip from '../SkewChip';
 import SkewPlate from '../SkewPlate';
+import Button from '../Button';
 import { ITEM_ICON_IDS, itemIconSource } from '@/lib/pkmn/item-icons';
 
 describe('ItemIcon', () => {
@@ -73,5 +74,24 @@ describe('SkewChip', () => {
     const { container } = render(<SkewChip tone="loss">L</SkewChip>);
     expect(container.querySelector('.skew-plate-bg')?.className).toContain('bg-loss-bg');
     expect((container.firstElementChild as HTMLElement).className).toContain('text-loss');
+  });
+});
+
+describe('Button', () => {
+  it('keeps an icon and its label on one row inside the @fluid label span', () => {
+    render(
+      <Button variant="secondary">
+        <svg data-testid="icon" aria-hidden="true" />
+        Add stage
+      </Button>,
+    );
+    const button = screen.getByRole('button', { name: 'Add stage' });
+    expect(button.className).toContain('[&>span>span]:inline-flex');
+    expect(screen.getByTestId('icon').parentElement?.textContent).toBe('Add stage');
+  });
+
+  it('leaves a text-only label to the @fluid text trim', () => {
+    render(<Button>Save</Button>);
+    expect(screen.getByRole('button', { name: 'Save' }).className).not.toContain('[&>span>span]:inline-flex');
   });
 });
