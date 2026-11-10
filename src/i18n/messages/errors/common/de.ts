@@ -22,4 +22,6 @@ export default defineDe<typeof en>()({
   sprite_style_cross_origin: 'Änderung des Sprite-Stils von einer fremden Website abgelehnt.',
   sprite_style_save_failed: 'Der Sprite-Stil konnte nicht gespeichert werden.',
   sprite_style_load_failed: 'Der Sprite-Stil konnte nicht geladen werden.',
+  state_transition_invalid: 'Das geht im aktuellen Zustand nicht ({from} → {to}). Lade die Seite neu und versuche es noch einmal.',
+  state_transition_forbidden: 'Das darfst du nicht ({from} → {to}).',
 });

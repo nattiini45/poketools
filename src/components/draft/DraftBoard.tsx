@@ -27,6 +27,7 @@ import { draftLegacyMessages } from '@/i18n/messages/draft/legacy';
 import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { useVisiblePoll } from '@/lib/draft/use-visible-poll';
+import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import {
   DRAFT_STATE_LOAD_ERROR,
   makeDraftBoardTick,
@@ -322,6 +323,8 @@ export default function DraftBoard({
     state.current_picker !== null &&
     (turnEnforced ? isMyTurn || isAdmin : isAdmin || (isParticipant && state.pool.draft_type !== 'auction'));
   const picker = pickerOf(state, { currentPlayerId, isAdmin, pickFor });
+  // Admin status buttons come from the machine: Start (pending) and End draft (in progress).
+  const adminEvents = isAdmin ? draftPoolStatusMachine.transitionsFrom(state.pool.status, 'admin').map((tr) => tr.event) : [];
   const stall = stallOf(state);
   const stalledName = stall ? (playerNames[stall.player_id] ?? tLegacy('unknownPlayer')) : '';
 
@@ -413,7 +416,7 @@ export default function DraftBoard({
         </div>
 
         <div className="flex items-center gap-2">
-          {isAdmin && state.pool.status === 'pending' && (
+          {adminEvents.includes('start') && (
             <Button variant="success" size="sm" onClick={() => handleStatusChange('in_progress')}>
               {t('board.startDraft')}
             </Button>
@@ -453,7 +456,7 @@ export default function DraftBoard({
               </Button>
             </div>
           )}
-          {isAdmin && (
+          {adminEvents.includes('complete') && (
             <div>
               <Button variant="ghost" size="sm" onClick={() => setConfirming('end')}>
                 {t('board.endDraft')}

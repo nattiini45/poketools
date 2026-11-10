@@ -9,10 +9,29 @@ import {
   approveNote,
   rejectNote,
   setNoteResubmissionBlock,
+  type NoteModerationGuard,
 } from '@/lib/supabase/queries/wiki-notes';
+import type { WikiNote } from '@/types/wiki';
 import { logAuditEvent } from '@/lib/audit/log';
+import { logger } from '@/lib/logger';
+import { noteModerationMachine, noteModerationState } from '@/lib/wiki/note-moderation-state';
 import type { ApiResult } from '@/types/api';
+import type { WikiNotePatchInput } from '@/lib/validation';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+
+function noteNotFoundResponse() {
+  return NextResponse.json<ApiResult<never>>(
+    { success: false, error: 'Note not found', code: 'wiki_note_not_found' },
+    { status: 404 },
+  );
+}
+
+function noteChangedResponse() {
+  return NextResponse.json<ApiResult<never>>(
+    { success: false, error: 'This note changed after you loaded it. Reload and review it again.', code: 'wiki_note_changed' },
+    { status: 409 },
+  );
+}
 
 function resubmissionBlockedResponse() {
   return NextResponse.json<ApiResult<never>>(
@@ -97,6 +116,41 @@ async function handleResubmissionBlock(id: string, rawBody: unknown) {
   );
 }
 
+/**
+ * The compare-and-set guard of a moderator's verdict: the state and text version the moderator saw (the panel sends
+ * both), or the ones just read when the caller sends neither. Null when the note has moved on since the moderator
+ * loaded it (409 `wiki_note_changed`); throws `IllegalTransitionError` (409) when the verdict is not a move from
+ * that state, such as approving an approved note.
+ */
+function verdictGuard(
+  id: string,
+  note: WikiNote,
+  body: WikiNotePatchInput,
+  to: 'approved' | 'rejected',
+): NoteModerationGuard | null {
+  const current = noteModerationState(note);
+  const from = body.expected_state ?? current;
+  const updatedAt = body.expected_updated_at ?? note.updated_at;
+  if (from !== current || Date.parse(updatedAt) !== Date.parse(note.updated_at)) {
+    logger.warn('api/wiki/notes', 'verdict refused: the note changed since the moderator loaded it', {
+      noteId: id,
+      to,
+      expected: { state: from, updatedAt },
+      current: { state: current, updatedAt: note.updated_at },
+    });
+    return null;
+  }
+  noteModerationMachine.assertTransition(from, to, 'admin');
+  return { from, updatedAt };
+}
+
+/** The guarded verdict UPDATE matched no row: the note was deleted, or changed between the read and the write. */
+async function verdictMissedResponse(id: string) {
+  if (!(await getNoteById(id))) return noteNotFoundResponse();
+  logger.warn('api/wiki/notes', 'verdict refused: the note changed between the read and the write', { noteId: id });
+  return noteChangedResponse();
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -139,13 +193,10 @@ export async function PATCH(
     if (body.approved === true) {
       const admin = await requireAdmin();
       const note = await getNoteById(id);
-      if (!note) {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Note not found', code: 'wiki_note_not_found' },
-          { status: 404 },
-        );
-      }
-      await approveNote(id, admin.playerId);
+      if (!note) return noteNotFoundResponse();
+      const guard = verdictGuard(id, note, body, 'approved');
+      if (!guard) return noteChangedResponse();
+      if (!(await approveNote(id, admin.playerId, guard))) return await verdictMissedResponse(id);
       logAuditEvent({
         actor_id: admin.playerId,
         actor_name: admin.name,
@@ -162,16 +213,13 @@ export async function PATCH(
     if (body.rejected === true) {
       const admin = await requireAdmin();
       const note = await getNoteById(id);
-      if (!note) {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Note not found', code: 'wiki_note_not_found' },
-          { status: 404 },
-        );
-      }
+      if (!note) return noteNotFoundResponse();
+      const guard = verdictGuard(id, note, body, 'rejected');
+      if (!guard) return noteChangedResponse();
       // No reason given is stored as null (never an English default); a UI showing
       // the reason labels null in the viewer's language.
       const reason = body.rejection_reason ?? null;
-      await rejectNote(id, admin.playerId, reason);
+      if (!(await rejectNote(id, admin.playerId, reason, guard))) return await verdictMissedResponse(id);
       logAuditEvent({
         actor_id: admin.playerId,
         actor_name: admin.name,
@@ -214,7 +262,7 @@ export async function PATCH(
     const editor = player.isAdmin ? 'moderator' : 'author';
 
     // A note the superadmin closed for resubmission stays rejected: the author's edit is refused and re-queues nothing.
-    if (editor === 'author' && note.resubmission_blocked_at) {
+    if (editor === 'author' && !noteModerationMachine.can(noteModerationState(note), 'pending', 'author')) {
       return resubmissionBlockedResponse();
     }
 

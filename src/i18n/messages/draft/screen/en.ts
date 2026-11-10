@@ -64,6 +64,7 @@ export default {
     next: 'Next: {player}',
     nextFive: 'Next {n}:',
     complete: 'Draft complete',
+    cancelled: 'Draft cancelled',
     pending: 'The draft has not started yet',
     toTokens: 'Go to your tokens',
     until: 'until <time></time>',

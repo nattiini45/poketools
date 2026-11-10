@@ -28,7 +28,7 @@ vi.mock('@/lib/supabase/client', () => {
     const call: Call = { table, steps: [] };
     state.calls.push(call);
     const chain: Record<string, unknown> = {};
-    for (const name of ['select', 'eq', 'in', 'is']) {
+    for (const name of ['select', 'update', 'eq', 'in', 'is']) {
       chain[name] = (...args: unknown[]) => {
         call.steps.push([name, ...args]);
         return chain;
@@ -59,6 +59,7 @@ import {
   getSeasonManualPhaseCount,
   getSeasonPresetRulesets,
   getSeasonStartSignals,
+  setSeasonFormatEngine,
   type AttachStageRow,
 } from '../season-formats';
 import { isSeasonStarted } from '@/lib/season/season-started';
@@ -126,6 +127,46 @@ describe('getSeasonFormatSummary and getSeasonFormat', () => {
     const boom = { message: 'boom' };
     state.respond = () => ({ error: boom });
     await expect(getSeasonFormatSummary(SEASON)).rejects.toBe(boom);
+  });
+});
+
+describe('setSeasonFormatEngine', () => {
+  const row = (engine: string) => ({
+    season_id: SEASON,
+    definition_id: 'd',
+    version_no: 2,
+    spec_hash: 'h',
+    tunables: {},
+    engine,
+    frozen_at: 't',
+    amendments: [],
+  });
+
+  it('switches with an UPDATE guarded by the engine the caller read', async () => {
+    state.respond = () => ({ data: row('kit') });
+    expect((await setSeasonFormatEngine(SEASON, 'shadow', 'kit'))?.engine).toBe('kit');
+    expect(state.calls).toHaveLength(1);
+    expect(stepsOf(state.calls[0], 'update')[0].slice(1)).toEqual([{ engine: 'kit' }]);
+    expect(stepsOf(state.calls[0], 'eq').map((step) => step.slice(1))).toEqual([
+      ['season_id', SEASON],
+      ['engine', 'shadow'],
+    ]);
+  });
+
+  it('throws format_engine_changed (409) when another admin switched the engine in between', async () => {
+    state.respond = (call) => ({ data: stepsOf(call, 'update').length > 0 ? null : row('legacy') });
+    await expect(setSeasonFormatEngine(SEASON, 'shadow', 'kit')).rejects.toMatchObject({ code: 'format_engine_changed', statusCode: 409 });
+  });
+
+  it('answers null when the format was detached in between', async () => {
+    state.respond = () => ({ data: null });
+    expect(await setSeasonFormatEngine(SEASON, 'legacy', 'kit')).toBeNull();
+    expect(state.calls).toHaveLength(2);
+  });
+
+  it('refuses a move that is not a switch, before any request', async () => {
+    await expect(setSeasonFormatEngine(SEASON, 'kit', 'kit')).rejects.toMatchObject({ code: 'state_transition_invalid', statusCode: 409 });
+    expect(state.calls).toHaveLength(0);
   });
 });
 

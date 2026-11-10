@@ -10,6 +10,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
+import { actionSubmissionMachine } from '@/lib/format-engine/runtime/action-state';
 import { saveActionRequest, submitActionRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ActionPick } from '@/lib/format-engine/runtime/types';
 import type { ActionView, DomainEntriesView, EntryView, SubmissionState } from '@/lib/format-engine/runtime/view-types';
@@ -69,6 +70,7 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
   const picks = draft ?? submission?.picks ?? [];
   const canAct = !closed && action.actionable;
   const editable = canAct && (state !== 'submitted' || editing);
+  const canSaveDraft = state === 'none' || actionSubmissionMachine.can(state, 'draft', 'player');
   const stepsReady = action.steps.every((step) => step.unlocked);
   const complete = action.steps.every((step) => picksOfStep(picks, step.index).length === step.count);
 
@@ -250,7 +252,7 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
         <div className="flex flex-wrap gap-2">
           {editable ? (
             <>
-              {state !== 'submitted' && (
+              {canSaveDraft && (
                 <Button
                   variant="secondary"
                   size="sm"
