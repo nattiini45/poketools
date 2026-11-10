@@ -189,10 +189,11 @@ export class FormatAdjustmentRefusedError extends Error {
 }
 
 /**
- * `format_action_submit` was asked to write only over a draft (`onlyIfUnsubmitted`) and found a submitted pick: the player
- * committed after the caller read its state. Nothing was written. A pick that is already locked (or a locked action)
- * raises `action_locked` instead, because the function checks the lock first; the caller treats both as "left alone".
- * Only the cron's deadline draw asks, so it never leaves the server as an API answer.
+ * `format_action_save`, or `format_action_submit` asked to write only over a draft (`onlyIfUnsubmitted`), found a
+ * submitted pick: the player committed, possibly after the caller read its state. Nothing was written. A pick that is
+ * already locked (or a locked action) raises `action_locked` instead, because the functions check the lock first. The
+ * cron's deadline draw treats both as "left alone"; `saveAction` answers it as `format_action_already_submitted`, so it
+ * never leaves the server as itself.
  */
 export class FormatActionAlreadySubmittedError extends Error {
   constructor() {
@@ -265,8 +266,10 @@ export interface SaveFormatActionInput {
 }
 
 /**
- * Saves a draft pick. Raises `action_locked` while the action or the actor's submission is locked and
- * `format_context_stale` when the league's format changed since `revision` was read.
+ * Saves a draft pick; only a draft (or no row) is written. Raises `FormatActionAlreadySubmittedError` when the actor's
+ * pick is submitted (decided under the action's lock, so a submit that landed after the caller's read is never demoted),
+ * `action_locked` while the action or the actor's submission is locked and `format_context_stale` when the league's
+ * format changed since `revision` was read.
  */
 export async function saveFormatAction(input: SaveFormatActionInput): Promise<FormatActionSubmissionRow> {
   const { data, error } = await supabase.rpc('format_action_save', {
@@ -277,7 +280,11 @@ export async function saveFormatAction(input: SaveFormatActionInput): Promise<Fo
     p_picks: input.picks,
     p_expected_revision: input.revision,
   });
-  if (error) throw mapFormatRuntimeDbError(error);
+  if (error) {
+    const signal = parseDbError(error);
+    if (signal?.code === 'P0001' && signal.message === 'action_already_submitted') throw new FormatActionAlreadySubmittedError();
+    throw mapFormatRuntimeDbError(error);
+  }
   return data;
 }
 

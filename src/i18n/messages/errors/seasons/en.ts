@@ -243,4 +243,7 @@ export default {
 
   // Roster changes of a started format phase are forced with a reason (docs/format-kit.md, "Roster changes after the start").
   PHASE_ROSTER_REASON_REQUIRED: 'Forcing a roster change on a started phase of the format needs a reason of 1 to 500 characters.',
+
+  // The league status moved (another admin, a first round written) between the read and the guarded write; nothing was written (409).
+  season_status_changed: 'This league changed its status in the meantime. Reload the page and try again.',
 } as const;

@@ -18,10 +18,20 @@ import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-st
 import { formatCheckMachine } from '@/lib/format-engine/runtime/check-state';
 import { relationRevealMachine } from '@/lib/format-engine/runtime/relation-state';
 import { seasonFormatEngineMachine } from '@/lib/format-studio/engine-state';
+import { leagueTrashMachine } from '@/lib/league-trash/lifecycle-state';
+import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
+import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMachine, gameStatsLockMachine } from '@/lib/match/game-marker-state';
+import { matchOutcomeMachine } from '@/lib/match/outcome-state';
+import { matchProposalMachine } from '@/lib/match/proposal-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { pushDeviceMachine } from '@/lib/push/device-state';
+import { seasonMachine } from '@/lib/season/season-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
+import { teamRosterMachine } from '@/lib/team/team-roster-state';
+import { teamLibraryMachine, teamShareMachine } from '@/lib/team/team-share-state';
 import { matchMachine } from '@/lib/tournament/match-state';
+import { roundMachine } from '@/lib/tournament/round-state';
+import { tournamentMachine } from '@/lib/tournament/tournament-state';
 import { submitPhaseMachine } from '@/lib/ui/submit-phase-state';
 import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
@@ -34,6 +44,20 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  tournamentMachine.spec,
+  seasonMachine.spec,
+  roundMachine.spec,
+  matchOutcomeMachine.spec,
+  matchProposalMachine.spec,
+  teamRosterMachine.spec,
+  teamShareMachine.spec,
+  teamLibraryMachine.spec,
+  aggregateJobMachine.spec,
+  gameAggregateMarkerMachine.spec,
+  gameEvolutionCreditMachine.spec,
+  gameEditLeaseMachine.spec,
+  gameStatsLockMachine.spec,
+  leagueTrashMachine.spec,
   actionWindowMachine.spec,
   actionSubmissionMachine.spec,
   formatChallengeMachine.spec,

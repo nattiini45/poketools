@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { roundMachine } from '@/lib/tournament/round-state';
 import { logger } from '@/lib/logger';
 import {
   getRoundById,
@@ -191,7 +192,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
           }
         }
       } else if (body.status) {
-        round = await updateRoundStatus(rid, body.status);
+        // Start, or the admin's move back to pending (roundMachine), as a compare-and-set on the status read.
+        if (body.status !== round.status) roundMachine.assertTransition(round.status, body.status, 'admin');
+        round = await updateRoundStatus(rid, body.status, round.status);
         wrote = true;
       }
 

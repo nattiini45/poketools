@@ -295,7 +295,7 @@ describe('generate-all-rounds — league groups', () => {
     expect(res.status).toBe(201);
     expect(vi.mocked(createRoundWithMatches).mock.calls.length).toBeGreaterThan(1);
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-    expect(updateRoundStatus).toHaveBeenCalledWith('new-1', 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith('new-1', 'active', 'pending');
     expect(json.data[0].status).toBe('active');
     expect(json.data.slice(1).every((round: { status?: string }) => round.status === undefined)).toBe(true);
     expect(logAuditEvent).toHaveBeenCalledTimes(1);

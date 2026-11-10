@@ -31,6 +31,8 @@ export default {
   team_locked: 'Team is locked',
   // The row is linked to a completed match: its roster is public and final (site admins can still correct it)
   team_match_completed: 'This team belongs to a completed match and can no longer be changed',
+  // A guarded team write found the row changed in between: locked, deleted, re-published or a new share link (state machines team.roster / team.share / team.library)
+  team_changed: 'This team was changed in the meantime; reload it and try again',
 
   // Team library (`/api/teams/library/**`)
   team_library_entry_not_found: 'Team not found or not published',

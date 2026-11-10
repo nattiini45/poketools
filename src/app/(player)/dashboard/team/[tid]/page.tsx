@@ -3,6 +3,7 @@ import AuthGuard from '@/components/shared/AuthGuard';
 import TeambuilderClient from '@/components/teambuilder/TeambuilderClient';
 import { getTeamById, getTeamVisibilityFacts } from '@/lib/supabase/queries/teams';
 import { isCompletedMatchLocked } from '@/lib/team/completed-match-lock';
+import { canWriteTeam, teamLockState } from '@/lib/team/team-roster-state';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
@@ -46,6 +47,11 @@ export default async function DashboardTeamPage({ params }: PageProps) {
       : Promise.resolve(false),
   ]);
 
+  // The editor opens read-only when the viewer may not edit the roster (machine team.roster). The closure is not read
+  // here: the save answers it (403 with the closure code).
+  const lockState = teamLockState({ locked: team.locked, linkedToMatch: !!team.match_id, closure: null, matchCompleted: completedMatch });
+  const editable = canWriteTeam(lockState, 'edit', access.isSiteAdmin ? 'admin' : 'owner');
+
   return (
     <AuthGuard>
       <TeambuilderClient
@@ -59,8 +65,8 @@ export default async function DashboardTeamPage({ params }: PageProps) {
         initialPokemon={team.pokemon}
         teamId={team.id}
         teamName={team.name}
-        locked={team.locked || completedMatch}
-        lockReason={completedMatch ? 'completed_match' : 'tournament'}
+        locked={!editable}
+        lockReason={lockState === 'match_completed' ? 'completed_match' : 'tournament'}
       />
     </AuthGuard>
   );

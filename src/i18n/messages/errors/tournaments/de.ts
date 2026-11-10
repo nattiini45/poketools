@@ -140,6 +140,8 @@ export default defineDe<typeof en>()({
     'Der Phasenstatus wurde gespeichert, aber die Reaktion des Ligaformats darauf (Stufenstart oder -ende, Gleichstand-Prüfungen) ist nicht gelaufen. Sende denselben Status erneut, um sie zu wiederholen.',
   round_changed: 'Ein Match dieser Runde hat sich geändert, während sie gelöscht wurde, deshalb wurde nichts gelöscht. Lade die Runde neu und versuche es erneut.',
   rounds_round_completed: '{round} ist bereits abgeschlossen, deshalb wurden keine Matches hineingeschrieben. Lösche sie, um sie neu zu erzeugen.',
+  tournament_status_changed: 'Der Status dieses Turniers oder dieser Phase hat sich inzwischen geändert. Lade die Seite neu und versuche es erneut.',
+  round_status_changed: 'Der Status dieser Runde hat sich inzwischen geändert. Lade die Seite neu und versuche es erneut.',
 
   // Resource admins
   resource_admin_target_required: 'Ressourcentyp und Ressourcen-ID sind erforderlich.',

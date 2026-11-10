@@ -450,6 +450,24 @@ describe('updateTournament', () => {
     mockBuilder.single.mockResolvedValue({ data: null, error: new Error('update err') });
     await expect(updateTournament('t1', { name: 'X' })).rejects.toThrow('update err');
   });
+
+  it('with a guard, writes only while the row still holds the status read', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: { ...TOURNAMENT_ROW, status: 'completed' }, error: null });
+
+    const result = await updateTournament('t1', { status: 'completed' }, { from: 'active' });
+    expect(mockBuilder.eq).toHaveBeenCalledWith('id', 't1');
+    expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'active');
+    expect(mockBuilder.single).not.toHaveBeenCalled();
+    expect(result.status).toBe('completed');
+  });
+
+  it('with a guard, a row that moved on is a 409 tournament_status_changed', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(updateTournament('t1', { status: 'completed' }, { from: 'active' })).rejects.toMatchObject({
+      code: 'tournament_status_changed',
+      statusCode: 409,
+    });
+  });
 });
 
 describe('archiveTournamentsBySeason', () => {
