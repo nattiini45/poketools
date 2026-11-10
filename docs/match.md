@@ -8,6 +8,8 @@ The Match module focuses on match/team stat aggregation helpers used by UI, repo
 src/lib/match/
 ├── aggregation.ts  # Match/team aggregation helpers
 ├── aggregate-queue.ts  # Deferred aggregate processing
+├── aggregate-job-state.ts  # aggregateJobMachine: the aggregate_jobs.status machine (client-safe)
+├── game-marker-state.ts  # The game marker machines: aggregate and evolution markers, edit lease, stats lock (client-safe)
 ├── finalize.ts  # Shared completion side effects for manual/cron finalization
 ├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
 ├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
@@ -22,7 +24,10 @@ src/lib/match/
 ├── downstream-matches.ts  # The later bracket matches a game change would reset, encoded into the refusal's params (client-safe)
 ├── game-change-outcome.ts  # How the admin game UI reports the outcome of a game change
 ├── match-children.ts  # Match children cleanup
+├── match-actions.ts  # availableMatchActions: the match machine events a viewer may start from a screen (client-safe)
 ├── outcome.ts  # Faint tally and source of a played result (match_outcomes)
+├── outcome-state.ts  # match_outcomes as a state machine (SQL-owned, docs/state-machines.md)
+├── proposal-state.ts  # match_proposals.status as a state machine, with the effective (expired) status
 ├── outcome-takeback.ts  # Taking back a match's outcome row when it leaves completed or disputed, by the set_at read before the flip
 ├── match-kos.ts  # One player's KO totals across the games of a match
 ├── reopen.ts  # Reopening a completed match
@@ -70,6 +75,7 @@ The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snap
 - **File**: `aggregate-queue.ts`
 - **Purpose**: Processes deferred aggregate jobs and marks `games.aggregate_applied_at` after successful application
 - **Atomic apply**: each job is applied by the `apply_aggregate_job` RPC (`supabase/migrations/20261018130100_aggregate_apply_atomic.sql`), which locks the job and the game, fences on the job status and the game marker, applies the aggregate and player deltas and sets `aggregate_applied_at` in one transaction. A job applied twice (a reclaimed job, a retry) counts once; a cancelled job applies nothing; bad deltas abort before any aggregate or marker changes.
+- **State machines**: `aggregate_jobs.status` is `aggregateJobMachine` (`src/lib/match/aggregate-job-state.ts`); the game markers (`aggregate_applied_at`, `evolution_applied_at` + `evolution_credits`, the edit lease, `stats_locked`) are the machines in `src/lib/match/game-marker-state.ts`. Diagrams, transitions and every writer: [State machines](./state-machines.md). The SQL functions own the moves; parity tests (`src/lib/match/__tests__/aggregate-job-state.test.ts`, `game-marker-state.test.ts`) hold their guards to the definitions, and a new SQL function that writes `aggregate_jobs` or a marker column fails them until it is listed as a writer.
 - **Restored leagues.** A league restored from the league trash ([Season](./season.md#league-recycle-bin)) brings its games back with `aggregate_applied_at` NULL and ONE pending increment job per game that has battle stats (in a non-scheduled match), so this queue rebuilds the league, phase and `all_time` scopes atomically and resumably; the restore never runs a global rebuild. The restore route drains the queue for up to 90 s and leaves the rest to the cron.
 - **Failures**: a job whose own processing fails goes back to `pending` (or ends `failed` once its attempts are exhausted) and is counted in `failed`; the run still succeeds. A failed claim throws `AggregateQueueClaimError`; a failed reclaim or queue write throws `AggregateQueueRunError` after the batch (fresh jobs are still applied first). The reclaim ends exhausted `processing` jobs as `failed` instead of returning them to `pending`.
 - **Cron** (`/api/cron/process-aggregates`): answers 500 with a code per cause: `aggregate_claim_failed` (the claim RPC failed), `aggregate_queue_failed` (anything else in the run: the reclaim, a queue write, the revalidation after the batch), `aggregate_health_failed` (the health probe or the failed-job count errored), and `aggregate_jobs_stranded` when `aggregate_job_health()` reports pending rows that can no longer be claimed or rows stuck in `processing` for more than 15 minutes (three reclaim windows).

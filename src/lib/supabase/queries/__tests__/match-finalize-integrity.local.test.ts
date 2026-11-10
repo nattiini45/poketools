@@ -191,7 +191,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     expect(await readMarker()).toBeNull();
 
     // updateMatchPlayers writes a scheduled match only: a completed one keeps its result and its marker.
-    await matches.updateMatchStatus(ids.match, 'completed', ids.p1);
+    await matches.updateMatchStatus(ids.match, 'completed', ids.p1, undefined, undefined, 'scheduled');
     expect(await matches.markMatchFinalized(ids.match)).toBe(true);
     expect(await matches.updateMatchPlayers(ids.match, ids.p1, ids.p2)).toBeNull();
     expect(await readMarker()).not.toBeNull();
@@ -211,7 +211,7 @@ describe.skipIf(!optIn)('match finalize integrity (local stack)', () => {
     expect(staleToken).not.toBeNull();
 
     // Reopened and completed again (another confirmed_at, finalize still to run).
-    await matches.transitionMatchStatus(ids.match, { expectedStatus: 'completed', status: 'in_progress', confirmedAt: null, datePlayed: null });
+    await matches.transitionMatchStatus(ids.match, { expectedStatus: 'completed', status: 'in_progress' });
     await new Promise((resolve) => setTimeout(resolve, 5));
     const second = await matches.updateMatchStatus(ids.match, 'completed', ids.p2, undefined, undefined, 'in_progress');
     expect(second!.confirmed_at).not.toBe(staleToken);

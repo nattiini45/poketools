@@ -45,7 +45,7 @@ function toCoreTriple(value: unknown): CoreTriple | null {
   return [value[0], value[1], value[2]] as CoreTriple;
 }
 
-function toSeason(row: SeasonRow): Season {
+export function toSeason(row: SeasonRow): Season {
   return {
     id: row.id,
     name: row.name,

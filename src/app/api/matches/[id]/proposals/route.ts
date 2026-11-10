@@ -4,6 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import {
   createMatchProposal,
+  expireOverdueMatchProposals,
   getPendingProposalForParticipant,
   listMatchProposals,
 } from '@/lib/supabase/queries/match-proposals';
@@ -93,6 +94,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const responderId = getResponderId(player.playerId, match);
+    // An overdue proposal nobody answered is expired first: it no longer blocks a new one.
+    await expireOverdueMatchProposals(id, now.toISOString());
     const [proposerPending, responderPending] = await Promise.all([
       getPendingProposalForParticipant(id, player.playerId),
       getPendingProposalForParticipant(id, responderId),

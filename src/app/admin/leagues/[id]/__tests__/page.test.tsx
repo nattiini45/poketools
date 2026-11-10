@@ -979,6 +979,16 @@ describe('draft tab (DF7b, draft-frontend §7.4)', () => {
     expect(roomText).not.toMatch(/Bind a point-buy list|Add participants/);
   });
 
+  it('EPB: a cancelled queue pool reads as cancelled, not as complete (its status twin)', async () => {
+    const pool = { id: 'pool-1', draft_type: 'snake', pick_order: 'snake', engine: 'queue', kind: 'initial' };
+    mocks.getDraftPoolBySeason.mockResolvedValue({ ...pool, status: 'complete', phase: 'cancelled' });
+    const cancelled = visibleText(sectionTitled(await render('draft'), 'Draft Room') as El);
+    expect(cancelled).toContain(' ( | Cancelled | ).');
+    expect(cancelled).not.toContain('Complete');
+    mocks.getDraftPoolBySeason.mockResolvedValue({ ...pool, status: 'complete', phase: 'complete' });
+    expect(visibleText(sectionTitled(await render('draft'), 'Draft Room') as El)).toContain(' ( | Complete | ).');
+  });
+
   it('plain draft season: one three-type form in the Draft Room, no EPB summary, no format-rules read', async () => {
     mocks.getDraftPoolBySeason.mockResolvedValue(null);
     mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'draft', point_buy_list_id: null }));

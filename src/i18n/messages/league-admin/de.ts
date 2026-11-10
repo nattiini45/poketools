@@ -56,6 +56,7 @@ export default defineDe<typeof en>()({
       button: 'Wiederherstellen',
       buttonLabel: 'Liga {name} wiederherstellen',
       blocked: 'Führe zuerst den ausstehenden Neuaufbau dieses Löschens aus.',
+      expired: 'Die Frist zum Wiederherstellen ist abgelaufen.',
       confirmTitle: 'Liga wiederherstellen?',
       confirmMessage:
         'Liga „{name}“ aus dem Papierkorb wiederherstellen? Sie kommt mit ihren Matches, Spielen und Drafts zurück. Laufende Drafts kommen pausiert zurück, und jede Frist verschiebt sich um die Zeit, die die Liga im Papierkorb lag.',

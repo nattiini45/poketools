@@ -17,6 +17,7 @@ import type { AdminAgentConfig } from '@/lib/ai/admin-agent/env';
 import { parseTextBlocks, parseToolResultBlocks } from '@/lib/ai/admin-agent/loop/blocks';
 import { LOOP_EVENTS, readHarnessEvent } from '@/lib/ai/admin-agent/loop/harness';
 import type { ToolRole } from '@/lib/ai/admin-agent/registry';
+import { effectiveProposalStatus } from '@/lib/ai/admin-agent/store/proposal-state';
 import type { ConversationRecord, Json, MessageRecord, ProposalSummary } from '@/lib/ai/admin-agent/store/types';
 import { isValidUuid } from '@/lib/utils/uuid';
 
@@ -187,13 +188,12 @@ export function awaitsContinue(messages: readonly Pick<MessageRecord, 'kind'>[])
 
 export function toProposalSummaryView(row: ProposalSummary, now: Date): ProposalSummaryView {
   const status = row.status as ProposalStatusValue;
-  const expired = status === 'proposed' && new Date(row.expires_at).getTime() <= now.getTime();
   return {
     id: row.id,
     kind: row.kind as ProposalSummaryView['kind'],
     class: row.class === 'G' ? 'G' : 'B',
     status,
-    effectiveStatus: expired ? 'expired' : status,
+    effectiveStatus: effectiveProposalStatus({ status, expires_at: row.expires_at }, now),
     planCode: row.proposal_hash.slice(0, 8),
     createdAt: row.created_at,
     expiresAt: row.expires_at,

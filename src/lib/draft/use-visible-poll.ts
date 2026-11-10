@@ -7,7 +7,8 @@
  *   in a hidden tab, so the board has data the moment it is shown.
  * - Once a tick reports `'complete'`, slows to at least 60 s, or stops when the
  *   caller passes `completeIntervalMs: null`. A tab refocus still refetches once.
- * - A tick that reports `'stop'` (401/403) halts the poller; only an explicit
+ * - A tick that reports `'stop'` (401/403; the hidden-tab turn watch also
+ *   404/409) halts the poller; only an explicit
  *   `refresh()` revives it.
  *
  * Ticks are chained with setTimeout (never setInterval), so a slow request can
@@ -17,9 +18,11 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { pollerMachine, type PollerState, type PollOutcome } from './poller-state';
 
-/** What a tick tells the poller about the draft it just read. */
-export type PollOutcome = 'live' | 'complete' | 'stop';
+/** What a tick tells the poller about the draft it just read (`pollOutcomeForPool` for a draft pool). */
+export type { PollOutcome };
+export { pollOutcomeForPool } from './poller-state';
 
 /** One poll. The signal aborts when the poller stops (unmount / key change). */
 export type PollTick = (signal: AbortSignal) => Promise<PollOutcome | void>;
@@ -71,11 +74,6 @@ export interface VisiblePoller {
   refresh(): Promise<void>;
 }
 
-/** Map a draft pool status onto a poll outcome. */
-export function outcomeForPoolStatus(status: string): PollOutcome {
-  return status === 'complete' ? 'complete' : 'live';
-}
-
 function resolveCompleteInterval(value: number | null | undefined): number | null {
   if (value === null) return null;
   return Math.max(COMPLETE_POLL_INTERVAL_MS, value ?? COMPLETE_POLL_INTERVAL_MS);
@@ -102,11 +100,15 @@ export function createVisiblePoller(
   /** The running tick, tagged with the run (signal) that started it. */
   let inFlight: { signal: AbortSignal; promise: Promise<void> } | null = null;
   let rerun = false;
-  let halted = false;
-  let lastOutcome: PollOutcome = 'live';
+  /** The lifecycle state (`pollerMachine`); every move goes through `move`. */
+  let state: PollerState = 'stopped';
 
   const isRunning = () => controller !== null && !controller.signal.aborted;
   const isHidden = () => visibility?.hidden === true;
+  const move = (to: PollerState, actor: 'consumer' | 'tick') => {
+    if (pollerMachine.can(state, to, actor)) state = to;
+  };
+  const TICK_STATE: Record<PollOutcome, PollerState> = { live: 'live', complete: 'complete', stop: 'halted' };
 
   function clearTimer() {
     if (timer !== null) {
@@ -117,8 +119,8 @@ export function createVisiblePoller(
 
   function schedule() {
     clearTimer();
-    if (!isRunning() || halted || isHidden()) return;
-    const ms = lastOutcome === 'complete' ? completeMs : liveMs;
+    if (!isRunning() || state === 'halted' || isHidden()) return;
+    const ms = state === 'complete' ? completeMs : liveMs;
     if (ms === null) return;
     timer = timers.setTimeout(() => {
       timer = null;
@@ -150,9 +152,8 @@ export function createVisiblePoller(
         if (inFlight?.signal === signal) inFlight = null;
       }
       if (signal.aborted) return;
-      lastOutcome = outcome;
-      if (outcome === 'stop') {
-        halted = true;
+      move(TICK_STATE[outcome], 'tick');
+      if (state === 'halted') {
         rerun = false;
         clearTimer();
         return;
@@ -170,7 +171,7 @@ export function createVisiblePoller(
   }
 
   function onVisibilityChange() {
-    if (!isRunning() || halted) return;
+    if (!isRunning() || state === 'halted') return;
     if (isHidden()) {
       clearTimer();
       return;
@@ -182,9 +183,8 @@ export function createVisiblePoller(
     start() {
       if (isRunning()) return;
       controller = new AbortController();
-      halted = false;
       rerun = false;
-      lastOutcome = 'live';
+      move('live', 'consumer');
       visibility?.addEventListener('visibilitychange', onVisibilityChange);
       void runTick();
     },
@@ -193,10 +193,11 @@ export function createVisiblePoller(
       visibility?.removeEventListener('visibilitychange', onVisibilityChange);
       controller?.abort();
       rerun = false;
+      move('stopped', 'consumer');
     },
     refresh() {
       if (!isRunning()) return Promise.resolve();
-      halted = false;
+      move('live', 'consumer');
       return runTick();
     },
   };

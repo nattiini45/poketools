@@ -41,6 +41,7 @@ import {
   isLiveIncrementJob,
 } from '@/lib/supabase/queries/games';
 import { revalidateMatchPages } from '@/lib/revalidation';
+import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -282,12 +283,14 @@ async function processJob(job: AggregateJob): Promise<boolean> {
 
 async function completeJob(jobId: string): Promise<void> {
   // Guard: only mark completed if still in 'processing' (could have been cancelled)
+  const from: AggregateJobStatus = 'processing';
+  aggregateJobMachine.assertTransition(from, 'completed', 'queue');
   const now = new Date().toISOString();
   const { error } = await supabase
     .from('aggregate_jobs')
     .update({ status: 'completed', processed_at: now, updated_at: now })
     .eq('id', jobId)
-    .eq('status', 'processing');
+    .eq('status', from);
 
   if (error) {
     console.error(`[aggregate-queue] Complete error for job ${jobId}:`, error);
@@ -316,6 +319,7 @@ async function markJobFailed(jobId: string, errorMessage: string): Promise<void>
 
   const newStatus: AggregateJobStatus =
     job.attempts >= job.max_attempts ? 'failed' : 'pending';
+  aggregateJobMachine.assertTransition('processing', newStatus, 'queue');
 
   const { error: updateError } = await supabase
     .from('aggregate_jobs')
@@ -544,6 +548,8 @@ export async function countFailedIncrementJobsForSeason(seasonId: string): Promi
  * were re-queued; throws when the write fails.
  */
 export async function requeueFailedIncrementJobsForSeason(seasonId: string): Promise<number> {
+  const from: AggregateJobStatus = 'failed';
+  aggregateJobMachine.assertTransition(from, 'pending', 'admin');
   const { count, error } = await supabase
     .from('aggregate_jobs')
     .update(
@@ -552,7 +558,7 @@ export async function requeueFailedIncrementJobsForSeason(seasonId: string): Pro
     )
     .eq('season_id', seasonId)
     .eq('operation', 'increment')
-    .eq('status', 'failed');
+    .eq('status', from);
 
   if (error) {
     console.error('[aggregate-queue] Season failed-job requeue error:', error);

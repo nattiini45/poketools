@@ -12,6 +12,8 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin, errorsStats } from '@/i18n/messages/errors';
 import { adminToolsMessages } from '@/i18n/messages/admin-tools';
 import { commonMessages } from '@/i18n/messages/common';
+import { noteModerationMachine, noteModerationState } from '@/lib/wiki/note-moderation-state';
+import { noteReportMachine } from '@/lib/wiki/note-report-state';
 
 type ApiPayload<T> =
   | { success: true; data: T }
@@ -52,23 +54,49 @@ export function reportReasonKey(reason: string): string {
   return reason === 'other' ? 'otherReason' : reason;
 }
 
+type SeenNote = Pick<WikiNote, 'approved' | 'rejected_at' | 'resubmission_blocked_at'> & { updated_at?: string };
+
+/** Whether the machine offers the admin `event` from the note's state. */
+function offers(note: SeenNote, event: string, actor: 'admin' | 'superadmin' = 'admin'): boolean {
+  return noteModerationMachine.transitionsFrom(noteModerationState(note), actor).some((t) => t.event === event);
+}
+
 /** Only an approved note is live, so only a report on one can be answered by unpublishing the note. */
 export function canUnpublishReportedNote(report: WikiNoteReport): boolean {
-  return report.note?.approved === true;
+  return report.note !== undefined && offers(report.note, 'unpublish');
+}
+
+/** The state and version the moderator saw, so the route applies the verdict only to that note (compare-and-set). */
+function seenFields(note: SeenNote | undefined): Record<string, string> {
+  if (!note?.updated_at) return {};
+  return { expected_state: noteModerationState(note), expected_updated_at: note.updated_at };
+}
+
+/** The approve PATCH for the note the moderator saw. */
+export function noteApproveRequest(noteId: string, seen?: SeenNote): { url: string; init: RequestInit } {
+  return {
+    url: `/api/wiki/notes/${noteId}`,
+    init: { method: 'PATCH', body: JSON.stringify({ approved: true, ...seenFields(seen) }) },
+  };
 }
 
 /**
  * The request that takes a note out of public view: the admin reject PATCH (audited as `wiki.note.reject`).
  * An empty reason is omitted: the route stores null (no reason). No UI shows the stored reason today; one that
- * does labels null in the viewer's language (legacy English defaults map via engine-labels).
+ * does labels null in the viewer's language (legacy English defaults map via engine-labels). `seen` is the note as
+ * the moderator loaded it.
  */
-export function noteRejectRequest(noteId: string, reason?: string): { url: string; init: RequestInit } {
+export function noteRejectRequest(noteId: string, reason?: string, seen?: SeenNote): { url: string; init: RequestInit } {
   const trimmed = reason?.trim();
   return {
     url: `/api/wiki/notes/${noteId}`,
     init: {
       method: 'PATCH',
-      body: JSON.stringify(trimmed ? { rejected: true, rejection_reason: trimmed } : { rejected: true }),
+      body: JSON.stringify({
+        rejected: true,
+        ...(trimmed ? { rejection_reason: trimmed } : {}),
+        ...seenFields(seen),
+      }),
     },
   };
 }
@@ -82,23 +110,23 @@ export function noteBlockRequest(noteId: string, block: boolean): { url: string;
 }
 
 function isBlocked(note: WikiNote): boolean {
-  return Boolean(note.resubmission_blocked_at);
+  return noteModerationState(note) === 'blocked';
 }
 
 /** Only the superadmin may block, and only a rejected note that is not blocked yet. */
 export function canBlockResubmission(note: WikiNote, isSuperadmin: boolean): boolean {
-  return isSuperadmin && !note.approved && Boolean(note.rejected_at) && !isBlocked(note);
+  return isSuperadmin && offers(note, 'block', 'superadmin');
 }
 
 /** Only the superadmin may lift a block. */
 export function canAllowResubmission(note: WikiNote, isSuperadmin: boolean): boolean {
-  return isSuperadmin && isBlocked(note);
+  return isSuperadmin && offers(note, 'unblock', 'superadmin');
 }
 
 interface RejectedNoteCardProps {
   note: WikiNote;
   isSuperadmin: boolean;
-  onApprove: (noteId: string) => void;
+  onApprove: (note: WikiNote) => void;
   onDelete: (noteId: string) => void;
   onBlock: (noteId: string) => void;
   onAllow: (noteId: string) => void;
@@ -118,7 +146,9 @@ export function RejectedNoteCard({ note, isSuperadmin, onApprove, onDelete, onBl
       <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-poke-text-primary">{note.content}</p>
       {isBlocked(note) && <p className="mt-2 text-xs text-poke-text-secondary">{t('wiki.blockedHint')}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button type="button" size="sm" onClick={() => onApprove(note.id)}>{t('wiki.approve')}</Button>
+        {offers(note, 'approve') && (
+          <Button type="button" size="sm" onClick={() => onApprove(note)}>{t('wiki.approve')}</Button>
+        )}
         {canBlockResubmission(note, isSuperadmin) && (
           <Button type="button" size="sm" variant="secondary" onClick={() => onBlock(note.id)}>
             {t('wiki.blockResubmission')}
@@ -133,6 +163,11 @@ export function RejectedNoteCard({ note, isSuperadmin, onApprove, onDelete, onBl
       </div>
     </Card>
   );
+}
+
+/** A moderator can close an open report as reviewed or dismissed (a closed one is no longer listed). */
+export function canCloseReport(report: WikiNoteReport, to: 'reviewed' | 'dismissed'): boolean {
+  return report.status !== to && noteReportMachine.nextStates(report.status, 'admin').includes(to);
 }
 
 function toPanelError(e: unknown, fallback: PanelErrorKey): PanelError {
@@ -192,15 +227,13 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
     if (await write(url, init)) await load();
   }
 
-  async function approveNote(noteId: string) {
-    await moderate(`/api/wiki/notes/${noteId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ approved: true }),
-    });
+  async function approveNote(note: WikiNote) {
+    const { url, init } = noteApproveRequest(note.id, note);
+    await moderate(url, init);
   }
 
-  async function rejectNote(noteId: string) {
-    const { url, init } = noteRejectRequest(noteId, rejecting[noteId]);
+  async function rejectNote(note: WikiNote) {
+    const { url, init } = noteRejectRequest(note.id, rejecting[note.id], note);
     await moderate(url, init);
   }
 
@@ -211,7 +244,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
   async function unpublishReportedNote(report: WikiNoteReport) {
     if (!report.note) return;
     const noteId = report.note.id;
-    const { url, init } = noteRejectRequest(noteId, rejecting[noteId]);
+    const { url, init } = noteRejectRequest(noteId, rejecting[noteId], report.note);
     if (!(await write(url, init))) return;
     const closed = await write(`/api/admin/wiki/reports/${report.id}`, {
       method: 'PATCH',
@@ -307,7 +340,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
               key={note.id}
               note={note}
               isSuperadmin={isSuperadmin}
-              onApprove={(noteId) => void approveNote(noteId)}
+              onApprove={(target) => void approveNote(target)}
               onDelete={(noteId) => void deleteNote(noteId)}
               onBlock={setBlockTarget}
               onAllow={(noteId) => void allowResubmission(noteId)}
@@ -332,8 +365,12 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                 className="mt-4 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-none focus:ring-2 focus:ring-poke-accent"
               />
               <div className="mt-3 flex flex-wrap gap-2">
-                <Button type="button" size="sm" onClick={() => void approveNote(note.id)}>{t('wiki.approve')}</Button>
-                <Button type="button" size="sm" variant="secondary" onClick={() => void rejectNote(note.id)}>{t('wiki.reject')}</Button>
+                {offers(note, 'approve') && (
+                  <Button type="button" size="sm" onClick={() => void approveNote(note)}>{t('wiki.approve')}</Button>
+                )}
+                {offers(note, 'reject') && (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void rejectNote(note)}>{t('wiki.reject')}</Button>
+                )}
                 <Button type="button" size="sm" variant="danger" onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
               </div>
             </Card>
@@ -382,12 +419,16 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                     {t('wiki.unpublish')}
                   </Button>
                 )}
-                <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'reviewed')}>
-                  {t('wiki.reviewed')}
-                </Button>
-                <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'dismissed')}>
-                  {t('wiki.dismiss')}
-                </Button>
+                {canCloseReport(report, 'reviewed') && (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'reviewed')}>
+                    {t('wiki.reviewed')}
+                  </Button>
+                )}
+                {canCloseReport(report, 'dismissed') && (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'dismissed')}>
+                    {t('wiki.dismiss')}
+                  </Button>
+                )}
               </div>
             </Card>
           ))}

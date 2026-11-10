@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { scanWikiNoteContent } from '@/lib/wiki/moderation';
+import type { NoteModerationState } from '@/lib/wiki/note-moderation-state';
 import type {
   WikiNote,
   WikiNoteInsert,
@@ -40,7 +41,10 @@ type WikiNoteReportRow = {
   created_at: string;
   updated_at: string;
   players?: { name: string } | null;
-  wiki_notes?: Pick<WikiNoteRow, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'> | null;
+  wiki_notes?:
+    | (Pick<WikiNoteRow, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'> &
+        Partial<Pick<WikiNoteRow, 'rejected_at' | 'resubmission_blocked_at' | 'updated_at'>>)
+    | null;
 };
 
 interface WikiModerationFilters {
@@ -103,6 +107,14 @@ function toWikiReport(row: WikiNoteReportRow): WikiNoteReport {
           content: row.wiki_notes.content,
           author_id: row.wiki_notes.author_id,
           approved: row.wiki_notes.approved,
+          // The moderation list also reads the note's state and version, so a moderator's verdict is compare-and-set.
+          ...(row.wiki_notes.updated_at
+            ? {
+                rejected_at: row.wiki_notes.rejected_at ?? null,
+                resubmission_blocked_at: row.wiki_notes.resubmission_blocked_at ?? null,
+                updated_at: row.wiki_notes.updated_at,
+              }
+            : {}),
         }
       : undefined,
   };
@@ -236,13 +248,47 @@ export async function deleteNote(id: string): Promise<void> {
   if (error) throw error;
 }
 
-export async function approveNote(id: string, moderatorId?: string): Promise<void> {
+/**
+ * The state and the text version (`updated_at`) a moderator's verdict was made on. Every write that changes the text
+ * or the verdict stamps `updated_at`, so a verdict is applied only to the note the moderator saw.
+ */
+export interface NoteModerationGuard {
+  from: NoteModerationState;
+  updatedAt: string;
+}
+
+/**
+ * Applies a moderator's verdict as a compare-and-set: the UPDATE filters on the guard's state and version. Returns
+ * false when no row matched (the note changed or is gone); the caller tells the two apart.
+ */
+async function writeVerdict(id: string, fields: Record<string, unknown>, guard: NoteModerationGuard): Promise<boolean> {
+  let query = supabase.from('wiki_notes').update(fields).eq('id', id).eq('updated_at', guard.updatedAt);
+  switch (guard.from) {
+    case 'pending':
+      query = query.eq('approved', false).is('rejected_at', null);
+      break;
+    case 'approved':
+      query = query.eq('approved', true);
+      break;
+    case 'rejected':
+      query = query.eq('approved', false).not('rejected_at', 'is', null).is('resubmission_blocked_at', null);
+      break;
+    case 'blocked':
+      query = query.eq('approved', false).not('resubmission_blocked_at', 'is', null);
+      break;
+  }
+  const { data, error } = await query.select('id');
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
+}
+
+export async function approveNote(id: string, moderatorId: string, guard: NoteModerationGuard): Promise<boolean> {
   const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('wiki_notes')
-    .update({
+  return writeVerdict(
+    id,
+    {
       approved: true,
-      approved_by: moderatorId ?? null,
+      approved_by: moderatorId,
       approved_at: now,
       rejected_by: null,
       rejected_at: null,
@@ -251,27 +297,30 @@ export async function approveNote(id: string, moderatorId?: string): Promise<voi
       resubmission_blocked_at: null,
       resubmission_blocked_by: null,
       updated_at: now,
-    })
-    .eq('id', id);
-
-  if (error) throw error;
+    },
+    guard,
+  );
 }
 
-/** Rejects a note; `reason` is null when the moderator gave none. */
-export async function rejectNote(id: string, moderatorId: string, reason: string | null): Promise<void> {
+/** Rejects (or unpublishes) a note; `reason` is null when the moderator gave none. */
+export async function rejectNote(
+  id: string,
+  moderatorId: string,
+  reason: string | null,
+  guard: NoteModerationGuard,
+): Promise<boolean> {
   const now = new Date().toISOString();
-  const { error } = await supabase
-    .from('wiki_notes')
-    .update({
+  return writeVerdict(
+    id,
+    {
       approved: false,
       rejected_by: moderatorId,
       rejected_at: now,
       rejection_reason: reason,
       updated_at: now,
-    })
-    .eq('id', id);
-
-  if (error) throw error;
+    },
+    guard,
+  );
 }
 
 /**
@@ -340,7 +389,7 @@ export async function listNoteReports(filters: WikiReportFilters = {}): Promise<
   const offset = filters.offset ?? 0;
   let query = supabase
     .from('wiki_note_reports')
-    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved)')
+    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at)')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -353,11 +402,34 @@ export async function listNoteReports(filters: WikiReportFilters = {}): Promise<
   return ((data as unknown as WikiNoteReportRow[] | null) ?? []).map(toWikiReport);
 }
 
-export async function updateNoteReportStatus(id: string, status: WikiNoteReportStatus): Promise<void> {
-  const { error } = await supabase
+/** The status of one report, or null when there is none with that id. */
+export async function getNoteReportStatus(id: string): Promise<WikiNoteReportStatus | null> {
+  const { data, error } = await supabase
     .from('wiki_note_reports')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id);
+    .select('status')
+    .eq('id', id)
+    .maybeSingle();
 
   if (error) throw error;
+  return data ? ((data as { status: string }).status as WikiNoteReportStatus) : null;
+}
+
+/**
+ * Moves a report from `from` to `status` as a compare-and-set on the status. Returns false when no row matched (the
+ * report moved on or is gone).
+ */
+export async function updateNoteReportStatus(
+  id: string,
+  status: WikiNoteReportStatus,
+  from: WikiNoteReportStatus,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('wiki_note_reports')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+    .eq('status', from)
+    .select('id');
+
+  if (error) throw error;
+  return (data?.length ?? 0) > 0;
 }

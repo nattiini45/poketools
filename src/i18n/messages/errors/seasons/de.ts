@@ -112,6 +112,7 @@ export default defineDe<typeof en>()({
   format_not_attached:
     'Diese Liga nutzt ein eigenes Format, es ist aber noch keines angehängt. Hänge vor dem Start ein Format an.',
   format_nothing_attached: 'An diese Liga ist kein Format angehängt.',
+  format_engine_changed: 'Die Format-Engine der Liga wurde inzwischen geändert. Lade die Seite neu und versuche es noch einmal.',
   format_detach_blocked:
     'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
   format_phases_in_use:
@@ -122,6 +123,7 @@ export default defineDe<typeof en>()({
     'Diese Liga hat bereits Daten ihres aktuellen Formats: {links} Verknüpfungen, {items} Gegenstände, {submissions} Abgaben und {adjustments} Anpassungen. Beim Ersetzen oder Abhängen des Formats wird alles gelöscht. Bestätige, um fortzufahren.',
   season_format_type_locked:
     'Der Ligatyp lässt sich nicht auf oder von einem eigenen Format umstellen, solange ein Format angehängt ist oder nachdem die Liga begonnen hat.',
+  season_format_create_failed: 'Die Liga ließ sich aus diesem Format nicht erstellen. Es wurde nichts angelegt. Versuche es noch einmal.',
   action_locked: 'Diese Aktion ist gesperrt, deshalb lässt sie sich nicht mehr ändern.',
   resource_item_taken: 'Ein anderer Spieler hat dieses Item schon, deshalb kannst du es nicht noch einmal wählen.',
   resource_capacity_reached: 'Dieser Spieler hält von dieser Ressource bereits so viel, wie erlaubt ist, deshalb lässt sich nichts mehr hinzufügen.',

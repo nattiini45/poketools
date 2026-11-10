@@ -4,15 +4,17 @@
  * `(proposal_id, step_key)` give at-most-once dispatch: `insertAction` reports `inserted: false` when the key already
  * exists, and the caller must not dispatch. The insert is awaited and a failure stops the step (the caller maps it to
  * `ledger_unavailable`); the row is then completed with the outcome. The triggers freeze `args`, `args_hash`, the step
- * key, the tool and the class at insert, and a row never returns to `executing`.
+ * key, the tool and the class at insert, and a row never returns to `executing`. A status change is guarded by the
+ * ledger's state machine (`action-state.ts`): the UPDATE matches only a row in a legal source state.
  */
 import { isValidUuid } from '@/lib/utils/uuid';
+import { actionMachine } from './action-state';
 import { ACTION_COLUMNS } from './columns';
 import { ownedConversation, type StoreContext } from './context';
 import { AdminAgentStoreError, isUniqueViolation, mapStoreDbError, unwrap } from './errors';
 import { assertAdminId, type AdminId } from './ids';
 import { assertPayloadAllowed } from './payload-guard';
-import type { ActionOutcome, ActionRecord, InsertedAction, NewAction } from './types';
+import type { ActionOutcome, ActionRecord, ActionStatus, InsertedAction, NewAction } from './types';
 
 export const ACTION_LIST_MAX = 500;
 
@@ -69,7 +71,12 @@ export function actionRepository(ctx: StoreContext) {
       throw mapStoreDbError('actions.insert', error);
     },
 
-    /** Records the outcome of a dispatched call (status, HTTP status, the allow-listed result, before/after, the undo recipe, the read-back). */
+    /**
+     * Records the outcome of a dispatched call (status, HTTP status, the allow-listed result, before/after, the undo recipe,
+     * the read-back). A status is written only from a state the ledger machine allows (`executing` or `unknown` to an
+     * outcome, `ok` to `undone`); a row in another state is refused with `state_transition_invalid` and left as it is. A row
+     * already in the requested status is answered as it is, without a write (an idempotent retry).
+     */
     async completeAction(adminId: AdminId, actionId: string, outcome: ActionOutcome): Promise<ActionRecord> {
       assertAdminId(adminId);
       if (!isValidUuid(actionId)) throw new AdminAgentStoreError('agent_harness_error', undefined, { reason: 'action_not_found' });
@@ -97,12 +104,22 @@ export function actionRepository(ctx: StoreContext) {
         ...(outcome.entityType !== undefined ? { entity_type: outcome.entityType } : {}),
         ...(outcome.entityId !== undefined ? { entity_id: outcome.entityId } : {}),
       };
-      const row = unwrap(
-        'actions.complete',
-        await ctx.db.from('admin_agent_actions').update(patch).eq('id', actionId).eq('admin_id', adminId).select(ACTION_COLUMNS).maybeSingle(),
-      );
-      if (!row) throw new AdminAgentStoreError('agent_harness_error', undefined, { reason: 'action_not_found' });
-      return row;
+      const to = outcome.status;
+      let query = ctx.db.from('admin_agent_actions').update(patch).eq('id', actionId).eq('admin_id', adminId);
+      if (to !== undefined) query = query.in('status', actionMachine.sourcesOf(to));
+      const row = unwrap('actions.complete', await query.select(ACTION_COLUMNS).maybeSingle());
+      if (row) return row;
+      const current =
+        to === undefined
+          ? null
+          : unwrap('actions.completeReread', await ctx.db.from('admin_agent_actions').select(ACTION_COLUMNS).eq('id', actionId).eq('admin_id', adminId).maybeSingle());
+      if (!current || to === undefined) throw new AdminAgentStoreError('agent_harness_error', undefined, { reason: 'action_not_found' });
+      // Already there: a retry of a completion whose first attempt landed but did not answer (the D tools retry once). The row
+      // keeps what the first attempt wrote, as the guard trigger lets `undone` stay `undone`.
+      if (current.status === to) return current;
+      actionMachine.assertTransition(current.status as ActionStatus, to, 'system');
+      // A legal move that matched no row: the row changed between the two statements.
+      throw new AdminAgentStoreError('agent_harness_error', undefined, { reason: 'action_changed', detail: { status: current.status } });
     },
 
     /** The ledger row of a model tool call (D tools), or `null`. */

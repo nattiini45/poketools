@@ -220,6 +220,9 @@ export type DialogStateId = (typeof DIALOG_STATES)[number];
 
 // ─── The league recycle bin ───────────────────────────────────────────────────────────────────────────────────────
 
+/** The fixed read time of the preview, before every purge date below, so captures stay stable. */
+export const TRASH_NOW = '2026-11-09T12:00:00Z';
+
 export const TRASH_ROWS: LeagueTrashRowView[] = [
   {
     id: 'trash-ok',
