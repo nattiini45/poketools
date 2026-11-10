@@ -476,7 +476,7 @@ describe('POST /api/ai/match-prep-analysis — hardening', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    vi.mocked(updateMatchPrepAnalysis).mockResolvedValue(undefined);
+    vi.mocked(updateMatchPrepAnalysis).mockResolvedValue(true);
   });
 
   it('asks for JSON output and stores the model that actually answered', async () => {

@@ -209,6 +209,7 @@ const FORMAT_CODE_KINDS: Readonly<Record<FormatErrorCode, ApiErrorKind>> = {
   format_attach_manual_phases: 'blocked',
   format_not_attached: 'blocked',
   format_nothing_attached: 'not_found',
+  format_engine_changed: 'blocked',
   format_detach_blocked: 'blocked',
   format_phases_in_use: 'blocked',
   format_phase_owned: 'blocked',

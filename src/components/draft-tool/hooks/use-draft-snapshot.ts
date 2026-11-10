@@ -15,6 +15,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useVisiblePoll, type PollOutcome } from '@/lib/draft/use-visible-poll';
 import { SNAPSHOT_POLL_MS } from '@/lib/draft-ui/constants';
+import { DRAFT_PHASE_STATUS } from '@/lib/draft/pool-phase-state';
 import { toDraftViewModel, type CatalogOrderLike, type DraftViewModel } from '@/lib/draft-ui/snapshot-adapter';
 import type { DraftSnapshotDTO } from '@/lib/draft-ui/snapshot-types';
 import type { DraftDataSource, SnapshotResult } from '../data-source';
@@ -42,8 +43,9 @@ function offsetOf(serverNow: string, receivedAt: number): number {
   return Number.isFinite(parsed) ? parsed - receivedAt : 0;
 }
 
+/** A complete or cancelled pool (by phase; both have the status twin `complete`) slows the poll to its finished cadence. */
 function outcomeOf(dto: DraftSnapshotDTO | null): PollOutcome {
-  return dto?.pool.status === 'complete' ? 'complete' : 'live';
+  return dto && DRAFT_PHASE_STATUS[dto.pool.phase] === 'complete' ? 'complete' : 'live';
 }
 
 export function initialSnapshotState(initial: DraftSnapshotDTO | null, now: number): SnapshotState {

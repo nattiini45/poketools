@@ -221,7 +221,7 @@ export default defineDe<typeof en>()({
     openAria: '{action} öffnen',
     lockAria: '{action} sperren',
     openTitle: '{action} öffnen?',
-    openBody: 'Die Spieler können wieder wählen. Die Änderung wird mit deinem Grund festgehalten.',
+    openBody: 'Wer noch keine endgültige Wahl hat, kann wieder wählen; bereits gesperrte Wahlen bleiben gesperrt. Die Änderung wird mit deinem Grund festgehalten.',
     lockTitle: '{action} sperren?',
     lockBody: 'Niemand kann mehr wählen oder eine Wahl ändern. Die Änderung wird mit deinem Grund festgehalten.',
     lockFollowUp: 'Was das Format nach einer Sperre tut, läuft jetzt oder beim nächsten geplanten Durchlauf, falls es jetzt nicht fertig wird.',

@@ -55,6 +55,11 @@ describe('AdminLadders', () => {
     expect(screen.queryByRole('button', { name: /Withdraw/ })).toBeNull();
   });
 
+  it.each(['accepted', 'declined', 'expired', 'cancelled'] as const)('a %s challenge cannot be withdrawn', (state) => {
+    mount([challengeView({ state })]);
+    expect(screen.queryByRole('button', { name: /Withdraw/ })).toBeNull();
+  });
+
   it('withdraws as admin after a confirmation, then reads the page again', async () => {
     const user = userEvent.setup();
     fetchMock.mockResolvedValue(okResponse({ challenge: challengeView({ state: 'cancelled' }) }));

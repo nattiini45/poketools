@@ -40,6 +40,9 @@ export default defineDe<typeof en>()({
   wiki_note_resubmission_blocked: 'Ein Moderator hat diese Notiz für weitere Einreichungen gesperrt.',
   wiki_note_block_superadmin_only: 'Nur der Superadmin kann eine Notiz für erneutes Einreichen sperren.',
   wiki_note_block_not_rejected: 'Nur eine abgelehnte Notiz kann für erneutes Einreichen gesperrt werden.',
+  wiki_note_changed: 'Diese Notiz hat sich geändert, seit du sie geladen hast. Lade neu und prüfe sie noch einmal.',
+  wiki_report_not_found: 'Meldung nicht gefunden.',
+  wiki_report_changed: 'Ein anderer Moderator hat diese Meldung schon geschlossen. Lade neu, um den aktuellen Stand zu sehen.',
 
   unknown_move: 'Unbekannte Attacke: {move}.',
   unknown_item: 'Unbekanntes Item: {item}.',

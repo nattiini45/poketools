@@ -15,7 +15,7 @@ import {
   getDraftPoolById,
   getPicksByPool,
   createDraftPick,
-  updateDraftPoolStatus,
+  completeLegacyPoolIfRunning,
 } from '@/lib/supabase/queries/drafts';
 import { confirmDraftPick, type ConfirmPickResult } from '@/lib/supabase/queries/drafts-queue';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
@@ -644,10 +644,15 @@ async function legacyPick(player: SessionPlayer, pool: DraftPool, rawBody: unkno
   }
 
   // Auto-complete draft if all picks are made; if the flip fails, `GET /api/drafts/[id]/state` completes the pool.
+  // Guarded on the pool still running (draftPoolStatusMachine), so an admin's concurrent move is not overwritten.
   const draftDone = isDraftComplete(state.next_pick_number, participantIds.length, totalRounds);
   if (draftDone) {
     try {
-      await updateDraftPoolStatus(id, 'complete');
+      if (!(await completeLegacyPoolIfRunning(id))) {
+        logger.warn('api/drafts/picks', 'last pick committed but the pool was no longer running, so it was not completed', {
+          poolId: id,
+        });
+      }
     } catch (err) {
       logger.error('api/drafts/picks', 'last pick committed but the pool was not set to complete', { error: err });
       warnings.push('POOL_COMPLETION_PENDING');

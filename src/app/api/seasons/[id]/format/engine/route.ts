@@ -28,7 +28,8 @@ const ENGINE_LIMIT = { limit: 30, windowSeconds: 60 * 60 } as const;
  * also after the start: it changes how the next round pairs and how the tables rank. Switching to `kit` also replays the league's finished matches
  * through the format over the next cron runs (events, points, stage ends, auto advance), which can write phase status,
  * enrollment and adjustments; switching away only stops new reactions. The legacy, shadow, kit diff is the safe way in.
- * 404 `season_not_found`, 404 `format_nothing_attached` (no format, or not a custom league).
+ * 404 `season_not_found`, 404 `format_nothing_attached` (no format, or not a custom league), 409 `format_engine_changed`
+ * (another admin switched the engine since this request read it; nothing written).
  */
 export async function PUT(request: NextRequest, { params }: RouteParams) {
   try {
@@ -52,7 +53,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
     // commit, and before any further read that can fail.
     let summary: SeasonFormatSummary | null = before;
     try {
-      if (before.engine !== parsed.data.engine) summary = await setSeasonFormatEngine(id, parsed.data.engine);
+      if (before.engine !== parsed.data.engine) summary = await setSeasonFormatEngine(id, before.engine, parsed.data.engine);
     } finally {
       expireSeasonReads(id);
     }
