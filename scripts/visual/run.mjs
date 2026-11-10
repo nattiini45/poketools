@@ -315,14 +315,35 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
     } else {
       // Site chrome that floats over a clipped root (the sticky nav bar) is not part of the surface: hide every
       // fixed or sticky element that neither sits inside a root nor contains one, keeping its layout box.
+      // Chrome above a root is not part of it either, and its height would move the root on the page: drop every
+      // element that precedes the root or one of its ancestors (unless it holds another root), and the top padding,
+      // margin and border of those ancestors, so each root starts near the top of the page whatever the chrome is.
       await page.evaluate((selectors) => {
         const roots = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]);
+        for (const root of roots) {
+          for (let el = root; el && el !== document.body; el = el.parentElement) {
+            for (let sib = el.previousElementSibling; sib; sib = sib.previousElementSibling) {
+              if (['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE'].includes(sib.tagName) || roots.some((r) => sib.contains(r) || r.contains(sib))) continue;
+              sib.style.setProperty('display', 'none', 'important');
+            }
+            if (el !== root && !roots.some((r) => el === r || r.contains(el))) {
+              for (const prop of ['padding-top', 'margin-top', 'border-top-width']) el.style.setProperty(prop, '0', 'important');
+            }
+          }
+        }
         for (const el of document.querySelectorAll('body *')) {
           const position = getComputedStyle(el).position;
           if (position !== 'fixed' && position !== 'sticky') continue;
           if (roots.some((root) => root.contains(el) || el.contains(root))) continue;
           el.style.setProperty('visibility', 'hidden', 'important');
         }
+      }, job.roots);
+      await page.waitForTimeout(300);
+      // Lazy images below the fold would otherwise be captured unloaded.
+      await page.evaluate(async (selectors) => {
+        const images = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]).flatMap((root) => [...root.querySelectorAll('img')]);
+        for (const img of images) img.loading = 'eager';
+        await Promise.all(images.map((img) => (img.complete ? null : new Promise((done) => { img.addEventListener('load', done, { once: true }); img.addEventListener('error', done, { once: true }); }))));
       }, job.roots);
       for (const selector of job.roots) {
         const matches = page.locator(selector);
@@ -331,6 +352,21 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
           const el = matches.nth(i);
           const box = await el.boundingBox();
           if (!box || box.width < 1 || box.height < 1) continue;
+          // Pin the root to the same raster phase on every run: whole pixels across, and down to the next multiple of
+          // 64 px. Chrome above a root may change its height, and gradients, rotated boxes and text rasterise by
+          // their offset on the page, so an unchanged surface would otherwise re-rasterise.
+          await el.evaluate((node) => {
+            const style = getComputedStyle(node);
+            if (style.position !== 'static' && style.position !== 'relative') return;
+            const offset = (value) => (value === 'auto' ? 0 : parseFloat(value));
+            const rect = node.getBoundingClientRect();
+            const x = rect.left + window.scrollX;
+            const y = rect.top + window.scrollY;
+            const [left, top] = style.position === 'relative' ? [offset(style.left), offset(style.top)] : [0, 0];
+            node.style.setProperty('position', 'relative');
+            node.style.setProperty('left', left + Math.round(x) - x + 'px');
+            node.style.setProperty('top', top + Math.ceil(y / 64) * 64 - y + 'px');
+          });
           shots.push(await el.screenshot({ animations: 'disabled', caret: 'hide', mask, timeout: 60_000 }));
         }
       }
