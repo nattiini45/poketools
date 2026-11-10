@@ -27,11 +27,11 @@ export const tournamentMachine = defineMachine({
       actors: ['admin', 'system'],
       writers: [
         'supabase/migrations/20261106090000_format_challenges.sql#round_write',
-        'src/lib/tournament/bracket-generate.ts',
+        'supabase/migrations/20261109210000_bracket_write.sql#bracket_write',
         'src/lib/tournament/tournament-transition.ts',
         'src/lib/dev-seed/seed.ts',
       ],
-      note: 'The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start. bracket-generate still writes active unguarded after the bracket; its guarded, locked writer is a follow-up.',
+      note: 'The first round written (round_write, in the same transaction) or the bracket generated; an admin PATCH may also set it. Fires the format stage_start. The bracket generate writes the bracket and the move in one transaction under the phase row lock (bracket_write).',
     },
     {
       event: 'complete',
@@ -65,8 +65,8 @@ export const tournamentMachine = defineMachine({
       from: ['completed'],
       to: 'active',
       actors: ['system'],
-      writers: ['src/lib/tournament/bracket-generate.ts'],
-      note: 'Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase). The active write is unguarded until the follow-up locked regenerate writer.',
+      writers: ['supabase/migrations/20261109210000_bracket_write.sql#bracket_write'],
+      note: 'Regenerating the bracket of a completed tournament or non-format phase restarts it (the regenerate route refuses a completed format phase). The old bracket is replaced and the status moved in one transaction under the phase row lock, only while the status is still the one the regenerate read.',
     },
   ],
 });
