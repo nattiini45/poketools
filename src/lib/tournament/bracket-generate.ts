@@ -145,7 +145,7 @@ async function writePlannedBracket(
   const firstRoundId = plan.rounds.find((round) => round.round_number === plan.firstRoundNumber)?.id;
   if (options.startFirstRound && firstRoundId) {
     try {
-      await updateRoundStatus(firstRoundId, 'active');
+      await updateRoundStatus(firstRoundId, 'active', 'pending');
       result.started_round_id = firstRoundId;
     } catch (startErr) {
       console.error('[generate-bracket] Failed to start the first round:', startErr);

@@ -30,6 +30,8 @@ import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
 import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { banPlayer, suspendPlayer, unsuspendPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
+import { safeErrorResponse } from '@/lib/api/error-response';
+import { IllegalTransitionError } from '@/lib/state-machine/machine';
 
 const admin = { playerId: 'admin-1', name: 'Admin' };
 const player = {
@@ -138,6 +140,21 @@ describe('admin player discipline routes', () => {
       action: 'player.unsuspend',
       resource_id: '51541de2-cef5-42ee-8563-d412cf4563a2',
     }));
+  });
+
+  it.each<[string, () => Promise<Response>, () => ReturnType<typeof vi.fn>]>([
+    ['suspend', () => suspendPost(request({ type: 'suspend', suspended_until: new Date(Date.now() + 86_400_000).toISOString() }), params), () => vi.mocked(suspendPlayer)],
+    ['ban', () => suspendPost(request({ type: 'ban', ban_reason: 'Again' }), params), () => vi.mocked(banPlayer)],
+    ['unsuspend', () => unsuspendPost({} as NextRequest, params), () => vi.mocked(unsuspendPlayer)],
+  ])('hands a refused %s to safeErrorResponse and writes no audit row', async (_name, attempt, writer) => {
+    const refused = new IllegalTransitionError('player.status', 'banned', 'suspended', 'not_a_transition', 'state_transition_invalid');
+    writer().mockRejectedValue(refused);
+
+    const res = await attempt();
+
+    expect(res.status).toBe(500);
+    expect(safeErrorResponse).toHaveBeenCalledWith(refused, expect.any(String));
+    expect(logAuditEvent).not.toHaveBeenCalled();
   });
 
   describe('the superadmin row', () => {

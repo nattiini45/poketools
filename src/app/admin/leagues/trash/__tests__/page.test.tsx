@@ -165,6 +165,14 @@ describe('league trash page: the data handed to the panel', () => {
     }
   });
 
+  it('hands the panel the time of the read, which decides whether an entry is past its purge date', async () => {
+    const before = Date.now();
+    const [panel] = findByType(await LeagueTrashPage(), LeagueTrashPanel);
+    const now = Date.parse(panel.props.now as string);
+    expect(now).toBeGreaterThanOrEqual(before);
+    expect(now).toBeLessThanOrEqual(Date.now());
+  });
+
   it('maps the pending rebuilds of both kinds', async () => {
     const [panel] = findByType(await LeagueTrashPage(), LeagueTrashPanel);
     expect(panel.props.pending).toEqual([

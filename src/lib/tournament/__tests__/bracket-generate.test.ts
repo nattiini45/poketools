@@ -339,7 +339,7 @@ describe('regenerateEliminationBracket', () => {
     });
 
     expect(result.started_round_id).toBe(firstRoundIdWritten());
-    expect(updateRoundStatus).toHaveBeenCalledWith(firstRoundIdWritten(), 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith(firstRoundIdWritten(), 'active', 'pending');
   });
 });
 
@@ -439,7 +439,7 @@ describe('generateEliminationBracket', () => {
     });
 
     expect(updateRoundStatus).toHaveBeenCalledTimes(1);
-    expect(updateRoundStatus).toHaveBeenCalledWith(firstRoundIdWritten(), 'active');
+    expect(updateRoundStatus).toHaveBeenCalledWith(firstRoundIdWritten(), 'active', 'pending');
     expect(vi.mocked(writeBracket).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(updateRoundStatus).mock.invocationCallOrder[0]);
     expect(result.started_round_id).toBe(firstRoundIdWritten());
     expect(result.rounds_created).toBeGreaterThan(1);

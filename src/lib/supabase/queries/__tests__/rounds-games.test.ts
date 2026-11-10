@@ -285,17 +285,26 @@ describe('queries/rounds', () => {
 
   // ── updateRoundStatus ──
   describe('updateRoundStatus', () => {
-    it('updates and returns the round', async () => {
+    it('updates and returns the round, guarded on the status read', async () => {
       const updated = { ...roundRow, status: 'active' };
-      mockBuilder.single.mockResolvedValue({ data: updated, error: null });
-      const result = await updateRoundStatus('rd-1', 'active');
+      mockBuilder.maybeSingle.mockResolvedValue({ data: updated, error: null });
+      const result = await updateRoundStatus('rd-1', 'active', 'pending');
       expect(result.status).toBe('active');
       expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'active' });
+      expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
+    });
+
+    it('a round that moved on is a 409 round_status_changed', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+      await expect(updateRoundStatus('rd-1', 'active', 'pending')).rejects.toMatchObject({
+        code: 'round_status_changed',
+        statusCode: 409,
+      });
     });
 
     it('throws on error', async () => {
-      mockBuilder.single.mockResolvedValue({ data: null, error: new Error('fail') });
-      await expect(updateRoundStatus('rd-1', 'completed')).rejects.toThrow('fail');
+      mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: new Error('fail') });
+      await expect(updateRoundStatus('rd-1', 'pending', 'active')).rejects.toThrow('fail');
     });
   });
 

@@ -10,9 +10,42 @@
  * `CONFIRM_ARM_MS` after every open and after every failed submission
  * (SPEC:494-497), and while a submission is in flight (SPEC:1011).
  */
+import { defineMachine } from '@/lib/state-machine/machine';
 import { CONFIRM_ARM_MS } from './constants';
 
-export type ArmedConfirmPhase = 'closed' | 'arming' | 'armed' | 'submitting';
+export const ARMED_CONFIRM_PHASES = ['closed', 'arming', 'armed', 'submitting'] as const;
+export type ArmedConfirmPhase = (typeof ARMED_CONFIRM_PHASES)[number];
+
+type ArmedConfirmActor = 'viewer' | 'timer' | 'flow';
+
+const WRITERS = ['src/lib/draft-ui/armed-confirm.ts', 'src/components/draft-tool/shared/ArmedConfirmDialog.tsx'];
+
+/**
+ * The legal moves of the armed confirm. `viewer` is the person at the dialog, `timer` the arming delay, `flow` the
+ * pick submission the dialog reports on (`busy`, `failed`, `succeeded`). `armedConfirmReducer` asks it before every move.
+ */
+export const armedConfirmMachine = defineMachine({
+  id: 'draft_room.armed_confirm',
+  title: 'Draft room armed confirm',
+  storage: 'client: armedConfirmReducer phase in ArmedConfirmDialog',
+  summary:
+    'The confirm button of a pick or token dialog is enabled only in armed: it stays disabled for CONFIRM_ARM_MS after every open and after every re-arming failure, and while a submission is in flight. A timer for an older arm token is ignored.',
+  states: ARMED_CONFIRM_PHASES,
+  initial: ['closed'],
+  terminal: [],
+  actors: ['viewer', 'timer', 'flow'],
+  transitions: [
+    { event: 'open', from: ['closed'], to: 'arming', actors: ['viewer'], writers: WRITERS },
+    { event: 'elapsed', from: ['arming'], to: 'armed', actors: ['timer'], writers: WRITERS, note: 'Only the timer of the current arm token.' },
+    { event: 'submit', from: ['armed'], to: 'submitting', actors: ['viewer'], writers: WRITERS },
+    { event: 'busy', from: ['arming', 'armed'], to: 'submitting', actors: ['flow'], writers: WRITERS, note: 'The caller reports a submission in flight.' },
+    { event: 'fail_rearm', from: ['submitting'], to: 'arming', actors: ['flow'], writers: WRITERS, note: 'Default after a failure: a new arm token.' },
+    { event: 'fail', from: ['submitting'], to: 'armed', actors: ['flow'], writers: WRITERS, note: '`failed` with `rearm: false`.' },
+    { event: 'succeed', from: ['arming', 'armed', 'submitting'], to: 'closed', actors: ['flow'], writers: WRITERS },
+    { event: 'close', from: ['arming', 'armed', 'submitting'], to: 'closed', actors: ['viewer'], writers: WRITERS },
+  ],
+  doc: 'docs/draft-room.md',
+});
 
 export interface ArmedConfirmState {
   phase: ArmedConfirmPhase;
@@ -42,24 +75,23 @@ export const INITIAL_ARMED_CONFIRM: ArmedConfirmState = Object.freeze({
 });
 
 export function armedConfirmReducer(state: ArmedConfirmState, action: ArmedConfirmAction): ArmedConfirmState {
+  const can = (to: ArmedConfirmPhase, actor: ArmedConfirmActor) => armedConfirmMachine.can(state.phase, to, actor);
   switch (action.type) {
     case 'open':
-      if (state.phase !== 'closed') return state;
-      return { phase: 'arming', armToken: state.armToken + 1, openCount: state.openCount + 1 };
+      return can('arming', 'viewer') ? { phase: 'arming', armToken: state.armToken + 1, openCount: state.openCount + 1 } : state;
     case 'elapsed':
-      return state.phase === 'arming' && action.token === state.armToken ? { ...state, phase: 'armed' } : state;
+      return can('armed', 'timer') && action.token === state.armToken ? { ...state, phase: 'armed' } : state;
     case 'submit':
-      return state.phase === 'armed' ? { ...state, phase: 'submitting' } : state;
+      return can('submitting', 'viewer') ? { ...state, phase: 'submitting' } : state;
     case 'busy':
-      return state.phase === 'closed' || state.phase === 'submitting' ? state : { ...state, phase: 'submitting' };
+      return can('submitting', 'flow') ? { ...state, phase: 'submitting' } : state;
     case 'failed':
-      if (state.phase !== 'submitting') return state;
-      return action.rearm === false
-        ? { ...state, phase: 'armed' }
-        : { ...state, phase: 'arming', armToken: state.armToken + 1 };
+      if (action.rearm === false) return can('armed', 'flow') ? { ...state, phase: 'armed' } : state;
+      return can('arming', 'flow') ? { ...state, phase: 'arming', armToken: state.armToken + 1 } : state;
     case 'succeeded':
+      return can('closed', 'flow') ? { ...state, phase: 'closed' } : state;
     case 'close':
-      return state.phase === 'closed' ? state : { ...state, phase: 'closed' };
+      return can('closed', 'viewer') ? { ...state, phase: 'closed' } : state;
     default:
       return state;
   }

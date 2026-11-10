@@ -33,6 +33,9 @@ export function buildConfirmMatchBody(
 /** An action error: the network failure (by key) or an API failure. Translated at render. */
 type ActionError = { kind: 'updateFailed' } | { kind: 'api'; error: ApiErrorLike };
 
+/** The request: `done` once it succeeded, kept until the redirect, so the result cannot be sent twice. */
+type SubmitPhase = 'idle' | 'submitting' | 'done';
+
 export default function ConfirmMatchClient({
   matchId,
   canConfirm,
@@ -42,15 +45,17 @@ export default function ConfirmMatchClient({
   const router = useRouter();
   const t = useT(matchFormsMessages);
   const apiErrorText = useApiErrorText(errorsMatches);
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<SubmitPhase>('idle');
+  const loading = phase === 'submitting';
   const [error, setError] = useState<ActionError | null>(null);
   const [reason, setReason] = useState('');
   const [successKey, setSuccessKey] = useState<'confirmed' | 'disputed' | null>(null);
 
   async function handleAction(action: 'confirm' | 'dispute') {
+    if (phase !== 'idle') return;
     setError(null);
     setSuccessKey(null);
-    setLoading(true);
+    setPhase('submitting');
 
     try {
       const res = await fetch(`/api/confirm-match/${matchId}`, {
@@ -62,6 +67,7 @@ export default function ConfirmMatchClient({
       const json = await res.json();
 
       if (json.success) {
+        setPhase('done');
         setSuccessKey(action === 'confirm' ? 'confirmed' : 'disputed');
         setReason('');
         setTimeout(() => {
@@ -74,7 +80,7 @@ export default function ConfirmMatchClient({
     } catch {
       setError({ kind: 'updateFailed' });
     } finally {
-      setLoading(false);
+      setPhase((current) => (current === 'submitting' ? 'idle' : current));
     }
   }
 
@@ -97,7 +103,7 @@ export default function ConfirmMatchClient({
             maxLength={MATCH_REASON_MAX_LENGTH}
             rows={3}
             value={reason}
-            disabled={loading}
+            disabled={phase !== 'idle'}
             onChange={(e) => setReason(e.target.value)}
           />
           <p className="text-right text-xs text-poke-text-muted">
@@ -111,6 +117,7 @@ export default function ConfirmMatchClient({
           <Button
             variant="success"
             loading={loading}
+            disabled={phase === 'done'}
             onClick={() => handleAction('confirm')}
           >
             {t('confirm.confirmResult')}
@@ -120,6 +127,7 @@ export default function ConfirmMatchClient({
           <Button
             variant="danger"
             loading={loading}
+            disabled={phase === 'done'}
             onClick={() => handleAction('dispute')}
           >
             {t('confirm.disputeResult')}

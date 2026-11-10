@@ -1,7 +1,12 @@
 import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { MatchProposal, MatchProposalStatus, MatchProposalWithPlayers } from '@/types/match-proposal';
+import { matchProposalMachine } from '@/lib/match/proposal-state';
+
+/** The only state an answer, an expiry or a cancellation leaves (`matchProposalMachine.sourcesOf`). */
+const [PENDING] = matchProposalMachine.sourcesOf('cancelled');
 
 type MatchProposalRow = Tables<'match_proposals'>;
 type PlayerJoin = { name: string };
@@ -134,15 +139,36 @@ export async function listPendingMatchProposalsForPlayer(
 }
 
 export async function acceptMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'accepted');
+  return updateMatchProposalStatus(id, 'accepted', 'responder');
 }
 
 export async function rejectMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'rejected');
+  return updateMatchProposalStatus(id, 'rejected', 'responder');
 }
 
 export async function expireMatchProposal(id: string): Promise<MatchProposal> {
-  return updateMatchProposalStatus(id, 'expired');
+  return updateMatchProposalStatus(id, 'expired', 'system');
+}
+
+/**
+ * Moves the match's pending proposals whose `expires_at` has passed to expired (event `expire`): before a new
+ * proposal, so an overdue one nobody answered no longer counts as the match's pending proposal (nor holds the
+ * one-pending-per-player index). Returns the expired rows.
+ */
+export async function expireOverdueMatchProposals(matchId: string, nowIso: string): Promise<MatchProposal[]> {
+  assertValidUuid(matchId, 'match id');
+  matchProposalMachine.assertTransition(PENDING, 'expired', 'system');
+
+  const { data, error } = await supabase
+    .from('match_proposals')
+    .update({ status: 'expired', responded_at: nowIso })
+    .eq('match_id', matchId)
+    .eq('status', PENDING)
+    .lte('expires_at', nowIso)
+    .select();
+
+  if (error) throw error;
+  return data.map(toMatchProposal);
 }
 
 export async function cancelPendingMatchProposalsForMatch(matchId: string): Promise<MatchProposal[]> {
@@ -152,7 +178,7 @@ export async function cancelPendingMatchProposalsForMatch(matchId: string): Prom
     .from('match_proposals')
     .update({ status: 'cancelled', responded_at: new Date().toISOString() })
     .eq('match_id', matchId)
-    .eq('status', 'pending')
+    .eq('status', PENDING)
     .select();
 
   if (error) throw error;
@@ -178,20 +204,33 @@ export async function deleteMatchProposalsByMatch(matchId: string): Promise<numb
   return count ?? 0;
 }
 
+/** The proposal left pending between the caller's read and its answer (another answer, an expiry, a cancellation). HTTP 409. */
+export class MatchProposalNotPendingError extends UserFacingError<'match_proposal_not_pending'> {
+  constructor() {
+    super('Proposal is no longer pending', { code: 'match_proposal_not_pending', status: 409 });
+    this.name = 'MatchProposalNotPendingError';
+  }
+}
+
+/** An answer to a pending proposal (match proposal machine): written only while the row is still pending. */
 async function updateMatchProposalStatus(
   id: string,
-  status: Exclude<MatchProposalStatus, 'pending'>
+  status: Exclude<MatchProposalStatus, 'pending'>,
+  actor: 'responder' | 'system'
 ): Promise<MatchProposal> {
   assertValidUuid(id, 'proposal id');
+  matchProposalMachine.assertTransition(PENDING, status, actor);
 
   const { data, error } = await supabase
     .from('match_proposals')
     .update({ status, responded_at: new Date().toISOString() })
     .eq('id', id)
-    .eq('status', 'pending')
+    .eq('status', PENDING)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  // A concurrent answer, expiry or cancellation got there first: the row is no longer pending.
+  if (!data) throw new MatchProposalNotPendingError();
   return toMatchProposal(data);
 }

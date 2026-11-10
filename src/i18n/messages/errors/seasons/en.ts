@@ -130,6 +130,8 @@ export default {
   format_not_attached:
     'This league uses a custom format, but none is attached yet. Attach a format before the league starts.',
   format_nothing_attached: 'No format is attached to this league.',
+  // Another admin switched the league's engine between the read and the write (409).
+  format_engine_changed: "The league's format engine was changed in the meantime. Reload the page and try again.",
   format_detach_blocked: 'Teams still point to a phase of this format, so it cannot be detached.',
   // A replace removes a phase that teams still point to (409).
   format_phases_in_use: 'Teams still point to a phase that this format change would remove. Remove those teams first.',
@@ -140,6 +142,9 @@ export default {
     'This league already has data from its current format: {links} links, {items} items, {submissions} submissions and {adjustments} adjustments. Replacing or detaching the format deletes all of it. Confirm to continue.',
   season_format_type_locked:
     'The league type cannot be switched to or from a custom format while a format is attached or after the league has started.',
+  // New-competition wizard (POST /api/seasons with from_format, src/lib/format-studio/create-league.ts): the one transaction
+  // failed for a reason no other code names (500); it rolled back, so nothing was created.
+  season_format_create_failed: 'The league could not be created from this format. Nothing was created. Try again.',
   action_locked: 'This action is locked, so it can no longer be changed.',
   resource_item_taken: 'Another player already holds this item, so it cannot be picked again.',
   resource_capacity_reached: 'This player already holds as many of this resource as it allows, so nothing more can be added.',
@@ -238,4 +243,7 @@ export default {
 
   // Roster changes of a started format phase are forced with a reason (docs/format-kit.md, "Roster changes after the start").
   PHASE_ROSTER_REASON_REQUIRED: 'Forcing a roster change on a started phase of the format needs a reason of 1 to 500 characters.',
+
+  // The league status moved (another admin, a first round written) between the read and the guarded write; nothing was written (409).
+  season_status_changed: 'This league changed its status in the meantime. Reload the page and try again.',
 } as const;

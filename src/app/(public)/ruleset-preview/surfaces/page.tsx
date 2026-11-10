@@ -35,6 +35,7 @@ import {
   PIN_CARDS,
   SURFACES,
   TRASH_PENDING,
+  TRASH_NOW,
   TRASH_ROWS,
   isSurface,
   type SurfaceId,
@@ -184,7 +185,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
             </Link>
           }
         >
-          <LeagueTrashPanel rows={TRASH_ROWS} pending={TRASH_PENDING} />
+          <LeagueTrashPanel rows={TRASH_ROWS} pending={TRASH_PENDING} now={TRASH_NOW} />
         </PageContainer>
       );
     }

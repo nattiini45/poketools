@@ -1,6 +1,6 @@
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import type { SeasonFormatType, SeasonStatus } from '@/types/season';
-import type { TournamentStatus } from '@/types/tournament';
+import type { SeasonFormatType } from '@/types/season';
+import { isSeasonStarted, type SeasonStartSignals } from './season-state';
 
 /**
  * Guards for editing a league's settings (PATCH /api/seasons/[id]). Pure and
@@ -11,22 +11,7 @@ import type { TournamentStatus } from '@/types/tournament';
 /** Why the league type cannot be changed: the league started, or it is on the point-buy side. */
 export type FormatLockReason = 'started' | 'point_buy';
 
-export interface SeasonStartSignals {
-  status: SeasonStatus;
-  /** One entry per phase of the league, with how many rounds the phase has. */
-  phases: ReadonlyArray<{ status: TournamentStatus; rounds_total: number }>;
-}
-
-/**
- * A league has started when its status is active or completed, any phase has
- * left `upcoming`, or any phase has at least one round (this also covers a
- * running league an admin flipped back to upcoming). Participants and draft
- * pools deliberately do not count.
- */
-export function isSeasonStarted(signals: SeasonStartSignals): boolean {
-  if (signals.status === 'active' || signals.status === 'completed') return true;
-  return signals.phases.some((phase) => phase.status !== 'upcoming' || phase.rounds_total > 0);
-}
+export { isSeasonStarted, type SeasonStartSignals } from './season-state';
 
 /**
  * The reason the league type is locked, or null when it can change. The
