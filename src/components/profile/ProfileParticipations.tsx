@@ -60,7 +60,7 @@ function ParticipationCard({ p }: { p: ProfileParticipation }) {
       </div>
 
       {p.best_pokemon && (
-        <div className="flex items-center gap-1.5 flex-shrink-0">
+        <div className="flex items-center gap-1.5 shrink-0">
           <PokemonSprite name={p.best_pokemon.pokemon_name} size={28} />
           <span className="text-xs text-poke-text-secondary font-medium">
             {t('participations.kos', { count: p.best_pokemon.kos_dealt })}

@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import config from '../../../../tailwind.config';
+import { themeColors } from '@/test/tailwind-theme';
 
 /**
  * Site palettes — components read the palette inks, not static Tailwind
@@ -68,9 +68,9 @@ describe('error boundaries use the button recipe', () => {
   ];
 
   it('poke.primary / poke.card / poke.hover do not exist (those classes generate nothing)', () => {
-    const extend = config.theme?.extend as { colors?: Record<string, Record<string, string>> } | undefined;
-    const poke = extend?.colors?.poke ?? {};
-    for (const key of ['primary', 'card', 'hover']) expect(poke[key], key).toBeUndefined();
+    const colors = themeColors();
+    expect(colors['poke-surface'], 'the theme is read').toBeDefined();
+    for (const key of ['primary', 'card', 'hover']) expect(colors[`poke-${key}`], key).toBeUndefined();
   });
 
   it('ErrorState owns the primary + secondary buttonVariants, with no undefined tokens or text-white', () => {

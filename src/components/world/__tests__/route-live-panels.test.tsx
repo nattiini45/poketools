@@ -15,8 +15,6 @@
  * overlay structure and the shell's root are server-rendered.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createElement, type ReactNode } from 'react';
 
@@ -57,21 +55,12 @@ import { sakuraSectionCopyFor } from '../themes/sakura/sections/copy';
 import { toSakuraRouteData } from '../themes/sakura/types';
 import { buildPreviewSakuraWorld } from '@/app/(public)/route-preview/fixtures';
 import { resolveViewerWorld } from '@/lib/worlds/registry';
+import { parseCssRules, readGlobalsCss } from '@/test/css-rules';
 
 const sakuraSectionCopy = sakuraSectionCopyFor('en');
 
-const ROOT = join(__dirname, '..', '..', '..', '..');
-
-interface CssRule {
-  selector: string;
-  body: string;
-}
-
-/** Top-level rules of globals.css (comments stripped; @media blocks skipped). */
-function globalRules(): CssRule[] {
-  const css = readFileSync(join(ROOT, 'src', 'app', 'globals.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
-  return [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].map((m) => ({ selector: m[1].trim(), body: m[2] }));
-}
+/** The leaf rules of globals.css, wrappers (@media, @layer) flattened. */
+const globalRules = () => parseCssRules(readGlobalsCss());
 
 describe('route-live section rules (R4)', () => {
   const sectionRules = globalRules().filter((rule) => /\[data-world-route\]\s+section/.test(rule.selector));

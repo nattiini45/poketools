@@ -1,8 +1,7 @@
 /**
- * Cross-origin image handling shared by the two PNG exporters: `capture-node.ts` (html-to-image) and
- * `export-node.ts` (html2canvas). Both draw the live node into a canvas, which a cross-origin `<img>`
- * would taint, so each image is swapped for a data URL fetched through our proxy before the render and
- * put back afterwards.
+ * Cross-origin image handling for the PNG exporter `capture-node.ts` (html-to-image). It draws the live
+ * node into a canvas, which a cross-origin `<img>` would taint, so each image is swapped for a data URL
+ * fetched through our proxy before the render and put back afterwards.
  */
 
 /** 1x1 transparent PNG, the fallback for an image the proxy cannot deliver. */

@@ -749,7 +749,7 @@
   backdrop-filter: blur(18px) saturate(1.25);
   -webkit-backdrop-filter: blur(18px) saturate(1.25);
   color: var(--hud-ink, #f0f9ff);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 14.625px;
   font-weight: 800;
   text-shadow: 0 1px 8px rgba(2, 30, 40, 0.5);

@@ -24,14 +24,14 @@ import { getSpriteStylePreference } from "@/lib/pkmn/sprite-style.server";
 // 404s. Local files make the build hermetic.
 const nunito = localFont({
   src: "./fonts/nunito-latin.woff2",
-  variable: "--font-heading",
+  variable: "--font-heading-face",
   display: "swap",
   weight: "200 1000",
 });
 
 const dmSans = localFont({
   src: "./fonts/dm-sans-latin.woff2",
-  variable: "--font-body",
+  variable: "--font-body-face",
   display: "swap",
   weight: "100 1000",
 });

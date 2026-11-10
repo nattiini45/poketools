@@ -111,7 +111,7 @@ export default function TrackerPokemonSlot({
       `}
     >
       {/* Sprite */}
-      <div className="relative flex-shrink-0">
+      <div className="relative shrink-0">
         <PokemonSprite name={slot.pokemon_name} size={48} animated />
         {/* Status badges */}
         {slot.was_lead && (
@@ -166,7 +166,7 @@ export default function TrackerPokemonSlot({
       </div>
 
       {/* Action buttons */}
-      <div className="flex flex-col gap-1 flex-shrink-0">
+      <div className="flex flex-col gap-1 shrink-0">
         <button
           type="button"
           onClick={handleKo}

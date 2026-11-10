@@ -3,6 +3,7 @@ import { join, relative, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { BALL_TIMING } from '@/lib/route-world/ball-loader-state';
+import { inReducedMotion, keyframesOf, parseCssRules, readGlobalsCss, stripCssComments, type CssRule } from '@/test/css-rules';
 
 /**
  * W7 handoff contract — the canvas is inert (opacity 0, no pointer events)
@@ -79,66 +80,21 @@ function walk(dir: string, match: (path: string) => boolean): string[] {
   return files.filter(match);
 }
 
-function stripCssComments(css: string): string {
-  return css.replace(/\/\*[\s\S]*?\*\//g, '');
-}
-
-/** Remove every `@media (prefers-reduced-motion: reduce) { … }` block (brace-matched). */
-function stripReducedMotion(css: string): string {
-  let out = css;
-  for (;;) {
-    const at = out.search(/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{/);
-    if (at < 0) return out;
-    let depth = 0;
-    let end = out.indexOf('{', at);
-    for (; end < out.length; end += 1) {
-      if (out[end] === '{') depth += 1;
-      else if (out[end] === '}') {
-        depth -= 1;
-        if (depth === 0) break;
-      }
-    }
-    out = out.slice(0, at) + out.slice(end + 1);
-  }
-}
-
 /** Every `@keyframes name { … }` block → the set of properties its frames declare. */
 function keyframeProperties(css: string): Map<string, Set<string>> {
   const found = new Map<string, Set<string>>();
-  for (const match of css.matchAll(/@keyframes\s+([\w-]+)\s*\{/g)) {
-    let depth = 0;
-    let end = (match.index ?? 0) + match[0].length - 1;
-    const start = end;
-    for (; end < css.length; end += 1) {
-      if (css[end] === '{') depth += 1;
-      else if (css[end] === '}') {
-        depth -= 1;
-        if (depth === 0) break;
-      }
-    }
-    const body = css.slice(start + 1, end);
-    const props = new Set<string>();
-    for (const decl of body.matchAll(/([a-z-]+)\s*:/g)) props.add(decl[1]);
-    found.set(match[1], props);
+  for (const rule of parseCssRules(css)) {
+    const name = keyframesOf(rule);
+    if (name === null) continue;
+    const props = found.get(name) ?? new Set<string>();
+    for (const [prop] of rule.list) props.add(prop);
+    found.set(name, props);
   }
   return found;
 }
 
-interface CssRule {
-  file: string;
-  selector: string;
-  body: string;
-}
-
-function rulesOf(file: string): CssRule[] {
-  const css = stripCssComments(read(file));
-  const rules: CssRule[] = [];
-  // Innermost blocks only: a rule nested in @media is captured with the
-  // selector text that follows the media block's opening brace.
-  for (const match of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    rules.push({ file, selector: match[1].trim(), body: match[2] });
-  }
-  return rules;
+function rulesOf(file: string): Array<CssRule & { file: string }> {
+  return parseCssRules(read(file)).map((rule) => ({ ...rule, file }));
 }
 
 const posix = (path: string) => relative(SRC, path).split(sep).join('/');
@@ -207,7 +163,7 @@ describe('W7 handoff contract — two-phase: no frame shows neither page nor wor
   }, FILE_WALK_TIMEOUT_MS);
 
   it('the release fade runs only during the ball reveal, on the beam delay, opacity-only, and ends before the ceremony', () => {
-    const globals = read(join(SRC, 'app', 'globals.css'));
+    const globals = readGlobalsCss();
     const rules = rulesOf(join(SRC, 'app', 'globals.css')).filter(
       (rule) => rule.selector.includes('data-route-canvas') && /\banimation\s*:(?!\s*none)/.test(rule.body),
     );
@@ -226,12 +182,11 @@ describe('W7 handoff contract — two-phase: no frame shows neither page nor wor
       // The fade ends before the ball is done (the rule drops away then).
       expect(Number(timing?.[1]) + Number(timing?.[2])).toBeLessThanOrEqual(BALL_TIMING.openMs);
     }
-    const css = stripCssComments(globals);
-    const from = css.match(/@keyframes\s+route-canvas-release\s*\{\s*from\s*\{([^}]*)\}/);
-    expect(from?.[1]).toMatch(/opacity\s*:\s*0\s*;/);
-    expect([...(keyframeProperties(css).get('route-canvas-release') ?? [])]).toEqual(['opacity']);
+    const from = parseCssRules(globals).find((rule) => keyframesOf(rule) === 'route-canvas-release' && rule.selector === 'from');
+    expect(from?.decls.get('opacity')).toBe('0');
+    expect([...(keyframeProperties(globals).get('route-canvas-release') ?? [])]).toEqual(['opacity']);
     // The r3–r5 clip-path iris (main-thread paint) is gone for good.
-    expect(css).not.toMatch(/route-canvas-iris|clip-path\s*:\s*circle/);
+    expect(stripCssComments(globals)).not.toMatch(/route-canvas-iris|clip-path\s*:\s*circle/);
   });
 
   it('the site NavBar leaves with the page from handoff phase 1, on the canvas opacity transition (review r4)', () => {
@@ -307,8 +262,7 @@ describe('W7 handoff contract — two-phase: no frame shows neither page nor wor
   });
 
   it('compositor-only: every ceremony keyframe animates transform / opacity and nothing else', () => {
-    const ballCss = stripCssComments(read(join(SRC, 'components', 'world', 'route', 'BallLoader.module.css')));
-    const frames = keyframeProperties(ballCss);
+    const frames = keyframeProperties(read(join(SRC, 'components', 'world', 'route', 'BallLoader.module.css')));
     expect(frames.size).toBeGreaterThanOrEqual(10);
     for (const [name, props] of frames) {
       for (const prop of props) expect(['transform', 'opacity'], `@keyframes ${name} animates ${prop}`).toContain(prop);
@@ -316,13 +270,10 @@ describe('W7 handoff contract — two-phase: no frame shows neither page nor wor
   });
 
   it('one timeline: every reveal beat (outside the crossfade) is scaled by --k; the reduced paths are not', () => {
-    const css = stripReducedMotion(
-      stripCssComments(read(join(SRC, 'components', 'world', 'route', 'BallLoader.module.css'))),
-    );
-    const beats = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
-      .map((match) => ({ selector: match[1].trim(), body: match[2] }))
+    const beats = parseCssRules(read(join(SRC, 'components', 'world', 'route', 'BallLoader.module.css')))
       .filter(
         (rule) =>
+          !inReducedMotion(rule) &&
           rule.selector.includes('[data-revealing]') &&
           !rule.selector.includes('[data-reduced]') &&
           /\banimation\s*:(?!\s*none)/.test(rule.body),

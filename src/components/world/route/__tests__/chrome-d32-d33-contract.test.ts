@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { THEME_VEIL } from '@/lib/route-world/theme-veil';
 import { NAV_REVEAL } from '@/lib/route-world/nav-reveal';
 import { CEREMONY_RENDER_HOLD } from '../scene-progress';
+import { cssSection, inReducedMotion, keyframesOf, parseCssRules, readGlobalsCss, type CssRule } from '@/test/css-rules';
 
 /**
  * CHROME seat (D32 theme veil, D33 NavBar reveal) — source-level contract.
@@ -20,60 +21,35 @@ import { CEREMONY_RENDER_HOLD } from '../scene-progress';
  * - The veil's release waits past the ceremony render hold and the ceremony
  *   DPR clamp, so the restored buffer is drawn before the veil lifts.
  *
- * Honest limit: regex over source; the runtime proof is the capture probe
+ * Honest limit: parsed source rules (src/test/css-rules.ts), not a cascade; the runtime proof is the capture probe
  * (`--nav-reveal-probe`, the judged `--quiet-theme` leg).
  */
 
 const HERE = join(fileURLToPath(import.meta.url), '..');
 const SRC = join(HERE, '..', '..', '..', '..');
 const read = (path: string) => readFileSync(path, 'utf8');
-const stripComments = (css: string) => css.replace(/\/\*[\s\S]*?\*\//g, '');
-
-function block(css: string, name: string): string {
-  const start = css.indexOf(`/* === ${name} === */`);
-  const end = css.indexOf(`/* === end ${name} === */`);
-  expect(start, `${name} block start`).toBeGreaterThanOrEqual(0);
-  expect(end, `${name} block end`).toBeGreaterThan(start);
-  return css.slice(start, end);
-}
-
-interface Rule {
-  selector: string;
-  body: string;
-}
-
-function rules(css: string): Rule[] {
-  const out: Rule[] = [];
-  const clean = stripComments(css);
-  for (const match of clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-    const selector = match[1].trim().replace(/^@media[^{]*$/, '').trim();
-    out.push({ selector, body: match[2] });
-  }
-  return out;
-}
-
-/** Keyframe selectors (`from`, `to`, percentages) are not element rules. */
-const isKeyframeStep = (selector: string) => /^(from|to|\d+%)(\s*,\s*(from|to|\d+%))*$/.test(selector);
 
 const ROUTE_SCOPE = /^html(\.world-route-live|\[data-route-handoff\]|\[data-route-veil(="[a-z]+")?\]|:is\(\s*(\.world-route-live|\[data-route-handoff\]|\[data-route-veil\])(\s*,\s*(\.world-route-live|\[data-route-handoff\]|\[data-route-veil\]))*\s*\))/;
 
-const globals = read(join(SRC, 'app', 'globals.css'));
+const globals = readGlobalsCss();
+const sectionRules = (name: string) => parseCssRules(cssSection(globals, name));
+const selectors = (rule: CssRule) => rule.selector.split(/,(?![^(]*\))/).map((part) => part.trim());
 
 describe('CHROME D32/D33 — every new rule is scoped to the route marks', () => {
   for (const name of ['D33 nav reveal', 'D32 theme veil']) {
     it(`${name}: each selector starts at a route mark`, () => {
-      const found = rules(block(globals, name)).filter((rule) => rule.selector !== '' && !isKeyframeStep(rule.selector));
+      const found = sectionRules(name).filter((rule) => keyframesOf(rule) === null);
       expect(found.length).toBeGreaterThan(4);
       for (const rule of found) {
-        for (const selector of rule.selector.split(/,(?![^(]*\))/)) {
-          expect(selector.trim(), `${name}: "${selector.trim()}"`).toMatch(ROUTE_SCOPE);
+        for (const selector of selectors(rule)) {
+          expect(selector, `${name}: "${selector}"`).toMatch(ROUTE_SCOPE);
         }
       }
     });
   }
 
   it('the route-live NavBar is no longer visibility-hidden (Tab must reach it) and keeps its flow slot', () => {
-    const all = rules(globals);
+    const all = parseCssRules(globals);
     const navRules = all.filter((rule) => /body > nav/.test(rule.selector));
     expect(navRules.length).toBeGreaterThan(0);
     for (const rule of navRules) {
@@ -88,32 +64,38 @@ describe('CHROME D32/D33 — every new rule is scoped to the route marks', () =>
   });
 
   it('the reveal is transform/opacity only, with reduced-motion instant', () => {
-    const nav = block(globals, 'D33 nav reveal');
-    expect(nav).toMatch(/\[data-route-nav="open"\] body > nav/);
-    expect(nav).toMatch(/body > nav:has\(:focus-visible\)/);
-    expect(stripComments(nav)).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{[\s\S]*?transition:\s*none;/);
+    const nav = sectionRules('D33 nav reveal');
+    expect(nav.some((rule) => /\[data-route-nav="open"\] body > nav/.test(rule.selector))).toBe(true);
+    expect(nav.some((rule) => /body > nav:has\(:focus-visible\)/.test(rule.selector))).toBe(true);
+    expect(nav.some((rule) => inReducedMotion(rule) && rule.decls.get('transition') === 'none')).toBe(true);
     // The menu chip is for coarse pointers only (the desktop HUD is unchanged).
-    expect(nav).toMatch(/@media \(hover: none\), \(any-pointer: coarse\)/);
+    expect(nav.some((rule) => rule.context.includes('@media (hover: none), (any-pointer: coarse)'))).toBe(true);
   });
 
   it('the veil is the page background token, never a fixed dark colour (D25)', () => {
-    const veil = rules(block(globals, 'D32 theme veil'));
+    const veil = sectionRules('D32 theme veil');
     const base = veil.find((rule) => rule.selector.includes('.route-theme-veil') && /background\s*:/.test(rule.body));
     expect(base?.body).toMatch(/background\s*:\s*var\(--world-ground,\s*var\(--poke-base\)\)/);
     for (const rule of veil) {
       expect(rule.body, rule.selector).not.toMatch(/background[^;]*(#[0-9a-f]{3,8}|rgba?\()/i);
     }
-    const css = stripComments(block(globals, 'D32 theme veil'));
-    expect(css).toMatch(/html\[data-route-veil\] \[data-ball-loader\]\s*\{\s*visibility:\s*hidden;/);
-    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*html\[data-route-veil\] \.route-theme-veil\s*\{\s*transition:\s*none;/);
+    const loader = veil.filter((rule) => rule.selector === 'html[data-route-veil] [data-ball-loader]');
+    expect(loader.some((rule) => rule.decls.get('visibility') === 'hidden')).toBe(true);
+    expect(
+      veil.some(
+        (rule) =>
+          inReducedMotion(rule) &&
+          rule.selector === 'html[data-route-veil] .route-theme-veil' &&
+          rule.decls.get('transition') === 'none',
+      ),
+    ).toBe(true);
     // The fades match the sequencer.
-    expect(css).toMatch(new RegExp(`transition: opacity ${THEME_VEIL.inMs}ms`));
-    expect(css).toMatch(new RegExp(`transition: opacity ${THEME_VEIL.outMs}ms`));
+    expect(veil.some((rule) => rule.body.includes(`transition: opacity ${THEME_VEIL.inMs}ms`))).toBe(true);
+    expect(veil.some((rule) => rule.body.includes(`transition: opacity ${THEME_VEIL.outMs}ms`))).toBe(true);
   });
 
   it('the Station Card goes with the world under the veil: filter fade, hidden while opaque, animations untouched', () => {
-    const css = stripComments(block(globals, 'D32 theme veil'));
-    const veil = rules(block(globals, 'D32 theme veil'));
+    const veil = sectionRules('D32 theme veil');
     const hide = veil.find(
       (rule) => rule.selector.includes('html[data-route-veil="in"] .world-station-card') && /filter\s*:\s*opacity\(0\)/.test(rule.body),
     );
@@ -125,8 +107,20 @@ describe('CHROME D32/D33 — every new rule is scoped to the route marks', () =>
     expect(delay).toBeGreaterThanOrEqual(17);
     expect(delay).toBeLessThanOrEqual(50);
     expect(duration + delay).toBe(THEME_VEIL.inMs);
-    expect(css).toMatch(new RegExp(`\\.world-station-card \\{\\s*transition: filter ${THEME_VEIL.outMs}ms`));
-    expect(css).toMatch(/html\[data-route-veil="opaque"\] \.world-station-card \{\s*visibility: hidden;/);
+    expect(
+      veil.some(
+        (rule) =>
+          selectors(rule).some((selector) => selector.endsWith('.world-station-card')) &&
+          (rule.decls.get('transition') ?? '').startsWith(`filter ${THEME_VEIL.outMs}ms`),
+      ),
+    ).toBe(true);
+    expect(
+      veil.some(
+        (rule) =>
+          selectors(rule).includes('html[data-route-veil="opaque"] .world-station-card') &&
+          rule.decls.get('visibility') === 'hidden',
+      ),
+    ).toBe(true);
     // The card's own enter / exit animations keep running (animationend still fires).
     const cardRules = veil.filter((r) => r.selector.includes('.world-station-card'));
     expect(cardRules.length).toBeGreaterThanOrEqual(3);
@@ -136,9 +130,9 @@ describe('CHROME D32/D33 — every new rule is scoped to the route marks', () =>
   });
 
   it('the canvas release and the loading spacer stand down under the veil', () => {
-    const css = stripComments(globals);
-    expect(css).toMatch(/html\[data-route-handoff\]:not\(\[data-route-veil\]\):has\(\[data-ball-loader\]\[data-revealing\]:not\(\[data-reduced\]\)\) \[data-route-canvas\]/);
-    expect(css).toMatch(/html:not\(\[data-route-veil\]\):has\(\[data-ball-loader\]\[data-ball-phase="loading"\]\) \[data-world-route\]::after/);
+    const all = parseCssRules(globals).flatMap(selectors);
+    expect(all.some((selector) => selector.startsWith('html[data-route-handoff]:not([data-route-veil]):has([data-ball-loader][data-revealing]:not([data-reduced])) [data-route-canvas]'))).toBe(true);
+    expect(all).toContain('html:not([data-route-veil]):has([data-ball-loader][data-ball-phase="loading"]) [data-world-route]::after');
   });
 });
 

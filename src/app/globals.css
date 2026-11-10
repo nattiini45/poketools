@@ -601,7 +601,7 @@ html[data-palette="clouds"][data-theme="dark"] {
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: var(--font-body), system-ui, sans-serif;
+  font-family: var(--font-body-face), system-ui, sans-serif;
 }
 
 /* ─── Warm form controls ─── */
@@ -1043,7 +1043,7 @@ html[data-route-veil] .route-theme-veil-status {
   padding: 0 18px;
   text-align: center;
   color: var(--world-ink-secondary, var(--poke-text-secondary));
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   animation: route-veil-status-in 240ms ease-out 820ms both;
 }
 html[data-route-veil] .route-theme-veil-title {
@@ -1386,7 +1386,7 @@ html[data-route-veil] .route-theme-veil-ball-button {
 .world-nav-hud-brand {
   flex: none;
   color: var(--hud-ink);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 14.625px;
   font-weight: 800;
   letter-spacing: 0.04em;
@@ -1422,7 +1422,7 @@ html[data-route-veil] .route-theme-veil-ball-button {
   padding: 0 14.4px;
   border-radius: 9999px;
   color: var(--hud-ink-muted);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 13.5px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -1603,7 +1603,7 @@ html.world-route-live .world-nav-hud {
 }
 
 .world-focus-panel-title {
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -1908,7 +1908,7 @@ html.world-route-live .world-nav-hud {
 .world-station-card-kicker {
   overflow: hidden;
   color: var(--hud-ink-muted);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 13.5px;
   font-weight: 700;
   letter-spacing: 0.06em;
@@ -1937,7 +1937,7 @@ html.world-route-live .world-nav-hud {
 
 .world-station-card-digest {
   color: var(--hud-ink);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 16.875px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
@@ -1975,7 +1975,7 @@ html.world-route-live .world-nav-hud {
   color: var(--hud-chip-active-ink);
   background: var(--hud-chip-active);
   box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
-  font-family: var(--font-heading), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-heading-face), ui-sans-serif, system-ui, sans-serif;
   font-size: 15.75px;
   font-weight: 700;
   white-space: nowrap;

@@ -22,6 +22,7 @@ import {
 import { sceneGenerationKey } from '../WorldStateProvider';
 import { getRevealArmedAt, noteRevealArmed, resetSceneProgressForTests } from '../scene-progress';
 import { canvasSource } from './route-sources';
+import { parseCssRules, readGlobalsCss } from '@/test/css-rules';
 
 /**
  * ENGINE r5 contracts (LOOK round 5):
@@ -215,11 +216,12 @@ describe('warm sub-step line (ENGINE r5, CAR r4: 7.6-9.3 s on one milestone)', (
 
 describe('no sprite streams while the world is the page (ENGINE r5, CAR r4: 56 fetches)', () => {
   it('skips the hidden sections’ rendering, so their lazy images are never requested', () => {
-    const css = read(join(SRC, 'app', 'globals.css'));
     // Station sections only: dialog subtrees (the docked panels) are skipped (test pass, R4).
-    const rule = css.match(/html\.world-route-live \[data-world-route\] section:not\(dialog \*\) > \* \{[\s\S]*?\}/)?.[0] ?? '';
-    expect(rule).toMatch(/visibility: hidden;/);
-    expect(rule).toMatch(/content-visibility: hidden;/);
+    const rule = parseCssRules(readGlobalsCss()).find(
+      (candidate) => candidate.selector === 'html.world-route-live [data-world-route] section:not(dialog *) > *',
+    );
+    expect(rule?.decls.get('visibility')).toBe('hidden');
+    expect(rule?.decls.get('content-visibility')).toBe('hidden');
   });
 });
 
