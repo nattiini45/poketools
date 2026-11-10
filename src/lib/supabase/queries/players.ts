@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import type { Tables, TablesInsert } from '@/types/database';
+import type { Tables, TablesInsert, TablesUpdate } from '@/types/database';
 import type {
   Player,
   PlayerRegistration,
@@ -14,6 +14,7 @@ import type { AuthProvider, SessionPlayer } from '@/types/auth';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { ilikeAnyOf } from '@/lib/supabase/postgrest-filter';
 import { DEFAULT_PLAYER_SORT, type PlayerSort } from '@/lib/players/player-sort';
+import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { countLeagueTrashForPlayer } from './league-trash';
 
 type PlayerRow = Tables<'players'>;
@@ -399,7 +400,9 @@ export function playerSearchFilter(search: string): string {
  * `active`, `suspended_until` cleared. One conditional UPDATE, so a suspension
  * renewed or lifted by an admin between a read and this write is never
  * touched, and a banned player (whose `suspended_until` is null) is never
- * reinstated. Returns the players that were lifted, for the audit trail.
+ * reinstated (the `expire` move of `playerStatusMachine`, whose system sources
+ * are exactly `suspended`). Returns the players that were lifted, for the audit
+ * trail.
  *
  * The live auth guards reject `status !== 'active'`; this is the only thing
  * that turns a timed suspension back into `active`. `suspended_until` is a
@@ -767,65 +770,76 @@ export async function getPlayerCompetitiveRefs(id: string): Promise<PlayerCompet
 }
 
 /**
- * Permanently ban a player. Clears any active suspension and ends the
- * sessions the player holds (`sessions_valid_after`): reinstating the player
- * later does not revive them.
+ * Moves one player to `to` as an admin. The UPDATE is guarded with the states
+ * `playerStatusMachine` allows the move from, so a sanction never overwrites
+ * another one (a ban never turns into a suspension the cron would lift) and a
+ * player who moved on since the roster was read is left alone. When no row
+ * matched: an unknown id rethrows the database error (as before the guard), a
+ * move the machine refuses throws its `IllegalTransitionError` (409), and a
+ * legal move whose row changed in between throws `player_status_changed` (409).
  */
-export async function banPlayer(id: string, banReason: string): Promise<Player> {
+async function moderatePlayer(
+  id: string,
+  to: PlayerStatus,
+  changes: Omit<TablesUpdate<'players'>, 'status'>,
+): Promise<Player> {
   const { data, error } = await supabase
     .from('players')
-    .update({
-      status: 'banned',
-      ban_reason: banReason,
-      suspended_until: null,
-      sessions_valid_after: new Date().toISOString(),
-    })
+    .update({ status: to, ...changes })
     .eq('id', id)
+    .in('status', playerStatusMachine.sourcesOf(to, 'admin'))
     .select()
     .single();
 
-  if (error) throw error;
-  return toPlayer(data);
+  if (!error) return toPlayer(data);
+  if (error.code !== 'PGRST116') throw error;
+
+  const { data: current, error: readError } = await supabase
+    .from('players')
+    .select('status')
+    .eq('id', id)
+    .maybeSingle();
+  if (readError) throw readError;
+  if (!current) throw error;
+  playerStatusMachine.assertTransition(current.status as PlayerStatus, to, 'admin');
+  throw new UserFacingError("The player's status changed in the meantime. Reload the list and try again.", {
+    code: 'player_status_changed',
+    status: 409,
+  });
 }
 
 /**
- * Suspend a player until the given timestamp. Sets suspended_until and ends
- * the sessions the player holds, like a ban.
+ * Permanently ban an active player. Ends the sessions the player holds
+ * (`sessions_valid_after`): reinstating the player later does not revive them.
+ */
+export async function banPlayer(id: string, banReason: string): Promise<Player> {
+  return moderatePlayer(id, 'banned', {
+    ban_reason: banReason,
+    suspended_until: null,
+    sessions_valid_after: new Date().toISOString(),
+  });
+}
+
+/**
+ * Suspend an active player until the given timestamp. Sets suspended_until and
+ * ends the sessions the player holds, like a ban.
  */
 export async function suspendPlayer(id: string, suspendedUntil: string): Promise<Player> {
-  const { data, error } = await supabase
-    .from('players')
-    .update({
-      status: 'suspended',
-      suspended_until: suspendedUntil,
-      ban_reason: null,
-      sessions_valid_after: new Date().toISOString(),
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return toPlayer(data);
+  return moderatePlayer(id, 'suspended', {
+    suspended_until: suspendedUntil,
+    ban_reason: null,
+    sessions_valid_after: new Date().toISOString(),
+  });
 }
 
 /**
  * Reinstate a suspended or banned player to active status.
  */
 export async function unsuspendPlayer(id: string): Promise<Player> {
-  const { data, error } = await supabase
-    .from('players')
-    .update({
-      status: 'active',
-      suspended_until: null,
-      ban_reason: null,
-    })
-    .eq('id', id)
-    .select()
-    .single();
-
-  if (error) throw error;
-  return toPlayer(data);
+  return moderatePlayer(id, 'active', {
+    suspended_until: null,
+    ban_reason: null,
+  });
 }
 
 /**

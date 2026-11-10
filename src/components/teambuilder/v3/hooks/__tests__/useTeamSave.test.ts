@@ -240,4 +240,16 @@ describe('useTeamSave: the league-rules advisory of a successful save', () => {
 
     expect(actions).toContainEqual({ type: 'SET_META', patch: { teamId: 'team-new' } });
   });
+
+  it('starts no save while one is in flight (teamSaveMachine)', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    const actions: EditorAction[] = [];
+    const { save } = useTeamSave({ ...stateWithTeam(), saveStatus: 'saving' }, (a) => actions.push(a));
+
+    await save();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(actions).toEqual([]);
+  });
 });

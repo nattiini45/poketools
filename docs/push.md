@@ -48,7 +48,7 @@ Permission is requested only when the player clicks the bell (`Notification.requ
 
 ## The bell, the device list and the states
 
-The draft room's bell (clock bar, and the players sheet with its note) is "Push alerts on this device": it subscribes or unsubscribes THIS browser (`usePushAlerts`, `src/lib/push/client.ts`). It is per device, not per pool.
+The draft room's bell (clock bar, and the players sheet with its note) is "Push alerts on this device": it subscribes or unsubscribes THIS browser (`usePushAlerts`, `src/lib/push/client.ts`). It is per device, not per pool. Its state comes from one function, `pushDeviceState` (`src/lib/push/device-state.ts`), and moves as the machine `push.device` in [State machines](./state-machines.md) allows: a click switches only from ask (`default`), off, on or failed.
 
 | State | Control |
 |---|---|

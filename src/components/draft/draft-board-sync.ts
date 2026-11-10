@@ -10,7 +10,7 @@
 
 import type { PublicDraftPick } from '@/lib/draft/public-pick';
 import type { EvolutionEvent, EvolutionTrackerWithTier } from '@/types/evolution';
-import { outcomeForPoolStatus, type PollOutcome } from '@/lib/draft/use-visible-poll';
+import { pollOutcomeForPool, type PollOutcome } from '@/lib/draft/use-visible-poll';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 
 /** player_id → that player's trackers with tiers. */
@@ -185,7 +185,7 @@ export async function pollDraftBoard({
       kind: 'state',
       state: json.data,
       evolution,
-      outcome: outcomeForPoolStatus(json.data.pool.status),
+      outcome: pollOutcomeForPool({ status: json.data.pool.status }),
     };
   } catch (err) {
     if (signal?.aborted) return { kind: 'aborted' };

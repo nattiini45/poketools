@@ -18,6 +18,7 @@ import { languageMessages } from '@/i18n/messages/language';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import type { LeagueFormIdentity } from '@/lib/league-admin/clone-source';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
+import { useSubmitPhase } from '@/lib/ui/use-submit-phase';
 
 interface LeagueFormProps {
   rulesets: readonly RulesetOption[];
@@ -103,7 +104,8 @@ export default function LeagueForm({ rulesets, onSubmit, initialData, onIdentity
   const [rulesetId, setRulesetId] = useState(initialData?.ruleset_id ?? '');
   const [startDate, setStartDate] = useState(initialData?.start_date ?? '');
   const [endDate, setEndDate] = useState(initialData?.end_date ?? '');
-  const [submitting, setSubmitting] = useState(false);
+  // A created league navigates to its admin page: the button stays disabled until the page changes.
+  const submit = useSubmitPhase();
   const [error, setError] = useState<ApiErrorLike | null>(null);
 
   const formatOptions = useMemo(
@@ -126,28 +128,29 @@ export default function LeagueForm({ rulesets, onSubmit, initialData, onIdentity
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    setError(null);
-
-    try {
-      const failure = await onSubmit(
-        buildLeagueFormPayload({
-          name,
-          description,
-          formatType,
-          rulesetId,
-          startDate,
-          endDate,
-          routeTheme,
-          language,
-        }),
-      );
-      if (failure) setError(failure);
-    } catch (err) {
-      setError(toApiErrorLike(err));
-    } finally {
-      setSubmitting(false);
-    }
+    await submit.run(async () => {
+      setError(null);
+      try {
+        const failure = await onSubmit(
+          buildLeagueFormPayload({
+            name,
+            description,
+            formatType,
+            rulesetId,
+            startDate,
+            endDate,
+            routeTheme,
+            language,
+          }),
+        );
+        if (!failure) return 'done';
+        setError(failure);
+        return 'failed';
+      } catch (err) {
+        setError(toApiErrorLike(err));
+        return 'failed';
+      }
+    });
   }
 
   return (
@@ -236,7 +239,7 @@ export default function LeagueForm({ rulesets, onSubmit, initialData, onIdentity
       <Button
         type="submit"
         variant="secondary"
-        loading={submitting}
+        loading={!submit.canSubmit}
         disabled={!name.trim()}
       >
         {t('form.submit')}
