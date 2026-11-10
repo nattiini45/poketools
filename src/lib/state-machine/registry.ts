@@ -1,8 +1,21 @@
 import type { MachineSpec } from './machine';
-import { matchMachine } from '@/lib/tournament/match-state';
-import { pickFlowMachine } from '@/lib/draft-ui/pick-flow-state';
+import { actionMachine } from '@/lib/ai/admin-agent/store/action-state';
+import { planMachine } from '@/lib/ai/admin-agent/store/plan-state';
+import { proposalMachine } from '@/lib/ai/admin-agent/store/proposal-state';
+import { aiArtifactMachine } from '@/lib/ai/artifact-state';
+import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
+import { castStudioSaveMachine } from '@/lib/broadcast/cast-studio-save-state';
 import { armedConfirmMachine } from '@/lib/draft-ui/armed-confirm';
+import { pickFlowMachine } from '@/lib/draft-ui/pick-flow-state';
 import { pollerMachine } from '@/lib/draft/poller-state';
+import { draftPoolPauseMachine, draftPoolPhaseMachine, redraftSubmissionWindowMachine } from '@/lib/draft/pool-phase-state';
+import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
+import { draftSlotMachine } from '@/lib/draft/slot-state';
+import { draftKillTokenWindowMachine } from '@/lib/draft/token-window-state';
+import { playerStatusMachine } from '@/lib/players/player-status-state';
+import { matchMachine } from '@/lib/tournament/match-state';
+import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
+import { noteReportMachine } from '@/lib/wiki/note-report-state';
 
 /**
  * Every explicit state machine in the app. docs/state-machines.md is generated
@@ -15,4 +28,19 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   pickFlowMachine.spec,
   armedConfirmMachine.spec,
   pollerMachine.spec,
+  aiArtifactMachine.spec,
+  noteModerationMachine.spec,
+  noteReportMachine.spec,
+  proposalMachine.spec,
+  actionMachine.spec,
+  planMachine.spec,
+  castSessionMachine.spec,
+  castStudioSaveMachine.spec,
+  playerStatusMachine.spec,
+  draftPoolStatusMachine.spec,
+  draftPoolPhaseMachine.spec,
+  draftPoolPauseMachine.spec,
+  redraftSubmissionWindowMachine.spec,
+  draftSlotMachine.spec,
+  draftKillTokenWindowMachine.spec,
 ];

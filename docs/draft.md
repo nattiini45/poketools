@@ -21,6 +21,7 @@ src/lib/draft/
 ├── use-visible-poll.ts  # Visibility-aware poller of the live draft screens
 ├── notify.ts  # Draft-tool Discord notifications
 ├── tokens.ts  # Draft token rules
+├── pool-status-state.ts, pool-phase-state.ts, slot-state.ts, token-window-state.ts  # State machines: legacy pool status, queue phase (+ pause, Redraft submission window), slot status, Draft Kill Token window (docs/state-machines.md)
 ├── budget.ts  # Draft budget rules
 ├── points-limits.ts  # Point limits of the legacy (pre-queue) engine
 ├── roster-split.ts  # Can a fixed-price pool list fill every roster
@@ -113,7 +114,7 @@ const error = validatePick(state, input, true);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/draft/__tests__/` (68 test files; `fixtures/` holds the vector files). Engines and rules: `engine.test.ts`, `budget.test.ts`, `points-limits.test.ts`, `roster-split.test.ts`, `tokens.test.ts`, `redraft-engine.test.ts`, `redraft-order.test.ts`, `seat-draw.test.ts`, `completability.test.ts`, `draftability.test.ts`, `quiet-hours.test.ts`, `time.test.ts`. Evolution Point Buy: `epb-*.test.ts`, `evolution-engine.test.ts`, `point-buy-*.test.ts`, `progress-*.test.ts`, `line-*.test.ts`, `special-rules*.test.ts`, `reconciliation-report.server.test.ts`. Glue: `schemas.test.ts`, `errors.test.ts`, `http.test.ts`, `rpc-errors.test.ts`, `snapshot*.test.ts`, `notify*.test.ts`, `use-visible-poll.test.ts`. Migrations and SQL twins: nine `*-migration.test.ts` files read the migration text, and eight `*.local.test.ts` / `*.live-db.test.ts` files run only against a local stack (`npm run test:db`, [`AGENTS.md`](../AGENTS.md) "Automation never spends the Supabase quota").
+- **Test Files**: `src/lib/draft/__tests__/` (70 test files; `fixtures/` holds the vector files). Engines and rules: `engine.test.ts`, `budget.test.ts`, `points-limits.test.ts`, `roster-split.test.ts`, `tokens.test.ts`, `redraft-engine.test.ts`, `redraft-order.test.ts`, `seat-draw.test.ts`, `completability.test.ts`, `draftability.test.ts`, `quiet-hours.test.ts`, `time.test.ts`. Evolution Point Buy: `epb-*.test.ts`, `evolution-engine.test.ts`, `point-buy-*.test.ts`, `progress-*.test.ts`, `line-*.test.ts`, `special-rules*.test.ts`, `reconciliation-report.server.test.ts`. Glue: `schemas.test.ts`, `errors.test.ts`, `http.test.ts`, `rpc-errors.test.ts`, `snapshot*.test.ts`, `notify*.test.ts`, `use-visible-poll.test.ts`. Migrations and SQL twins: nine `*-migration.test.ts` files read the migration text, `pool-phase-state-sql.test.ts` and `token-window-state.test.ts` hold the draft state machines equal to the latest definition of each RPC (`sql-function-body.ts` reads it), and eight `*.local.test.ts` / `*.live-db.test.ts` files run only against a local stack (`npm run test:db`, [`AGENTS.md`](../AGENTS.md) "Automation never spends the Supabase quota").
 - **Testing Approach**: Pure unit tests of the engines, SQL-text tests of the migrations, local-stack tests of the RPCs, and the route tests of `src/app/api/drafts/` for the end-to-end flow.
 
 ## Related Modules

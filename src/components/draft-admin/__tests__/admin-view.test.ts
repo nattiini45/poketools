@@ -27,12 +27,16 @@ import type { LineId } from '@/types/draft-queue';
 
 describe('correctionsAllowed (BR-8)', () => {
   it('is false while the draft runs unpaused', () => {
-    expect(correctionsAllowed({ paused: false, status: 'in_progress' })).toBe(false);
-    expect(correctionsAllowed({ paused: false, status: 'pending' })).toBe(false);
+    expect(correctionsAllowed({ paused: false, phase: 'drafting' })).toBe(false);
+    expect(correctionsAllowed({ paused: false, phase: 'setup' })).toBe(false);
   });
   it('is true when paused or complete', () => {
-    expect(correctionsAllowed({ paused: true, status: 'in_progress' })).toBe(true);
-    expect(correctionsAllowed({ paused: false, status: 'complete' })).toBe(true);
+    expect(correctionsAllowed({ paused: true, phase: 'drafting' })).toBe(true);
+    expect(correctionsAllowed({ paused: false, phase: 'complete' })).toBe(true);
+  });
+  it('is false for a cancelled draft, whose status twin reads complete (draft_admin_void_pick answers DRAFT_NOT_ACTIVE)', () => {
+    expect(correctionsAllowed({ paused: false, phase: 'cancelled' })).toBe(false);
+    expect(correctionsAllowed({ paused: false, phase: 'submissions' })).toBe(false);
   });
 });
 

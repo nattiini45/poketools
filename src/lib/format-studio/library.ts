@@ -188,7 +188,7 @@ export async function createFromBody(actor: SessionPlayer, body: FormatCreateBod
 }
 
 /** A copy of a document with `identity.based_on` set (the identity block is created when the draft lacks one). */
-function withBasedOn(document: Record<string, unknown>, basedOn: string): Record<string, unknown> {
+export function withBasedOn(document: Record<string, unknown>, basedOn: string): Record<string, unknown> {
   const copy = structuredClone(document);
   const identity = isRecord(copy.identity) ? copy.identity : {};
   return { ...copy, identity: { ...identity, based_on: basedOn } };

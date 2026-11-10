@@ -43,7 +43,9 @@ export interface WikiNoteReport {
   status: WikiNoteReportStatus;
   created_at: string;
   updated_at: string;
-  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'>;
+  /** The reported note; the moderation list adds its state fields and version (`updated_at`). */
+  note?: Pick<WikiNote, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'> &
+    Partial<Pick<WikiNote, 'rejected_at' | 'resubmission_blocked_at' | 'updated_at'>>;
 }
 
 export interface WikiMoveEntry {
