@@ -112,6 +112,7 @@ export default defineDe<typeof en>()({
   format_not_attached:
     'Diese Liga nutzt ein eigenes Format, es ist aber noch keines angehängt. Hänge vor dem Start ein Format an.',
   format_nothing_attached: 'An diese Liga ist kein Format angehängt.',
+  format_engine_changed: 'Die Format-Engine der Liga wurde inzwischen geändert. Lade die Seite neu und versuche es noch einmal.',
   format_detach_blocked:
     'Teams verweisen noch auf eine Phase dieses Formats, deshalb lässt es sich nicht abhängen.',
   format_phases_in_use:

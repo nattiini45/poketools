@@ -12,6 +12,12 @@ import { draftPoolPauseMachine, draftPoolPhaseMachine, redraftSubmissionWindowMa
 import { draftPoolStatusMachine } from '@/lib/draft/pool-status-state';
 import { draftSlotMachine } from '@/lib/draft/slot-state';
 import { draftKillTokenWindowMachine } from '@/lib/draft/token-window-state';
+import { formatNotificationReadMachine } from '@/lib/format-engine/notifications/read-state';
+import { actionSubmissionMachine, actionWindowMachine } from '@/lib/format-engine/runtime/action-state';
+import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-state';
+import { formatCheckMachine } from '@/lib/format-engine/runtime/check-state';
+import { relationRevealMachine } from '@/lib/format-engine/runtime/relation-state';
+import { seasonFormatEngineMachine } from '@/lib/format-studio/engine-state';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { pushDeviceMachine } from '@/lib/push/device-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
@@ -28,6 +34,13 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  actionWindowMachine.spec,
+  actionSubmissionMachine.spec,
+  formatChallengeMachine.spec,
+  formatCheckMachine.spec,
+  relationRevealMachine.spec,
+  formatNotificationReadMachine.spec,
+  seasonFormatEngineMachine.spec,
   pickFlowMachine.spec,
   armedConfirmMachine.spec,
   pollerMachine.spec,
