@@ -4,7 +4,7 @@ export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "succ
 export type ButtonSize = "sm" | "md" | "lg";
 
 export const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 border font-heading font-semibold transition-all duration-200 ease-out focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
+  "inline-flex items-center justify-center gap-2 border font-heading font-semibold transition-all duration-200 ease-out focus-visible:outline-2 focus-visible:[outline-style:auto] focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none",
   {
     variants: {
       variant: {
