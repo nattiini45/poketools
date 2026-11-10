@@ -16,6 +16,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { matchMessages } from '@/i18n/messages/match';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
+import { availableMatchActions } from '@/lib/match/match-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,7 @@ export default async function SubmitResultPage({ params }: PageProps) {
     redirect('/dashboard');
   }
 
-  const canSubmit = match.status === 'scheduled' || match.status === 'in_progress';
+  const canSubmit = availableMatchActions(match, { playerId: player.playerId, isAdmin: canAdminister }).has('record_game');
 
   const [prepTeamRows, tournament] = await Promise.all([
     getMatchPrepTeams(mid),

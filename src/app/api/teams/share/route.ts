@@ -17,6 +17,8 @@ import { teamShareCreateSchema, teamShareDeleteSchema, formatZodErrors } from '@
  *
  * The only response that carries a share token, and only to the team's
  * owner (or an admin): every other team response is a `PublicTeam` (C1).
+ * Machine `team.share`: enables the link, or rotates it (the previous link
+ * stops working); a link changed in between answers 409 `team_changed`.
  */
 export async function POST(req: NextRequest) {
   try {
@@ -69,7 +71,8 @@ export async function POST(req: NextRequest) {
 }
 
 /**
- * DELETE /api/teams/share
+ * DELETE /api/teams/share — machine `team.share` (idempotent: a team without a
+ * link answers 200 too)
  * Body: { teamId: string }
  */
 export async function DELETE(req: NextRequest) {

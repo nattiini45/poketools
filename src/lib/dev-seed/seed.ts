@@ -179,7 +179,7 @@ async function ensureStage(leagueId: string, versionId: string, playerIds: strin
       );
   // Two finished matches and two still to play.
   if (matches.every((match) => match.status === 'scheduled')) {
-    for (const match of matches.slice(0, 2)) await updateMatchStatus(match.id, 'completed', match.player_1_id);
+    for (const match of matches.slice(0, 2)) await updateMatchStatus(match.id, 'completed', match.player_1_id, undefined, undefined, 'scheduled');
   }
 
   await updateTournament(tournamentId, { status: 'active', current_round: 1 });

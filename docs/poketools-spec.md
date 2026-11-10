@@ -250,9 +250,9 @@ A ruleset is a **definition** with immutable, numbered **versions** (Ruleset Stu
 | match_id | UUID | nullable FK → matches.id; partial unique on `(player_id, match_id) WHERE match_id IS NOT NULL` |
 | pokemon | Text | JSON blob — full sets |
 | import_source | Select | pokepastes / manual / ps_text |
-| locked | Checkbox | manual lock flag (PATCH/DELETE refuse a locked row for its owner; no code path sets it today). A row linked to a **completed** match is locked independently by the `teams_completed_match_lock` trigger (see §7) |
+| locked | Checkbox | manual lock flag (PATCH refuses a locked row for everyone, DELETE for its owner; no code path sets it today). A row linked to a **completed** match is locked independently by the `teams_completed_match_lock` trigger (see §7). All write locks: state machine `team.roster` (`docs/state-machines.md`) |
 | draft_pool | Relation → DraftPools | nullable; the draft pool a draft-league team was built from |
-| is_draft_team | Checkbox | true for a team built from a draft pool |
+| is_draft_team | Checkbox | meant to be true for a team built from a draft pool; no code path writes it (nor draft_pool_id) today |
 | share_token | UUID | nullable; unique; ungessable UUID v4 for public share links |
 | share_enabled_at | Timestamp | nullable; set when share link is minted |
 | library_published_at | Timestamp | nullable; set when team is published to the public library |
@@ -996,7 +996,12 @@ POST /api/seasons                           Create a league (any admin). Optiona
                                             for site admins, its league admins) after the create; 403 SEASON_CLONE_FORBIDDEN /
                                             SEASON_CLONE_ADMINS_FORBIDDEN, 404 SEASON_NOT_FOUND, 409
                                             SEASON_CLONE_CUSTOM_FORMAT (a custom-format source); a failed copy is rolled back
-                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too)
+                                            (500 SEASON_CLONE_FAILED, or SEASON_CLONE_CLEANUP_FAILED if the cleanup failed too).
+                                            Optional `from_format` (`format_type: 'custom'`, never with `clone_from`):
+                                            { preset_id, ruleset_preset_id? } or { definition_id, version_no? } creates the
+                                            league, its format and its stages in one transaction (RPC
+                                            competition_create_from_format); 201 { season, format, stages, warnings }.
+                                            At most 20 creates per admin and hour (429, `season-create`)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)

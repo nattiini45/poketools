@@ -7,6 +7,7 @@
  * names, stored text, the Plan's readiness with live facts, the route schemas on every step body, the checks that need a
  * league built earlier, then provenance of every id. The first failure refuses; nothing is written before all pass.
  */
+import { planMachine } from '../store/plan-state';
 import { parsePlanDocument, phaseNameKey, type PlanDocument } from '../plans/schema';
 import { planReadiness } from '../plans/readiness';
 import { BUILD_LIMITS, PLAN_OP_INFO, READ_STATE_DOMAIN, type PlanOp } from '../plans/ops';
@@ -49,7 +50,8 @@ export const BUILD_OP_PHASE: Readonly<Record<PlanOp, number>> = Object.freeze({
 });
 
 /** A Plan in one of these states may be built (`partial`: a fresh Build for the remainder, plan 4.4). */
-const BUILDABLE = new Set(['drafting', 'ready', 'partial']);
+/** A Build is staged only from a plan state that can move to `building`. */
+const BUILDABLE: ReadonlySet<string> = new Set(planMachine.sourcesOf('building'));
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
