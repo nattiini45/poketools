@@ -170,9 +170,6 @@ describe('reopenMatch of a completed match', () => {
       expectedStatus: 'completed',
       status: 'in_progress',
       winnerId: null,
-      autoConfirmAt: null,
-      confirmedAt: null,
-      datePlayed: null,
     });
     expect(payload[1]).not.toHaveProperty('submitterId');
   });

@@ -16,7 +16,14 @@ vi.mock('@/lib/supabase/queries/format-runtime', async (importOriginal) => ({
 }));
 vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn() }));
 
-import { FormatRuntimeError, saveFormatAction, submitFormatAction, type FormatActionSubmissionRow } from '@/lib/supabase/queries/format-runtime';
+import { expireSeasonReads } from '@/lib/revalidation';
+import {
+  FormatActionAlreadySubmittedError,
+  FormatRuntimeError,
+  saveFormatAction,
+  submitFormatAction,
+  type FormatActionSubmissionRow,
+} from '@/lib/supabase/queries/format-runtime';
 import { saveAction, submitAction } from '../actions-server';
 import { loadFreshKitContext, type KitContext } from '../load';
 import type { ActionPick, RuntimeSubmission } from '../types';
@@ -71,6 +78,13 @@ describe('saveAction over an earlier submission', () => {
     vi.mocked(loadFreshKitContext).mockResolvedValue(context({ submission: 'submitted' }));
     await expect(saveAction(action)).rejects.toMatchObject({ code: 'format_action_already_submitted', statusCode: 409 });
     expect(saveFormatAction).not.toHaveBeenCalled();
+  });
+
+  it('answers a submit that landed after its read (the database refuses the save) with the same refusal', async () => {
+    vi.mocked(loadFreshKitContext).mockResolvedValue(context({ submission: 'draft' }));
+    vi.mocked(saveFormatAction).mockRejectedValue(new FormatActionAlreadySubmittedError());
+    await expect(saveAction(action)).rejects.toMatchObject({ code: 'format_action_already_submitted', statusCode: 409 });
+    expect(expireSeasonReads).not.toHaveBeenCalled();
   });
 
   it('leaves a locked row to the database (action_locked)', async () => {

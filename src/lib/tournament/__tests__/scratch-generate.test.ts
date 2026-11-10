@@ -11,23 +11,20 @@ const createdMatches: Array<{
 const createdRounds: Array<{ round_number: number; name: string; bracket_side: string }> = [];
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
-  createRound: vi.fn(async (input: { round_number: number; name: string; bracket_side: string }) => {
-    createdRounds.push(input);
-    return {
-      id: `round-${input.round_number}`,
-      tournament_id: 't1',
-      name: input.name,
-      round_number: input.round_number,
-      best_of: 3,
-      status: 'pending',
-      pairings_generated: true,
-      deadline: null,
-      bracket_side: input.bracket_side,
-      created_at: '2026-01-01T00:00:00Z',
-      updated_at: '2026-01-01T00:00:00Z',
-    };
+  // The bracket is written in one call (bracket_write); its rounds and matches are captured here.
+  writeBracket: vi.fn(async (input: { rounds: typeof createdRounds; matches: typeof createdMatches }) => {
+    createdRounds.push(...input.rounds.map((r) => ({ round_number: r.round_number, name: r.name, bracket_side: r.bracket_side })));
+    createdMatches.push(...input.matches.map((m) => ({
+      player_1_id: m.player_1_id,
+      player_2_id: m.player_2_id,
+      bracket_side: m.bracket_side,
+      bracket_pos: m.bracket_pos,
+      round_id: m.round_id,
+    })));
+    return { rounds: input.rounds.length, matches: input.matches.length };
   }),
   getRoundsByTournament: vi.fn(async () => []),
+  updateRoundStatus: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({

@@ -6585,6 +6585,17 @@ export type Database = {
         Returns: undefined
       }
       bootstrap_first_admin: { Args: { p_player_id: string }; Returns: string }
+      bracket_write: {
+        Args: {
+          p_current_round: number
+          p_expected_status: Database["public"]["Enums"]["tournament_status"]
+          p_matches: Json
+          p_replace: boolean
+          p_rounds: Json
+          p_tournament_id: string
+        }
+        Returns: Json
+      }
       cancel_aggregate_jobs_for_game: {
         Args: { p_game_id: string }
         Returns: number

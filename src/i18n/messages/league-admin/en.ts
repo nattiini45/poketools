@@ -72,6 +72,7 @@ export default {
       /** The button name for assistive technology: `{name}` = the league. */
       buttonLabel: 'Restore league {name}',
       blocked: 'Run the pending rebuild of this delete first.',
+      expired: 'Its restore deadline has passed.',
       confirmTitle: 'Restore league?',
       /** `{name}` = the league. */
       confirmMessage:

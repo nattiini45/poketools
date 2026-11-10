@@ -3,6 +3,7 @@ import 'server-only';
 import { getSeasonPlayState } from '@/lib/supabase/queries/format-runtime-reads';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { TeamWritesClosedReason } from './team-writes-closed-response';
+import { isSeasonClosed } from '@/lib/season/season-state';
 
 /**
  * Whether the tournament (a league phase, or a standalone one) takes no more team writes from its players, and why: it is
@@ -20,5 +21,5 @@ export async function teamWritesClosed(tournamentId: string): Promise<TeamWrites
   if (tournament.archived) return 'tournament_archived';
   if (!tournament.season_id) return null;
   const season = await getSeasonPlayState(tournament.season_id);
-  return season !== null && (season.status === 'completed' || season.archived) ? 'league_closed' : null;
+  return season !== null && isSeasonClosed(season) ? 'league_closed' : null;
 }

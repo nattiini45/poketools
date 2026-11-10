@@ -24,6 +24,7 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
+import { isTournamentUnstarted } from '@/lib/tournament/tournament-state';
 import {
   phaseAnchorOptions,
   phaseNumbers,
@@ -181,7 +182,7 @@ export default function PhaseTimeline({
   }
 
   async function movePhase(phaseId: string, direction: 'up' | 'down') {
-    const upcoming = phases.filter((p) => p.status === 'upcoming');
+    const upcoming = phases.filter((p) => isTournamentUnstarted(p.status));
     const idx = upcoming.findIndex((p) => p.id === phaseId);
     if (idx < 0) return;
     const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
@@ -287,7 +288,7 @@ export default function PhaseTimeline({
                   <Badge variant={statusVariant(phase.status)}>
                     {enumLabel(tEnum, 'tournamentStatus', phase.status)}
                   </Badge>
-                  {phase.status === 'upcoming' && (
+                  {isTournamentUnstarted(phase.status) && (
                     <>
                       <Button
                         variant="ghost"
@@ -315,7 +316,7 @@ export default function PhaseTimeline({
                   >
                     {t('timeline.manage')}
                   </Link>
-                  {canDelete && phase.status === 'upcoming' && (
+                  {canDelete && isTournamentUnstarted(phase.status) && (
                     <Button
                       variant="danger"
                       size="sm"
