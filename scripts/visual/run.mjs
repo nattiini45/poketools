@@ -315,22 +315,28 @@ async function captureJob(browser, job, { baseUrl, outDir, cacheDir, authDir, ro
     } else {
       // Site chrome that floats over a clipped root (the sticky nav bar) is not part of the surface: hide every
       // fixed or sticky element that neither sits inside a root nor contains one, keeping its layout box.
-      // Chrome above a root is not part of it either, and its height would move the root on the page: drop every
-      // element that precedes the root or one of its ancestors (unless it holds another root), and the top padding,
-      // margin and border of those ancestors, so each root starts near the top of the page whatever the chrome is.
+      // Chrome around a root is not part of it either, and its height would move the root on the page or change how
+      // far the page scrolls (which moves a sticky part of the root): drop every element that precedes or follows the
+      // root or one of its ancestors (unless it holds another root), and the vertical padding, margin and border of
+      // those ancestors, so each root starts near the top of a page that ends with it, whatever the chrome is.
+      // The page ground is chrome too: ancestors paint no background, and the page shows the plaza ground, so a root
+      // with transparent edges (rounded corners, an outlined card) reads the same backdrop on every run.
       await page.evaluate((selectors) => {
         const roots = selectors.flatMap((selector) => [...document.querySelectorAll(selector)]);
         for (const root of roots) {
           for (let el = root; el && el !== document.body; el = el.parentElement) {
-            for (let sib = el.previousElementSibling; sib; sib = sib.previousElementSibling) {
-              if (['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE'].includes(sib.tagName) || roots.some((r) => sib.contains(r) || r.contains(sib))) continue;
+            for (const sib of el.parentElement ? el.parentElement.children : []) {
+              if (sib === el || ['SCRIPT', 'STYLE', 'LINK', 'TEMPLATE'].includes(sib.tagName) || roots.some((r) => sib.contains(r) || r.contains(sib))) continue;
               sib.style.setProperty('display', 'none', 'important');
             }
             if (el !== root && !roots.some((r) => el === r || r.contains(el))) {
-              for (const prop of ['padding-top', 'margin-top', 'border-top-width']) el.style.setProperty(prop, '0', 'important');
+              for (const prop of ['padding-top', 'margin-top', 'border-top-width', 'padding-bottom', 'margin-bottom', 'border-bottom-width']) el.style.setProperty(prop, '0', 'important');
+              el.style.setProperty('background', 'none', 'important');
             }
           }
+          if (!roots.some((r) => r.contains(document.body))) document.body.style.setProperty('background', 'none', 'important');
         }
+        document.documentElement.style.setProperty('background', 'var(--palette-plaza-ground)', 'important');
         for (const el of document.querySelectorAll('body *')) {
           const position = getComputedStyle(el).position;
           if (position !== 'fixed' && position !== 'sticky') continue;
