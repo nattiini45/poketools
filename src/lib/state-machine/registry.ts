@@ -24,6 +24,8 @@ import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMa
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { pushDeviceMachine } from '@/lib/push/device-state';
 import { teamSaveMachine } from '@/lib/team/editor-save-state';
+import { teamRosterMachine } from '@/lib/team/team-roster-state';
+import { teamLibraryMachine, teamShareMachine } from '@/lib/team/team-share-state';
 import { matchMachine } from '@/lib/tournament/match-state';
 import { submitPhaseMachine } from '@/lib/ui/submit-phase-state';
 import { noteModerationMachine } from '@/lib/wiki/note-moderation-state';
@@ -37,6 +39,9 @@ import { noteReportMachine } from '@/lib/wiki/note-report-state';
  */
 export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   matchMachine.spec,
+  teamRosterMachine.spec,
+  teamShareMachine.spec,
+  teamLibraryMachine.spec,
   aggregateJobMachine.spec,
   gameAggregateMarkerMachine.spec,
   gameEvolutionCreditMachine.spec,
