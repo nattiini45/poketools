@@ -443,6 +443,11 @@
       },
       "signIn": "admin",
       "needs": []
+    },
+    {
+      "id": "dev-ui-preview",
+      "url": "/ui-preview",
+      "fullPage": true
     }
   ]
 }

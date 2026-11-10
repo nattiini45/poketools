@@ -283,6 +283,48 @@ px, `uppercase` and `tracking-*`, static Tailwind palette colours, and raw
 `<select>`. Pass `--paths "<files>"` to list the hits in the files you touched;
 new code should add none.
 
+## Direction B primitives (redesign F4)
+
+### Skewed plates
+
+`SkewPlate` and `SkewChip` (`src/components/ui`) draw a plate sheared by `--skew` (−10°) behind an upright,
+selectable label; only the plate span is skewed (`.skew-plate`, `.skew-plate-bg` in `globals.css`).
+
+- `SkewPlate variant="nav"`: the active item gets the gold (`tier-1`) plate with dark ink.
+- `variant="tab"`: a surface plate with a strong hairline; the active tab adds a 3 px accent underside.
+- `variant="button"`: `tone="primary"` is the amber `accent-fill` with dark ink, `"secondary"` the surface plate.
+- `variant="rank"`: the tier 1–4 plates for the top four.
+- `glideId`, shared by the items of one row, makes the nav plate or tab underside glide between them with
+  `SPRING.moderate` (reduced motion: no glide, through the root `MotionConfig`).
+- The label carries an invisible copy at weight 550, so a heavier active label never resizes the plate; nothing
+  has a fixed width, so German labels widen it.
+- Put the plate inside the link or button it labels. That element's focus ring moves onto the plate (outline on
+  the skewed box, offset 2 px).
+- `SkewChip` is the small static plate for status chips and score or stat plates: `neutral`, `accent`, `live`,
+  `win`, `loss`, `tier-1…4`.
+
+### Item icons
+
+`ItemIcon` (`src/components/ui/ItemIcon.tsx`) draws the approved item icons for nav, tabs, section headers and
+states (the map in `src/lib/pkmn/item-icons.ts`): Showdown's per-file icons through `getItemSpriteUrl`, and the four
+sheet-only ones (`ability-shield`, `electric-seed`, `gold-bottle-cap`, `weakness-policy`) from pinned sheet
+coordinates, like `ball-sprites.ts`. `size` is 24, 48, 72 or 96 (anything else is a type error), rendering is
+`image-rendering: pixelated`, and the icon is decorative (`alt=""`): the label beside it names it.
+
+### Fluid primitives
+
+The [Fluid Functionalism](https://www.fluidfunctionalism.com) components and systems (Radix flavour) are vendored
+in `src/components/ui/fluid/`, `src/lib/fluid/` and `src/hooks/fluid/` (README there; paths in
+`src/lib/design/vendored.ts`). They are never edited to change behaviour: pages reach them through wrappers in
+`src/components/ui/`. Their theme variables map onto the B tokens in `globals.css` ("Fluid Functionalism
+system"): solid `--active` and `--tint` washes, umber `--surface-1…8` steps in moonlit, `--focus-ring` is the
+accent ink, and the `--fs-*` / `--lh-*` sizes are the F3 type roles (compact steps one size down and keeps the
+11 px floor). The lint rules of the React Compiler, the duration guard and the i18n literal check skip the vendored
+folders; wrappers pass translated labels.
+
+`/ui-preview` (dev only, 404 in production) shows the type roles, item icons, plates and @fluid controls on the
+site theme; the harness captures it as the `dev-ui-preview` surface.
+
 ## UI Primitives — `src/components/ui/`
 
 All primitives are server-component-safe (no `'use client'` unless they need
