@@ -37,6 +37,17 @@ function sidebar(roles: AdminRoles, locale: 'en' | 'de' = 'en', extraItems: read
   );
 }
 
+/** The text a row shows: without the hidden bold copy of the label (weight without reflow), then without any tag. */
+function visibleText(markup: string): string {
+  let text = markup.replace(/<span[^>]*aria-hidden="true"[^>]*>.*?<\/span>/g, '');
+  let previous: string;
+  do {
+    previous = text;
+    text = text.replace(/<[^>]*>/g, '');
+  } while (text !== previous);
+  return text;
+}
+
 /** The rows of the sidebar's nav as `[href, aria-current]` pairs, in document order. */
 function navRows(html: string): { href: string; current: string | null; text: string }[] {
   const nav = html.slice(html.indexOf('<nav'), html.indexOf('</nav>'));
@@ -44,7 +55,7 @@ function navRows(html: string): { href: string; current: string | null; text: st
     href: m[1],
     current: /aria-current="([^"]*)"/.exec(m[2])?.[1] ?? null,
     // The row renders a hidden bold copy of its label (weight without reflow): drop it, then the tags.
-    text: m[3].replace(/<span[^>]*aria-hidden="true"[^>]*>.*?<\/span>/g, '').replace(/<[^>]*>/g, ''),
+    text: visibleText(m[3]),
   }));
 }
 const pages = (html: string) => navRows(html).filter((row) => row.current === 'page');
