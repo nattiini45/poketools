@@ -23,6 +23,7 @@ src/lib/profile/
   1. Fetch player baseline and participation records
   2. Fetch rating/streak/signature/achievement slices
   3. Compute standings-derived profile sections
+  4. The headline's total KOs and unique-Pokémon count are summed from the player's all-time `player_aggregates` rows (one row per Pokémon, read complete under `max_rows` by `getAllTimePlayerAggregates`), so they exclude test-league and test-account games (`games.exclude_all_time`) like every other all-time stat. Best-Pokémon-per-tournament and kill rankings still read `getPlayerBattleStats` (capped at 500 rows).
 - **Output**: `PlayerProfile` aggregate object
 
 ## Dependencies

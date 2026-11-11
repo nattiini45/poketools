@@ -371,18 +371,35 @@ describe('queries/aggregates', () => {
 
   // ── getAllTimePlayerAggregates ─────────────────────────────────────
   describe('getAllTimePlayerAggregates', () => {
-    it('returns mapped player aggregates', async () => {
-      mockBuilder.order.mockReturnValue({ data: [playerAggRow], error: null });
+    it('returns mapped player aggregates in one request when the first page is short', async () => {
+      mockBuilder.range.mockReturnValue({ data: [playerAggRow], error: null });
 
       const result = await getAllTimePlayerAggregates('p1');
       expect(result).toHaveLength(1);
       expect(result[0].player_id).toBe('p1');
       expect(mockBuilder.eq).toHaveBeenCalledWith('scope_type', 'all_time');
       expect(mockBuilder.is).toHaveBeenCalledWith('scope_id', null);
+      expect(mockBuilder.order).toHaveBeenNthCalledWith(1, 'total_brought', { ascending: false });
+      expect(mockBuilder.order).toHaveBeenNthCalledWith(2, 'id', { ascending: true });
+      expect(mockBuilder.range).toHaveBeenCalledTimes(1);
+      expect(mockBuilder.range).toHaveBeenCalledWith(0, 999);
+    });
+
+    it('pages past the 1000-row max_rows cap until a short page', async () => {
+      const fullPage = Array.from({ length: 1000 }, (_, i) => ({ ...playerAggRow, id: `pa${i}`, pokemon_name: `P${i}` }));
+      mockBuilder.range
+        .mockReturnValueOnce({ data: fullPage, error: null })
+        .mockReturnValueOnce({ data: [{ ...playerAggRow, id: 'pa1000', pokemon_name: 'P1000' }], error: null });
+
+      const result = await getAllTimePlayerAggregates('p1');
+      expect(result).toHaveLength(1001);
+      expect(result[1000].pokemon_name).toBe('P1000');
+      expect(mockBuilder.range).toHaveBeenNthCalledWith(1, 0, 999);
+      expect(mockBuilder.range).toHaveBeenNthCalledWith(2, 1000, 1999);
     });
 
     it('throws on error', async () => {
-      mockBuilder.order.mockReturnValue({
+      mockBuilder.range.mockReturnValue({
         data: null,
         error: { message: 'pa error' },
       });
