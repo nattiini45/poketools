@@ -3380,16 +3380,6 @@ html[data-theme="dark"] .league-hero {
     clip-path: polygon(var(--hero-lean) 0, calc(var(--hero-lean) + 12px) 0, 12px 100%, 0 100%);
   }
 }
-/* Home hero (redesign D1, src/app/(public)/page.tsx): the same split, but in sunlit the slab stays in the sand
-   family (a deeper sand under the amber edge, ink in the page's own text colours). Dark only in moonlit. */
-html:not([data-theme="dark"]) .home-hero {
-  --hero-slab: #d8c597;
-  --hero-slab-ink: var(--fg);
-  --hero-slab-muted: var(--fg-muted);
-}
-html:not([data-theme="dark"]) .home-hero .league-hero-vs {
-  color: var(--accent-ink);
-}
 /* The hero and the hub sit above the world; while a 3D route world is the page they leave the layout with the
    world's own sections (the hub did the same inside #pulse). */
 html.world-route-live [data-league-top] {
