@@ -1,3 +1,4 @@
+import type { HeroSide } from '@/components/competition/HeroBits';
 import type { LeagueFixture, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { MatchStatus } from '@/types/match';
 import type { SeasonWithDetails } from '@/types/season';
@@ -8,16 +9,7 @@ import type { TournamentWithDetails } from '@/types/tournament';
  * panel shows. Pure: it reads only the world payload the league page already holds, so the hero costs no query.
  */
 
-export interface HeroSide {
-  playerId: string;
-  name: string;
-  avatarUrl: string | null;
-  /** Ace species (English name) for the sprite; null when the trainer has no public team lead. */
-  ace: string | null;
-  /** 1-based place in the season table; null when the trainer is not in it. */
-  rank: number | null;
-  points: number | null;
-}
+export type { HeroSide };
 
 /** `yours`: the viewer's own open match. `live`: a match in progress. `next`: the next kickoff. */
 export type HeroMatchKind = 'yours' | 'live' | 'next';

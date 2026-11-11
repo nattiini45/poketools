@@ -2114,10 +2114,12 @@ describe('rules panel', () => {
       [getFormatName('gen9ou'), 'indigo'],
       ['Doubles', 'purple'],
       ['Species Clause', 'blue'],
-      ['Koraidon', 'red'],
-      ['Pikachu', 'green'],
       ['50% of team', 'yellow'],
     ];
+    // The name lists are rows, not chips: a banned list carries the loss edge, an added one the win edge.
+    const list = (text: string) => findOne(rendered.panel, (el) => el.tag === 'ul' && squash(el).includes(text), `list ${text}`);
+    expect(classList(list('Koraidon'))).toContain('border-loss');
+    expect(classList(list('Pikachu'))).toContain('border-win');
     for (const [text, colour] of expected) {
       expect(classList(chip(text))).toEqual(
         expect.arrayContaining([

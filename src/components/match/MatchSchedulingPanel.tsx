@@ -174,15 +174,15 @@ export default function MatchSchedulingPanel({
   }
 
   return (
-    <Section title={t('scheduling.title')}>
+    <Section title={t('scheduling.title')} icon="metronome">
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-        <div className="rounded-poke-md border border-poke-border bg-poke-surface p-3">
-          <p className="text-xs font-heading uppercase tracking-wide text-poke-text-muted">{t('scheduling.scheduled')}</p>
-          <p className="mt-1 text-sm font-heading font-semibold text-poke-text-primary">{dateTime(currentScheduledAt)}</p>
+        <div className="rounded-poke-md border border-hairline bg-sunken p-3">
+          <p className="text-caption text-fg-muted">{t('scheduling.scheduled')}</p>
+          <p className="mt-1 font-heading text-title tabular-nums text-fg">{dateTime(currentScheduledAt)}</p>
         </div>
-        <div className="rounded-poke-md border border-poke-border bg-poke-surface p-3">
-          <p className="text-xs font-heading uppercase tracking-wide text-poke-text-muted">{t('scheduling.deadline')}</p>
-          <p className="mt-1 text-sm font-heading font-semibold text-poke-text-primary">{dateTime(roundDeadline)}</p>
+        <div className="rounded-poke-md border border-hairline bg-sunken p-3">
+          <p className="text-caption text-fg-muted">{t('scheduling.deadline')}</p>
+          <p className="mt-1 font-heading text-title tabular-nums text-fg">{dateTime(roundDeadline)}</p>
         </div>
       </div>
 

@@ -36,7 +36,7 @@ export default async function LeaguesPage({ searchParams }: { searchParams?: Pro
   ]);
 
   return (
-    <PageContainer title={t('list.title')}>
+    <PageContainer title={t('list.title')} icon="poke-ball">
       <PublicCompetitionList
         icon="poke-ball"
         basePath="/leagues"

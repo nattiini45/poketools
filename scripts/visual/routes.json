@@ -208,6 +208,173 @@
       }
     },
     {
+      "id": "d4-auth-signin",
+      "url": "/auth/signin",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-signin-error",
+      "url": "/auth/signin?error=OAuthAccountNotLinked",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-signup",
+      "url": "/auth/signup",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-forgot-password",
+      "url": "/auth/forgot-password",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-reset-password",
+      "url": "/auth/reset-password",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-verify-email",
+      "url": "/auth/verify-email?email=aria%40poketools.test",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-confirm",
+      "url": "/auth/confirm?token_hash=visual-capture",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-auth-error",
+      "url": "/auth/error?error=AccessDenied",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-creator-hub",
+      "url": "/creator",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin"
+    },
+    {
+      "id": "d4-creator-hub-signed-out",
+      "url": "/creator",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d4-creator-overlays",
+      "url": "/creator/overlays",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin"
+    },
+    {
       "id": "player-dashboard",
       "url": "/dashboard",
       "fullPage": true,
@@ -377,6 +544,81 @@
       "signIn": "admin",
       "needs": [
         "leagueCustom"
+      ]
+    },
+    {
+      "id": "admin-league-custom-format",
+      "url": "/admin/leagues/{leagueCustom}?tab=format",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueCustom"
+      ]
+    },
+    {
+      "id": "admin-league-epb",
+      "url": "/admin/leagues/{leagueEpb}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-epb-rules",
+      "url": "/admin/leagues/{leagueEpb}?tab=rules",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-settings",
+      "url": "/admin/leagues/{leagueSakura}?tab=settings",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "admin-league-danger",
+      "url": "/admin/leagues/{leagueSakura}?tab=danger",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
       ]
     },
     {

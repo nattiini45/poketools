@@ -21,6 +21,13 @@ export default {
     submitResult: 'Submit Result',
     backToDashboard: 'Back to dashboard',
     enterReplayUrl: 'Please enter a replay URL',
+    openMatch: 'Open the match page',
+  },
+  versus: {
+    vs: 'VS',
+    you: 'You',
+    winner: 'Winner',
+    score: '{p1} {s1}, {p2} {s2}',
   },
   manual: {
     kosLabel: 'KOs:',
@@ -28,6 +35,15 @@ export default {
     resultRecorded: 'Result recorded! Match is now pending confirmation.',
     gameRecorded: 'Game recorded! More games needed.',
     submitFailed: 'Failed to submit result',
+    winnerHint: 'One game at a time: pick who won this game.',
+    kosAria: 'KOs dealt by Pokémon {n}',
+    movesAria: 'Moves used by Pokémon {n}',
+    removeAria: 'Remove Pokémon {n}',
+    rosterCount: '{count} of 6',
+    summaryTitle: 'Check before you submit',
+    summaryWinner: '{name} wins this game',
+    summaryNoWinner: 'No winner picked yet',
+    summarySide: '{name}: {count} Pokémon, {kos} KOs',
   },
   replaySubmit: {
     invalidUrl: 'Please enter a valid Pokémon Showdown replay URL or ID',
@@ -35,6 +51,7 @@ export default {
     recordedMore: 'Game recorded! More games needed to complete the series.',
     submitFailed: 'Failed to submit replay',
     urlLabel: 'Replay URL',
+    urlHint: 'Paste the replay link from Pokémon Showdown, one game at a time. The winner and the stats are read from the replay.',
     nameMismatch: "The replay's Showdown names don't match the registered players.",
     nameMismatchAsk:
       "The replay's Showdown names don't match the registered players. Ask a tournament organizer to import this replay.",
@@ -90,6 +107,7 @@ export default {
     tabReplay: 'Replay URL',
     tabManual: 'Manual Entry',
     tabReplayImport: 'Replay (manual assign)',
+    tabsLabel: 'How to report the result',
   },
   confirm: {
     title: 'Confirm Match Result',
@@ -105,6 +123,8 @@ export default {
     disputeReasonHint: 'Shown to the admins who review the dispute.',
     disputeReasonCount: '{count} / {max}',
     cannotAct: 'You cannot take action on this match. Only the opponent can confirm.',
+    resultTitle: 'Reported result',
+    noGames: 'No game has been reported for this match yet.',
   },
   scheduling: {
     title: 'Scheduling',

@@ -168,12 +168,12 @@ export default function MatchAnalysisCard({
             <ProfPortrait alt={profName} />
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-sm font-heading font-semibold text-poke-text-secondary">
+                <span className="font-heading text-title text-fg">
                   {profName}
                 </span>
                 <Badge variant="purple" size="sm">{t('aiBadge')}</Badge>
               </div>
-              <p className="text-xs text-poke-text-muted mt-0.5">
+              <p className="mt-0.5 text-body text-fg-muted">
                 {errorText || t('analysis.askPrompt')}
               </p>
             </div>
@@ -203,19 +203,19 @@ export default function MatchAnalysisCard({
           <div className="flex items-center gap-3">
             <ProfPortrait alt={profName} />
             <div>
-              <span className="text-sm font-heading font-semibold text-poke-text-secondary">
+              <span className="font-heading text-title text-fg">
                 {profName}
               </span>
               <div className="flex items-center gap-2 mt-1">
                 {!isStale ? (
                   <>
                     <div className="w-3 h-3 rounded-full border-2 border-poke-blue border-t-transparent animate-spin" />
-                    <span className="text-xs text-poke-text-muted">
+                    <span className="text-body text-fg-muted">
                       {t('analysis.reviewing')}
                     </span>
                   </>
                 ) : (
-                  <span className="text-xs text-poke-text-muted">
+                  <span className="text-body text-fg-muted">
                     {t('takingWhile')}
                   </span>
                 )}
@@ -244,7 +244,7 @@ export default function MatchAnalysisCard({
           <div className="flex items-center gap-3">
             <ProfPortrait alt={profName} />
             <div>
-              <span className="text-sm text-poke-text-muted">
+              <span className="text-body text-fg-muted">
                 {errorText || t('unavailable')}
               </span>
             </div>
@@ -268,16 +268,16 @@ export default function MatchAnalysisCard({
         <div className="flex items-center gap-3">
           <ProfPortrait alt={profName} />
           <div>
-            <span className="text-sm font-heading font-semibold text-poke-text-secondary">
+            <span className="font-heading text-title text-fg">
               {profName}
             </span>
             <div className="flex items-center gap-2 mt-1">
               {errorText ? (
-                <span className="text-xs text-poke-text-muted">{errorText}</span>
+                <span className="text-body text-fg-muted">{errorText}</span>
               ) : (
                 <>
                   <div className="w-3 h-3 rounded-full border-2 border-poke-blue border-t-transparent animate-spin" />
-                  <span className="text-xs text-poke-text-muted">
+                  <span className="text-body text-fg-muted">
                     {t('analysis.reviewing')}
                   </span>
                 </>
@@ -303,12 +303,12 @@ export default function MatchAnalysisCard({
           <ProfPortrait alt={profName} />
           <div>
             <div className="flex items-center gap-2">
-              <span className="text-sm font-heading font-semibold text-poke-text-secondary">
+              <span className="font-heading text-title text-fg">
                 {profName}
               </span>
               <Badge variant="purple" size="sm">{t('aiBadge')}</Badge>
             </div>
-            <p className="text-xs text-poke-text-muted mt-0.5">
+            <p className="mt-0.5 text-body text-fg-muted">
               {t('analysis.title')}
             </p>
           </div>
@@ -358,7 +358,7 @@ export default function MatchAnalysisCard({
                     {localizeSpecies(content.mvp.pokemon, dataLocale)}
                   </span>
                   {content.mvp.player && (
-                    <span className="text-xs text-poke-text-muted">
+                    <span className="text-body text-fg-muted">
                       ({content.mvp.player})
                     </span>
                   )}

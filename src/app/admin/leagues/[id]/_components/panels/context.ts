@@ -21,5 +21,5 @@ export interface LeagueAdminPanelContext {
   isSiteAdmin: boolean;
   t: Translator<typeof seasonPageEn>;
   /** A link to another tab of this page (rich-text `<link>` chunks). */
-  tabLink: (tab: LeagueAdminTab) => (chunks: ReactNode) => ReactNode;
+  tabLink: (tab: LeagueAdminTab, section?: string) => (chunks: ReactNode) => ReactNode;
 }

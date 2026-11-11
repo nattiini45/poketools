@@ -10,8 +10,6 @@ const shown = vi.hoisted(() => ({ standings: [] as { player_id: string; points: 
 
 vi.mock('next/link', () => ({ default: () => null }));
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: null }) }));
-vi.mock('@/components/world/WorldNav', () => ({ default: () => null }));
-vi.mock('@/components/world/SectionShell', () => ({ default: () => null }));
 vi.mock('@/components/bracket/RoundRobinTable', () => ({ default: () => null }));
 vi.mock('@/components/bracket/GroupStandingsTable', () => ({
   default: (props: { standings: { player_id: string; points: number }[] }) => {
@@ -52,6 +50,7 @@ function render(props: { seasonFormatType: string | null; tiebreakerOrder?: Tieb
       usageRows={[]}
       killRanking={[]}
       isDoubles={false}
+      activeTab="standings"
       evolutionPoints={{ ash: 0, misty: 7, brock: 20 }}
       {...props}
     />,
