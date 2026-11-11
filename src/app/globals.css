@@ -3255,17 +3255,21 @@ html.world-route-live .world-nav-hud {
 }
 
 
-/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar is a dark umber rail in both themes: it carries
-   data-theme="dark", so the tokens inside resolve to their moonlit values, and the @fluid light-dark() pair follows.
+/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar follows the theme: in sunlit it sits on the page's
+   own sand behind a hairline, in moonlit on the umber surface, so it reads as part of the page in both.
    The current section sits on a gold plate cut to the site skew (a clip-path, because @fluid animates the plate's
    box with inline styles); its label takes the plate ink. Unlayered on purpose: these restyle @fluid's utilities. */
 .admin-rail {
-  --lightningcss-light: ;
-  --lightningcss-dark: initial;
+  background-color: var(--page);
+  border-inline-end: 1px solid var(--hairline-strong);
+  color: var(--fg);
   /* New competition keeps the amber fill beside the gold plate of the current section. */
   --accent-fill: #CF660B;
-  /* Declared again so it takes the rail's own (moonlit) accent, not the page's. */
-  --focus-ring: var(--accent-ink);
+}
+
+[data-theme="dark"] .admin-rail {
+  background-color: var(--surface);
+  border-inline-end-color: transparent;
 }
 
 .admin-rail [data-sidebar="menu"] > .bg-active {
