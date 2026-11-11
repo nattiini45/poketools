@@ -301,6 +301,23 @@ describe('example format page', () => {
     expect(fork[0].props.presetId).toBe(presetId);
   });
 
+  it.each(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup'])('%s: links to the wizard with the preset id, in the viewer language', async (presetId) => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const en = html(await ExamplePage(exampleParams(presetId)));
+    expect(en).toContain('href="/admin/leagues/new?preset=' + presetId + '"');
+    expect(en).toContain('>Create a league from this<');
+    mocks.locale = 'de';
+    const de = html(await ExamplePage(exampleParams(presetId)));
+    expect(de).toContain('href="/admin/leagues/new?preset=' + presetId + '"');
+    expect(de).toContain('>Liga daraus erstellen<');
+  });
+
+  it('a viewer who fails the gate gets no wizard link', async () => {
+    mocks.getLiveAccess.mockResolvedValue(null);
+    const out = html(await ExamplePage(exampleParams('cup')));
+    expect(out).not.toContain('/admin/leagues/new');
+  });
+
   it('a viewer who fails the gate gets no fork button', async () => {
     mocks.getLiveAccess.mockResolvedValue(null);
     const tree = await ExamplePage(exampleParams('cup'));

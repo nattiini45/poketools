@@ -4,7 +4,11 @@ import LibraryCard from '@/components/studio-shell/library/LibraryCard';
 import FormatLibraryList from '@/components/format-studio/starts/FormatLibraryList';
 import type { LibraryEntry } from '@/components/studio-shell/library/LibraryList';
 import NewFormatDialog from '@/components/format-studio/starts/NewFormatDialog';
+import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import { wizardHref } from '@/lib/league-admin/wizard';
+import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 import PageContainer from '@/components/ui/PageContainer';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { formatReads } from '@/lib/cache/format-reads';
@@ -70,8 +74,9 @@ export default async function FormatsGalleryPage() {
   const access = await getLiveAccess();
   if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
-  const [t, tEnum, tEditor, locale] = await Promise.all([
+  const [t, tLeague, tEnum, tEditor, locale] = await Promise.all([
     getT(formatStudioAdminMessages),
+    getT(leagueAdminMessages),
     getT(enumMessages),
     getT(formatStudioEditorMessages),
     getLocale(),
@@ -121,14 +126,22 @@ export default async function FormatsGalleryPage() {
           <p className="text-sm text-poke-text-muted">{t('gallery.readOnlyNote')}</p>
           <div className="grid gap-3 sm:grid-cols-2">
             {examples.map(({ id, doc }) => (
-              <LibraryCard
-                key={id}
-                href={`/admin/formats/example/${id}`}
-                title={doc.title}
-                lines={[doc.summary ?? '', doc.overview, doc.coverageLine].filter((line) => line !== '')}
-                badges={<Badge variant="accent">{t('gallery.exampleBadge')}</Badge>}
-                openLabel={t('gallery.open')}
-              />
+              <div key={id} className="flex min-w-0 flex-col gap-2">
+                <div className="min-w-0 flex-1">
+                  <LibraryCard
+                    href={`/admin/formats/example/${id}`}
+                    title={doc.title}
+                    lines={[doc.summary ?? '', doc.overview, doc.coverageLine].filter((line) => line !== '')}
+                    badges={<Badge variant="accent">{t('gallery.exampleBadge')}</Badge>}
+                    openLabel={t('gallery.open')}
+                  />
+                </div>
+                <Button asChild variant="secondary" size="sm" className="self-start">
+                  <Link href={wizardHref({ preset: id })} aria-label={tLeague('wizard.fromExampleNamed', { name: doc.title })}>
+                    {tLeague('wizard.fromExample')}
+                  </Link>
+                </Button>
+              </div>
             ))}
           </div>
         </section>

@@ -15,14 +15,14 @@ const HOOK = 'src/lib/ui/use-submit-phase.ts';
 const FORMS = [
   HOOK,
   'src/components/tournament/TournamentForm.tsx',
-  'src/components/league/LeagueForm.tsx',
+  'src/components/league/wizard/NewCompetitionWizard.tsx',
   'src/components/league/EpbImportPanel.tsx',
 ];
 
 export const submitPhaseMachine = defineMachine({
   id: 'client.submit_phase',
   title: 'Form submission',
-  storage: 'client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)',
+  storage: 'client: useSubmitPhase (TournamentForm, NewCompetitionWizard, EpbImportPanel)',
   summary:
     'One submission at a time. A failure stays retryable; a success that navigates away is final, so a second click while the next page loads cannot create the same tournament or league twice.',
   states: SUBMIT_PHASES,

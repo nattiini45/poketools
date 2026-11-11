@@ -881,7 +881,8 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 ### Admin pages
 ```
 /admin                         Admin overview
-/admin/leagues/new             Create league
+/admin/leagues/new             New-competition wizard for a league: starting point, details, review
+                               (?preset=<id> or ?format=<definition id> opens it with that start picked)
 /admin/leagues/[id]            League workspace in URL tabs (?tab=): Overview, Participants, Phases
                                (PhaseTimeline), Format and rules (read-only generated outline and rules
                                text, then the rules editors), Draft, Live (custom leagues: checks inbox,
