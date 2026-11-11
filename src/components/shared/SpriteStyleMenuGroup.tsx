@@ -7,7 +7,7 @@ import SpriteStyleOptions from './SpriteStyleOptions';
 import { useSpriteStyleChange } from './sprite-style-client';
 
 /**
- * The sprite-style choice in the NavBar language menu and the mobile drawer
+ * The sprite-style choice in the site menus (Appearance in the account menu and the signed-out drawer)
  * (docs/pkmn.md, "Sprite styles"): the anonymous entry point. A choice applies
  * at once and is saved by `POST /api/sprite-style` (cookie; also the account
  * when signed in); a failed save reverts it and says why.
