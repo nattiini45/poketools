@@ -1,5 +1,5 @@
 /**
- * The Assistant entry of the admin navigation: in the competitions group, not site-admin-only (the
+ * The Assistant entry of the admin navigation: in the System group, not site-admin-only (the
  * assistant's tools are scoped by role), labelled in both languages, and rendered only while the
  * admin layout says the assistant is on for the live viewer (`AdminRoles.assistantEnabled`).
  */
@@ -30,8 +30,8 @@ describe('admin navigation: Assistant', () => {
     ['a site admin', SITE_ADMIN],
     ['a resource admin', RESOURCE_ADMIN],
     ['the superadmin', SUPERADMIN],
-  ])('shows /admin/assistant once, in the competitions group, to %s when it is enabled', (_who, roles) => {
-    expect(assistantHits({ ...roles, assistantEnabled: true })).toEqual(['competitions']);
+  ])('shows /admin/assistant once, in the system group, to %s when it is enabled', (_who, roles) => {
+    expect(assistantHits({ ...roles, assistantEnabled: true })).toEqual(['system']);
   });
 
   it('is not restricted to site admins or superadmins (the audience gate is assistantEnabled)', () => {
@@ -41,10 +41,10 @@ describe('admin navigation: Assistant', () => {
     expect(item?.superadminOnly).toBeUndefined();
   });
 
-  it('follows Formats in the competitions group', () => {
-    const competitions = ADMIN_NAV.find((group) => group.id === 'competitions');
-    const hrefs = competitions?.items.map((item) => item.href) ?? [];
-    expect(hrefs.indexOf('/admin/assistant')).toBe(hrefs.indexOf('/admin/formats') + 1);
+  it('follows Test players in the System group', () => {
+    const system = ADMIN_NAV.find((group) => group.id === 'system');
+    const hrefs = system?.items.map((item) => item.href) ?? [];
+    expect(hrefs.indexOf('/admin/assistant')).toBe(hrefs.indexOf('/admin/test-players') + 1);
   });
 
   it('does not change what any other item shows', () => {

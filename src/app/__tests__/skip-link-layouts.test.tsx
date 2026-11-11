@@ -1,5 +1,5 @@
 /**
- * Every site layout opens with a "Skip to content" link ahead of the NavBar and lands on a focusable
+ * Every site layout opens with a "Skip to content" link ahead of its navigation (the NavBar, or the admin shell's sidebar) and lands on a focusable
  * `<main id="main-content">`. The auth layout has no navigation to skip, so it only carries the id.
  */
 import type { ReactNode } from 'react';
@@ -7,9 +7,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 
 vi.mock('@/components/shared/NavBar', () => ({ default: () => <nav data-testid="site-nav">nav</nav> }));
+vi.mock('@/components/shared/nav/BottomTabBar', () => ({ default: () => <div data-testid="site-bottom-bar">bar</div> }));
 vi.mock('@/components/shared/PageTransitionWrapper', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/shared/AdminGuard', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
-vi.mock('@/components/admin/AdminSidebar', () => ({ default: () => <aside>sidebar</aside> }));
+vi.mock('@/components/admin/AdminShell', () => ({
+  default: ({ children }: { children: ReactNode }) => (
+    <>
+      <nav aria-label="Admin">admin nav</nav>
+      {children}
+    </>
+  ),
+}));
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('@/components/admin/assistant/AssistantDrawer', () => ({ default: () => null }));
 vi.mock('@/components/creator/CreatorNav', () => ({ default: () => <div>creator nav</div> }));
 vi.mock('@/lib/pack-extensions', () => ({
@@ -19,7 +28,7 @@ vi.mock('@/lib/pack-extensions', () => ({
 vi.mock('@/lib/auth/helpers', () => ({
   getSession: async () => ({ user: { id: 'p1' } }),
   getSessionPlayer: async () => ({ name: 'Ash' }),
-  getLiveAccess: async () => ({ player: { playerId: 'p1', name: 'Ash' } }),
+  getLiveAccess: async () => ({ player: { playerId: 'p1', name: 'Ash' }, isAnyAdmin: true, isSiteAdmin: true }),
   getLiveSessionPlayer: async () => ({ playerId: 'p1', name: 'Ash' }),
 }));
 vi.mock('next/navigation', () => ({ redirect: vi.fn(), usePathname: () => '/' }));

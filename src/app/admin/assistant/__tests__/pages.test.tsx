@@ -22,6 +22,7 @@ vi.mock('next/navigation', () => ({
 }));
 vi.mock('next/link', () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/components/shared/AdminGuard', () => ({ default: ({ children }: { children: ReactNode }) => children }));
+vi.mock('next/headers', () => ({ cookies: async () => ({ get: () => undefined }) }));
 vi.mock('@/components/shared/NavBar', () => ({ default: () => null }));
 vi.mock('@/components/shared/PageTransitionWrapper', () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/i18n/server', async () => {

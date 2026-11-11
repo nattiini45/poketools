@@ -122,6 +122,7 @@ export default {
       calc: 'Calc',
       speed: 'Speed',
     },
+    tabsLabel: 'Intel views',
     analyse: 'Analyse {species}',
   },
   overview: {

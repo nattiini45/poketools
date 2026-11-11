@@ -1,6 +1,7 @@
-/** NavBar links and aria-labels (i18n-core §1.4, §2.1). */
+/** The site navigation: the link row, More, the account menu, search and the phone bottom bar (i18n-core §1.4, §2.1). */
 export default {
   links: {
+    home: 'Home',
     tournaments: 'Tournaments',
     leagues: 'Leagues',
     replays: 'Replays',
@@ -8,6 +9,7 @@ export default {
     wiki: 'Wiki',
     players: 'Players',
     teams: 'Teams',
+    more: 'More',
     creator: 'Creator Hub',
     admin: 'Admin',
   },
@@ -15,4 +17,31 @@ export default {
   toggleMenu: 'Toggle menu',
   closeMenu: 'Close menu',
   menuLabel: 'Site menu',
+  mainLabel: 'Main navigation',
+  bottomLabel: 'Quick navigation',
+  account: {
+    trigger: 'Account menu',
+    guestTrigger: 'Appearance and language',
+    settings: 'Settings',
+    appearance: 'Appearance',
+    language: 'Language',
+    theme: 'Theme',
+    sunlit: 'Sunlit',
+    moonlit: 'Moonlit',
+  },
+  search: {
+    trigger: 'Search',
+    placeholder: 'Search Pokémon, moves, pages…',
+    title: 'Search',
+    description: 'Find a Pokémon, a move, an item or a page.',
+    empty: 'Nothing found.',
+    pages: 'Pages',
+    wiki: 'Wiki',
+    elsewhere: 'Search for “{query}”',
+    inPlayers: 'Players named “{query}”',
+    inReplays: 'Replays matching “{query}”',
+    open: 'Open',
+    navigate: 'Move',
+    close: 'Close',
+  },
 } as const;
