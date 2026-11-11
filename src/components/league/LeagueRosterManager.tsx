@@ -588,31 +588,33 @@ export default function LeagueRosterManager({
                       {p.gym_type && <TypeSprite type={p.gym_type} size={16} />}
                     </>
                   )}
-                  {p.is_guest && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setLinkGuest(p);
-                        setLinkSource(null);
-                        linkSearch.reset();
-                      }}
-                      className={cn(ROW_ACTION, 'text-accent-ink')}
-                    >
-                      {t('roster.linkAccount')}
+                  <div className="flex items-center justify-end gap-x-3">
+                    {p.is_guest && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setLinkGuest(p);
+                          setLinkSource(null);
+                          linkSearch.reset();
+                        }}
+                        className={cn(ROW_ACTION, 'text-accent-ink')}
+                      >
+                        {t('roster.linkAccount')}
+                      </button>
+                    )}
+                    {!substitutionClosed && (
+                      <button
+                        type="button"
+                        onClick={() => openSubstitute({ id: p.id, name: p.name, onRoster: true })}
+                        className={cn(ROW_ACTION, 'text-accent-ink')}
+                      >
+                        {t('roster.substitute')}
+                      </button>
+                    )}
+                    <button type="button" onClick={() => removePlayer(p.id)} className={cn(ROW_ACTION, 'text-loss')}>
+                      {t('roster.remove')}
                     </button>
-                  )}
-                  {!substitutionClosed && (
-                    <button
-                      type="button"
-                      onClick={() => openSubstitute({ id: p.id, name: p.name, onRoster: true })}
-                      className={cn(ROW_ACTION, 'text-accent-ink')}
-                    >
-                      {t('roster.substitute')}
-                    </button>
-                  )}
-                  <button type="button" onClick={() => removePlayer(p.id)} className={cn(ROW_ACTION, 'text-loss')}>
-                    {t('roster.remove')}
-                  </button>
+                  </div>
                 </div>
               </li>
             ))}
