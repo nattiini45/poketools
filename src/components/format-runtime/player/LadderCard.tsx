@@ -2,8 +2,10 @@
 
 import { useId, useRef } from 'react';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
+import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsCommon } from '@/i18n/messages/errors/common';
@@ -12,6 +14,7 @@ import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/play
 import { makeChallengeRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ChallengeView, LadderView } from '@/lib/format-engine/runtime/view-types';
 import ChallengeRow, { type LadderStatus } from './ChallengeRow';
+import { FOCUS_TARGET, PLAYER_CARD, TrainerTile } from './parts';
 import { useLText, usePlayerName } from './useLabels';
 import { useRuntimeAction } from './useRuntimeAction';
 
@@ -65,10 +68,15 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
   }
 
   return (
-    <article className="space-y-3 rounded-poke-lg border border-poke-border bg-poke-surface p-4" data-ladder={ladder.phase_id}>
-      <header className="space-y-1">
-        <h3 className="font-heading text-base font-bold text-poke-text-primary">{title}</h3>
-        <p className="text-xs text-poke-text-secondary">
+    <article className={PLAYER_CARD} data-ladder={ladder.phase_id}>
+      <header className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <h3 className="text-subtitle font-[550] text-fg">{title}</h3>
+          <SkewChip tone={ladder.my_rank !== null ? 'tier-1' : 'neutral'}>
+            {ladder.my_rank !== null ? t('ladder.yourRank', { rank: ladder.my_rank }) : t('ladder.notRanked')}
+          </SkewChip>
+        </div>
+        <p className="max-w-[75ch] text-caption text-fg-muted">
           {t('ladder.rules', {
             range: config.rank_range,
             max: config.max_open,
@@ -76,20 +84,17 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
             cooldown: config.cooldown_rounds,
           })}
         </p>
-        <p className="text-sm text-poke-text-secondary">
-          {ladder.my_rank !== null ? t('ladder.yourRank', { rank: ladder.my_rank }) : t('ladder.notRanked')}
-        </p>
       </header>
 
-      <div className="overflow-x-auto rounded-poke-md border border-poke-border">
-        <table className="w-full text-left text-sm">
+      <div className="overflow-x-auto rounded-poke-md border border-hairline">
+        <table className="w-full text-left text-body">
           <caption className="sr-only">{title}</caption>
-          <thead className="bg-poke-elevated text-poke-text-secondary">
+          <thead className="bg-elevated text-caption text-fg-muted">
             <tr>
-              <th scope="col" className="px-3 py-2 font-heading font-semibold">
+              <th scope="col" className="w-px px-3 py-2 font-[550]">
                 {t('ladder.rank')}
               </th>
-              <th scope="col" className="px-3 py-2 font-heading font-semibold">
+              <th scope="col" className="px-3 py-2 font-[550]">
                 {t('ladder.player')}
               </th>
               <th scope="col" className="px-3 py-2">
@@ -97,15 +102,27 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-poke-border">
+          <tbody className="divide-y divide-hairline">
             {ladder.table.map((row) => {
               const isViewer = row.player.id === viewerId;
               const name = nameOf(row.player);
               return (
-                <tr key={row.player.id}>
-                  <td className="px-3 py-2 text-poke-text-primary">{row.rank}</td>
-                  <td className="px-3 py-2 text-poke-text-primary">
-                    {name} {isViewer && <Badge variant="accent">{t('ladder.you')}</Badge>}
+                <tr key={row.player.id} className={isViewer ? 'bg-accent-subtle' : undefined}>
+                  <td className="px-3 py-2 text-fg">
+                    {row.rank >= 1 && row.rank <= 4 ? (
+                      <SkewPlate variant="rank" tier={row.rank as 1 | 2 | 3 | 4} className="min-w-8 justify-center font-heading text-body tabular-nums">
+                        {row.rank}
+                      </SkewPlate>
+                    ) : (
+                      <span className="inline-block min-w-8 text-center font-heading text-body tabular-nums text-fg-muted">{row.rank}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 text-fg">
+                    <span className="flex items-center gap-2">
+                      <TrainerTile name={name} own={isViewer} />
+                      <span className={cn('min-w-0 [overflow-wrap:anywhere]', isViewer && 'font-[550]')}>{name}</span>
+                      {isViewer && <SkewChip tone="accent">{t('ladder.you')}</SkewChip>}
+                    </span>
                   </td>
                   <td className="px-3 py-2 text-right">
                     {!isViewer && (
@@ -128,26 +145,26 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
           </tbody>
         </table>
       </div>
-      <p id={hintId} className="text-xs text-poke-text-muted">
+      <p id={hintId} className="max-w-[75ch] text-caption text-fg-muted">
         {ladder.round === null ? t('ladder.noRound') : ladder.my_rank === null ? t('ladder.notRankedHint') : t('ladder.outOfRange')}
       </p>
 
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
 
-      <div className="space-y-2">
-        <h4 ref={challengesHeadingRef} tabIndex={-1} className="font-heading text-sm font-semibold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <div className="flex flex-col gap-2 border-t border-hairline pt-3">
+        <h4 ref={challengesHeadingRef} tabIndex={-1} className={cn('self-start rounded-poke-sm text-body font-[550] text-fg', FOCUS_TARGET)}>
           {t('ladder.yours')}
         </h4>
         {challenges.length === 0 ? (
-          <p className="text-sm text-poke-text-secondary">{t('ladder.none')}</p>
+          <p className="text-body text-fg-muted">{t('ladder.none')}</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="flex flex-col gap-2">
             {challenges.map((entry) => (
               <ChallengeRow key={entry.id} seasonId={seasonId} challenge={entry} viewerId={viewerId} closed={closed} onReload={onReload} onStatus={onStatus} />
             ))}
           </ul>
         )}
-        <p className="text-xs text-poke-text-muted">{t('ladder.noNotice')}</p>
+        <p className="text-caption text-fg-muted">{t('ladder.noNotice')}</p>
       </div>
     </article>
   );

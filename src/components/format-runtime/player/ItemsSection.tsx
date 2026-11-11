@@ -1,9 +1,10 @@
 'use client';
 
-import Section from '@/components/ui/Section';
+import SkewChip from '@/components/ui/SkewChip';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import type { ItemView } from '@/lib/format-engine/runtime/view-types';
+import { EntrySprite, PLAYER_CARD, PlayerSection } from './parts';
 import SpeciesLabel from './SpeciesLabel';
 import { useLText, usePlayerName } from './useLabels';
 
@@ -21,31 +22,35 @@ export default function ItemsSection({ items }: ItemsSectionProps) {
   for (const item of items) groups.set(item.resource, [...(groups.get(item.resource) ?? []), item]);
 
   return (
-    <Section title={t('items.heading')}>
-      <div className="space-y-4">
+    <PlayerSection title={t('items.heading')} icon="amulet-coin">
+      <div className="flex flex-col gap-4">
         {[...groups.entries()].map(([resource, rows]) => (
-          <div key={resource} className="space-y-1">
-            <h3 className="font-heading text-base font-bold text-poke-text-primary">{labelOf(rows[0].resource_label)}</h3>
-            <ul className="space-y-0.5 text-sm text-poke-text-primary">
+          <div key={resource} className={PLAYER_CARD}>
+            <h3 className="text-subtitle font-[550] text-fg">{labelOf(rows[0].resource_label)}</h3>
+            <ul className="flex flex-wrap gap-2">
               {rows.map((row, index) => (
-                <li key={`${row.item_id ?? 'counter'}-${row.holder?.id ?? 'own'}-${index}`}>
+                <li
+                  key={`${row.item_id ?? 'counter'}-${row.holder?.id ?? 'own'}-${index}`}
+                  className="flex min-w-0 items-center gap-2 rounded-poke-md border border-hairline bg-elevated py-1 pl-1.5 pr-3 text-body text-fg"
+                >
                   {row.item_id !== null ? (
                     <>
-                      <SpeciesLabel id={row.item_id} />
-                      {row.amount !== 1 && <> {t('items.count', { count: row.amount })}</>}
+                      <EntrySprite id={row.item_id} />
+                      <span className="font-[550]">
+                        <SpeciesLabel id={row.item_id} />
+                      </span>
+                      {row.amount !== 1 && <SkewChip tone="tier-1">{t('items.count', { count: row.amount })}</SkewChip>}
                     </>
                   ) : (
-                    t('items.count', { count: row.amount })
+                    <span className="py-1.5 pl-1.5 font-heading text-title tabular-nums">{t('items.count', { count: row.amount })}</span>
                   )}
-                  {row.holder !== null && (
-                    <span className="text-poke-text-secondary"> ({t('items.heldBy', { name: nameOf(row.holder) })})</span>
-                  )}
+                  {row.holder !== null && <span className="text-fg-muted">({t('items.heldBy', { name: nameOf(row.holder) })})</span>}
                 </li>
               ))}
             </ul>
           </div>
         ))}
       </div>
-    </Section>
+    </PlayerSection>
   );
 }

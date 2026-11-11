@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Input from '@/components/ui/Input';
 import Button from '@/components/ui/Button';
+import PlateButton from '@/components/match/PlateButton';
+import StickyActionBar from '@/components/match/StickyActionBar';
 import Alert from '@/components/ui/Alert';
 import { useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -139,16 +141,19 @@ export default function ReplaySubmitForm({
     }
   }
 
+  // What the player typed is wrong: the message belongs to the field. Everything else is a notice of the request.
+  const fieldError = error && (error.kind === 'enterReplayUrl' || error.kind === 'invalidUrl') ? error : null;
+
   const details = mismatchDetails && (
-    <div className="text-sm space-y-1 font-mono text-poke-text-secondary">
+    <div className="flex flex-col gap-1 break-all font-mono text-caption text-fg-muted">
       <p>
-        <span className="font-sans font-heading font-semibold text-poke-text-primary">
+        <span className="font-body font-[550] text-fg">
           {t('replaySubmit.submittedUrl')}
         </span>{' '}
         {mismatchDetails.submittedUrl}
       </p>
       <p>
-        <span className="font-sans font-heading font-semibold text-poke-text-primary">
+        <span className="font-body font-[550] text-fg">
           {t('replaySubmit.parsedNames')}
         </span>{' '}
         {mismatchDetails.psUsernames.length > 0
@@ -159,9 +164,12 @@ export default function ReplaySubmitForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-3">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-4">
       <Input
         label={t('replaySubmit.urlLabel')}
+        hint={t('replaySubmit.urlHint')}
+        error={fieldError ? errorMessage(fieldError) : undefined}
+        inputMode="url"
         type="text"
         value={replayUrl}
         onChange={(e) => setReplayUrl(e.target.value)}
@@ -170,13 +178,13 @@ export default function ReplaySubmitForm({
         autoComplete="off"
       />
 
-      {error && <Alert variant="error">{errorMessage(error)}</Alert>}
+      {error && !fieldError && <Alert variant="error">{errorMessage(error)}</Alert>}
       {successKey && <Alert variant="success">{t(`replaySubmit.${successKey}`)}</Alert>}
 
       {nameMismatch && (
         isAdmin && onManualAssign ? (
           <Alert variant="warning">
-            <div className="space-y-2">
+            <div className="flex flex-col items-start gap-2">
               <p>{t('replaySubmit.nameMismatch')}</p>
               {details}
               <Button
@@ -190,7 +198,7 @@ export default function ReplaySubmitForm({
           </Alert>
         ) : (
           <Alert variant="warning">
-            <div className="space-y-2">
+            <div className="flex flex-col gap-2">
               <p>{t('replaySubmit.nameMismatchAsk')}</p>
               {details}
             </div>
@@ -198,9 +206,11 @@ export default function ReplaySubmitForm({
         )
       )}
 
-      <Button type="submit" variant="secondary" loading={loading}>
-        {t('replaySubmit.submit')}
-      </Button>
+      <StickyActionBar>
+        <PlateButton type="submit" loading={loading} className="flex-1 sm:flex-none">
+          {t('replaySubmit.submit')}
+        </PlateButton>
+      </StickyActionBar>
     </form>
   );
 }
