@@ -133,6 +133,7 @@ export default function AdminCommandMenu({
           label: entry.name,
           action: t('admin.command.open', { page: entry.name }),
           description: kind,
+          icon: NAV_ICONS['poke-ball'],
           group: jumpGroup,
           onSelect: () => router.push(commandIndexHref(entry)),
         });
