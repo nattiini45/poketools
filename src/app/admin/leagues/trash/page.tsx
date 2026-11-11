@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import SuperadminGuard from '@/components/shared/SuperadminGuard';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import LeagueTrashPanel from '@/components/league-trash/LeagueTrashPanel';
 import PageContainer from '@/components/ui/PageContainer';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import Button from '@/components/ui/Button';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { LEAGUE_TRASH_RETENTION_DAYS } from '@/lib/league-trash/constants';
 import {
@@ -18,6 +19,7 @@ import {
 } from '@/lib/supabase/queries/league-trash';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
+import { adminCompetitionsMessages } from '@/i18n/messages/admin-competitions';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
@@ -35,11 +37,12 @@ export default async function LeagueTrashPage() {
   const access = await getLiveAccess();
   if (!access?.isSuperadmin) return <SuperadminGuard>{null}</SuperadminGuard>;
 
-  const [trash, pendingRebuilds, schemaVersion, t, tEnum] = await Promise.all([
+  const [trash, pendingRebuilds, schemaVersion, t, tc, tEnum] = await Promise.all([
     listLeagueTrash(),
     listPendingLeagueRebuilds(),
     getLeagueTrashSchemaVersion(),
     getT(leagueAdminMessages),
+    getT(adminCompetitionsMessages),
     getT(enumMessages),
   ]);
 
@@ -70,13 +73,15 @@ export default async function LeagueTrashPage() {
         subtitle={t('trash.subtitle', { days: LEAGUE_TRASH_RETENTION_DAYS })}
         maxWidth="xl"
         action={
-          <Link href="/admin/leagues" className={`${getButtonClasses('ghost', 'sm')} min-h-11 sm:min-h-0`}>
-            {t('trash.back')}
-          </Link>
+          <Button asChild variant="primary" size="sm" className="min-h-11 sm:min-h-0">
+            <Link href="/admin/leagues/new">{tc('new.league')}</Link>
+          </Button>
         }
       >
-        {/* i18n-ignore: force-dynamic server page; the read time decides whether an entry is past its purge date and reaches the client as a prop, never re-read there */}
-        <LeagueTrashPanel rows={rows} pending={pending} now={new Date().toISOString()} />
+        <CompetitionList kind="league" view="trash" canViewTrash>
+          {/* i18n-ignore: force-dynamic server page; the read time decides whether an entry is past its purge date and reaches the client as a prop, never re-read there */}
+          <LeagueTrashPanel rows={rows} pending={pending} now={new Date().toISOString()} />
+        </CompetitionList>
       </PageContainer>
     </SuperadminGuard>
   );

@@ -2,7 +2,9 @@
  * Admin league lists. The viewer is read live (never the session copy). A
  * site admin sees every league; a resource admin only their own, and the
  * active list never shows archived leagues while the archived list shows
- * only the admin's own archived ones.
+ * only the admin's own archived ones. The rows reach `CompetitionList` as
+ * display data (redesign A4); the list itself is tested in
+ * `components/admin/competitions/__tests__`.
  */
 import { isValidElement, type ReactElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -41,12 +43,10 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ getAdminSeasonIds: mocks.getAdminSeasonIds }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
-vi.mock('@/components/ui/Card', () => stub('Card'));
-vi.mock('@/components/ui/Badge', () => stub('Badge'));
 
 import AdminLeaguesPage from '../page';
 import ArchivedLeaguesPage from '../archived/page';
-import Link from 'next/link';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 
@@ -69,15 +69,11 @@ function findByType(node: ReactNode, type: unknown): El[] {
   return found;
 }
 
-function text(node: ReactNode): string {
-  const out: string[] = [];
-  const visit = (n: ReactNode): void => {
-    if (typeof n === 'string' || typeof n === 'number') out.push(String(n));
-    else if (Array.isArray(n)) n.forEach(visit);
-    else if (isValidElement<Record<string, unknown>>(n)) visit(n.props.children as ReactNode);
-  };
-  visit(node);
-  return out.join(' | ');
+/** The list the page rendered: its props, and the names of its rows. */
+function listOf(tree: ReactNode) {
+  const [list] = findByType(tree, CompetitionList);
+  const rows = (list.props.rows as { name: string }[]).map((row) => row.name);
+  return { props: list.props, rows };
 }
 
 function league(id: string, name: string, archived = false) {
@@ -126,8 +122,8 @@ describe('admin leagues list', () => {
     const tree = await AdminLeaguesPage();
     expect(mocks.listSeasons).toHaveBeenCalledWith({ includeTestSeasons: true });
     expect(mocks.listSeasonsByIds).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Open League');
-    expect(text(tree)).toContain('Other League');
+    expect(listOf(tree).rows).toEqual(['Open League', 'Other League']);
+    expect(listOf(tree).props).toMatchObject({ kind: 'league', view: 'active' });
   });
 
   it('resource admin: only their own leagues, archived ones excluded', async () => {
@@ -136,26 +132,49 @@ describe('admin leagues list', () => {
     expect(mocks.getAdminSeasonIds).toHaveBeenCalledWith('p1');
     expect(mocks.listSeasonsByIds).toHaveBeenCalledWith(['s2'], { archived: false });
     expect(mocks.listSeasons).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Other League');
-    expect(text(tree)).not.toContain('Open League');
+    expect(listOf(tree).rows).toEqual(['Other League']);
   });
 
-  it('links the league trash for the superadmin only', async () => {
-    const trashLinks = async (live: ReturnType<typeof access>) => {
+  it('offers the league trash link to the superadmin only, from the live read', async () => {
+    const canViewTrash = async (live: ReturnType<typeof access>) => {
       mocks.getLiveAccess.mockResolvedValue(live);
-      return findByType(await AdminLeaguesPage(), Link).filter((link) => link.props.href === '/admin/leagues/trash');
+      return listOf(await AdminLeaguesPage()).props.canViewTrash;
     };
-    expect(await trashLinks(access({ isSiteAdmin: true, isAnyAdmin: true }))).toHaveLength(0);
-    expect(await trashLinks(access({ isAnyAdmin: true }))).toHaveLength(0);
-    const [link] = await trashLinks(access({ isSiteAdmin: true, isAnyAdmin: true, isSuperadmin: true }));
-    expect(text(link)).toBe('League trash');
+    expect(await canViewTrash(access({ isSiteAdmin: true, isAnyAdmin: true }))).toBe(false);
+    expect(await canViewTrash(access({ isAnyAdmin: true }))).toBe(false);
+    expect(await canViewTrash(access({ isSiteAdmin: true, isAnyAdmin: true, isSuperadmin: true }))).toBe(true);
   });
 
-  it('a resource admin with no assignments sees the empty state', async () => {
+  it('a resource admin with no assignments gets an empty list (the list shows the empty state)', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
     mocks.getAdminSeasonIds.mockResolvedValue([]);
     mocks.listSeasonsByIds.mockResolvedValue([]);
-    expect(text(await AdminLeaguesPage())).toContain('No leagues yet');
+    expect(listOf(await AdminLeaguesPage()).rows).toEqual([]);
+  });
+
+  it('maps a league to display data: translated labels, counts, dates and the next step', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.listSeasons.mockResolvedValue([
+      { ...league('s1', 'Open League'), format_type: 'draft', ruleset_name: 'Gen 9 OU', start_date: '2026-10-01', end_date: '2026-10-31', created_at: '2026-09-01T00:00:00Z', tournament_count: 2, status: 'upcoming' },
+      { ...league('s3', 'Kit League'), format_type: 'custom', status: 'upcoming' },
+    ]);
+    const { props } = listOf(await AdminLeaguesPage());
+    expect(props.rows).toEqual([
+      expect.objectContaining({
+        id: 's1',
+        href: '/admin/leagues/s1',
+        actionHref: '/admin/leagues/s1',
+        action: 'setup',
+        formatLabel: 'Draft',
+        statusLabel: 'Upcoming',
+        rulesetName: 'Gen 9 OU',
+        detail: '2 stages',
+        players: 8,
+        startDate: '2026-10-01',
+        endDate: '2026-10-31',
+      }),
+      expect.objectContaining({ id: 's3', action: 'setup', actionHref: '/admin/leagues/s3?tab=format' }),
+    ]);
   });
 
   it.each([
@@ -177,7 +196,8 @@ describe('admin archived leagues list', () => {
     const tree = await ArchivedLeaguesPage();
     expect(mocks.listArchivedSeasons).toHaveBeenCalledTimes(1);
     expect(mocks.listSeasonsByIds).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Old League');
+    expect(listOf(tree).rows).toEqual(['Old League']);
+    expect(listOf(tree).props).toMatchObject({ kind: 'league', view: 'archived' });
   });
 
   it('resource admin: only their own archived leagues, not every archived league', async () => {
@@ -187,8 +207,7 @@ describe('admin archived leagues list', () => {
     expect(mocks.getAdminSeasonIds).toHaveBeenCalledWith('p1');
     expect(mocks.listSeasonsByIds).toHaveBeenCalledWith(['s2'], { archived: true });
     expect(mocks.listArchivedSeasons).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('My Archived');
-    expect(text(tree)).not.toContain('Old League');
+    expect(listOf(tree).rows).toEqual(['My Archived']);
   });
 
   it.each([
