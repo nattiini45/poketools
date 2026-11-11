@@ -1,24 +1,13 @@
-import { readFileSync } from 'node:fs';
 import { describe, expect, it, vi } from 'vitest';
-import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
 
-vi.mock('next-auth/react', () => ({
-  useSession: () => ({
-    data: {
-      user: { image: null },
-      player: {
-        playerId: 'p1',
-        name: 'Fixture League Admin',
-        avatarUrl: null,
-        isAdmin: true,
-        isCreator: true,
-        isResourceAdmin: false,
-      },
-    },
-  }),
+const session = vi.hoisted(() => ({
+  current: null as null | { user: { image: null }; player: Record<string, unknown> },
 }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/admin' }));
+const nav = vi.hoisted(() => ({ pathname: '/leagues' }));
+
+vi.mock('next-auth/react', () => ({ useSession: () => ({ data: session.current }) }));
+vi.mock('next/navigation', () => ({ usePathname: () => nav.pathname, useRouter: () => ({ push: () => {} }) }));
 vi.mock('next/link', () => ({
   default: ({ href, children, ...rest }: { href: string; children?: React.ReactNode } & Record<string, unknown>) => (
     <a href={href} {...rest}>
@@ -26,143 +15,130 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('../DiscordLoginButton', () => ({ default: () => <span data-stub="auth" /> }));
-vi.mock('../ThemeToggle', () => ({ default: () => <span data-stub="theme" /> }));
-vi.mock('../PalettePicker', () => ({
-  default: () => <span data-stub="palette" />,
-  PalettePickerSection: () => <span data-stub="palette-section" />,
-}));
-vi.mock('../LanguagePicker', () => ({
-  default: () => <span data-stub="language" />,
-  LanguagePickerSection: () => <span data-stub="language-section" />,
-}));
-vi.mock('../PwaInstallPrompt', () => ({ default: () => <span data-stub="pwa" /> }));
+vi.mock('../DiscordLoginButton', () => ({ default: () => <span data-stub="auth" />, signOutAndClearCaches: () => {} }));
+vi.mock('../PwaInstallPrompt', () => ({ default: () => null }));
 vi.mock('../PlayerAvatar', () => ({
   default: ({ className }: { className?: string }) => <span data-stub="avatar" className={className} />,
 }));
+vi.mock('@/components/notifications/NotificationBell', () => ({ default: () => <span data-stub="bell" /> }));
 
-import NavBar, { NavLink, PROFILE_TEXT_VISIBILITY } from '../NavBar';
+import NavBar from '../NavBar';
+import BottomTabBar from '../nav/BottomTabBar';
 
-/** Class list of the first element whose opening tag matches `pattern`. */
-function classesOf(html: string, pattern: RegExp): string[] {
-  const tag = html.match(pattern)?.[0] ?? '';
-  const classes = tag.match(/class="([^"]*)"/)?.[1] ?? '';
-  return classes.split(/\s+/).filter(Boolean);
+const PLAYER = { playerId: 'p1', name: 'Fixture League Admin', avatarUrl: null, isAdmin: false, isCreator: false, isResourceAdmin: false };
+const ADMIN = { ...PLAYER, isAdmin: true, isCreator: true };
+const HISTORY = [{ href: '/history', label: 'History' }];
+
+/** The hrefs of the desktop link row, in order. */
+function rowLinks(html: string): string[] {
+  const row = html.slice(html.indexOf('lg:flex'), html.indexOf('aria-label="Search"'));
+  return [...row.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1]);
 }
 
-describe('NavBar layout (fits every width)', () => {
-  const html = renderWithI18n(<NavBar />);
+describe('NavBar link row', () => {
+  it('shows a visitor four links, More, search and Sign in, and no bell', () => {
+    session.current = null;
+    const html = renderWithI18n(<NavBar />);
+    expect(rowLinks(html)).toEqual(['/leagues', '/tournaments', '/insights', '/wiki']);
+    expect(html).toMatch(/<button[^>]*aria-expanded="false"[^>]*>(?:(?!<\/button>).)*More/s);
+    expect(html).toContain('aria-label="Search"');
+    expect(html).toContain('data-stub="auth"');
+    expect(html).not.toContain('data-stub="bell"');
+  });
 
-  it('the menu button reports its state and names the drawer it opens', () => {
+  it('shows a player Home and Teams as well, the bell and the account menu, and no hamburger', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<NavBar />);
+    expect(rowLinks(html)).toEqual(['/dashboard', '/leagues', '/tournaments', '/teambuilder', '/insights', '/wiki']);
+    expect(html).toContain('data-stub="bell"');
+    expect(html).toContain('aria-label="Account menu"');
+    expect(html).not.toContain('aria-controls="navbar-drawer"');
+    expect(html).not.toContain('data-stub="auth"');
+  });
+
+  it('never puts Admin or Creator Hub in the bar, whatever the role', () => {
+    session.current = { user: { image: null }, player: ADMIN };
+    const html = renderWithI18n(<NavBar />);
+    expect(html).not.toContain('href="/admin"');
+    expect(html).not.toContain('href="/creator"');
+  });
+
+  it('marks the current page and puts it on the gold plate', () => {
+    session.current = null;
+    const html = renderWithI18n(<NavBar />);
+    const current = html.match(/<a [^>]*aria-current="page"[^>]*>/g) ?? [];
+    expect(current).toHaveLength(1);
+    expect(current[0]).toContain('href="/leagues"');
+    expect(html).toMatch(/href="\/leagues"(?:(?!<\/a>).)*bg-tier-1/s);
+  });
+
+  it('keeps the closed menus out of the markup: More, the account menu and the drawer render on demand', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<NavBar extraLinks={HISTORY} />);
+    expect(html).not.toContain('href="/replays"');
+    expect(html).not.toContain('href="/history"');
+    expect(html).not.toContain('type="radio"');
+    expect(html).not.toContain('role="dialog"');
+  });
+
+  it('gives a visitor the hamburger below lg, wired to the drawer', () => {
+    session.current = null;
+    const html = renderWithI18n(<NavBar />);
     const button = html.match(/<button[^>]*aria-controls="navbar-drawer"[^>]*>/)?.[0] ?? '';
     expect(button).toContain('aria-expanded="false"');
+    expect(button).toContain('lg:hidden');
+    expect(button).toContain('aria-label="Toggle menu"');
   });
 
-  it('truncates a long display name and exposes it as a tooltip', () => {
-    const name = classesOf(html, /<span[^>]*>(?=Fixture League Admin<\/span>)/);
+  it('is one labelled navigation landmark, 64 px tall, in German too', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<NavBar />, { locale: 'de' });
+    expect(html).toMatch(/<nav id="site-nav"[^>]*aria-label="Hauptnavigation"/);
+    expect(html).toContain('flex h-16 items-center');
+    expect(html).toContain('Turniere');
+    expect(html).toContain('aria-label="Kontomenü"');
+    expect(html).toContain('aria-label="Suche"');
+  });
+
+  it('keeps the name out of the bar below 2xl and reachable as the trigger title', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<NavBar />);
+    const trigger = html.match(/<button[^>]*aria-label="Account menu"[^>]*>/)?.[0] ?? '';
+    expect(trigger).toContain('title="Fixture League Admin"');
+    const name = html.match(/<span[^>]*>(?=Fixture League Admin<\/span>)/)?.[0] ?? '';
     expect(name).toContain('truncate');
-    expect(name).toContain('max-w-[10rem]');
-
-    const profile = html.match(/<a[^>]*href="\/players\/p1"[^>]*>/)?.[0] ?? '';
-    expect(profile).toContain('title="Fixture League Admin"');
-    expect(classesOf(profile, /^.*$/)).toContain('min-w-0');
-
-    expect(classesOf(html, /<span[^>]*>(?=View public profile<\/span>)/)).toContain('truncate');
-    expect(classesOf(html, /<span data-stub="avatar"[^>]*>/)).toContain('shrink-0');
-  });
-
-  it('keeps Sign Out on one line', () => {
-    const wrapper = classesOf(html, /<div[^>]*>(?=<span data-stub="auth"><\/span>)/);
-    expect(wrapper).toContain('shrink-0');
-    expect(wrapper).toContain('whitespace-nowrap');
-  });
-
-  it('gives the bar row a gap and shrink rules so nothing overflows', () => {
-    const row = classesOf(html, /<div class="flex h-16[^"]*"[^>]*>/);
-    expect(row).toContain('justify-between');
-    expect(row).toContain('gap-3');
-    expect(classesOf(html, /<div class="flex shrink-0 items-center gap-1"[^>]*>/)).toContain('shrink-0');
-    expect(classesOf(html, /<div class="flex min-w-0 items-center[^"]*"[^>]*>/)).toContain('min-w-0');
-  });
-
-  it('switches the desktop links and the hamburger at the same breakpoint', () => {
-    const links = classesOf(html, /<div class="hidden xl:flex[^"]*"[^>]*>/);
-    expect(links).toContain('hidden');
-    expect(links).toContain('xl:flex');
-
-    const toggle = classesOf(html, /<button[^>]*aria-label="Toggle menu"[^>]*>/);
-    expect(toggle).toContain('xl:hidden');
-    expect(toggle).toContain('shrink-0');
-
-    for (const list of [links, toggle]) {
-      expect(list.filter((c) => c.startsWith('md:') && /hidden|flex|block/.test(c))).toEqual([]);
-    }
-  });
-
-  it('renders the desktop links dense', () => {
-    const row = html.slice(html.indexOf('hidden xl:flex'), html.indexOf('data-stub="language"'));
-    const links = row.match(/<a [^>]*>/g) ?? [];
-    expect(links.length).toBeGreaterThanOrEqual(9);
-    for (const link of links.filter((l) => !l.includes('/players/'))) {
-      expect(link).toContain('px-2');
-    }
-  });
-
-  it('renders in German with the same truncation rules', () => {
-    const de = renderWithI18n(<NavBar />, { locale: 'de' });
-    expect(de).toContain('Öffentliches Profil ansehen');
-    const name = classesOf(de, /<span[^>]*>(?=Fixture League Admin<\/span>)/);
-    expect(name).toContain('truncate');
-    expect(name).toContain('max-w-[10rem]');
+    expect(name).toContain('2xl:block');
   });
 });
 
-describe('NavBar profile caption at desktop widths', () => {
-  const html = renderWithI18n(<NavBar />);
-  const column = classesOf(html, /<div[^>]*>(?=<span[^>]*>Fixture League Admin<\/span>)/);
-
-  it('shows the name text at 768-1279 and from 1536, and only the avatar at 1280-1535', () => {
-    // 1024 (md..xl): visible; 1280, 1366, 1440 (xl..2xl): collapsed; 1536 (2xl): visible again.
-    expect(PROFILE_TEXT_VISIBILITY.split(' ')).toEqual(['sr-only', 'md:not-sr-only', 'xl:sr-only', '2xl:not-sr-only']);
-    for (const cls of PROFILE_TEXT_VISIBILITY.split(' ')) expect(column).toContain(cls);
-    // Wide screens: the bar widens so the name has room and cannot be squeezed.
-    expect(column).toContain('2xl:shrink-0');
-    expect(html).toContain('2xl:max-w-[96rem]');
+describe('BottomTabBar', () => {
+  it('renders nothing for a visitor', () => {
+    session.current = null;
+    expect(renderWithI18n(<BottomTabBar />)).toBe('');
   });
 
-  it('keeps the full name reachable when the text is collapsed', () => {
-    const profile = html.match(/<a[^>]*href="\/players\/p1"[^>]*>/)?.[0] ?? '';
-    expect(profile).toContain('title="Fixture League Admin"');
-    // The text stays in the DOM (sr-only), so the accessible name is still the full name.
-    expect(html).toContain('Fixture League Admin</span>');
-  });
-});
-
-describe('NavBar drawer (source contract; the closed drawer is not server-rendered)', () => {
-  const src = readFileSync(new URL('../NavBar.tsx', import.meta.url), 'utf8');
-
-  it('is a labelled modal dialog', () => {
-    expect(src).toMatch(/role="dialog"/);
-    expect(src).toMatch(/aria-modal="true"/);
-    expect(src).toContain("aria-label={t('menuLabel')}");
+  it('gives a player Home, Leagues, Teams, Wiki and More, with the current tab marked', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<BottomTabBar extraLinks={HISTORY} />);
+    expect([...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1])).toEqual(['/dashboard', '/leagues', '/teambuilder', '/wiki']);
+    expect(html).toMatch(/<a [^>]*href="\/leagues"[^>]*aria-current="page"/);
+    expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-expanded="false"/);
+    expect(html).toContain('aria-label="Quick navigation"');
+    expect(html.startsWith('<div data-site-bottom-bar=""')).toBe(true);
   });
 
-  it('closes on Escape and returns focus to the menu button', () => {
-    expect(src).toMatch(/event\.key === 'Escape'\) setMobileOpen\(false\)/);
-    expect(src).toContain('closeButtonRef.current?.focus()');
-    expect(src).toContain('menuButtonRef.current?.focus()');
+  it('marks More while one of its pages is open, extension pages included', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    nav.pathname = '/history/season-1';
+    const html = renderWithI18n(<BottomTabBar extraLinks={HISTORY} />);
+    nav.pathname = '/leagues';
+    expect(html).not.toContain('aria-current="page"');
+    expect(html).toMatch(/<button[^>]*class="[^"]*font-\[550\][^"]*"[^>]*>/);
   });
-});
 
-describe('NavLink padding', () => {
-  it('uses px-2 when dense and px-3 by default, and never wraps its label', () => {
-    const dense = renderToStaticMarkup(<NavLink href="/x" label="X" active={false} dense />);
-    expect(dense).toContain('px-2');
-    expect(dense).not.toContain('px-3');
-    expect(dense).toContain('whitespace-nowrap');
-
-    const regular = renderToStaticMarkup(<NavLink href="/x" label="X" active={false} />);
-    expect(regular).toContain('px-3');
-    expect(regular).not.toContain('px-2');
+  it('speaks German', () => {
+    session.current = { user: { image: null }, player: PLAYER };
+    const html = renderWithI18n(<BottomTabBar />, { locale: 'de' });
+    for (const label of ['Start', 'Ligen', 'Teams', 'Wiki', 'Mehr']) expect(html).toContain(`>${label}</span>`);
   });
 });

@@ -6,6 +6,26 @@ export default {
     hidden: 'Hidden achievement',
     earnedTooltip: '{description} • Earned {date}',
     timesEarned: '{tier} • x{count}',
+    earnedCount: '{earned} of {total} achievements earned',
+    earnedOn: 'Earned {date}',
+    locked: 'Locked',
+    progress: '{current} / {target}',
+    progressAria: 'Progress: {current} of {target}',
+    /** Display names on the profile's badge case; `categories` and `tiers` below stay the lower-case values the admin editor lists. */
+    categoryNames: {
+      combat: 'Combat',
+      milestone: 'Milestones',
+      social: 'Community',
+      rare: 'Rare',
+      meta: 'Meta',
+    },
+    tierNames: {
+      bronze: 'Bronze',
+      silver: 'Silver',
+      gold: 'Gold',
+      platinum: 'Platinum',
+      legendary: 'Legendary',
+    },
     categories: {
       combat: 'combat',
       milestone: 'milestone',
@@ -26,6 +46,7 @@ export default {
     provisionalAria: 'Provisional rating',
     ratingTitle: '{rating} ± {rd}',
     ratingTitleProvisional: '{rating} ± {rd} (provisional)',
+    deviation: '± {rd}',
   },
   ratingHistory: {
     empty: 'No rating history yet',
@@ -36,6 +57,7 @@ export default {
   signatures: {
     unlockAt: { one: 'Unlock at {count} game', other: 'Unlock at {count} games' },
     games: { one: '{count} game', other: '{count} games' },
+    locked: 'Locked slot',
   },
   streaks: {
     win: 'Win Streak',

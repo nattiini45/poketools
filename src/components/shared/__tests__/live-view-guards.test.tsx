@@ -41,7 +41,7 @@ vi.mock('@/components/shared/NavBar', () => ({ default: () => null }));
 vi.mock('@/components/shared/PageTransitionWrapper', () => ({
   default: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('@/components/admin/AdminSidebar', () => ({ default: () => null }));
+vi.mock('@/components/admin/AdminShell', () => ({ default: ({ children }: { children: ReactNode }) => children }));
 
 import AdminGuard from '../AdminGuard';
 import CreatorGuard from '../CreatorGuard';
@@ -146,7 +146,7 @@ describe('CreatorGuard', () => {
 });
 
 describe('admin layout', () => {
-  it('passes the live site-admin flag to the sidebar, not the session copy', async () => {
+  it('passes the live site-admin flag to the admin shell, not the session copy', async () => {
     auth.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: false }));
     const tree = await AdminLayout({ children: null });
     expect(findRoles(tree)).toMatchObject({ isSiteAdmin: false, isSuperadmin: false });

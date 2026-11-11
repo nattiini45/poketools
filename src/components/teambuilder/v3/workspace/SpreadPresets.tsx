@@ -142,7 +142,7 @@ export default function SpreadPresets({ slot, species }: SpreadPresetsProps) {
       {/* Real spreads from the meta, with usage share */}
       {metaSpreads.length > 0 && (
         <div>
-          <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+          <h4 className="text-caption font-[550] text-fg mb-1.5">
             {t('spreadPresets.metaTitle', { species: localizeSpecies(species, dl) })}
           </h4>
           <div className="flex flex-col gap-1">
@@ -152,11 +152,11 @@ export default function SpreadPresets({ slot, species }: SpreadPresetsProps) {
                 <button
                   key={preset.id}
                   onClick={() => applyPreset(preset)}
-                  className="flex items-center gap-2 px-1.5 py-0.5 text-[10px] bg-poke-surface hover:bg-poke-muted border border-poke-border rounded text-left text-poke-text-secondary hover:text-poke-text-primary transition-colors"
+                  className="flex items-center gap-2 px-1.5 py-0.5 text-caption bg-surface hover:bg-hover border border-hairline rounded text-left text-fg-muted hover:text-fg transition-colors"
                   title={t('spreadPresets.applyTitle', { spread: label })}
                 >
                   <span className="flex-1 truncate">{label}</span>
-                  <span className="text-poke-text-muted tabular-nums shrink-0">
+                  <span className="text-fg-muted tabular-nums shrink-0">
                     {formatUsagePct(preset.pct ?? 0, locale, 0)}
                   </span>
                 </button>
@@ -168,7 +168,7 @@ export default function SpreadPresets({ slot, species }: SpreadPresetsProps) {
 
       {/* Canonical quick presets */}
       <div>
-        <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+        <h4 className="text-caption font-[550] text-fg mb-1.5">
           {t('spreadPresets.quickTitle')}
         </h4>
         <div className="flex flex-wrap gap-1">
@@ -177,7 +177,7 @@ export default function SpreadPresets({ slot, species }: SpreadPresetsProps) {
               key={preset.id}
               onClick={() => applyPreset(preset)}
               title={labelOf(preset)}
-              className="px-1.5 py-0.5 text-[10px] bg-poke-surface hover:bg-poke-muted border border-poke-border rounded text-poke-text-secondary hover:text-poke-text-primary transition-colors"
+              className="px-1.5 py-0.5 text-caption bg-surface hover:bg-hover border border-hairline rounded text-fg-muted hover:text-fg transition-colors"
             >
               {localizeNature(preset.nature, dl)}
             </button>

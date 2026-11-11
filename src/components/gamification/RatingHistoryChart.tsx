@@ -8,30 +8,14 @@ interface RatingHistoryChartProps {
   history: RatingHistoryEntry[];
 }
 
-interface ChartPoint {
-  x: number;
-  ratingY: number;
-  upperY: number;
-  lowerY: number;
-}
-
-const WIDTH = 720;
-const HEIGHT = 260;
-const PADDING = 24;
-
-function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
+/** Tick distances for the rating axis; the smallest one that fits the values into four steps or fewer is used. */
+const TICK_STEPS = [25, 50, 100, 200, 250, 500, 1000, 2000];
 
 export default function RatingHistoryChart({ history }: RatingHistoryChartProps) {
   const t = useT(gamificationMessages);
   const formatter = useFormatter();
   if (history.length === 0) {
-    return (
-      <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-4 text-sm text-poke-text-tertiary">
-        {t('ratingHistory.empty')}
-      </div>
-    );
+    return <p className="text-body text-fg-muted">{t('ratingHistory.empty')}</p>;
   }
 
   const points = [...history].sort((a, b) => {
@@ -45,28 +29,24 @@ export default function RatingHistoryChart({ history }: RatingHistoryChartProps)
   ]);
   const minValue = Math.min(...values);
   const maxValue = Math.max(...values);
-  const span = Math.max(maxValue - minValue, 1);
-  const yMin = minValue - span * 0.1;
-  const yMax = maxValue + span * 0.1;
-  const yRange = Math.max(yMax - yMin, 1);
+  const step =
+    TICK_STEPS.find((candidate) => Math.ceil(maxValue / candidate) - Math.floor(minValue / candidate) <= 4) ?? TICK_STEPS[TICK_STEPS.length - 1];
+  const yMin = Math.floor(minValue / step) * step;
+  const yMax = Math.max(Math.ceil(maxValue / step) * step, yMin + step);
+  const yRange = yMax - yMin;
+  // Grid lines from the top value down, as a share of the plot height.
+  const grid = Array.from({ length: Math.round(yRange / step) + 1 }, (_, index) => (index * step) / yRange);
 
-  const xStep = points.length > 1 ? (WIDTH - PADDING * 2) / (points.length - 1) : 0;
-  const toY = (value: number) => {
-    const normalized = (value - yMin) / yRange;
-    return clamp(HEIGHT - PADDING - normalized * (HEIGHT - PADDING * 2), PADDING, HEIGHT - PADDING);
-  };
+  // The plot is a 100 x 100 box stretched to the element, so every coordinate is a percentage.
+  const toX = (index: number) => (points.length > 1 ? (index / (points.length - 1)) * 100 : 50);
+  const toY = (value: number) => Math.max(0, Math.min(100, 100 - ((value - yMin) / yRange) * 100));
 
-  const chartPoints: ChartPoint[] = points.map((point, index) => {
-    const x = PADDING + index * xStep;
-    const upper = point.rating_after + point.rd_after * 2;
-    const lower = point.rating_after - point.rd_after * 2;
-    return {
-      x,
-      ratingY: toY(point.rating_after),
-      upperY: toY(upper),
-      lowerY: toY(lower),
-    };
-  });
+  const chartPoints = points.map((point, index) => ({
+    x: toX(index),
+    ratingY: toY(point.rating_after),
+    upperY: toY(point.rating_after + point.rd_after * 2),
+    lowerY: toY(point.rating_after - point.rd_after * 2),
+  }));
 
   const linePath = chartPoints.map((point) => `${point.x},${point.ratingY}`).join(' ');
   const upperPath = chartPoints.map((point) => `${point.x},${point.upperY}`);
@@ -77,58 +57,68 @@ export default function RatingHistoryChart({ history }: RatingHistoryChartProps)
   const lastLabel = formatter.instant(points[points.length - 1].recorded_at, 'date');
 
   return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-4">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('ratingHistory.title')}</h3>
-        <span className="text-xs text-poke-text-tertiary">{t('ratingHistory.band')}</span>
+    <figure className="flex flex-col gap-2">
+      <figcaption className="flex flex-wrap items-baseline justify-between gap-x-3">
+        <h3 className="text-subtitle font-[550] text-fg">{t('ratingHistory.title')}</h3>
+        <span className="text-caption text-fg-muted">{t('ratingHistory.band')}</span>
+      </figcaption>
+      <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-2">
+        <div aria-hidden="true" className="relative my-2 min-w-8 font-mono text-micro text-fg-muted tabular-nums">
+          {grid.map((share) => (
+            <span key={share} className="absolute right-0 -translate-y-1/2" style={{ top: `${share * 100}%` }}>
+              {String(Math.round(yMax - share * yRange))}
+            </span>
+          ))}
+        </div>
+        <div className="relative my-2 h-44">
+          <svg
+            viewBox="0 0 100 100"
+            preserveAspectRatio="none"
+            className="absolute inset-0 h-full w-full overflow-visible"
+            role="img"
+            aria-label={t('ratingHistory.chartAria')}
+          >
+            {grid.map((share) => (
+              <line
+                key={share}
+                x1={0}
+                y1={share * 100}
+                x2={100}
+                y2={share * 100}
+                className="stroke-hairline"
+                strokeWidth="1"
+                vectorEffect="non-scaling-stroke"
+              />
+            ))}
+            <polygon points={confidenceBand} className="fill-accent-subtle stroke-none" />
+            <polyline
+              points={linePath}
+              fill="none"
+              className="stroke-accent-ink"
+              strokeWidth="2"
+              strokeLinejoin="round"
+              strokeLinecap="round"
+              vectorEffect="non-scaling-stroke"
+            />
+          </svg>
+          {chartPoints.map((point, index) => (
+            <span
+              key={`${point.x}-${point.ratingY}`}
+              aria-hidden="true"
+              className={
+                index === chartPoints.length - 1
+                  ? 'absolute h-2.5 w-2.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-surface bg-accent-ink'
+                  : 'absolute h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent-ink'
+              }
+              style={{ left: `${point.x}%`, top: `${point.ratingY}%` }}
+            />
+          ))}
+        </div>
+        <div className="col-start-2 flex items-center justify-between font-mono text-micro text-fg-muted">
+          <span>{firstLabel}</span>
+          <span>{lastLabel}</span>
+        </div>
       </div>
-      <svg
-        viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
-        className="w-full h-56 rounded-poke-md border border-poke-border"
-        role="img"
-        aria-label={t('ratingHistory.chartAria')}
-      >
-        <line
-          x1={PADDING}
-          y1={HEIGHT - PADDING}
-          x2={WIDTH - PADDING}
-          y2={HEIGHT - PADDING}
-          stroke="currentColor"
-          className="text-poke-border"
-          strokeWidth="1"
-        />
-        <line
-          x1={PADDING}
-          y1={PADDING}
-          x2={PADDING}
-          y2={HEIGHT - PADDING}
-          stroke="currentColor"
-          className="text-poke-border"
-          strokeWidth="1"
-        />
-
-        <polygon points={confidenceBand} className="stroke-none" />
-        <polyline
-          points={linePath}
-          fill="none"
-          stroke="currentColor"
-          className="text-poke-accent"
-          strokeWidth="2.5"
-        />
-        {chartPoints.map((point) => (
-          <circle
-            key={`${point.x}-${point.ratingY}`}
-            cx={point.x}
-            cy={point.ratingY}
-            r={2.75}
-            className="fill-poke-blue"
-          />
-        ))}
-      </svg>
-      <div className="mt-2 flex items-center justify-between text-xs text-poke-text-tertiary">
-        <span>{firstLabel}</span>
-        <span>{lastLabel}</span>
-      </div>
-    </div>
+    </figure>
   );
 }

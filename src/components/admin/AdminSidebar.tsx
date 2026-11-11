@@ -1,141 +1,174 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { ArrowLeft, Search } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
-import { FOCUS_RING } from '@/components/ui/panel';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewPlate from '@/components/ui/SkewPlate';
+import { formatShortcut, useIsMac } from '@/components/ui/fluid/command-menu';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarGroup,
+  SidebarGroupLabel,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarMenuSub,
+  SidebarMenuSubButton,
+  SidebarMenuSubItem,
+  useSidebar,
+} from '@/components/ui/fluid/sidebar';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
-import { activeAdminNavHref, chipScrollLeft, visibleAdminNav, type AdminNavExtraItem, type AdminRoles, type VisibleAdminNavItem } from './adminNav';
+import AdminAccountMenu from './AdminAccountMenu';
+import { ADMIN_BACK_TO_SITE_HREF } from './AdminCommandMenu';
+import {
+  ADMIN_NEW_COMPETITION_HREF,
+  activeAdminNavHref,
+  adminNavSections,
+  type VisibleAdminNavGroup,
+  type VisibleAdminNavItem,
+} from './adminNav';
+import { NAV_ICONS } from './nav-icons';
 
-/**
- * One mobile chip row. It scrolls the highlighted chip into view when the page (or the active
- * item) changes, so the current section is visible without swiping. Only the row's own
- * `scrollLeft` moves; the page never scrolls.
- */
-function ChipRow({ activeHref, children }: { activeHref: string | null; children: React.ReactNode }) {
-  const rowRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const row = rowRef.current;
-    const chip = row?.querySelector<HTMLElement>('[aria-current="page"]');
-    if (!row || !chip) return;
-    const rowBox = row.getBoundingClientRect();
-    const chipBox = chip.getBoundingClientRect();
-    row.scrollLeft = chipScrollLeft({
-      rowWidth: row.clientWidth,
-      rowScrollWidth: row.scrollWidth,
-      currentScrollLeft: row.scrollLeft,
-      chipLeft: chipBox.left - rowBox.left + row.scrollLeft,
-      chipWidth: chipBox.width,
-    });
-  }, [activeHref]);
+const RAIL_FOCUS = 'focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
+
+function NavGroup({ group, activeHref }: { group: VisibleAdminNavGroup; activeHref: string | null }) {
+  const t = useT(shellMessages);
+  const labelOf = (item: VisibleAdminNavItem): string => (item.labelKey === undefined ? item.label : t(`admin.items.${item.labelKey}`));
+  const holdsPage = group.items.some((item) => item.href === activeHref);
+
+  // A folded group opens when the page moves into it (a command-menu jump, a link on a page); after that the admin's
+  // own toggle stands until the page moves in again.
+  const [open, setOpen] = useState(!group.collapsed || holdsPage);
+  const [heldPage, setHeldPage] = useState(holdsPage);
+  if (heldPage !== holdsPage) {
+    setHeldPage(holdsPage);
+    if (holdsPage) setOpen(true);
+  }
+
   return (
-    <div ref={rowRef} className="flex gap-1.5 overflow-x-auto pb-1">
-      {children}
-    </div>
+    <SidebarGroup collapsible={group.collapsed} open={open} onOpenChange={setOpen}>
+      <SidebarGroupLabel>
+        {group.icon && <ItemIcon item={group.icon} />}
+        <span className="min-w-0 truncate">{t(`admin.groups.${group.id}`)}</span>
+      </SidebarGroupLabel>
+      <SidebarMenu>
+        {adminNavSections(group.items).map(({ item, subs }) => {
+          const inSection = item.href === activeHref || subs.some((sub) => sub.href === activeHref);
+          return (
+            <SidebarMenuItem key={item.labelKey ?? item.href}>
+              <SidebarMenuButton
+                render={<Link href={item.href} />}
+                isActive={inSection}
+                // The page itself is the view below when the section has views (Leagues under Competitions).
+                aria-current={inSection ? (subs.length > 0 ? 'true' : 'page') : undefined}
+                icon={item.icon ? NAV_ICONS[item.icon] : undefined}
+                className={item.icon ? undefined : 'pl-10'}
+              >
+                {labelOf(item)}
+                {item.deprecated && (
+                  <Badge variant="gray" size="xs">
+                    {t('admin.legacy')}
+                  </Badge>
+                )}
+              </SidebarMenuButton>
+              {subs.length > 0 && (
+                <SidebarMenuSub open={inSection} className="ml-[19px]">
+                  {subs.map((sub) => (
+                    <SidebarMenuSubItem key={sub.labelKey ?? sub.href}>
+                      <SidebarMenuSubButton render={<Link href={sub.href} />} aria-current={sub.href === activeHref ? 'page' : undefined}>
+                        {labelOf(sub)}
+                      </SidebarMenuSubButton>
+                    </SidebarMenuSubItem>
+                  ))}
+                </SidebarMenuSub>
+              )}
+            </SidebarMenuItem>
+          );
+        })}
+      </SidebarMenu>
+    </SidebarGroup>
   );
 }
 
 /**
- * Admin workflow rail: grouped, role-filtered navigation with an accent
- * marker on the active item. Desktop renders a sticky side rail; below `lg`
- * the same config renders as a compact horizontally-scrolling chip row per
- * group so the workflow stays one tap away.
+ * The admin sidebar (redesign A1): a dark umber rail in both themes with the wordmark, New competition, the
+ * command-menu field, the role-filtered groups of `adminNav.ts` (a gold skewed plate marks the current section) and,
+ * at the foot, Back to site and the account menu. It collapses with `[`, resizes from its edge and is a drawer below
+ * 768 px (@fluid sidebar).
  */
-export default function AdminSidebar({
-  roles,
-  extraItems,
-}: {
-  roles: AdminRoles;
-  /** Admin pages of the active pack extension (docs/format-packs.md), labels already localized. */
-  extraItems?: readonly AdminNavExtraItem[];
-}) {
+export default function AdminSidebar({ groups, onOpenCommand }: { groups: readonly VisibleAdminNavGroup[]; onOpenCommand: () => void }) {
   const pathname = usePathname();
   const t = useT(shellMessages);
-  const groups = visibleAdminNav(roles, extraItems);
+  const mac = useIsMac();
+  const { setOpenMobile } = useSidebar();
   // One highlighted item: the most specific href the page sits under, extension items included.
   const activeHref = activeAdminNavHref(
     pathname,
     groups.flatMap((group) => group.items.map((item) => item.href)),
   );
-  const labelOf = (item: VisibleAdminNavItem): string =>
-    item.labelKey === undefined ? item.label : t(`admin.items.${item.labelKey}`);
+
+  // The drawer closes when its link has taken the admin to another page.
+  useEffect(() => {
+    setOpenMobile(false);
+  }, [pathname, setOpenMobile]);
 
   return (
-    <>
-      {/* Desktop rail */}
-      <nav
-        aria-label={t('admin.navLabel')}
-        className="hidden lg:block sticky top-20 self-start w-56 shrink-0 space-y-6"
-      >
-        {groups.map((group) => (
-          <div key={group.id}>
-            <h2 className="px-3 text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted">
-              {t(`admin.groups.${group.id}`)}
-            </h2>
-            <ul className="mt-2 space-y-0.5 border-l border-poke-border">
-              {group.items.map((item) => {
-                const active = item.href === activeHref;
-                return (
-                  <li key={item.href}>
-                    <Link
-                      href={item.href}
-                      aria-current={active ? 'page' : undefined}
-                      className={`flex items-center gap-2 -ml-px border-l-2 py-1.5 pr-2 text-sm font-heading font-semibold transition-colors ${
-                        item.sub ? 'pl-7' : 'pl-3'
-                      } ${FOCUS_RING} ${
-                        active
-                          ? 'border-poke-accent text-poke-accent'
-                          : 'border-transparent text-poke-text-secondary hover:text-poke-text-primary hover:bg-poke-elevated'
-                      }`}
-                    >
-                      <span className="truncate">{labelOf(item)}</span>
-                      {item.deprecated && (
-                        <Badge variant="gray" size="xs">
-                          {t('admin.legacy')}
-                        </Badge>
-                      )}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
-        ))}
-      </nav>
+    <Sidebar bordered={false}>
+      {/* data-theme: the rail is moonlit in both themes, so every token inside resolves to its dark value. */}
+      <div data-theme="dark" data-admin-rail="" className="admin-rail flex h-full min-h-0 w-full flex-col bg-surface text-fg">
+        <SidebarHeader className="gap-3 p-3">
+          <Link href="/admin" className={`flex items-baseline gap-2 self-start rounded-sm px-1 ${RAIL_FOCUS}`}>
+            <span className="font-heading text-xl leading-7 text-fg">PokéTools</span>
+            <span className="text-xs text-fg-muted">{t('admin.brand')}</span>
+          </Link>
+          <Link href={ADMIN_NEW_COMPETITION_HREF} className="flex rounded-sm">
+            <SkewPlate variant="button" tone="primary" className="w-full py-2 text-sm">
+              <span className="flex items-center gap-2">
+                <ItemIcon item="premier-ball" />
+                {t('admin.newCompetition')}
+              </span>
+            </SkewPlate>
+          </Link>
+          <button
+            type="button"
+            onClick={onOpenCommand}
+            className={`flex h-9 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md border border-hairline bg-elevated px-2.5 text-left text-sm text-fg-muted transition-colors duration-80 hover:border-hairline-strong hover:text-fg ${RAIL_FOCUS}`}
+          >
+            <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+            <span className="min-w-0 flex-1 truncate">{t('admin.command.trigger')}</span>
+            {/* Geist has no ⌘ glyph: the key caps use the system font. */}
+            <kbd aria-hidden="true" className="shrink-0 rounded border border-hairline-strong px-1 font-[system-ui] text-[11px] leading-4 text-fg-muted">
+              {formatShortcut('mod+k', mac).join(mac ? '' : '+')}
+            </kbd>
+          </button>
+        </SidebarHeader>
 
-      {/* Mobile chip rows: stacked above the content by the admin layout.
-          min-w-0 w-full cap the nav at the column width, so each row
-          scrolls inside it instead of widening the page. */}
-      <nav aria-label={t('admin.navLabel')} className="lg:hidden min-w-0 w-full space-y-3">
-        {groups.map((group) => (
-          <div key={group.id}>
-            <h2 className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted mb-1">
-              {t(`admin.groups.${group.id}`)}
-            </h2>
-            <ChipRow activeHref={activeHref}>
-              {group.items.map((item) => {
-                const active = item.href === activeHref;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    aria-current={active ? 'page' : undefined}
-                    className={`whitespace-nowrap rounded-full border px-3 py-1 text-xs font-heading font-semibold transition-colors ${FOCUS_RING} ${
-                      active
-                        ? 'bg-poke-accent-light text-poke-accent-strong'
-                        : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-accent hover:text-poke-text-primary'
-                    }`}
-                  >
-                    {labelOf(item)}
-                  </Link>
-                );
-              })}
-            </ChipRow>
-          </div>
-        ))}
-      </nav>
-    </>
+        <SidebarContent>
+          <nav aria-label={t('admin.navLabel')}>
+            {groups.map((group) => (
+              <NavGroup key={group.id} group={group} activeHref={activeHref} />
+            ))}
+          </nav>
+        </SidebarContent>
+
+        <SidebarFooter className="border-t border-hairline p-2">
+          <Link
+            href={ADMIN_BACK_TO_SITE_HREF}
+            className={`flex h-9 items-center gap-2 rounded-md px-2 text-sm text-fg-muted transition-colors duration-80 hover:bg-hover hover:text-fg ${RAIL_FOCUS}`}
+          >
+            <ArrowLeft className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {t('admin.backToSite')}
+          </Link>
+          <AdminAccountMenu />
+        </SidebarFooter>
+      </div>
+    </Sidebar>
   );
 }

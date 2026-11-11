@@ -130,14 +130,14 @@ function ApplyShowdownBlock({
   }
 
   return (
-    <div className="mt-2 border-t border-poke-border pt-2">
+    <div className="mt-2 border-t border-hairline pt-2">
       {sets === null ? (
         <Button variant="secondary" size="sm" onClick={() => void parse()} loading={loading}>
           {t('ai.chat.applyToSlot')}
         </Button>
       ) : (
         <div className="space-y-1">
-          <p className="text-[11px] text-poke-text-muted">
+          <p className="text-caption text-fg-muted">
             {t('ai.chat.appliesHint')}
           </p>
           <div className="flex flex-wrap gap-1.5">
@@ -158,7 +158,7 @@ function ApplyShowdownBlock({
       )}
       {notice && (
         <p
-          className={`mt-1 text-xs ${notice.kind === 'applied' ? 'text-poke-green' : 'text-poke-danger'}`}
+          className={`mt-1 text-xs ${notice.kind === 'applied' ? 'text-win' : 'text-loss'}`}
         >
           {noticeText(notice)}
         </p>
@@ -278,11 +278,11 @@ export default function AiChatPanel({ commandApi, format, teamId, rulesetId, mat
 
   return (
     <div className="flex flex-col">
-      <p className="text-xs text-poke-text-muted">{t('ai.chat.intro')}</p>
+      <p className="text-xs text-fg-muted">{t('ai.chat.intro')}</p>
 
       {expanded && (
         <div
-          className="mt-3 max-h-80 overflow-y-auto space-y-3 rounded-poke-md p-3 border border-poke-border"
+          className="mt-3 max-h-80 overflow-y-auto space-y-3 rounded-poke-md p-3 border border-hairline"
           aria-live="polite"
         >
           <AgentChatThread
@@ -302,7 +302,7 @@ export default function AiChatPanel({ commandApi, format, teamId, rulesetId, mat
       )}
 
       {errorMessage && (
-        <p className="mt-3 text-sm text-poke-danger" role="alert">
+        <p className="mt-3 text-sm text-loss" role="alert">
           {errorMessage}
         </p>
       )}
@@ -316,10 +316,10 @@ export default function AiChatPanel({ commandApi, format, teamId, rulesetId, mat
           rows={2}
           disabled={streaming}
           placeholder={t('ai.chat.placeholder')}
-          className="w-full resize-none px-3 py-2 text-sm bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2 disabled:opacity-60"
+          className="w-full resize-none px-3 py-2 text-sm bg-elevated text-fg border border-hairline rounded-poke-md placeholder:text-fg-muted transition-colors duration-200 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2 disabled:opacity-60 pointer-coarse:text-base pointer-coarse:min-h-11"
         />
         <div className="mt-2 flex items-center justify-between gap-2">
-          <span className="text-[10px] text-poke-text-muted italic">
+          <span className="text-caption text-fg-muted italic">
             {t('ai.chat.disclaimer')}
           </span>
           {streaming ? (

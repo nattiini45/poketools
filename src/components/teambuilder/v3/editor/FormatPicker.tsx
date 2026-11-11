@@ -62,10 +62,10 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
   return (
     <div className="relative" ref={ref}>
       <button
-        className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg border text-xs transition-all ${
+        className={`flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-body transition-[background-color,border-color] duration-80 ease-out pointer-coarse:h-11 ${
           disabled
-            ? 'bg-poke-surface text-poke-text-muted cursor-not-allowed'
-            : 'bg-poke-surface border-poke-border text-poke-text-primary hover:border-poke-blue/40'
+            ? 'cursor-not-allowed bg-surface text-fg-muted'
+            : 'bg-surface text-fg hover:border-hairline-strong hover:bg-hover'
         }`}
         onClick={() => !disabled && setOpen(!open)}
         disabled={disabled}
@@ -73,11 +73,12 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
         aria-expanded={open}
         title={disabled ? t('format.lockedTitle') : t('format.changeTitle')}
       >
-        <span className="text-poke-text-muted text-[10px]">{t('format.label')}</span>
-        <span className="font-medium truncate max-w-[160px]">{displayName}</span>
+        <span className="hidden text-caption text-fg-muted sm:inline">{t('format.label')}</span>
+        <span className="max-w-[10rem] truncate font-[550]">{displayName}</span>
         {!disabled && (
           <svg
-            className={`w-3 h-3 text-poke-text-muted transition-transform ${open ? 'rotate-180' : ''}`}
+            className={`h-3.5 w-3.5 text-fg-muted transition-transform duration-80 ease-out ${open ? 'rotate-180' : ''}`}
+            aria-hidden="true"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -89,7 +90,7 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
       </button>
 
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 w-[320px] bg-poke-elevated border border-poke-border rounded-xl p-3 shadow-2xl max-h-[70vh] overflow-y-auto">
+        <div className="absolute left-0 top-full z-50 mt-1 max-h-[70vh] w-[min(22rem,calc(100vw-3rem))] overflow-y-auto rounded-xl border border-hairline-strong bg-surface p-2 shadow-poke-lg">
           {[...GENERATIONS].reverse().map((gen) => {
             const isExpanded = visibleExpandedGens.has(gen.num);
             const hasActiveTier = currentGen === gen.num;
@@ -99,13 +100,15 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
                 <button
                   type="button"
                   onClick={() => toggleGen(gen.num)}
-                  className={`flex items-center gap-1.5 w-full px-2 py-1.5 rounded-md text-left transition-colors ${
-                    hasActiveTier ? 'bg-poke-blue/10 hover:bg-poke-blue/15' : 'hover:bg-poke-surface'
+                  aria-expanded={isExpanded}
+                  className={`flex min-h-9 w-full items-center gap-2 rounded-md px-2 py-1.5 text-left transition-colors duration-80 ease-out pointer-coarse:min-h-11 ${
+                    hasActiveTier ? 'bg-accent-subtle' : 'hover:bg-hover'
                   }`}
                 >
                   <svg
-                    className={`w-3 h-3 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''} ${
-                      hasActiveTier ? 'text-poke-blue' : 'text-poke-text-muted'
+                    aria-hidden="true"
+                    className={`h-3.5 w-3.5 shrink-0 transition-transform duration-80 ease-out ${isExpanded ? 'rotate-90' : ''} ${
+                      hasActiveTier ? 'text-accent-ink' : 'text-fg-muted'
                     }`}
                     fill="none"
                     viewBox="0 0 24 24"
@@ -115,32 +118,31 @@ export default function FormatPicker({ currentFormat, onSelect, disabled }: Form
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
                   <span
-                    className={`text-[11px] font-medium ${
-                      hasActiveTier ? 'text-poke-blue' : 'text-poke-text-secondary'
+                    className={`text-body font-[550] ${
+                      hasActiveTier ? 'text-accent-ink' : 'text-fg'
                     }`}
                   >
                     {t('format.generation', { n: gen.num })}
                   </span>
                   <span
-                    className={`text-[10px] ${
-                      hasActiveTier ? 'text-poke-blue/60' : 'text-poke-text-muted'
-                    }`}
+                    className="text-caption text-fg-muted"
                   >
                     {gen.shortName}
                   </span>
-                  <span className="text-[9px] text-poke-text-muted ml-auto">{tiers.length}</span>
+                  <span className="ml-auto font-mono text-caption text-fg-muted">{tiers.length}</span>
                 </button>
                 {isExpanded && (
-                  <div className="flex flex-wrap gap-1.5 mt-1 mb-2 ml-5">
+                  <div className="mb-2 ml-6 mt-1.5 flex flex-wrap gap-1.5">
                     {tiers.map(({ formatId, label }) => {
                       const isActive = formatId === currentFormat;
                       return (
                         <button
                           key={formatId}
-                          className={`px-2 py-0.5 rounded-md text-[11px] transition-colors ${
+                          aria-pressed={isActive}
+                          className={`rounded-md border px-2 py-1 text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11 pointer-coarse:px-3 ${
                             isActive
-                              ? 'bg-poke-blue/20 text-poke-blue ring-1 ring-poke-blue/30'
-                              : 'text-poke-text-secondary bg-poke-surface hover:bg-poke-muted'
+                              ? 'border-accent-ink bg-accent-subtle font-[550] text-accent-ink'
+                              : 'border-hairline bg-elevated text-fg hover:border-hairline-strong hover:bg-hover'
                           }`}
                           onClick={() => {
                             onSelect(formatId);

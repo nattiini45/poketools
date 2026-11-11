@@ -15,7 +15,8 @@ test.describe('site chrome', () => {
     const nav = page.locator('#site-nav');
     await expect(nav.getByRole('link', { name: 'Tournaments' })).toBeVisible();
 
-    await page.getByRole('button', { name: /^Language:/ }).click();
+    await nav.getByRole('button', { name: 'Appearance and language' }).click();
+    await nav.getByRole('button', { name: 'Language', exact: true }).click();
     // The radio input is visually hidden behind its label.
     await page.getByText('Deutsch', { exact: true }).click();
     await expect(page.getByRole('radio', { name: 'Deutsch' })).toBeChecked();

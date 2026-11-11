@@ -1,6 +1,8 @@
 'use client';
 
 import dynamic from 'next/dynamic';
+import { useId } from 'react';
+import SkewPlate from '@/components/ui/SkewPlate';
 import { useT } from '@/i18n/client';
 import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
 import { useEditorContext } from '../editor/EditorContext';
@@ -19,23 +21,47 @@ export default function IntelPanel() {
   const { state, dispatch } = useEditorContext();
   const t = useT(teambuilderIntelMessages);
   const active = state.intelTab;
+  const uid = useId();
 
   return (
-    <div className="flex flex-col h-full">
-      {/* Tab bar */}
-      <div className="flex border-b border-poke-border shrink-0">
+    <div className="flex h-full flex-col">
+      {/* One tab strip: skewed plates, the accent underside glides to the active tab */}
+      <div role="tablist" aria-label={t('intel.tabsLabel')} className="flex shrink-0 gap-1.5 overflow-x-auto border-b border-hairline px-3 py-2">
         {TABS.map((tab) => (
           <button
             key={tab}
+            type="button"
+            role="tab"
+            id={`${uid}-tab-${tab}`}
+            aria-selected={active === tab}
+            aria-controls={`${uid}-panel`}
+            tabIndex={active === tab ? 0 : -1}
             onClick={() => dispatch({ type: 'SET_INTEL_TAB', tab })}
+            onKeyDown={(e) => {
+              const i = TABS.indexOf(tab);
+              const next =
+                e.key === 'ArrowRight'
+                  ? (i + 1) % TABS.length
+                  : e.key === 'ArrowLeft'
+                    ? (i + TABS.length - 1) % TABS.length
+                    : e.key === 'Home'
+                      ? 0
+                      : e.key === 'End'
+                        ? TABS.length - 1
+                        : -1;
+              if (next < 0) return;
+              e.preventDefault();
+              dispatch({ type: 'SET_INTEL_TAB', tab: TABS[next] });
+              (e.currentTarget.parentElement?.children[next] as HTMLElement | undefined)?.focus();
+            }}
             className={[
-              'flex-1 py-1.5 text-[11px] font-medium transition-colors',
-              active === tab
-                ? 'text-poke-blue border-b-2 border-poke-blue -mb-px'
-                : 'text-poke-text-muted hover:text-poke-text-secondary',
+              'inline-flex min-h-9 shrink-0 items-center text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11',
+              active === tab ? 'text-fg' : 'text-fg-muted hover:text-fg',
             ].join(' ')}
           >
-            {t(`intel.tabs.${tab}`)}
+            <SkewPlate variant="tab" active={active === tab} glideId="teambuilder-intel-tab" className="h-full text-inherit">
+              {t(`intel.tabs.${tab}`)}
+            </SkewPlate>
           </button>
         ))}
       </div>
@@ -44,7 +70,7 @@ export default function IntelPanel() {
       {active !== 'overview' && <IntelSubjectStrip />}
 
       {/* Tab content */}
-      <div className="flex-1 overflow-y-auto p-3 min-h-0">
+      <div role="tabpanel" id={`${uid}-panel`} aria-labelledby={`${uid}-tab-${active}`} className="min-h-0 flex-1 overflow-y-auto p-3">
         {active === 'overview' && <OverviewTab />}
         {active === 'sets' && <SetsTab />}
         {active === 'calc' && <CalcTab />}
