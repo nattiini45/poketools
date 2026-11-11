@@ -145,6 +145,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       columns={columns}
       data={data}
       keyExtractor={(row) => row.pokemon_name}
+      stickyColumn="pokemon_name"
       emptyMessage={labels.empty}
       labels={labels.pagination}
       animated

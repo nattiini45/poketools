@@ -65,6 +65,9 @@ export default {
     global: 'Global (all time)',
     league: 'League',
     tournament: 'Tournament',
+    /** The placeholders of the league and tournament pickers. */
+    leagueSearch: 'Search leagues',
+    tournamentSearch: 'Search tournaments',
   },
   resourceAdmins: {
     loading: 'Loading admins...',

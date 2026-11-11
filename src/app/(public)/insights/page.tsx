@@ -245,8 +245,8 @@ async function InsightsPageContent({ searchParams }: PageProps) {
 
   if (!scopeData) {
     return (
-      <PageContainer title={t('page.title')} maxWidth="xl">
-        <p className="text-poke-text-muted">{t('page.scopeNotFound')}</p>
+      <PageContainer title={t('page.title')} icon="scope-lens" maxWidth="xl">
+        <p className="text-body text-fg-muted">{t('page.scopeNotFound')}</p>
       </PageContainer>
     );
   }
@@ -256,18 +256,16 @@ async function InsightsPageContent({ searchParams }: PageProps) {
   const tournamentOptions = tournaments.map((t) => ({ id: t.id, name: t.name }));
 
   return (
-    <PageContainer maxWidth="xl">
+    <PageContainer title={scopeData.title ?? t('page.globalTitle')} icon="scope-lens" subtitle={t('page.subtitle')} maxWidth="xl">
       <ScopeSelector
         scope={scope}
         leagues={leagueOptions}
         tournaments={tournamentOptions}
         globalOnly={tab === 'ratings'}
-        className="mb-6"
       />
       <InsightsTabs
-        initialTab={tab}
+        activeTab={tab}
         scope={scope}
-        title={scopeData.title ?? t('page.globalTitle')}
         usageRows={scopeData.usageRows}
         isDoubles={scopeData.isDoubles}
         standings={scopeData.standings}
@@ -294,8 +292,8 @@ export default async function InsightsPage(props: PageProps) {
   return (
     <Suspense
       fallback={
-        <PageContainer title={t('page.title')} maxWidth="xl">
-          <p className="text-poke-text-muted text-sm">{t('page.loading')}</p>
+        <PageContainer title={t('page.title')} icon="scope-lens" maxWidth="xl">
+          <p className="text-body text-fg-muted">{t('page.loading')}</p>
         </PageContainer>
       }
     >

@@ -104,7 +104,16 @@ interface TableProps<T> {
   getRowProps?: (row: T, index: number) => TableRowExtraProps;
   /** The pagination chrome's words; the viewer's language by default. */
   labels?: TablePaginationLabels;
+  /**
+   * The key of the column that names the row (a player, a Pokémon). Below `md`, where a wide table scrolls
+   * sideways, that column stays at the left edge so every number keeps its row's name beside it.
+   */
+  stickyColumn?: string;
 }
+
+/** A sticky cell needs its own fill, or the scrolling cells show through it. */
+const STICKY_CELL = "max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-poke-surface";
+const STICKY_HEAD = "max-md:sticky max-md:left-0 max-md:z-[1] max-md:bg-poke-elevated";
 
 const alignClass = {
   left: "text-left",
@@ -421,6 +430,7 @@ export default function Table<T extends object>({
   hidePagination = false,
   getRowProps,
   labels,
+  stickyColumn,
 }: TableProps<T>) {
   const sortConfigs = useMemo(
     () =>
@@ -492,6 +502,7 @@ export default function Table<T extends object>({
                       width={col.width}
                       sortState={sort}
                       onSort={handleHeaderClick}
+                      className={col.key === stickyColumn ? STICKY_HEAD : undefined}
                     />
                   );
                 }
@@ -502,7 +513,8 @@ export default function Table<T extends object>({
                     key={col.key}
                     className={cn(
                       "px-4 py-3 font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary",
-                      alignClass[align]
+                      alignClass[align],
+                      col.key === stickyColumn && STICKY_HEAD
                     )}
                     style={col.width ? { width: col.width } : undefined}
                   >
@@ -558,7 +570,7 @@ export default function Table<T extends object>({
                   {columns.map((col) => (
                     <td
                       key={col.key}
-                      className={cn("px-4 py-3", alignClass[col.align || "left"])}
+                      className={cn("px-4 py-3", alignClass[col.align || "left"], col.key === stickyColumn && STICKY_CELL)}
                     >
                       {col.render
                         ? col.render(row, globalIndex)

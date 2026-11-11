@@ -109,6 +109,8 @@ describe('ScopeSelector', () => {
     expect(html).toContain('>Bereich<');
     expect(html).toContain('>Global (gesamte Zeit)<');
     expect(html).toContain('>Liga<');
-    expect(html).toContain('>EvoLiga Season 3<');
+    // The league picker is a combobox: the selected league is the field's value.
+    expect(html).toContain('value="EvoLiga Season 3"');
+    expect(html).toContain('placeholder="Ligen durchsuchen"');
   });
 });
