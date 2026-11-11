@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect, useRef } from 'react';
 import { usePathname } from 'next/navigation';
 import { MessageSquare, PanelLeft, Search } from 'lucide-react';
 import NotificationBell from '@/components/notifications/NotificationBell';
@@ -9,6 +10,7 @@ import { useT } from '@/i18n/client';
 import { adminAssistantMessages } from '@/i18n/messages/admin-assistant';
 import { shellMessages } from '@/i18n/messages/shell';
 import AdminBreadcrumb from './AdminBreadcrumb';
+import { refocusWhenReleased } from './refocus';
 import type { VisibleAdminNavGroup } from './adminNav';
 import { ASSISTANT_LAUNCHER_ATTR, openAdminAssistant } from './assistant/AssistantDrawer';
 
@@ -30,11 +32,19 @@ export default function AdminTopBar({
   const pathname = usePathname();
   const { toggleSidebar, open, openMobile, isMobile } = useSidebar();
   const expanded = isMobile ? openMobile : open;
+  // The phone drawer closes on Escape or on its backdrop: focus goes back to the menu button that opened it.
+  const menuButton = useRef<HTMLButtonElement>(null);
+  const wasOpenMobile = useRef(false);
+  useEffect(() => {
+    const closed = wasOpenMobile.current && !openMobile;
+    wasOpenMobile.current = openMobile;
+    if (closed) return refocusWhenReleased(menuButton.current);
+  }, [openMobile]);
   const toggleLabel = isMobile ? t('admin.sidebar.openMenu') : expanded ? t('admin.sidebar.collapse') : t('admin.sidebar.expand');
 
   return (
     <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-2 border-b border-hairline bg-page px-3 sm:px-5">
-      <Button variant="ghost" size="sm" onClick={toggleSidebar} aria-label={toggleLabel} aria-expanded={expanded} title={toggleLabel} className="max-md:h-11 max-md:w-11">
+      <Button ref={menuButton} variant="ghost" size="sm" onClick={toggleSidebar} aria-label={toggleLabel} aria-expanded={expanded} title={toggleLabel} className="max-md:h-11 max-md:w-11">
         <PanelLeft className="h-4 w-4" aria-hidden="true" />
       </Button>
       <AdminBreadcrumb groups={groups} />

@@ -1,11 +1,12 @@
 'use client';
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { SidebarProvider } from '@/components/ui/fluid/sidebar';
 import AdminCommandMenu from './AdminCommandMenu';
 import AdminSidebar from './AdminSidebar';
 import AdminTopBar from './AdminTopBar';
 import { visibleAdminNav, type AdminNavExtraItem, type AdminRoles } from './adminNav';
+import { refocusWhenReleased } from './refocus';
 
 /**
  * The admin shell (redesign A1): the sidebar, the top bar and the command menu around the page. The admin layout
@@ -32,7 +33,19 @@ export default function AdminShell({
     () => visibleAdminNav({ isSiteAdmin, isSuperadmin, assistantEnabled }, JSON.parse(extraKey) as AdminNavExtraItem[]),
     [isSiteAdmin, isSuperadmin, assistantEnabled, extraKey],
   );
-  const openCommand = () => setCommandOpen(true);
+  // Closing the command menu hands focus back to whatever opened it (a button, or the element focused at Ctrl+K).
+  const commandOpener = useRef<HTMLElement | null>(null);
+  const changeCommand = useCallback((next: boolean) => {
+    if (next) commandOpener.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    setCommandOpen(next);
+  }, []);
+  const openCommand = () => changeCommand(true);
+  useEffect(() => {
+    if (commandOpen) return;
+    const opener = commandOpener.current;
+    commandOpener.current = null;
+    return refocusWhenReleased(opener);
+  }, [commandOpen]);
 
   return (
     <SidebarProvider defaultOpen={defaultSidebarOpen}>
@@ -41,7 +54,7 @@ export default function AdminShell({
         <AdminTopBar groups={groups} assistantEnabled={assistantEnabled} onOpenCommand={openCommand} />
         {children}
       </div>
-      <AdminCommandMenu open={commandOpen} onOpenChange={setCommandOpen} groups={groups} assistantEnabled={assistantEnabled} />
+      <AdminCommandMenu open={commandOpen} onOpenChange={changeCommand} groups={groups} assistantEnabled={assistantEnabled} />
     </SidebarProvider>
   );
 }

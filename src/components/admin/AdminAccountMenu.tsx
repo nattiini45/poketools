@@ -30,7 +30,7 @@ export default function AdminAccountMenu() {
           <button
             type="button"
             aria-label={t('admin.account.menu')}
-            className="flex h-10 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-fg outline-none transition-colors duration-80 hover:bg-hover focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+            className="flex h-10 w-full min-w-0 cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm text-fg transition-colors duration-80 hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           >
             <PlayerAvatar avatarUrl={player.avatarUrl} discordAvatarUrl={session?.user?.image} name={player.name} size={24} />
             <span className="min-w-0 flex-1 truncate">{player.name}</span>
