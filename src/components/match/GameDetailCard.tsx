@@ -108,9 +108,9 @@ function PlayerTeamColumn({
 
   return (
     <div className="flex-1 min-w-0">
-      <h4 className={`text-sm font-heading font-semibold mb-2 ${isWinner ? 'text-poke-green' : 'text-poke-text-secondary'}`}>
+      <h3 className={`mb-2 font-heading text-title ${isWinner ? 'text-win' : 'text-fg-muted'}`}>
         {playerName} {isWinner && '★'}
-      </h4>
+      </h3>
       <div className="space-y-0.5">
         {sorted.map((stat, i) => (
           <PokemonRow key={stat.id} stat={stat} index={i} />
@@ -183,17 +183,17 @@ export default function GameDetailCard({
             setCollapsed((prev) => !prev);
           }
         }}
-        className="flex items-center justify-between w-full text-left cursor-pointer select-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+        className="flex min-h-11 w-full cursor-pointer select-none items-center justify-between gap-3 rounded-[3px] text-left focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
         aria-expanded={bodyExpanded}
         aria-disabled={editing}
       >
         <div className="flex items-center gap-3 flex-wrap">
-          <span className="text-sm font-heading font-semibold text-poke-text-secondary">
+          <span className="font-heading text-title text-fg">
             {t('shared.game', { n: game.game_number })}
           </span>
           {winnerName && (
-            <span className="text-xs text-poke-text-muted">
-              {t('gameCard.winnerLabel')} <span className="text-poke-green font-medium">{winnerName}</span>
+            <span className="text-body text-fg-muted">
+              {t('gameCard.winnerLabel')} <span className="font-[650] text-win">{winnerName}</span>
             </span>
           )}
           <Badge variant="gray" size="sm">
@@ -213,7 +213,7 @@ export default function GameDetailCard({
               href={game.replay_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-poke-blue hover:underline font-heading"
+              className="inline-flex min-h-6 items-center rounded-[3px] text-body font-[550] text-accent-ink hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
               onClick={(e) => e.stopPropagation()}
             >
               {t('gameCard.viewReplay')}
@@ -226,7 +226,7 @@ export default function GameDetailCard({
                 e.stopPropagation();
                 handleEditClick();
               }}
-              className="text-xs text-poke-blue hover:underline font-heading"
+              className="inline-flex min-h-6 items-center rounded-[3px] text-body font-[550] text-accent-ink hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
             >
               {t('gameCard.edit')}
             </button>
@@ -234,7 +234,7 @@ export default function GameDetailCard({
           <motion.span
             animate={{ rotate: bodyExpanded ? 180 : 0 }}
             transition={{ duration: DURATION.state }}
-            className={`text-sm ${editing ? '' : 'text-poke-text-muted'}`}
+            className={`text-body ${editing ? '' : 'text-fg-muted'}`}
           >
             ▾
           </motion.span>
@@ -273,7 +273,7 @@ export default function GameDetailCard({
                       stats={p1Stats}
                       isWinner={game.winner_id === player1Id}
                     />
-                    <div className="w-px bg-poke-border self-stretch" />
+                    <div className="w-px self-stretch bg-hairline" />
                     <PlayerTeamColumn
                       playerName={player2Name}
                       stats={p2Stats}
@@ -281,7 +281,7 @@ export default function GameDetailCard({
                     />
                   </div>
                 ) : (
-                  <p className="text-xs text-poke-text-muted">{t('gameCard.noStats')}</p>
+                  <p className="text-body text-fg-muted">{t('gameCard.noStats')}</p>
                 )}
               </div>
             )}

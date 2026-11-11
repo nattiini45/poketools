@@ -52,7 +52,7 @@ vi.mock('@/components/tournament/TournamentTabsUnified', () => ({
     return null;
   },
 }));
-vi.mock('@/i18n/server', () => ({ getT: vi.fn(async () => (key: string) => key) }));
+vi.mock('@/i18n/server', () => ({ getT: vi.fn(async () => (key: string) => key), getLocale: vi.fn(async () => 'en') }));
 vi.mock('@/i18n/content/enum-label', () => ({ enumLabel: () => '' }));
 
 import TournamentPage from '../page';

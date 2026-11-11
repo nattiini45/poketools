@@ -1,12 +1,13 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { publicReads } from '@/lib/cache/public-reads';
 import { tournamentMetadata } from '@/lib/seo/page-metadata';
 import { readTournament } from '@/lib/seo/page-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForFormat } from '@/lib/tournament/standings';
+import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import { scoringByeRecords } from '@/lib/tournament/byes';
+import { buildTournamentHero, parseTournamentTab, tournamentPageTabs, TOURNAMENT_TAB_PARAM, type TournamentPageTab } from '@/lib/tournament/page-view';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { kitForPhase } from '@/lib/format-engine/context';
 import {
@@ -16,26 +17,39 @@ import {
   WORLD_OVERRIDE_URL_PARAM,
 } from '@/lib/worlds/registry';
 import WorldShell from '@/components/world/WorldShell';
+import WorldThemeSwitcher from '@/components/world/WorldThemeSwitcher';
 import WorldOverrideRedirect from '@/components/world/route/WorldOverrideRedirect';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import PageContainer from '@/components/ui/PageContainer';
-import Badge from '@/components/ui/Badge';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import Link from 'next/link';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewPlate from '@/components/ui/SkewPlate';
+import LinkTabs from '@/components/ui/LinkTabs';
+import TournamentHero from '@/components/tournament/TournamentHero';
+import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
+import type { ItemIconId } from '@/lib/pkmn/item-icons';
 import RulesetDetail from '@/components/ruleset/RulesetDetail';
 import ElimBracketView from '@/components/bracket/ElimBracketView';
 import SwissStandings from '@/components/bracket/SwissStandings';
 import TournamentTabsUnified from '@/components/tournament/TournamentTabsUnified';
 import type { PublicMatch } from '@/lib/match/public-match';
-import { getT } from '@/i18n/server';
-import { enumLabel } from '@/i18n/content/enum-label';
-import { commonMessages } from '@/i18n/messages/common';
-import { enumMessages } from '@/i18n/messages/enums';
+import { getLocale, getT } from '@/i18n/server';
 import { tournamentsMessages } from '@/i18n/messages/tournaments';
 
 // Reads no session. Rendered per request (dynamic segment, `searchParams`).
 // Every read but the ruleset comes from the tagged public read cache (30 s,
 // expired by match writes on this tournament).
+
+const TAB_ICON: Record<TournamentPageTab, ItemIconId> = {
+  standings: 'star-piece',
+  bracket: 'kings-rock',
+  rounds: 'vs-seeker',
+  matrix: 'town-map',
+  stats: 'scope-lens',
+  ruleset: 'ability-shield',
+  report: 'poke-flute',
+};
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -112,8 +126,7 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   // A stage of a kit league ranks by its own stage of the attached format (cached, season-tagged).
   const kit = season?.format_type === 'custom' ? kitForPhase(await publicReads.seasonKitStandings(season.id), id) : undefined;
 
-  // World-registered seasons wrap the tournament page in the season world
-  // shell so world tokens carry over. B2: the viewer override is resolved
+  // World-registered seasons keep the season world's ground behind the tournament page. B2: the viewer override is resolved
   // here too, so the shell's token namespace and station manifest follow the
   // same world the palette and camera do. Precedence stays `?world=` > admin
   // pin > auto-map (EPB → evoliga/plaza, everything else → sakura, C-096).
@@ -171,48 +184,68 @@ export default async function TournamentPage({ params, searchParams }: PageProps
     standingsContent = <SwissStandings standings={standings} />;
   }
 
-  const pageTitle = season ? `${season.name} — ${tournament.name}` : tournament.name;
-  const [t, tc, te] = await Promise.all([getT(tournamentsMessages), getT(commonMessages), getT(enumMessages)]);
+  const [t, locale] = await Promise.all([getT(tournamentsMessages), getLocale()]);
 
-  const page = (
-    <PageContainer title={pageTitle}>
-      {season && (
-        <Link
-          href={`/leagues/${season.id}#schedule`}
-          className="inline-flex items-center gap-1 text-sm font-medium text-poke-text-secondary hover:text-poke-text transition-colors"
-          aria-label={t('detail.backToLeagueLabel', { name: season.name })}
-        >
-          <span aria-hidden="true">←</span> {t('detail.backToLeague', { name: season.name })}
-        </Link>
-      )}
-      <div className="flex flex-wrap gap-2 items-center text-sm text-poke-text-secondary">
-        <span>{enumLabel(te, 'bracketType', tournament.bracket_type)}</span>
-        <span>&middot;</span>
-        <span>{tc('bestOf', { count: tournament.best_of_default })}</span>
-        {tournament.is_doubles && (
-          <>
-            <span>&middot;</span>
-            <Badge variant="purple">{t('list.doubles')}</Badge>
-          </>
-        )}
-        <span>&middot;</span>
-        <span>{tournament.ruleset_name}</span>
-        <span>&middot;</span>
-        <span>{tc('units.players', { count: tournament.participant_count })}</span>
-        <span>&middot;</span>
-        <Link
-          href={`/insights?scope=tournament&id=${id}&tab=usage`}
-          className={getButtonClasses('ghost', 'sm')}
-        >
-          {t('detail.insights')}
+  // The hero's table: the one the standings tab shows. A round robin's is computed in the client tabs (its round
+  // filter recomputes it), so the hero ranks it here with the same inputs, unfiltered.
+  const heroStandings = isRoundRobin
+    ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
+        ...roundRobinMatchPoints(seasonFormatType),
+        battleStats,
+        gamesByMatch: Object.fromEntries(
+          matches.filter((m) => m.status === 'completed').map((m) => [m.id, m.games.map((game) => game.winner_id ?? '')]),
+        ),
+      }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit })
+    : standings;
+  const hero = buildTournamentHero({ matches, standings: heroStandings });
+
+  // One link-tab strip: the tab lives in `?tab=`, every other query parameter (the world override) is kept.
+  const tabs = tournamentPageTabs(tournament.bracket_type, { ruleset: ruleset !== null, reports: ENABLE_KALE_CABBAGE });
+  const activeTab = parseTournamentTab(query[TOURNAMENT_TAB_PARAM], tabs);
+  const tabLabel: Record<TournamentPageTab, string> = {
+    standings: isRoundRobin ? t('tabs.rankings') : t('tabs.standings'),
+    bracket: t('tabs.bracket'),
+    rounds: t('tabs.rounds'),
+    matrix: t('tabs.overview'),
+    stats: t('tabs.stats'),
+    ruleset: t('tabs.ruleset'),
+    report: t('tabs.report'),
+  };
+  const tabHref = (tab: TournamentPageTab) => {
+    const params = new URLSearchParams();
+    for (const [key, value] of Object.entries(query)) {
+      if (key !== TOURNAMENT_TAB_PARAM && typeof value === 'string') params.set(key, value);
+    }
+    if (tab !== tabs[0]) params.set(TOURNAMENT_TAB_PARAM, tab);
+    const search = params.toString();
+    return `/tournaments/${id}${search ? `?${search}` : ''}`;
+  };
+
+  return (
+    <PageContainer>
+      <WorldOverrideRedirect />
+      <TournamentHero
+        tournament={tournament}
+        league={season ? { id: season.id, name: season.name } : null}
+        roundCount={totalRounds}
+        view={hero}
+        locale={locale}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <LinkTabs
+          tabs={tabs.map((tab) => ({ key: tab, href: tabHref(tab), label: tabLabel[tab], icon: <ItemIcon item={TAB_ICON[tab]} /> }))}
+          activeKey={activeTab}
+          label={t('detail.tabsLabel')}
+          glideId="tournament-tabs"
+          className="min-w-0"
+        />
+        <Link href={`/insights?scope=tournament&id=${id}&tab=usage`} className="relative inline-flex rounded-[3px] text-body">
+          <SkewPlate variant="button" tone="secondary">
+            {t('detail.insights')}
+          </SkewPlate>
         </Link>
       </div>
-
-      {tournament.description && (
-        <p className="text-sm text-poke-text-secondary whitespace-pre-wrap max-w-3xl">{tournament.description}</p>
-      )}
-
-      {/* Unified tabbed layout for all bracket types */}
+      <h2 className="sr-only">{tabLabel[activeTab]}</h2>
       <TournamentTabsUnified
         bracketType={tournament.bracket_type as 'round_robin' | 'swiss' | 'single_elim' | 'double_elim'}
         participants={participants.map((p) => ({
@@ -245,15 +278,15 @@ export default async function TournamentPage({ params, searchParams }: PageProps
         evolutionPoints={evolutionPoints}
         tiebreakerOrder={tiebreakerOrder}
         kit={kit}
-        layout="sections"
+        activeTab={activeTab}
       />
+      {/* The world keeps its ground behind the page (a fixed layer) and its picker; everything above is on the
+          site's own tokens (redesign B3). */}
+      <WorldShell world={world}>
+        <div className="flex justify-end">
+          <WorldThemeSwitcher className="inline-flex min-h-11 cursor-pointer items-center gap-1.5 whitespace-nowrap px-3 font-heading text-sm font-semibold text-arena-ink transition-colors duration-150 hover:text-arena-accent-strong focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-arena-focus" />
+        </div>
+      </WorldShell>
     </PageContainer>
-  );
-
-  return (
-    <WorldShell world={world}>
-      <WorldOverrideRedirect />
-      {page}
-    </WorldShell>
   );
 }
