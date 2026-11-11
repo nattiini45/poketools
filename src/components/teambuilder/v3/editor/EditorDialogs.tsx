@@ -97,7 +97,7 @@ export function ExportPanel({ team }: { team: (PokemonSet | null)[] }) {
         readOnly
         value={text}
         lang="en"
-        className="w-full h-48 p-3 border border-poke-border bg-poke-elevated rounded-poke-md text-sm text-poke-text-primary font-mono resize-y"
+        className="w-full h-48 p-3 border border-hairline bg-elevated rounded-poke-md text-sm text-fg font-mono resize-y pointer-coarse:text-base"
       />
       <div className="flex gap-2">
         <Button variant="primary" onClick={handleCopy}>
@@ -166,14 +166,14 @@ export function ShareDialog({ open, onClose, teamId }: ShareDialogProps) {
     <Modal open={open} onClose={onClose} title={t('dialogs.shareTitle')} size="sm">
       <div className="space-y-3">
         {!teamId && (
-          <p className="text-sm text-poke-text-muted">{t('dialogs.saveBeforeSharing')}</p>
+          <p className="text-sm text-fg-muted">{t('dialogs.saveBeforeSharing')}</p>
         )}
         {teamId && !shareUrl && (
           <>
-            <p className="text-sm text-poke-text-muted">
+            <p className="text-sm text-fg-muted">
               {t('dialogs.shareIntro')}
             </p>
-            {error && <p className="text-sm text-poke-danger">{errorText(error)}</p>}
+            {error && <p className="text-sm text-loss">{errorText(error)}</p>}
             <Button variant="primary" onClick={handleGenerate} loading={loading}>
               {t('dialogs.generateLink')}
             </Button>
@@ -184,7 +184,7 @@ export function ShareDialog({ open, onClose, teamId }: ShareDialogProps) {
             <input
               readOnly
               value={shareUrl}
-              className="w-full p-2 border border-poke-border bg-poke-elevated rounded-poke-md text-sm text-poke-text-primary"
+              className="w-full p-2 border border-hairline bg-elevated rounded-poke-md text-sm text-fg pointer-coarse:text-base"
             />
             <Button variant="primary" onClick={handleCopy}>
               {copied ? t('dialogs.copied') : t('dialogs.copyLink')}
@@ -251,7 +251,7 @@ export function PublishDialog({ open, onClose, teamId }: PublishDialogProps) {
     return (
       <Modal open={open} onClose={onClose} title={t('dialogs.publishedTitle')} size="sm">
         <div className="space-y-3">
-          <p className="text-sm text-poke-text-secondary">
+          <p className="text-sm text-fg-muted">
             {t('dialogs.publishedBody')}
           </p>
           <Button variant="primary" onClick={onClose}>{t('dialogs.done')}</Button>
@@ -264,39 +264,39 @@ export function PublishDialog({ open, onClose, teamId }: PublishDialogProps) {
     <Modal open={open} onClose={onClose} title={t('dialogs.publishTitle')} size="md">
       <div className="space-y-3">
         {!teamId && (
-          <p className="text-sm text-poke-text-muted">{t('dialogs.saveBeforePublishing')}</p>
+          <p className="text-sm text-fg-muted">{t('dialogs.saveBeforePublishing')}</p>
         )}
         {teamId && (
           <>
             <div>
-              <label className="block text-xs text-poke-text-muted mb-1">{t('dialogs.titleLabel')}</label>
+              <label className="block text-xs text-fg-muted mb-1">{t('dialogs.titleLabel')}</label>
               <input
                 value={title}
                 onChange={e => setTitle(e.target.value)}
                 placeholder={t('dialogs.titlePlaceholder')}
-                className="w-full p-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary"
+                className="w-full p-2 border border-hairline bg-surface rounded-poke-md text-sm text-fg pointer-coarse:text-base pointer-coarse:min-h-11"
               />
             </div>
             <div>
-              <label className="block text-xs text-poke-text-muted mb-1">{t('dialogs.descriptionLabel')}</label>
+              <label className="block text-xs text-fg-muted mb-1">{t('dialogs.descriptionLabel')}</label>
               <textarea
                 value={description}
                 onChange={e => setDescription(e.target.value)}
                 placeholder={t('dialogs.descriptionPlaceholder')}
                 rows={3}
-                className="w-full p-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary resize-none"
+                className="w-full p-2 border border-hairline bg-surface rounded-poke-md text-sm text-fg resize-none pointer-coarse:text-base pointer-coarse:min-h-11"
               />
             </div>
             <div>
-              <label className="block text-xs text-poke-text-muted mb-1">{t('dialogs.tagsLabel')}</label>
+              <label className="block text-xs text-fg-muted mb-1">{t('dialogs.tagsLabel')}</label>
               <input
                 value={tags}
                 onChange={e => setTags(e.target.value)}
                 placeholder={t('dialogs.tagsPlaceholder')}
-                className="w-full p-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary"
+                className="w-full p-2 border border-hairline bg-surface rounded-poke-md text-sm text-fg pointer-coarse:text-base pointer-coarse:min-h-11"
               />
             </div>
-            {error && <p className="text-sm text-poke-danger">{errorText(error)}</p>}
+            {error && <p className="text-sm text-loss">{errorText(error)}</p>}
             <div className="flex gap-2">
               <Button variant="primary" onClick={handlePublish} loading={loading}>
                 {t('dialogs.publish')}

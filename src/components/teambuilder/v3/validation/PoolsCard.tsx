@@ -51,9 +51,9 @@ export default function PoolsCard({ view }: { view: RunningView }) {
 
   return (
     <div className="mb-3 rounded px-2 py-2" data-pools-card>
-      <p className="text-[10px] uppercase mb-1 tracking-wider">{t('validation.pools.title')}</p>
+      <p className="mb-1 text-caption font-[550] text-fg">{t('validation.pools.title')}</p>
       {[...groups.entries()].map(([resource, rows]) => (
-        <p key={resource} className="text-[11px] text-poke-text-secondary">
+        <p key={resource} className="text-caption text-fg-muted">
           {labelOf(rows[0]!.resource_label)}:{' '}
           {rows.map((row, i) => (
             <span key={`${row.item_id}-${i}`}>
@@ -66,7 +66,7 @@ export default function PoolsCard({ view }: { view: RunningView }) {
       {pools.length > 0 && (
         <ul className="mt-1 space-y-0.5">
           {pools.map((pool) => (
-            <li key={pool.key} className="text-[11px] text-poke-text-secondary">
+            <li key={pool.key} className="text-caption text-fg-muted">
               {t(pool.unlocked ? 'validation.pools.domainUnlocked' : 'validation.pools.domainLocked', { pool: labelOf(pool.label) })}
             </li>
           ))}

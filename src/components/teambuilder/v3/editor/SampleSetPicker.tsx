@@ -109,24 +109,24 @@ export default function SampleSetPicker({
 
   return (
     <div className="p-3">
-      <h3 className="text-xs font-heading font-semibold text-poke-text-secondary mb-2">
+      <h3 className="text-caption font-[550] text-fg mb-2">
         {t('sampleSets.title')}
       </h3>
 
       {loading && (
-        <div className="text-xs text-poke-text-muted py-4 text-center">
+        <div className="text-xs text-fg-muted py-4 text-center">
           {t('sampleSets.loading')}
         </div>
       )}
 
       {error && (
-        <div className="text-xs text-poke-danger py-2">
+        <div className="text-xs text-loss py-2">
           {t('errors.sampleSetsFailed')}
         </div>
       )}
 
       {!loading && !error && sets.length === 0 && (
-        <div className="text-xs text-poke-text-muted py-4 text-center">
+        <div className="text-xs text-fg-muted py-4 text-center">
           {t('sampleSets.empty')}
         </div>
       )}
@@ -142,7 +142,7 @@ export default function SampleSetPicker({
           return (
             <div
               key={`${resolved.set_name}-${idx}`}
-              className="border border-poke-border rounded-poke-md p-2 bg-poke-surface hover:border-poke-blue/40 transition-colors"
+              className="border border-hairline rounded-poke-md p-2 bg-elevated hover:border-hairline-strong transition-colors"
             >
               {/* Set header */}
               <div className="flex items-center gap-2 mb-2">
@@ -150,14 +150,14 @@ export default function SampleSetPicker({
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold truncate" lang="en">{resolved.set_name}</p>
                   {resolved.description && (
-                    <p className="text-[10px] text-poke-text-muted truncate" lang="en">
+                    <p className="text-caption text-fg-muted truncate" lang="en">
                       {resolved.description}
                     </p>
                   )}
                 </div>
                 <button
                   onClick={() => handleApplyFullSet(resolved)}
-                  className="px-2 py-1 text-[10px] bg-poke-blue/10 text-poke-blue rounded hover:bg-poke-blue/20 transition-colors font-medium"
+                  className="px-2 py-1 text-caption bg-accent-subtle text-accent-ink rounded hover:bg-selected transition-colors font-medium"
                   title={t('sampleSets.applyFullSet')}
                 >
                   {t('sampleSets.apply')}
@@ -169,7 +169,7 @@ export default function SampleSetPicker({
                 {resolvedItem && (
                   <button
                     onClick={() => onApplyItem(resolvedItem)}
-                    className="text-[10px] px-1.5 py-0.5 bg-poke-muted rounded hover:bg-poke-blue/20 transition-colors"
+                    className="text-caption px-1.5 py-0.5 bg-sunken rounded hover:bg-selected transition-colors"
                     title={t('sampleSets.applyItem')}
                   >
                     {localizeItem(resolvedItem, dl)}
@@ -178,14 +178,14 @@ export default function SampleSetPicker({
                 {resolvedAbility && (
                   <button
                     onClick={() => onApplyAbility(resolvedAbility)}
-                    className="text-[10px] px-1.5 py-0.5 bg-poke-muted rounded hover:bg-poke-blue/20 transition-colors"
+                    className="text-caption px-1.5 py-0.5 bg-sunken rounded hover:bg-selected transition-colors"
                     title={t('sampleSets.applyAbility')}
                   >
                     {localizeAbility(resolvedAbility, dl)}
                   </button>
                 )}
                 {resolvedNature && (
-                  <span className="text-[10px] px-1.5 py-0.5 text-poke-text-muted">
+                  <span className="text-caption px-1.5 py-0.5 text-fg-muted">
                     {localizeNature(resolvedNature, dl)}
                   </span>
                 )}
@@ -193,7 +193,7 @@ export default function SampleSetPicker({
 
               {/* EV spread */}
               {moveset.evs && (
-                <p className="text-[10px] text-poke-text-muted mb-1.5 font-mono">
+                <p className="text-caption text-fg-muted mb-1.5 font-mono">
                   {evSpreadSummary(moveset.evs, dl)}
                 </p>
               )}
@@ -204,7 +204,7 @@ export default function SampleSetPicker({
                   <button
                     key={i}
                     onClick={() => onApplyMove(move)}
-                    className="text-[10px] px-1.5 py-0.5 bg-poke-blue/5 text-poke-text-secondary rounded hover:bg-poke-blue/20 transition-colors"
+                    className="text-caption px-1.5 py-0.5 bg-accent-subtle text-fg-muted rounded hover:bg-selected transition-colors"
                     title={t('sampleSets.applyMove')}
                   >
                     {localizeMove(move, dl)}

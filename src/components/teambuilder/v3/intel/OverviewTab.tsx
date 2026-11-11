@@ -98,7 +98,7 @@ export default function OverviewTab() {
 
   if (species.length === 0) {
     return (
-      <div className="text-[11px] text-poke-text-muted text-center py-6">
+      <div className="text-caption text-fg-muted text-center py-6">
         {t('overview.empty')}
       </div>
     );
@@ -106,7 +106,7 @@ export default function OverviewTab() {
 
   if (loading) {
     return (
-      <div className="text-[11px] text-poke-text-muted text-center py-6">
+      <div className="text-caption text-fg-muted text-center py-6">
         {t('overview.loading')}
       </div>
     );
@@ -122,17 +122,17 @@ export default function OverviewTab() {
     <div className="space-y-4">
       {/* Team weaknesses */}
       <div>
-        <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+        <h4 className="text-caption font-[550] text-fg mb-1.5">
           {t('overview.weaknesses')}
         </h4>
         {notableWeaknesses.length === 0 ? (
-          <p className="text-[10px] text-green-400">{t('overview.noSharedWeaknesses')}</p>
+          <p className="text-caption text-win">{t('overview.noSharedWeaknesses')}</p>
         ) : (
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-x-2 gap-y-1">
             {notableWeaknesses.map((w) => (
               <div key={w.type} className="flex items-center gap-0.5">
-                <TypeBadge type={w.type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
-                <span className="text-[10px] text-red-400 font-mono">×{w.count}</span>
+                <TypeBadge type={w.type} size="compact" className="px-1.5! py-0.5!" />
+                <span className="font-mono text-caption font-[550] text-loss">×{w.count}</span>
               </div>
             ))}
           </div>
@@ -142,14 +142,14 @@ export default function OverviewTab() {
       {/* Team resistances */}
       {sortedResistances.length > 0 && (
         <div>
-          <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+          <h4 className="text-caption font-[550] text-fg mb-1.5">
             {t('overview.resistances')}
           </h4>
-          <div className="flex flex-wrap gap-1">
+          <div className="flex flex-wrap gap-x-2 gap-y-1">
             {sortedResistances.slice(0, 8).map((r) => (
               <div key={r.type} className="flex items-center gap-0.5">
-                <TypeBadge type={r.type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
-                <span className="text-[10px] text-blue-400 font-mono">×{r.count}</span>
+                <TypeBadge type={r.type} size="compact" className="px-1.5! py-0.5!" />
+                <span className="font-mono text-caption font-[550] text-win">×{r.count}</span>
               </div>
             ))}
           </div>
@@ -159,7 +159,7 @@ export default function OverviewTab() {
       {/* Common teammates (from meta usage data) */}
       {teammateSuggestions.length > 0 && (
         <div>
-          <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+          <h4 className="text-caption font-[550] text-fg mb-1.5">
             {t('overview.teammates')}
           </h4>
           <div className="flex flex-wrap gap-1">
@@ -177,9 +177,9 @@ export default function OverviewTab() {
                       ? t('overview.teammateFull', { species: mateName })
                       : t('overview.teammateAdd', { species: mateName })
                   }
-                  className="flex items-center gap-1 pl-0.5 pr-1.5 py-0.5 bg-poke-surface border border-poke-border rounded-full text-[10px] text-poke-text-secondary hover:text-poke-text-primary hover:border-poke-blue/40 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="flex items-center gap-1 rounded-full border border-hairline bg-elevated py-0.5 pl-1 pr-2 text-caption text-fg transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover disabled:cursor-not-allowed disabled:opacity-60 pointer-coarse:min-h-11"
                 >
-                  <PokemonSprite name={mate.name} size={18} />
+                  <PokemonSprite name={mate.name} size={24} />
                   {mateName}
                 </button>
               );
@@ -190,32 +190,34 @@ export default function OverviewTab() {
 
       {/* Per-Pokémon breakdown */}
       <div>
-        <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+        <h4 className="text-caption font-[550] text-fg mb-1.5">
           {t('overview.individual')}
         </h4>
         <div className="space-y-2">
           {analysis.pokemon.map((mon) => (
-            <div key={mon.species} className="bg-poke-surface rounded-lg p-2">
-              <div className="text-[11px] font-medium text-poke-text-primary mb-1">
+            <div key={mon.species} className="rounded-lg bg-elevated p-2">
+              <div className="mb-1 flex items-center gap-1.5 text-caption font-[550] text-fg">
+                <PokemonSprite name={mon.species} size={24} />
                 {localizeSpecies(mon.species, dl)}
               </div>
               {mon.weaknesses.length > 0 && (
-                <div className="flex flex-wrap gap-0.5 mb-0.5">
+                <div className="mb-1 flex flex-wrap gap-1">
                   {mon.weaknesses.map((type) => (
                     <TypeBadge
                       key={type}
                       type={type}
-                      className="text-[7px]! px-0.5! py-0! min-w-[2rem]! opacity-80"
+                      size="compact"
+                      className="px-1.5! py-0.5!"
                     />
                   ))}
                 </div>
               )}
               {mon.immunities.length > 0 && (
-                <div className="flex flex-wrap gap-0.5">
+                <div className="flex flex-wrap gap-1">
                   {mon.immunities.map((type) => (
                     <span
                       key={type}
-                      className="inline-flex items-center justify-center px-1 py-0 text-[7px] rounded border border-poke-border text-poke-text-muted opacity-60 min-w-[2rem]"
+                      className="inline-flex items-center justify-center rounded-full border border-hairline-strong px-1.5 text-caption text-fg-muted"
                     >
                       {localizeType(type, dl)}
                     </span>
