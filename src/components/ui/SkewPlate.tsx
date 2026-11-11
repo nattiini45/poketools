@@ -18,6 +18,8 @@ interface SkewPlateProps {
   tier?: 1 | 2 | 3 | 4;
   /** Shared by the items of one nav or tab row, so the active plate glides between them with the moderate spring. */
   glideId?: string;
+  /** A leading icon, drawn once beside the label; the label's width ghost never copies it. */
+  icon?: ReactNode;
   className?: string;
 }
 
@@ -27,7 +29,7 @@ const TIER_FILL = { 1: 'bg-tier-1', 2: 'bg-tier-2', 3: 'bg-tier-3', 4: 'bg-tier-
  * Direction B's skewed plate (docs/design.md, "Skewed plates"): a plate sheared by `--skew` behind an upright,
  * selectable label. Place it inside the link or button it labels; the focus ring follows the plate.
  */
-export default function SkewPlate({ variant, children, active = false, tone = 'primary', tier = 1, glideId, className }: SkewPlateProps) {
+export default function SkewPlate({ variant, children, active = false, tone = 'primary', tier = 1, glideId, icon, className }: SkewPlateProps) {
   const fill = (() => {
     switch (variant) {
       case 'nav':
@@ -46,20 +48,26 @@ export default function SkewPlate({ variant, children, active = false, tone = 'p
   const glides = glideId !== undefined && (variant === 'nav' || variant === 'tab');
 
   return (
-    <span className={cn('skew-plate', ink, variant === 'rank' ? 'px-2 py-0.5' : 'px-3 py-1.5', className)} data-variant={variant}>
+    <span className={cn('skew-plate', ink, variant === 'rank' ? 'px-2 py-0.5' : 'px-3 py-1.5', icon !== undefined && 'grid-flow-col gap-2', className)} data-variant={variant}>
       {fill &&
         (glides && variant === 'nav' ? (
-          <motion.span layoutId={glideId} transition={SPRING.moderate} aria-hidden="true" className={cn('skew-plate-bg', fill)} />
+          // The glide owns its element's transform, so the skewed plate sits inside the gliding box.
+          <motion.span layoutId={glideId} transition={SPRING.moderate} aria-hidden="true" className="absolute inset-0 -z-1">
+            <span className={cn('skew-plate-bg', fill)} />
+          </motion.span>
         ) : (
           <span aria-hidden="true" className={cn('skew-plate-bg', fill)} />
         ))}
       {variant === 'tab' &&
         active &&
         (glides ? (
-          <motion.span layoutId={glideId} transition={SPRING.moderate} aria-hidden="true" className="skew-plate-underside" />
+          <motion.span layoutId={glideId} transition={SPRING.moderate} aria-hidden="true" className="absolute inset-x-0 bottom-0 -z-1 h-[3px]">
+            <span className="skew-plate-underside" />
+          </motion.span>
         ) : (
           <span aria-hidden="true" className="skew-plate-underside" />
         ))}
+      {icon}
       <span className="grid">
         <span aria-hidden="true" className="invisible col-start-1 row-start-1 font-[550]">
           {children}

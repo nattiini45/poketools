@@ -7,6 +7,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 
 vi.mock('@/components/shared/NavBar', () => ({ default: () => <nav data-testid="site-nav">nav</nav> }));
+vi.mock('@/components/shared/nav/BottomTabBar', () => ({ default: () => <div data-testid="site-bottom-bar">bar</div> }));
 vi.mock('@/components/shared/PageTransitionWrapper', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/shared/AdminGuard', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/admin/AdminShell', () => ({
