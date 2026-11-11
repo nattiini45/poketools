@@ -112,9 +112,9 @@ export default function SignUpForm() {
         </Button>
       </form>
 
-      <p className="text-sm text-poke-text-secondary text-center">
+      <p className="text-sm text-fg-muted text-center">
         {t('signUp.haveAccount')}{' '}
-        <Link href="/auth/signin" className="underline hover:text-poke-text-primary">
+        <Link href="/auth/signin" className="text-accent-ink underline underline-offset-2 hover:text-fg">
           {t('signUp.signIn')}
         </Link>
       </p>

@@ -1,10 +1,10 @@
 'use client';
 
-import Section from '@/components/ui/Section';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import type { PlayerRef, RelationLinkView, RelationView } from '@/lib/format-engine/runtime/view-types';
-import ScrollRegion from '../ScrollRegion';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS_TARGET, PLAYER_CARD, PlayerSection, TrainerTile } from './parts';
 import { useLText, usePlayerName } from './useLabels';
 
 export interface RelationsSectionProps {
@@ -57,9 +57,17 @@ export default function RelationsSection({ relations, viewerId }: RelationsSecti
   const labelOf = useLText();
   const nameOf = usePlayerName();
 
+  const line = (key: string, name: string, text: string) => (
+    <li key={key} className="flex items-center gap-2">
+      <TrainerTile name={name} />
+      <span>{text}</span>
+    </li>
+  );
+  const CELL = 'px-3 py-2 text-fg';
+
   return (
-    <Section title={t('relations.heading')}>
-      <div className="space-y-5">
+    <PlayerSection title={t('relations.heading')} icon="exp-share">
+      <div className="flex flex-col gap-4">
         {relations.map((relation) => {
           const mine = relation.links.filter((link) => link.from?.id === viewerId || link.to?.id === viewerId);
           const symmetric = relation.shape === 'pairs';
@@ -71,62 +79,66 @@ export default function RelationsSection({ relations, viewerId }: RelationsSecti
             mine.some((link) => (link.from?.id === viewerId ? link.to === null : link.from === null)) && !(symmetric && others.length > 0);
           const label = labelOf(relation.label);
           return (
-            <div key={relation.key} className="space-y-2" data-relation={relation.key}>
-              <h3 className="font-heading text-base font-bold text-poke-text-primary">{label}</h3>
-              {mine.length === 0 && open.length === 0 && <p className="text-sm text-poke-text-secondary">{t('relations.empty')}</p>}
+            <div key={relation.key} className={PLAYER_CARD} data-relation={relation.key}>
+              <h3 className="text-subtitle font-[550] text-fg">{label}</h3>
+              {mine.length === 0 && open.length === 0 && <p className="text-body text-fg-muted">{t('relations.empty')}</p>}
               {!directed && others.length > 0 && (
-                <ul className="space-y-0.5 text-sm text-poke-text-primary">
-                  {others.map((other) => (
-                    <li key={`other-${other.id}`}>{t(symmetric ? 'relations.partner' : 'relations.linked', { name: nameOf(other) })}</li>
-                  ))}
+                <ul className="flex flex-col gap-1.5 text-body font-[550] text-fg">
+                  {others.map((other) => line(`other-${other.id}`, nameOf(other), t(symmetric ? 'relations.partner' : 'relations.linked', { name: nameOf(other) })))}
                 </ul>
               )}
               {directed && mine.length > 0 && (
-                <ul className="space-y-0.5 text-sm text-poke-text-primary">
+                <ul className="flex flex-col gap-1.5 text-body font-[550] text-fg">
                   {mine.map((link, index) => {
                     if (link.from?.id === viewerId && link.to !== null) {
-                      return <li key={`give-${link.to.id}-${index}`}>{t('relations.give', { name: nameOf(link.to) })}</li>;
+                      return line(`give-${link.to.id}-${index}`, nameOf(link.to), t('relations.give', { name: nameOf(link.to) }));
                     }
                     if (link.to?.id === viewerId && link.from !== null) {
-                      return <li key={`receive-${link.from.id}-${index}`}>{t('relations.receive', { name: nameOf(link.from) })}</li>;
+                      return line(`receive-${link.from.id}-${index}`, nameOf(link.from), t('relations.receive', { name: nameOf(link.from) }));
                     }
                     return null;
                   })}
                 </ul>
               )}
-              {hidden && <p className="text-sm text-poke-text-secondary">{t('relations.hiddenNotice')}</p>}
+              {hidden && <p className="text-body text-fg-muted">{t('relations.hiddenNotice')}</p>}
               {open.length > 0 && (
-                <div className="space-y-1">
-                  <h4 className="font-heading text-sm font-semibold text-poke-text-secondary">{t('relations.revealedHeading')}</h4>
-                  <ScrollRegion label={`${label}: ${t('relations.revealedHeading')}`}>
-                    <table className="w-full text-left text-sm">
+                <div className="flex flex-col gap-1.5">
+                  <h4 className="text-caption font-[550] text-fg-muted">{t('relations.revealedHeading')}</h4>
+                  {/* A scroll box without a focusable child is not in the tab order: the region role, name and tabIndex make it reachable. */}
+                  <div
+                    role="region"
+                    aria-label={`${label}: ${t('relations.revealedHeading')}`}
+                    tabIndex={0}
+                    className={cn('overflow-x-auto rounded-poke-md border border-hairline', FOCUS_TARGET)}
+                  >
+                    <table className="w-full text-left text-body">
                       <caption className="sr-only">{`${label}: ${t('relations.revealedHeading')}`}</caption>
-                      <thead className="bg-poke-elevated text-poke-text-secondary">
+                      <thead className="bg-elevated text-caption text-fg-muted">
                         <tr>
-                          <th scope="col" className="px-3 py-2 font-heading font-semibold">
+                          <th scope="col" className="px-3 py-2 font-[550]">
                             {symmetric ? t('relations.player') : t('relations.from')}
                           </th>
-                          <th scope="col" className="px-3 py-2 font-heading font-semibold">
+                          <th scope="col" className="px-3 py-2 font-[550]">
                             {symmetric ? t('relations.partnerColumn') : t('relations.to')}
                           </th>
                         </tr>
                       </thead>
-                      <tbody className="divide-y divide-poke-border">
+                      <tbody className="divide-y divide-hairline">
                         {open.map((link) => (
                           <tr key={`${link.from.id}-${link.to.id}`}>
-                            <td className="px-3 py-2 text-poke-text-primary">{nameOf(link.from)}</td>
-                            <td className="px-3 py-2 text-poke-text-primary">{nameOf(link.to)}</td>
+                            <td className={CELL}>{nameOf(link.from)}</td>
+                            <td className={CELL}>{nameOf(link.to)}</td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
-                  </ScrollRegion>
+                  </div>
                 </div>
               )}
             </div>
           );
         })}
       </div>
-    </Section>
+    </PlayerSection>
   );
 }

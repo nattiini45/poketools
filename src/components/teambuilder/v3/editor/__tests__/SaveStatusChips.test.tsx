@@ -13,17 +13,17 @@ describe('SaveStatusChips', () => {
   it('shows the amber "rules not met" chip for a warned save', () => {
     const html = render('warned');
     expect(html).toContain('Saved, rules not met');
-    // The documented warning pairing: ink text on an amber tint, never a static amber shade.
-    expect(html).toContain('text-poke-amber-ink');
-    expect(html).toContain('bg-amber-500/15');
-    expect(html).not.toContain('text-amber-400');
+    // The documented warning pairing: the accent ink on the accent wash (a skewed plate), never a static amber shade.
+    expect(html).toContain('text-accent-ink');
+    expect(html).toContain('bg-accent-subtle');
+    expect(html).not.toContain('amber-');
     expect(html).not.toContain('Saved</span>');
   });
 
   it('shows the neutral "unchecked" chip for an unchecked save', () => {
     const html = render('unchecked');
     expect(html).toContain('Saved, rules could not be checked');
-    expect(html).not.toContain('amber');
+    expect(html).not.toContain('accent');
   });
 
   it('hides both advisory chips while the editor is dirty and shows "unsaved" instead', () => {

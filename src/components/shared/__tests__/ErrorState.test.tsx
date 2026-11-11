@@ -21,11 +21,12 @@ function renderState(props: Partial<Parameters<typeof ErrorState>[0]> = {}, loca
 }
 
 describe('ErrorState', () => {
-  it('renders the title and description, with the emoji hidden from assistive tech', () => {
+  it('renders the title and description, with the item icon hidden from assistive tech', () => {
     renderState();
     expect(screen.getByRole('heading', { name: 'Broke' })).toBeTruthy();
     expect(screen.getByText('It broke.')).toBeTruthy();
-    expect(document.querySelector('[aria-hidden="true"]')?.textContent).toBe('😵');
+    expect(document.querySelector('img[aria-hidden="true"]')?.getAttribute('alt')).toBe('');
+    expect(screen.queryByRole('img')).toBeNull();
   });
 
   it('retries and goes back from the two buttons', async () => {

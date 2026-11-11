@@ -1,10 +1,10 @@
 'use client';
 
-import Section from '@/components/ui/Section';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import type { ActionView, DomainEntriesView } from '@/lib/format-engine/runtime/view-types';
 import ActionCard, { type ActionStatus } from './ActionCard';
+import { PlayerSection } from './parts';
 
 export interface ActionsSectionProps {
   seasonId: string;
@@ -20,8 +20,8 @@ export interface ActionsSectionProps {
 export default function ActionsSection({ seasonId, actions, domains, closed, onReload, onStatus }: ActionsSectionProps) {
   const t = useT(formatRuntimePlayerMessages);
   return (
-    <Section title={t('actions.heading')}>
-      <div className="space-y-4">
+    <PlayerSection title={t('actions.heading')} icon="rare-candy">
+      <div className="flex flex-col gap-4">
         {actions.map((action) => (
           <ActionCard
             key={action.id}
@@ -34,6 +34,6 @@ export default function ActionsSection({ seasonId, actions, domains, closed, onR
           />
         ))}
       </div>
-    </Section>
+    </PlayerSection>
   );
 }

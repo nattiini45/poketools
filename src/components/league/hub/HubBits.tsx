@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import type { ReactNode } from 'react';
-import { FOCUS_RING, PANEL_NOTICE } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+
+const PANEL_NOTICE = 'rounded-poke-md border border-hairline bg-elevated p-6 text-body text-fg-muted';
 
 /**
  * Small server-rendered pieces the league hub panels share. Everything is
@@ -69,7 +71,7 @@ export function HubStageHeader({
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
       <div className="min-w-0">
-        <h4 className="font-heading text-lg font-bold text-arena-ink">{name}</h4>
+        <h4 className="font-heading text-title text-fg">{name}</h4>
         <p className="text-xs text-arena-ink-secondary">{meta}</p>
       </div>
       <div className="flex items-center gap-3">

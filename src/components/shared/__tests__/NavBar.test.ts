@@ -1,94 +1,187 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { publicNavLinks } from '../NavBar';
+import {
+  ALL_NAV_LINKS,
+  BOTTOM_BAR_LINKS,
+  BOTTOM_SHEET_LINKS,
+  MORE_NAV_LINKS,
+  extensionLinkIcon,
+  isNavPathActive,
+  primaryNavLinks,
+} from '../nav/links';
 import { navMessages } from '@/i18n/messages/nav';
 
-describe('publicNavLinks', () => {
-  it('includes the Replays destination in the public navigation', () => {
-    expect(publicNavLinks).toContainEqual({ href: '/replays', labelKey: 'replays' });
+const read = (file: string) => readFileSync(path.resolve(__dirname, '..', file), 'utf8');
+const hrefs = (links: readonly { href: string }[]) => links.map((link) => link.href);
+
+describe('site nav link groups (plan §3.1)', () => {
+  it('gives a visitor Leagues, Tournaments, Insights and Wiki', () => {
+    expect(hrefs(primaryNavLinks(false))).toEqual(['/leagues', '/tournaments', '/insights', '/wiki']);
   });
 
-  it('labels every public link through navMessages (English source unchanged)', () => {
-    const labels = publicNavLinks.map((link) => navMessages.en.links[link.labelKey]);
-    expect(labels).toEqual(['Tournaments', 'Leagues', 'Replays', 'Insights', 'Wiki', 'Players']);
-    expect(publicNavLinks.map((link) => navMessages.de.links[link.labelKey])).toContain('Turniere');
+  it('gives a player Home first and Teams', () => {
+    expect(hrefs(primaryNavLinks(true))).toEqual(['/dashboard', '/leagues', '/tournaments', '/teambuilder', '/insights', '/wiki']);
+  });
+
+  it('keeps Replays and Players reachable under More', () => {
+    expect(MORE_NAV_LINKS).toContainEqual({ href: '/replays', labelKey: 'replays', icon: 'dubious-disc' });
+    expect(hrefs(MORE_NAV_LINKS)).toEqual(['/replays', '/players']);
+  });
+
+  it('splits every destination between the bottom bar and its sheet, with no admin or creator link', () => {
+    expect(hrefs(BOTTOM_BAR_LINKS)).toEqual(['/dashboard', '/leagues', '/teambuilder', '/wiki']);
+    expect(hrefs(BOTTOM_SHEET_LINKS)).toEqual(['/tournaments', '/insights', '/replays', '/players']);
+    expect([...hrefs(BOTTOM_BAR_LINKS), ...hrefs(BOTTOM_SHEET_LINKS)].sort()).toEqual(hrefs(ALL_NAV_LINKS).sort());
+    for (const href of hrefs(ALL_NAV_LINKS)) expect(href).not.toMatch(/^\/(admin|creator)/);
+  });
+
+  it('labels every link through navMessages, in English and German', () => {
+    expect(primaryNavLinks(true).map((link) => navMessages.en.links[link.labelKey])).toEqual([
+      'Home',
+      'Leagues',
+      'Tournaments',
+      'Teams',
+      'Insights',
+      'Wiki',
+    ]);
+    expect(primaryNavLinks(true).map((link) => navMessages.de.links[link.labelKey])).toContain('Turniere');
+    expect(navMessages.de.links.more).toBe('Mehr');
+  });
+
+  it('uses the approved item icon of each destination', () => {
+    expect(Object.fromEntries(ALL_NAV_LINKS.map((link) => [link.labelKey, link.icon]))).toEqual({
+      home: 'exp-share',
+      leagues: 'poke-ball',
+      tournaments: 'kings-rock',
+      teams: 'choice-scarf',
+      insights: 'scope-lens',
+      wiki: 'weakness-policy',
+      replays: 'dubious-disc',
+      players: 'lucky-egg',
+    });
+    expect(extensionLinkIcon('/history')).toBe('old-amber');
+    expect(extensionLinkIcon('/history/season-1')).toBe('old-amber');
+    expect(extensionLinkIcon('/somewhere')).toBe('town-map');
   });
 });
 
-describe('NavBar language picker wiring (i18n-core §2.1)', () => {
-  const source = readFileSync(path.resolve(__dirname, '../NavBar.tsx'), 'utf8');
-
-  it('renders the desktop language picker immediately before the palette picker', () => {
-    const language = source.indexOf('<LanguagePicker />');
-    const palette = source.indexOf('<PalettePicker />');
-    expect(language).toBeGreaterThan(-1);
-    expect(palette).toBeGreaterThan(language);
-    expect(source.slice(language + '<LanguagePicker />'.length, palette).trim()).toBe('');
+describe('isNavPathActive', () => {
+  it('lights a link on its page and the pages under it, never on a sibling prefix', () => {
+    expect(isNavPathActive('/leagues', '/leagues')).toBe(true);
+    expect(isNavPathActive('/leagues/abc/draft', '/leagues')).toBe(true);
+    expect(isNavPathActive('/leaguesque', '/leagues')).toBe(false);
+    expect(isNavPathActive(null, '/leagues')).toBe(false);
   });
 
-  it('puts the drawer language section right after the palette section, inside the scroll region', () => {
-    const palette = source.indexOf('<PalettePickerSection />');
-    const language = source.indexOf('<LanguagePickerSection />');
-    const footer = source.indexOf('{/* Auth button */}');
-    expect(language).toBeGreaterThan(palette);
-    expect(footer).toBeGreaterThan(language);
-    expect(source.slice(palette, language)).not.toContain('</div>');
+  it('lights Wiki on a Pokémon page and Teams on the team library', () => {
+    const [, , , teams, , wiki] = primaryNavLinks(true);
+    expect(isNavPathActive('/pokemon/garchomp', wiki.href, wiki.also)).toBe(true);
+    expect(isNavPathActive('/teams/library', teams.href, teams.also)).toBe(true);
   });
 });
 
-describe('NavBar site palette wiring', () => {
-  const source = readFileSync(path.resolve(__dirname, '../NavBar.tsx'), 'utf8');
+describe('NavBar source contract', () => {
+  const source = read('NavBar.tsx');
+  const count = (needle: string) => source.split(needle).length - 1;
 
-  it('imports the palette picker and its drawer section', () => {
-    expect(source).toMatch(/import PalettePicker, \{ PalettePickerSection \} from '\.\/PalettePicker';/);
+  it('keeps the nav id and the drawer attributes the route chrome relies on', () => {
+    expect(count('id="site-nav"')).toBe(1);
+    expect(count('data-navbar-drawer=""')).toBe(2);
+    expect(source).toContain('h-16');
   });
 
-  it('renders the desktop picker right before the light/dark toggle', () => {
-    const picker = source.indexOf('<PalettePicker />');
-    const toggle = source.indexOf('<ThemeToggle />');
-    expect(picker).toBeGreaterThan(-1);
-    expect(toggle).toBeGreaterThan(picker);
-    expect(source.slice(picker + '<PalettePicker />'.length, toggle).trim()).toBe('');
+  it('switches the link row and the drawer at one breakpoint (lg)', () => {
+    expect(count('md:hidden')).toBe(0);
+    expect(count('xl:hidden')).toBe(0);
+    expect(count('hidden items-center gap-0.5 lg:flex')).toBe(1);
+    // Hamburger, drawer backdrop and drawer panel.
+    expect(count('lg:hidden')).toBe(3);
   });
 
-  it('puts the drawer palette section inside the scroll region, after the links and before the auth footer', () => {
-    const scroll = source.indexOf('className="flex-1 min-h-0 overflow-y-auto"');
-    const links = source.indexOf('<MobileNavLink', scroll);
-    const section = source.indexOf('<PalettePickerSection />');
+  it('carries no Admin or Creator Hub link in the bar: they live in the account menu', () => {
+    expect(source).not.toMatch(/['"]\/admin['"]/);
+    expect(source).not.toMatch(/['"]\/creator['"]/);
+    const menu = read('nav/AccountMenu.tsx');
+    expect(menu).toContain('href="/admin"');
+    expect(menu).toContain('href="/creator"');
+  });
+
+  it('puts the drawer links, Appearance and Language in one scroll region, ahead of the sign-in footer', () => {
+    const scroll = source.indexOf('className="min-h-0 flex-1 overflow-y-auto"');
+    const links = source.indexOf('<NavMenuLink', scroll);
+    const appearance = source.indexOf('<AppearanceSettings name="site-drawer" />');
+    const language = source.indexOf('<LanguagePickerSection name="site-drawer-language"');
     const footer = source.indexOf('{/* Auth button */}');
     expect(scroll).toBeGreaterThan(-1);
     expect(links).toBeGreaterThan(scroll);
-    expect(section).toBeGreaterThan(links);
-    expect(footer).toBeGreaterThan(section);
-    // Still inside the scroll element: no <div> closes between its start and the section
-    // (the link list closes with </nav>), and the scroll element closes before the footer.
-    expect(source.slice(scroll, section)).not.toContain('</div>');
-    expect(source.slice(section, footer)).toContain('</div>');
-    // The link list itself no longer scrolls on its own (one scroll region).
-    expect(source).not.toMatch(/<nav className="[^"]*overflow-y-auto/);
+    expect(appearance).toBeGreaterThan(links);
+    expect(language).toBeGreaterThan(appearance);
+    expect(footer).toBeGreaterThan(language);
+  });
+
+  it('is a labelled modal drawer that closes on Escape and returns focus to the menu button', () => {
+    expect(source).toMatch(/role="dialog"/);
+    expect(source).toMatch(/aria-modal="true"/);
+    expect(source).toContain("aria-label={t('menuLabel')}");
+    expect(source).toMatch(/event\.key === 'Escape'\) setMobileOpen\(false\)/);
+    expect(source).toContain('closeButtonRef.current?.focus()');
+    expect(source).toContain('menuButtonRef.current?.focus()');
   });
 });
 
-describe('NavBar responsive structure', () => {
-  const source = readFileSync(path.resolve(__dirname, '../NavBar.tsx'), 'utf8');
-  const count = (needle: string) => source.split(needle).length - 1;
+describe('menus inside #site-nav (D33)', () => {
+  const hook = read('nav/use-nav-disclosure.ts');
 
-  it('switches links and menu button at one breakpoint (xl), never md', () => {
-    expect(count('md:hidden')).toBe(0);
-    expect(count('hidden xl:flex')).toBe(1);
-    // Hamburger, drawer backdrop and drawer panel.
-    expect(count('xl:hidden')).toBe(3);
+  it('consumes the panel Escape natively on its wrapper, so the revealed bar stays open', () => {
+    expect(hook).toMatch(/wrapper\.addEventListener\('keydown'/);
+    expect(hook).toContain('event.stopPropagation()');
   });
 
-  it('keeps the drawer attributes and the nav id the route chrome relies on', () => {
-    expect(count('data-navbar-drawer=""')).toBe(2);
-    expect(count('id="site-nav"')).toBe(1);
+  it('closes on a soft navigation: the open state is keyed to the pathname it opened on', () => {
+    expect(hook).toContain('const pathname = usePathname();');
+    expect(hook).toMatch(/const open = openOn !== null && openOn\.path === pathname;/);
+    expect(hook).toMatch(/if \(openOn !== null && openOn\.path !== pathname\) setOpenOn\(null\);/);
+    expect(hook).not.toMatch(/useState\(false\)/);
   });
 
-  it('renders every desktop link dense', () => {
-    const row = source.slice(source.indexOf('hidden xl:flex'), source.indexOf('{/* Right side'));
-    expect(row).toContain('<NavLink');
-    expect(row).toMatch(/<NavLink[^>]*\bdense\b/s);
+  it('More and the account menu use it and are never portalled', () => {
+    for (const file of ['nav/MoreMenu.tsx', 'nav/AccountMenu.tsx', 'nav/use-nav-disclosure.ts', 'PalettePicker.tsx', 'LanguagePicker.tsx']) {
+      const source = read(file);
+      expect(source, file).not.toContain('createPortal');
+      expect(source, file).not.toMatch(/@radix-ui/);
+    }
+    expect(read('nav/MoreMenu.tsx')).toContain('useNavDisclosure()');
+    expect(read('nav/AccountMenu.tsx')).toContain('useNavDisclosure()');
+  });
+});
+
+describe('bottom tab bar contract (plan §3.1)', () => {
+  const bar = read('nav/BottomTabBar.tsx');
+  const css = readFileSync(path.resolve(__dirname, '../../../app/globals.css'), 'utf8');
+
+  it('is not a body > nav, counts as inside the bar for the route reveal, and shows below lg only', () => {
+    expect(bar).toMatch(/<div\s+data-site-bottom-bar=""\s+data-navbar-drawer=""/);
+    expect(bar).toContain('lg:hidden');
+    expect(bar).toContain('if (!session?.player) return null;');
+  });
+
+  it('is mounted by the public, player and creator layouts only', () => {
+    const app = path.resolve(__dirname, '../../../app');
+    const layout = (dir: string) => readFileSync(path.join(app, dir, 'layout.tsx'), 'utf8');
+    for (const dir of ['(public)', '(player)', 'creator']) expect(layout(dir), dir).toContain('<BottomTabBar extraLinks={navExtraLinks} />');
+    for (const dir of ['(broadcast)', 'auth', 'admin']) expect(layout(dir), dir).not.toContain('BottomTabBar');
+  });
+
+  it('pads main by the bar while it is mounted, and never on a draft-room page', () => {
+    expect(css).toContain('html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {\n  display: none;');
+    expect(css).toMatch(
+      /html:not\(\.world-route-live\):not\(:has\(\[data-frozen="draft-room"\]\)\) body:has\(\[data-site-bottom-bar\]\) #main-content \{\s*padding-bottom: calc\(27px \+ 56px \+ env\(safe-area-inset-bottom\)\);/,
+    );
+  });
+
+  it('parks with the NavBar while a 3D route world is the page', () => {
+    expect(css).toMatch(/html\.world-route-live \[data-site-bottom-bar\] \{\s*transform: translate3d\(0, calc\(100% \+ 16px\), 0\);/);
+    expect(css).toContain('html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] [data-site-bottom-bar]');
   });
 });

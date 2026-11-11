@@ -1,7 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { buttonVariants } from "@/components/ui/buttonStyles";
+import ItemIcon from "@/components/ui/ItemIcon";
+import SkewPlate from "@/components/ui/SkewPlate";
 import { useT } from "@/i18n/client";
 import { shellMessages } from "@/i18n/messages/shell";
 
@@ -18,28 +19,33 @@ interface ErrorStateProps {
   detail?: string;
 }
 
+const PLATE_BUTTON =
+  "inline-flex min-h-11 items-center text-body transition-transform duration-80 ease-out hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none";
+
 /** The body of every route error boundary (`error.tsx`). */
 export default function ErrorState({ title, description, retryLabel, backLabel, onRetry, digest, detail }: ErrorStateProps) {
   const router = useRouter();
   const t = useT(shellMessages);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-6 text-center">
-      <div className="text-5xl" aria-hidden="true">😵</div>
+    <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
+      <ItemIcon item="dubious-disc" size={96} />
       <div>
-        <h2 className="text-xl font-heading font-bold text-poke-text-primary mb-2">{title}</h2>
-        <p className="text-sm text-poke-text-secondary max-w-md">{description}</p>
-        {detail ? <p className="mt-2 text-xs font-mono text-poke-text-muted max-w-md break-words">{detail}</p> : null}
-        {digest ? (
-          <p className="mt-2 text-xs text-poke-text-muted">{t("errorPage.reference", { digest })}</p>
-        ) : null}
+        <h2 className="font-heading text-display text-balance text-fg">{title}</h2>
+        <p className="mx-auto mt-2 max-w-md text-body text-fg-muted">{description}</p>
+        {detail ? <p className="mx-auto mt-2 max-w-md break-words font-mono text-caption text-fg-muted">{detail}</p> : null}
+        {digest ? <p className="mt-2 text-caption text-fg-muted">{t("errorPage.reference", { digest })}</p> : null}
       </div>
-      <div className="flex gap-3">
-        <button onClick={onRetry} className={buttonVariants({ variant: "primary", size: "md" })}>
-          {retryLabel}
+      <div className="flex flex-wrap justify-center gap-4">
+        <button type="button" onClick={onRetry} className={PLATE_BUTTON}>
+          <SkewPlate variant="button" className="px-5 py-2.5">
+            {retryLabel}
+          </SkewPlate>
         </button>
-        <button onClick={() => router.back()} className={buttonVariants({ variant: "secondary", size: "md" })}>
-          {backLabel}
+        <button type="button" onClick={() => router.back()} className={PLATE_BUTTON}>
+          <SkewPlate variant="button" tone="secondary" className="px-5 py-2.5">
+            {backLabel}
+          </SkewPlate>
         </button>
       </div>
     </div>

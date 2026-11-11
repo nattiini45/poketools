@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
@@ -106,6 +107,8 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 
   return (
     <AdminGuard>
+      <AdminCrumbName href={`/admin/leagues/${seasonId}`} name={league.name} />
+      <AdminCrumbName href={`/admin/leagues/${seasonId}/phases/${phaseId}`} name={phase.name} />
       <PageContainer
         title={phase.name}
         subtitle={t('phasePage.subtitle', {

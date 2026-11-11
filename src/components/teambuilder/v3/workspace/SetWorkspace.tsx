@@ -115,7 +115,7 @@ export default function SetWorkspace() {
 
   const flashClass = (section: string) =>
     jumpSection === section
-      ? 'ring-2 ring-poke-danger/60 rounded-lg animate-pulse'
+      ? 'ring-2 ring-loss rounded-lg animate-pulse'
       : '';
 
   // Keyboard: 1-6 to switch slots, Esc to close workspace
@@ -174,7 +174,7 @@ export default function SetWorkspace() {
             <div className="flex items-center gap-2 mb-4">
               <button
                 onClick={() => dispatch({ type: 'CLOSE_SET_WORKSPACE' })}
-                className="flex items-center gap-1 text-xs text-poke-text-muted hover:text-poke-text-primary transition-colors"
+                className="flex items-center gap-1 text-xs text-fg-muted hover:text-fg transition-colors"
                 aria-label={t('workspace.backToGrid')}
               >
                 <svg
@@ -189,7 +189,7 @@ export default function SetWorkspace() {
                 </svg>
                 {t('workspace.team')}
               </button>
-              <span className="text-[10px]">
+              <span className="text-caption">
                 {t('workspace.slotCrumb', { n: slot + 1 })}
               </span>
             </div>
@@ -199,8 +199,8 @@ export default function SetWorkspace() {
               <div
                 className={`mb-3 px-3 py-2 rounded-lg border text-xs ${
                   jumpIssue.severity === 'error'
-                    ? 'border-poke-danger/50 text-poke-danger'
-                    : 'border-yellow-500/50 bg-yellow-500/10 text-yellow-600 dark:text-yellow-400'
+                    ? 'border-loss bg-loss-bg text-loss'
+                    : 'border-accent-ink bg-accent-subtle text-fg'
                 }`}
                 role="alert"
               >
@@ -220,7 +220,7 @@ export default function SetWorkspace() {
             {/* Item / Ability / Nature row */}
             <div ref={fieldsRef} className={`grid grid-cols-1 sm:grid-cols-3 gap-3 mb-2 ${flashClass('fields')}`}>
               <div>
-                <label className="text-[10px] text-poke-text-muted uppercase tracking-wide mb-1 block">
+                <label className="text-caption text-fg-muted mb-1 block">
                   {t('workspace.item')}
                 </label>
                 <div className="relative">
@@ -230,12 +230,12 @@ export default function SetWorkspace() {
                     }}
                     disabled={state.locked}
                     className={[
-                      'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded border text-left transition-colors pr-6',
+                      'w-full flex items-center gap-1.5 px-2 py-1.5 text-xs rounded-md border text-left transition-colors duration-80 ease-out pr-6 pointer-coarse:min-h-11 pointer-coarse:text-sm',
                       itemPickerOpen
-                        ? 'border-poke-blue/60 bg-poke-blue/10 text-poke-text-primary'
+                        ? 'border-accent-ink bg-accent-subtle text-fg'
                         : set!.item
-                          ? 'bg-poke-surface border-poke-border text-poke-text-primary hover:border-poke-blue/40'
-                          : 'border-dashed border-poke-border text-poke-text-muted hover:border-poke-blue/40',
+                          ? 'bg-surface border-hairline text-fg hover:border-hairline-strong'
+                          : 'border-dashed border-hairline text-fg-muted hover:border-hairline-strong',
                       state.locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
                     ].join(' ')}
                   >
@@ -251,7 +251,7 @@ export default function SetWorkspace() {
                   {set!.item && !state.locked && (
                     <button
                       onClick={() => dispatch({ type: 'UPDATE_SLOT', slot, patch: { item: '' } })}
-                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-poke-text-muted hover:text-poke-danger transition-colors"
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 text-fg-muted hover:text-loss transition-colors"
                       aria-label={t('workspace.clearItem')}
                     >
                       <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
@@ -263,7 +263,7 @@ export default function SetWorkspace() {
                 </div>
               </div>
               <div>
-                <label className="text-[10px] text-poke-text-muted uppercase tracking-wide mb-1 block">
+                <label className="text-caption text-fg-muted mb-1 block">
                   {t('workspace.ability')}
                 </label>
                 <AbilityPicker
@@ -275,7 +275,7 @@ export default function SetWorkspace() {
                 />
               </div>
               <div>
-                <label className="text-[10px] text-poke-text-muted uppercase tracking-wide mb-1 block">
+                <label className="text-caption text-fg-muted mb-1 block">
                   {t('workspace.nature')}
                 </label>
                 <NaturePicker
@@ -313,13 +313,13 @@ export default function SetWorkspace() {
 
             {/* Remove */}
             {!state.locked && (
-              <div className="pt-3 border-t border-poke-border">
+              <div className="pt-3 border-t border-hairline">
                 <button
                   onClick={() => {
                     dispatch({ type: 'REMOVE_SLOT', slot });
                     dispatch({ type: 'CLOSE_SET_WORKSPACE' });
                   }}
-                  className="text-xs text-poke-danger hover:text-poke-danger/80 transition-colors"
+                  className="text-xs text-loss hover:text-loss transition-colors"
                 >
                   {t('workspace.removePokemon')}
                 </button>

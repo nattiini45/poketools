@@ -1016,9 +1016,10 @@ describe('standings panel — league groups', () => {
   });
 
   it('the ungrouped standings panel is byte-identical to the pre-groups markup (HEAD fixture)', () => {
-    // fixtures/standings-ungrouped.head.html: the panel region the pre-groups LeagueHub and HubStandingsTable
-    // (git HEAD 78cec7cf) render for STANDINGS_PANEL, captured once with today's messages. Text changes in the
-    // messages show up in both; a markup change of the ungrouped table fails here.
+    // fixtures/standings-ungrouped.head.html: the panel region LeagueHub and HubStandingsTable render for
+    // STANDINGS_PANEL without groups. First captured from the pre-groups hub (git 78cec7cf) and captured again
+    // with redesign B2, which restyled the table on purpose (rank plates, sentence-case head, site tokens).
+    // Text changes in the messages show up in both; a markup change of the ungrouped table fails here.
     const fixture = readFileSync(path.resolve(__dirname, 'fixtures/standings-ungrouped.head.html'), 'utf8').replace(/\r?\n$/, '');
     for (const panel of [STANDINGS_PANEL, { ...STANDINGS_PANEL, groupStandings: [], standingsRanking: 'points' as const }]) {
       expect(panelRegionHtml(renderHub({ panel }).html)).toBe(fixture);
@@ -2113,10 +2114,12 @@ describe('rules panel', () => {
       [getFormatName('gen9ou'), 'indigo'],
       ['Doubles', 'purple'],
       ['Species Clause', 'blue'],
-      ['Koraidon', 'red'],
-      ['Pikachu', 'green'],
       ['50% of team', 'yellow'],
     ];
+    // The name lists are rows, not chips: a banned list carries the loss edge, an added one the win edge.
+    const list = (text: string) => findOne(rendered.panel, (el) => el.tag === 'ul' && squash(el).includes(text), `list ${text}`);
+    expect(classList(list('Koraidon'))).toContain('border-loss');
+    expect(classList(list('Pikachu'))).toContain('border-win');
     for (const [text, colour] of expected) {
       expect(classList(chip(text))).toEqual(
         expect.arrayContaining([

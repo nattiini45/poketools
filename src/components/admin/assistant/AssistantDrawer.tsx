@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, MessageSquare, X } from 'lucide-react';
+import { ArrowLeft, X } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { FOCUS_RING } from '@/components/ui/panel';
@@ -37,6 +37,16 @@ function writeStored(key: string, value: string | null): void {
   }
 }
 
+/** Marks the shell's assistant button, where focus returns when the drawer closes. */
+export const ASSISTANT_LAUNCHER_ATTR = 'data-assistant-launcher';
+
+const OPEN_EVENT = 'plc:admin-assistant-open';
+
+/** Opens the drawer from anywhere in the admin shell (the top bar's button, the command menu). */
+export function openAdminAssistant(): void {
+  window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
 const clampWidth = (value: number): number => Math.min(DRAWER_MAX_WIDTH, Math.max(DRAWER_MIN_WIDTH, Math.round(value)));
 
 /** Whether a key press belongs to a text field, where `.` is just a character. */
@@ -47,8 +57,9 @@ function isTyping(target: EventTarget | null): boolean {
 
 /**
  * The assistant drawer (plan 5.1), mounted once in the admin layout outside the page transition, so a conversation goes on
- * while the admin clicks around. It opens from the floating button and the `.` key, closes with Esc, is resizable from 420 to
- * 720 px and is a full-screen sheet on a phone. The panel is not modal: the page behind it stays usable.
+ * while the admin clicks around. It opens from the shell (the top bar's button and the command menu, through
+ * `openAdminAssistant`) and the `.` key, closes with Esc, is resizable from 420 to 720 px and is a full-screen sheet on a
+ * phone. The panel is not modal: the page behind it stays usable.
  */
 export default function AssistantDrawer() {
   const t = useT(adminAssistantMessages);
@@ -57,7 +68,6 @@ export default function AssistantDrawer() {
   const [width, setWidth] = useState(DRAWER_MIN_WIDTH);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
-  const launcher = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ startX: number; startWidth: number } | null>(null);
 
   // What the browser remembered (the width, the last conversation) is read when the drawer opens, never during render, so
@@ -83,14 +93,18 @@ export default function AssistantDrawer() {
       }
     };
     window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    window.addEventListener(OPEN_EVENT, openDrawer);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener(OPEN_EVENT, openDrawer);
+    };
   }, [open, closeDrawer, openDrawer]);
 
-  // Focus moves into the panel when it opens and back to the launcher when it closes.
+  // Focus moves into the panel when it opens and back to the shell's launcher when it closes.
   const wasOpen = useRef(false);
   useEffect(() => {
     if (open) panel.current?.focus();
-    else if (wasOpen.current) launcher.current?.focus();
+    else if (wasOpen.current) document.querySelector<HTMLElement>(`[${ASSISTANT_LAUNCHER_ATTR}]`)?.focus();
     wasOpen.current = open;
   }, [open]);
 
@@ -121,23 +135,9 @@ export default function AssistantDrawer() {
   // The full page has everything the drawer has; a second copy beside it would only get in the way.
   if (pathname?.startsWith('/admin/assistant')) return null;
 
-  return (
-    <>
-      {!open && (
-        <button
-          ref={launcher}
-          type="button"
-          onClick={openDrawer}
-          title={t('drawer.shortcutHint')}
-          aria-label={t('drawer.open')}
-          className={`fixed bottom-4 right-4 z-30 inline-flex items-center gap-2 rounded-full border border-poke-accent bg-poke-accent px-4 py-2.5 font-heading text-sm font-semibold text-poke-surface shadow-poke-lg hover:bg-poke-accent-strong ${FOCUS_RING}`}
-        >
-          <MessageSquare className="h-4 w-4" aria-hidden="true" />
-          {t('name')}
-        </button>
-      )}
+  if (!open) return null;
 
-      {open && (
+  return (
         <div
           ref={panel}
           role="dialog"
@@ -188,7 +188,5 @@ export default function AssistantDrawer() {
             )}
           </div>
         </div>
-      )}
-    </>
   );
 }

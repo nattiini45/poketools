@@ -7,7 +7,9 @@
  *    under `[data-world-route]` — so the panels opened blank. The rules now
  *    leave dialog subtrees alone.
  *  - R18c: the hidden league hub still laid out a ~92 px box inside #pulse;
- *    it is out of the layout while the world is the page.
+ *    it is out of the layout while the world is the page. Since redesign B2
+ *    the hub sits above the world with the hero, in `[data-league-top]`,
+ *    and that column leaves the layout instead.
  *  - R7: the German plaza world used to mark its subtree `lang="de"`; since
  *    i18n D11 every world follows the viewer and inherits `<html lang>`.
  *
@@ -113,10 +115,11 @@ describe('route-live section rules (R4)', () => {
 
 describe('league hub on the route tier (R18c)', () => {
   it('is out of the layout while the world is the page, never before', () => {
-    const hub = globalRules().filter((rule) => rule.selector.includes('#league-hub'));
-    expect(hub).toHaveLength(1);
-    expect(hub[0].selector).toBe('html.world-route-live [data-world-route] #league-hub');
-    expect(hub[0].body).toMatch(/display\s*:\s*none/);
+    expect(globalRules().filter((rule) => rule.selector.includes('#league-hub'))).toHaveLength(0);
+    const top = globalRules().filter((rule) => rule.selector.includes('[data-league-top]'));
+    expect(top).toHaveLength(1);
+    expect(top[0].selector).toBe('html.world-route-live [data-league-top]');
+    expect(top[0].body).toMatch(/display\s*:\s*none/);
   });
 });
 

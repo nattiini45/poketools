@@ -299,12 +299,12 @@ describe('Format tab (?tab=format)', () => {
     expect(mocks.loadLeagueFormat).not.toHaveBeenCalled();
   });
 
-  it('every format has the tab, right before settings', async () => {
+  it('every format has the tab, right after phases', async () => {
     for (const format of ['singles', 'doubles', 'draft', 'evolution_point_buy']) {
       mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: format }));
       const tabs = findByType(await render('format'), LeagueAdminTabs)[0].props.tabs as string[];
       expect(tabs, format).toContain('format');
-      expect(tabs[tabs.indexOf('format') + 1], format).toBe('settings');
+      expect(tabs[tabs.indexOf('format') - 1], format).toBe('phases');
     }
   });
 
@@ -313,7 +313,7 @@ describe('Format tab (?tab=format)', () => {
     const tree = await render('format');
     const labels = findByType(tree, LeagueAdminTabs)[0].props.labels as Record<string, string>;
     expect(labels.format).toBe(createTranslator(leagueAdminSeasonPageMessages, 'de')('tabs.format'));
-    expect(labels.format).toBe('Format');
+    expect(labels.format).toBe('Format und Regeln');
     const [section] = findByType(tree, Section);
     expect(section.props.title).toBe(studioT('de')('tab.title'));
     expect(String(section.props.title)).not.toMatch(/Ã|Â|�/);

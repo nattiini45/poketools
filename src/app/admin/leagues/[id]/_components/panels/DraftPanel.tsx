@@ -1,3 +1,4 @@
+import { LEAGUE_ADMIN_RULES_SECTION } from '@/lib/league-admin/tabs';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import Section from '@/components/ui/Section';
@@ -115,7 +116,7 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
     // Plain draft seasons only (EPB takes the branches below), so `pointBuy` keeps its default `false`.
     roomBody = <DraftPoolManager seasonId={id} seasonName={league.name} />;
   } else if (!league.point_buy_list_id) {
-    roomBody = note(t.rich('draftRoom.bindListFirst', { link: tabLink('rules') }));
+    roomBody = note(t.rich('draftRoom.bindListFirst', { link: tabLink('format', LEAGUE_ADMIN_RULES_SECTION) }));
   } else if (participants.length === 0) {
     // Seats are the participants. With none, the create is refused (SEATS_INVALID) ...
     roomBody = note(t.rich('draftRoom.addParticipantsFirst', { link: tabLink('participants') }));

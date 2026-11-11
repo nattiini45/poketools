@@ -5,6 +5,7 @@ export default defineDe<typeof en>()({
   versusTitle: '{p1} vs. {p2}',
   detail: {
     title: 'Spieldetails',
+    heading: '{player1} vs. {player2}',
     evolutionSummary: 'Evolutionsliga-Übersicht',
     evolutionProgress: '{name} – Entwicklungsfortschritt',
     notBrought: 'Nicht eingesetzt ({count})',

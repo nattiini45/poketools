@@ -60,14 +60,14 @@ export default function ConfirmEmailClient({ tokenHash }: { tokenHash: string })
           {error.kind === 'failed' ? t('confirmEmail.failed') : errorText(error.error)}
         </Alert>
       )}
-      <p className="text-sm text-poke-text-secondary">
+      <p className="text-sm text-fg-muted">
         {t('confirmEmail.prompt')}
       </p>
       <Button onClick={handleConfirm} className="w-full" loading={state === 'loading'}>
         {t('confirmEmail.submit')}
       </Button>
       {state === 'error' && (
-        <Link href="/auth/verify-email" className="block text-sm underline text-poke-text-secondary hover:text-poke-text-primary">
+        <Link href="/auth/verify-email" className="block text-sm text-accent-ink underline underline-offset-2 hover:text-fg">
           {t('confirmEmail.resend')}
         </Link>
       )}

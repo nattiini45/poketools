@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import Alert from '@/components/ui/Alert';
+import { ArrowLeft } from 'lucide-react';
+import ItemIcon from '@/components/ui/ItemIcon';
 import PlayerFormatView from '@/components/format-runtime/player/PlayerFormatView';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { loadPlayerView } from '@/lib/format-engine/runtime/views-server';
@@ -18,7 +19,8 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const LINK = 'text-sm font-medium text-poke-blue hover:underline';
+const LINK = 'inline-flex min-h-11 items-center gap-1.5 text-body font-[550] text-accent-ink underline-offset-4 hover:underline sm:min-h-0';
+const NOTICE = 'flex items-center gap-4 rounded-poke-lg border border-hairline bg-surface p-4 text-body text-fg-muted sm:p-5';
 
 /**
  * `/dashboard/leagues/[id]/play`: the player's page of a running custom league (the format's actions, pairings, items
@@ -46,35 +48,51 @@ export default async function PlayPage({ params }: PageProps) {
 
   const back = (
     <Link href={`/leagues/${seasonId}`} className={LINK}>
+      <ArrowLeft aria-hidden="true" className="size-4" />
       {t('page.back')}
     </Link>
   );
   const heading = (
-    <div className="flex flex-wrap items-baseline justify-between gap-2">
-      <h1 className="text-2xl font-bold">{t('page.title', { league: league.name })}</h1>
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
+      <div className="flex min-w-0 items-center gap-3">
+        <ItemIcon item="poke-ball" />
+        <h1 className="min-w-0 font-heading text-title text-fg [overflow-wrap:anywhere] sm:text-display">{t('page.title', { league: league.name })}</h1>
+      </div>
       {back}
     </div>
   );
   const shell = (children: ReactNode) => (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4">
+    <div className="mx-auto flex w-full max-w-[1008px] flex-col gap-4">
       {heading}
       {children}
     </div>
   );
 
-  if (league.format_type !== 'custom') return shell(<Alert variant="info">{t('page.notCustom')}</Alert>);
+  // A notice that replaces the page: nothing to do here, and the link above leads back to the league.
+  const notice = (text: string) => (
+    <div className={NOTICE}>
+      <ItemIcon item="poke-doll" size={48} />
+      <p>{text}</p>
+    </div>
+  );
+
+  if (league.format_type !== 'custom') return shell(notice(t('page.notCustom')));
 
   // Same rule as requireSeasonMember: a player out of good standing is refused before the participant read.
   const isMember = inGoodStanding && (await isSeasonPlayer(seasonId, player.playerId));
-  if (!isMember) return shell(<Alert variant="info">{t('page.notMember')}</Alert>);
+  if (!isMember) return shell(notice(t('page.notMember')));
 
   const view = await loadPlayerView(seasonId, player.playerId);
-  if (!view.running) return shell(<Alert variant="info">{t('page.notRunning')}</Alert>);
+  if (!view.running) return shell(notice(t('page.notRunning')));
 
   const closed = isSeasonClosed(league);
   return shell(
     <>
-      {closed && <Alert variant="info">{t('page.closed')}</Alert>}
+      {closed && (
+        <p role="status" className="rounded-poke-md border border-hairline bg-elevated px-3 py-2 text-body text-fg">
+          {t('page.closed')}
+        </p>
+      )}
       <PlayerFormatView seasonId={seasonId} viewerId={player.playerId} initialView={view} closed={closed} />
     </>,
   );
