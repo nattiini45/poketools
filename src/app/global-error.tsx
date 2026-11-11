@@ -9,8 +9,10 @@ import { useSyncExternalStore } from "react";
  * It renders without providers (the I18nProvider may be what failed), so it
  * reads `plc_locale` from document.cookie and uses inline bilingual copy:
  * a sanctioned i18n exception (i18n-core §2.4, allowlisted in
- * scripts/i18n-allowlist.json). The hex colours stay: the root CSS may be
- * gone when this renders, and the page is a full-screen error, not a slab.
+ * scripts/i18n-allowlist.json). The hex colours stay, fixed to the sunlit tokens
+ * of globals.css (--sunken #E8D9B5, --fg #241A0C, --fg-muted #5C4E37, --accent-fill #CF660B): the root CSS and the
+ * theme may be gone when this renders, so the page is light sand in every theme, never dark. Contrast: ink on
+ * ground 12.23:1, muted on ground 5.78:1, ink on the button 4.53:1.
  */
 
 type GlobalErrorLocale = "en" | "de";
@@ -57,23 +59,23 @@ export default function GlobalError({
   const copy = COPY[locale];
   return (
     <html lang={locale}>
-      <body className="bg-[#0E0B06] text-[#F5EDDD] font-sans antialiased">
+      <body className="bg-[#E8D9B5] text-[#241A0C] font-sans antialiased">
         <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center px-4">
           <div className="text-5xl">💥</div>
           <div>
             <h2 className="text-xl font-bold mb-2">
               {copy.heading}
             </h2>
-            <p className="text-sm text-[#C4B596] max-w-md">
+            <p className="text-sm text-[#5C4E37] max-w-md">
               {copy.fallback}
             </p>
             {error.digest ? (
-              <p className="mt-2 text-xs text-[#C4B596]">{copy.reference}: {error.digest}</p>
+              <p className="mt-2 text-xs text-[#5C4E37]">{copy.reference}: {error.digest}</p>
             ) : null}
           </div>
           <button
             onClick={() => reset()}
-            className="px-4 py-2 rounded-lg bg-[#9A4806] text-[#FFF8E9] font-semibold text-sm hover:bg-[#843C05] transition-colors"
+            className="px-4 py-2 rounded-lg bg-[#CF660B] text-[#241A0C] font-semibold text-sm hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#241A0C] transition-[filter]"
           >
             {copy.retry}
           </button>
