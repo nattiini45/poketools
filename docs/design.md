@@ -302,6 +302,9 @@ selectable label; only the plate span is skewed (`.skew-plate`, `.skew-plate-bg`
   has a fixed width, so German labels widen it.
 - Put the plate inside the link or button it labels. That element's focus ring moves onto the plate (outline on
   the skewed box, offset 2 px).
+- `LinkTabs` (`src/components/ui/LinkTabs.tsx`) is the strip of link tabs on `variant="tab"` plates for tabs that
+  change the URL (a status filter, page sections): each tab is a link with `aria-current`, takes an optional
+  `ItemIcon` and count, and the strip scrolls sideways on a phone with the current tab in view.
 - `SkewChip` is the small static plate for status chips and score or stat plates: `neutral`, `accent`, `live`,
   `win`, `loss`, `tier-1…4`.
 
