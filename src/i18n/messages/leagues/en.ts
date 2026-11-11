@@ -23,6 +23,29 @@ export default {
     description: 'An unexpected error occurred loading this league.',
     goBack: 'Go back',
   },
+  /** The league hero (versus screen) at the top of a league page. */
+  hero: {
+    statusMatchday: '{status} · Matchday {matchday}',
+    /** One line of world lore; the only place the site chrome carries it (D9). */
+    lore: {
+      evoliga: 'Plaza world. The east terrace still waits for its champion.',
+      sakura: 'Sakura Park. Every result goes up on the banner row under the torii.',
+      mountain: 'Mountain Pass. Results are painted on the trail signs up to the pass gate.',
+      clouds: 'Skyisle. The fixtures drift past on the airship, the halo gate keeps the rules.',
+    },
+    stats: {
+      trainers: { one: 'trainer', other: 'trainers' },
+      matchesPlayed: { one: 'match played', other: 'matches played' },
+      daysLeft: { one: 'day left', other: 'days left' },
+      daysToStart: { one: 'day to the start', other: 'days to the start' },
+    },
+    match: { yours: 'Your next match', live: 'Live now', next: 'Next match' },
+    leader: { leading: 'Top of the table', champion: 'Champion' },
+    /** A trainer's place and points under their name plate. */
+    standing: '#{rank} · {points} pts',
+    vs: 'VS',
+    actions: { submit: 'Submit result', prep: 'Match prep', open: 'Open match' },
+  },
   detail: {
     pointBuy: 'Point-Buy List',
     matchup: 'Matchup Analysis',

@@ -52,6 +52,10 @@ export default {
       other: 'Draft complete · {count} rounds · {picks} picks',
     },
     completeNoRounds: 'Draft complete · {picks} picks',
+    /** A pending draft, for everyone who cannot start it. */
+    notStarted: 'The draft has not started yet.',
+    /** Label of this round's seat order beside the clock. */
+    seatOrder: 'Pick order this round',
     startDraft: 'Start Draft',
     undoLastPick: 'Undo Last Pick',
     yourTurn: "It's your turn to pick!",

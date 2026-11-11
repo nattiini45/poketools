@@ -11,11 +11,14 @@ import DraftStallNotice from './DraftStallNotice';
 import PickWarnings, { knownPickWarnings, type PickWarning } from './PickWarnings';
 import Link from 'next/link';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
 import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Table, { type Column } from '@/components/ui/Table';
+import Select from '@/components/ui/Select';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
+import ItemIcon from '@/components/ui/ItemIcon';
+import { cn } from '@/lib/utils/cn';
 import { useDataLocale, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -254,14 +257,14 @@ export default function DraftBoard({
         header: '#',
         sortable: true,
         sortValue: (pick) => pick.pick_number,
-        render: (pick) => <span className="text-poke-text-muted">{pick.pick_number}</span>,
+        render: (pick) => <span className="font-mono text-fg-muted tabular-nums">{pick.pick_number}</span>,
       },
       {
         key: 'round',
         header: t('board.columns.round'),
         sortable: true,
         sortValue: (pick) => pick.round,
-        render: (pick) => <span className="text-poke-text-muted">{pick.round}</span>,
+        render: (pick) => <span className="font-mono text-fg-muted tabular-nums">{pick.round}</span>,
       },
       {
         key: 'player',
@@ -292,7 +295,7 @@ export default function DraftBoard({
         header: t('board.columns.cost'),
         sortable: true,
         sortValue: (pick) => pick.points_spent ?? 0,
-        render: (pick) => <span className="text-poke-text-muted">{pick.points_spent ?? '-'}</span>,
+        render: (pick) => <span className="font-mono text-fg-muted tabular-nums">{pick.points_spent ?? '-'}</span>,
       });
     }
 
@@ -306,11 +309,11 @@ export default function DraftBoard({
     : null;
 
   if (loading) {
-    return <div className="p-8 text-center text-poke-text-muted">{t('board.loading')}</div>;
+    return <div className="rounded-poke-lg border border-hairline bg-surface p-8 text-center text-body text-fg-muted">{t('board.loading')}</div>;
   }
 
   if (!state) {
-    return <div className="p-8 text-center text-poke-danger">{errorText || t('board.errors.loadFailed')}</div>;
+    return <div className="rounded-poke-lg border border-hairline bg-surface p-8 text-center text-body text-poke-danger-ink">{errorText || t('board.errors.loadFailed')}</div>;
   }
 
   const turnEnforced = state.turn_enforced;
@@ -371,124 +374,134 @@ export default function DraftBoard({
     progressLabel = t('board.roundPick', { round: state.current_round, pick: state.next_pick_number });
   }
 
+  const status = state.pool.status;
+  const statusTone: SkewChipTone = status === 'in_progress' ? 'live' : status === 'complete' ? 'tier-1' : 'neutral';
+  const live = status === 'in_progress' && state.current_picker !== null;
+  const showSeats = live && turnEnforced && state.pick_order.length > 0;
+  const showEnd = live && !turnEnforced && adminEvents.includes('complete');
+  const showUndo = isAdmin && status === 'in_progress' && state.picks.length > 0;
+  const hasActions = (live && canPick) || adminEvents.includes('start') || showUndo || showEnd || (live && !turnEnforced && isAdmin);
+
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {isEpb && epbMeta && (
-        <Card variant="outlined" padding="sm">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
-            <div>
-              <p className="text-poke-text-muted">{t('board.epb.pointsUsed')}</p>
-              <p className="text-lg font-bold">{myPointsSpent ?? 0} / {epbMeta.draft_budget}</p>
-            </div>
-            <div>
-              <p className="text-poke-text-muted">{t('board.epb.pointsRemaining')}</p>
-              <p className="text-lg font-bold">{myBudgetRemaining ?? epbMeta.draft_budget}</p>
-            </div>
-            <div>
-              <p className="text-poke-text-muted">{t('board.epb.picksUsed')}</p>
-              <p className="text-lg font-bold">{myPicksUsed} / {epbMeta.draft_picks}</p>
-            </div>
-            <div>
-              <p className="text-poke-text-muted">{t('board.epb.picksRemaining')}</p>
-              <p className="text-lg font-bold">{myPicksRemaining ?? epbMeta.draft_picks}</p>
-            </div>
-          </div>
-          {state.pool.status === 'complete' && (
-            <p className="mt-3 text-xs text-poke-text-secondary">
+        <div>
+          <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              [t('board.epb.pointsUsed'), `${myPointsSpent ?? 0} / ${epbMeta.draft_budget}`],
+              [t('board.epb.pointsRemaining'), String(myBudgetRemaining ?? epbMeta.draft_budget)],
+              [t('board.epb.picksUsed'), `${myPicksUsed} / ${epbMeta.draft_picks}`],
+              [t('board.epb.picksRemaining'), String(myPicksRemaining ?? epbMeta.draft_picks)],
+            ].map(([label, value]) => (
+              <div key={label} className="rounded-poke-md border border-hairline bg-surface px-3 py-2">
+                <dt className="text-caption text-fg-muted">{label}</dt>
+                <dd className="font-heading text-title text-fg tabular-nums">{value}</dd>
+              </div>
+            ))}
+          </dl>
+          {status === 'complete' && (
+            <p className="mt-3 text-caption text-fg-muted">
               {t.rich('board.epb.purchasableTokens', {
                 count: epbMeta.purchasable_tokens_by_player[currentPlayerId] ?? 0,
                 ratio: epbMeta.token_ratio,
                 max: epbMeta.token_max,
-                b: (chunks) => <strong>{chunks}</strong>,
+                b: (chunks) => <strong className="text-fg">{chunks}</strong>,
               })}
             </p>
           )}
-        </Card>
+        </div>
       )}
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between p-4 bg-poke-surface rounded-poke-lg border border-poke-border shadow-poke-card">
-        <div className="flex items-center">
-          <StatusBadge status={state.pool.status} label={enumLabel(tEnums, 'draftPoolStatus', state.pool.status)} />
-          <span className="ml-3 text-sm text-poke-text-muted">
-            {progressLabel}
-          </span>
-        </div>
+      {/* The clock: status, whose pick it is, this round's seat order and the actions, on one slab. */}
+      <section
+        className={cn(
+          'relative isolate overflow-hidden rounded-poke-lg border bg-surface',
+          isMyTurn && live ? 'border-accent-fill' : 'border-hairline-strong',
+        )}
+      >
+        <span
+          aria-hidden="true"
+          className="absolute inset-y-0 -right-12 -z-10 hidden w-[46%] border-l-4 border-accent-fill bg-sunken [transform:skewX(var(--skew))] md:block"
+        />
+        <div className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between md:gap-10 md:p-5">
+          <div className="flex min-w-0 flex-col gap-2 md:w-1/2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              <SkewChip tone={statusTone}>{enumLabel(tEnums, 'draftPoolStatus', status)}</SkewChip>
+              <span className="font-mono text-caption text-fg-muted tabular-nums">{progressLabel}</span>
+            </div>
+            {status === 'pending' && <p className="font-heading text-title text-fg">{t('board.notStarted')}</p>}
+            {status === 'complete' && <p className="font-heading text-display text-fg">{t('board.complete')}</p>}
+            {/* Current picker callout (snake and linear order) */}
+            {live && turnEnforced && state.current_picker && (
+              <p className={cn('font-heading text-fg', isMyTurn ? 'text-display' : 'text-title')}>
+                {isMyTurn
+                  ? t('board.yourTurn')
+                  : t('board.waitingFor', { name: playerNames[state.current_picker] ?? tLegacy('unknownPlayer') })}
+              </p>
+            )}
+            {/* Free order: no turn, so no "your turn" / "waiting for"; admins choose whose pick they enter. */}
+            {live && !turnEnforced && <p className="text-body text-fg">{t('board.freeOrder')}</p>}
+          </div>
 
-        <div className="flex items-center gap-2">
-          {adminEvents.includes('start') && (
-            <Button variant="success" size="sm" onClick={() => handleStatusChange('in_progress')}>
-              {t('board.startDraft')}
-            </Button>
-          )}
-          {isAdmin && state.pool.status === 'in_progress' && state.picks.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={handleUndo} className="text-yellow-600 hover:bg-poke-yellow-light">
-              {t('board.undoLastPick')}
-            </Button>
-          )}
-        </div>
-      </div>
-
-      {/* Free order: no turn, so no "your turn" / "waiting for"; admins choose whose pick they enter. */}
-      {state.pool.status === 'in_progress' && state.current_picker && !turnEnforced && (
-        <div className="p-4 rounded-poke-lg border-2 border-poke-blue bg-poke-blue-light text-center space-y-2">
-          <p className="text-sm text-poke-text-primary">{t('board.freeOrder')}</p>
-          {isAdmin && (
-            <label className="inline-flex items-center gap-2 text-sm text-poke-text-primary">
-              <span className="font-semibold">{t('board.pickFor')}</span>
-              <select
+          <div className="flex min-w-0 flex-col gap-3 md:w-[42%] md:items-end">
+            {showSeats && (
+              <div className="flex flex-col gap-1 md:items-end">
+                <p className="text-caption text-fg-muted">{t('board.seatOrder')}</p>
+                <ol className="-mx-1 flex flex-wrap gap-y-1 md:justify-end">
+                  {state.pick_order.map((playerId, seat) => (
+                    <li key={playerId} aria-current={playerId === state.current_picker ? 'true' : undefined}>
+                      <SkewPlate variant="nav" active={playerId === state.current_picker} className="text-body">
+                        <span className="mr-1.5 font-mono text-caption tabular-nums">{seat + 1}</span>
+                        {playerNames[playerId] ?? tLegacy('unknownPlayer')}
+                      </SkewPlate>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+            {live && !turnEnforced && isAdmin && (
+              <Select
+                label={t('board.pickFor')}
                 value={picker ?? ''}
                 onChange={(e) => setPickFor(e.currentTarget.value)}
-                className="px-2 py-1 border border-poke-border bg-poke-surface rounded-poke-md text-sm"
+                className="h-9 py-1"
               >
                 {Object.keys(state.rosters).map((playerId) => (
                   <option key={playerId} value={playerId}>
                     {playerNames[playerId] ?? tLegacy('unknownPlayer')}
                   </option>
                 ))}
-              </select>
-            </label>
-          )}
-          {canPick && (
-            <div>
-              <Button variant="primary" onClick={() => setShowPicker(true)}>
-                {t('board.makePick')}
-              </Button>
-            </div>
-          )}
-          {adminEvents.includes('complete') && (
-            <div>
-              <Button variant="ghost" size="sm" onClick={() => setConfirming('end')}>
-                {t('board.endDraft')}
-              </Button>
-            </div>
-          )}
+              </Select>
+            )}
+            {hasActions ? (
+              <div className="flex flex-wrap items-center gap-2 md:justify-end">
+                {live && canPick && (
+                  <Button variant="primary" size={isMyTurn ? 'lg' : 'md'} onClick={() => setShowPicker(true)}>
+                    {t('board.makePick')}
+                  </Button>
+                )}
+                {adminEvents.includes('start') && (
+                  <Button variant="success" size="sm" onClick={() => handleStatusChange('in_progress')}>
+                    {t('board.startDraft')}
+                  </Button>
+                )}
+                {showUndo && (
+                  <Button variant="ghost" size="sm" onClick={handleUndo}>
+                    {t('board.undoLastPick')}
+                  </Button>
+                )}
+                {showEnd && (
+                  <Button variant="ghost" size="sm" onClick={() => setConfirming('end')}>
+                    {t('board.endDraft')}
+                  </Button>
+                )}
+              </div>
+            ) : (
+              !showSeats && <ItemIcon item="premier-ball" size={48} className="hidden md:inline-block" />
+            )}
+          </div>
         </div>
-      )}
-
-      {/* Current picker callout (snake and linear order) */}
-      {state.pool.status === 'in_progress' && state.current_picker && turnEnforced && (
-        <div
-          className={`p-4 rounded-poke-lg border-2 text-center ${
-            isMyTurn
-              ? 'border-poke-green bg-poke-green-light'
-              : 'border-poke-blue bg-poke-blue-light'
-          }`}
-        >
-          <p className="text-lg font-heading font-semibold text-poke-text-primary">
-            {isMyTurn
-              ? t('board.yourTurn')
-              : t('board.waitingFor', { name: playerNames[state.current_picker] ?? tLegacy('unknownPlayer') })}
-          </p>
-          {canPick && (
-            <div className="mt-2">
-              <Button variant="primary" onClick={() => setShowPicker(true)}>
-                {t('board.makePick')}
-              </Button>
-            </div>
-          )}
-        </div>
-      )}
+      </section>
 
       {/* Fixed prices in turn order: the current picker can afford nothing that completes their roster. */}
       {state.pool.status === 'in_progress' && stall && (
@@ -523,21 +536,16 @@ export default function DraftBoard({
         confirmLabel={t('board.endDraft')}
       />
 
-      {state.pool.status === 'complete' && (
-        <Alert variant="success">
-          <p className="text-lg font-heading font-bold">{t('board.complete')}</p>
-        </Alert>
-      )}
-
       {showTokenCta && seasonId && (
-        <Card variant="outlined" padding="md">
-          <p className="text-sm text-poke-text-secondary mb-4">
-            {t('board.tokens.intro')}
-          </p>
-          <Button asChild variant="primary">
+        <div className="flex flex-col gap-3 rounded-poke-lg border border-hairline bg-surface p-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <ItemIcon item="amulet-coin" className="mt-0.5" />
+            <p className="text-body text-fg-muted">{t('board.tokens.intro')}</p>
+          </div>
+          <Button asChild variant="primary" className="shrink-0">
             <Link href={`/leagues/${seasonId}/tokens`}>{t('board.tokens.title')}</Link>
           </Button>
-        </Card>
+        </div>
       )}
 
       {errorText && (
@@ -555,8 +563,11 @@ export default function DraftBoard({
       )}
 
       {/* Rosters grid */}
-      <div>
-        <h3 className="font-heading font-semibold text-lg text-poke-text-primary mb-3">{t('board.rosters')}</h3>
+      <section>
+        <h2 className="mb-3 flex items-center gap-2 font-heading text-title text-fg">
+          <ItemIcon item="choice-scarf" />
+          {t('board.rosters')}
+        </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
           {Object.entries(state.rosters).map(([playerId, pokemon]) => {
             const playerTrackers = evoTrackers[playerId] ?? [];
@@ -602,18 +613,21 @@ export default function DraftBoard({
             );
           })}
         </div>
-      </div>
+      </section>
 
       {/* Pick history */}
       {state.picks.length > 0 && (
-        <div>
-          <h3 className="font-heading font-semibold text-lg text-poke-text-primary mb-3">{t('board.pickHistory')}</h3>
+        <section>
+          <h2 className="mb-3 flex items-center gap-2 font-heading text-title text-fg">
+            <ItemIcon item="metronome" />
+            {t('board.pickHistory')}
+          </h2>
           <Table
             columns={pickColumns}
             data={state.picks}
             keyExtractor={(pick) => pick.id}
           />
-        </div>
+        </section>
       )}
 
       {/* Pick modal */}
@@ -639,21 +653,6 @@ export default function DraftBoard({
 
 // ── Sub-components ──────────────────────────────────────────────────
 
-/** The pool status badge; the label comes from `enums.draftPoolStatus` (i18n-core §5.3). */
-function StatusBadge({ status, label }: { status: string; label: string }) {
-  const variants: Record<string, 'yellow' | 'blue' | 'green'> = {
-    pending: 'yellow',
-    in_progress: 'blue',
-    complete: 'green',
-  };
-
-  return (
-    <Badge variant={variants[status] ?? 'gray'} size="sm">
-      {label}
-    </Badge>
-  );
-}
-
 function RosterCard({
   playerName,
   pokemon,
@@ -670,35 +669,43 @@ function RosterCard({
   const tLegacy = useT(draftLegacyMessages);
   const dataLocale = useDataLocale();
   return (
-    <Card
-      variant="outlined"
-      padding="sm"
-      className={isCurrentPicker ? 'border-poke-border-focus ring-1' : ''}
+    <div
+      className={cn(
+        'overflow-hidden rounded-poke-lg border bg-surface',
+        isCurrentPicker ? 'border-accent-fill' : 'border-hairline',
+      )}
     >
-      <div className="flex items-center justify-between mb-2">
-        <span className="font-heading font-medium text-sm text-poke-text-primary">{playerName}</span>
-        <div className="text-xs text-poke-text-muted text-right">
+      <div
+        className={cn(
+          'flex items-center justify-between gap-3 border-b px-3 py-2',
+          isCurrentPicker ? 'border-accent-fill bg-accent-subtle' : 'border-hairline bg-elevated',
+        )}
+      >
+        <span className="min-w-0 break-words font-heading text-title text-fg">{playerName}</span>
+        <div className="shrink-0 text-right font-mono text-caption text-fg-muted tabular-nums">
           {budget !== null && <div>{tLegacy('ptsRemaining', { n: budget })}</div>}
           {picksRemaining !== undefined && <div>{tLegacy('picksLeft', { count: picksRemaining })}</div>}
         </div>
       </div>
-      {pokemon.length === 0 ? (
-        <p className="text-xs text-poke-text-muted">{tLegacy('noPicksYet')}</p>
-      ) : (
-        <div className="flex flex-wrap gap-1.5">
-          {pokemon.map((name) => (
-            <div
-              key={name}
-              className="inline-flex items-center gap-1 px-2 py-0.5 bg-poke-muted rounded-poke-sm text-xs text-poke-text-secondary"
-            >
-              <AnimatedSprite>
-                <PokemonSprite name={name} size={20} />
-              </AnimatedSprite>
-              <span>{localizeSpecies(name, dataLocale)}</span>
-            </div>
-          ))}
-        </div>
-      )}
-    </Card>
+      <div className="p-3">
+        {pokemon.length === 0 ? (
+          <p className="text-caption text-fg-muted">{tLegacy('noPicksYet')}</p>
+        ) : (
+          <ul className="flex flex-wrap gap-1.5">
+            {pokemon.map((name) => (
+              <li
+                key={name}
+                className="inline-flex items-center gap-1.5 rounded-poke-sm bg-elevated py-0.5 pr-2 pl-1 text-caption text-fg"
+              >
+                <AnimatedSprite>
+                  <PokemonSprite name={name} size={28} />
+                </AnimatedSprite>
+                <span>{localizeSpecies(name, dataLocale)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
