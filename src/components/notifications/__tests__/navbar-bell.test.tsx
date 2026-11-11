@@ -4,11 +4,8 @@ import { renderWithI18n } from '@/test/i18n';
 const session = vi.hoisted(() => ({ current: null as null | { user: { image: null }; player: Record<string, unknown> } }));
 
 vi.mock('next-auth/react', () => ({ useSession: () => ({ data: session.current }) }));
-vi.mock('next/navigation', () => ({ usePathname: () => '/leagues' }));
+vi.mock('next/navigation', () => ({ usePathname: () => '/leagues', useRouter: () => ({ push: () => {} }) }));
 vi.mock('@/components/shared/DiscordLoginButton', () => ({ default: () => null }));
-vi.mock('@/components/shared/ThemeToggle', () => ({ default: () => null }));
-vi.mock('@/components/shared/PalettePicker', () => ({ default: () => null, PalettePickerSection: () => null }));
-vi.mock('@/components/shared/LanguagePicker', () => ({ default: () => null, LanguagePickerSection: () => null }));
 vi.mock('@/components/shared/PwaInstallPrompt', () => ({ default: () => null }));
 vi.mock('@/components/shared/PlayerAvatar', () => ({ default: () => null }));
 vi.mock('../NotificationBell', () => ({ default: () => <span data-stub="bell" /> }));

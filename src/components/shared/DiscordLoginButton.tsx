@@ -4,7 +4,7 @@ import { Suspense, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { signOut, useSession } from 'next-auth/react';
 import Button from '@/components/ui/Button';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import SkewPlate from '@/components/ui/SkewPlate';
 import { useT } from '@/i18n/client';
 import { shellMessages } from '@/i18n/messages/shell';
 import { clearPwaCaches } from '@/lib/pwa/caches';
@@ -13,7 +13,7 @@ import { useSignInHref } from './use-sign-in-href';
 const subscribe = () => () => {};
 
 // The worker's caches can hold what this session saw; they go before the session does.
-async function signOutAndClearCaches() {
+export async function signOutAndClearCaches() {
   await clearPwaCaches();
   await signOut();
 }
@@ -21,8 +21,13 @@ async function signOutAndClearCaches() {
 function SignInLink({ href }: { href: string }) {
   const t = useT(shellMessages);
   return (
-    <Link href={href} className={getButtonClasses('secondary', 'sm')}>
-      {t('session.signIn')}
+    <Link
+      href={href}
+      className="inline-flex shrink-0 whitespace-nowrap rounded-[3px] text-body [&_.skew-plate-bg]:transition-[filter] [&_.skew-plate-bg]:duration-[80ms] hover:[&_.skew-plate-bg]:brightness-95"
+    >
+      <SkewPlate variant="button" tone="primary">
+        {t('session.signIn')}
+      </SkewPlate>
     </Link>
   );
 }

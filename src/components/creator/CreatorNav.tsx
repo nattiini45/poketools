@@ -28,7 +28,7 @@ export default function CreatorNav({ playerName }: CreatorNavProps) {
             href={tab.href}
             label={t(`nav.${tab.labelKey}`)}
             active={pathname === tab.href || pathname.startsWith(`${tab.href}/`)}
-            layoutId="creator-nav-underline"
+            glideId="creator-nav-plate"
           />
         ))}
       </div>
