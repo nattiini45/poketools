@@ -566,7 +566,7 @@ export default function LeagueRosterManager({
                   {p.is_guest && <GuestBadge />}
                   {p.is_test_account && <SkewChip tone="tier-1">{t('roster.testBadge')}</SkewChip>}
                 </div>
-                <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
+                <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
                   {showTypeSelector && (
                     <>
                       <div className="w-36 shrink-0">
