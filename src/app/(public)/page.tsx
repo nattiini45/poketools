@@ -1,15 +1,17 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { publicReads } from '@/lib/cache/public-reads';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
 import TestLeagueBadge from '@/components/league/TestLeagueBadge';
-import Button from '@/components/ui/Button';
-import { PANEL, PANEL_HOVER, PANEL_NOTICE } from '@/components/ui/panel';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
 import DiscordLoginButton from '@/components/shared/DiscordLoginButton';
 import AgentChatWidget from '@/components/agent/AgentChatWidget';
 import Pokeball from '@/components/shared/Pokeball';
 import { getSessionPlayer } from '@/lib/auth/helpers';
+import type { ItemIconId } from '@/lib/pkmn/item-icons';
+import { cn } from '@/lib/utils/cn';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
@@ -28,11 +30,17 @@ export const metadata: Metadata = {
   alternates: { canonical: '/' },
 };
 
-const statusVariant: Record<string, 'green' | 'accent' | 'gray'> = {
-  active: 'green',
-  upcoming: 'accent',
-  completed: 'gray',
-};
+const STATUS_TONE: Record<string, SkewChipTone> = { active: 'live', upcoming: 'accent', completed: 'neutral' };
+const STATUS_EDGE: Record<string, string> = { active: 'bg-live', upcoming: 'bg-accent-fill', completed: 'bg-hairline-strong' };
+
+const FOCUS = 'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus';
+/** A link that holds a button plate: 44 px target, 80 ms lift. */
+const PLATE_LINK =
+  'inline-flex min-h-11 items-center rounded-[3px] text-body transition-transform duration-[80ms] ease-out hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none';
+const TILE = cn(
+  'group relative flex h-full overflow-hidden rounded-poke-lg border border-hairline bg-surface transition-colors duration-[80ms] hover:border-hairline-strong hover:bg-elevated',
+  FOCUS,
+);
 
 /** Small centered Pokéball that clicks open on hover — the divider egg. */
 function PokeballDivider({ title }: { title: string }) {
@@ -43,21 +51,74 @@ function PokeballDivider({ title }: { title: string }) {
   );
 }
 
-function SectionHeading({ title, href, linkLabel }: { title: string; href: string; linkLabel: string }) {
+function SectionHeading({ title, icon, href, linkLabel }: { title: string; icon: ItemIconId; href: string; linkLabel: string }) {
   return (
-    <div className="flex items-end justify-between gap-4">
-      <div>
-        <h2 className="text-lg font-heading font-bold tracking-tight text-poke-text-primary">
-          {title}
-        </h2>
-        <div aria-hidden="true" className="mt-2 h-0.5 w-12 rounded-full bg-poke-accent" />
+    <div className="flex items-center justify-between gap-4">
+      <div className="flex min-w-0 items-center gap-3">
+        <ItemIcon item={icon} size={24} />
+        <h2 className="min-w-0 font-heading text-title text-fg">{title}</h2>
       </div>
       <Link
         href={href}
-        className="text-sm font-heading font-semibold text-poke-text-link hover:text-poke-accent transition-colors"
+        className={cn('group inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-[3px] text-body font-[550] text-accent-ink hover:text-fg', FOCUS)}
       >
         {linkLabel}
+        <ArrowRight
+          aria-hidden="true"
+          className="h-4 w-4 transition-transform duration-[80ms] ease-out group-hover:translate-x-1 motion-reduce:transform-none"
+        />
       </Link>
+    </div>
+  );
+}
+
+/** One number of the hero's scoreboard. */
+function Score({ value, label }: { value: number; label: string }) {
+  return (
+    <li className="flex min-w-0 flex-col items-center gap-1 text-center">
+      <span className="league-hero-vs font-heading text-display tabular-nums sm:text-[40px] sm:leading-[44px]">{value}</span>
+      <span className="league-hero-slab-muted text-caption">{label}</span>
+    </li>
+  );
+}
+
+function Teaser({
+  href,
+  name,
+  status,
+  statusLabel,
+  meta,
+  badge,
+}: {
+  href: string;
+  name: string;
+  status: string;
+  statusLabel: string;
+  meta: readonly string[];
+  badge?: React.ReactNode;
+}) {
+  return (
+    <li>
+      <Link href={href} className={cn(TILE, 'flex-col gap-2 py-4 pl-5 pr-4')}>
+        <span aria-hidden="true" className={cn('absolute inset-y-0 left-0 w-1', STATUS_EDGE[status] ?? 'bg-hairline-strong')} />
+        <span className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+          <h3 className="min-w-0 font-heading text-title text-fg [overflow-wrap:anywhere]">{name}</h3>
+          <SkewChip tone={STATUS_TONE[status] ?? 'neutral'}>{statusLabel}</SkewChip>
+        </span>
+        <span className="flex flex-wrap items-center gap-2 text-caption text-fg-muted">
+          <span>{meta.join(' · ')}</span>
+          {badge}
+        </span>
+      </Link>
+    </li>
+  );
+}
+
+function EmptyTeaser({ text }: { text: string }) {
+  return (
+    <div className="flex items-center gap-4 rounded-poke-lg border border-hairline bg-surface px-5 py-4">
+      <ItemIcon item="poke-doll" size={48} />
+      <p className="text-body text-fg-muted">{text}</p>
     </div>
   );
 }
@@ -87,6 +148,8 @@ export default async function Home() {
 
   const recentTournaments = tournaments.slice(0, 3);
   const recentLeagues = leagues.slice(0, 3);
+  const liveCount =
+    leagues.filter((l) => l.status === 'active').length + tournaments.filter((t) => t.status === 'active').length;
 
   const featuredStandings =
     featured != null
@@ -94,86 +157,83 @@ export default async function Home() {
       : [];
 
   return (
-    <div className="mx-auto max-w-7xl space-y-8">
-      {/* Hero — static plaza-language panel, Pokéball motif, no scrollworld */}
-      <div
-        className={`relative overflow-hidden rounded-poke-xl border border-poke-border p-8 sm:p-12 shadow-poke-md bg-[radial-gradient(120%_120%_at_85%_0%,var(--poke-glow),transparent_55%),linear-gradient(135deg,var(--poke-elevated),var(--poke-surface)_55%,var(--poke-muted))]`}
-      >
-        {/* oversized decorative ball outline, far right */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-16 -top-24 h-72 w-72 rounded-full border-[10px]"
-        />
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -right-4 -top-10 h-44 w-44 rounded-full border-[6px]"
-        />
-        <div className="relative flex flex-wrap items-center gap-8">
-          <div className="max-w-xl flex-1 basis-72">
-            <p className="text-xs font-heading font-semibold uppercase tracking-[0.18em] text-poke-accent">
-              {t('hero.eyebrow')}
-            </p>
-            <h1 className="mt-3 text-4xl sm:text-5xl font-heading font-extrabold tracking-tight text-poke-text-primary">
-              PokéTools
-            </h1>
-            <div aria-hidden="true" className="mt-4 h-0.5 w-16 rounded-full bg-poke-accent" />
-            <p className="mt-4 text-poke-text-secondary">
-              {t('hero.intro')}
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <DiscordLoginButton />
-              <Link href="/tournaments">
-                <Button variant="secondary" size="sm">
-                  {t('hero.browseTournaments')}
-                </Button>
+    <div className="mx-auto flex max-w-7xl flex-col gap-8">
+      {/* Hero: the title screen. The wordmark and the calls to action on the arena sand, the Pokéball and the
+          site's scoreboard on the dark slab (the league hero's versus-screen classes, so both read as one hand). */}
+      <section aria-labelledby="home-hero-heading" className="league-hero league-hero-split overflow-hidden rounded-poke-lg border border-hairline">
+        <div className="relative min-w-0 px-5 py-8 sm:px-10 sm:py-14">
+          <h1 id="home-hero-heading" className="font-heading text-[clamp(2.75rem,9vw,4.5rem)] leading-none text-fg">
+            {/* i18n-ignore: brand wordmark (PokéTools), the same in every language */}
+            PokéTools
+          </h1>
+          <p className="mt-5 max-w-[46ch] text-subtitle text-fg-muted">{t('hero.intro')}</p>
+          <div className="mt-7 flex flex-wrap items-center gap-x-4 gap-y-3">
+            {isAuthenticated ? (
+              <Link href="/dashboard" className={PLATE_LINK}>
+                <SkewPlate variant="button" className="px-5 py-2.5">
+                  {t('hero.dashboard')}
+                </SkewPlate>
               </Link>
-            </div>
+            ) : (
+              // The shared sign-in plate at the size of the page's other calls to action.
+              <span className="inline-flex min-h-11 items-center [&_.skew-plate]:px-5 [&_.skew-plate]:py-2.5">
+                <DiscordLoginButton />
+              </span>
+            )}
+            <Link href="/tournaments" className={PLATE_LINK}>
+              <SkewPlate variant="button" tone="secondary" className="px-5 py-2.5">
+                {t('hero.browseTournaments')}
+              </SkewPlate>
+            </Link>
           </div>
-          <Pokeball className="hidden sm:block h-28 w-28 rotate-12" />
         </div>
-      </div>
+        <div className="league-hero-slab group relative flex min-w-0 flex-row items-center justify-center gap-6 px-5 py-6 sm:gap-10 sm:px-8 lg:flex-col lg:gap-8 lg:py-10">
+          <Pokeball interactive className="h-20 w-20 shrink-0 rotate-12 sm:h-28 sm:w-28 lg:h-36 lg:w-36" />
+          <ul className="grid min-w-0 grid-cols-3 gap-x-5 sm:gap-x-8">
+            <Score value={leagues.length} label={t('hero.stats.leagues', { count: leagues.length })} />
+            <Score value={tournaments.length} label={t('hero.stats.tournaments', { count: tournaments.length })} />
+            <Score value={liveCount} label={t('hero.stats.live', { count: liveCount })} />
+          </ul>
+        </div>
+      </section>
 
       <AgentChatWidget isAuthenticated={isAuthenticated} />
 
       {featured && (
-        <Card
-          variant="default"
-          padding="lg"
-          className="group relative overflow-hidden"
+        <section
+          aria-labelledby="home-featured-heading"
+          className="relative overflow-hidden rounded-poke-lg border border-hairline bg-surface lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,24rem)]"
         >
-          {/* type-shimmer sweep across the featured spotlight on hover */}
-          <span
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 group-hover:animate-type-shimmer bg-[linear-gradient(105deg,transparent_40%,var(--poke-glow)_50%,transparent_60%)]"
-          />
-          <div className="relative flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-heading uppercase tracking-wide text-poke-text-muted mb-1">
-                {featured.type === 'league' ? t('featured.league') : t('featured.tournament')}
-              </p>
-              <h2 className="text-xl font-heading font-bold tracking-tight text-poke-text-primary">
+          <span aria-hidden="true" className="absolute inset-y-0 left-0 w-1 bg-live" />
+          <div className="min-w-0 py-6 pl-6 pr-5 sm:pl-8 sm:pr-6">
+            <p className="text-caption text-fg-muted">
+              {featured.type === 'league' ? t('featured.league') : t('featured.tournament')}
+            </p>
+            <div className="mt-2 flex items-center gap-4">
+              <ItemIcon item={featured.type === 'league' ? 'poke-ball' : 'kings-rock'} size={48} className="hidden sm:block" />
+              <h2 id="home-featured-heading" className="min-w-0 font-heading text-display text-fg [overflow-wrap:anywhere]">
                 {featured.item.name}
               </h2>
-              <div className="flex flex-wrap gap-2 mt-2 items-center text-xs text-poke-text-secondary">
-                <Badge variant="green" size="sm">
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <SkewChip tone="live">
+                <span className="inline-flex items-center gap-1.5">
+                  <span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-live" />
                   {featured.type === 'league'
                     ? enumLabel(tEnums, 'seasonStatus', 'active')
                     : enumLabel(tEnums, 'tournamentStatus', 'active')}
-                </Badge>
-                <span>{tCommon('units.players', { count: featured.item.participant_count })}</span>
-              </div>
+                </span>
+              </SkewChip>
+              <SkewChip>{tCommon('units.players', { count: featured.item.participant_count })}</SkewChip>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap gap-x-4 gap-y-3">
               <Link
-                href={
-                  featured.type === 'league'
-                    ? `/leagues/${featured.item.id}`
-                    : `/tournaments/${featured.item.id}`
-                }
+                href={featured.type === 'league' ? `/leagues/${featured.item.id}` : `/tournaments/${featured.item.id}`}
+                className={PLATE_LINK}
               >
-                <Button variant="primary" size="sm">
+                <SkewPlate variant="button" className="px-5 py-2.5">
                   {t('featured.viewLive')}
-                </Button>
+                </SkewPlate>
               </Link>
               <Link
                 href={
@@ -181,29 +241,28 @@ export default async function Home() {
                     ? `/insights?scope=league&id=${featured.item.id}`
                     : `/insights?scope=tournament&id=${featured.item.id}`
                 }
+                className={PLATE_LINK}
               >
-                <Button variant="ghost" size="sm">
+                <SkewPlate variant="button" tone="secondary" className="px-5 py-2.5">
                   {t('featured.openInsights')}
-                </Button>
+                </SkewPlate>
               </Link>
             </div>
           </div>
           {featuredStandings.length > 0 && (
-            <div className="relative mt-6 border-t border-poke-border pt-4">
-              <p className="text-xs font-heading uppercase tracking-wide text-poke-text-muted mb-2">
+            <div className="min-w-0 border-t border-hairline bg-elevated py-5 pl-6 pr-5 lg:border-l lg:border-t-0 lg:pl-5">
+              <p className="flex items-center gap-2 text-body font-[550] text-fg">
+                <ItemIcon item="star-piece" size={24} />
                 {t('featured.standingsTop3')}
               </p>
-              <ol className="space-y-1.5">
+              <ol className="mt-3 flex flex-col">
                 {featuredStandings.map((row) => (
-                  <li
-                    key={row.rank}
-                    className="flex items-center justify-between text-sm gap-3"
-                  >
-                    <span className="text-poke-text-muted font-heading w-6">#{row.rank}</span>
-                    <span className="flex-1 font-medium text-poke-text-primary truncate">
-                      {row.player_name}
-                    </span>
-                    <span className="text-poke-text-secondary text-xs shrink-0">
+                  <li key={row.rank} className="flex items-center gap-3 border-t border-hairline py-2 first:border-t-0">
+                    <SkewPlate variant="rank" tier={Math.min(Math.max(row.rank, 1), 4) as 1 | 2 | 3 | 4} className="min-w-8 font-heading text-body tabular-nums">
+                      {row.rank}
+                    </SkewPlate>
+                    <span className="min-w-0 flex-1 truncate text-body font-[550] text-fg">{row.player_name}</span>
+                    <span className="shrink-0 font-mono text-caption tabular-nums text-fg-muted">
                       {t('featured.record', { wins: row.wins, losses: row.losses })}
                     </span>
                   </li>
@@ -211,82 +270,89 @@ export default async function Home() {
               </ol>
             </div>
           )}
-        </Card>
+        </section>
       )}
 
       {!featured && (
-        <p className={PANEL_NOTICE}>
-          {t('noActive')}
-        </p>
+        <div className="flex flex-col items-center gap-4 rounded-poke-lg border border-hairline bg-surface px-6 py-10 text-center">
+          <ItemIcon item="poke-doll" size={72} />
+          <p className="max-w-[52ch] text-body text-fg-muted">{t('noActive')}</p>
+        </div>
       )}
 
       <PokeballDivider title={t('dividerTitle')} />
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Link href="/insights?tab=ratings" className={PANEL_HOVER + ' rounded-poke-lg block h-full ' + PANEL}>
-          <div className="p-5">
-            <h3 className="font-heading font-bold text-poke-text-primary">{t('cards.insightsTitle')}</h3>
-            <p className="text-sm text-poke-text-secondary mt-1">{t('cards.insightsBody')}</p>
-          </div>
-        </Link>
-        <Link href="/wiki" className={PANEL_HOVER + ' rounded-poke-lg block h-full ' + PANEL}>
-          <div className="p-5">
-            <h3 className="font-heading font-bold text-poke-text-primary">{t('cards.wikiTitle')}</h3>
-            <p className="text-sm text-poke-text-secondary mt-1">{t('cards.wikiBody')}</p>
-          </div>
-        </Link>
-      </div>
+      <ul className="grid gap-4 sm:grid-cols-2">
+        {(
+          [
+            { href: '/insights?tab=ratings', icon: 'scope-lens', title: t('cards.insightsTitle'), body: t('cards.insightsBody') },
+            { href: '/wiki', icon: 'weakness-policy', title: t('cards.wikiTitle'), body: t('cards.wikiBody') },
+          ] as const
+        ).map((card) => (
+          <li key={card.href}>
+            <Link href={card.href} className={cn(TILE, 'items-start gap-4 p-5')}>
+              <ItemIcon item={card.icon} size={48} />
+              <span className="min-w-0 flex-1">
+                <span className="flex items-center gap-2 font-heading text-title text-fg">
+                  {card.title}
+                  <ArrowRight
+                    aria-hidden="true"
+                    className="h-4 w-4 shrink-0 text-accent-ink transition-transform duration-[80ms] ease-out group-hover:translate-x-1 motion-reduce:transform-none"
+                  />
+                </span>
+                <span className="mt-1 block text-body text-fg-muted">{card.body}</span>
+              </span>
+            </Link>
+          </li>
+        ))}
+      </ul>
 
-      <div className="space-y-4">
-        <SectionHeading title={t('sections.tournaments')} href="/tournaments" linkLabel={t('sections.viewAll')} />
+      <section className="flex flex-col gap-3">
+        <SectionHeading title={t('sections.tournaments')} icon="kings-rock" href="/tournaments" linkLabel={t('sections.viewAll')} />
         {recentTournaments.length === 0 ? (
-          <p className="text-poke-text-muted text-sm">{t('sections.noTournaments')}</p>
+          <EmptyTeaser text={t('sections.noTournaments')} />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {recentTournaments.map((tournament) => (
-              <Link key={tournament.id} href={`/tournaments/${tournament.id}`} className={PANEL_HOVER + ' rounded-poke-lg block ' + PANEL}>
-                <div className="p-5">
-                  <h3 className="font-heading font-semibold text-poke-text-primary">{tournament.name}</h3>
-                  <div className="flex flex-wrap gap-2 mt-2 items-center text-xs text-poke-text-secondary">
-                    <span>{enumLabel(tEnums, 'bracketType', tournament.bracket_type)}</span>
-                    <span>{tCommon('units.players', { count: tournament.participant_count })}</span>
-                    <Badge variant={statusVariant[tournament.status] ?? 'gray'}>
-                      {enumLabel(tEnums, 'tournamentStatus', tournament.status)}
-                    </Badge>
-                  </div>
-                </div>
-              </Link>
+              <Teaser
+                key={tournament.id}
+                href={`/tournaments/${tournament.id}`}
+                name={tournament.name}
+                status={tournament.status}
+                statusLabel={enumLabel(tEnums, 'tournamentStatus', tournament.status)}
+                meta={[
+                  enumLabel(tEnums, 'bracketType', tournament.bracket_type),
+                  tCommon('units.players', { count: tournament.participant_count }),
+                ]}
+              />
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
 
-      <div className="space-y-4">
-        <SectionHeading title={t('sections.leagues')} href="/leagues" linkLabel={t('sections.viewAll')} />
+      <section className="flex flex-col gap-3">
+        <SectionHeading title={t('sections.leagues')} icon="poke-ball" href="/leagues" linkLabel={t('sections.viewAll')} />
         {recentLeagues.length === 0 ? (
-          <p className="text-poke-text-muted text-sm">{t('sections.noLeagues')}</p>
+          <EmptyTeaser text={t('sections.noLeagues')} />
         ) : (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {recentLeagues.map((league) => (
-              <Link key={league.id} href={`/leagues/${league.id}`} className={PANEL_HOVER + ' rounded-poke-lg block ' + PANEL}>
-                <div className="p-5">
-                  <h3 className="font-heading font-semibold text-poke-text-primary">
-                    {league.name}
-                  </h3>
-                  <div className="flex flex-wrap gap-2 mt-2 items-center text-xs text-poke-text-secondary">
-                    <span>{enumLabel(tEnums, 'formatType', league.format_type)}</span>
-                    <span>{tCommon('units.players', { count: league.participant_count })}</span>
-                    <Badge variant={statusVariant[league.status] ?? 'gray'}>
-                      {enumLabel(tEnums, 'seasonStatus', league.status)}
-                    </Badge>
-                    {league.is_test_season && <TestLeagueBadge label={tLeagues('list.testBadge')} />}
-                  </div>
-                </div>
-              </Link>
+              <Teaser
+                key={league.id}
+                href={`/leagues/${league.id}`}
+                name={league.name}
+                status={league.status}
+                statusLabel={enumLabel(tEnums, 'seasonStatus', league.status)}
+                meta={[
+                  enumLabel(tEnums, 'formatType', league.format_type),
+                  tCommon('units.players', { count: league.participant_count }),
+                ]}
+                badge={league.is_test_season ? <TestLeagueBadge label={tLeagues('list.testBadge')} /> : undefined}
+              />
             ))}
-          </div>
+          </ul>
         )}
-      </div>
+      </section>
     </div>
   );
 }

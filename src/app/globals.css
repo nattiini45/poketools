@@ -326,6 +326,8 @@
   --color-poke-type-steel: hsl(220, 15%, 60%);
   --color-poke-type-fairy: hsl(330, 55%, 65%);
   --color-art-ball-red: #DC2626;
+  --color-art-ball-ink: #241A0C;
+  --color-art-ball-shell: #FFF8E9;
   --color-art-card-blue: #3B82F6;
   --shadow-poke-sm: 0 1px 2px rgba(26, 23, 20, 0.05);
   --shadow-poke-md: 0 4px 6px -1px rgba(26, 23, 20, 0.07), 0 2px 4px -2px rgba(26, 23, 20, 0.05);
