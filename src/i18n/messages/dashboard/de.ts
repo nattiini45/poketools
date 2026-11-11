@@ -34,6 +34,11 @@ export default defineDe<typeof en>()({
     submitResult: 'Ergebnis eintragen',
     confirmResult: 'Ergebnis bestätigen',
   },
+  empty: {
+    lead: 'Dein erstes Spiel beginnt mit einer Liga.',
+    body: 'Du bist noch in keiner Liga und keinem Turnier. Tritt einer Liga bei, dann erscheinen deine Spiele, Fristen und Ergebnisse hier.',
+    cta: 'Liga beitreten',
+  },
   leagues: {
     title: 'Meine Ligen',
     count: { one: '{count} Liga', other: '{count} Ligen' },

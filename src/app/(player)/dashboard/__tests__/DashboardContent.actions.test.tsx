@@ -45,6 +45,57 @@ function render(m: MatchWithPlayers, player: Partial<Player> | null = null): str
 const SUBMIT = '/dashboard/submit/m1';
 const CONFIRM = '/dashboard/confirm/m1';
 
+describe('DashboardContent: a player without a league, tournament or match', () => {
+  const empty = (locale: 'en' | 'de') =>
+    renderWithI18n(
+      <DashboardContent
+        playerId="p1"
+        playerName="Misty"
+        initialPlayer={null}
+        initialMatches={[]}
+        initialTournaments={[]}
+        playerRating={null}
+        playerStreaks={null}
+        leagueStandings={[]}
+        teamsUsed={[]}
+      />,
+      { locale, timeZone: 'UTC' },
+    );
+
+  it('names the next step with a link to the leagues, instead of empty lists', () => {
+    const html = empty('en');
+    expect(html).toContain('Join a league');
+    expect(html).toContain('href="/leagues"');
+    expect(html).not.toContain('My Tournaments');
+    expect(html).not.toContain('History');
+    expect(empty('de')).toContain('Liga beitreten');
+  });
+});
+
+describe('DashboardContent: the queue names where a match is played', () => {
+  it('shows the league of a stage match and marks a match that needs the viewer', () => {
+    const html = renderWithI18n(
+      <DashboardContent
+        playerId="p1"
+        playerName="Misty"
+        initialPlayer={null}
+        initialMatches={[match('scheduled')]}
+        initialTournaments={[{ id: 't1', name: 'Stage 1', season_id: 'l1' }] as never}
+        playerRating={null}
+        playerStreaks={null}
+        leagueStandings={[
+          { leagueId: 'l1', leagueName: 'Kanto League', status: 'active', formatType: 'singles', participantCount: 8, isTestSeason: false, snapshot: null },
+        ]}
+        teamsUsed={[]}
+      />,
+      { locale: 'en', timeZone: 'UTC' },
+    );
+    const card = html.slice(html.indexOf('vs Ash'), html.indexOf(SUBMIT));
+    expect(card).toContain('Kanto League');
+    expect(html).toContain('border-accent-fill');
+  });
+});
+
 describe('DashboardContent: result actions', () => {
   it.each(['scheduled', 'in_progress'])('%s in a live round: submit a result', (status) => {
     const html = render(match(status));

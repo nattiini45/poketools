@@ -11,6 +11,7 @@ import { publicReads } from '@/lib/cache/public-reads';
 import { FULL_STANDINGS_LIMIT, playerStandingFromRows } from '@/lib/stats/standings-preview';
 import DashboardContent from './DashboardContent';
 import { buildTeamsUsed, teamsUsedScopeIds } from './teams-used';
+import Alert from '@/components/ui/Alert';
 import PageContainer from '@/components/ui/PageContainer';
 import { getT } from '@/i18n/server';
 import { dashboardMessages } from '@/i18n/messages/dashboard';
@@ -29,11 +30,7 @@ export default async function DashboardPage() {
     const t = await getT(dashboardMessages);
     return (
       <PageContainer title={t('pageTitle')}>
-        <div className="bg-poke-yellow-light border border-poke-yellow/40 rounded-poke-lg p-5">
-          <p className="text-sm text-yellow-700 dark:text-poke-yellow font-heading font-semibold">
-            {t('notRegistered')}
-          </p>
-        </div>
+        <Alert variant="warning">{t('notRegistered')}</Alert>
       </PageContainer>
     );
   }
@@ -90,6 +87,7 @@ export default async function DashboardPage() {
   );
 
   return (
+    <PageContainer maxWidth="lg">
     <DashboardContent
       playerId={playerId}
       playerName={livePlayer.name}
@@ -103,5 +101,6 @@ export default async function DashboardPage() {
       leagueStandings={leagueStandings}
       teamsUsed={teamsUsed}
     />
+    </PageContainer>
   );
 }
