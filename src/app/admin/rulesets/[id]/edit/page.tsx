@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import { notFound, redirect } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
@@ -52,6 +53,7 @@ export default async function RulesetEditPage({ params }: PageProps) {
   return (
     <AdminGuard>
       <PageContainer title={title} maxWidth="full">
+        <AdminCrumbName href={`/admin/rulesets/${id}`} name={title} />
         <RulesetEditor
           definitionId={id}
           summary={detail.definition}

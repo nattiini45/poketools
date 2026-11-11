@@ -57,7 +57,7 @@ export default function MoveSection({ slot, set }: MoveSectionProps) {
 
   return (
     <div>
-      <h3 className="text-[10px] text-poke-text-muted uppercase tracking-wide mb-2">{t('moveSection.title')}</h3>
+      <h3 className="text-caption font-[550] text-fg mb-2">{t('moveSection.title')}</h3>
 
       {/* 4 move slot chips */}
       <div className="grid grid-cols-2 gap-1.5 mb-2">
@@ -70,12 +70,12 @@ export default function MoveSection({ slot, set }: MoveSectionProps) {
               }}
               disabled={state.locked}
               className={[
-                'w-full px-2 py-1.5 text-xs rounded border text-left transition-colors pr-6',
+                'w-full px-2 py-1.5 text-xs rounded-md border text-left transition-colors duration-80 ease-out pr-6 pointer-coarse:min-h-11 pointer-coarse:text-sm',
                 activeMoveSlot === i
-                  ? 'border-poke-blue/60 bg-poke-blue/10 text-poke-text-primary'
+                  ? 'border-accent-ink bg-accent-subtle text-fg'
                   : move
-                    ? 'bg-poke-surface border-poke-border text-poke-text-primary hover:border-poke-blue/40'
-                    : 'border-dashed border-poke-border text-poke-text-muted hover:border-poke-blue/40',
+                    ? 'bg-surface border-hairline text-fg hover:border-hairline-strong'
+                    : 'border-dashed border-hairline text-fg-muted hover:border-hairline-strong',
                 state.locked ? 'cursor-not-allowed opacity-50' : 'cursor-pointer',
               ].join(' ')}
             >
@@ -90,7 +90,7 @@ export default function MoveSection({ slot, set }: MoveSectionProps) {
             {move && !state.locked && (
               <button
                 onClick={() => handleClearMove(i)}
-                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-poke-text-muted hover:text-poke-danger transition-colors"
+                className="absolute right-1.5 top-1/2 -translate-y-1/2 text-fg-muted hover:text-loss transition-colors"
                 aria-label={t('moveSection.clearMove', { n: i + 1 })}
               >
                 <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">

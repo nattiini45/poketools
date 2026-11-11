@@ -126,15 +126,15 @@ export default function MovePicker({
   };
 
   return (
-    <div className="flex flex-col border border-poke-border rounded-lg overflow-hidden bg-poke-elevated">
+    <div className="flex flex-col border border-hairline rounded-lg overflow-hidden bg-elevated">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-poke-border bg-poke-surface">
-        <h4 className="text-xs font-semibold text-poke-text-primary">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-surface">
+        <h4 className="text-xs font-semibold text-fg">
           {t('movePicker.title', { n: moveIndex + 1 })}
         </h4>
         <button
           type="button"
-          className="text-xs text-poke-text-muted hover:text-poke-text-secondary transition-colors"
+          className="text-xs text-fg-muted hover:text-fg transition-colors"
           onClick={onClose}
         >
           {t('common.done')}
@@ -142,11 +142,11 @@ export default function MovePicker({
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2 border-b border-poke-border">
+      <div className="px-3 py-2 border-b border-hairline">
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent"
+          className="w-full bg-surface border border-hairline rounded px-2.5 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base pointer-coarse:min-h-11"
           placeholder={t('movePicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -161,16 +161,16 @@ export default function MovePicker({
       </div>
 
       {/* Filter bar */}
-      <div className="px-3 py-1.5 border-b border-poke-border space-y-1.5">
+      <div className="px-3 py-1.5 border-b border-hairline space-y-1.5">
         <div className="flex items-center gap-1.5">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               type="button"
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-caption font-medium transition-colors ${
                 categoryFilter === cat
-                  ? 'bg-poke-blue/20 text-poke-blue ring-1 ring-poke-blue/30'
-                  : 'bg-poke-surface text-poke-text-muted hover:text-poke-text-secondary'
+                  ? 'bg-accent-subtle text-accent-ink ring-1 ring-accent-ink'
+                  : 'bg-surface text-fg-muted hover:text-fg'
               }`}
               onClick={() => setCategoryFilter(categoryFilter === cat ? null : cat)}
             >
@@ -179,7 +179,7 @@ export default function MovePicker({
             </button>
           ))}
           <select
-            className="ml-auto text-[10px] bg-poke-surface border border-poke-border rounded px-1.5 py-0.5 text-poke-text-secondary focus:ring-1 outline-2 outline-offset-2 outline-transparent"
+            className="ml-auto text-caption bg-surface border border-hairline rounded px-1.5 py-0.5 text-fg-muted focus:ring-1 outline-2 outline-offset-2 outline-transparent"
             value={typeFilter ?? ''}
             onChange={(e) => setTypeFilter(e.target.value || null)}
             aria-label={t('movePicker.filterByType')}
@@ -194,14 +194,14 @@ export default function MovePicker({
         </div>
 
         {/* Sort controls aligned to result columns */}
-        <div className="flex items-center gap-1.5 text-[9px] text-poke-text-muted">
+        <div className="flex items-center gap-1.5 text-caption text-fg-muted">
           <span className="w-8 shrink-0" aria-hidden="true" />
           <button
             type="button"
             className={`min-w-[4rem] text-left rounded px-1 py-0.5 transition-colors ${
               sortField === 'name'
-                ? 'bg-poke-blue/20 text-poke-blue font-semibold'
-                : 'hover:text-poke-text-secondary'
+                ? 'bg-accent-subtle text-accent-ink font-semibold'
+                : 'hover:text-fg'
             }`}
             onClick={() => handleSort('name')}
           >
@@ -221,8 +221,8 @@ export default function MovePicker({
               type="button"
               className={`${widthClass} rounded px-0.5 py-0.5 text-right transition-colors ${
                 sortField === field
-                  ? 'bg-poke-blue/20 text-poke-blue font-semibold'
-                  : 'hover:text-poke-text-secondary'
+                  ? 'bg-accent-subtle text-accent-ink font-semibold'
+                  : 'hover:text-fg'
               }`}
               onClick={() => handleSort(field)}
             >
@@ -236,9 +236,9 @@ export default function MovePicker({
       {/* Results list */}
       <div className="max-h-64 overflow-y-auto">
         {loading ? (
-          <div className="p-3 text-center text-xs text-poke-text-muted">{t('movePicker.loading')}</div>
+          <div className="p-3 text-center text-xs text-fg-muted">{t('movePicker.loading')}</div>
         ) : displayResults.length === 0 ? (
-          <div className="p-3 text-center text-xs text-poke-text-muted">
+          <div className="p-3 text-center text-xs text-fg-muted">
             {t('movePicker.empty')}
           </div>
         ) : (
@@ -252,7 +252,7 @@ export default function MovePicker({
                 key={move.name}
                 type="button"
                 className={`w-full flex items-center gap-1.5 px-3 py-1.5 text-left transition-colors ${
-                  isUsed ? 'bg-poke-blue/10 opacity-60' : 'hover:bg-poke-surface'
+                  isUsed ? 'bg-accent-subtle opacity-60' : 'hover:bg-hover'
                 }`}
                 onClick={() => !isUsed && onSelect(move.name)}
                 disabled={isUsed}
@@ -268,12 +268,12 @@ export default function MovePicker({
                 ) : (
                   <span className="w-3.5 shrink-0" />
                 )}
-                <span className="text-xs text-poke-text-primary shrink-0">
+                <span className="text-xs text-fg shrink-0">
                   {displayName}
-                  {isUsed && <span className="ml-1 text-poke-blue text-[9px]">✓</span>}
+                  {isUsed && <span className="ml-1 text-accent-ink text-caption">✓</span>}
                 </span>
                 {move.shortDesc ? (
-                  <span className="text-[9px] text-poke-text-muted flex-1 truncate ml-1 hidden sm:inline">
+                  <span className="text-caption text-fg-muted flex-1 truncate ml-1 hidden sm:inline">
                     {move.shortDesc}
                     <DescFallbackTag descLang={move.shortDescLang} />
                   </span>
@@ -282,13 +282,13 @@ export default function MovePicker({
                 )}
                 <span className="sm:hidden flex-1" />
                 <span
-                  className="text-[10px] text-poke-text-muted shrink-0 w-7 text-right tabular-nums"
+                  className="text-caption text-fg-muted shrink-0 w-7 text-right tabular-nums"
                   title={t('movePicker.powerTitle')}
                 >
                   {move.basePower ? move.basePower : ''}
                 </span>
                 <span
-                  className="text-[10px] text-poke-text-muted shrink-0 w-8 text-right tabular-nums"
+                  className="text-caption text-fg-muted shrink-0 w-8 text-right tabular-nums"
                   title={t('movePicker.accuracyTitle')}
                 >
                   {move.accuracy === true
@@ -298,13 +298,13 @@ export default function MovePicker({
                       : ''}
                 </span>
                 <span
-                  className="text-[10px] text-poke-text-muted shrink-0 w-6 text-right tabular-nums"
+                  className="text-caption text-fg-muted shrink-0 w-6 text-right tabular-nums"
                   title={t('movePicker.ppTitle')}
                 >
                   {move.pp ?? ''}
                 </span>
                 <span
-                  className="text-[10px] shrink-0 w-11 text-right tabular-nums text-poke-text-secondary"
+                  className="text-caption shrink-0 w-11 text-right tabular-nums text-fg-muted"
                   title={t('common.usage')}
                 >
                   {pct !== undefined ? formatUsagePct(pct, locale) : ''}

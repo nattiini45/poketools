@@ -14,7 +14,7 @@ export default function DescFallbackTag({ descLang }: { descLang: Locale | undef
   if (locale !== 'de' || descLang !== 'en') return null;
   return (
     <span
-      className="ml-1 shrink-0 text-[8px] font-semibold text-poke-text-muted border border-poke-border rounded px-0.5 align-middle"
+      className="ml-1 shrink-0 text-caption font-semibold text-fg-muted border border-hairline rounded px-0.5 align-middle"
       title={t('descFallbackTitle')}
     >
       {t('descFallbackTag')}

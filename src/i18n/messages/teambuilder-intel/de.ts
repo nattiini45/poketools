@@ -114,6 +114,7 @@ export default defineDe<typeof en>()({
       calc: 'Calc',
       speed: 'Speed',
     },
+    tabsLabel: 'Intel-Ansichten',
     analyse: '{species} analysieren',
   },
   overview: {

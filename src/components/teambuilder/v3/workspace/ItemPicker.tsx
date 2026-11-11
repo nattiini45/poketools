@@ -141,15 +141,15 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
   };
 
   return (
-    <div className="flex flex-col border border-poke-border rounded-lg overflow-hidden bg-poke-elevated">
+    <div className="flex flex-col border border-hairline rounded-lg overflow-hidden bg-elevated">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-poke-border bg-poke-surface">
-        <h4 className="text-xs font-semibold text-poke-text-primary">{t('itemPicker.title')}</h4>
+      <div className="flex items-center justify-between px-3 py-2 border-b border-hairline bg-surface">
+        <h4 className="text-xs font-semibold text-fg">{t('itemPicker.title')}</h4>
         <div className="flex items-center gap-3">
           {currentItem && (
             <button
               type="button"
-              className="text-xs text-poke-danger hover:text-poke-danger/80 transition-colors"
+              className="text-xs text-loss hover:text-loss transition-colors"
               onClick={() => onSelect('')}
             >
               {t('itemPicker.clear')}
@@ -157,7 +157,7 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
           )}
           <button
             type="button"
-            className="text-xs text-poke-text-muted hover:text-poke-text-secondary transition-colors"
+            className="text-xs text-fg-muted hover:text-fg transition-colors"
             onClick={onClose}
           >
             {t('common.done')}
@@ -166,11 +166,11 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
       </div>
 
       {/* Search */}
-      <div className="px-3 py-2 border-b border-poke-border">
+      <div className="px-3 py-2 border-b border-hairline">
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded px-2.5 py-1.5 text-xs text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent"
+          className="w-full bg-surface border border-hairline rounded px-2.5 py-1.5 text-xs text-fg placeholder:text-fg-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base pointer-coarse:min-h-11"
           placeholder={t('itemPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -184,14 +184,14 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
       </div>
 
       {/* Sort controls aligned to result columns */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-poke-border text-[9px] text-poke-text-muted">
+      <div className="flex items-center gap-1.5 px-3 py-1.5 border-b border-hairline text-caption text-fg-muted">
         <span className="w-5 shrink-0" aria-hidden="true" />
         <button
           type="button"
           className={`min-w-[5rem] text-left rounded px-1 py-0.5 transition-colors ${
             sortField === 'name'
-              ? 'bg-poke-blue/20 text-poke-blue font-semibold'
-              : 'hover:text-poke-text-secondary'
+              ? 'bg-accent-subtle text-accent-ink font-semibold'
+              : 'hover:text-fg'
           }`}
           onClick={() => handleSort('name')}
         >
@@ -202,8 +202,8 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
           type="button"
           className={`w-11 rounded px-0.5 py-0.5 text-right transition-colors ${
             sortField === 'usage'
-              ? 'bg-poke-blue/20 text-poke-blue font-semibold'
-              : 'hover:text-poke-text-secondary'
+              ? 'bg-accent-subtle text-accent-ink font-semibold'
+              : 'hover:text-fg'
           }`}
           onClick={() => handleSort('usage')}
         >
@@ -214,9 +214,9 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
       {/* Results list */}
       <div className="max-h-64 overflow-y-auto">
         {loading ? (
-          <div className="p-3 text-center text-xs text-poke-text-muted">{t('itemPicker.loading')}</div>
+          <div className="p-3 text-center text-xs text-fg-muted">{t('itemPicker.loading')}</div>
         ) : displayResults.length === 0 ? (
-          <div className="p-3 text-center text-xs text-poke-text-muted">{t('itemPicker.empty')}</div>
+          <div className="p-3 text-center text-xs text-fg-muted">{t('itemPicker.empty')}</div>
         ) : (
           displayResults.map((item) => {
             const isCurrent = item.name === currentItem;
@@ -228,18 +228,18 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
                 key={item.name}
                 type="button"
                 className={`w-full flex items-center gap-1.5 px-3 py-1.5 text-left transition-colors ${
-                  isCurrent ? 'bg-poke-blue/10' : 'hover:bg-poke-surface'
+                  isCurrent ? 'bg-accent-subtle' : 'hover:bg-hover'
                 }`}
                 onClick={() => onSelect(item.name)}
                 title={item.desc || displayName}
               >
                 <ItemSprite item={item.name} size={20} className="shrink-0" />
-                <span className="text-xs text-poke-text-primary shrink-0">
+                <span className="text-xs text-fg shrink-0">
                   {displayName}
-                  {isCurrent && <span className="ml-1 text-poke-blue text-[9px]">✓</span>}
+                  {isCurrent && <span className="ml-1 text-accent-ink text-caption">✓</span>}
                 </span>
                 {item.desc ? (
-                  <span className="text-[9px] text-poke-text-muted flex-1 truncate ml-1 hidden sm:inline">
+                  <span className="text-caption text-fg-muted flex-1 truncate ml-1 hidden sm:inline">
                     {item.desc}
                     <DescFallbackTag descLang={item.descLang} />
                   </span>
@@ -248,7 +248,7 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
                 )}
                 <span className="sm:hidden flex-1" />
                 <span
-                  className="text-[10px] shrink-0 w-11 text-right tabular-nums text-poke-text-secondary"
+                  className="text-caption shrink-0 w-11 text-right tabular-nums text-fg-muted"
                   title={t('itemPicker.usageTitle')}
                 >
                   {pct !== undefined ? formatUsagePct(pct, locale) : ''}

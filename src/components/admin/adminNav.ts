@@ -1,21 +1,18 @@
 /**
- * Admin navigation IA — one config drives the sidebar, the mobile menu and
- * (eventually) breadcrumbs. Groups follow the admin workflow: run
- * competitions, tend the community, then system-level tooling.
+ * Admin navigation IA: one config drives the sidebar, the command menu and the breadcrumb. Groups follow the admin
+ * workflow: run competitions, the format and ruleset library, the community, then system tooling (collapsed).
  *
- * Visibility mirrors the API guards: `siteAdminOnly` items require full
- * `isAdmin`, `superadminOnly` requires `isSuperadmin`; everything else is
- * available to any admin (including resource admins). An `assistant` item
- * (the Admin Assistant) also needs `AdminRoles.assistantEnabled`, which the
- * admin layout derives from the live role (the public flag, the server switch
- * and the audience), so it never shows where the assistant would answer 404.
+ * Visibility mirrors the API guards: `siteAdminOnly` items require full `isAdmin`, `superadminOnly` requires
+ * `isSuperadmin`; everything else is available to any admin (including resource admins). An `assistant` item (the
+ * Admin Assistant) also needs `AdminRoles.assistantEnabled`, which the admin layout derives from the live role (the
+ * public flag, the server switch and the audience), so it never shows where the assistant would answer 404.
  *
- * Labels are keys of `shell.admin.groups` / `shell.admin.items`
- * (`src/i18n/messages/shell`), translated where the nav renders. Pages a pack
- * extension adds (docs/format-packs.md, "Pack extensions") arrive as
- * `AdminNavExtraItem`s with a label the server already localized.
+ * Labels are keys of `shell.admin.groups` / `shell.admin.items` (`src/i18n/messages/shell`), translated where the
+ * nav renders. Pages a pack extension adds (docs/format-packs.md, "Pack extensions") arrive as `AdminNavExtraItem`s
+ * with a label the server already localized; the shell lists them at the end of System.
  */
 import type shellEn from '@/i18n/messages/shell/en';
+import type { ItemIconId } from '@/lib/pkmn/item-icons';
 
 export type AdminNavGroupKey = keyof typeof shellEn.admin.groups;
 export type AdminNavItemKey = keyof typeof shellEn.admin.items;
@@ -23,11 +20,13 @@ export type AdminNavItemKey = keyof typeof shellEn.admin.items;
 export interface AdminNavItem {
   href: string;
   labelKey: AdminNavItemKey;
+  /** The approved item icon (renders/design-direction/item-icon-map.png); sub-items and System items carry none. */
+  icon?: ItemIconId;
   siteAdminOnly?: boolean;
   superadminOnly?: boolean;
-  /** Soft-deprecated tooling — labelled, never removed silently. */
+  /** Soft-deprecated tooling: labelled, never removed silently. */
   deprecated?: boolean;
-  /** Secondary destinations rendered indented under a primary item. */
+  /** A view of the primary item above it, listed under it while that section is open. */
   sub?: boolean;
   /** The Admin Assistant: shown only while `AdminRoles.assistantEnabled` is true. */
   assistant?: boolean;
@@ -35,14 +34,17 @@ export interface AdminNavItem {
 
 export interface AdminNavGroup {
   id: AdminNavGroupKey;
+  /** The group folds behind its label and opens when the page is inside it. */
+  collapsed?: boolean;
+  icon?: ItemIconId;
   items: AdminNavItem[];
 }
 
-/** An admin page a pack extension adds: appended to its group, with a localized label. */
+/** An admin page a pack extension adds, with a localized label. `group` is the pack contract; the shell lists all of them in System. */
 export interface AdminNavExtraItem {
   href: string;
   label: string;
-  group: AdminNavGroupKey;
+  group: 'competitions' | 'community' | 'system';
   siteAdminOnly?: boolean;
   superadminOnly?: boolean;
 }
@@ -54,41 +56,54 @@ export type VisibleAdminNavItem =
 
 export interface VisibleAdminNavGroup {
   id: AdminNavGroupKey;
+  collapsed?: boolean;
+  icon?: ItemIconId;
   items: VisibleAdminNavItem[];
 }
 
+/** Where the "New competition" button of the shell leads. */
+export const ADMIN_NEW_COMPETITION_HREF = '/admin/leagues/new';
+
 export const ADMIN_NAV: readonly AdminNavGroup[] = [
   {
-    id: 'competitions',
+    id: 'run',
     items: [
-      { href: '/admin', labelKey: 'overview' },
-      { href: '/admin/leagues', labelKey: 'leagues' },
+      { href: '/admin', labelKey: 'overview', icon: 'town-map' },
+      { href: '/admin/leagues', labelKey: 'competitions', icon: 'poke-ball' },
+      { href: '/admin/leagues', labelKey: 'leagues', sub: true },
+      { href: '/admin/tournaments', labelKey: 'tournaments', sub: true },
       { href: '/admin/leagues/archived', labelKey: 'archivedLeagues', sub: true },
-      { href: '/admin/leagues/trash', labelKey: 'leagueTrash', superadminOnly: true, sub: true },
-      { href: '/admin/tournaments', labelKey: 'tournaments' },
       { href: '/admin/tournaments/archived', labelKey: 'archivedTournaments', sub: true },
-      { href: '/admin/matches', labelKey: 'matches' },
-      { href: '/admin/rulesets', labelKey: 'rulesets' },
-      { href: '/admin/formats', labelKey: 'formats' },
-      { href: '/admin/assistant', labelKey: 'assistant', assistant: true },
+      { href: '/admin/leagues/trash', labelKey: 'leagueTrash', superadminOnly: true, sub: true },
+      { href: '/admin/matches', labelKey: 'matches', icon: 'vs-seeker' },
+      { href: '/admin/players', labelKey: 'players', icon: 'lucky-egg', siteAdminOnly: true },
+    ],
+  },
+  {
+    id: 'library',
+    items: [
+      { href: '/admin/formats', labelKey: 'formats', icon: 'up-grade' },
+      { href: '/admin/rulesets', labelKey: 'rulesets', icon: 'ability-shield' },
     ],
   },
   {
     id: 'community',
     items: [
-      { href: '/admin/players', labelKey: 'players', siteAdminOnly: true },
-      { href: '/admin/achievements', labelKey: 'achievements', siteAdminOnly: true },
-      { href: '/admin/wiki', labelKey: 'wiki', siteAdminOnly: true },
-      { href: '/admin/social', labelKey: 'social', siteAdminOnly: true },
+      { href: '/admin/achievements', labelKey: 'achievements', icon: 'gold-bottle-cap', siteAdminOnly: true },
+      { href: '/admin/wiki', labelKey: 'wiki', icon: 'weakness-policy', siteAdminOnly: true },
+      { href: '/admin/social', labelKey: 'social', icon: 'poke-flute', siteAdminOnly: true },
     ],
   },
   {
     id: 'system',
+    collapsed: true,
+    icon: 'rocky-helmet',
     items: [
       { href: '/admin/data', labelKey: 'data', siteAdminOnly: true },
       { href: '/admin/meta-data', labelKey: 'metaData', siteAdminOnly: true },
       { href: '/admin/audit', labelKey: 'audit', siteAdminOnly: true },
       { href: '/admin/test-players', labelKey: 'testPlayers', siteAdminOnly: true },
+      { href: '/admin/assistant', labelKey: 'assistant', assistant: true },
       {
         href: '/admin/kale',
         labelKey: 'kale',
@@ -117,8 +132,8 @@ function mayOpen(
 }
 
 /**
- * Filter the IA down to what this viewer may open. Extension items join the end of their group
- * under the same role rules (the extension's own routes still guard themselves).
+ * Filter the IA down to what this viewer may open. Extension items join the end of System under the same role rules
+ * (the extension's own routes still guard themselves).
  */
 export function visibleAdminNav(
   roles: AdminRoles,
@@ -126,10 +141,12 @@ export function visibleAdminNav(
 ): VisibleAdminNavGroup[] {
   return ADMIN_NAV.map((group) => ({
     id: group.id,
+    collapsed: group.collapsed,
+    icon: group.icon,
     items: [
       ...group.items.filter((item) => mayOpen(item, roles)),
-      ...extraItems
-        .filter((item) => item.group === group.id && mayOpen(item, roles))
+      ...(group.id === 'system' ? extraItems : [])
+        .filter((item) => mayOpen(item, roles))
         .map(
           (item): VisibleAdminNavItem => ({
             href: item.href,
@@ -140,6 +157,23 @@ export function visibleAdminNav(
         ),
     ],
   })).filter((group) => group.items.length > 0);
+}
+
+/** A primary item with the views listed under it. */
+export interface AdminNavSection {
+  item: VisibleAdminNavItem;
+  subs: VisibleAdminNavItem[];
+}
+
+/** A group's items as sections: every primary item with the sub-items that follow it. */
+export function adminNavSections(items: readonly VisibleAdminNavItem[]): AdminNavSection[] {
+  const sections: AdminNavSection[] = [];
+  for (const item of items) {
+    const last = sections.at(-1);
+    if (item.sub && last) last.subs.push(item);
+    else sections.push({ item, subs: [] });
+  }
+  return sections;
 }
 
 /**
@@ -157,24 +191,4 @@ export function activeAdminNavHref(pathname: string | null, hrefs: readonly stri
     if (matches && (best === null || href.length > best.length)) best = href;
   }
   return best;
-}
-
-/**
- * The `scrollLeft` that centres a chip in its scrolling row, clamped to the row's range. All
- * measures are in px: `chipLeft` is the chip's left edge within the row's scrollable content.
- * A chip that already sits inside the row keeps the row where it is (returns `currentScrollLeft`).
- */
-export function chipScrollLeft(m: {
-  rowWidth: number;
-  rowScrollWidth: number;
-  currentScrollLeft: number;
-  chipLeft: number;
-  chipWidth: number;
-}): number {
-  const { rowWidth, rowScrollWidth, currentScrollLeft, chipLeft, chipWidth } = m;
-  const visible = chipLeft >= currentScrollLeft && chipLeft + chipWidth <= currentScrollLeft + rowWidth;
-  if (visible) return currentScrollLeft;
-  const max = Math.max(0, rowScrollWidth - rowWidth);
-  const centred = chipLeft - (rowWidth - chipWidth) / 2;
-  return Math.min(max, Math.max(0, centred));
 }
