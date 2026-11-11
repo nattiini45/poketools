@@ -2,7 +2,7 @@
 
 import { useId, useOptimistic, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import Card from '@/components/ui/Card';
+import SettingsSection from '@/components/player/SettingsSection';
 import { LOCALES, type Locale, type PkmnTermsPreference } from '@/i18n/config';
 import { useDataLocale, useLocale, useT } from '@/i18n/client';
 import type { ApiErrorLike } from '@/i18n/api-errors';
@@ -170,9 +170,7 @@ export function LanguageSettingsSection() {
   const t = useT(languageMessages);
   const { shown, pending, failed, change } = useLanguagePreference();
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-1">{t('settings.heading')}</h2>
-      <p className="text-sm text-poke-text-secondary mb-4">{t('settings.description')}</p>
+    <SettingsSection icon="poke-flute" title={t('settings.heading')} description={t('settings.description')}>
       <LanguageOptions
         name="site-language-settings"
         legendClassName="sr-only"
@@ -181,11 +179,11 @@ export function LanguageSettingsSection() {
         onChange={change}
       />
       {pending && (
-        <p aria-live="polite" className="px-2 pt-2 text-xs text-poke-text-muted">
+        <p aria-live="polite" className="px-2 pt-2 text-caption text-fg-muted">
           {t('saving')}
         </p>
       )}
       <SaveFailed error={failed} />
-    </Card>
+    </SettingsSection>
   );
 }
