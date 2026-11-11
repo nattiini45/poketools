@@ -971,6 +971,9 @@ POST /api/tournaments/[id]/regenerate-bracket Admin: wipe and rebuild SE/DE brac
 POST /api/tournaments/[id]/repair-bracket     Admin: re-run bye resolution + slot materialization
 GET  /api/admin/dashboard               Any admin: counts, attention queue, recent audit (a resource admin gets only
                                             their own leagues and tournaments, no site-wide counts or activity)
+GET  /api/admin/command-index           Any admin, scoped: the ⌘K jump-to list, `[{ id, name, kind: league|tournament,
+                                            archived }]` (leagues and standalone tournaments, newest first, at most 500;
+                                            a resource admin gets only their own)
 GET  /api/admin/matches                    Any admin, scoped: status, season_id, tournament_id, round_id, q, format_type,
                                             bracket_type, best_of, ruleset_id, date_field + date_from / date_to /
                                             date_none, player_id, player2_id, replay, hand_edited, has_notes, no_games,

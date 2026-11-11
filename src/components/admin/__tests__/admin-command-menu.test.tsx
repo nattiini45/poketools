@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { withI18n } from '@/test/i18n';
@@ -9,7 +9,15 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   pathname: '/admin' as string,
   openAssistant: vi.fn(),
+  fetch: vi.fn(),
 }));
+
+const INDEX = [
+  { id: 'season-1', name: 'Kanto Cup', kind: 'league', archived: false },
+  { id: 'tour-1', name: 'Friday Rumble', kind: 'tournament', archived: false },
+  { id: 'season-0', name: 'Johto Classic', kind: 'league', archived: true },
+];
+const indexResponse = (body: unknown) => ({ json: async () => body });
 
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname, useRouter: () => ({ push: mocks.push, refresh: vi.fn() }) }));
 vi.mock('next-themes', () => ({ useTheme: () => ({ resolvedTheme: 'light', setTheme: vi.fn() }) }));
@@ -36,6 +44,9 @@ beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} });
   mocks.push.mockClear();
   mocks.openAssistant.mockClear();
+  mocks.fetch.mockReset();
+  mocks.fetch.mockResolvedValue(indexResponse({ success: true, data: [] }));
+  vi.stubGlobal('fetch', mocks.fetch);
   mocks.pathname = '/admin';
 });
 
@@ -134,5 +145,129 @@ describe('AdminCommandMenu', () => {
     await screen.findByRole('dialog');
     expect(option(/^Open assistant/)).toBeNull();
     expect(option(/^Assistant/)).toBeTruthy();
+  });
+});
+
+describe('AdminCommandMenu: Jump to', () => {
+  function mountClosed(locale: 'en' | 'de' = 'en') {
+    const groups = visibleAdminNav({ ...SITE_ADMIN, assistantEnabled: false });
+    const ui = (open: boolean) =>
+      withI18n(<AdminCommandMenu open={open} onOpenChange={vi.fn()} groups={groups} assistantEnabled={false} />, { locale });
+    const view = render(ui(false));
+    return { open: () => view.rerender(ui(true)), close: () => view.rerender(ui(false)) };
+  }
+
+  it('does not ask for the index before the menu is first opened', async () => {
+    const menu = mountClosed();
+    await Promise.resolve();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+    menu.open();
+    await screen.findByRole('dialog');
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+    expect(mocks.fetch).toHaveBeenCalledWith('/api/admin/command-index');
+  });
+
+  it('asks once across several opens', async () => {
+    mocks.fetch.mockResolvedValue(indexResponse({ success: true, data: INDEX }));
+    const menu = mountClosed();
+    for (let i = 0; i < 3; i++) {
+      menu.open();
+      await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: /^Kanto Cup/ });
+      menu.close();
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    }
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('adds one Jump to item per competition and opens the league workspace or the tournament rounds page', async () => {
+    const user = userEvent.setup();
+    mocks.fetch.mockResolvedValue(indexResponse({ success: true, data: INDEX }));
+    const menu = mountClosed();
+    menu.open();
+    expect(await screen.findByText('Jump to')).toBeTruthy();
+    expect(await screen.findAllByText(/^(Kanto Cup|Friday Rumble|Johto Classic)$/)).toHaveLength(3);
+    expect(option(/^Kanto Cup\s*League/)).toBeTruthy();
+    expect(option(/^Johto Classic\s*Archived league/)).toBeTruthy();
+
+    await user.click(option(/^Kanto Cup/)!);
+    expect(mocks.push).toHaveBeenLastCalledWith('/admin/leagues/season-1');
+
+    menu.open();
+    await user.type(screen.getByRole('combobox'), 'rumble');
+    await user.keyboard('{Enter}');
+    expect(mocks.push).toHaveBeenLastCalledWith('/admin/tournaments/tour-1/rounds');
+  });
+
+  it('finds a competition by its kind, and words the kind in German', async () => {
+    const user = userEvent.setup();
+    mocks.fetch.mockResolvedValue(indexResponse({ success: true, data: INDEX }));
+    const menu = mountClosed('de');
+    menu.open();
+    await screen.findByRole('option', { name: /^Friday Rumble/ });
+    expect(screen.getByText('Springe zu')).toBeTruthy();
+    await user.type(screen.getByRole('combobox'), 'turnier');
+    expect(option(/^Friday Rumble/)).toBeTruthy();
+    expect(option(/^Kanto Cup/)).toBeNull();
+  });
+
+  it('works as before while the index is still loading', async () => {
+    mocks.fetch.mockReturnValue(new Promise(() => {}));
+    const menu = mountClosed();
+    menu.open();
+    await screen.findByRole('dialog');
+    expect(option(/^Matches/)).toBeTruthy();
+    expect(screen.queryByText('Jump to')).toBeNull();
+  });
+
+  it('keeps the menu usable and says so quietly when the load fails, and asks again at the next open', async () => {
+    const user = userEvent.setup();
+    mocks.fetch.mockResolvedValueOnce(indexResponse({ success: false, error: 'Failed to load the command index' }));
+    const menu = mountClosed();
+    menu.open();
+    expect(await screen.findByText('The competitions could not be loaded.')).toBeTruthy();
+    expect(screen.getByText('Jump to')).toBeTruthy();
+    expect(option(/^Matches/)).toBeTruthy();
+    // No retry loop while the menu stays open.
+    await Promise.resolve();
+    expect(mocks.fetch).toHaveBeenCalledTimes(1);
+
+    // The line is no row to pick, and it stays while the admin types.
+    await user.type(screen.getByRole('combobox'), 'rulesets');
+    expect(option(/^Rulesets/)).toBeTruthy();
+    expect(screen.getByText('The competitions could not be loaded.')).toBeTruthy();
+    await user.click(screen.getByText('The competitions could not be loaded.'));
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.fetch.mockResolvedValueOnce(indexResponse({ success: true, data: INDEX }));
+    menu.close();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    menu.open();
+    expect(await screen.findByRole('option', { name: /^Kanto Cup/ })).toBeTruthy();
+    expect(screen.queryByText('The competitions could not be loaded.')).toBeNull();
+    expect(mocks.fetch).toHaveBeenCalledTimes(2);
+  });
+
+  it('words a failure the server sent a code for in the viewer\'s language', async () => {
+    mocks.fetch.mockResolvedValueOnce(indexResponse({ success: false, error: 'Admin access required', code: 'forbidden' }));
+    const menu = mountClosed('de');
+    menu.open();
+    expect(await screen.findByText(/Berechtigung/)).toBeTruthy();
+    expect(screen.queryByText('Admin access required')).toBeNull();
+  });
+
+  it('words a failure the server sent a code for, and a lost connection too', async () => {
+    mocks.fetch.mockResolvedValueOnce(indexResponse({ success: false, error: 'Admin access required', code: 'forbidden' }));
+    const menu = mountClosed();
+    menu.open();
+    // English shows the server's own text; another language goes through the catalog (next test).
+    expect(await screen.findByText('Admin access required')).toBeTruthy();
+    menu.close();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    mocks.fetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+    menu.open();
+    expect(await screen.findByText('Network error. Check your connection and try again.')).toBeTruthy();
+    expect(option(/^Matches/)).toBeTruthy();
   });
 });
