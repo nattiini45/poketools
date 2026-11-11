@@ -410,6 +410,51 @@
       }
     },
     {
+      "id": "d3-replays",
+      "url": "/replays",
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d3-players",
+      "url": "/players",
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d3-teams-library",
+      "url": "/teams/library",
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
       "id": "public-player",
       "url": "/players/{playerAria}",
       "fullPage": true,

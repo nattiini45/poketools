@@ -13,6 +13,11 @@ export default {
     previous: 'Previous',
     next: 'Next',
     pageOf: 'Page {page} of {total}',
+    search: 'Search',
+    count: { one: 'player', other: 'players' },
+    ratingLabel: 'Rating {rating} ± {rd}',
+    emptyHint: 'Try another name, or go back to the full roster.',
+    showAll: 'Show all players',
   },
   replays: {
     title: 'Replay Library',
@@ -42,6 +47,11 @@ export default {
     unknownPlayer: 'Unknown',
     unknownLeague: 'Unknown league',
     unknownRound: 'Unknown round',
+    versus: 'VS',
+    filters: 'Filters',
+    emptyTitle: 'No replays here',
+    resetFilters: 'Reset filters',
+    browseLeagues: 'Browse leagues',
   },
   content: {
     title: 'Content Creator Dashboard',
