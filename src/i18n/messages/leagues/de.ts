@@ -19,6 +19,26 @@ export default defineDe<typeof en>()({
     description: 'Beim Laden dieser Liga ist ein unerwarteter Fehler aufgetreten.',
     goBack: 'Zurück',
   },
+  hero: {
+    statusMatchday: '{status} · Spieltag {matchday}',
+    lore: {
+      evoliga: 'Plaza-Welt. Die Ostterrasse wartet noch auf ihren Champion.',
+      sakura: 'Sakura-Park. Jedes Ergebnis hängt an der Bannerreihe unter dem Torii.',
+      mountain: 'Bergpass. Die Ergebnisse stehen auf den Wegschildern bis hinauf zum Passtor.',
+      clouds: 'Skyisle. Die Ansetzungen ziehen auf dem Luftschiff vorbei, das Halo-Tor hütet die Regeln.',
+    },
+    stats: {
+      trainers: { one: 'Trainer', other: 'Trainer' },
+      matchesPlayed: { one: 'Spiel gespielt', other: 'Spiele gespielt' },
+      daysLeft: { one: 'Tag übrig', other: 'Tage übrig' },
+      daysToStart: { one: 'Tag bis zum Start', other: 'Tage bis zum Start' },
+    },
+    match: { yours: 'Dein nächstes Spiel', live: 'Läuft gerade', next: 'Nächstes Spiel' },
+    leader: { leading: 'Tabellenspitze', champion: 'Champion' },
+    standing: 'Platz {rank} · {points} Pkt.',
+    vs: 'VS',
+    actions: { submit: 'Ergebnis melden', prep: 'Spielvorbereitung', open: 'Zum Spiel' },
+  },
   detail: {
     pointBuy: 'Point-Buy-Liste',
     matchup: 'Matchup-Analyse',

@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { FOCUS_RING, PANEL_INSET } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+import { HUB_INSET as PANEL_INSET } from './hub-style';
 import { LocalTime } from '@/i18n/LocalTime';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import { gameScore, openRoundId, type HubRoundMatches, type HubStageMatches } from '@/lib/league-hub/views';

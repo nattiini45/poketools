@@ -462,9 +462,11 @@ function worldOf(page: AnyElement): AnyElement {
 }
 
 function hubOf(page: AnyElement): HubElement {
-  const hub = worldOf(page).props.hub as HubElement | undefined;
-  if (!hub) throw new Error('the route world received no hub');
-  expect(hub.type).toBe(LeagueHub);
+  // The hub sits above the world (redesign B2): the page's top column holds the hero, then the hub.
+  const top = childrenOf(page).find((child) => 'data-league-top' in child.props);
+  const hub = top ? (childrenOf(top).find((child) => child.type === LeagueHub) as HubElement | undefined) : undefined;
+  if (!hub) throw new Error('the page rendered no hub above the world');
+  expect(worldOf(page).props.hub).toBeUndefined();
   return hub;
 }
 
