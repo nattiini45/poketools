@@ -120,7 +120,7 @@ export default function LadderCard({ seasonId, ladder, viewerId, closed, onReloa
                   <td className="px-3 py-2 text-fg">
                     <span className="flex items-center gap-2">
                       <TrainerTile name={name} own={isViewer} />
-                      <span className={cn('min-w-0 [overflow-wrap:anywhere]', isViewer && 'font-[550]')}>{name}</span>
+                      <span className={cn('min-w-0 [overflow-wrap:break-word]', isViewer && 'font-[550]')}>{name}</span>
                       {isViewer && <SkewChip tone="accent">{t('ladder.you')}</SkewChip>}
                     </span>
                   </td>
