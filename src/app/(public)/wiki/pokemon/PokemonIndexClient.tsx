@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useMemo } from 'react';
+import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeBadge from '@/components/shared/TypeBadge';
 import WikiIndexTable, {
   type WikiIndexColumn,
@@ -62,17 +63,22 @@ export default function PokemonIndexClient({ data }: { data: readonly PokemonRow
         key: 'name',
         primary: true,
         header: t('index.name'),
-        width: '180px',
+        width: '240px',
         sortable: true,
+        cardClassName: 'max-md:order-1 max-md:col-span-4',
         sortValue: (row) => localizeSpecies(row.name, dl),
         render: (row) => (
-          <span className="font-medium text-poke-text-primary">{localizeSpecies(row.name, dl)}</span>
+          <span className="inline-flex items-center gap-3 align-middle">
+            <PokemonSprite name={row.name} size={40} />
+            <span>{localizeSpecies(row.name, dl)}</span>
+          </span>
         ),
       },
       {
         key: 'types',
         header: t('index.types'),
         width: '180px',
+        cardClassName: 'max-md:order-3 max-md:col-span-6',
         render: (row) => (
           <div className="flex gap-1">
             {row.types.map((type) => (
@@ -86,17 +92,22 @@ export default function PokemonIndexClient({ data }: { data: readonly PokemonRow
           key: stat,
           header: localizeStat(stat, dl, 'short'),
           align: 'right',
-          width: '55px',
+          width: '64px',
           sortable: true,
+          numeric: true,
+          cardLabel: 'above',
+          cardClassName: 'max-md:order-4 max-md:text-center',
         }),
       ),
       {
         key: 'bst',
         header: t('index.bst'),
         align: 'right',
-        width: '60px',
+        width: '72px',
         sortable: true,
-        render: (row) => <span className="font-bold text-poke-text-primary">{row.bst}</span>,
+        cardLabel: 'inline',
+        cardClassName: 'max-md:order-2 max-md:col-span-2 max-md:text-right',
+        render: (row) => <span className="font-heading text-body tabular-nums text-fg">{row.bst}</span>,
       },
     ],
     [t, dl],

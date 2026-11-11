@@ -1,4 +1,6 @@
+import SkewChip from '@/components/ui/SkewChip';
 import WikiDescFallbackTag from '@/components/wiki/WikiDescFallbackTag';
+import { WikiDefinitionList, WikiHero, type WikiDefinition } from '@/components/wiki/WikiParts';
 import { DEFAULT_TIME_ZONE, type Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { createFormatter } from '@/i18n/format';
@@ -26,58 +28,46 @@ export default function WikiAbilityContent({
 }: WikiAbilityContentProps) {
   const t = createTranslator(wikiMessages, locale);
   const formatter = createFormatter({ locale, timeZone: DEFAULT_TIME_ZONE });
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <span
-          className="inline-block w-3 h-3 rounded-full bg-poke-blue shrink-0"
-          aria-hidden="true"
-        />
-        <h1 className="font-heading text-2xl font-bold text-poke-text-primary">
-          {localizeAbility(ability.name, dataLocale)}
-        </h1>
-      </div>
 
-      {/* Description */}
-      <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border">
-        <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
+  const rows: WikiDefinition[] = [
+    {
+      key: 'description',
+      term: (
+        <>
           {t('entry.description')}
           {descFallback && <WikiDescFallbackTag className="ml-2" />}
-        </h2>
-        <p className="font-body text-poke-text-primary leading-relaxed">
-          {ability.description || ability.shortDesc || t('entry.noDescription')}
-        </p>
-      </div>
+        </>
+      ),
+      children: ability.description || ability.shortDesc || t('entry.noDescription'),
+    },
+  ];
+  // Short description
+  if (ability.shortDesc && ability.shortDesc !== ability.description) {
+    rows.push({ key: 'summary', term: t('entry.summary'), children: ability.shortDesc });
+  }
 
-      {/* Short description */}
-      {ability.shortDesc && ability.shortDesc !== ability.description && (
-        <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border">
-          <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-            {t('entry.summary')}
-          </h2>
-          <p className="font-body text-poke-text-primary">
-            {ability.shortDesc}
+  return (
+    <div className="flex flex-col gap-4">
+      <WikiHero className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <h1 className="font-heading text-display text-fg [overflow-wrap:anywhere]">
+          {localizeAbility(ability.name, dataLocale)}
+        </h1>
+
+        {/* Rating */}
+        {ability.rating > 0 && (
+          <p className="inline-flex items-center gap-2 text-body text-fg-muted">
+            <span>{t('entry.competitiveRating')}</span>
+            <SkewChip tone="accent" className="px-3 py-1 font-heading text-title">
+              {formatter.number(ability.rating)}/5
+            </SkewChip>
           </p>
-        </div>
-      )}
+        )}
+      </WikiHero>
 
-      {/* Rating */}
-      {ability.rating > 0 && (
-        <div className="bg-poke-surface rounded-poke-md p-3 shadow-poke-sm border border-poke-border inline-block">
-          <span className="font-heading text-xs font-semibold text-poke-text-secondary uppercase tracking-wide">
-            {t('entry.competitiveRating')}{' '}
-          </span>
-          <span className="font-heading text-sm font-bold text-poke-accent">
-            {formatter.number(ability.rating)}/5
-          </span>
-        </div>
-      )}
+      <WikiDefinitionList rows={rows} />
 
       {/* Generation info */}
-      <p className="text-xs text-poke-text-secondary font-body">
-        {t('entry.introducedIn', { gen: ability.generation })}
-      </p>
+      <p className="text-caption text-fg-muted">{t('entry.introducedIn', { gen: ability.generation })}</p>
     </div>
   );
 }
