@@ -49,7 +49,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
               if (!state.locked) onChangeSpecies();
             }}
             disabled={state.locked}
-            className="text-lg font-heading font-bold text-poke-text-primary hover:text-poke-blue transition-colors disabled:cursor-default disabled:hover:text-poke-text-primary"
+            className="font-heading text-title text-fg hover:text-accent-ink transition-colors disabled:cursor-default disabled:hover:text-fg"
             aria-label={t('speciesHeader.changeSpeciesAria', { species: speciesName })}
             title={t('speciesHeader.changeSpecies')}
           >
@@ -58,7 +58,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
           {!state.locked && (
             <button
               onClick={onChangeSpecies}
-              className="text-[10px] text-poke-text-muted hover:text-poke-blue transition-colors"
+              className="text-caption text-fg-muted hover:text-accent-ink transition-colors"
             >
               {t('speciesHeader.change')}
             </button>
@@ -69,18 +69,18 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
         {types.length > 0 && (
           <div className="flex gap-1 mb-2">
             {types.map((t) => (
-              <TypeBadge key={t} type={t} className="text-[9px]! px-1.5! py-0.5!" />
+              <TypeBadge key={t} type={t} size="compact" className="px-1.5! py-0.5!" />
             ))}
           </div>
         )}
 
         {/* Base stat summary */}
         {baseStats && (
-          <div className="flex flex-wrap gap-2.5 text-[10px] text-poke-text-muted mb-2">
+          <div className="mb-2 grid w-fit grid-cols-3 gap-x-3 gap-y-1.5 text-caption text-fg-muted sm:flex sm:gap-2.5">
             {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map((s) => (
               <span key={s} className="flex flex-col items-center leading-none">
-                <span className="uppercase opacity-60">{localizeStat(s, dl, 'short')}</span>
-                <span className="font-mono mt-0.5">{baseStats[s]}</span>
+                <span className="whitespace-nowrap">{localizeStat(s, dl, 'short')}</span>
+                <span className="mt-0.5 font-mono text-fg">{baseStats[s]}</span>
               </span>
             ))}
           </div>
@@ -97,9 +97,9 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
             placeholder={t('speciesHeader.nickname')}
             maxLength={24}
             disabled={state.locked}
-            className="w-24 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary placeholder:text-poke-text-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
+            className="w-24 pointer-coarse:w-36 px-2 py-1 text-xs bg-surface border border-hairline rounded text-fg placeholder:text-fg-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base"
           />
-          <label className="flex items-center gap-1 text-xs text-poke-text-muted">
+          <label className="flex items-center gap-1 text-xs text-fg-muted">
             {t('speciesHeader.level')}
             <input
               type="number"
@@ -112,10 +112,10 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
                 dispatch({ type: 'UPDATE_SLOT', slot, patch: { level: v } });
               }}
               disabled={state.locked}
-              className="w-12 px-2 py-1 text-xs bg-poke-surface border border-poke-border rounded text-poke-text-primary disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
+              className="w-12 pointer-coarse:w-16 px-2 py-1 text-xs bg-surface border border-hairline rounded text-fg disabled:opacity-50 outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base"
             />
           </label>
-          <label className="flex items-center gap-1.5 text-xs text-poke-text-muted cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-xs text-fg-muted cursor-pointer select-none">
             <input
               type="checkbox"
               checked={!!set.shiny}
@@ -123,7 +123,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
                 dispatch({ type: 'UPDATE_SLOT', slot, patch: { shiny: e.target.checked } })
               }
               disabled={state.locked}
-              className="accent-poke-blue"
+              className="accent-accent-fill"
             />
             {t('speciesHeader.shiny')}
           </label>
@@ -133,7 +133,7 @@ export default function SpeciesHeader({ slot, set, onChangeSpecies }: SpeciesHea
       {/* Tera type picker */}
       {state.generation >= 9 && (
         <div className="shrink-0">
-          <div className="text-[10px] text-poke-text-muted uppercase tracking-wide mb-1">{t('speciesHeader.tera')}</div>
+          <div className="text-caption text-fg-muted mb-1">{t('speciesHeader.tera')}</div>
           <TeraTypePicker
             value={set.tera_type ?? null}
             species={set.species}

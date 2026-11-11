@@ -1,6 +1,7 @@
 'use client';
 
 import { useRef, useEffect, useCallback } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 interface StatStepInputProps {
   value: number;
@@ -73,8 +74,8 @@ export default function StatStepInput({
         max={max}
         step={step}
         disabled
-        className={`w-full bg-poke-elevated border border-poke-border rounded-poke-sm px-0.5 py-1.5
-          text-center text-xs text-poke-text-primary tabular-nums opacity-50
+        className={`w-full bg-elevated border border-hairline rounded-poke-sm px-0.5 py-1.5
+          text-center text-xs text-fg tabular-nums opacity-50
           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none ${className ?? ''}`}
         value={value}
       />
@@ -102,11 +103,11 @@ export default function StatStepInput({
         onTouchEnd={stopHold}
       />
       {/* Hover indicators */}
-      <div className="pointer-events-none absolute inset-x-0 top-px flex justify-center opacity-0 group-hover/step:opacity-50 transition-opacity text-[6px] text-poke-blue leading-none">
-        ▲
+      <div className="pointer-events-none absolute inset-x-0 top-px flex justify-center opacity-0 group-hover/step:opacity-50 transition-opacity text-accent-ink">
+        <ChevronUp aria-hidden="true" className="size-2" strokeWidth={3} />
       </div>
-      <div className="pointer-events-none absolute inset-x-0 bottom-px flex justify-center opacity-0 group-hover/step:opacity-50 transition-opacity text-[6px] text-poke-blue leading-none">
-        ▼
+      <div className="pointer-events-none absolute inset-x-0 bottom-px flex justify-center opacity-0 group-hover/step:opacity-50 transition-opacity text-accent-ink">
+        <ChevronDown aria-hidden="true" className="size-2" strokeWidth={3} />
       </div>
       {/* Input (center 24% is directly clickable for manual edit) */}
       <input
@@ -114,8 +115,8 @@ export default function StatStepInput({
         min={min}
         max={max}
         step={step}
-        className="w-full bg-poke-elevated border border-poke-border rounded-poke-sm px-0.5 py-1.5
-          text-center text-xs text-poke-text-primary tabular-nums
+        className="w-full bg-elevated border border-hairline rounded-poke-sm px-0.5 py-1.5
+          text-center text-xs text-fg tabular-nums pointer-coarse:text-base
           focus:ring-1 transition-all
           [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         value={value}

@@ -1,5 +1,6 @@
 import RoundRobinTable, { type RoundRobinTableLabels } from '@/components/bracket/RoundRobinTable';
-import { FOCUS_RING, PANEL_INSET } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+import { HUB_INSET as PANEL_INSET, HUB_SUBHEADING } from './hub-style';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import type { HubTableStage } from '@/lib/league-hub/views';
 import { HubNotice, HubStageHeader } from './HubBits';
@@ -50,7 +51,7 @@ export default function HubGroupsPanel({ stages, isEvolutionPointBuy, copy, grid
                 {tables.map((table) => (
                   <div key={table.key} className={`${PANEL_INSET} min-w-0 space-y-3 p-4`}>
                     {table.name && (
-                      <h5 className="font-heading text-sm font-bold uppercase tracking-wide text-arena-ink-secondary">
+                      <h5 className={HUB_SUBHEADING}>
                         {table.name}
                       </h5>
                     )}

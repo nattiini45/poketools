@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils/cn";
 type AlertVariant = "error" | "success" | "warning" | "info";
 
 const alertVariants = cva(
-  "relative w-full rounded-poke-md border px-3 py-2 text-sm font-heading",
+  "relative w-full rounded-poke-md border px-3 py-2 text-body font-body",
   {
     variants: {
       variant: {

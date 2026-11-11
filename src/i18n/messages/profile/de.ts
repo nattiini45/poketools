@@ -19,6 +19,14 @@ export default defineDe<typeof en>()({
     streakHint: 'Siegesserien erscheinen ab 3 Siegen in Folge.',
     signInPrompt: 'Melde dich mit Discord an, um Spielverlauf und Serien zu sehen.',
     signIn: 'Anmelden',
+    editProfile: 'Profil bearbeiten',
+    noRatedMatchOwn: 'Du hast noch kein gewertetes Spiel. Nach dem ersten startet hier deine Wertung.',
+    trophiesEmpty: 'Noch kein Podestplatz. Ein Platz unter den ersten drei in einem Turnier bringt hier eine Trophäe.',
+    browseTournaments: 'Turniere ansehen',
+    participationsEmpty: 'Noch in keiner Liga und keinem Turnier dabei.',
+    browseLeagues: 'Ligen ansehen',
+    spotlightEmpty: 'Noch keine Pokémon-Statistiken. Sie erscheinen nach dem ersten gemeldeten Spiel.',
+    noRecentMatchesOwn: 'Noch keine abgeschlossenen Spiele. Tritt einer Liga bei, um deine erste Paarung zu bekommen.',
   },
   header: {
     ps: 'PS:',
@@ -31,10 +39,12 @@ export default defineDe<typeof en>()({
     pokemon: 'Pokémon',
     titles: 'Titel',
     form: 'Form',
+    signatureCount: '{count} von {total} freigeschaltet',
   },
   matchList: {
     empty: 'Keine Spiele',
     viewMatch: 'Spiel gegen {opponent} ansehen',
+    versus: 'vs',
   },
   participations: {
     current: 'Aktuell ({count})',

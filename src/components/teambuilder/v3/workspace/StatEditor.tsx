@@ -21,12 +21,12 @@ const NATURE_EFFECTS = Object.fromEntries(
 ) as Record<string, { plus: string; minus: string }>;
 
 const BAR_COLORS: Record<StatKey, string> = {
-  hp: 'bg-green-500',
-  atk: 'bg-red-400',
-  def: 'bg-orange-400',
-  spa: 'bg-blue-400',
-  spd: 'bg-teal-400',
-  spe: 'bg-yellow-400',
+  hp: 'bg-tier-4',
+  atk: 'bg-tier-2',
+  def: 'bg-tier-2',
+  spa: 'bg-tier-3',
+  spd: 'bg-tier-3',
+  spe: 'bg-tier-1',
 };
 
 function calcStat(base: number, ev: number, iv: number, level: number, stat: StatKey, nature: string): number {
@@ -88,16 +88,16 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
     <div>
       {/* Header row with EV budget bar */}
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[10px] text-poke-text-muted uppercase tracking-wide">{t('statEditor.title')}</h3>
+        <h3 className="text-caption font-[550] text-fg">{t('statEditor.title')}</h3>
         <div className="flex items-center gap-2">
           <span
-            className={`text-[10px] font-mono ${evOver508 ? 'text-yellow-400' : 'text-poke-text-muted'}`}
+            className={`text-caption font-mono ${evOver508 ? 'text-accent-ink' : 'text-fg-muted'}`}
           >
             {t('statEditor.evTotal', { total: totalEvs })}
           </span>
-          <div className="w-16 h-1.5 bg-poke-border rounded-full overflow-hidden">
+          <div className="w-16 h-1.5 bg-hairline rounded-full overflow-hidden">
             <div
-              className={`h-full rounded-full transition-all ${evOver508 ? 'bg-yellow-400' : 'bg-poke-blue'}`}
+              className={`h-full rounded-full transition-all ${evOver508 ? 'bg-tier-2' : 'bg-accent-fill'}`}
               style={{ width: `${evPercent}%` }}
             />
           </div>
@@ -107,10 +107,10 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
       {/* Column header row */}
       <div className="grid grid-cols-[3rem_2.5rem_4rem_3.5rem_3rem_1fr] items-center gap-1.5 mb-0.5">
         <div />
-        <span className="text-[9px] text-poke-text-muted text-right">{t('statEditor.base')}</span>
-        <span className="text-[9px] text-poke-text-muted text-center">{t('statEditor.ev')}</span>
-        <span className="text-[9px] text-poke-text-muted text-center">{t('statEditor.iv')}</span>
-        <span className="text-[9px] text-poke-text-muted text-right">{t('statEditor.total')}</span>
+        <span className="text-caption text-fg-muted text-right">{t('statEditor.base')}</span>
+        <span className="text-caption text-fg-muted text-center">{t('statEditor.ev')}</span>
+        <span className="text-caption text-fg-muted text-center">{t('statEditor.iv')}</span>
+        <span className="text-caption text-fg-muted text-right">{t('statEditor.total')}</span>
         <div />
       </div>
 
@@ -134,17 +134,14 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
             >
               <span
                 className={[
-                  'text-[10px] text-right font-medium',
-                  isBoosted
-                    ? 'text-red-400'
-                    : isLowered
-                      ? 'text-blue-400'
-                      : 'text-poke-text-muted',
+                  'whitespace-nowrap text-right text-caption',
+                  isBoosted ? 'font-[550] text-accent-ink' : 'text-fg-muted',
                 ].join(' ')}
               >
                 {localizeStat(stat, dl, 'short')}
+                {isBoosted ? ' +' : isLowered ? ' −' : ''}
               </span>
-              <span className="text-[10px] text-poke-text-muted font-mono text-right">{base}</span>
+              <span className="text-caption text-fg-muted font-mono text-right">{base}</span>
               <input
                 type="number"
                 min={0}
@@ -153,7 +150,7 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 value={ev}
                 onChange={(e) => handleEvChange(stat, e.target.value)}
                 disabled={state.locked}
-                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-primary disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
+                className="w-full px-1 py-0.5 text-xs text-center bg-surface border border-hairline rounded font-mono text-fg disabled:opacity-50 outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base"
               />
               <input
                 type="number"
@@ -163,21 +160,17 @@ export default function StatEditor({ slot, set }: StatEditorProps) {
                 value={iv}
                 onChange={(e) => handleIvChange(stat, e.target.value)}
                 disabled={state.locked}
-                className="w-full px-1 py-0.5 text-xs text-center bg-poke-surface border border-poke-border rounded font-mono text-poke-text-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent"
+                className="w-full px-1 py-0.5 text-xs text-center bg-surface border border-hairline rounded font-mono text-fg-muted disabled:opacity-50 outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base"
               />
               <span
                 className={[
-                  'text-xs font-mono font-semibold text-right',
-                  isBoosted
-                    ? 'text-red-400'
-                    : isLowered
-                      ? 'text-blue-400'
-                      : 'text-poke-text-primary',
+                  'text-right font-mono text-caption font-[550] tabular-nums',
+                  isBoosted ? 'text-accent-ink' : isLowered ? 'text-fg-muted' : 'text-fg',
                 ].join(' ')}
               >
                 {total}
               </span>
-              <div className="h-2 bg-poke-border rounded-full overflow-hidden">
+              <div className="h-2 bg-hairline rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${BAR_COLORS[stat]}`}
                   style={{ width: `${barWidth}%` }}
