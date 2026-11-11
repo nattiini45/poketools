@@ -9,7 +9,7 @@ import type { PkmnKind } from '@/lib/pkmn/i18n/types';
 import type { WikiSearchResult, WikiEntityType } from '@/types/wiki';
 
 /** The pkmn-layer kind of each result type, for the display name (the API returns English names). */
-const RESULT_KIND: Record<WikiEntityType, PkmnKind> = {
+export const RESULT_KIND: Record<WikiEntityType, PkmnKind> = {
   pokemon: 'species',
   move: 'move',
   item: 'item',
@@ -17,7 +17,7 @@ const RESULT_KIND: Record<WikiEntityType, PkmnKind> = {
   tera: 'type',
 };
 
-function getWikiPath(result: WikiSearchResult): string {
+export function getWikiPath(result: WikiSearchResult): string {
   const encodedName = encodeURIComponent(result.name);
   switch (result.type) {
     case 'pokemon':
