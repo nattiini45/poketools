@@ -1,3 +1,4 @@
+import SheetIcon from '@/components/shared/SheetIcon';
 import SpriteImg from '@/components/shared/SpriteImg';
 import TypeBadgeView from '@/components/shared/TypeBadgeView';
 import type { Translator } from '@/i18n/core';
@@ -8,12 +9,14 @@ import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
 import { localizeAbility } from '@/lib/pkmn/i18n/names/abilities';
 import { localizeNature, localizeType } from '@/lib/pkmn/i18n/names/misc';
+import { itemIconCell } from '@/lib/pkmn/sheet-cells.server';
 import { formatStatSpread, hasCustomIv, hasEv } from '@/lib/team/stat-spread';
 import type { PokemonSet } from '@/types/team';
 
 /**
- * One read-only set of the shared-team and library-entry pages. A server component: the names are localized here,
- * so neither page ships a name table to the browser; only the sprite is a client leaf (its fallback walk).
+ * One member panel of the team sheet (the shared-team and library-entry pages). A server component: the names are
+ * localized here and the held item's icon cell is resolved here, so neither page ships a name table or `@pkmn/img`
+ * to the browser; only the sprite is a client leaf (its fallback walk).
  */
 export default function TeamSetCard({
   set,
@@ -32,63 +35,78 @@ export default function TeamSetCard({
 }) {
   if (!set.species || set.species === 'hidden') {
     return (
-      <div className="border border-poke-border rounded-poke-md p-4 text-center">
-        <p className="text-xs text-poke-text-muted">{t('set.slot', { n: index + 1 })}</p>
-      </div>
+      <li className="flex min-h-24 items-center justify-center rounded-poke-lg border border-dashed border-hairline-strong">
+        <p className="text-caption text-fg-muted">{t('set.slot', { n: index + 1 })}</p>
+      </li>
     );
   }
 
   const speciesName = localizeSpecies(set.species, dl);
+  const moves = (set.moves ?? []).filter(Boolean);
+  const itemCell = set.item ? itemIconCell(set.item) : null;
+  const hasEvs = set.evs && Object.values(set.evs).some((v) => v > 0);
   return (
-    <div className="border border-poke-border rounded-poke-md p-4 bg-poke-surface hover:border-poke-blue/30 transition-colors">
-      <div className="flex items-center gap-3 mb-3">
-        <SpriteImg name={set.species} alt={speciesName} width={48} height={48} className="shrink-0" />
-        <div className="flex-1 min-w-0">
-          <p className="font-semibold text-sm truncate">{set.name || speciesName}</p>
+    <li className="flex flex-col overflow-hidden rounded-poke-lg border border-hairline bg-surface">
+      <div className="flex items-center gap-3 border-b border-hairline bg-elevated px-4 py-3">
+        <SpriteImg name={set.species} alt={speciesName} width={56} height={56} className="shrink-0" />
+        <div className="min-w-0 flex-1">
+          <h2 className="truncate font-heading text-title text-fg">{set.name || speciesName}</h2>
           {set.item && (
-            <p className="text-[10px] text-poke-text-muted">{t('set.item', { item: localizeItem(set.item, dl) })}</p>
+            <p className="mt-0.5 flex items-center gap-1 text-caption text-fg-muted">
+              {itemCell !== null && <SheetIcon sheet="item" cell={itemCell} />}
+              <span className="min-w-0 truncate">{t('set.item', { item: localizeItem(set.item, dl) })}</span>
+            </p>
           )}
         </div>
+        <span aria-hidden="true" className="self-start font-heading text-title tabular-nums text-fg-muted">
+          {index + 1}
+        </span>
       </div>
 
-      {set.ability && (
-        <p className="text-[11px] text-poke-text-secondary mb-1">
-          {t.rich('set.ability', {
-            ability: localizeAbility(set.ability, dl),
-            value: (chunks) => <span className="text-poke-text-primary">{chunks}</span>,
-          })}
-        </p>
-      )}
+      <div className="flex flex-1 flex-col gap-3 px-4 py-3">
+        {(set.ability || set.tera_type) && (
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+            {set.ability && (
+              <p className="text-caption text-fg-muted">
+                {t.rich('set.ability', {
+                  ability: localizeAbility(set.ability, dl),
+                  value: (chunks) => <span className="font-[550] text-fg">{chunks}</span>,
+                })}
+              </p>
+            )}
+            {set.tera_type && (
+              <p className="flex items-center gap-1.5 text-caption text-fg-muted">
+                {t('set.tera')}
+                <TypeBadgeView type={set.tera_type} label={localizeType(set.tera_type, dl)} />
+              </p>
+            )}
+          </div>
+        )}
 
-      {set.tera_type && (
-        <div className="flex items-center gap-1 mb-2">
-          <span className="text-[10px] text-poke-text-muted">{t('set.tera')}</span>
-          <TypeBadgeView type={set.tera_type} label={localizeType(set.tera_type, dl)} className="text-[9px]! px-1.5! py-0!" />
-        </div>
-      )}
+        {moves.length > 0 && (
+          <ul aria-label={t('set.moves')} className="grid grid-cols-2 gap-1.5">
+            {moves.map((move, i) => (
+              <li key={i} className="truncate rounded-poke-sm bg-sunken px-2 py-1.5 text-caption text-fg">
+                {localizeMove(move, dl)}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
-      {set.moves && set.moves.length > 0 && (
-        <div className="mb-2">
-          {set.moves.filter(Boolean).map((move, i) => (
-            <p key={i} className="text-[11px] text-poke-text-secondary">
-              - {localizeMove(move, dl)}
+      {(hasEvs || set.nature) && (
+        <div className="flex flex-col gap-0.5 border-t border-hairline px-4 py-2.5 text-micro text-fg-muted">
+          {hasEvs && <p className="font-mono tabular-nums">{formatStatSpread(set.evs, hasEv, dl)}</p>}
+          {set.nature && (
+            <p>
+              {t('set.nature', { nature: localizeNature(set.nature, dl) })}
+              {showIvs && set.ivs && Object.values(set.ivs).some(hasCustomIv) && (
+                <> · {t('set.ivs', { spread: formatStatSpread(set.ivs, hasCustomIv, dl) })}</>
+              )}
             </p>
-          ))}
+          )}
         </div>
       )}
-
-      {set.evs && Object.values(set.evs).some((v) => v > 0) && (
-        <p className="text-[10px] text-poke-text-muted font-mono">{formatStatSpread(set.evs, hasEv, dl)}</p>
-      )}
-
-      {set.nature && (
-        <p className="text-[10px] text-poke-text-muted">
-          {t('set.nature', { nature: localizeNature(set.nature, dl) })}
-          {showIvs && set.ivs && Object.values(set.ivs).some(hasCustomIv) && (
-            <> · {t('set.ivs', { spread: formatStatSpread(set.ivs, hasCustomIv, dl) })}</>
-          )}
-        </p>
-      )}
-    </div>
+    </li>
   );
 }

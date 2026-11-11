@@ -1,8 +1,12 @@
 import { type ReactNode } from "react";
 import { cn } from "@/lib/utils/cn";
+import type { ItemIconId } from "@/lib/pkmn/item-icons";
+import ItemIcon from "./ItemIcon";
 
 interface PageContainerProps {
   title?: string;
+  /** An approved item icon (docs/design.md, "Item icons") left of the title; decorative, the title names the page. */
+  icon?: ItemIconId;
   subtitle?: string;
   action?: ReactNode;
   children: ReactNode;
@@ -19,6 +23,7 @@ const maxWidthStyles = {
 
 export default function PageContainer({
   title,
+  icon,
   subtitle,
   action,
   children,
@@ -32,18 +37,15 @@ export default function PageContainer({
           {hasTitleBlock && (
             <div className="min-w-0 flex-1 basis-60">
               {title && (
-                <h1 className="text-2xl font-heading font-bold tracking-tight text-poke-text-primary">
-                  {title}
-                </h1>
-              )}
-              {title && (
-                <div
-                  aria-hidden="true"
-                  className="mt-2 h-0.5 w-12 rounded-full bg-poke-accent"
-                />
+                <div className="flex items-center gap-3">
+                  {icon && <ItemIcon item={icon} size={48} />}
+                  <h1 className="min-w-0 font-heading text-display text-balance text-fg">
+                    {title}
+                  </h1>
+                </div>
               )}
               {subtitle && (
-                <p className="mt-2 text-sm text-poke-text-secondary">
+                <p className="mt-2 text-body text-fg-muted">
                   {subtitle}
                 </p>
               )}
