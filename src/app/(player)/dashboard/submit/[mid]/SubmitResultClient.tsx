@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState, type KeyboardEvent } from 'react';
+import SkewPlate from '@/components/ui/SkewPlate';
 import ReplaySubmitForm from '@/components/match/ReplaySubmitForm';
 import ManualStatForm from '@/components/match/ManualStatForm';
 import ReplayImportForm from '@/components/match/ReplayImportForm';
@@ -45,34 +46,53 @@ export default function SubmitResultClient({
     setMode('replay-import');
   }
 
-  const tabClass = (active: boolean) =>
-    `px-4 py-2 text-sm font-heading font-semibold border-b-2 transition-colors ${
-      active
-        ? 'border-poke-accent text-poke-accent'
-        : 'border-transparent text-poke-text-muted hover:text-poke-text-secondary'
-    }`;
+  const tabsId = useId();
+  const modes: { mode: Mode; label: string }[] = [
+    { mode: 'replay', label: t('submitPage.tabReplay') },
+    { mode: 'manual', label: t('submitPage.tabManual') },
+    ...(isAdmin ? [{ mode: 'replay-import' as const, label: t('submitPage.tabReplayImport') }] : []),
+  ];
+
+  // Arrow keys move between the tabs, as in any tab list; the tab that gets focus is selected.
+  function handleTabKey(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') return;
+    event.preventDefault();
+    const index = modes.findIndex((entry) => entry.mode === mode);
+    const next = modes[(index + (event.key === 'ArrowRight' ? 1 : modes.length - 1)) % modes.length];
+    setMode(next.mode);
+    document.getElementById(`${tabsId}-${next.mode}`)?.focus();
+  }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Mode Tabs */}
-      <div className="flex gap-1 border-b border-poke-border">
-        <button onClick={() => setMode('replay')} className={tabClass(mode === 'replay')}>
-          {t('submitPage.tabReplay')}
-        </button>
-        <button onClick={() => setMode('manual')} className={tabClass(mode === 'manual')}>
-          {t('submitPage.tabManual')}
-        </button>
-        {isAdmin && (
+      <div role="tablist" aria-label={t('submitPage.tabsLabel')} className="flex flex-wrap gap-x-3 gap-y-2 px-1" onKeyDown={handleTabKey}>
+        {modes.map((entry) => (
           <button
-            onClick={() => setMode('replay-import')}
-            className={tabClass(mode === 'replay-import')}
+            key={entry.mode}
+            id={`${tabsId}-${entry.mode}`}
+            type="button"
+            role="tab"
+            aria-selected={mode === entry.mode}
+            aria-controls={`${tabsId}-panel`}
+            tabIndex={mode === entry.mode ? 0 : -1}
+            onClick={() => setMode(entry.mode)}
+            className="inline-flex min-h-11 items-stretch text-body"
           >
-            {t('submitPage.tabReplayImport')}
+            <SkewPlate variant="tab" active={mode === entry.mode} glideId={`${tabsId}-glide`} className="px-4">
+              {entry.label}
+            </SkewPlate>
           </button>
-        )}
+        ))}
       </div>
 
       {/* Forms */}
+      <div
+        id={`${tabsId}-panel`}
+        role="tabpanel"
+        aria-labelledby={`${tabsId}-${mode}`}
+        className="rounded-poke-lg border border-hairline bg-surface p-4 sm:p-5"
+      >
       {mode === 'replay' && (
         <ReplaySubmitForm
           matchId={matchId}
@@ -99,6 +119,7 @@ export default function SubmitResultClient({
           autoParse={Boolean(carryUrl)}
         />
       )}
+      </div>
     </div>
   );
 }

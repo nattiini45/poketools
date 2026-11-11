@@ -73,10 +73,10 @@ describe('error boundaries use the button recipe', () => {
     for (const key of ['primary', 'card', 'hover']) expect(colors[`poke-${key}`], key).toBeUndefined();
   });
 
-  it('ErrorState owns the primary + secondary buttonVariants, with no undefined tokens or text-white', () => {
+  it('ErrorState owns the primary + secondary plate buttons, with no undefined tokens or text-white', () => {
     const source = read('components/shared/ErrorState.tsx');
-    expect(source).toContain('buttonVariants({ variant: "primary", size: "md" })');
-    expect(source).toContain('buttonVariants({ variant: "secondary", size: "md" })');
+    expect(source).toContain('<SkewPlate variant="button" className=');
+    expect(source).toContain('<SkewPlate variant="button" tone="secondary"');
     expect(source).not.toMatch(/poke-(primary|card|hover)\b/);
     expect(source).not.toContain('text-white');
   });

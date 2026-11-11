@@ -23,6 +23,8 @@ export default defineDe<typeof en>()({
     teamRules: 'Teamregeln',
     informational: 'nur zur Information',
     informationalNote: 'Als „nur zur Information“ markierte Klauseln gelten im Kampf. Der Teamcheck prüft sie nicht.',
+    search: 'Diese Listen durchsuchen',
+    noMatches: 'Auf diesen Listen passt nichts zu „{query}“.',
   },
   select: {
     generation: 'Generation {gen}',

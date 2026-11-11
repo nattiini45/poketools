@@ -32,7 +32,7 @@ export default async function TournamentsPage({ searchParams }: { searchParams?:
   ]);
 
   return (
-    <PageContainer title={t('list.title')}>
+    <PageContainer title={t('list.title')} icon="kings-rock">
       <PublicCompetitionList
         icon="kings-rock"
         basePath="/tournaments"

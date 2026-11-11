@@ -3325,19 +3325,24 @@ html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {
 }
 
 /* ─── League hero (redesign B2, src/components/league/hero/LeagueHero.tsx) ───
-   Direction B's versus screen: the arena sand with a hex texture, and a dark slab for the match. The slab is
-   dark in both themes (a fighting-game card, not a surface), so it carries its own ink. From lg the slab's left
-   edge leans like every skewed plate and an accent stripe runs along it. */
+   Direction B's versus screen: the arena sand with a hex texture, and a slab for the match. In sunlit the slab
+   is a deeper arena sand (no dark surface on the light theme); only moonlit makes it near-black. The slab
+   carries its own ink through the --hero-slab-* properties, so anything that borrows these classes follows.
+   From lg the slab's left edge leans like every skewed plate and an accent stripe runs along it. */
 .league-hero {
-  --hero-slab: #2b2112;
-  --hero-slab-ink: #f5eddd;
-  --hero-slab-muted: #c4b596;
+  --hero-slab: #dfcd9f;
+  --hero-slab-ink: var(--fg);
+  --hero-slab-muted: var(--fg-muted);
+  --hero-vs: var(--accent-ink);
   --hero-lean: 72px;
   background-color: var(--sunken);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23241a0c' stroke-opacity='.07'/%3E%3C/svg%3E");
 }
 html[data-theme="dark"] .league-hero {
   --hero-slab: #0e0b06;
+  --hero-slab-ink: #f5eddd;
+  --hero-slab-muted: #c4b596;
+  --hero-vs: var(--tier-1);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23f5eddd' stroke-opacity='.06'/%3E%3C/svg%3E");
 }
 .league-hero-slab {
@@ -3349,11 +3354,12 @@ html[data-theme="dark"] .league-hero {
   color: var(--hero-slab-muted);
 }
 .league-hero-vs {
-  color: var(--tier-1);
+  color: var(--hero-vs);
 }
 .league-hero-nameplate {
   background-color: var(--surface);
   color: var(--fg);
+  border: 1px solid var(--hairline-strong);
   border-radius: 3px;
 }
 @media (min-width: 1024px) {

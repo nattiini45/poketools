@@ -20,6 +20,16 @@ export default {
     backToLeague: 'Back to league: {name}',
     backToLeagueLabel: 'Back to the league {name}',
     insights: 'Insights',
+    /** The link-tab strip's accessible name. */
+    tabsLabel: 'Tournament sections',
+  },
+  /** The hero at the top of a tournament page; the versus panel's words come from the league hero. */
+  hero: {
+    statusRound: '{status} · Round {round}',
+    stats: {
+      players: { one: 'player', other: 'players' },
+      rounds: { one: 'round', other: 'rounds' },
+    },
   },
   error: {
     title: 'Tournament failed to load',

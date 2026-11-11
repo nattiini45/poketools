@@ -3,8 +3,7 @@
 import { useState, useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import WorldNav from '@/components/world/WorldNav';
-import SectionShell from '@/components/world/SectionShell';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import RoundRobinTable from '@/components/bracket/RoundRobinTable';
 import GroupStandingsTable from '@/components/bracket/GroupStandingsTable';
 import DecisionMatchPanel from '@/components/evolution/DecisionMatchPanel';
@@ -20,9 +19,10 @@ import type { TournamentReport } from '@/types/tournament-report';
 import type { KillRankingRow, PokemonUsageRow } from '@/types/game';
 import type { TiebreakerStep } from '@/types/format-rules';
 import type { KitStandingsData } from '@/lib/format-engine/context';
+import type { TournamentPageTab } from '@/lib/tournament/page-view';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
+import { cn } from '@/lib/utils/cn';
 import { useLocale, useT } from '@/i18n/client';
-import type { Translator } from '@/i18n/core';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { contentMessages } from '@/i18n/messages/content';
@@ -78,74 +78,11 @@ interface TournamentTabsUnifiedProps {
   tiebreakerOrder?: readonly TiebreakerStep[];
   /** A stage of a kit league: the kit's standings data of this stage (`kitForPhase`), no seed. */
   kit?: KitStandingsData;
-  /** 'tabs' (legacy single-panel) or 'sections' — anchored scrollworld. */
-  layout?: 'tabs' | 'sections';
+  /** The panel to show: the page's `?tab=` (the link-tab strip above is the page's). */
+  activeTab: TournamentPageTab;
 }
 
-type TournamentsT = Translator<typeof tournamentsMessages.en>;
-
-// Tab definitions per bracket type — primary content first, Report second, Ruleset last
-function getTabsForBracketType(bracketType: BracketType, hasRuleset: boolean, t: TournamentsT) {
-  const base: { key: string; label: string }[] = [];
-  const report = ENABLE_KALE_CABBAGE ? [{ key: 'report', label: t('tabs.report') }] : [];
-
-  switch (bracketType) {
-    case 'round_robin':
-      base.push(
-        { key: 'rankings', label: t('tabs.rankings') },
-        ...report,
-        { key: 'kills', label: t('tabs.stats') },
-        { key: 'rounds', label: t('tabs.rounds') },
-        { key: 'overview', label: t('tabs.overview') },
-      );
-      break;
-    case 'swiss':
-      base.push(
-        { key: 'standings', label: t('tabs.standings') },
-        ...report,
-        { key: 'kills', label: t('tabs.stats') },
-        { key: 'rounds', label: t('tabs.rounds') },
-      );
-      break;
-    case 'single_elim':
-    case 'double_elim':
-      base.push(
-        { key: 'bracket', label: t('tabs.bracket') },
-        ...report,
-        { key: 'kills', label: t('tabs.stats') },
-        { key: 'rounds', label: t('tabs.rounds') },
-      );
-      break;
-  }
-
-  if (hasRuleset) {
-    base.push({ key: 'ruleset', label: t('tabs.ruleset') });
-  }
-
-  return base;
-}
-
-
-/** Layout-aware wrapper: plain passthrough in tabs mode, anchored
- *  SectionShell (heading + reveal rhythm) in sections mode. */
-function SectionBlock({
-  sections,
-  id,
-  heading,
-  children,
-}: {
-  sections: boolean;
-  id: string;
-  heading: string;
-  children: ReactNode;
-}) {
-  if (!sections) return <>{children}</>;
-  return (
-    <SectionShell id={id} heading={heading}>
-      {children}
-    </SectionShell>
-  );
-}
+const ROUND_TONE: Record<Round['status'], SkewChipTone> = { active: 'live', pending: 'accent', completed: 'neutral' };
 
 export default function TournamentTabsUnified({
   bracketType,
@@ -169,7 +106,7 @@ export default function TournamentTabsUnified({
   evolutionPoints,
   tiebreakerOrder,
   kit,
-  layout = 'tabs',
+  activeTab,
 }: TournamentTabsUnifiedProps) {
   const { data: session } = useSession();
   const sessionIsAdmin = session?.player?.isAdmin ?? false;
@@ -177,8 +114,6 @@ export default function TournamentTabsUnified({
   const t = useT(tournamentsMessages);
   const tContent = useT(contentMessages);
   const tEnum = useT(enumMessages);
-  const tabs = getTabsForBracketType(bracketType, !!rulesetContent, t);
-  const [activeTab, setActiveTab] = useState<string>(tabs[0].key);
   const [generatingFor, setGeneratingFor] = useState<string | null>(null);
 
   // Default round filter to the active round, not the latest generated
@@ -283,62 +218,22 @@ export default function TournamentTabsUnified({
     }
   }
 
-  // Sections layout renders every panel stacked with anchor nav; tabs
-  // layout keeps the legacy single-panel switch.
-  const show = (key: string) => layout === 'sections' || activeTab === key;
+  const show = (key: TournamentPageTab) => activeTab === key;
 
-  // Sections mode drops panels that have no content so the anchor nav never
-  // points at a section that isn't on the page.
-  const hasContent: Record<string, boolean> = {
-    bracket: bracketContent != null,
-    standings: standingsContent != null,
-    ruleset: rulesetContent != null,
-  };
-  const sectionTabs = tabs.filter((tab) => hasContent[tab.key] !== false);
-
-  // ── Round filter visibility ────────────────────────────────────
-  const showRoundFilter =
-    bracketType === 'round_robin' &&
-    totalRounds > 1 &&
-    (layout === 'sections' ||
-      activeTab === 'rankings' ||
-      activeTab === 'kills' ||
-      activeTab === 'overview');
+  // The round filter recomputes the table and the result matrix; the other panels do not read it.
+  const showRoundFilter = bracketType === 'round_robin' && totalRounds > 1 && (activeTab === 'standings' || activeTab === 'matrix');
 
   return (
     <div className="space-y-4">
-      {layout === 'sections' && (
-        <WorldNav
-          sections={sectionTabs.map((tab) => ({ id: tab.key, navLabel: tab.label }))}
-          label={t('tabs.sections')}
-          variant="lite"
-        />
-      )}
-      {/* Tab bar */}
-      <div className={`${layout === 'sections' ? 'hidden' : 'flex'} gap-1 border-b border-poke-border overflow-x-auto`}>
-        {tabs.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-heading font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab.key
-                ? 'border-poke-accent text-poke-accent'
-                : 'border-transparent text-poke-text-muted hover:text-poke-text-secondary'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
-
       {/* Round filter — own row below tabs on mobile */}
       {showRoundFilter && (
         <div className="flex items-center gap-2">
-          <label className="text-xs text-poke-text-secondary">{t('roundFilter.label')}</label>
+          <label htmlFor="tournament-round-filter" className="text-body text-fg-muted">{t('roundFilter.label')}</label>
           <select
+            id="tournament-round-filter"
             value={selectedRound}
             onChange={(e) => setSelectedRound(Number(e.target.value))}
-            className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
+            className="min-h-9 rounded-poke-sm border border-hairline-strong bg-surface px-2 py-1 text-body text-fg max-sm:min-h-11"
           >
             {Array.from({ length: totalRounds }, (_, i) => i + 1).map((r) => (
               <option key={r} value={r}>
@@ -351,17 +246,12 @@ export default function TournamentTabsUnified({
         </div>
       )}
 
-      {/* Tab content */}
-      {/* Content: stacked anchored sections in sections mode, single panel in tabs mode */}
-      {/* Bracket tab — single/double elim */}
-      {show('bracket') && bracketContent && (layout === 'sections' ? <SectionShell id="bracket" heading={t('tabs.bracket')}>{bracketContent}</SectionShell> : bracketContent)}
+      {show('bracket') && bracketContent}
 
-      {/* Standings tab — swiss */}
-      {show('standings') && standingsContent && (layout === 'sections' ? <SectionShell id="standings" heading={t('tabs.standings')}>{standingsContent}</SectionShell> : standingsContent)}
+      {show('standings') && standingsContent}
 
-      {/* Rankings tab — round robin */}
-      {show('rankings') && (
-        <SectionBlock sections={layout === 'sections'} id="rankings" heading={t('tabs.rankings')}>
+      {/* Round robin table */}
+      {show('standings') && bracketType === 'round_robin' && (
         <div className="space-y-4">
           {epbTiedPlayers.length > 0 && (
             <DecisionMatchPanel
@@ -376,12 +266,10 @@ export default function TournamentTabsUnified({
             showEvolutionColumns={seasonFormatType === 'evolution_point_buy'}
           />
         </div>
-        </SectionBlock>
       )}
 
-      {/* Stats tab — inline insights tables (usage / kills / moves / h2h) */}
-      {show('kills') && (
-        <SectionBlock sections={layout === 'sections'} id="kills" heading={t('tabs.stats')}>
+      {/* Inline insights tables (usage / kills / moves / h2h) */}
+      {show('stats') && (
         <ScopedInsightsView
           usageRows={usageRows}
           isDoubles={isDoubles}
@@ -391,23 +279,19 @@ export default function TournamentTabsUnified({
           aggregateScopeType="tournament"
           aggregateScopeId={tournamentId}
         />
-        </SectionBlock>
       )}
 
-      {/* Match overview tab — round robin */}
-      {show('overview') && (
-        <SectionBlock sections={layout === 'sections'} id="overview" heading={t('tabs.overview')}>
+      {/* Result matrix — round robin */}
+      {show('matrix') && (
         <RoundRobinTable
           participants={participants.map((p) => ({ id: p.id, name: p.name }))}
           matches={filteredMatches}
         />
-        </SectionBlock>
       )}
 
       {/* Rounds tab — all formats */}
       {show('rounds') && (
-        <SectionBlock sections={layout === 'sections'} id="rounds" heading={t('tabs.rounds')}>
-        <div className="space-y-4">
+        <div className="space-y-3">
           {rounds
             .slice()
             .sort((a, b) => {
@@ -424,20 +308,12 @@ export default function TournamentTabsUnified({
                 <details
                   key={round.id}
                   open={round.status === 'active'}
-                  className="border border-poke-border rounded-poke-lg overflow-hidden"
+                  className="overflow-hidden rounded-poke-lg border border-hairline bg-surface"
                 >
-                  <summary className="px-4 py-3 cursor-pointer text-sm font-heading font-medium hover:bg-poke-elevated transition-colors flex items-center justify-between">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span>{translateEngineLabel('round', round.name, locale)}</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        round.status === 'active'
-                          ? 'bg-green-500/15 text-green-400'
-                          : round.status === 'completed'
-                            ? 'text-poke-text-muted'
-                            : 'bg-yellow-500/15 text-yellow-400'
-                      }`}>
-                        {enumLabel(tEnum, 'roundStatus', round.status)}
-                      </span>
+                  <summary className="flex min-h-11 cursor-pointer items-center justify-between px-4 py-3 text-body transition-colors hover:bg-elevated">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="font-heading text-title text-fg">{translateEngineLabel('round', round.name, locale)}</span>
+                      <SkewChip tone={ROUND_TONE[round.status]}>{enumLabel(tEnum, 'roundStatus', round.status)}</SkewChip>
                       {/* Admin generate buttons (hidden when Kale Cabbage disabled) */}
                       {ENABLE_KALE_CABBAGE && sessionIsAdmin && (
                         <>
@@ -445,7 +321,7 @@ export default function TournamentTabsUnified({
                             <button
                               onClick={(e) => { e.preventDefault(); handleGenerateReport(round.id, 'round_forecast'); }}
                               disabled={generatingFor === `${round.id}-round_forecast`}
-                              className="text-[10px] px-2 py-0.5 rounded-full border border-blue-500/30 text-blue-400 hover:bg-blue-500/10 disabled:opacity-50 transition-colors"
+                              className="rounded-[3px] border border-hairline-strong px-2 py-0.5 text-caption text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:opacity-50"
                             >
                               {generatingFor === `${round.id}-round_forecast` ? '...' : t('rounds.generateForecast')}
                             </button>
@@ -454,7 +330,7 @@ export default function TournamentTabsUnified({
                             <button
                               onClick={(e) => { e.preventDefault(); handleGenerateReport(round.id, 'round_recap'); }}
                               disabled={generatingFor === `${round.id}-round_recap`}
-                              className="text-[10px] px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-400 hover:bg-purple-500/10 disabled:opacity-50 transition-colors"
+                              className="rounded-[3px] border border-hairline-strong px-2 py-0.5 text-caption text-fg-muted transition-colors hover:bg-elevated hover:text-fg disabled:opacity-50"
                             >
                               {generatingFor === `${round.id}-round_recap` ? '...' : t('rounds.generateRecap')}
                             </button>
@@ -463,37 +339,25 @@ export default function TournamentTabsUnified({
                       )}
                     </div>
                   </summary>
-                  <div className="px-4 pb-3">
+                  <div className="border-t border-hairline px-4 py-3">
                     {roundMatches.length === 0 ? (
-                      <p className="text-xs text-poke-text-muted">{t('rounds.noMatches')}</p>
+                      <p className="text-body text-fg-muted">{t('rounds.noMatches')}</p>
                     ) : (
-                      <div className="space-y-1">
+                      <div className="grid gap-2 lg:grid-cols-2">
                         {roundMatches.map((m) => (
                           <Link
                             key={m.id}
                             href={`/tournaments/${tournamentId}/matches/${m.id}`}
-                            className="flex items-center gap-3 p-2 border border-poke-border rounded-poke-md hover:bg-poke-elevated transition-colors text-sm"
+                            className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-poke-md border border-hairline px-3 py-2 text-body transition-colors hover:bg-elevated focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
                           >
                             <span
-                              className={
-                                m.winner_id === m.player_1_id
-                                  ? 'font-semibold text-poke-text-primary'
-                                  : m.winner_id
-                                    ? 'text-poke-text-muted'
-                                    : ''
-                              }
+                              className={cn('min-w-0 truncate text-right', m.winner_id === m.player_1_id ? 'font-[650] text-fg' : m.winner_id ? 'text-fg-muted' : 'text-fg')}
                             >
                               {m.player_1_name}
                             </span>
-                            <span className="text-poke-text-muted">{t('rounds.versus')}</span>
+                            <span className="font-heading text-caption text-fg-muted">{t('rounds.versus')}</span>
                             <span
-                              className={
-                                m.winner_id === m.player_2_id
-                                  ? 'font-semibold text-poke-text-primary'
-                                  : m.winner_id
-                                    ? 'text-poke-text-muted'
-                                    : ''
-                              }
+                              className={cn('min-w-0 truncate', m.winner_id === m.player_2_id ? 'font-[650] text-fg' : m.winner_id ? 'text-fg-muted' : 'text-fg')}
                             >
                               {m.player_2_name}
                             </span>
@@ -506,21 +370,11 @@ export default function TournamentTabsUnified({
               );
             })}
         </div>
-        </SectionBlock>
       )}
 
-      {/* Ruleset tab */}
-      {show('ruleset') && rulesetContent && (
-        <SectionBlock sections={layout === 'sections'} id="ruleset" heading={t('tabs.ruleset')}>
-        <div className="max-w-3xl">
-          {rulesetContent}
-        </div>
-        </SectionBlock>
-      )}
+      {show('ruleset') && rulesetContent && <div className="rounded-poke-lg border border-hairline bg-surface p-5">{rulesetContent}</div>}
 
-      {/* Report tab — all formats */}
       {show('report') && (
-        <SectionBlock sections={layout === 'sections'} id="report" heading={t('tabs.report')}>
         <TournamentReportTab
           reports={reports}
           rounds={rounds.map((r) => ({
@@ -531,7 +385,6 @@ export default function TournamentTabsUnified({
           }))}
           tournamentId={tournamentId}
         />
-        </SectionBlock>
       )}
     </div>
   );
