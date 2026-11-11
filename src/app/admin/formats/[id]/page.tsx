@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
@@ -56,6 +57,7 @@ export default async function FormatPage({ params }: PageProps) {
   return (
     <AdminGuard>
       <PageContainer title={title} maxWidth="lg">
+        <AdminCrumbName href={`/admin/formats/${id}`} name={title} />
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Badge variant="gray">{tEditor(`toolbar.visibility.${summary.visibility}`)}</Badge>
           <Badge variant={summary.current_version === null ? 'gray' : 'green'}>

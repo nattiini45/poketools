@@ -921,14 +921,17 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 /admin/players                 Player roster management (guest creation + Link account)
 ```
 
-**Admin navigation IA.** `/admin/*` renders a role-filtered sidebar
-(`src/components/admin/adminNav.ts` is the single config) with three workflow
-groups: **Competitions** (leagues + archived, tournaments + archived, matches,
-rulesets), **Community** (player roster, achievements, wiki moderation, social
-integration) and **System** (data tools, meta data, audit log, test players,
-Kale console [superadmin, soft-deprecated]). Items flagged `siteAdminOnly`
-render only for full `isAdmin`; the Kale console only for `isSuperadmin`.
-Below `lg` the same config renders as grouped chip rows. The admin overview
+**Admin navigation IA.** `/admin/*` renders its own shell instead of the public
+NavBar (docs/admin.md, "Layout and navigation"): a role-filtered sidebar
+(`src/components/admin/adminNav.ts` is the single config), a top bar with the
+breadcrumb, and a command menu (⌘K) over the same pages. Four workflow groups:
+**Run** (overview, competitions [leagues, tournaments, their archives and the
+league trash as views of one section], matches, players), **Library** (formats,
+rulesets), **Community** (achievements, wiki moderation, social) and **System**
+(data tools, meta data, audit log, test players, assistant, Kale console
+[superadmin, soft-deprecated], pack extension pages; folded by default). Items
+flagged `siteAdminOnly` render only for full `isAdmin`; the Kale console only
+for `isSuperadmin`. Below 768 px the sidebar is a drawer. The admin overview
 page no longer duplicates this IA as a card grid — it shows the live
 dashboard (attention queue, recent audit) only.
 
@@ -1181,7 +1184,7 @@ The draft routes' exact contracts: `docs/draft-room.md` and the route handlers u
 |---|---|
 | `/admin/assistant` | Conversation list (chips such as "Waiting for you" and "Partial build") and new conversation |
 | `/admin/assistant/[id]` | One conversation: transcript beside the Plan panel (§18.3) |
-| every `/admin/*` page | The assistant drawer, mounted once in the admin layout outside the page transition, so a conversation continues while the admin navigates. Opens from the sidebar footer button and the `.` shortcut; a full-screen sheet on mobile |
+| every `/admin/*` page | The assistant drawer, mounted once in the admin layout outside the page transition, so a conversation continues while the admin navigates. Opens from the top bar's assistant button, the command menu and the `.` shortcut; a full-screen sheet on mobile |
 
 The admin navigation gets one item in the Competitions group, not `siteAdminOnly` (the tools are scoped, §18.9). Pages call the live access gate like other admin pages; `NEXT_PUBLIC_ENABLE_ADMIN_ASSISTANT` only hides the UI. Entry points (a "New league with assistant" button, "Ask assistant" on a league tab, "Fix with assistant" on a readiness item, "Describe a ruleset", "Describe a format") pass a **seed**: a whitelisted key plus ids, never free text from a URL. The server validates the named entity with its guard and never trusts the seed. Each phase ships the entry points of its own area (§18.17).
 
