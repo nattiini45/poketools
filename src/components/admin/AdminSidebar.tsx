@@ -98,7 +98,7 @@ function NavGroup({ group, activeHref }: { group: VisibleAdminNavGroup; activeHr
 }
 
 /**
- * The admin sidebar (redesign A1): a dark umber rail in both themes with the wordmark, New competition, the
+ * The admin sidebar (redesign A1): a rail that follows the theme (the page's sand in sunlit, umber in moonlit) with the wordmark, New competition, the
  * command-menu field, the role-filtered groups of `adminNav.ts` (a gold skewed plate marks the current section) and,
  * at the foot, Back to site and the account menu. It collapses with `[`, resizes from its edge and is a drawer below
  * 768 px (@fluid sidebar).
@@ -121,8 +121,7 @@ export default function AdminSidebar({ groups, onOpenCommand }: { groups: readon
 
   return (
     <Sidebar bordered={false}>
-      {/* data-theme: the rail is moonlit in both themes, so every token inside resolves to its dark value. */}
-      <div data-theme="dark" data-admin-rail="" className="admin-rail flex h-full min-h-0 w-full flex-col bg-surface text-fg">
+      <div data-admin-rail="" className="admin-rail flex h-full min-h-0 w-full flex-col">
         <SidebarHeader className="gap-3 p-3">
           <Link href="/admin" className={`flex items-baseline gap-2 self-start rounded-sm px-1 ${RAIL_FOCUS}`}>
             <span className="font-heading text-xl leading-7 text-fg">PokéTools</span>
