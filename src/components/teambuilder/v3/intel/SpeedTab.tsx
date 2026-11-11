@@ -243,7 +243,7 @@ export default function SpeedTab() {
 
   if (loading) {
     return (
-      <div className="text-[11px] text-poke-text-muted text-center py-6">
+      <div className="text-caption text-fg-muted text-center py-6">
         {t('speed.loading')}
       </div>
     );
@@ -271,15 +271,15 @@ export default function SpeedTab() {
     <div className="space-y-3">
       {/* Outspeed solver panel */}
       {target && (
-        <div className="border border-poke-blue/40 bg-poke-blue/5 rounded-lg p-2">
+        <div className="border border-accent-ink bg-accent-subtle rounded-lg p-2">
           <div className="flex items-center justify-between mb-1">
-            <span className="text-[10px] font-medium text-poke-text-primary">
+            <span className="text-caption font-medium text-fg">
               {subject.set?.species
                 ? t.rich('speed.outspeedWith', {
                     target: localizeSpecies(target.species, dl),
                     speed: target.speed,
                     species: localizeSpecies(subject.set.species, dl),
-                    muted: (chunks) => <span className="text-poke-text-muted">{chunks}</span>,
+                    muted: (chunks) => <span className="text-fg-muted">{chunks}</span>,
                   })
                 : t('speed.outspeed', {
                     target: localizeSpecies(target.species, dl),
@@ -288,20 +288,20 @@ export default function SpeedTab() {
             </span>
             <button
               onClick={() => dispatch({ type: 'SET_SPEED_TARGET', target: null })}
-              className="text-[9px] text-poke-text-muted hover:text-poke-text-primary transition-colors"
+              className="text-caption text-fg-muted hover:text-fg transition-colors"
               aria-label={t('speed.clearTarget')}
             >
               ✕
             </button>
           </div>
-          <p className="text-[9px] text-poke-text-muted mb-1.5">{targetLabel}</p>
+          <p className="text-caption text-fg-muted mb-1.5">{targetLabel}</p>
 
           {!subject.set?.species ? (
-            <p className="text-[10px] text-poke-text-muted">{t('speed.addPokemon')}</p>
+            <p className="text-caption text-fg-muted">{t('speed.addPokemon')}</p>
           ) : solverLoading ? (
-            <p className="text-[10px] text-poke-text-muted animate-pulse">{t('speed.solving')}</p>
+            <p className="text-caption text-fg-muted animate-pulse">{t('speed.solving')}</p>
           ) : solver?.impossible ? (
-            <p className="text-[10px] text-orange-400">
+            <p className="text-caption text-accent-ink">
               {/* The route's English `note` is derived the same way: Choice Scarf already held or not. */}
               {tb(
                 subject.set.item?.toLowerCase() === 'choice scarf'
@@ -315,9 +315,9 @@ export default function SpeedTab() {
               {solver.solutions.slice(0, 3).map((sol) => (
                 <div
                   key={`${sol.nature}-${sol.ev}`}
-                  className="flex items-center gap-2 text-[10px]"
+                  className="flex items-center gap-2 text-caption"
                 >
-                  <span className="text-poke-text-primary flex-1">
+                  <span className="text-fg flex-1">
                     {t('speed.solution', {
                       nature: localizeNature(sol.nature, dl),
                       ev: sol.ev,
@@ -338,7 +338,7 @@ export default function SpeedTab() {
                           },
                         });
                       }}
-                      className="px-1.5 py-0.5 text-[9px] bg-poke-blue/15 text-poke-blue rounded hover:bg-poke-blue/25 transition-colors shrink-0"
+                      className="px-1.5 py-0.5 text-caption bg-accent-subtle text-accent-ink rounded hover:bg-selected transition-colors shrink-0"
                     >
                       {t('common.apply')}
                     </button>
@@ -353,16 +353,16 @@ export default function SpeedTab() {
       {/* Merged speed list */}
       <div>
         <div className="flex items-center justify-between mb-1.5">
-          <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide">
+          <h4 className="text-caption font-[550] text-fg">
             {t('speed.title')}
           </h4>
-          <span className="text-[8px] text-poke-text-muted">
+          <span className="text-caption text-fg-muted">
             {t('speed.hint')}
           </span>
         </div>
 
         {rows.length === 0 ? (
-          <p className="text-[10px] text-poke-text-muted text-center py-2">
+          <p className="text-caption text-fg-muted text-center py-2">
             {t('speed.empty')}
           </p>
         ) : (
@@ -381,36 +381,36 @@ export default function SpeedTab() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-baseline gap-1.5">
                       <span
-                        className={`text-[10px] truncate ${
+                        className={`text-caption truncate ${
                           isTeam
-                            ? 'text-poke-text-primary font-medium'
-                            : 'text-poke-text-secondary'
+                            ? 'text-fg font-medium'
+                            : 'text-fg-muted'
                         }`}
                       >
                         {speciesName}
                       </span>
-                      <span className="text-[8px] text-poke-text-muted truncate shrink-0">
+                      <span className="text-caption text-fg-muted truncate shrink-0">
                         {config}
                       </span>
                     </div>
-                    <div className="h-1.5 bg-poke-border rounded-full overflow-hidden mt-0.5">
+                    <div className="h-1.5 bg-hairline rounded-full overflow-hidden mt-0.5">
                       <div
                         className={`h-full rounded-full ${
                           isTeam
                             ? row.isScarf
-                              ? 'bg-orange-400'
-                              : 'bg-green-500'
+                              ? 'bg-tier-2'
+                              : 'bg-tier-4'
                             : isTarget
-                              ? 'bg-poke-blue'
-                              : 'bg-poke-border-strong'
+                              ? 'bg-accent-fill'
+                              : 'bg-hairline-strong'
                         }`}
                         style={{ width: `${barWidth}%` }}
                       />
                     </div>
                   </div>
                   <span
-                    className={`text-[10px] font-mono w-8 text-right shrink-0 ${
-                      isTeam ? 'text-poke-text-primary' : 'text-poke-text-muted'
+                    className={`text-caption font-mono w-8 text-right shrink-0 ${
+                      isTeam ? 'text-fg' : 'text-fg-muted'
                     }`}
                   >
                     {row.speed >= 0 ? row.speed : '—'}
@@ -442,7 +442,7 @@ export default function SpeedTab() {
                   }
                   className={[
                     'w-full flex items-center gap-2 py-0.5 px-1 rounded text-left transition-colors',
-                    isTarget ? 'bg-poke-blue/15' : 'hover:bg-poke-muted',
+                    isTarget ? 'bg-accent-subtle' : 'hover:bg-hover',
                   ].join(' ')}
                   title={t('speed.solveTitle', { species: speciesName, speed: row.speed })}
                 >
@@ -454,7 +454,7 @@ export default function SpeedTab() {
         )}
 
         {!hasBenchmarks && rows.length > 0 && (
-          <p className="text-[9px] text-poke-text-muted mt-2 text-center">
+          <p className="text-caption text-fg-muted mt-2 text-center">
             {t('speed.noUsageData', { format: state.format })}
           </p>
         )}

@@ -124,17 +124,17 @@ export default function AbilityPicker({
       <button
         onClick={() => setOpen((p) => !p)}
         disabled={disabled || abilities.length === 0}
-        className="w-full px-2 py-1.5 text-xs bg-poke-surface border border-poke-border rounded text-left disabled:opacity-50 hover:border-poke-blue/40 transition-colors"
+        className="flex w-full min-w-0 items-baseline gap-1 rounded-md border border-hairline bg-surface px-2 py-1.5 text-left text-xs transition-colors duration-80 ease-out hover:border-hairline-strong disabled:opacity-60 pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:text-sm"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         {value ? (
-          <span className="text-poke-text-primary">{localizeAbility(value, dl)}</span>
+          <span className="shrink-0 text-fg">{localizeAbility(value, dl)}</span>
         ) : (
-          <span className="text-poke-text-muted">{t('common.none')}</span>
+          <span className="text-fg-muted">{t('common.none')}</span>
         )}
         {selectedAbility?.shortDesc && (
-          <span className="ml-1 text-[10px] text-poke-text-muted truncate hidden sm:inline">
+          <span className="hidden min-w-0 truncate text-caption text-fg-muted sm:inline">
             — {selectedAbility.shortDesc}
           </span>
         )}
@@ -142,7 +142,7 @@ export default function AbilityPicker({
       {open && (
         <ul
           role="listbox"
-          className="absolute z-20 top-full mt-0.5 left-0 right-0 bg-poke-elevated border border-poke-border rounded shadow-lg max-h-44 overflow-y-auto"
+          className="absolute z-20 top-full mt-0.5 left-0 right-0 bg-elevated border border-hairline rounded shadow-lg max-h-44 overflow-y-auto"
         >
           {sortedAbilities.map((a) => {
             const pct = abilityUsage[a.name.toLowerCase()];
@@ -151,22 +151,22 @@ export default function AbilityPicker({
                 <button
                   onMouseDown={(e) => { e.preventDefault(); handleSelect(a.name); }}
                   className={[
-                    'w-full px-2 py-1.5 text-left hover:bg-poke-surface transition-colors',
-                    value === a.name ? 'bg-poke-blue/10' : '',
+                    'w-full px-2 py-1.5 text-left hover:bg-hover transition-colors',
+                    value === a.name ? 'bg-accent-subtle' : '',
                   ].join(' ')}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-poke-text-primary flex-1">
+                    <span className="text-xs text-fg flex-1">
                       {localizeAbility(a.name, dl)}
                     </span>
                     {pct !== undefined && (
-                      <span className="text-[10px] text-poke-text-secondary tabular-nums shrink-0">
+                      <span className="text-caption text-fg-muted tabular-nums shrink-0">
                         {formatUsagePct(pct, locale)}
                       </span>
                     )}
                   </div>
                   {a.shortDesc && (
-                    <div className="text-[10px] text-poke-text-muted leading-tight">
+                    <div className="text-caption text-fg-muted leading-tight">
                       {a.shortDesc}
                       <DescFallbackTag descLang={a.shortDescLang} />
                     </div>

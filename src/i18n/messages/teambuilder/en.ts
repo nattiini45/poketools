@@ -156,6 +156,16 @@ export default {
       validation: 'Validate',
       ai: 'AI',
     },
+    panelLabel: 'Side panel',
+    save: 'Save',
+    saveErrors: { one: '{count} rule error', other: '{count} rule errors' },
+    moreActions: 'More actions',
+    actions: {
+      import: 'Import',
+      export: 'Export',
+      share: 'Share',
+      publish: 'Publish',
+    },
     fab: {
       publish: 'Publish to library',
       share: 'Share team',

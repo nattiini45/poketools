@@ -6,7 +6,7 @@ import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
 vi.mock('next/font/local', () => ({ default: () => ({ variable: 'font-var' }) }));
-vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }) }));
+vi.mock('next/headers', () => ({ headers: async () => ({ get: () => null }), cookies: async () => ({ get: () => undefined }) }));
 vi.mock('@/i18n/server', async () => {
   const { createTranslator } = await import('@/i18n/core');
   return {
@@ -28,7 +28,7 @@ vi.mock('@/components/shared/SpriteStyleAccountSync', () => ({ default: () => nu
 vi.mock('@/components/shared/NavBar', () => ({ default: () => null }));
 vi.mock('@/components/shared/PageTransitionWrapper', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
 vi.mock('@/components/shared/AdminGuard', () => ({ default: ({ children }: { children: ReactNode }) => <>{children}</> }));
-vi.mock('@/components/admin/AdminSidebar', () => ({ default: () => null }));
+vi.mock('@/components/admin/AdminShell', () => ({ default: ({ children }: { children: ReactNode }) => children }));
 vi.mock('@/components/admin/assistant/AssistantDrawer', () => ({ default: () => null }));
 vi.mock('@/components/creator/CreatorNav', () => ({ default: () => null }));
 vi.mock('@/lib/pack-extensions', () => ({ siteNavExtraLinks: async () => [], extensionAdminLinks: async () => [] }));

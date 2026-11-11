@@ -9,7 +9,7 @@ import type { ConversationDetail, ConversationSummary, ProposalDetail } from '..
 const nav = vi.hoisted(() => ({ pathname: '/admin/leagues' }));
 vi.mock('next/navigation', () => ({ usePathname: () => nav.pathname, useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 
-import AssistantDrawer from '../AssistantDrawer';
+import AssistantDrawer, { ASSISTANT_LAUNCHER_ATTR, openAdminAssistant } from '../AssistantDrawer';
 import AssistantWorkspace from '../AssistantWorkspace';
 
 const C1 = '33333333-3333-4333-8333-333333333333';
@@ -120,26 +120,37 @@ afterEach(() => {
 
 const mount = (locale: Locale = 'en') => render(withI18n(<AssistantDrawer />, { locale }));
 const dialog = () => screen.getByRole('dialog', { name: 'Assistant' });
-const openDrawer = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole('button', { name: 'Open assistant' }));
-  return dialog();
+const openDrawer = (locale: 'Assistant' | 'Assistent' = 'Assistant') => {
+  act(() => openAdminAssistant());
+  return screen.getByRole('dialog', { name: locale });
 };
 
 describe('AssistantDrawer: opening and closing', () => {
-  it('is a floating button until opened; "." opens it and Esc closes it, handing focus back', async () => {
+  it('stays closed until asked; openAdminAssistant() and "." open it, Esc closes it and hands focus back to the shell launcher', async () => {
     const user = userEvent.setup();
-    mount();
+    render(
+      withI18n(
+        <>
+          <button type="button" {...{ [ASSISTANT_LAUNCHER_ATTR]: '' }}>
+            Shell launcher
+          </button>
+          <AssistantDrawer />
+        </>,
+      ),
+    );
     expect(screen.queryByRole('dialog')).toBeNull();
-    const launcher = screen.getByRole('button', { name: 'Open assistant' });
-    expect(launcher.getAttribute('title')).toBe('Press . to open the assistant, Esc to close it');
+    expect(screen.queryByRole('button', { name: 'Open assistant' })).toBeNull();
+
+    openDrawer();
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Shell launcher' }));
 
     await user.keyboard('.');
     expect(dialog()).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Open assistant' })).toBeNull();
-
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('dialog')).toBeNull();
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open assistant' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Shell launcher' }));
   });
 
   it('does not steal "." from a text field or a shortcut', async () => {
@@ -159,9 +170,8 @@ describe('AssistantDrawer: opening and closing', () => {
   });
 
   it('is a non-modal dialog the page behind stays usable under, with a labelled resize handle', async () => {
-    const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     expect(panel.getAttribute('aria-modal')).toBe('false');
     expect(within(panel).getByRole('separator', { name: 'Resize assistant' })).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Close assistant' })).toBeTruthy();
@@ -170,7 +180,7 @@ describe('AssistantDrawer: opening and closing', () => {
   it('closes with its button too', async () => {
     const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     await user.click(within(panel).getByRole('button', { name: 'Close assistant' }));
     expect(screen.queryByRole('dialog')).toBeNull();
   });
@@ -182,10 +192,8 @@ describe('AssistantDrawer: opening and closing', () => {
   });
 
   it('speaks German', async () => {
-    const user = userEvent.setup();
     mount('de');
-    await user.click(screen.getByRole('button', { name: 'Assistent öffnen' }));
-    expect(screen.getByRole('dialog', { name: 'Assistent' })).toBeTruthy();
+    openDrawer('Assistent');
     expect(await screen.findByText('Noch keine Unterhaltungen. Starte eine, um eine Liga, ein Regelwerk oder ein Turnier einzurichten.')).toBeTruthy();
   });
 });
@@ -194,12 +202,12 @@ describe('AssistantDrawer: conversations', () => {
   it('lists the admin\'s conversations, with a hint when there are none', async () => {
     const user = userEvent.setup();
     mount();
-    await openDrawer(user);
+    openDrawer();
     expect(await screen.findByText(/No conversations yet/)).toBeTruthy();
 
     server.list = [summary(C1, { title: 'Spring league' }), summary(C2, { readOnly: true })];
     await user.keyboard('{Escape}');
-    await openDrawer(user);
+    openDrawer();
     expect(await screen.findByRole('button', { name: /Spring league/ })).toBeTruthy();
     expect(screen.getByRole('button', { name: /New conversation.*Read-only/ })).toBeTruthy();
   });
@@ -208,7 +216,7 @@ describe('AssistantDrawer: conversations', () => {
     nav.pathname = '/admin/rulesets/catalog/gen9ou';
     const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     await user.click(await within(panel).findByRole('button', { name: 'New conversation' }));
 
     expect(server.created).toEqual([{ seed: { area: 'rulesets' } }]);
@@ -223,7 +231,7 @@ describe('AssistantDrawer: conversations', () => {
     server.details.set(C1, detailOf(summary(C1, { title: 'Spring league' })));
     window.localStorage.setItem('plc.admin-assistant.conversation', C1);
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     expect(await within(panel).findByRole('heading', { name: 'Spring league' })).toBeTruthy();
 
     await user.click(within(panel).getByRole('button', { name: 'Back to conversations' }));
@@ -232,10 +240,9 @@ describe('AssistantDrawer: conversations', () => {
   });
 
   it('says a stored conversation is gone instead of showing an empty page', async () => {
-    const user = userEvent.setup();
     window.localStorage.setItem('plc.admin-assistant.conversation', C1);
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     expect(await within(panel).findByText('Conversation not found.')).toBeTruthy();
     expect(within(panel).getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
@@ -244,7 +251,7 @@ describe('AssistantDrawer: conversations', () => {
     server.listError = Response.json({ success: false, error: 'The assistant is not available.', code: 'agent_disabled' }, { status: 404 });
     const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     expect(await within(panel).findByText('The assistant is not available.')).toBeTruthy();
     server.listError = null;
     await user.click(within(panel).getByRole('button', { name: 'Try again' }));
@@ -260,7 +267,7 @@ describe('AssistantDrawer: conversations', () => {
       throw new DOMException('denied', 'SecurityError');
     });
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     await user.click(await within(panel).findByRole('button', { name: 'New conversation' }));
     expect(await within(panel).findByRole('textbox', { name: 'Message to the assistant' })).toBeTruthy();
     blocked.mockRestore();
@@ -274,7 +281,7 @@ describe('AssistantDrawer: it follows the admin around', () => {
     server.details.set(C1, detailOf(summary(C1, { title: 'Spring league' })));
     window.localStorage.setItem('plc.admin-assistant.conversation', C1);
     const view = mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     const box = await within(panel).findByRole('textbox', { name: 'Message to the assistant' });
     await user.type(box, 'half a thought');
 
@@ -290,7 +297,7 @@ describe('AssistantDrawer: it follows the admin around', () => {
   it('is resizable from 420 to 720 pixels by keyboard and remembers the width', async () => {
     const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     const handle = within(panel).getByRole('separator');
     expect(handle.getAttribute('aria-valuenow')).toBe('420');
     expect(handle.getAttribute('aria-valuemin')).toBe('420');
@@ -308,7 +315,7 @@ describe('AssistantDrawer: it follows the admin around', () => {
     await user.keyboard('{ArrowLeft}{ArrowLeft}');
     expect(window.localStorage.getItem('plc.admin-assistant.width')).toBe('468');
     await user.keyboard('{Escape}');
-    await openDrawer(user);
+    openDrawer();
     expect(within(dialog()).getByRole('separator').getAttribute('aria-valuenow')).toBe('468');
   });
 
@@ -316,11 +323,11 @@ describe('AssistantDrawer: it follows the admin around', () => {
     window.localStorage.setItem('plc.admin-assistant.width', '99999');
     const user = userEvent.setup();
     mount();
-    const panel = await openDrawer(user);
+    const panel = openDrawer();
     expect(within(panel).getByRole('separator').getAttribute('aria-valuenow')).toBe('720');
     await user.keyboard('{Escape}');
     window.localStorage.setItem('plc.admin-assistant.width', 'wide');
-    await openDrawer(user);
+    openDrawer();
     expect(within(dialog()).getByRole('separator').getAttribute('aria-valuenow')).toBe('720');
   });
 });
