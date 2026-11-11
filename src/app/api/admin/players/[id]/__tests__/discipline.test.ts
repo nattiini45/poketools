@@ -20,6 +20,10 @@ vi.mock('@/lib/supabase/queries/players', () => ({
   unsuspendPlayer: vi.fn(),
 }));
 
+vi.mock('@/lib/revalidation', () => ({
+  expirePlayerVisibilityReads: vi.fn(),
+}));
+
 vi.mock('@/lib/audit/log', () => ({
   logAuditEvent: vi.fn(),
 }));
@@ -30,6 +34,7 @@ import { requireAdmin, isSuperadminNow } from '@/lib/auth/helpers';
 import { resolveSuperadminPlayerId } from '@/lib/auth/superadmin';
 import { banPlayer, suspendPlayer, unsuspendPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
+import { expirePlayerVisibilityReads } from '@/lib/revalidation';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { IllegalTransitionError } from '@/lib/state-machine/machine';
 
@@ -94,6 +99,15 @@ describe('admin player discipline routes', () => {
       action: 'player.ban',
       metadata: { reason: 'Repeated no-shows' },
     }));
+  });
+
+  it('expires the player-visibility reads on ban, suspend and reinstate', async () => {
+    await suspendPost(request({ type: 'ban', ban_reason: 'Repeated no-shows' }), params);
+    await suspendPost(request({ type: 'suspend', suspended_until: new Date(Date.now() + 86_400_000).toISOString() }), params);
+    await unsuspendPost({} as NextRequest, params);
+
+    expect(expirePlayerVisibilityReads).toHaveBeenCalledTimes(3);
+    expect(expirePlayerVisibilityReads).toHaveBeenCalledWith('51541de2-cef5-42ee-8563-d412cf4563a2');
   });
 
   it('rejects invalid discipline payloads', async () => {

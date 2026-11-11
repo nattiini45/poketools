@@ -6,6 +6,10 @@ vi.mock('@/lib/supabase/queries/ratings', () => ({
   getLeaderboardEntries: vi.fn(),
 }));
 
+vi.mock('@/lib/cache/public-reads', () => ({
+  publicReads: { hiddenPlayerIds: vi.fn(async () => ['banned-1']) },
+}));
+
 import { GET } from '@/app/api/ratings/route';
 import { getLeaderboardEntries } from '@/lib/supabase/queries/ratings';
 
@@ -44,6 +48,15 @@ describe('GET /api/ratings', () => {
     expect(body.success).toBe(true);
     expect(body.data).toEqual([mockEntry]);
     expect(vi.mocked(getLeaderboardEntries)).toHaveBeenCalledWith(undefined);
+  });
+
+  it('leaves out players the public directory hides', async () => {
+    vi.mocked(getLeaderboardEntries).mockResolvedValue([mockEntry, { ...mockEntry, id: 'rating-2', player_id: 'banned-1' }]);
+
+    const response = await GET({ url: 'http://localhost:3000/api/ratings' } as unknown as NextRequest);
+    const body = await response.json();
+
+    expect(body.data).toEqual([mockEntry]);
   });
 
   it('passes valid min_games param', async () => {

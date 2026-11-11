@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getLeaderboardEntries } from '@/lib/supabase/queries/ratings';
+import { publicReads } from '@/lib/cache/public-reads';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { cacheHeaders } from '@/lib/api/cache';
 import type { ApiResult } from '@/types/api';
@@ -16,7 +18,8 @@ export async function GET(request: NextRequest) {
         ? parsedMinGames
         : undefined;
 
-    const leaderboard = await getLeaderboardEntries(minGames);
+    const [entries, hidden] = await Promise.all([getLeaderboardEntries(minGames), publicReads.hiddenPlayerIds()]);
+    const leaderboard = withoutHiddenPlayers(entries, hidden);
 
     return NextResponse.json<ApiResult<RatingLeaderboardEntry[]>>(
       { success: true, data: leaderboard },
