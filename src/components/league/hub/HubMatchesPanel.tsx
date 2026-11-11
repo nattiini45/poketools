@@ -59,7 +59,7 @@ function MatchRow({ match, copy }: { match: PublicMatch; copy: LeagueHubCopy }) 
     <li>
       <Link
         href={`/tournaments/${match.tournament_id}/matches/${match.id}`}
-        className={`grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 hover:bg-arena-elevated motion-reduce:transition-none sm:grid-cols-[7.5rem_1fr_auto_1fr_auto] ${FOCUS_RING}`}
+        className={`grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 hover:bg-arena-elevated motion-reduce:transition-none sm:grid-cols-[calc(var(--spacing)*30)_1fr_auto_1fr_auto] ${FOCUS_RING}`}
       >
         <span className="hidden text-xs text-arena-ink-secondary sm:block">
           {when ? <LocalTime value={when} preset="dateTime" /> : null}
@@ -69,7 +69,7 @@ function MatchRow({ match, copy }: { match: PublicMatch; copy: LeagueHubCopy }) 
         </span>
         <span
           title={result?.title}
-          className="min-w-[3.5rem] text-center font-heading font-bold tabular-nums text-arena-ink"
+          className="min-w-14 text-center font-heading font-bold tabular-nums text-arena-ink"
         >
           {result ? result.text : <span className="text-arena-ink-secondary">{copy.versus}</span>}
         </span>

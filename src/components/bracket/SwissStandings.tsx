@@ -18,7 +18,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
     {
       key: 'rank',
       header: '#',
-      width: '2.5rem',
+      width: 'calc(var(--spacing) * 10)',
       render: (_row: Standing, i: number) => (
         <span className="text-poke-text-muted">{i + 1}</span>
       ),

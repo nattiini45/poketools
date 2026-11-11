@@ -172,7 +172,7 @@ export default function LiveControls({
 
       {drafting ? (
         <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[16rem] flex-1 space-y-1">
+          <div className="min-w-64 flex-1 space-y-1">
             <label htmlFor={reasonId} className={LABEL}>
               {t('live.pauseReason')}
             </label>

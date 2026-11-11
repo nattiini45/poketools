@@ -199,7 +199,7 @@ function HoverPopover({
                 initial={{ opacity: 0, scale: 0.96, y: 4 }}
                 animate={{ opacity: 1, scale: 1, y: 0 }}
                 exit={{ opacity: 0, scale: 0.96, y: 4 }}
-                transition={SPRING.default}
+                transition={SPRING.moderate}
                 className={cn(
                   "fixed z-[9998] rounded-poke-lg bg-poke-surface border border-poke-border shadow-poke-lg overflow-hidden",
                   contentClassName

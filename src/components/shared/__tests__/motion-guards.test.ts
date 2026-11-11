@@ -5,6 +5,7 @@
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { isFrozenSource } from '@/lib/design/frozen-surfaces';
 
 const SRC = path.resolve(__dirname, '../../..');
 
@@ -67,5 +68,18 @@ describe('no hard-coded transition durations', () => {
     'components/ui/Table.tsx',
   ])('%s has no numeric duration literal', (relPath) => {
     expect(read(relPath)).not.toMatch(/\bduration:\s*[\d.]/);
+  });
+
+  it('has no literal transition or animation duration in a CSS module outside the frozen surfaces (use --motion-*)', () => {
+    const cssModules = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) return entry.name === '__tests__' ? [] : cssModules(full);
+        return entry.name.endsWith('.css') ? [full] : [];
+      });
+    const offenders = cssModules(path.join(SRC, 'components'))
+      .filter((file) => !isFrozenSource(rel(file)))
+      .filter((file) => /(transition|animation)(-duration)?\s*:[^;]*\b\d*\.?\d+m?s\b/.test(readFileSync(file, 'utf8')));
+    expect(offenders.map(rel)).toEqual([]);
   });
 });

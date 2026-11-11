@@ -10,10 +10,10 @@ interface PageContainerProps {
 }
 
 const maxWidthStyles = {
-  sm: "max-w-2xl",
-  md: "max-w-4xl",
-  lg: "max-w-5xl",
-  xl: "max-w-7xl",
+  sm: "max-w-[756px]",
+  md: "max-w-[1008px]",
+  lg: "max-w-[1152px]",
+  xl: "max-w-[1440px]",
   full: "",
 };
 
@@ -26,7 +26,7 @@ export default function PageContainer({
 }: PageContainerProps) {
   const hasTitleBlock = Boolean(title || subtitle);
   return (
-    <div className={cn(maxWidthStyles[maxWidth], "mx-auto space-y-6")}>
+    <div className={cn(maxWidthStyles[maxWidth], "mx-auto space-y-[27px]")}>
       {(title || action) && (
         <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
           {hasTitleBlock && (

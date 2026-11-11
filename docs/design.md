@@ -24,6 +24,15 @@ worlds: `sakura` (Sakura Park), `mountain` (Mountain Pass) and `clouds`
 the same; only their values change (see [Site palettes](#site-palettes)).
 League world pages keep their own world palette whatever the site palette.
 
+### Direction B (redesign F3)
+
+Since F3 the site's semantic layer is **Direction B, "Character Select"**
+(plan addendum D, Caspar 2026-11-09): sand ground, cream surfaces, one amber,
+four tier plates for the top ranks, skewed plates for active nav, tabs and
+buttons (F4). The B tokens below are the names new code uses; today's
+`poke-*` and shadcn names alias onto them on `<html>`, so pages restyle
+without edits. The frozen surfaces keep their look ([Frozen surfaces](#frozen-surfaces-and-the-16-px-root)).
+
 ## File Structure
 
 ```
@@ -41,6 +50,34 @@ the existing `--poke-*` palette in `globals.css`, so Radix/CVA internals render
 in the incumbent warm palette without raw hex in components.
 
 ## Tokens
+
+### Direction B tokens (`bg-page`, `text-fg`, `border-hairline`, …)
+
+Declared in `globals.css` (" Direction B tokens") and mapped to Tailwind in
+`@theme inline`. Every text pair reads at 4.5:1 or more on every ground
+(`b-tokens.test.ts`); washes are solid hex, never `/NN` modifiers (Q3).
+
+| Token | Sunlit | Moonlit | Use |
+|---|---|---|---|
+| `page` | `#EEE3CA` | `#0E0B06` | Page ground |
+| `surface` | `#FFF8E9` | `#171208` | Cards, nav bar |
+| `elevated` | `#FAEED6` | `#211A0D` | Table heads, hover base, search field |
+| `sunken` | `#E8D9B5` | `#2A2110` | Wells, the hero's arena sand |
+| `hairline` / `hairline-strong` | `#E3D2AC` / `#C9B183` | `#3A311C` / `#5C5133` | Borders |
+| `fg` / `fg-muted` | `#241A0C` / `#5C4E37` | `#F5EDDD` / `#C4B596` | The two text colours |
+| `accent-ink` / `accent-fill` / `accent-subtle` | `#9A4806` / `#CF660B` / `#F7E8CF` | `#FFD166` / `#F5B84B` / `#3B2D13` | The one amber: links and active text, primary button fill, selected wash. `accent-fill` is `#CF660B` instead of the render's `#C05E0A` so dark ink on it reads at 4.5:1 |
+| `tier-1…4` | `#F2C14E` · `#F4A97F` · `#8EB4EA` · `#9BD3A6` | `#F5B84B` · `#F09A6B` · `#6E9BE0` · `#5FBF7A` | Top-four rank plates; ink on a plate is always `tier-ink` (`#241A0C`) |
+| `tier-1…4-soft` | `#FCE7A6` · `#FBCFA6` · `#C3DBF6` · `#C4E9CD` | same | Soft fills (rank row wash) |
+| `live` / `win` / `loss` (+ `-bg`) | `#166534` / `#166534` on `#D7EED3` / `#A91B1B` on `#F6D9D4` | `#6EE7A0` / on `#253420` / `#F8A09B` on `#3B2920` | Status only |
+| `hover` / `selected` | `#F4EDDE` / `#E9E2D3` | `#241F15` / `#2D281D` | 5 % and 10 % of `fg` over `surface`, as solid hex |
+| `scrim` | `#241A0C` at 40 % | `#000` at 50 % | Modal and nav sheet backdrops (the one translucent token) |
+| `--skew` | `-10deg` | same | Every skewed plate (F4) |
+
+The legacy names alias onto the set: `poke-base` → `page`, `poke-surface` → `surface`, `poke-elevated` → `elevated`, `poke-text-primary` → `fg`, `poke-text-secondary` → `fg-muted`, `poke-border(-strong)` → `hairline(-strong)`, `poke-accent` → `accent-ink`, `poke-accent-light` → `accent-subtle`, `poke-live` → `live`, and shadcn's
+`--background` / `--foreground`. A site palette (`html[data-palette]`) still
+overrides these aliases; reducing it to the accent alone (D6) is a later step.
+The tables below describe the legacy names as they stand for themed worlds and
+site palettes.
 
 ### Color (`poke-*` in Tailwind: `bg-poke-*`, `text-poke-*`, `border-poke-*`)
 
@@ -103,11 +140,33 @@ charts and inline styles; prefer the CSS-variable-backed Tailwind classes
 wherever possible (they swap with the theme, the constants cannot).
 
 ### Typography
-- `font-heading` → `--font-heading-face` (Nunito, self-hosted variable woff2 via
-  `next/font/local`; fetched from Google at build time broke cold-cache CI
-  builds). Used for headings, badges, table headers, labels.
-- `font-body` → `--font-body-face` (DM Sans, self-hosted variable woff2). Body text.
-- Base font-size is 18px (112.5%) for readability at 100% OS scaling.
+
+Fonts (OFL, self-hosted woff2 through `next/font/local`, so the build never fetches a font):
+
+- `font-heading` → Geist Pixel Square: display and title text, the wordmark. One
+  weight, so `font-synthesis-weight: none` keeps it from being faked bold.
+- `font-body` → Geist Sans (variable, 100–900): everything else, at weights 400 and 550.
+- `font-mono` → Geist Mono (variable): pure number columns.
+- Emoji fall back to the system emoji font (Geist has none).
+- Frozen roots keep Nunito, DM Sans and the system mono stack: `[data-frozen]`
+  re-points `--font-heading-face`, `--font-body-face` and `--font-mono`
+  (`globals.css`, "Fonts").
+
+Type roles (`typeClass(role)` in `src/lib/design/type.ts`; the size utilities
+are `text-<role>`, and `cn()` merges them as font sizes, so
+`cn('text-caption', 'text-fg-muted')` keeps both):
+
+| Role | Size / line height | Face |
+|---|---|---|
+| display | 28 / 34 | Geist Pixel Square |
+| title | 18 / 24 | Geist Pixel Square |
+| subtitle | 15 / 22 | Geist Sans 550 |
+| body | 14 / 20 | Geist Sans |
+| caption | 12 / 16 | Geist Sans |
+| micro | 11 / 14 | Geist Sans (the floor) |
+
+The root is 16 px (`html { font-size: 100% }`), except on draft-room pages
+([Frozen surfaces](#frozen-surfaces-and-the-16-px-root)).
 
 ### Shape & elevation
 - `rounded-poke-{sm,md,lg,xl}` → `0.375rem / 0.5rem / 0.75rem / 1rem`
@@ -149,9 +208,13 @@ duration or easing curve in a component.
 | `EASE.standard` | `0.4, 0, 0.2, 1` | Moves that start and end on screen |
 | `OFFSET.{sm,md,lg}` | 8 / 16 / 24px | Entrance translation; nothing travels further |
 | `STAGGER.{desktop,mobile}` | 60 / 40ms | Between siblings in a list |
-| `SPRING.default` | `bounce 0`, 350ms | Every UI spring unless a gesture preceded it |
+| `SPRING.fast` | `bounce 0`, 80ms | Hover, focus rings, fades, tooltips, selection indicators |
+| `SPRING.moderate` | `bounce 0`, 160ms | Short travel: indicators, switch thumbs, popovers, drawers |
+| `SPRING.slow` | `bounce 0.12`, 240ms | Large surfaces: dialogs, side panels, stepped flows |
+| `SPRING_EXIT.{fast,moderate,slow}` | 60 / 120 / 160ms tweens | The exit paired with each speed |
 | `SPRING.momentum` | `bounce 0.2`, 400ms | Only after a flick or drag carried velocity |
-| `SPRING.surface` | `bounce 0.05`, 450ms | Sheets and large panels |
+| `SPRING.default` | `bounce 0`, 350ms | The pre-F3 default, for the frozen world HUD only |
+| `--motion-fast` / `--motion-moderate` / `--motion-slow` | 80 / 160 / 240ms | The same speeds for CSS transitions. A CSS module outside the frozen surfaces may not hard-code a duration (`motion-guards.test.ts`) |
 
 Rules:
 
@@ -183,6 +246,42 @@ Rules:
 `WORLD_MOTION` in the same file carries the route-world constants (camera
 damping, pointer parallax clamp, sway and bob amplitudes, reveal duration) so
 the 3D layer obeys the same grammar as the DOM. See the route-world design spec (maintainer-only; not in this repo) §4.4.
+
+## Frozen surfaces and the 16 px root
+
+The draft rooms, themed route worlds, broadcast overlays, EPB animations
+(`CrystalXPBar`, `EvolutionRosterCard`), the match highlight card and the social
+images keep their pre-redesign pixels (plan addendum B). Their roots carry
+`data-frozen="<surface>"` (no styles), and the visual harness holds them to zero
+diff (`docs/visual-harness.md`). They were built against an 18 px root, so:
+
+- `frozen-pins.css` (F1) pins the site colours a frozen root inherits.
+- `frozen-scale.css` (F3, generated by `npx --no-install tsx scripts/design/frozen-scale.mts`,
+  checked by `frozen-scale.test.ts`) re-declares every rem-valued theme token
+  (`--spacing`, `--text-*`, `--radius*`, `--container-*`) at 18 px on `[data-frozen]`,
+  and the outermost root's font size. Tailwind 4 utilities read these
+  variables where they are used, so frozen subtrees keep their geometry. Rerun
+  the script after changing a rem token.
+- Inside frozen code, write lengths through the spacing scale (`min-w-112`,
+  `calc(var(--spacing)*30)`), never an arbitrary `rem` value: those cannot be pinned.
+  Plain `rounded` is one spacing step for the same reason.
+- Draft-room pages keep the pre-F3 site look (`html:has([data-frozen="draft-room"])`): the
+  18 px root, the plaza ground and the Nunito / DM Sans page font. The room fills
+  the page under the nav and leaves its ground transparent, and its sticky clock
+  bar paints pixel-identical only under the root size and page font it was built
+  with, even with identical geometry.
+- The containers that size a frozen root keep their pre-F3 pixel widths until
+  their track redesigns them: the layout `<main>` (1440 px, 18/27/36 px gutters),
+  `PageContainer` (756/1008/1152/1440 px) and the draft board's roster grid gap.
+- Fonts: see [Typography](#typography).
+
+## Guardrails
+
+`npm run design:guards` (`scripts/design/check-design-guards.mts`) reports, at warn level
+and outside the frozen surfaces (`src/lib/design/frozen-surfaces.ts`): text below 11
+px, `uppercase` and `tracking-*`, static Tailwind palette colours, and raw
+`<select>`. Pass `--paths "<files>"` to list the hits in the files you touched;
+new code should add none.
 
 ## UI Primitives — `src/components/ui/`
 

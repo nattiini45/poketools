@@ -73,7 +73,7 @@ export default function HubStandingsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-[28rem] text-sm">
+      <table className="w-full min-w-112 text-sm">
         <caption className="sr-only">{caption}</caption>
         <thead className={TABLE_HEAD}>
           <tr>

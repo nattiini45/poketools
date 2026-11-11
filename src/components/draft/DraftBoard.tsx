@@ -557,7 +557,7 @@ export default function DraftBoard({
       {/* Rosters grid */}
       <div>
         <h3 className="font-heading font-semibold text-lg text-poke-text-primary mb-3">{t('board.rosters')}</h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-[18px]">
           {Object.entries(state.rosters).map(([playerId, pokemon]) => {
             const playerTrackers = evoTrackers[playerId] ?? [];
 
