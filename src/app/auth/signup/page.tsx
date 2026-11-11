@@ -10,11 +10,11 @@ export default async function SignUpPage() {
   const t = await getT(authMessages);
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-1">
+      <h1 className="font-heading text-display text-fg mb-4">
         {t('signUp.title')}
       </h1>
       {discordOAuthEnabled() && (
-        <p className="text-sm text-poke-text-secondary mb-4">{t('signUp.discordHint')}</p>
+        <p className="text-sm text-fg-muted mb-4">{t('signUp.discordHint')}</p>
       )}
       <SignUpForm />
     </Card>
