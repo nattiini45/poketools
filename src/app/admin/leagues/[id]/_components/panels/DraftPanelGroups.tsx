@@ -1,3 +1,4 @@
+import { LEAGUE_ADMIN_RULES_SECTION } from '@/lib/league-admin/tabs';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import Section from '@/components/ui/Section';
@@ -172,7 +173,7 @@ export async function groupedDraftPanel(
         </ul>
       );
     } else if (!league.point_buy_list_id) {
-      body = <p className={NOTE}>{t.rich('draftRoom.bindListFirst', { link: tabLink('rules') })}</p>;
+      body = <p className={NOTE}>{t.rich('draftRoom.bindListFirst', { link: tabLink('format', LEAGUE_ADMIN_RULES_SECTION) })}</p>;
     } else {
       const gate = groupDraftGate({
         memberCount: group.player_ids.length,

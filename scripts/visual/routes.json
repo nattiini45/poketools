@@ -354,6 +354,81 @@
       ]
     },
     {
+      "id": "admin-league-custom-format",
+      "url": "/admin/leagues/{leagueCustom}?tab=format",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueCustom"
+      ]
+    },
+    {
+      "id": "admin-league-epb",
+      "url": "/admin/leagues/{leagueEpb}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-epb-rules",
+      "url": "/admin/leagues/{leagueEpb}?tab=rules",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-settings",
+      "url": "/admin/leagues/{leagueSakura}?tab=settings",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "admin-league-danger",
+      "url": "/admin/leagues/{leagueSakura}?tab=danger",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
       "id": "admin-matches",
       "url": "/admin/matches",
       "fullPage": true,

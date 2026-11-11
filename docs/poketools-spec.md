@@ -882,10 +882,12 @@ The Plan Team editor has no page of its own: `/dashboard/match-prep/[mid]` mount
 ```
 /admin                         Admin overview
 /admin/leagues/new             Create league
-/admin/leagues/[id]            League admin page in URL tabs (?tab=): Overview, Participants, Draft,
-                               Phases (PhaseTimeline; the old ?tab=schedule opens it), Rules, Format
-                               (read-only generated outline and rules text), Live (custom leagues: checks
-                               inbox, adjustments, actions, relations, challenges), Settings, Danger zone;
+/admin/leagues/[id]            League workspace in URL tabs (?tab=): Overview, Participants, Phases
+                               (PhaseTimeline), Format and rules (read-only generated outline and rules
+                               text, then the rules editors), Draft, Live (custom leagues: checks inbox,
+                               adjustments, actions, relations, challenges), Settings (ends with the
+                               danger zone); the old ?tab=schedule, ?tab=rules and ?tab=danger open
+                               Phases, Format and rules, and Settings;
                                which tabs a format shows and what each holds: docs/admin.md
                                (League admin page)
 /admin/leagues/[id]/phases/[phaseId]  Phase workspace: PhaseForm, SeedingTable, PhaseGroupsPanel, RoundManager
