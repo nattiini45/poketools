@@ -1,10 +1,9 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import ItemIcon from '@/components/ui/ItemIcon';
-import SkewPlate from '@/components/ui/SkewPlate';
+import LinkTabs from '@/components/ui/LinkTabs';
 import WikiSearchBar from '@/components/wiki/WikiSearchBar';
 import { useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
@@ -24,18 +23,13 @@ const FOCUS_RING =
 /**
  * The wiki's header on every wiki page and on `/pokemon/<name>`: the title with the Weakness Policy icon, the
  * site-wide wiki search, and the section strip as a row of skewed tabs whose amber underside glides to the
- * current section. On a phone the strip scrolls sideways and brings the current tab into view.
+ * current section (`LinkTabs`).
  */
 export default function WikiHeader() {
   const t = useT(wikiMessages);
   const pathname = usePathname() ?? '';
   const isHome = pathname === '/wiki';
   const active = SECTIONS.find((section) => section.match.some((prefix) => pathname.startsWith(prefix)))?.key;
-  const activeRef = useRef<HTMLAnchorElement | null>(null);
-
-  useEffect(() => {
-    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [active]);
 
   return (
     <header className="flex flex-col gap-4">
@@ -55,27 +49,12 @@ export default function WikiHeader() {
         </div>
       </div>
 
-      <nav aria-label={t('chrome.sections')} className="scrollbar-hide -mx-[18px] overflow-x-auto px-[18px] sm:-mx-1.5 sm:px-1.5">
-        <ul className="flex w-max gap-2 py-1">
-          {SECTIONS.map((section) => {
-            const isActive = section.key === active;
-            return (
-              <li key={section.key}>
-                <Link
-                  ref={isActive ? activeRef : undefined}
-                  href={section.href}
-                  aria-current={isActive ? 'page' : undefined}
-                  className="block rounded-poke-sm"
-                >
-                  <SkewPlate variant="tab" active={isActive} glideId="wiki-sections" className="min-h-11 px-4 text-body">
-                    {t(`home.categories.${section.key}.label`)}
-                  </SkewPlate>
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <LinkTabs
+        tabs={SECTIONS.map((section) => ({ key: section.key, href: section.href, label: t(`home.categories.${section.key}.label`) }))}
+        activeKey={active ?? ''}
+        label={t('chrome.sections')}
+        glideId="wiki-sections"
+      />
     </header>
   );
 }
