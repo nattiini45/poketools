@@ -12,12 +12,6 @@ import PageContainer from '../PageContainer';
 
 const ACTION = <button type="button" data-action="1">Act</button>;
 
-function classOf(html: string, marker: string): string[] {
-  const tag = html.match(new RegExp(`<[a-z]+[^>]*${marker}[^>]*>`))?.[0] ?? '';
-  const cls = tag.match(/class="([^"]*)"/)?.[1] ?? '';
-  return cls.split(/\s+/).filter(Boolean);
-}
-
 /** Class list of the element that directly wraps the action button. */
 function actionWrapperClasses(html: string): string[] {
   const m = html.match(/<div class="([^"]*)"><button[^>]*data-action/);
