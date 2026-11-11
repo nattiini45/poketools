@@ -20,6 +20,19 @@ export default {
     archived: '{subtitle} · Archived',
     testBadge: 'Test',
   },
+  /**
+   * The workspace header's one primary action (`src/lib/league-admin/primary-action.ts`). `activate` writes the
+   * status; the others link to the tab where the step is done.
+   */
+  action: {
+    activate: 'Activate league',
+    attachFormat: 'Attach a format',
+    addParticipants: 'Add participants',
+    addPhase: 'Add a phase',
+    manageRounds: 'Manage rounds',
+    reviewChecks: 'Review checks',
+    publicPage: 'Open public page',
+  },
   /** The tab strip (`src/lib/league-admin/tabs.ts`); each tab is a link (`?tab=`). */
   tabs: {
     /** The tab strip's `<nav>` landmark name. */
@@ -29,13 +42,15 @@ export default {
     draft: 'Draft',
     /** The league's phases (there is no league-scoped match list). Old `?tab=schedule` links still open it. */
     phases: 'Phases',
-    rules: 'Rules',
-    /** The read-only Format Studio view of the league (generated outline, rules text, diagnostics). */
-    format: 'Format',
+    /**
+     * The Format Studio view of the league (generated outline, rules text, diagnostics) and, for the formats that
+     * have them, the rules editors. Old `?tab=rules` links open it at the rules editors.
+     */
+    format: 'Format and rules',
     /** The running format of a custom league: checks inbox, adjustments, player actions, relations, challenges. */
     live: 'Live format',
+    /** Ends with the danger zone; old `?tab=danger` links open it there. */
     settings: 'Settings',
-    danger: 'Danger zone',
     /** Native confirm before a tab switch while the open tab holds unsaved input (forms marked `data-unsaved`). */
     unsavedConfirm: 'This tab has unsaved changes. Switch tabs and lose them?',
   },
@@ -49,8 +64,14 @@ export default {
     ruleset: 'Ruleset',
     noRuleset: 'None',
     participants: 'Participants',
+    /** Accessible name of the link on the participants count. */
+    openParticipants: 'Open the participants',
     phases: 'Phases',
+    /** Accessible name of the link on the phases count. */
+    openPhases: 'Open the phases',
     status: 'Status',
+    /** The league's content language (Discord, social posts, stored reports); the value is the language's own name. */
+    language: 'Content language',
     dates: 'Dates',
     noDates: 'Not set',
     /** `{start}` / `{end}` = calendar dates. */
@@ -60,6 +81,25 @@ export default {
     /** Link beside the dates fact: opens the Settings tab, where the dates are edited. */
     editDates: 'Edit dates',
     publicPage: 'Open the public league page',
+    /** What the league needs from its admin, decided from the league row (`src/lib/league-admin/attention.ts`). */
+    attention: {
+      title: 'Needs attention',
+      none: 'Nothing needs you here right now.',
+      items: {
+        archived: 'This league is archived. It is hidden from the active lists.',
+        noParticipants: 'The league has no participants yet.',
+        noPhases: 'The league has no phase yet, so no round can be generated.',
+        noRuleset: 'No battle ruleset is set for the league.',
+        noStartDate: 'The league has no start date.',
+      },
+      actions: {
+        archived: 'Open the danger zone',
+        noParticipants: 'Add participants',
+        noPhases: 'Add a phase',
+        noRuleset: 'Choose a ruleset',
+        noStartDate: 'Set the dates',
+      },
+    },
   },
   danger: {
     title: 'Danger zone',
@@ -197,9 +237,9 @@ export default {
       create: 'Create Draft Room',
       createFailed: 'Failed to create the Draft Room',
     },
-    /** `<link>` = the Rules tab, where the point-buy list is bound. */
+    /** `<link>` = the rules editors of the Format and rules tab, where the point-buy list is bound. */
     bindListFirst:
-      'Bind a point-buy list on the <link>Rules</link> tab first. It defines the evolution lines available in the draft.',
+      'Bind a point-buy list on the <link>Format and rules</link> tab first. It defines the evolution lines available in the draft.',
     /** EPB: the season has no participants, so the draft would have no seats. `<link>` = the Participants tab. */
     addParticipantsFirst: 'Add participants on the <link>Participants</link> tab first. Each one gets a seat in the draft.',
     /**
