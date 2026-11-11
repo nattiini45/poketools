@@ -21,8 +21,8 @@
 import { useEffect, useReducer, useRef, useState, type ReactNode } from 'react';
 import * as Dialog from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
-import Button from '@/components/ui/Button';
-import type { ButtonVariant } from '@/components/ui/buttonStyles';
+import Button from '@/components/ui/frozen/Button';
+import type { ButtonVariant } from '@/components/ui/frozen/buttonStyles';
 import { useT } from '@/i18n/client';
 import { commonMessages } from '@/i18n/messages/common';
 import { uiMessages } from '@/i18n/messages/ui';

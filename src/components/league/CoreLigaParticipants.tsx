@@ -1,6 +1,6 @@
 'use client';
 
-import Card from '@/components/ui/Card';
+import Card from '@/components/ui/frozen/Card';
 import TypeSprite from '@/components/shared/TypeSprite';
 import { useT } from '@/i18n/client';
 import { leagueRosterMessages } from '@/i18n/messages/league-roster';

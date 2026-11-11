@@ -27,6 +27,7 @@ vi.mock('../AdminDataTools', () => ({
 import AdminDataPage from '../page';
 import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
 import FormatDriftReport, { FormatDriftReportView } from '../FormatDriftReport';
+import { buttonLabelled } from '@/test/button-markup';
 
 const PACK: TiebreakerStep[] = ['match_points', 'evolution_points', 'kill_difference', 'head_to_head', 'decision_match'];
 const L1 = '5e150000-0000-4000-8000-000000000001';
@@ -101,20 +102,20 @@ describe('FormatDriftReportView', () => {
 
   it('loading: disables the button and says it is running', () => {
     const html = view({ status: 'loading' });
-    expect(html).toMatch(/<button[^>]*disabled[^>]*>Running…<\/button>/);
+    expect(buttonLabelled(html, 'Running…')?.disabled).toBe(true);
   });
 
   it('failed: shows the fallback error text and a Retry button', () => {
     const html = view({ status: 'failed', error: { error: 'Failed to build the format drift report' } });
     expect(html).toContain('role="alert"');
     expect(html).toContain('Failed to build the format drift report');
-    expect(html).toContain('>Retry</button>');
+    expect(buttonLabelled(html, 'Retry')).toBeDefined();
   });
 
   it('failed: renders a catalogued error code in the viewer language', () => {
     const html = view({ status: 'failed', error: { code: 'network_error' } }, undefined, 'de');
     expect(html).toContain('role="alert"');
-    expect(html).toContain('>Erneut versuchen</button>');
+    expect(buttonLabelled(html, 'Erneut versuchen')).toBeDefined();
     expect(html).not.toContain('network_error');
   });
 

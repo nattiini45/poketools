@@ -10,6 +10,7 @@ import type { RulesetOption } from '@/lib/ruleset-studio/library-types';
 import type { LeagueSettingsValues } from '@/lib/league-admin/settings-patch';
 import LeagueSettingsForm from '../LeagueSettingsForm';
 import { makeRulesetOption } from '@/test/ruleset-fixtures';
+import { buttonLabelled } from '@/test/button-markup';
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
@@ -107,7 +108,7 @@ describe('LeagueSettingsForm', () => {
     const html = render(CLASSIC, null);
 
     expect(submitButton(html)).toContain(' disabled=""');
-    expect(html).toContain('Save changes</button>');
+    expect(buttonLabelled(html, 'Save changes')).toBeDefined();
     expect(html).not.toContain('data-unsaved');
     expect(html).not.toContain('The end date must not be before the start date.');
   });

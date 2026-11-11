@@ -10,13 +10,14 @@ import type { DraftDocument } from '@/lib/format-studio/editor/document';
 import { addEdge, addSelect, removeStage, updateEdge } from '@/lib/format-studio/editor/ops';
 import EdgesInspector from '../../editor/inspectors/EdgesInspector';
 import { compiled, esc, expectLabelledControls, expectNoLeftovers, expectUniqueIds, presetDoc, stageNameOf } from './test-helpers';
+import { buttonLabelled } from '@/test/button-markup';
 
 function render(doc: DraftDocument, locale: Locale = 'en') {
   return renderWithI18n(<EdgesInspector doc={doc} diagnostics={compiled(doc).diagnostics} onChange={() => undefined} />, { locale });
 }
 
 /** The Add rule button, disabled (an icon, then the label). */
-const ADD_DISABLED = /<button[^>]*disabled=""[^>]*>(?:<svg[\s\S]*?<\/svg>)?Add advancement rule/;
+const addDisabled = (html: string) => buttonLabelled(html, 'Add advancement rule')?.disabled;
 
 const THRESHOLD: Expr = { k: 'cmp', op: '>=', a: { k: 'ref', name: 'points', t: 'number' }, b: { k: 'num', v: 6 } };
 
@@ -84,7 +85,7 @@ describe('EdgesInspector', () => {
     const { doc } = removeStage(presetDoc(), 1);
     const html = render(doc);
     expect(html).toContain('Advancement connects two stages. Add a second stage first.');
-    expect(html).toMatch(ADD_DISABLED);
+    expect(addDisabled(html)).toBe(true);
     const german = render(doc, 'de');
     expect(german).toContain('Weiterkommen verbindet zwei Stages.');
   });
@@ -93,6 +94,6 @@ describe('EdgesInspector', () => {
     const doc: DraftDocument = { ...presetDoc(), edges: [] };
     const html = render(doc);
     expect(html).toContain('No advancement rules yet.');
-    expect(html).not.toMatch(ADD_DISABLED);
+    expect(addDisabled(html)).toBe(false);
   });
 });

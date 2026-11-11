@@ -1,6 +1,11 @@
 'use client';
 
 import { useState, type ReactNode } from 'react';
+import SiteBadge from '@/components/ui/Badge';
+import SiteButton from '@/components/ui/Button';
+import SiteCard from '@/components/ui/Card';
+import SiteInput from '@/components/ui/Input';
+import SiteTextarea from '@/components/ui/Textarea';
 import ItemIcon from '@/components/ui/ItemIcon';
 import SkewChip from '@/components/ui/SkewChip';
 import SkewPlate from '@/components/ui/SkewPlate';
@@ -146,6 +151,41 @@ export default function UiPreviewClient() {
           <BannerTitle>Round 5 is open</BannerTitle>
           <BannerDescription>Submit your result by Sunday, 18:00.</BannerDescription>
         </Banner>
+      </Section>
+
+      <Section id="site-primitives" title="Site primitives on @fluid">
+        <div className="flex flex-wrap items-center gap-2">
+          {(['primary', 'secondary', 'ghost', 'danger', 'success'] as const).map((variant) => (
+            <SiteButton key={variant} variant={variant}>
+              {variant}
+            </SiteButton>
+          ))}
+          <SiteButton size="sm">sm</SiteButton>
+          <SiteButton loading>loading</SiteButton>
+          <SiteButton disabled>disabled</SiteButton>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {(['default', 'accent', 'red', 'blue', 'green', 'yellow', 'purple', 'gray'] as const).map((variant) => (
+            <SiteBadge key={variant} variant={variant}>
+              {variant}
+            </SiteBadge>
+          ))}
+          <SiteBadge size="md">md</SiteBadge>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(['default', 'elevated', 'outlined', 'muted'] as const).map((variant) => (
+            <SiteCard key={variant} variant={variant} hover={variant === 'default'}>
+              <p className={typeClass('subtitle')}>{variant}</p>
+              <p className="text-caption text-fg-muted">Sakura Cup, round 5 of 6</p>
+            </SiteCard>
+          ))}
+        </div>
+        <div className="grid max-w-md gap-3">
+          <SiteInput label="League name" hint="Shown on the league page" placeholder="Sakura Cup" />
+          <SiteInput label="Start date" type="date" />
+          <SiteInput label="Showdown name" error="This name is already taken" defaultValue="ash" />
+          <SiteTextarea label="Rules note" placeholder="Bo3, no Tera" />
+        </div>
       </Section>
 
       <Section id="fluid-table" title="@fluid table">

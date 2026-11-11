@@ -9,6 +9,7 @@ import { AdminMatchBulkDialogBody, BulkResultsPanel, buildBatchBody } from '../A
 import { summarizeBulkResults, type BulkItemResult } from '@/lib/admin/match-bulk';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { GameSummary } from '@/types/match';
+import { buttonLabelled } from '@/test/button-markup';
 
 const P1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const P2 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
@@ -332,7 +333,7 @@ describe('BulkResultsPanel', () => {
     expect(skippedClass).not.toContain('text-poke-danger');
     expect(skippedText).toContain('Mara4 vs Joel4: Only matches awaiting confirmation can be confirmed in bulk.');
 
-    expect(html).toContain('>Close</button>');
+    expect(buttonLabelled(html, 'Close')).toBeDefined();
   });
 
   it('lists nothing but the summary when every match was done', () => {
@@ -351,6 +352,6 @@ describe('BulkResultsPanel', () => {
     expect(html).toContain('Mara3 vs. Joel3: Das Spiel hat sich während der Aktion geändert');
     expect(html).toContain('Mara4 vs. Joel4: Nur Spiele, die auf Bestätigung warten');
     expect(html).toContain('Mara2 vs. Joel2: Das Ergebnis wurde bestätigt, aber 2 Folgeschritte sind fehlgeschlagen.');
-    expect(html).toContain('>Schließen</button>');
+    expect(buttonLabelled(html, 'Schließen')).toBeDefined();
   });
 });

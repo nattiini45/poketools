@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import Card from '@/components/ui/Card';
+import Card from '@/components/ui/frozen/Card';
 import Alert from '@/components/ui/Alert';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useT } from '@/i18n/client';
 import { errorsMatches } from '@/i18n/messages/errors';

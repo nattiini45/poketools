@@ -122,7 +122,7 @@ describe('NumberField', () => {
   it('a field without a finding or hint has no aria-describedby', () => {
     const html = renderWithI18n(<NumberField pointer="/stages/0/pairing/legs" label="Legs" value={2} min={1} max={4} onCommit={() => undefined} />);
     expect(html).not.toContain('aria-describedby');
-    expect(html).not.toContain('aria-invalid');
+    expect(html).not.toMatch(/\saria-invalid="/);
   });
 
   it('shows the range hint for a value outside the range and marks the control invalid', () => {

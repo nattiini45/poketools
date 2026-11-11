@@ -29,6 +29,7 @@ import { MatchListRow } from '../AdminMatchRowCard';
 import type { AdminMatchRow } from '@/lib/supabase/queries/matches';
 import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import { ADMIN_MATCH_MAX_PAGE, parseMatchListUrl } from '@/lib/admin/match-list';
+import { buttonLabelled } from '@/test/button-markup';
 
 const LEAGUE = '11111111-1111-4111-8111-111111111111';
 const PHASE = '22222222-2222-4222-8222-222222222222';
@@ -354,11 +355,11 @@ describe('MatchListSelectionHeader', () => {
   it('disables Export while it runs and for an empty set', () => {
     const working = render({ exportState: { kind: 'working' } });
     expect(working).toContain('Exporting...');
-    expect(working).toMatch(/<button[^>]*disabled=""[^>]*>Exporting\.\.\.<\/button>/);
+    expect(buttonLabelled(working, 'Exporting...')?.disabled).toBe(true);
     // The status region is mounted for every state, so its text is announced when it appears.
     expect(working).toMatch(/<div role="status" class="sr-only"><p>Exporting\.\.\.<\/p><\/div>/);
     expect(render()).toContain('<div role="status" class="sr-only"></div>');
-    expect(render({ total: 0 })).toMatch(/<button[^>]*disabled=""[^>]*>Export 0 matches \(CSV\)<\/button>/);
+    expect(buttonLabelled(render({ total: 0 }), 'Export 0 matches (CSV)')?.disabled).toBe(true);
     expect(render()).not.toMatch(/<button[^>]*disabled=""/);
   });
 

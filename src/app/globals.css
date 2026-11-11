@@ -2885,6 +2885,19 @@ html.world-route-live .world-nav-hud {
   }
 }
 
+/* light-dark() in the @fluid classes compiles to Lightning CSS's --lightningcss-light / --lightningcss-dark pair,
+   which only a color-scheme declaration sets. The theme switches through data-theme without color-scheme (native
+   controls on the frozen surfaces keep their look), so the pair is set here. */
+:root {
+  --lightningcss-light: initial;
+  --lightningcss-dark: ;
+}
+
+:root[data-theme="dark"] {
+  --lightningcss-light: ;
+  --lightningcss-dark: initial;
+}
+
 :root {
   --active: #F0E8DA;
   --destructive-light: var(--loss-bg);

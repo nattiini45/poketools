@@ -8,7 +8,7 @@
  * caller then navigates or refreshes, the dialog closes either way).
  */
 import { useState } from 'react';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';

@@ -11,6 +11,7 @@ import type { Locale } from '@/i18n/config';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { formatStudioEditorMessages } from '@/i18n/messages/format-studio/editor';
 import { expectNoLeftovers } from './test-helpers';
+import { buttonLabelled } from '@/test/button-markup';
 
 /** The shared dialog body with the Format Studio's words. */
 function ConflictDialogBody(props: Omit<ComponentProps<typeof ShellConflictDialogBody>, 'text'>) {
@@ -79,6 +80,6 @@ describe('ConflictDialogBody', () => {
   });
 
   it('Cancel is disabled while a reload runs', () => {
-    expect(render({ busy: true })).toMatch(/<button[^>]*disabled=""[^>]*>Cancel</);
+    expect(buttonLabelled(render({ busy: true }), 'Cancel')?.disabled).toBe(true);
   });
 });

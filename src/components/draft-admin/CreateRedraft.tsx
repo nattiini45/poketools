@@ -12,7 +12,7 @@
  */
 import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';

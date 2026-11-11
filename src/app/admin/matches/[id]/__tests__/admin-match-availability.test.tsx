@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import type { GameSummary, MatchStatus } from '@/types/match';
 import AdminMatchActions from '../AdminMatchActions';
+import { buttonsIn } from '@/test/button-markup';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -41,7 +42,7 @@ function render(status: MatchStatus, games: GameSummary[]): string {
 function shown(html: string) {
   return {
     manageGames: html.includes('Reset / Manage Games'),
-    resetButtons: html.split('Reset Match</button>').length - 1,
+    resetButtons: buttonsIn(html).filter((button) => button.label === 'Reset Match').length,
     override: html.includes('Admin Override'),
     complete: html.includes('Complete Match'),
     markDisputed: html.includes('Mark Disputed'),

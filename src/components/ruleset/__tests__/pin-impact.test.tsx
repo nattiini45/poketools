@@ -21,6 +21,7 @@ import PinConfirmDialog from '../PinConfirmDialog';
 import PinImpactNotice from '../PinImpactNotice';
 import { describeChange } from '../pin-change-text';
 import { createPinImpactLoader, type PinImpactState } from '../use-pin-impact';
+import { buttonLabelled } from '@/test/button-markup';
 
 const IMPACT: PinImpact = {
   version_no: 3,
@@ -211,7 +212,7 @@ describe('PinConfirmDialog', () => {
         <p>“Summer League” has already started.</p>
       </PinConfirmDialog>,
     );
-  const confirmButton = (html: string) => /<button[^>]*>Update to version 3<\/button>/.exec(html)?.[0] ?? '';
+  const confirmButton = (html: string) => buttonLabelled(html, 'Update to version 3')?.html ?? '';
 
   it('is closed when it is not asked for', () => {
     expect(render({ open: false })).toBe('');
@@ -222,7 +223,7 @@ describe('PinConfirmDialog', () => {
     expect(html).toContain('aria-label="Update a running league?"');
     expect(html.indexOf('has already started')).toBeLessThan(html.indexOf('4 of 12 submitted teams'));
     expect(html.indexOf('4 of 12 submitted teams')).toBeLessThan(html.indexOf('Update to version 3'));
-    expect(html).toContain('>Cancel</button>');
+    expect(buttonLabelled(html, 'Cancel')).toBeDefined();
   });
 
   it('holds Confirm back while the teams are being counted, so the number is on screen before the decision', () => {
@@ -237,7 +238,7 @@ describe('PinConfirmDialog', () => {
   it('rests both buttons while the move is under way', () => {
     const html = render({ busy: true, impact: { status: 'ready', impact: IMPACT } });
     expect(confirmButton(html)).toContain(' disabled=""');
-    expect(/<button[^>]*>Cancel<\/button>/.exec(html)?.[0]).toContain(' disabled=""');
+    expect(buttonLabelled(html, 'Cancel')?.disabled).toBe(true);
   });
 });
 

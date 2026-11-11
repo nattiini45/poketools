@@ -14,14 +14,15 @@ const maskIds = (html: string) => html.replace(/_R_[0-9a-z]+_/g, 'ID');
 
 const BUTTON =
   'class="inline-flex min-h-11 items-center rounded-poke-md focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50 motion-safe:transition-opacity sm:min-h-0"';
+const BADGE =
+  'inline-flex items-center whitespace-nowrap h-5 px-2 text-[length:var(--fs-caption-compact,11px)] leading-[var(--lh-caption-compact,14px)] gap-1 rounded-lg';
 const CURRENT_BADGE = (variant: string, text: string) =>
-  `<span class="inline-flex items-center border font-heading font-semibold rounded-full ${variant} px-2 py-0.5 text-xs ring-2 ring-offset-1 ring-poke-border">${text}</span>`;
+  `<span class="${BADGE} ring-2 ring-offset-1 ring-poke-border" style="${variant}"><span class="[text-box:trim-both_cap_alphabetic]">${text}</span></span>`;
 const OTHER_BADGE = (variant: string, text: string) =>
-  `<span class="inline-flex items-center border font-heading font-semibold rounded-full ${variant} px-2 py-0.5 text-xs opacity-40 hover:opacity-70 cursor-pointer">${text}</span>`;
-const GRAY = 'border-poke-border bg-poke-muted text-poke-text-muted';
-const GREEN = 'border-poke-green/30 bg-poke-green-light text-poke-green';
-const BLUE =
-  'border-poke-blue/30 bg-poke-blue-light text-poke-blue dark:border-poke-blue/40';
+  `<span class="${BADGE} opacity-40 hover:opacity-70 cursor-pointer" style="${variant}"><span class="[text-box:trim-both_cap_alphabetic]">${text}</span></span>`;
+const GRAY = 'background-color:var(--accent);color:var(--foreground)';
+const GREEN = 'background-color:var(--win-bg);color:var(--win)';
+const BLUE = 'background-color:color-mix(in srgb, var(--poke-blue) 15%, var(--background));color:var(--poke-blue)';
 
 /** The render of an upcoming league before the `blocked` prop was added. */
 const UPCOMING_BEFORE =

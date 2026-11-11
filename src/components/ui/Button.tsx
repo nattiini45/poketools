@@ -1,14 +1,9 @@
 "use client";
 
-import { forwardRef, type ButtonHTMLAttributes } from "react";
-import { Slot } from "@radix-ui/react-slot";
-import { Loader2 } from "lucide-react";
+import { Children, forwardRef, isValidElement, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { Button as FluidButton } from "./fluid/button";
 import { cn } from "@/lib/utils/cn";
-import {
-  type ButtonVariant,
-  type ButtonSize,
-  buttonVariants,
-} from "./buttonStyles";
+import type { ButtonSize, ButtonVariant } from "./buttonStyles";
 
 export { getButtonClasses } from "./buttonStyles";
 
@@ -19,31 +14,46 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   asChild?: boolean;
 }
 
+const FLUID_VARIANT = {
+  primary: "primary",
+  secondary: "tertiary",
+  ghost: "ghost",
+  danger: "primary",
+  success: "primary",
+} as const satisfies Record<ButtonVariant, string>;
+
+const FLUID_SIZE = { sm: "compact", md: "default", lg: "default" } as const satisfies Record<ButtonSize, string>;
+
+const INLINE_CHILDREN = "[&>span>span]:inline-flex [&>span>span]:items-center [&>span>span]:gap-[inherit]";
+
+const FILL: Partial<Record<ButtonVariant, string>> = {
+  primary: "[--foreground:var(--accent-fill)] [--background:var(--tier-ink)]",
+  success: "[--foreground:var(--poke-green)] [--background:var(--poke-on-green)]",
+  danger: "[--foreground:var(--poke-danger)] [--background:var(--poke-on-danger)]",
+};
+
+/**
+ * The site button on the @fluid button (docs/design.md, "Direction B primitives"). The props are the pre-redesign
+ * ones; primary, success and danger recolour @fluid's primary fill (amber accent fill with plate ink, green, solid
+ * red), secondary is @fluid's bordered tertiary. @fluid wraps the label in one span for its text trim,
+ * so a label that carries an icon element lays that span out as a row. Frozen surfaces import ./frozen/Button instead.
+ */
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  (
-    {
-      variant = "primary",
-      size = "md",
-      loading = false,
-      disabled,
-      asChild = false,
-      className,
-      children,
-      ...props
-    },
-    ref
-  ) => {
-    const Comp = asChild ? Slot : "button";
+  ({ variant = "primary", size = "md", loading = false, asChild = false, className, children, ...props }, ref) => {
+    const label = asChild && isValidElement<{ children?: ReactNode }>(children) ? children.props.children : children;
+    const hasElements = Children.toArray(label).some(isValidElement);
     return (
-      <Comp
+      <FluidButton
         ref={ref}
-        disabled={disabled || loading}
-        className={cn(buttonVariants({ variant, size }), className)}
+        variant={FLUID_VARIANT[variant]}
+        size={FLUID_SIZE[size]}
+        loading={loading}
+        asChild={asChild}
+        className={cn(FILL[variant], hasElements && INLINE_CHILDREN, className)}
         {...props}
       >
-        {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
         {children}
-      </Comp>
+      </FluidButton>
     );
   }
 );

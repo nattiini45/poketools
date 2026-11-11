@@ -11,6 +11,7 @@ import { renderWithI18n } from '@/test/i18n';
 import type { ArmedConfirmDialogProps } from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import type { DraftPoolEntry } from '@/types/draft-pool';
 import type { EvolutionTier } from '@/types/evolution';
+import { buttonLabelled } from '@/test/button-markup';
 
 const confirmProps: ArmedConfirmDialogProps[] = [];
 
@@ -76,7 +77,7 @@ describe('PickSelector confirmation', () => {
 
   it('keeps the footer button disabled until a line is selected', () => {
     const html = renderToStaticMarkup(picker());
-    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Confirm Pick<\/button>/);
+    expect(buttonLabelled(html, 'Confirm Pick')?.disabled).toBe(true);
   });
 
   it('marks lines above the remaining budget as over budget', () => {

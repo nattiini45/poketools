@@ -15,7 +15,7 @@
  *   its first render; a player's snapshot never carries it).
  */
 import { useId, useState, useSyncExternalStore } from 'react';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import { LocalTime } from '@/i18n/LocalTime';
 import { useFormatter, useT } from '@/i18n/client';

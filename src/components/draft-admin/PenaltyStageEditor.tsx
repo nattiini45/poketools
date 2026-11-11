@@ -7,7 +7,7 @@
  * required reason.
  */
 import { useState } from 'react';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { draftAdminMessages } from '@/i18n/messages/draft/admin';

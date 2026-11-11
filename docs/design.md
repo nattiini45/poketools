@@ -322,8 +322,31 @@ accent ink, and the `--fs-*` / `--lh-*` sizes are the F3 type roles (compact ste
 11 px floor). The lint rules of the React Compiler, the duration guard and the i18n literal check skip the vendored
 folders; wrappers pass translated labels.
 
-`/ui-preview` (dev only, 404 in production) shows the type roles, item icons, plates and @fluid controls on the
-site theme; the harness captures it as the `dev-ui-preview` surface.
+`/ui-preview` (dev only, 404 in production) shows the type roles, item icons, plates, @fluid controls and the site
+primitives on the site theme; the harness captures it as the `dev-ui-preview` surface.
+
+### Site primitives on @fluid
+
+`Button`, `Badge`, `Input` and `Textarea` keep their props and paths and render the @fluid control; `Card` keeps
+its container API on the B surfaces (`surface`, `elevated`, `hairline`) with @fluid's 80 ms colour hover instead of
+the lift (the @fluid `Card` in `fluid/card.tsx` is the clickable tile for new layouts).
+
+- `Button`: `primary` is @fluid's primary fill recoloured to `accent-fill` with plate ink, `success` the same fill
+  in `poke-green`, `danger` the same fill in `poke-danger` with `poke-on-danger` ink, `secondary` @fluid's
+  bordered `tertiary`, `ghost` its ghost. `sm` is the compact 28 px step, `md` and `lg` the 36 px step. `getButtonClasses` still returns the
+  pre-redesign classes for links styled as buttons; the surface tracks move those onto `<Button asChild>`.
+- `Badge`: the @fluid solid badge in the B status colours: `green` and `red` are `win` and `loss` on their `-bg`,
+  `blue`, `yellow` and `purple` the `poke-blue`, `poke-yellow-ink` and `poke-plum` inks on 15 % of their hue mixed
+  into the ground,
+  `accent` `accent-ink` on `accent-subtle`, `default` and `gray` the neutral fill. `xs` and `sm` are the 20 px step,
+  `md` the 24 px step.
+- `Input` and `Textarea` keep the label, hint and error wiring of `field-a11y.tsx` around the @fluid field.
+- Frozen surfaces keep the pre-redesign `Button`, `Card`, `Badge` and `buttonStyles` from
+  `src/components/ui/frozen/`. Every module a frozen source reaches imports them from there
+  (`src/components/ui/__tests__/frozen-primitives.test.ts` walks the imports), including shared pieces such as
+  the draft admin forms, `MatchStatusBadge`, `TournamentReportCard` and the stats tables.
+- `light-dark()` in the @fluid classes needs the `--lightningcss-light` / `--lightningcss-dark` pair that
+  `globals.css` sets per `data-theme`, since the site sets no `color-scheme`.
 
 ## UI Primitives — `src/components/ui/`
 
@@ -333,10 +356,11 @@ interactivity) and consume the tokens above.
 | Component | Purpose |
 |---|---|
 | `PageContainer` | Page shell: title/subtitle + max-width wrapper (`maxWidth="xl"` etc.); the title row wraps, so the `action` slot drops below the title on narrow screens |
-| `Card` | Surface container with `variant` (outlined/elevated), `padding`, optional `hover` |
-| `Button` | Primary/secondary/ghost/danger variants × sm/md/lg sizes |
+| `Card` | Surface container with `variant` (outlined/elevated), `padding`, optional `hover` (B surfaces; see "Site primitives on @fluid") |
+| `Button` | Primary/secondary/ghost/danger/success variants × sm/md/lg sizes, on the @fluid button |
 | `buttonStyles.ts` | `getButtonClasses(variant, size)` for non-`<Button>` callers (e.g. anchor tags) |
-| `Badge` | Status/type chip with color variants (green/gray/blue/red/yellow/purple/…) |
+| `Badge` | Status/type chip with color variants (green/gray/blue/red/yellow/purple/…), on the @fluid badge |
+| `frozen/` | The pre-redesign `Button`, `Card`, `Badge` and `buttonStyles` the frozen surfaces import |
 | `Input` / `Select` / `Textarea` | Form controls with label + poke styling (Select keeps native `<select>` for GET forms). Ids come from `useId` (an explicit `id` wins), never from the label text. An `error` sets `aria-invalid` and describes the control through an always-rendered `aria-live="polite"` region; a `hint` (all three take one) describes it while there is no error; a caller's `aria-describedby` is kept and the field's id is appended (`field-a11y.tsx`) |
 | `Table` | Data table with optional client sort; exports `SortableTableHeader` + `TablePagination` |
 | `Tooltip` / `Popover` | Overlay primitives (Radix for click; custom portal for hover popovers) |

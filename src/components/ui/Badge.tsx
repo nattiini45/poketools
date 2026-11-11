@@ -1,62 +1,33 @@
-import { cva, type VariantProps } from "class-variance-authority";
-import { type HTMLAttributes } from "react";
-import { cn } from "@/lib/utils/cn";
+import { type CSSProperties, type HTMLAttributes } from "react";
+import { Badge as FluidBadge } from "./fluid/badge";
 
-type BadgeVariant =
-  | "default"
-  | "accent"
-  | "red"
-  | "blue"
-  | "green"
-  | "yellow"
-  | "purple"
-  | "gray";
+type BadgeVariant = "default" | "accent" | "red" | "blue" | "green" | "yellow" | "purple" | "gray";
 type BadgeSize = "xs" | "sm" | "md";
 
-const badgeVariants = cva(
-  "inline-flex items-center border font-heading font-semibold rounded-full",
-  {
-    variants: {
-      variant: {
-        default: "border-poke-border bg-poke-muted text-poke-text-secondary",
-        accent: "bg-poke-accent-light text-poke-accent",
-        red: "border-poke-danger/30 bg-poke-danger-light text-poke-danger",
-        blue: "border-poke-blue/30 bg-poke-blue-light text-poke-blue dark:border-poke-blue/40",
-        green: "border-poke-green/30 bg-poke-green-light text-poke-green",
-        yellow: "border-poke-yellow/40 bg-poke-yellow-light text-poke-yellow-ink",
-        purple: "bg-poke-plum-light text-poke-plum",
-        gray: "border-poke-border bg-poke-muted text-poke-text-muted",
-      },
-      size: {
-        xs: "px-1.5 py-px text-[10px]",
-        sm: "px-2 py-0.5 text-xs",
-        md: "px-2.5 py-1 text-sm",
-      },
-    },
-    defaultVariants: {
-      variant: "default",
-      size: "sm",
-    },
-  }
-);
-
-interface BadgeProps
-  extends HTMLAttributes<HTMLSpanElement>,
-    VariantProps<typeof badgeVariants> {
+interface BadgeProps extends Omit<HTMLAttributes<HTMLSpanElement>, "color"> {
   variant?: BadgeVariant;
   size?: BadgeSize;
 }
 
-export default function Badge({
-  variant = "default",
-  size = "sm",
-  className,
-  children,
-  ...props
-}: BadgeProps) {
+const STATUS_COLOR: Partial<Record<BadgeVariant, CSSProperties>> = {
+  accent: { backgroundColor: "var(--accent-subtle)", color: "var(--accent-ink)" },
+  red: { backgroundColor: "var(--loss-bg)", color: "var(--loss)" },
+  green: { backgroundColor: "var(--win-bg)", color: "var(--win)" },
+  blue: { backgroundColor: "color-mix(in srgb, var(--poke-blue) 15%, var(--background))", color: "var(--poke-blue)" },
+  yellow: { backgroundColor: "color-mix(in srgb, var(--poke-yellow) 15%, var(--background))", color: "var(--poke-yellow-ink)" },
+  purple: { backgroundColor: "color-mix(in srgb, var(--poke-plum) 15%, var(--background))", color: "var(--poke-plum)" },
+};
+
+const FLUID_SIZE = { xs: "compact", sm: "compact", md: "default" } as const satisfies Record<BadgeSize, string>;
+
+/**
+ * The site badge on the @fluid solid badge, tinted with the direction B status colours (docs/design.md): win and
+ * loss for green and red, the poke-* status hue mixed 15 % into the ground under its ink for blue, yellow and purple
+ * (the -light tints vanish on the sunlit ground), accent-subtle for accent, the neutral fill for default and gray.
+ * Frozen surfaces import ./frozen/Badge instead.
+ */
+export default function Badge({ variant = "default", size = "sm", style, ...props }: BadgeProps) {
   return (
-    <span className={cn(badgeVariants({ variant, size }), className)} {...props}>
-      {children}
-    </span>
+    <FluidBadge variant="solid" color="gray" size={FLUID_SIZE[size]} style={{ ...STATUS_COLOR[variant], ...style }} {...props} />
   );
 }

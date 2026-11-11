@@ -2,8 +2,8 @@
 
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import PokemonLink from '@/components/shared/PokemonLink';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
+import Card from '@/components/ui/frozen/Card';
+import Badge from '@/components/ui/frozen/Badge';
 import ProgressSourceChips from '@/components/evolution/ProgressSourceChips';
 import { useDataLocale, useT } from '@/i18n/client';
 import { draftLegacyMessages } from '@/i18n/messages/draft/legacy';

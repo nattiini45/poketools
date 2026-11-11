@@ -17,7 +17,7 @@
  */
 import { useId, useState } from 'react';
 import Link from 'next/link';
-import Button from '@/components/ui/Button';
+import Button from '@/components/ui/frozen/Button';
 import ArmedConfirmDialog from '@/components/draft-tool/shared/ArmedConfirmDialog';
 import ClockBar from '@/components/draft-tool/layout/ClockBar';
 import PlayersSheet from '@/components/draft-tool/layout/PlayersSheet';

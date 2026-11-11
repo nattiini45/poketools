@@ -158,7 +158,7 @@ describe('StageInspector: findings next to their fields', () => {
   });
 
   it('a valid document has no aria-invalid control', () => {
-    expect(render(presetDoc())).not.toContain('aria-invalid');
+    expect(render(presetDoc())).not.toMatch(/\saria-invalid="/);
   });
 });
 

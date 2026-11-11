@@ -148,7 +148,7 @@ describe('the trashed leagues table', () => {
   it('every button is disabled while an action runs, the running one shows its spinner', () => {
     const html = render({ rows: [row(), row({ id: 't9', name: 'Other' })], busy: restoreBusyKey('t1') });
     expect(html.match(/disabled=""/g)).toHaveLength(2);
-    expect(html).toContain('animate-spin');
+    expect(html).toContain('aria-busy="true"');
   });
 
   it('an empty trash says so and renders no table', () => {
@@ -213,7 +213,7 @@ describe('the pending rebuilds', () => {
 
   it('the running rebuild is marked busy and every button is disabled', () => {
     const html = render({ pending: [pendingItem()], busy: rebuildBusyKey('delete', 't2') });
-    expect(html).toContain('animate-spin');
+    expect(html).toContain('aria-busy="true"');
     expect(html.match(/disabled=""/g)?.length).toBeGreaterThanOrEqual(2);
   });
 });
