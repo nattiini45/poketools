@@ -141,6 +141,16 @@ export default defineDe<typeof en>()({
       validation: 'Prüfen',
       ai: 'KI',
     },
+    panelLabel: 'Seitenleiste',
+    save: 'Speichern',
+    saveErrors: { one: '{count} Regelverstoß', other: '{count} Regelverstöße' },
+    moreActions: 'Weitere Aktionen',
+    actions: {
+      import: 'Importieren',
+      export: 'Exportieren',
+      share: 'Teilen',
+      publish: 'Veröffentlichen',
+    },
     fab: {
       publish: 'In der Bibliothek veröffentlichen',
       share: 'Team teilen',

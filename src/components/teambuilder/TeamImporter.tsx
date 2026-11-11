@@ -81,13 +81,13 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
   return (
     <div className="space-y-3">
       {/* Mode tabs */}
-      <div className="flex gap-4 border-b border-poke-border">
+      <div className="flex gap-4 border-b border-hairline">
         <button
           onClick={() => setMode('text')}
           className={`pb-2 px-1 text-sm transition-colors ${
             mode === 'text'
-              ? 'border-b-2 border-poke-accent text-poke-accent font-heading font-semibold'
-              : 'text-poke-text-muted hover:text-poke-text-primary'
+              ? 'border-b-2 border-accent-ink font-[550] text-fg'
+              : 'text-fg-muted hover:text-fg'
           }`}
         >
           {t('importer.pasteTab')}
@@ -96,8 +96,8 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
           onClick={() => setMode('url')}
           className={`pb-2 px-1 text-sm transition-colors ${
             mode === 'url'
-              ? 'border-b-2 border-poke-accent text-poke-accent font-heading font-semibold'
-              : 'text-poke-text-muted hover:text-poke-text-primary'
+              ? 'border-b-2 border-accent-ink font-[550] text-fg'
+              : 'text-fg-muted hover:text-fg'
           }`}
         >
           {t('importer.urlTab')}
@@ -110,7 +110,7 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
           value={text}
           onChange={e => setText(e.target.value)}
           placeholder={`${t('importer.textPlaceholder')}\n\n${SHOWDOWN_EXAMPLE}`}
-          className="w-full h-48 p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors font-mono resize-y"
+          className="w-full h-48 p-3 border border-hairline bg-surface rounded-poke-md text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-2 transition-colors font-mono resize-y pointer-coarse:text-base"
         />
       ) : (
         <input
@@ -118,11 +118,11 @@ export default function TeamImporter({ rulesetId, onImport }: TeamImporterProps)
           value={url}
           onChange={e => setUrl(e.target.value)}
           placeholder="https://pokepast.es/abc123"
-          className="w-full p-3 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors"
+          className="w-full p-3 border border-hairline bg-surface rounded-poke-md text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-2 transition-colors pointer-coarse:text-base pointer-coarse:min-h-11"
         />
       )}
 
-      {error && <p className="text-sm text-poke-danger">{errorText(error)}</p>}
+      {error && <p className="text-sm text-loss">{errorText(error)}</p>}
 
       <Button variant="primary" onClick={handleImport} loading={loading}>
         {t('importer.submit')}

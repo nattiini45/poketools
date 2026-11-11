@@ -1,9 +1,8 @@
 import type { Metadata } from 'next';
-import Link from 'next/link';
 import { publicReads } from '@/lib/cache/public-reads';
 import PageContainer from '@/components/ui/PageContainer';
-import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
+import PublicCompetitionList, { parseCompetitionStatusFilter } from '@/components/competition/PublicCompetitionList';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
@@ -17,50 +16,52 @@ import { tournamentsMessages } from '@/i18n/messages/tournaments';
 // a render costs no Supabase query while the entry is warm.
 export const dynamic = 'force-dynamic';
 
-const statusVariant: Record<string, 'green' | 'accent' | 'gray'> = {
-  active: 'green',
-  upcoming: 'accent',
-  completed: 'gray',
-};
-
 export async function generateMetadata(): Promise<Metadata> {
   const t = await getT(tournamentsMessages);
   return { title: t('list.title') };
 }
 
-export default async function TournamentsPage() {
-  const [tournaments, t, tc, te] = await Promise.all([
+export default async function TournamentsPage({ searchParams }: { searchParams?: Promise<{ status?: string | string[] }> } = {}) {
+  // The status tabs filter the one cached list in memory: a tab costs no query.
+  const [tournaments, t, tc, te, query] = await Promise.all([
     publicReads.tournamentList(),
     getT(tournamentsMessages),
     getT(commonMessages),
     getT(enumMessages),
+    searchParams,
   ]);
 
   return (
     <PageContainer title={t('list.title')}>
-      {tournaments.length === 0 ? (
-        <p className="text-poke-text-muted">{t('list.empty')}</p>
-      ) : (
-        <div className="grid gap-3 max-w-2xl">
-          {tournaments.map((tournament) => (
-            <Link key={tournament.id} href={`/tournaments/${tournament.id}`}>
-              <Card hover padding="md">
-                <h2 className="font-heading font-semibold text-poke-text-primary">{tournament.name}</h2>
-                <div className="flex flex-wrap gap-2 mt-2 items-center text-xs text-poke-text-secondary">
-                  <span>{enumLabel(te, 'bracketType', tournament.bracket_type)}</span>
-                  <span>{tc('bestOf', { count: tournament.best_of_default })}</span>
-                  {tournament.is_doubles && <Badge variant="purple">{t('list.doubles')}</Badge>}
-                  <span>{tournament.ruleset_name}</span>
-                  <span>{tc('units.players', { count: tournament.participant_count })}</span>
-                  <Badge variant={statusVariant[tournament.status] ?? 'gray'}>
-                    {enumLabel(te, 'tournamentStatus', tournament.status)}
-                  </Badge>
-                </div>
-              </Card>
-            </Link>
-          ))}
-        </div>
-      )}
+      <PublicCompetitionList
+        icon="kings-rock"
+        basePath="/tournaments"
+        filter={parseCompetitionStatusFilter(query?.status)}
+        filterLabel={t('list.filterLabel')}
+        filterLabels={{
+          all: t('list.filters.all'),
+          active: t('list.filters.active'),
+          upcoming: t('list.filters.upcoming'),
+          completed: t('list.filters.completed'),
+        }}
+        emptyText={t('list.empty')}
+        emptyFilteredText={t('list.emptyFiltered')}
+        showAllLabel={t('list.showAll')}
+        items={tournaments.map((tournament) => ({
+          id: tournament.id,
+          href: `/tournaments/${tournament.id}`,
+          name: tournament.name,
+          status: tournament.status,
+          statusLabel: enumLabel(te, 'tournamentStatus', tournament.status),
+          meta: [
+            enumLabel(te, 'bracketType', tournament.bracket_type),
+            tournament.ruleset_name,
+            ...(tournament.season_name ? [tournament.season_name] : []),
+          ],
+          stats: [tc('units.players', { count: tournament.participant_count }), tc('bestOf', { count: tournament.best_of_default })],
+          badges: tournament.is_doubles ? <Badge variant="purple">{t('list.doubles')}</Badge> : undefined,
+        }))}
+      />
     </PageContainer>
   );
 }

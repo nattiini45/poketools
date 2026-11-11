@@ -59,11 +59,11 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
 
   const renderBadge = (type: string) =>
     type === 'Stellar' ? (
-      <span className="inline-flex items-center justify-center w-10 h-[16px] text-[8px] font-bold text-poke-text-primary bg-poke-surface rounded border border-poke-border">
+      <span className="inline-flex items-center justify-center rounded-full border border-hairline-strong px-1.5 text-caption font-[550] text-fg">
         ★ {localizeType(type, dl)}
       </span>
     ) : (
-      <TypeBadge type={type} className="text-[8px]! px-1! py-0! min-w-[2.5rem]!" />
+      <TypeBadge type={type} size="compact" className="px-1.5! py-0.5!" />
     );
 
   return (
@@ -74,15 +74,15 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
         aria-haspopup="listbox"
         aria-expanded={open}
         title={value ? t('teraPicker.current', { type: localizeType(value, dl) }) : t('teraPicker.pick')}
-        className="flex items-center gap-1 px-1.5 py-1 bg-poke-surface border border-poke-border rounded text-left disabled:opacity-50 hover:border-poke-blue/40 transition-colors min-w-[4.5rem]"
+        className="flex items-center gap-1 px-1.5 py-1 bg-surface border border-hairline rounded text-left disabled:opacity-50 hover:border-hairline-strong transition-colors min-w-[4.5rem]"
       >
         {value ? (
           renderBadge(value)
         ) : (
-          <span className="text-[10px] text-poke-text-muted">{t('common.none')}</span>
+          <span className="text-caption text-fg-muted">{t('common.none')}</span>
         )}
         <svg
-          className={`w-2.5 h-2.5 text-poke-text-muted ml-auto transition-transform ${open ? 'rotate-180' : ''}`}
+          className={`w-2.5 h-2.5 text-fg-muted ml-auto transition-transform ${open ? 'rotate-180' : ''}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -95,7 +95,7 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
       {open && !disabled && (
         <ul
           role="listbox"
-          className="absolute z-20 top-full mt-0.5 right-0 w-40 bg-poke-elevated border border-poke-border rounded shadow-lg max-h-64 overflow-y-auto p-1"
+          className="absolute z-20 top-full mt-0.5 right-0 w-40 bg-elevated border border-hairline rounded shadow-lg max-h-64 overflow-y-auto p-1"
         >
           {value && (
             <li>
@@ -105,7 +105,7 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
                   onChange(null);
                   setOpen(false);
                 }}
-                className="w-full px-1.5 py-1 text-left text-[10px] text-poke-text-muted hover:bg-poke-surface rounded transition-colors"
+                className="w-full px-1.5 py-1 text-left text-caption text-fg-muted hover:bg-hover rounded transition-colors"
               >
                 {t('teraPicker.clear')}
               </button>
@@ -123,13 +123,13 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
                   }}
                   className={[
                     'w-full flex items-center gap-1.5 px-1.5 py-1 rounded transition-colors',
-                    value === type ? 'bg-poke-blue/10' : 'hover:bg-poke-surface',
+                    value === type ? 'bg-accent-subtle' : 'hover:bg-hover',
                   ].join(' ')}
                 >
                   {renderBadge(type)}
                   <span className="flex-1" />
                   {pct !== undefined && (
-                    <span className="text-[9px] text-poke-text-secondary tabular-nums">
+                    <span className="text-caption text-fg-muted tabular-nums">
                       {formatUsagePct(pct, locale)}
                     </span>
                   )}

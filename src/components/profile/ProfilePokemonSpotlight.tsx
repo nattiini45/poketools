@@ -1,16 +1,36 @@
 'use client';
 
+import type { ReactNode } from 'react';
+import Link from 'next/link';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { profileMessages } from '@/i18n/messages/profile';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS } from './focus';
 import { ordinalSuffix } from './ordinal';
-import PokemonLink from '@/components/shared/PokemonLink';
 import type { ProfilePokemonStat, ProfileKillRanking } from '@/types/profile';
 
 interface ProfilePokemonSpotlightProps {
   mostUsed: ProfilePokemonStat[];
   bestKillers: ProfileKillRanking[];
+}
+
+function SpotlightRow({ name, displayName, children }: { name: string; displayName: string; children: ReactNode }) {
+  return (
+    <li>
+      <Link
+        href={`/pokemon/${encodeURIComponent(name)}`}
+        className={cn('flex min-h-11 items-center gap-3 rounded-poke-sm text-fg transition-colors duration-80 ease-out hover:text-accent-ink', FOCUS)}
+      >
+        <PokemonSprite name={name} size={40} />
+        <div className="min-w-0">
+          <div className="truncate text-body font-[550]">{displayName}</div>
+          <div className="text-caption text-fg-muted">{children}</div>
+        </div>
+      </Link>
+    </li>
+  );
 }
 
 export default function ProfilePokemonSpotlight({
@@ -23,63 +43,41 @@ export default function ProfilePokemonSpotlight({
   if (mostUsed.length === 0 && bestKillers.length === 0) return null;
 
   return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-6 shadow-poke">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Most Used */}
-        {mostUsed.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-3">
-              {t('spotlight.mostUsed')}
-            </h3>
-            <div className="space-y-3">
-              {mostUsed.map((mon) => (
-                <PokemonLink key={mon.pokemon_name} name={mon.pokemon_name} className="gap-3">
-                  <PokemonSprite name={mon.pokemon_name} size={40} showContainer />
-                  <div className="min-w-0">
-                    <div className="font-heading font-semibold text-poke-text-primary text-sm truncate">
-                      {localizeSpecies(mon.pokemon_name, dl)}
-                    </div>
-                    <div className="text-xs text-poke-text-secondary">
-                      {t('spotlight.gamesWinRate', {
-                        count: mon.total_games,
-                        winRate: formatter.percentOf(mon.win_rate, 0),
-                      })}
-                    </div>
-                  </div>
-                </PokemonLink>
-              ))}
-            </div>
-          </div>
-        )}
+    <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-1">
+      {/* Most Used */}
+      {mostUsed.length > 0 && (
+        <div>
+          <h3 className="mb-1.5 text-subtitle font-[550] text-fg">{t('spotlight.mostUsed')}</h3>
+          <ul className="flex flex-col gap-1">
+            {mostUsed.map((mon) => (
+              <SpotlightRow key={mon.pokemon_name} name={mon.pokemon_name} displayName={localizeSpecies(mon.pokemon_name, dl)}>
+                {t('spotlight.gamesWinRate', {
+                  count: mon.total_games,
+                  winRate: formatter.percentOf(mon.win_rate, 0),
+                })}
+              </SpotlightRow>
+            ))}
+          </ul>
+        </div>
+      )}
 
-        {/* Top Killers */}
-        {bestKillers.length > 0 && (
-          <div>
-            <h3 className="text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-3">
-              {t('spotlight.topKillers')}
-            </h3>
-            <div className="space-y-3">
-              {bestKillers.map((mon) => (
-                <PokemonLink key={mon.pokemon_name} name={mon.pokemon_name} className="gap-3">
-                  <PokemonSprite name={mon.pokemon_name} size={40} showContainer />
-                  <div className="min-w-0">
-                    <div className="font-heading font-semibold text-poke-text-primary text-sm truncate">
-                      {localizeSpecies(mon.pokemon_name, dl)}
-                    </div>
-                    <div className="text-xs text-poke-text-secondary">
-                      {t.rich('spotlight.kosOverall', {
-                        count: mon.kos_dealt,
-                        rank: t(`overallRank.${ordinalSuffix(mon.rank)}`, { n: mon.rank }),
-                        em: (chunks) => <span className="text-poke-text-link font-semibold">{chunks}</span>,
-                      })}
-                    </div>
-                  </div>
-                </PokemonLink>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+      {/* Top Killers */}
+      {bestKillers.length > 0 && (
+        <div>
+          <h3 className="mb-1.5 text-subtitle font-[550] text-fg">{t('spotlight.topKillers')}</h3>
+          <ul className="flex flex-col gap-1">
+            {bestKillers.map((mon) => (
+              <SpotlightRow key={mon.pokemon_name} name={mon.pokemon_name} displayName={localizeSpecies(mon.pokemon_name, dl)}>
+                {t.rich('spotlight.kosOverall', {
+                  count: mon.kos_dealt,
+                  rank: t(`overallRank.${ordinalSuffix(mon.rank)}`, { n: mon.rank }),
+                  em: (chunks) => <span className="font-[550] text-accent-ink">{chunks}</span>,
+                })}
+              </SpotlightRow>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

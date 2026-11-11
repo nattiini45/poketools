@@ -16,6 +16,8 @@ import { getT } from '@/i18n/server';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import DraftBoard from '@/components/draft/DraftBoard';
 import TierListDisplay from '@/components/draft/TierListDisplay';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewChip from '@/components/ui/SkewChip';
 
 export const dynamic = 'force-dynamic';
 
@@ -81,8 +83,9 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
   // Only draft-format leagues (and legacy EPB drafts) have draft pages
   if (league.format_type !== 'draft' && !isEpb) {
     return (
-      <div className="p-8 text-center">
-        <p className="text-poke-text-secondary">{t('legacyPage.notDraft')}</p>
+      <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-hairline bg-surface p-8 text-center">
+        <ItemIcon item="poke-doll" size={48} />
+        <p className="text-body text-fg-muted">{t('legacyPage.notDraft')}</p>
       </div>
     );
   }
@@ -112,27 +115,29 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">{t('legacyPage.title', { league: league.name })}</h1>
-        <p className="text-sm text-poke-text-secondary mt-1">
-          {t('legacyPage.participants', { count: league.participant_count })}
-          {league.ruleset_name && ` · ${league.ruleset_name}`}
-          {isEvoLeague && (
-            <span className="ml-2 inline-block px-2 py-0.5 border text-poke-accent rounded-full text-xs font-medium">
-              {t('legacyPage.evoLeague')}
+      <header className="mb-6 flex items-start gap-3">
+        <ItemIcon item="premier-ball" size={48} className="hidden sm:inline-block" />
+        <div className="min-w-0">
+          <h1 className="font-heading text-display text-fg">{t('legacyPage.title', { league: league.name })}</h1>
+          <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-body text-fg-muted">
+            <span>
+              {t('legacyPage.participants', { count: league.participant_count })}
+              {league.ruleset_name && ` · ${league.ruleset_name}`}
             </span>
-          )}
-        </p>
-      </div>
+            {isEvoLeague && <SkewChip tone="accent">{t('legacyPage.evoLeague')}</SkewChip>}
+          </p>
+        </div>
+      </header>
 
       {/* Tier list reference (always visible in evo-leagues) */}
       {isEvoLeague && evoTiers.length > 0 && (
         <div className="mb-6">
-          <details className="border border-poke-border rounded-lg" open={!pool}>
-            <summary className="px-4 py-2 text-sm font-medium cursor-pointer hover:bg-poke-elevated">
+          <details className="rounded-poke-lg border border-hairline bg-surface" open={!pool}>
+            <summary className="flex cursor-pointer items-center gap-2 rounded-poke-lg px-4 py-3 text-subtitle font-[550] text-fg hover:bg-hover">
+              <ItemIcon item="star-piece" />
               {t('legacyPage.tierList', { count: evoTiers.length })}
             </summary>
-            <div className="px-4 pb-3 pt-1">
+            <div className="px-4 pt-1 pb-4">
               <TierListDisplay tiers={evoTiers} tierLimits={tierLimits} />
             </div>
           </details>
@@ -141,15 +146,16 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
 
       {/* Draft not set up yet */}
       {!pool && (
-        <div className="p-8 text-center">
-          <p className="text-poke-text-secondary">
+        <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-hairline bg-surface p-8 text-center">
+          <ItemIcon item="poke-doll" size={48} />
+          <p className="text-body text-fg-muted">
             {t('legacyPage.notSetUp')}
             {player?.isAdmin && (
               <>
                 {' '}
                 {t.rich('legacyPage.adminSetUp', {
                   link: (chunks: ReactNode) => (
-                    <a href={leagueAdminHref(id, 'draft')} className="text-poke-text-link hover:underline">
+                    <a href={leagueAdminHref(id, 'draft')} className="text-accent-ink underline underline-offset-2">
                       {chunks}
                     </a>
                   ),
@@ -182,8 +188,9 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
       )}
 
       {pool && !player && (
-        <div className="p-8 text-center">
-          <p className="text-poke-text-secondary">{t('legacyPage.signIn')}</p>
+        <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-hairline bg-surface p-8 text-center">
+          <ItemIcon item="premier-ball" size={48} />
+          <p className="text-body text-fg-muted">{t('legacyPage.signIn')}</p>
         </div>
       )}
     </div>
