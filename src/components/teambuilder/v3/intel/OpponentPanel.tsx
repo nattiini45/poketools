@@ -25,14 +25,14 @@ export default function OpponentPanel() {
 
   if (loading) {
     return (
-      <div className="text-[11px] text-poke-text-muted text-center py-6">
+      <div className="text-caption text-fg-muted text-center py-6">
         {t('opponent.loading')}
       </div>
     );
   }
 
   if (apiError) {
-    return <div className="text-[11px] text-red-400 text-center py-4">{errorText(apiError)}</div>;
+    return <div className="text-caption text-loss text-center py-4">{errorText(apiError)}</div>;
   }
 
   if (!summary) return null;
@@ -43,30 +43,30 @@ export default function OpponentPanel() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-[11px] font-medium text-poke-text-primary">
+        <h3 className="text-caption font-medium text-fg">
           {summary.opponent_name}
         </h3>
-        <span className="text-[9px] text-poke-text-muted">
+        <span className="text-caption text-fg-muted">
           {t('opponent.gamesAnalyzed', { count: summary.total_games })}
         </span>
       </div>
 
       {summary.pokemon.length === 0 ? (
-        <p className="text-[11px] text-poke-text-muted text-center py-4">
+        <p className="text-caption text-fg-muted text-center py-4">
           {t('opponent.empty')}
         </p>
       ) : (
         <div className="space-y-1.5">
           {summary.pokemon.map((mon) => (
-            <div key={mon.species} className="bg-poke-surface rounded-lg p-2">
+            <div key={mon.species} className="bg-elevated rounded-lg p-2">
               <div className="flex items-center gap-2 mb-1.5">
                 <PokemonSprite name={mon.species} size={28} />
                 <div className="flex-1 min-w-0">
-                  <div className="text-[11px] font-medium text-poke-text-primary truncate">
+                  <div className="text-caption font-medium text-fg truncate">
                     {localizeSpecies(mon.species, dl)}
                   </div>
                   {mon.sample_moves.length > 0 && (
-                    <div className="text-[9px] text-poke-text-muted truncate">
+                    <div className="text-caption text-fg-muted truncate">
                       {mon.sample_moves.map((m) => localizeMove(m, dl)).join(' · ')}
                     </div>
                   )}
@@ -76,32 +76,32 @@ export default function OpponentPanel() {
               {/* Stats row */}
               <div className="grid grid-cols-4 gap-0.5 text-center">
                 <div>
-                  <div className="text-[11px] font-mono text-poke-text-primary">
+                  <div className="text-caption font-mono text-fg">
                     {rate(mon.bring_rate)}
                   </div>
-                  <div className="text-[8px] text-poke-text-muted">{t('opponent.bring')}</div>
+                  <div className="text-caption text-fg-muted">{t('opponent.bring')}</div>
                 </div>
                 <div>
                   <div
-                    className={`text-[11px] font-mono ${mon.ko_rate >= 50 ? 'text-red-400' : 'text-poke-text-primary'}`}
+                    className={`text-caption font-mono ${mon.ko_rate >= 50 ? 'text-loss' : 'text-fg'}`}
                   >
                     {rate(mon.ko_rate)}
                   </div>
-                  <div className="text-[8px] text-poke-text-muted">{t('opponent.ko')}</div>
+                  <div className="text-caption text-fg-muted">{t('opponent.ko')}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] font-mono text-poke-text-primary">
+                  <div className="text-caption font-mono text-fg">
                     {rate(mon.lead_rate)}
                   </div>
-                  <div className="text-[8px] text-poke-text-muted">{t('opponent.lead')}</div>
+                  <div className="text-caption text-fg-muted">{t('opponent.lead')}</div>
                 </div>
                 <div>
                   <div
-                    className={`text-[11px] font-mono ${mon.win_rate >= 60 ? 'text-green-400' : mon.win_rate <= 40 ? 'text-red-400' : 'text-poke-text-primary'}`}
+                    className={`text-caption font-mono ${mon.win_rate >= 60 ? 'text-win' : mon.win_rate <= 40 ? 'text-loss' : 'text-fg'}`}
                   >
                     {rate(mon.win_rate)}
                   </div>
-                  <div className="text-[8px] text-poke-text-muted">{t('opponent.win')}</div>
+                  <div className="text-caption text-fg-muted">{t('opponent.win')}</div>
                 </div>
               </div>
             </div>

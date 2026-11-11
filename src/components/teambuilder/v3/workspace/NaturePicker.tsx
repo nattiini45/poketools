@@ -52,27 +52,27 @@ export default function NaturePicker({ value, onChange, disabled }: NaturePicker
       <button
         onClick={() => setOpen((p) => !p)}
         disabled={disabled}
-        className="w-full px-2 py-1.5 text-xs bg-poke-surface border border-poke-border rounded text-left disabled:opacity-50 hover:border-poke-blue/40 transition-colors"
+        className="flex w-full min-w-0 items-baseline gap-1 rounded-md border border-hairline bg-surface px-2 py-1.5 text-left text-xs transition-colors duration-80 ease-out hover:border-hairline-strong disabled:opacity-60 pointer-coarse:min-h-11 pointer-coarse:items-center pointer-coarse:text-sm"
         aria-haspopup="listbox"
         aria-expanded={open}
       >
         {value ? (
           <>
-            <span className="text-poke-text-primary">{localizeNature(value, dl)}</span>
-            {desc && <span className="ml-2 text-poke-text-muted text-[10px]">{desc}</span>}
+            <span className="text-fg">{localizeNature(value, dl)}</span>
+            {desc && <span className="ml-2 text-fg-muted text-caption">{desc}</span>}
           </>
         ) : (
-          <span className="text-poke-text-muted">{t('common.none')}</span>
+          <span className="text-fg-muted">{t('common.none')}</span>
         )}
       </button>
       {open && (
-        <div className="absolute z-20 top-full mt-0.5 left-0 bg-poke-elevated border border-poke-border rounded shadow-lg p-2 w-52 max-h-72 overflow-y-auto">
+        <div className="absolute z-20 top-full mt-0.5 left-0 bg-elevated border border-hairline rounded shadow-lg p-2 w-52 max-h-72 overflow-y-auto">
           {GROUPS.map((g) => {
             const natures = NATURE_DATA.filter(([, plus]) => plus === g);
             if (natures.length === 0) return null;
             return (
               <div key={g || 'neutral'} className="mb-2 last:mb-0">
-                <div className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-0.5">
+                <div className="text-caption text-fg-muted mb-0.5">
                   {g ? `+${stat(g)}` : t('naturePicker.neutral')}
                 </div>
                 <div className="flex flex-wrap gap-0.5">
@@ -86,10 +86,10 @@ export default function NaturePicker({ value, onChange, disabled }: NaturePicker
                           : t('naturePicker.neutral')
                       }
                       className={[
-                        'px-1.5 py-0.5 text-[10px] rounded transition-colors',
+                        'px-1.5 py-0.5 text-caption rounded transition-colors',
                         value === name
-                          ? 'bg-poke-blue/20 text-poke-blue'
-                          : 'bg-poke-surface hover:bg-poke-muted text-poke-text-secondary',
+                          ? 'bg-accent-subtle text-accent-ink'
+                          : 'bg-surface hover:bg-hover text-fg-muted',
                       ].join(' ')}
                     >
                       {localizeNature(name, dl)}
