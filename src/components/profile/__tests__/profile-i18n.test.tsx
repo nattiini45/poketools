@@ -97,12 +97,13 @@ describe('profile components in both languages', () => {
   it('ProfileParticipations renders ordinals, enum labels and records per locale', () => {
     const en = renderWithI18n(<ProfileParticipations current={[PARTICIPATION]} past={[]} />);
     expect(en).toContain('Current (1)');
-    expect(en).toContain('2nd / 8 · 5W-2L');
+    // Second place sits on the peach rank plate.
+    expect(en).toContain('bg-tier-2"></span><span>2nd</span></span> / 8 · 5W-2L');
     expect(en).toContain('Single elimination');
 
     const de = renderWithI18n(<ProfileParticipations current={[PARTICIPATION]} past={[]} />, { locale: 'de' });
     expect(de).toContain('Aktuell (1)');
-    expect(de).toContain('2. / 8 · 5S-2N');
+    expect(de).toContain('<span>2.</span></span> / 8 · 5S-2N');
   });
 
   it('ProfilePokemonSpotlight localizes species, plurals and the overall rank', () => {
@@ -114,7 +115,7 @@ describe('profile components in both languages', () => {
     };
     const en = renderWithI18n(<ProfilePokemonSpotlight {...props} />);
     expect(en).toContain('1 game · 100% WR');
-    expect(en).toContain('9 KOs · <span class="text-poke-text-link font-semibold">3rd overall</span>');
+    expect(en).toContain('9 KOs · <span class="font-[550] text-accent-ink">3rd overall</span>');
 
     const de = renderWithI18n(<ProfilePokemonSpotlight {...props} />, { locale: 'de' });
     expect(de).toContain('Glurak');

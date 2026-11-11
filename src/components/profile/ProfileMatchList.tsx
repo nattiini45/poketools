@@ -2,107 +2,80 @@
 
 import Link from 'next/link';
 import { useFormatter, useT } from '@/i18n/client';
-import { commonMessages } from '@/i18n/messages/common';
 import { profileMessages } from '@/i18n/messages/profile';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
+import SkewChip from '@/components/ui/SkewChip';
+import type { PublicPlayer } from '@/types/player';
 import type { ProfileMatch } from '@/types/profile';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS } from './focus';
+import ResultToken from './ResultToken';
 
 interface ProfileMatchListProps {
   title: string;
   matches: ProfileMatch[];
   playerId: string;
   emptyMessage?: string;
+  /** The profile's own trainer, so a row carries both sides of the match. */
+  player?: Pick<PublicPlayer, 'name' | 'avatar_url'>;
 }
 
-function MatchResult({ match, playerId }: { match: ProfileMatch; playerId: string }) {
+function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: string; player?: ProfileMatchListProps['player'] }) {
   const t = useT(profileMessages);
-  const tCommon = useT(commonMessages);
   const formatter = useFormatter();
   const isWin = match.winner_id === playerId;
   const isLoss = match.winner_id !== null && match.winner_id !== playerId;
   const isScheduled = match.status === 'scheduled' || match.status === 'in_progress';
 
-  const resultBadge = isScheduled ? (
-    <span className="text-xs font-bold text-poke-accent-strong bg-poke-accent-light px-1.5 py-0.5 rounded">
-      VS
-    </span>
-  ) : isWin ? (
-    <span className="text-xs font-bold text-poke-green bg-poke-green-light px-1.5 py-0.5 rounded">
-      {tCommon('record.winShort')}
-    </span>
-  ) : isLoss ? (
-    <span className="text-xs font-bold text-poke-danger bg-poke-danger-light px-1.5 py-0.5 rounded">
-      {tCommon('record.lossShort')}
-    </span>
-  ) : (
-    <span className="text-xs font-bold text-poke-text-secondary bg-poke-muted px-1.5 py-0.5 rounded">
-      {tCommon('record.drawShort')}
-    </span>
-  );
-
   return (
-    <div className="relative flex items-center gap-3 px-4 py-2.5 bg-poke-elevated border border-poke-border rounded-poke-lg hover:border-poke-blue/50 transition-colors">
+    <li className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-poke-md border border-hairline bg-elevated px-3 py-2 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover">
       <Link
         href={`/tournaments/${match.tournament_id}/matches/${match.id}`}
-        className="absolute inset-0 z-0"
+        className={cn('absolute inset-0 z-0 rounded-poke-md', FOCUS)}
         aria-label={t('matchList.viewMatch', { opponent: match.opponent_name })}
       />
-      <div className="w-7 flex justify-center shrink-0">{resultBadge}</div>
+      <div className="flex min-w-0 items-center gap-2.5">
+        {!isScheduled && <ResultToken result={isWin ? 'W' : isLoss ? 'L' : 'D'} />}
+        {player && <PlayerAvatar avatarUrl={player.avatar_url} name={player.name} size={28} />}
+        {isScheduled ? (
+          <SkewChip tone="accent">{t('matchList.versus')}</SkewChip>
+        ) : (
+          <span className="shrink-0 font-heading text-title text-fg tabular-nums">{match.game_score}</span>
+        )}
+        <Link
+          href={`/players/${match.opponent_id}`}
+          className={cn('relative z-10 flex min-h-7 min-w-0 items-center gap-2 rounded-poke-sm text-body font-[550] text-fg hover:text-accent-ink', FOCUS)}
+        >
+          <PlayerAvatar avatarUrl={match.opponent_avatar_url} name={match.opponent_name} size={28} />
+          <span className="truncate">{match.opponent_name}</span>
+        </Link>
+      </div>
 
-      <Link
-        href={`/players/${match.opponent_id}`}
-        className="relative z-10 flex items-center gap-2 min-w-0 shrink-0 hover:opacity-80 transition-opacity"
-      >
-        <PlayerAvatar
-          avatarUrl={match.opponent_avatar_url}
-          name={match.opponent_name}
-          size={28}
-        />
-        <span className="text-sm font-semibold text-poke-text-primary truncate max-w-[120px]">
-          {match.opponent_name}
-        </span>
-      </Link>
-
-      {!isScheduled && (
-        <span className="text-sm font-heading font-bold text-poke-text-primary shrink-0">
-          {match.game_score}
-        </span>
-      )}
-
-      <Link
-        href={`/tournaments/${match.tournament_id}`}
-        className="relative z-10 text-xs text-poke-text-tertiary truncate flex-1 text-right hover:text-poke-accent transition-colors"
-      >
-        {match.tournament_name}
-      </Link>
-
-      {match.date_played && (
-        <span className="text-[10px] text-poke-text-tertiary shrink-0">
-          {formatter.instant(match.date_played, 'date')}
-        </span>
-      )}
-    </div>
+      <div className="ml-auto flex min-w-0 items-center gap-3">
+        <Link
+          href={`/tournaments/${match.tournament_id}`}
+          className={cn('relative z-10 min-h-6 truncate rounded-poke-sm text-caption/6 text-fg-muted hover:text-accent-ink', FOCUS)}
+        >
+          {match.tournament_name}
+        </Link>
+        {match.date_played && (
+          <span className="shrink-0 font-mono text-micro text-fg-muted tabular-nums">{formatter.instant(match.date_played, 'date')}</span>
+        )}
+      </div>
+    </li>
   );
 }
 
-export default function ProfileMatchList({
-  title: _title,
-  matches,
-  playerId,
-  emptyMessage,
-}: ProfileMatchListProps) {
+export default function ProfileMatchList({ title: _title, matches, playerId, emptyMessage, player }: ProfileMatchListProps) {
   const t = useT(profileMessages);
+  if (matches.length === 0) {
+    return <p className="text-body text-fg-muted">{emptyMessage ?? t('matchList.empty')}</p>;
+  }
   return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-6 shadow-poke">
-      {matches.length > 0 ? (
-        <div className="space-y-2">
-          {matches.map((m) => (
-            <MatchResult key={m.id} match={m} playerId={playerId} />
-          ))}
-        </div>
-      ) : (
-        <p className="text-sm text-poke-text-tertiary py-4 text-center">{emptyMessage ?? t('matchList.empty')}</p>
-      )}
-    </div>
+    <ul className="flex flex-col gap-2">
+      {matches.map((m) => (
+        <MatchRow key={m.id} match={m} playerId={playerId} player={player} />
+      ))}
+    </ul>
   );
 }
