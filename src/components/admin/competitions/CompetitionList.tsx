@@ -19,8 +19,8 @@ import { Search } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import ItemIcon from '@/components/ui/ItemIcon';
+import LinkTabs from '@/components/ui/LinkTabs';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
-import SkewPlate from '@/components/ui/SkewPlate';
 import { cn } from '@/lib/utils/cn';
 import { useFormatter, useT } from '@/i18n/client';
 import { adminCompetitionsMessages } from '@/i18n/messages/admin-competitions';
@@ -86,27 +86,17 @@ export default function CompetitionList(props: Props) {
   return (
     <div className="space-y-4" data-competition-list data-kind={kind} data-view={view}>
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3">
-        <nav aria-label={t('kind.label')} className="flex gap-2" data-competition-kinds>
-          {(['league', 'tournament'] as const).map((entry) => {
-            const current = entry === kind;
-            return (
-              <Link
-                key={entry}
-                href={competitionHref(entry, entry === otherKind && view === 'trash' ? 'active' : view)}
-                prefetch={false}
-                aria-current={current ? 'page' : undefined}
-                className={cn('inline-flex min-h-11 items-center rounded-poke-sm sm:min-h-0', FOCUS)}
-              >
-                <SkewPlate variant="tab" active={current}>
-                  <span className="inline-flex items-center gap-2">
-                    <ItemIcon item={KIND_ICON[entry]} size={24} className="-my-1" />
-                    {t(`kind.${entry}`)}
-                  </span>
-                </SkewPlate>
-              </Link>
-            );
-          })}
-        </nav>
+        <LinkTabs
+          label={t('kind.label')}
+          glideId="competition-kind"
+          activeKey={kind}
+          tabs={(['league', 'tournament'] as const).map((entry) => ({
+            key: entry,
+            href: competitionHref(entry, entry === otherKind && view === 'trash' ? 'active' : view),
+            label: t(`kind.${entry}`),
+            icon: <ItemIcon item={KIND_ICON[entry]} size={24} />,
+          }))}
+        />
 
         <nav aria-label={t('view.label')} className="flex flex-wrap gap-1" data-competition-views>
           {views.map((entry) => {
