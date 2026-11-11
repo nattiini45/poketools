@@ -1,5 +1,5 @@
 /** @vitest-environment jsdom */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import GlobalError from '../global-error';
@@ -43,5 +43,16 @@ describe('global-error', () => {
     expect(document.body.textContent).not.toContain('Reference');
     await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }));
     expect(reset).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows MissingNo as a decorative image and drops its plate when the image fails to load', () => {
+    renderBoundary(new Error(RAW));
+    const img = document.querySelector('img');
+    expect(img?.getAttribute('src')).toBe('https://play.pokemonshowdown.com/sprites/gen5/missingno.png');
+    expect(img?.getAttribute('alt')).toBe('');
+    expect(screen.queryByRole('img')).toBeNull();
+    fireEvent.error(img as HTMLImageElement);
+    expect((img?.parentElement as HTMLElement).style.display).toBe('none');
+    expect(screen.getByText('A critical error occurred.')).toBeTruthy();
   });
 });

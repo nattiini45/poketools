@@ -13,7 +13,13 @@ import { useSyncExternalStore } from "react";
  * of globals.css (--sunken #E8D9B5, --fg #241A0C, --fg-muted #5C4E37, --accent-fill #CF660B): the root CSS and the
  * theme may be gone when this renders, so the page is light sand in every theme, never dark. Contrast: ink on
  * ground 12.23:1, muted on ground 5.78:1, ink on the button 4.53:1.
+ *
+ * MissingNo is the error boundary's sprite (ErrorState): the same Showdown URL as a constant, drawn at 2x and
+ * cropped to its 24 x 57 glitch block with inline styles, so it needs neither an import nor the stylesheet. If the
+ * image does not load, its plate is removed and the page reads as text.
  */
+
+const MISSINGNO_URL = "https://play.pokemonshowdown.com/sprites/gen5/missingno.png";
 
 type GlobalErrorLocale = "en" | "de";
 
@@ -61,7 +67,24 @@ export default function GlobalError({
     <html lang={locale}>
       <body className="bg-[#E8D9B5] text-[#241A0C] font-sans antialiased">
         <div className="flex flex-col items-center justify-center min-h-screen gap-6 text-center px-4">
-          <div className="text-5xl">💥</div>
+          <span
+            aria-hidden="true"
+            style={{ position: "relative", display: "block", margin: "0 auto", width: 80, height: 136, overflow: "hidden", borderRadius: 3, border: "1px solid #C9B183", background: "#FFF8E9" }}
+          >
+            {/* eslint-disable-next-line @next/next/no-img-element -- pixel art at a whole-number scale, no import in the crash fallback */}
+            <img
+              src={MISSINGNO_URL}
+              alt=""
+              width={192}
+              height={192}
+              decoding="async"
+              onError={(event) => {
+                const plate = event.currentTarget.parentElement;
+                if (plate) plate.style.display = "none";
+              }}
+              style={{ position: "absolute", left: -56, top: -29, maxWidth: "none", imageRendering: "pixelated" }}
+            />
+          </span>
           <div>
             <h2 className="text-xl font-bold mb-2">
               {copy.heading}
