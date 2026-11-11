@@ -7,24 +7,17 @@ const P = formatPack.messages.de.leagueAdmin;
 export default defineDe<typeof en>()({
   list: {
     title: 'Ligen verwalten',
-    viewArchived: 'Archiv anzeigen',
-    newLeague: '+ Neue Liga',
-    empty: 'Noch keine Ligen.',
     stages: { one: '{count} Phase', other: '{count} Phasen' },
     testBadge: 'Test',
   },
   archived: {
     title: 'Archivierte Ligen',
-    back: 'Zurück zu den Ligen',
-    empty: 'Keine archivierten Ligen.',
-    badge: 'Archiviert',
   },
   trash: {
     title: 'Liga-Papierkorb',
     subtitle:
       'Gelöschte Ligen bleiben hier {days} Tage lang erhalten. Eine Wiederherstellung bringt eine Liga mit ihren Phasen, Matches, Spielen, Drafts und Einstellungen zurück, oder stellt gar nichts wieder her.',
     back: 'Zurück zu den Ligen',
-    link: 'Liga-Papierkorb',
     empty: 'Der Papierkorb ist leer.',
     caption: 'Gelöschte Ligen',
     columns: {

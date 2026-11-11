@@ -15,17 +15,11 @@ const P = formatPack.messages.en.leagueAdmin;
 export default {
   list: {
     title: 'Manage Leagues',
-    viewArchived: 'View Archived',
-    newLeague: '+ New League',
-    empty: 'No leagues yet.',
     stages: { one: '{count} stage', other: '{count} stages' },
     testBadge: 'Test',
   },
   archived: {
     title: 'Archived Leagues',
-    back: 'Back to Leagues',
-    empty: 'No archived leagues.',
-    badge: 'Archived',
   },
   /**
    * The league trash (`/admin/leagues/trash`, superadmin only): deleted leagues wait here until `{days}` days
@@ -38,8 +32,6 @@ export default {
     subtitle:
       'Deleted leagues stay here for {days} days. A restore brings a league back with its phases, matches, games, drafts and settings, or restores nothing at all.',
     back: 'Back to Leagues',
-    /** The link on the league list. */
-    link: 'League trash',
     empty: 'The trash is empty.',
     caption: 'Deleted leagues',
     columns: {

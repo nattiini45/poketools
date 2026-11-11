@@ -4,16 +4,10 @@ import type en from './en';
 export default defineDe<typeof en>()({
   list: {
     title: 'Turniere verwalten',
-    viewArchived: 'Archiv anzeigen',
-    newTournament: '+ Neues Turnier',
-    empty: 'Noch keine Turniere.',
     doubles: 'Doppel',
   },
   archived: {
     title: 'Archivierte Turniere',
-    back: 'Zurück zu den Turnieren',
-    empty: 'Keine archivierten Turniere.',
-    badge: 'Archiviert',
   },
   create: {
     title: 'Turnier erstellen',

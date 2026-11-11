@@ -496,8 +496,34 @@
       "needs": []
     },
     {
+      "id": "admin-leagues-trash",
+      "url": "/admin/leagues/trash",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
       "id": "admin-tournaments",
       "url": "/admin/tournaments",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-tournaments-archived",
+      "url": "/admin/tournaments/archived",
       "fullPage": true,
       "matrix": {
         "lang": [
