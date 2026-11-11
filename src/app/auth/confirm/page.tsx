@@ -22,7 +22,7 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
 
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-2">
+      <h1 className="font-heading text-display text-fg mb-4">
         {t('confirmEmail.title')}
       </h1>
       {tokenHash ? (
@@ -32,7 +32,7 @@ export default async function ConfirmPage({ searchParams }: ConfirmPageProps) {
           <Alert variant="error">
             {t('confirmEmail.missingToken')}
           </Alert>
-          <Link href="/auth/verify-email" className="text-sm underline text-poke-text-secondary hover:text-poke-text-primary">
+          <Link href="/auth/verify-email" className="text-sm text-accent-ink underline underline-offset-2 hover:text-fg">
             {t('confirmEmail.resend')}
           </Link>
         </div>
