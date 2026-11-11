@@ -15,8 +15,10 @@ interface RatingBadgeProps {
    * - `tier`: ball + tier label (e.g. "Great Ball"). Renders the rating-based
    *   tier even when provisional, with a "Provisional" chip when `rd > 100`.
    *   Hover/title shows the underlying `rating ± rd`.
+   * - `plate`: the profile's rating plate (Direction B): the tier ball, the rating in the scoreboard face, ± rd
+   *   and the tier name on a skewed plate, with a "Provisional" note when `rd > 100`.
    */
-  variant?: 'numeric' | 'tier';
+  variant?: 'numeric' | 'tier' | 'plate';
 }
 
 const SIZE_CLASSES: Record<NonNullable<RatingBadgeProps['size']>, string> = {
@@ -59,6 +61,26 @@ export default function RatingBadge({
   // Strings, not numbers: a rating reads "1500", never a grouped "1,500".
   const ratingText = String(Math.round(rating));
   const rdText = String(Math.round(rd));
+  if (variant === 'plate') {
+    const { tier, provisional } = getRatingTierForDisplay(rating, rd);
+    return (
+      <span className="skew-plate px-3.5 py-2 text-fg">
+        <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-surface" />
+        <span className="flex flex-wrap items-center gap-x-2.5 gap-y-1">
+          <PokeballIcon ball={tier} size={24} className="shrink-0" />
+          <span className="font-heading text-display tabular-nums">{ratingText}</span>
+          <span className="flex flex-col">
+            <span className="text-caption font-[550]">{localizeItem(RATING_TIER_META[tier].label, dl)}</span>
+            <span className="font-mono text-micro text-fg-muted tabular-nums">
+              {t('rating.deviation', { rd: rdText })}
+              {provisional && <> · {t('rating.provisional')}</>}
+            </span>
+          </span>
+        </span>
+      </span>
+    );
+  }
+
   if (variant === 'tier') {
     const { tier, provisional } = getRatingTierForDisplay(rating, rd);
     const meta = RATING_TIER_META[tier];

@@ -8,11 +8,14 @@ interface StreakRecordsProps {
   streaks: PlayerStreaks;
 }
 
-function RecordCard({ label, value }: { label: string; value: number }) {
+function RecordPlate({ label, value }: { label: string; value: number }) {
   return (
-    <div className="bg-poke-elevated border border-poke-border rounded-poke-lg p-3 text-center">
-      <div className="text-2xl font-heading font-bold text-poke-text-primary">{value}</div>
-      <div className="text-xs uppercase tracking-wide text-poke-text-tertiary mt-1">{label}</div>
+    <div className="skew-plate justify-items-start px-3.5 py-2">
+      <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-elevated" />
+      <div className="flex flex-col-reverse">
+        <dt className="text-caption text-fg-muted">{label}</dt>
+        <dd className="font-heading text-title text-fg tabular-nums">{value}</dd>
+      </div>
     </div>
   );
 }
@@ -20,14 +23,14 @@ function RecordCard({ label, value }: { label: string; value: number }) {
 export default function StreakRecords({ streaks }: StreakRecordsProps) {
   const t = useT(gamificationMessages);
   return (
-    <section className="bg-poke-surface border border-poke-border rounded-poke-xl p-5 shadow-poke">
-      <h3 className="text-base font-heading font-bold text-poke-text-primary mb-3">{t('streaks.recordsTitle')}</h3>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <RecordCard label={t('streaks.bestWin')} value={streaks.best_win_streak} />
-        <RecordCard label={t('streaks.bestLoss')} value={streaks.best_loss_streak} />
-        <RecordCard label={t('streaks.bestKo')} value={streaks.best_ko_streak} />
-        <RecordCard label={t('streaks.bestFlawless')} value={streaks.best_flawless_streak} />
-      </div>
+    <section>
+      <h3 className="mb-2.5 text-subtitle font-[550] text-fg">{t('streaks.recordsTitle')}</h3>
+      <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 px-1.5">
+        <RecordPlate label={t('streaks.bestWin')} value={streaks.best_win_streak} />
+        <RecordPlate label={t('streaks.bestLoss')} value={streaks.best_loss_streak} />
+        <RecordPlate label={t('streaks.bestKo')} value={streaks.best_ko_streak} />
+        <RecordPlate label={t('streaks.bestFlawless')} value={streaks.best_flawless_streak} />
+      </dl>
     </section>
   );
 }

@@ -9,6 +9,25 @@ export default defineDe<typeof en>()({
     hidden: 'Versteckter Erfolg',
     earnedTooltip: '{description} • Erhalten am {date}',
     timesEarned: '{tier} • {count}×',
+    earnedCount: '{earned} von {total} Erfolgen erhalten',
+    earnedOn: 'Erhalten am {date}',
+    locked: 'Gesperrt',
+    progress: '{current} / {target}',
+    progressAria: 'Fortschritt: {current} von {target}',
+    categoryNames: {
+      combat: 'Kampf',
+      milestone: 'Meilensteine',
+      social: 'Community',
+      rare: 'Selten',
+      meta: 'Meta',
+    },
+    tierNames: {
+      bronze: 'Bronze',
+      silver: 'Silber',
+      gold: 'Gold',
+      platinum: 'Platin',
+      legendary: 'Legendär',
+    },
     categories: {
       combat: 'Kampf',
       milestone: 'Meilenstein',
@@ -29,6 +48,7 @@ export default defineDe<typeof en>()({
     provisionalAria: 'Vorläufige Wertung',
     ratingTitle: '{rating} ± {rd}',
     ratingTitleProvisional: '{rating} ± {rd} (vorläufig)',
+    deviation: '± {rd}',
   },
   ratingHistory: {
     empty: 'Noch kein Wertungsverlauf',
@@ -39,6 +59,7 @@ export default defineDe<typeof en>()({
   signatures: {
     unlockAt: { one: 'Ab {count} Partie freigeschaltet', other: 'Ab {count} Partien freigeschaltet' },
     games: { one: '{count} Partie', other: '{count} Partien' },
+    locked: 'Gesperrter Platz',
   },
   streaks: {
     win: 'Siegesserie',
