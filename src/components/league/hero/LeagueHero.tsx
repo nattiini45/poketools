@@ -29,7 +29,7 @@ interface LeagueHeroProps {
 
 /**
  * The league hero (plan §4.2, B2; Direction B's versus screen): the league's name, status and matchday on the
- * arena sand, and the match that matters to this viewer on the dark slab: their own next match with its
+ * arena sand, and the match that matters to this viewer on the versus slab: their own next match with its
  * actions, else the live match, else the next kickoff, else the top of the table. It is the page's `h1` and the
  * only place that carries world lore (D9). Server component; it renders from the world payload alone.
  */
