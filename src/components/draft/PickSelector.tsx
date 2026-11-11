@@ -194,12 +194,11 @@ export default function PickSelector({
         );
         const json = await res.json();
         if (json.success) {
-          // The species search returns names only; rows read `types`.
+          // The species search returns `{ name, id }` (or bare names); rows read `name` and `types`.
           setApiResults(
-            (json.data as Array<Omit<PokemonSearchResult, 'types'> & { types?: string[] }>).map((mon) => ({
-              ...mon,
-              types: mon.types ?? [],
-            })),
+            (json.data as Array<string | (Omit<PokemonSearchResult, 'types'> & { types?: string[] })>).map((mon) =>
+              typeof mon === 'string' ? { name: mon, types: [] } : { ...mon, types: mon.types ?? [] },
+            ),
           );
         }
       } catch (err) {
