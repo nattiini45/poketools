@@ -26,7 +26,6 @@ import Input from '@/components/ui/Input';
 import ItemIcon from '@/components/ui/ItemIcon';
 import Modal from '@/components/ui/Modal';
 import Select from '@/components/ui/Select';
-import SkewChip from '@/components/ui/SkewChip';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import GuestBadge from '@/components/shared/GuestBadge';
 import TypeSprite from '@/components/shared/TypeSprite';
@@ -564,7 +563,11 @@ export default function LeagueRosterManager({
                   <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={24} />
                   <span className="min-w-0 truncate">{p.name}</span>
                   {p.is_guest && <GuestBadge />}
-                  {p.is_test_account && <SkewChip tone="tier-1">{t('roster.testBadge')}</SkewChip>}
+                  {p.is_test_account && (
+                    <span className="inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-poke-amber-ink">
+                      {t('roster.testBadge')}
+                    </span>
+                  )}
                 </div>
                 <div className="flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-3 gap-y-1">
                   {showTypeSelector && (
