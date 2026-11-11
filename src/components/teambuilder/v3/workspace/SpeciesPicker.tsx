@@ -25,9 +25,9 @@ const STAT_COLUMNS: readonly StatKey[] = ['hp', 'atk', 'def', 'spa', 'spd', 'spe
 
 // Shared column widths so the header row and the data cells stay aligned.
 // Narrow on mobile (the whole table stays visible, Showdown-style), roomier ≥ sm.
-const TIER_COL = 'w-7 sm:w-10';
-const STAT_COL = 'w-6 sm:w-9';
-const BST_COL = 'w-7 sm:w-10';
+const TIER_COL = 'w-9 sm:w-10';
+const STAT_COL = 'w-7 sm:w-9';
+const BST_COL = 'max-sm:hidden w-10';
 const PICK_COL = 'w-9 sm:w-14';
 
 interface SpeciesPickerProps {
@@ -303,7 +303,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
     // Show a priority number only when multiple criteria are stacked.
     const prefix = sortCriteria.length > 1 ? idx + 1 : '';
     return (
-      <span className="ml-0.5 text-poke-blue">
+      <span className="ml-0.5 text-accent-ink">
         {prefix}
         {dir === 'desc' ? '▾' : '▴'}
       </span>
@@ -333,23 +333,23 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
         key={pokemon.pokemon_name}
         type="button"
         className={`w-full flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-2 text-left transition-colors ${
-          onTeam || taken ? 'opacity-40 cursor-not-allowed' : 'hover:bg-poke-surface'
+          onTeam || taken ? 'opacity-40 cursor-not-allowed' : 'hover:bg-hover'
         }`}
         onClick={() => !onTeam && !taken && onSelect(pokemon.pokemon_name)}
         disabled={onTeam || taken}
       >
         <PokemonSprite name={pokemon.pokemon_name} size={32} className="shrink-0" />
         <div className="flex-1 min-w-0">
-          <span className="text-xs sm:text-sm text-poke-text-primary block truncate">
+          <span className="text-xs sm:text-sm text-fg block truncate">
             {localizeSpecies(pokemon.pokemon_name, dl)}
             {onTeam && (
-              <span className="ml-1.5 text-[9px] text-poke-blue">{t('speciesPicker.onTeam')}</span>
+              <span className="ml-1.5 text-caption text-accent-ink">{t('speciesPicker.onTeam')}</span>
             )}
             {isOwnPick && !onTeam && (
-              <span className="ml-1.5 text-[9px] text-green-500">{t('speciesPicker.yourPick')}</span>
+              <span className="ml-1.5 text-caption text-win">{t('speciesPicker.yourPick')}</span>
             )}
             {taken && (
-              <span className="ml-1.5 text-[9px] text-poke-text-muted">{t('speciesPicker.taken')}</span>
+              <span className="ml-1.5 text-caption text-fg-muted">{t('speciesPicker.taken')}</span>
             )}
           </span>
           <div className="flex gap-1 mt-0.5">
@@ -358,19 +358,19 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
             ))}
           </div>
         </div>
-        <div className="flex items-center shrink-0 text-[9px] sm:text-[11px] tabular-nums">
-          <span className={`${TIER_COL} text-center text-poke-text-muted`}>
+        <div className="flex items-center shrink-0 text-caption sm:text-caption tabular-nums">
+          <span className={`${TIER_COL} text-center text-fg-muted`}>
             {pokemon.tier ?? '—'}
           </span>
           {STAT_COLUMNS.map((key) => (
-            <span key={key} className={`${STAT_COL} text-center text-poke-text-muted`}>
+            <span key={key} className={`${STAT_COL} text-center text-fg-muted`}>
               {pokemon.base_stats?.[key] ?? '—'}
             </span>
           ))}
-          <span className={`${BST_COL} text-center text-poke-text-secondary font-medium`}>
+          <span className={`${BST_COL} text-center text-fg-muted font-medium`}>
             {bst ?? '—'}
           </span>
-          <span className={`${PICK_COL} text-right text-poke-text-muted`}>
+          <span className={`${PICK_COL} text-right text-fg-muted`}>
             {draft
               ? cost != null
                 ? t('speciesPicker.costValue', { cost })
@@ -391,14 +391,14 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
 
       {/* No-meta-data banner */}
       {!loading && pokemonList.length > 0 && !hasUsageData && (
-        <div className="px-4 py-1.5 text-[10px] text-yellow-600 dark:text-yellow-500 bg-yellow-500/10 border-b border-poke-border shrink-0">
+        <div className="px-4 py-1.5 text-caption text-fg bg-accent-subtle border-b border-hairline shrink-0">
           {t('speciesPicker.noUsageData', { format: state.format })}
         </div>
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2.5 border-b border-poke-border shrink-0">
-        <h3 className="font-heading font-semibold text-poke-text-primary text-sm">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-hairline shrink-0">
+        <h3 className="font-heading font-semibold text-fg text-sm">
           {t('speciesPicker.title')}
         </h3>
         <div className="flex items-center gap-3">
@@ -406,8 +406,8 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
             <button
               type="button"
               onClick={() => setShowTaken((v) => !v)}
-              className={`text-[10px] transition-colors ${
-                showTaken ? 'text-poke-blue' : 'text-poke-text-muted hover:text-poke-text-secondary'
+              className={`text-caption transition-colors ${
+                showTaken ? 'text-accent-ink' : 'text-fg-muted hover:text-fg'
               }`}
             >
               {showTaken ? t('speciesPicker.hideTaken') : t('speciesPicker.showTaken')}
@@ -416,7 +416,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
           {onCancel && (
             <button
               type="button"
-              className="text-xs text-poke-text-muted hover:text-poke-text-secondary transition-colors"
+              className="text-xs text-fg-muted hover:text-fg transition-colors"
               onClick={onCancel}
             >
               {t('common.cancel')}
@@ -426,11 +426,11 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       </div>
 
       {/* Search */}
-      <div className="px-4 py-2 border-b border-poke-border shrink-0">
+      <div className="px-4 py-2 border-b border-hairline shrink-0">
         <input
           ref={inputRef}
           type="text"
-          className="w-full bg-poke-surface border border-poke-border rounded-lg px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent"
+          className="w-full bg-surface border border-hairline rounded-lg px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:ring-1 transition-all outline-2 outline-offset-2 outline-transparent pointer-coarse:text-base pointer-coarse:min-h-11"
           placeholder={t('speciesPicker.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
@@ -442,7 +442,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       </div>
 
       {/* Type filters */}
-      <div className="px-4 py-2 border-b border-poke-border shrink-0">
+      <div className="px-4 py-2 border-b border-hairline shrink-0">
         <div className="flex flex-wrap gap-1">
           {TYPE_NAMES.map((type) => {
             const isActive = typeFilters.includes(type);
@@ -452,7 +452,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
                 type="button"
                 className={`inline-flex items-center rounded transition-all ${
                   isActive
-                    ? 'ring-1 ring-poke-blue/40 bg-poke-blue/15'
+                    ? 'ring-1 ring-accent-ink bg-accent-subtle'
                     : 'opacity-40 hover:opacity-75'
                 }`}
                 onClick={() => toggleTypeFilter(type)}
@@ -466,7 +466,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
           {typeFilters.length > 0 && (
             <button
               type="button"
-              className="text-[10px] text-poke-text-muted hover:text-poke-text-secondary px-1.5 transition-colors"
+              className="text-caption text-fg-muted hover:text-fg px-1.5 transition-colors"
               onClick={() => setTypeFilters([])}
             >
               {t('common.clear')}
@@ -476,13 +476,13 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       </div>
 
       {/* Controls: tier grouping + clear sort (its own row so it fits mobile) */}
-      <div className="flex items-center gap-3 px-2 sm:px-4 py-1.5 border-b border-poke-border shrink-0">
+      <div className="flex items-center gap-3 px-2 sm:px-4 py-1.5 border-b border-hairline shrink-0">
         <button
           type="button"
           onClick={() => setGroupByTier((v) => !v)}
           aria-pressed={groupByTier}
-          className={`text-[10px] transition-colors ${
-            groupByTier ? 'text-poke-blue' : 'text-poke-text-muted hover:text-poke-text-secondary'
+          className={`text-caption transition-colors ${
+            groupByTier ? 'text-accent-ink' : 'text-fg-muted hover:text-fg'
           }`}
         >
           {t('speciesPicker.groupByTier')}
@@ -492,7 +492,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
           <button
             type="button"
             onClick={() => setSortCriteria([])}
-            className="text-[10px] text-poke-text-muted hover:text-poke-text-secondary transition-colors"
+            className="text-caption text-fg-muted hover:text-fg transition-colors"
           >
             {t('speciesPicker.clearSort')}
           </button>
@@ -500,14 +500,14 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       </div>
 
       {/* Column headers — tap any column to build the sort stack (all breakpoints) */}
-      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1 border-b border-poke-border text-[9px] sm:text-[10px] font-medium text-poke-text-muted select-none shrink-0">
+      <div className="flex items-center gap-1.5 sm:gap-2 px-2 sm:px-4 py-1 border-b border-hairline text-caption sm:text-caption font-medium text-fg-muted select-none shrink-0">
         <div className="shrink-0" style={{ width: 32 }} />
         <div className="flex-1 min-w-0" />
         <div className="flex items-center shrink-0">
           <button
             type="button"
-            className={`${TIER_COL} text-center transition-colors hover:text-poke-text-secondary ${
-              isSorted('tier') ? 'text-poke-blue' : ''
+            className={`${TIER_COL} text-center transition-colors hover:text-fg ${
+              isSorted('tier') ? 'text-accent-ink' : ''
             }`}
             onClick={() => handleSort('tier')}
           >
@@ -517,8 +517,8 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
             <button
               key={key}
               type="button"
-              className={`${STAT_COL} text-center whitespace-nowrap transition-colors hover:text-poke-text-secondary ${
-                isSorted(key) ? 'text-poke-blue' : ''
+              className={`${STAT_COL} text-center whitespace-nowrap transition-colors hover:text-fg ${
+                isSorted(key) ? 'text-accent-ink' : ''
               }`}
               onClick={() => handleSort(key)}
               title={localizeStat(key, dl, 'long')}
@@ -529,8 +529,8 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
           ))}
           <button
             type="button"
-            className={`${BST_COL} text-center transition-colors hover:text-poke-text-secondary ${
-              isSorted('bst') ? 'text-poke-blue' : ''
+            className={`${BST_COL} text-center transition-colors hover:text-fg ${
+              isSorted('bst') ? 'text-accent-ink' : ''
             }`}
             onClick={() => handleSort('bst')}
           >
@@ -538,8 +538,8 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
           </button>
           <button
             type="button"
-            className={`${PICK_COL} text-right transition-colors hover:text-poke-text-secondary ${
-              isSorted('pick') ? 'text-poke-blue' : ''
+            className={`${PICK_COL} text-right transition-colors hover:text-fg ${
+              isSorted('pick') ? 'text-accent-ink' : ''
             }`}
             onClick={() => handleSort('pick')}
           >
@@ -552,16 +552,16 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
       {/* Results */}
       <div className="flex-1 overflow-y-auto">
         {loading ? (
-          <div className="p-4 text-center text-sm text-poke-text-muted">{t('common.loading')}</div>
+          <div className="p-4 text-center text-sm text-fg-muted">{t('common.loading')}</div>
         ) : sorted.length === 0 ? (
-          <div className="p-4 text-center text-sm text-poke-text-muted">{t('speciesPicker.empty')}</div>
+          <div className="p-4 text-center text-sm text-fg-muted">{t('speciesPicker.empty')}</div>
         ) : view.groups ? (
           view.groups.map((group) => (
             <div key={group.tier ?? '__untiered'}>
               {/* Sticky tier header — opaque bg so rows don't ghost through */}
-              <div className="sticky top-0 z-10 bg-poke-surface border-b border-poke-border px-2 sm:px-4 py-1 text-[10px] font-semibold text-poke-text-secondary">
+              <div className="sticky top-0 z-10 bg-surface border-b border-hairline px-2 sm:px-4 py-1 text-caption font-semibold text-fg-muted">
                 {group.label}{' '}
-                <span className="text-poke-text-muted">({group.items.length})</span>
+                <span className="text-fg-muted">({group.items.length})</span>
               </div>
               {group.items.map(renderRow)}
             </div>

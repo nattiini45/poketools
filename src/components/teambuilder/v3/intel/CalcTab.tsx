@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeBadge from '@/components/shared/TypeBadge';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import { useDataLocale, useFormatter, useLocale, useT } from '@/i18n/client';
 import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
 import { errorsStats } from '@/i18n/messages/errors/stats';
@@ -29,11 +30,11 @@ function koToken(n: number): string {
   return n <= 1 ? 'OHKO' : `${n}HKO`;
 }
 
-const KO_COLORS: Record<KoLevel, string> = {
-  guaranteed: 'bg-red-500/80 text-white',
-  likely: 'bg-orange-500/80 text-white',
-  possible: 'bg-yellow-500/80 text-zinc-900',
-  unlikely: 'bg-poke-surface text-poke-text-muted',
+const KO_TONES: Record<KoLevel, SkewChipTone> = {
+  guaranteed: 'loss',
+  likely: 'tier-2',
+  possible: 'tier-1',
+  unlikely: 'neutral',
 };
 
 /** Strip empty/undefined entries so the calc API gets a clean field object */
@@ -222,21 +223,21 @@ export default function CalcTab() {
     <div className="space-y-3">
       {/* Field conditions */}
       <div>
-        <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide mb-1.5">
+        <h4 className="text-caption font-[550] text-fg mb-1.5">
           {t('calc.fieldConditions')}
         </h4>
         <div className="space-y-1.5">
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] text-poke-text-muted w-14 shrink-0">{t('calc.weather')}</span>
+            <span className="text-caption text-fg-muted w-14 shrink-0">{t('calc.weather')}</span>
             {WEATHER_OPTIONS.map((value) => (
               <button
                 key={value}
                 onClick={() => setWeather(value)}
                 className={[
-                  'px-1.5 py-0.5 text-[10px] rounded border transition-colors',
+                  'rounded border px-1.5 py-0.5 text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11 pointer-coarse:px-3',
                   weather === value
-                    ? 'bg-poke-blue/20 border-poke-blue/60 text-poke-blue'
-                    : 'border-poke-border text-poke-text-muted hover:text-poke-text-secondary',
+                    ? 'bg-accent-subtle border-accent-ink text-accent-ink'
+                    : 'border-hairline text-fg hover:border-hairline-strong hover:bg-hover',
                 ].join(' ')}
               >
                 {value ? localizeWeather(value, dl) : t('common.none')}
@@ -244,16 +245,16 @@ export default function CalcTab() {
             ))}
           </div>
           <div className="flex items-center gap-1 flex-wrap">
-            <span className="text-[10px] text-poke-text-muted w-14 shrink-0">{t('calc.terrain')}</span>
+            <span className="text-caption text-fg-muted w-14 shrink-0">{t('calc.terrain')}</span>
             {TERRAIN_OPTIONS.map((value) => (
               <button
                 key={value}
                 onClick={() => setTerrain(value)}
                 className={[
-                  'px-1.5 py-0.5 text-[10px] rounded border transition-colors',
+                  'rounded border px-1.5 py-0.5 text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11 pointer-coarse:px-3',
                   terrain === value
-                    ? 'bg-poke-blue/20 border-poke-blue/60 text-poke-blue'
-                    : 'border-poke-border text-poke-text-muted hover:text-poke-text-secondary',
+                    ? 'bg-accent-subtle border-accent-ink text-accent-ink'
+                    : 'border-hairline text-fg hover:border-hairline-strong hover:bg-hover',
                 ].join(' ')}
               >
                 {value ? localizeTerrain(value, dl) : t('common.none')}
@@ -265,13 +266,13 @@ export default function CalcTab() {
 
       {/* Matchup matrix */}
       {!attacker?.species ? (
-        <p className="text-[11px] text-poke-text-muted text-center py-4">
+        <p className="text-caption text-fg-muted text-center py-4">
           {t('calc.empty')}
         </p>
       ) : (
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <h4 className="text-[9px] text-poke-text-muted uppercase tracking-wide">
+            <h4 className="text-caption font-[550] text-fg">
               {t('calc.matchupTitle', {
                 species: localizeSpecies(attacker.species, dl),
                 opponent:
@@ -281,7 +282,7 @@ export default function CalcTab() {
               })}
             </h4>
             {loading && (
-              <span className="text-[9px] text-poke-text-muted animate-pulse">{t('calc.calculating')}</span>
+              <span className="text-caption text-fg-muted animate-pulse">{t('calc.calculating')}</span>
             )}
           </div>
 
@@ -298,10 +299,10 @@ export default function CalcTab() {
                   key={id}
                   onClick={() => setSource(id)}
                   className={[
-                    'px-1.5 py-0.5 text-[10px] rounded border transition-colors',
+                    'rounded border px-1.5 py-0.5 text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11 pointer-coarse:px-3',
                     source === id
-                      ? 'bg-poke-blue/20 border-poke-blue/60 text-poke-blue'
-                      : 'border-poke-border text-poke-text-muted hover:text-poke-text-secondary',
+                      ? 'bg-accent-subtle border-accent-ink text-accent-ink'
+                      : 'border-hairline text-fg hover:border-hairline-strong hover:bg-hover',
                   ].join(' ')}
                 >
                   {label}
@@ -311,7 +312,7 @@ export default function CalcTab() {
           )}
 
           {isProjected && (
-            <p className="text-[9px] text-poke-text-muted mb-1.5">
+            <p className="text-caption text-fg-muted mb-1.5">
               {t('calc.projected', {
                 species: localizeSpecies(attacker.species, dl),
                 moves: usageMoves.map((m) => localizeMove(m, dl)).join(', '),
@@ -320,25 +321,25 @@ export default function CalcTab() {
           )}
 
           {calcError && !loading && (
-            <p className="text-[10px] text-poke-danger mb-1.5" role="alert">
+            <p className="text-caption text-loss mb-1.5" role="alert">
               {errorText(calcError)}
             </p>
           )}
 
           {defendersLoading ? (
-            <p className="text-[10px] text-poke-text-muted text-center py-2">{t('calc.loadingThreats')}</p>
+            <p className="text-caption text-fg-muted text-center py-2">{t('calc.loadingThreats')}</p>
           ) : source === 'meta' && threatsError && defenders.length === 0 ? (
-            <p className="text-[10px] text-poke-danger text-center py-2" role="alert">
+            <p className="text-caption text-loss text-center py-2" role="alert">
               {errorText(threatsError)}
             </p>
           ) : defenders.length === 0 ? (
-            <p className="text-[10px] text-poke-text-muted text-center py-2">
+            <p className="text-caption text-fg-muted text-center py-2">
               {source === 'opponent'
                 ? t('calc.noOpponentData')
                 : t('calc.noUsageData', { format: state.format })}
             </p>
           ) : calcMoves.length === 0 ? (
-            <p className="text-[10px] text-poke-text-muted text-center py-2">
+            <p className="text-caption text-fg-muted text-center py-2">
               {t('calc.pickMoves', { species: localizeSpecies(attacker.species, dl) })}
             </p>
           ) : (
@@ -363,12 +364,12 @@ export default function CalcTab() {
                 return (
                   <div
                     key={threat.species}
-                    className="flex items-center gap-2 py-1 border-b last:border-0"
+                    className="flex items-center gap-2 border-b border-hairline py-1.5 last:border-0"
                   >
                     <PokemonSprite name={threat.species} size={24} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
-                        <span className="text-[11px] text-poke-text-primary truncate">
+                        <span className="text-caption text-fg truncate">
                           {localizeSpecies(threat.species, dl)}
                         </span>
                         <div className="flex gap-0.5">
@@ -376,13 +377,14 @@ export default function CalcTab() {
                             <TypeBadge
                               key={t}
                               type={t}
-                              className="text-[7px]! px-0.5! py-0! min-w-[2rem]!"
+                              size="compact"
+                              className="px-1.5! py-0.5!"
                             />
                           ))}
                         </div>
                       </div>
                       {bestMove && (
-                        <span className="text-[10px] text-poke-text-muted truncate">
+                        <span className="text-caption text-fg-muted truncate">
                           {localizeMove(bestMove.move, dl)} —{' '}
                           {t('calc.damageRange', {
                             min: bestMove.damage.min_pct,
@@ -392,23 +394,22 @@ export default function CalcTab() {
                       )}
                     </div>
                     {bestMove && (
-                      <span
-                        className={`text-[9px] px-1.5 py-0.5 rounded font-medium shrink-0 ${KO_COLORS[koLevel]}`}
-                        title={koText || undefined}
-                      >
-                        {koLevel === 'guaranteed'
-                          ? koToken(ko?.n ?? 1)
-                          : koLevel === 'likely'
-                            ? t('calc.ko.likely')
-                            : koLevel === 'possible'
-                              ? t('calc.ko.possible')
-                              : bestMove.damage.max_pct > 0
-                                ? f.percentOf(bestMove.damage.max_pct, 1)
-                                : '—'}
+                      <span className="shrink-0" title={koText || undefined}>
+                        <SkewChip tone={KO_TONES[koLevel]} className="font-mono">
+                          {koLevel === 'guaranteed'
+                            ? koToken(ko?.n ?? 1)
+                            : koLevel === 'likely'
+                              ? t('calc.ko.likely')
+                              : koLevel === 'possible'
+                                ? t('calc.ko.possible')
+                                : bestMove.damage.max_pct > 0
+                                  ? f.percentOf(bestMove.damage.max_pct, 1)
+                                  : '—'}
+                        </SkewChip>
                       </span>
                     )}
                     {!bestMove && loading && (
-                      <span className="text-[9px] text-poke-text-muted">…</span>
+                      <span className="text-caption text-fg-muted">…</span>
                     )}
                   </div>
                 );
