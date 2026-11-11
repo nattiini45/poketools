@@ -6,7 +6,6 @@ import TestLeagueBadge from '@/components/league/TestLeagueBadge';
 import ItemIcon from '@/components/ui/ItemIcon';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import SkewPlate from '@/components/ui/SkewPlate';
-import DiscordLoginButton from '@/components/shared/DiscordLoginButton';
 import AgentChatWidget from '@/components/agent/AgentChatWidget';
 import Pokeball from '@/components/shared/Pokeball';
 import { getSessionPlayer } from '@/lib/auth/helpers';
@@ -18,6 +17,7 @@ import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { homeMessages } from '@/i18n/messages/home';
 import { leaguesMessages } from '@/i18n/messages/leagues';
+import { shellMessages } from '@/i18n/messages/shell';
 
 // Dynamic: the page reads the viewer's session. The lists and the featured
 // standings come from the tagged public read cache (60 s, expired by match
@@ -124,7 +124,7 @@ function EmptyTeaser({ text }: { text: string }) {
 }
 
 export default async function Home() {
-  const [tournaments, leagues, sessionPlayer, t, tCommon, tEnums, tLeagues] = await Promise.all([
+  const [tournaments, leagues, sessionPlayer, t, tCommon, tEnums, tLeagues, tShell] = await Promise.all([
     publicReads.tournamentList(),
     publicReads.seasonList(),
     getSessionPlayer(),
@@ -132,6 +132,7 @@ export default async function Home() {
     getT(commonMessages),
     getT(enumMessages),
     getT(leaguesMessages),
+    getT(shellMessages),
   ]);
   const isAuthenticated = sessionPlayer != null;
 
@@ -175,10 +176,11 @@ export default async function Home() {
                 </SkewPlate>
               </Link>
             ) : (
-              // The shared sign-in plate at the size of the page's other calls to action.
-              <span className="inline-flex min-h-11 items-center [&_.skew-plate]:px-5 [&_.skew-plate]:py-2.5">
-                <DiscordLoginButton />
-              </span>
+              <Link href="/auth/signin" className={PLATE_LINK}>
+                <SkewPlate variant="button" className="px-5 py-2.5">
+                  {tShell('session.signIn')}
+                </SkewPlate>
+              </Link>
             )}
             <Link href="/tournaments" className={PLATE_LINK}>
               <SkewPlate variant="button" tone="secondary" className="px-5 py-2.5">
