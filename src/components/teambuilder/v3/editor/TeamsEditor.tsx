@@ -323,6 +323,12 @@ export default function TeamsEditor({
                 ))}
               </Tabs>
             </div>
+            <div
+              id={`teambuilder-panel-panel-${Math.max(0, panelTabs.indexOf(state.rightPanelTab))}`}
+              role="tabpanel"
+              aria-labelledby={`teambuilder-panel-tab-${Math.max(0, panelTabs.indexOf(state.rightPanelTab))}`}
+              className="flex min-h-0 flex-1 flex-col"
+            >
             {state.rightPanelTab === 'intel' ? (
               <IntelPanel />
             ) : state.rightPanelTab === 'opponent' ? (
@@ -341,6 +347,7 @@ export default function TeamsEditor({
                 {state.rightPanelTab === 'ai' && <AiPanel />}
               </div>
             )}
+            </div>
           </div>
         </div>
 

@@ -33,7 +33,21 @@ export default function IntelPanel() {
             id={`intel-tab-${tab}`}
             aria-selected={active === tab}
             aria-controls="intel-tabpanel"
+            tabIndex={active === tab ? 0 : -1}
             onClick={() => dispatch({ type: 'SET_INTEL_TAB', tab })}
+            onKeyDown={(e) => {
+              const i = TABS.indexOf(tab);
+              const next =
+                e.key === 'ArrowRight' ? TABS[(i + 1) % TABS.length]
+                : e.key === 'ArrowLeft' ? TABS[(i + TABS.length - 1) % TABS.length]
+                : e.key === 'Home' ? TABS[0]
+                : e.key === 'End' ? TABS[TABS.length - 1]
+                : null;
+              if (!next) return;
+              e.preventDefault();
+              dispatch({ type: 'SET_INTEL_TAB', tab: next });
+              document.getElementById(`intel-tab-${next}`)?.focus();
+            }}
             className={[
               'inline-flex min-h-9 shrink-0 items-center text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11',
               active === tab ? 'text-fg' : 'text-fg-muted hover:text-fg',
