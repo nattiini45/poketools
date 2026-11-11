@@ -362,7 +362,7 @@ export default function Combobox(props: ComboboxProps) {
   return (
     <div ref={wrapperRef} className={cn('relative', className)}>
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
+        <label htmlFor={inputId} className="block text-xs font-body font-medium text-poke-text-secondary mb-1">
           {label}
         </label>
       )}

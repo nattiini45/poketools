@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import GymTypedName from '@/components/shared/GymTypedName';
-import { FOCUS_RING, PANEL_HOVER, PANEL_INSET } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+import { HUB_INSET as PANEL_INSET } from './hub-style';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import type { HubPhase } from '@/lib/league-hub/load';
 import { HubNotice, HubStatusChip } from './HubBits';
@@ -25,7 +26,7 @@ export default function HubPhasesPanel({ phases, copy }: HubPhasesPanelProps) {
         <li key={stage.id}>
           <Link
             href={`/tournaments/${stage.id}`}
-            className={`block ${PANEL_INSET} ${PANEL_HOVER} p-4 ${FOCUS_RING}`}
+            className={`block ${PANEL_INSET} p-4 transition-colors duration-[80ms] hover:bg-hover ${FOCUS_RING}`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">

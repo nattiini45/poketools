@@ -5,6 +5,7 @@ import AchievementGrid from '../AchievementGrid';
 import RatingBadge from '../RatingBadge';
 import RatingHistoryChart from '../RatingHistoryChart';
 import SignatureTeam from '../SignatureTeam';
+import StreakChips from '../StreakChips';
 import StreakIndicator from '../StreakIndicator';
 import StreakRecords from '../StreakRecords';
 import type { AchievementDefinition, EarnedAchievement } from '@/types/achievement';
@@ -48,10 +49,14 @@ const STREAKS = {
 describe('gamification components in both languages', () => {
   it('AchievementGrid renders the English catalog and falls back to DB text', () => {
     const html = renderWithI18n(<AchievementGrid achievements={[]} allDefinitions={[FIRST_WIN, CUSTOM]} />);
-    expect(html).toContain('Achievements');
+    expect(html).toContain('0 of 2 achievements earned');
     expect(html).toContain('First Victory');
     expect(html).toContain('Admin Special');
-    expect(html).toContain('milestone');
+    expect(html).toContain('Milestones');
+    // A locked achievement says what to do and that it is locked; no emoji is rendered.
+    expect(html).toContain('Win your first match.');
+    expect(html).toContain('Bronze · Locked');
+    expect(html).not.toContain('🏆');
   });
 
   it('AchievementGrid renders German catalog text, category and tier names', () => {
@@ -70,7 +75,7 @@ describe('gamification components in both languages', () => {
   it('an earned badge shows the localized name, tier, count and earned date', () => {
     const en = renderWithI18n(<AchievementGrid achievements={[EARNED]} allDefinitions={[FIRST_WIN]} />);
     expect(en).toContain('First Victory');
-    expect(en).toContain('bronze • x2');
+    expect(en).toContain('Bronze • x2');
     expect(en).toContain('Win your first match. • Earned 9 Oct 2026');
 
     const de = renderWithI18n(<AchievementGrid achievements={[EARNED]} allDefinitions={[FIRST_WIN]} />, {
@@ -79,6 +84,26 @@ describe('gamification components in both languages', () => {
     expect(de).toContain('Erster Sieg');
     expect(de).toContain('Bronze • 2×');
     expect(de).toContain('Erhalten am 9. Okt');
+  });
+
+  it('a locked achievement shows its progress when the profile has the count', () => {
+    const tenWins = def('ten_wins', 'Double Digits', 'Reach 10 total career wins.', {
+      criteria: { type: 'cumulative', stat: 'total_wins', op: 'gte', value: 10 },
+    });
+    const html = renderWithI18n(<AchievementGrid achievements={[]} allDefinitions={[tenWins]} progress={{ totalWins: 7 }} />);
+    expect(html).toContain('role="progressbar"');
+    expect(html).toContain('aria-label="Progress: 7 of 10"');
+    expect(html).toContain('7 / 10');
+    expect(renderWithI18n(<AchievementGrid achievements={[]} allDefinitions={[tenWins]} />)).not.toContain('role="progressbar"');
+  });
+
+  it('RatingBadge plate shows the rating, the deviation and the tier name', () => {
+    const plate = renderWithI18n(<RatingBadge rating={1648.2} rd={61.5} variant="plate" />);
+    expect(plate).toContain('1648');
+    expect(plate).toContain('± 62');
+    expect(plate).toContain('Ultra Ball');
+    expect(plate).not.toContain('Provisional');
+    expect(renderWithI18n(<RatingBadge rating={1500} rd={150} variant="plate" />, { locale: 'de' })).toContain('Vorläufig');
   });
 
   it('RatingBadge keeps ungrouped numbers and localizes the ball name', () => {
@@ -136,5 +161,14 @@ describe('gamification components in both languages', () => {
     expect(de).toContain('4S');
     expect(de).toContain('Serienrekorde');
     expect(de).toContain('Beste KO-Serie');
+  });
+
+  it('StreakChips names each streak for screen readers and draws no emoji', () => {
+    const en = renderWithI18n(<StreakChips streaks={STREAKS} />);
+    expect(en).toContain('title="Win Streak"');
+    expect(en).toContain('<span class="sr-only">Win Streak: </span>4W');
+    expect(en).toContain('2KO');
+    expect(en).not.toContain('🔥');
+    expect(renderWithI18n(<StreakChips streaks={{ ...STREAKS, current_win_streak: 2, current_ko_streak: 0, current_flawless_streak: 0 }} />)).toBe('');
   });
 });

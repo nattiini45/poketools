@@ -24,6 +24,8 @@ import MountainWorld from '@/components/world/themes/mountain/MountainWorld';
 import CloudsWorld from '@/components/world/themes/clouds/CloudsWorld';
 import DefaultWorld from '@/components/world/default/DefaultWorld';
 import LeagueHub from '@/components/league/hub/LeagueHub';
+import LeagueHero from '@/components/league/hero/LeagueHero';
+import { buildLeagueHero } from '@/lib/league-hub/hero';
 import { ENABLE_KALE_CABBAGE } from '@/lib/feature-flags';
 import {
   availableLeagueHubTabs,
@@ -160,29 +162,38 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     ]);
     if (!routeData || !hubPanel) notFound();
 
+    // The hero (the page's h1) and the hub sit above the world, on the site's own tokens (redesign B2): the
+    // themed world below is frozen and renders without the hub. Both render from the payload read above; the
+    // viewer's id only picks which match the hero shows (display, from the session copy).
+    const hero = buildLeagueHero({
+      league,
+      stages,
+      standings: routeData.standings,
+      fixtures: routeData.fixtures,
+      teamAces: routeData.teamAces,
+      viewerId: sessionPlayer?.playerId ?? null,
+    });
+
     return (
-      <PageContainer title={league.name}>
+      <PageContainer>
         <WorldOverrideRedirect />
+        <div data-league-top className="flex flex-col gap-6">
+          <LeagueHero league={league} worldId={world.id} view={hero} locale={locale} />
+          <LeagueHub
+            league={league}
+            stages={stages}
+            participants={participants}
+            locale={locale}
+            query={query}
+            tabs={hubTabs}
+            activeTab={hubTab}
+            panel={hubPanel}
+          />
+        </div>
         {/* `world` is restated on the payload so the contract can never carry
             the format auto-map's identity alongside a different viewer- or
             pin-resolved composition. */}
-        <RouteWorld
-          world={world}
-          data={{ ...routeData, world }}
-          worldExperience={worldExperience}
-          hub={
-            <LeagueHub
-              league={league}
-              stages={stages}
-              participants={participants}
-              locale={locale}
-              query={query}
-              tabs={hubTabs}
-              activeTab={hubTab}
-              panel={hubPanel}
-            />
-          }
-        />
+        <RouteWorld world={world} data={{ ...routeData, world }} worldExperience={worldExperience} />
       </PageContainer>
     );
   }
