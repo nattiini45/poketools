@@ -1,11 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import Image from 'next/image';
 import PokemonSprite from '@/components/shared/PokemonSprite';
-import Card from '@/components/ui/Card';
+import TypeBadge from '@/components/shared/TypeBadge';
 import Badge from '@/components/ui/Badge';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import Button from '@/components/ui/Button';
+import { ChevronDown, LoaderCircle } from 'lucide-react';
+import { cn } from '@/lib/utils/cn';
 import { ENABLE_AGENT_MATCH_ANALYSIS } from '@/lib/feature-flags';
 import { useDataLocale, useRequestTime, useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
@@ -33,6 +35,10 @@ interface ScoutingReportCardProps {
    * only the card's chrome follows the viewer.
    */
   contentLocale?: Locale;
+  /** The opponent the report is about, for the card's title. */
+  opponentName?: string;
+  /** Types of the Pokémon the report names, by English species name (resolved on the server; none: no badges). */
+  speciesTypes?: Record<string, string[]>;
 }
 
 /** A generation error: a client-side state (by key) or the stream's failure frame. Translated at render. */
@@ -49,7 +55,7 @@ function ProfPortrait({ alt }: { alt: string }) {
       alt={alt}
       width={PROF_SIZE}
       height={PROF_SIZE}
-      className="rounded-full shrink-0"
+      className="shrink-0 rounded-full bg-elevated"
       unoptimized
     />
   );
@@ -61,7 +67,11 @@ export default function ScoutingReportCard({
   showRescout,
   isAdmin,
   contentLocale,
+  opponentName,
+  speciesTypes,
 }: ScoutingReportCardProps) {
+  const titleId = useId();
+  const detailsId = useId();
   const t = useT(matchAiMessages);
   const dataLocale = useDataLocale();
   const requestTime = useRequestTime();
@@ -152,34 +162,31 @@ export default function ScoutingReportCard({
     }
   }
 
+  const SHELL = 'rounded-poke-lg border border-hairline bg-surface';
+  const SUBHEAD = 'text-caption font-[550] text-fg-muted';
+  const spinner = <LoaderCircle aria-hidden="true" className="size-4 shrink-0 animate-spin text-accent-ink motion-reduce:hidden" />;
+  const identity = (line: ReactNode) => (
+    <div className="flex min-w-0 items-center gap-3">
+      <ProfPortrait alt={profName} />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex flex-wrap items-center gap-2">
+          <span className="text-subtitle font-[550] text-fg">{profName}</span>
+          <Badge variant="purple" size="sm">{t('aiBadge')}</Badge>
+        </span>
+        <span className="flex items-center gap-2 text-body text-fg-muted">{line}</span>
+      </div>
+    </div>
+  );
+
   // ─── No analysis: Show "Scout the Opponent" button ─────────────────
   if (!analysis) {
     return (
-      <Card variant="outlined" padding="md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ProfPortrait alt={profName} />
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-heading font-semibold text-poke-text-secondary">
-                  {profName}
-                </span>
-                <Badge variant="purple" size="sm">{t('aiBadge')}</Badge>
-              </div>
-              <p className="text-xs text-poke-text-muted mt-0.5">
-                {errorText || t('scouting.askPrompt')}
-              </p>
-            </div>
-          </div>
-          <button
-            onClick={() => handleGenerate()}
-            disabled={generating}
-            className={getButtonClasses('ghost', 'md')}
-          >
-            {generating ? t('scouting.scouting') : error ? t('tryAgain') : t('scouting.scoutOpponent')}
-          </button>
-        </div>
-      </Card>
+      <div className={cn(SHELL, 'flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5')}>
+        {identity(errorText || t('scouting.askPrompt'))}
+        <Button variant="secondary" className="min-h-11 sm:min-h-0" onClick={() => handleGenerate()} disabled={generating}>
+          {generating ? t('scouting.scouting') : error ? t('tryAgain') : t('scouting.scoutOpponent')}
+        </Button>
+      </div>
     );
   }
 
@@ -191,198 +198,167 @@ export default function ScoutingReportCard({
     const isStale = requestTime - createdAt > STALE_AFTER_MS;
 
     return (
-      <Card variant="outlined" padding="md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ProfPortrait alt={profName} />
-            <div>
-              <span className="text-sm font-heading font-semibold text-poke-text-secondary">
-                {profName}
-              </span>
-              <div className="flex items-center gap-2 mt-1">
-                {!isStale ? (
-                  <>
-                    <div className="w-3 h-3 rounded-full border-2 border-poke-blue border-t-transparent animate-spin" />
-                    <span className="text-xs text-poke-text-muted">
-                      {t('scouting.inProgress')}
-                    </span>
-                  </>
-                ) : (
-                  <span className="text-xs text-poke-text-muted">
-                    {t('takingWhile')}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          {isStale && (
-            <button
-              onClick={() => handleGenerate(true)}
-              disabled={generating}
-              className={getButtonClasses('ghost', 'md')}
-            >
-              {generating ? t('scouting.scouting') : t('tryAgain')}
-            </button>
-          )}
-        </div>
-      </Card>
+      <div className={cn(SHELL, 'flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5')}>
+        {identity(
+          !isStale ? (
+            <>
+              {spinner}
+              {t('scouting.inProgress')}
+            </>
+          ) : (
+            t('takingWhile')
+          ),
+        )}
+        {isStale && (
+          <Button variant="secondary" className="min-h-11 sm:min-h-0" onClick={() => handleGenerate(true)} disabled={generating}>
+            {generating ? t('scouting.scouting') : t('tryAgain')}
+          </Button>
+        )}
+      </div>
     );
   }
 
   // ─── Failed ────────────────────────────────────────────────────────
   if (analysis.status === 'failed') {
     return (
-      <Card variant="outlined" padding="md">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <ProfPortrait alt={profName} />
-            <div>
-              <span className="text-sm text-poke-text-muted">
-                {errorText || t('unavailable')}
-              </span>
-            </div>
-          </div>
-          <button
-            onClick={() => handleGenerate(true)}
-            disabled={generating}
-            className={getButtonClasses('ghost', 'md')}
-          >
-            {generating ? t('scouting.scouting') : t('tryAgain')}
-          </button>
-        </div>
-      </Card>
+      <div className={cn(SHELL, 'flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5')}>
+        {identity(errorText || t('unavailable'))}
+        <Button variant="secondary" className="min-h-11 sm:min-h-0" onClick={() => handleGenerate(true)} disabled={generating}>
+          {generating ? t('scouting.scouting') : t('tryAgain')}
+        </Button>
+      </div>
     );
   }
 
   // ─── Regenerating spinner ──────────────────────────────────────────
   if (generating && collapsed) {
     return (
-      <Card variant="outlined" padding="md">
-        <div className="flex items-center gap-3">
-          <ProfPortrait alt={profName} />
-          <div>
-            <span className="text-sm font-heading font-semibold text-poke-text-secondary">
-              {profName}
-            </span>
-            <div className="flex items-center gap-2 mt-1">
-              {errorText ? (
-                <span className="text-xs text-poke-text-muted">{errorText}</span>
-              ) : (
-                <>
-                  <div className="w-3 h-3 rounded-full border-2 border-poke-blue border-t-transparent animate-spin" />
-                  <span className="text-xs text-poke-text-muted">
-                    {t('scouting.rescoutingNote')}
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </Card>
+      <div className={cn(SHELL, 'p-4 sm:p-5')}>
+        {identity(
+          errorText ? (
+            errorText
+          ) : (
+            <>
+              {spinner}
+              {t('scouting.rescoutingNote')}
+            </>
+          ),
+        )}
+      </div>
     );
   }
 
   // ─── Completed: Full scouting report ───────────────────────────────
   const content = analysis.analysis;
+  const signature = content.signature_pokemon ?? [];
+  const typesOf = (name: string) => speciesTypes?.[name] ?? [];
+  const typeBadges = (name: string) =>
+    typesOf(name).length > 0 && (
+      <span className="flex flex-wrap gap-1">
+        {typesOf(name).map((type) => (
+          <TypeBadge key={type} type={type} />
+        ))}
+      </span>
+    );
+  /** One labelled line of the report: the label in the viewer's language, the AI text as written. */
+  const fact = (label: string, text: string, tone = 'text-fg') => (
+    <div className="flex flex-col gap-0.5">
+      <dt className={cn('text-caption font-[550]', tone)}>{label}</dt>
+      <dd lang={contentLocale} className="text-body text-fg-muted">{text}</dd>
+    </div>
+  );
 
   return (
-    <Card variant="outlined" padding="md" className="space-y-0">
-      {/* Header */}
-      <button
-        type="button"
-        onClick={() => setCollapsed((prev) => !prev)}
-        className="flex items-center justify-between w-full text-left"
-      >
-        <div className="flex items-center gap-3">
+    <section className={SHELL} aria-labelledby={titleId}>
+      {/* Header: who scouted whom */}
+      <div className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
+        <div className="flex min-w-0 items-center gap-3">
           <ProfPortrait alt={profName} />
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-heading font-semibold text-poke-text-secondary">
-                {profName}
-              </span>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <h2 id={titleId} className="font-heading text-title text-fg">
+              {opponentName ? t('scouting.titleFor', { name: opponentName }) : t('scouting.title')}
+            </h2>
+            <span className="flex flex-wrap items-center gap-2 text-caption text-fg-muted">
+              {profName}
               <Badge variant="purple" size="sm">{t('aiBadge')}</Badge>
-            </div>
-            <p className="text-xs text-poke-text-muted mt-0.5">
-              {t('scouting.title')}
-            </p>
+            </span>
           </div>
         </div>
-        <span
-          className="text-poke-text-muted text-sm transition-transform duration-200"
-          style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(180deg)' }}
+        <Button
+          variant="secondary"
+          size="sm"
+          className="min-h-11 sm:min-h-0"
+          aria-expanded={!collapsed}
+          aria-controls={detailsId}
+          onClick={() => setCollapsed((prev) => !prev)}
         >
-          ▾
-        </span>
-      </button>
+          {collapsed ? t('scouting.showDetails') : t('scouting.hideDetails')}
+          <ChevronDown aria-hidden="true" className={cn('size-4 transition-transform duration-80 motion-reduce:transition-none', !collapsed && 'rotate-180')} />
+        </Button>
+      </div>
+
+      {/* The card's face: the opponent's likely picks, always in view */}
+      {signature.length > 0 && (
+        <div className="flex flex-col gap-2 border-t border-hairline p-4 sm:p-5">
+          <h3 className={SUBHEAD}>{t('scouting.likelyPicks')}</h3>
+          <ul className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+            {signature.map((sp) => (
+              <li key={sp.pokemon} className="flex items-start gap-3 rounded-poke-md border border-hairline bg-elevated p-3">
+                <PokemonSprite name={sp.pokemon} size={56} animated />
+                <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                  <span className="text-subtitle font-[550] text-fg">{species(sp.pokemon)}</span>
+                  {typeBadges(sp.pokemon)}
+                  {!collapsed && (
+                    <p lang={contentLocale} className="text-body text-fg-muted">
+                      {sp.usage_note}
+                    </p>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* Expanded content (AI body: shown as written, in the league's language) */}
       {!collapsed && (
-        <div className="mt-4 space-y-4">
+        <div id={detailsId} className="flex flex-col gap-5 border-t border-hairline p-4 sm:p-5">
           {/* Opponent Profile */}
-          <p lang={contentLocale} className="text-sm text-poke-text-primary leading-relaxed">
+          <p lang={contentLocale} className="max-w-[75ch] text-body text-fg">
             {content.opponent_profile}
           </p>
 
-          {/* Signature Pokemon */}
-          {content.signature_pokemon?.length > 0 && (
-            <div>
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
-                {t('scouting.signaturePokemon')}
-              </h4>
-              <div className="space-y-2">
-                {content.signature_pokemon.map((sp) => (
-                  <div key={sp.pokemon} className="flex items-center gap-3 bg-poke-muted rounded-poke-md p-2">
-                    <PokemonSprite name={sp.pokemon} size={40} animated />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-sm font-heading font-semibold text-poke-text-primary">
-                        {species(sp.pokemon)}
-                      </span>
-                      <p lang={contentLocale} className="text-xs text-poke-text-muted leading-relaxed">
-                        {sp.usage_note}
-                      </p>
-                    </div>
-                  </div>
-                ))}
+          <div className="grid gap-5 lg:grid-cols-2">
+            {/* Tendencies */}
+            {content.tendencies && (
+              <div className="flex flex-col gap-2">
+                <h3 className={SUBHEAD}>{t('scouting.tendencies')}</h3>
+                <dl className="flex flex-col gap-2">
+                  {content.tendencies.lead_patterns && fact(t('scouting.leads'), content.tendencies.lead_patterns)}
+                  {content.tendencies.play_style && fact(t('scouting.playStyle'), content.tendencies.play_style)}
+                  {content.tendencies.favorite_moves && fact(t('scouting.notableMoves'), content.tendencies.favorite_moves)}
+                </dl>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Tendencies */}
-          {content.tendencies && (
-            <div className="border-t border-poke-border pt-3">
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
-                {t('scouting.tendencies')}
-              </h4>
-              <div className="space-y-2">
-                {content.tendencies.lead_patterns && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.leads')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.tendencies.lead_patterns}</span>
-                  </div>
-                )}
-                {content.tendencies.play_style && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.playStyle')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.tendencies.play_style}</span>
-                  </div>
-                )}
-                {content.tendencies.favorite_moves && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.notableMoves')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.tendencies.favorite_moves}</span>
-                  </div>
-                )}
+            {/* Matchup Analysis (conditional — only when user team was included) */}
+            {content.matchup_analysis && (
+              <div className="flex flex-col gap-2">
+                <h3 className={SUBHEAD}>{t('scouting.matchupAnalysis')}</h3>
+                <dl className="flex flex-col gap-2">
+                  {content.matchup_analysis.your_advantages && fact(t('scouting.yourAdvantages'), content.matchup_analysis.your_advantages, 'text-win')}
+                  {content.matchup_analysis.their_advantages && fact(t('scouting.theirAdvantages'), content.matchup_analysis.their_advantages, 'text-loss')}
+                  {content.matchup_analysis.neutral_ground && fact(t('scouting.neutralGround'), content.matchup_analysis.neutral_ground)}
+                </dl>
               </div>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Meta Positioning */}
           {content.meta_positioning && (
-            <div className="border-t border-poke-border pt-3">
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-1">
-                {t('scouting.metaPositioning')}
-              </h4>
-              <p lang={contentLocale} className="text-sm text-poke-text-muted leading-relaxed">
+            <div className="flex flex-col gap-1">
+              <h3 className={SUBHEAD}>{t('scouting.metaPositioning')}</h3>
+              <p lang={contentLocale} className="max-w-[75ch] text-body text-fg-muted">
                 {content.meta_positioning}
               </p>
             </div>
@@ -390,101 +366,56 @@ export default function ScoutingReportCard({
 
           {/* Suggested Picks (conditional — only when no user team was provided) */}
           {content.suggested_picks && content.suggested_picks.length > 0 && (
-            <div className="border-t border-poke-border pt-3">
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
-                {t('scouting.suggestedPicks')}
-              </h4>
-              <div className="space-y-2">
+            <div className="flex flex-col gap-2">
+              <h3 className={SUBHEAD}>{t('scouting.suggestedPicks')}</h3>
+              <ul className="grid gap-2 lg:grid-cols-2">
                 {content.suggested_picks.map((pick) => (
-                  <div key={pick.pokemon} className="flex items-start gap-3 bg-poke-muted rounded-poke-md p-2">
-                    <PokemonSprite name={pick.pokemon} size={40} animated />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm font-heading font-semibold text-poke-text-primary">
-                          {species(pick.pokemon)}
-                        </span>
+                  <li key={pick.pokemon} className="flex items-start gap-3 rounded-poke-md border border-hairline bg-elevated p-3">
+                    <PokemonSprite name={pick.pokemon} size={56} animated />
+                    <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-subtitle font-[550] text-fg">{species(pick.pokemon)}</span>
                         <Badge variant="green" size="sm">{pick.role}</Badge>
-                      </div>
-                      <p className="text-xs text-poke-text-secondary mt-0.5 font-mono">
-                        {pick.set_summary}
-                      </p>
-                      <p lang={contentLocale} className="text-xs text-poke-text-muted mt-0.5 leading-relaxed">
+                      </span>
+                      {typeBadges(pick.pokemon)}
+                      <p className="font-mono text-caption text-fg [overflow-wrap:anywhere]">{pick.set_summary}</p>
+                      <p lang={contentLocale} className="text-body text-fg-muted">
                         {pick.reasoning}
                       </p>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Matchup Analysis (conditional — only when user team was included) */}
-          {content.matchup_analysis && (
-            <div className="border-t border-poke-border pt-3">
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
-                {t('scouting.matchupAnalysis')}
-              </h4>
-              <div className="space-y-2">
-                {content.matchup_analysis.your_advantages && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-green">{t('scouting.yourAdvantages')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.matchup_analysis.your_advantages}</span>
-                  </div>
-                )}
-                {content.matchup_analysis.their_advantages && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-accent">{t('scouting.theirAdvantages')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.matchup_analysis.their_advantages}</span>
-                  </div>
-                )}
-                {content.matchup_analysis.neutral_ground && (
-                  <div>
-                    <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.neutralGround')} </span>
-                    <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.matchup_analysis.neutral_ground}</span>
-                  </div>
-                )}
-              </div>
+              </ul>
             </div>
           )}
 
           {/* Recommendations */}
           {content.recommendations && (
-            <div className="border-t border-poke-border pt-3">
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
-                {t('scouting.recommendations')}
-              </h4>
+            <div className="flex flex-col gap-3">
+              <h3 className={SUBHEAD}>{t('scouting.recommendations')}</h3>
 
               {/* Threats */}
               {content.recommendations.threats_to_watch?.length > 0 && (
-                <div className="mb-2">
-                  <span className="text-xs font-heading font-semibold text-poke-accent">{t('scouting.threats')}</span>
-                  <div className="flex flex-wrap gap-2 mt-1">
+                <div className="flex flex-col gap-1.5">
+                  <span className="text-caption font-[550] text-loss">{t('scouting.threats')}</span>
+                  <ul className="flex flex-wrap gap-2">
                     {content.recommendations.threats_to_watch.map((threat) => (
-                      <div key={threat} className="flex items-center gap-1.5 bg-poke-muted rounded-full px-2 py-0.5">
-                        <PokemonSprite name={threat} size={20} />
-                        <span className="text-xs text-poke-text-secondary">{species(threat)}</span>
-                      </div>
+                      <li key={threat} className="flex items-center gap-2 rounded-poke-md border border-hairline bg-elevated py-1 pl-1.5 pr-3">
+                        <PokemonSprite name={threat} size={32} />
+                        <span className="text-body font-[550] text-fg">{species(threat)}</span>
+                      </li>
                     ))}
-                  </div>
+                  </ul>
                 </div>
               )}
 
-              {content.recommendations.suggested_leads && (
-                <div className="mb-2">
-                  <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.suggestedLeads')} </span>
-                  <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.recommendations.suggested_leads}</span>
-                </div>
-              )}
-
-              {content.recommendations.coverage_gaps && (
-                <div className="mb-2">
-                  <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('scouting.coverageGaps')} </span>
-                  <span lang={contentLocale} className="text-xs text-poke-text-muted">{content.recommendations.coverage_gaps}</span>
-                </div>
-              )}
+              <dl className="grid gap-3 lg:grid-cols-2">
+                {content.recommendations.suggested_leads && fact(t('scouting.suggestedLeads'), content.recommendations.suggested_leads)}
+                {content.recommendations.coverage_gaps && fact(t('scouting.coverageGaps'), content.recommendations.coverage_gaps)}
+              </dl>
 
               {content.recommendations.key_advice && (
-                <p lang={contentLocale} className="text-sm text-poke-text-muted leading-relaxed italic mt-2">
+                <p lang={contentLocale} className="max-w-[75ch] rounded-poke-md bg-accent-subtle px-3 py-2 text-body font-[550] text-fg">
                   {content.recommendations.key_advice}
                 </p>
               )}
@@ -492,33 +423,25 @@ export default function ScoutingReportCard({
           )}
 
           {/* Footer */}
-          <div className="flex items-center justify-between border-t border-poke-border pt-2">
-            <span className="text-[10px] text-poke-text-muted italic">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-t border-hairline pt-3">
+            <span className="text-micro text-fg-muted">
               {t('scouting.disclaimer')}
             </span>
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-2">
               {showRescout && !analysis.has_user_team && (
-                <button
-                  onClick={() => handleGenerate(true)}
-                  disabled={generating}
-                  className="text-[10px] text-poke-blue hover:underline transition-colors"
-                >
+                <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-0" onClick={() => handleGenerate(true)} disabled={generating}>
                   {generating ? t('scouting.rescouting') : t('scouting.rescoutWithTeam')}
-                </button>
+                </Button>
               )}
               {isAdmin && (
-                <button
-                  onClick={() => handleGenerate(true)}
-                  disabled={generating}
-                  className="text-[10px] text-poke-text-muted hover:text-poke-blue transition-colors"
-                >
+                <Button variant="ghost" size="sm" className="min-h-11 sm:min-h-0" onClick={() => handleGenerate(true)} disabled={generating}>
                   {generating ? t('scouting.scouting') : t('scouting.repeat')}
-                </button>
+                </Button>
               )}
             </div>
           </div>
         </div>
       )}
-    </Card>
+    </section>
   );
 }
