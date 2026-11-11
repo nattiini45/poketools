@@ -1,7 +1,7 @@
 /** @vitest-environment jsdom */
 /**
- * The submit button of the create/edit forms and the EPB import panel: one submission at a time, a failure stays
- * retryable, an edit form can save again, a dry run leaves the import open.
+ * The submit button of the create/edit forms, the new-competition wizard and the EPB import panel: one submission at a
+ * time, a failure stays retryable, an edit form can save again, a dry run leaves the import open.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -9,7 +9,7 @@ import userEvent from '@testing-library/user-event';
 import { withI18n } from '@/test/i18n';
 import { makeRulesetOption } from '@/test/ruleset-fixtures';
 import TournamentForm from '@/components/tournament/TournamentForm';
-import LeagueForm from '@/components/league/LeagueForm';
+import NewCompetitionWizard from '@/components/league/wizard/NewCompetitionWizard';
 import EpbImportPanel from '@/components/league/EpbImportPanel';
 
 const RULESET_ID = '11111111-1111-4111-8111-111111111111';
@@ -18,7 +18,13 @@ const tournament = { name: 'Spring Cup', bracket_type: 'single_elim' as const, r
 
 const submitButton = (container: HTMLElement) => container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
-afterEach(() => vi.unstubAllGlobals());
+const router = vi.hoisted(() => ({ push: vi.fn(), refresh: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => router }));
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+  router.push.mockClear();
+});
 
 describe('TournamentForm submit', () => {
   it('a failed create shows the error and stays retryable', async () => {
@@ -66,28 +72,51 @@ describe('TournamentForm submit', () => {
   });
 });
 
-describe('LeagueForm submit', () => {
+describe('NewCompetitionWizard submit', () => {
+  /** The wizard on its review step: a blank league named "Liga". */
+  async function reviewStep(user: ReturnType<typeof userEvent.setup>) {
+    render(withI18n(<NewCompetitionWizard examples={[]} formats={[]} rulesets={rulesets} sources={[]} isSiteAdmin={false} initialStart={{ kind: 'blank' }} />));
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await user.type(screen.getByLabelText('League Name'), 'Liga');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    return () => screen.getByRole('button', { name: /Create league/ }) as HTMLButtonElement;
+  }
+
   it('a refused create shows the error and stays retryable', async () => {
     const user = userEvent.setup();
-    const onSubmit = vi.fn(async () => ({ error: 'Name taken', code: 'season_name_taken' }));
-    const { container } = render(withI18n(<LeagueForm rulesets={rulesets} initialData={{ name: 'Liga' }} onSubmit={onSubmit} />));
-    await user.click(submitButton(container));
-    expect(onSubmit).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('alert')).toBeTruthy();
-    await user.click(submitButton(container));
-    expect(onSubmit).toHaveBeenCalledTimes(2);
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ success: false, error: 'Name taken', code: 'season_name_taken' }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const createButton = await reviewStep(user);
+    await user.click(createButton());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alert').textContent).toBe('Name taken');
+    expect(createButton().disabled).toBe(false);
+    await user.click(createButton());
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(router.push).not.toHaveBeenCalled();
   });
-});
 
-describe('LeagueForm create', () => {
   it('a successful create keeps the button disabled while the league page loads (no second league)', async () => {
     const user = userEvent.setup();
-    const onSubmit = vi.fn(async () => null);
-    const { container } = render(withI18n(<LeagueForm rulesets={rulesets} initialData={{ name: 'Liga' }} onSubmit={onSubmit} />));
-    await user.click(submitButton(container));
-    expect(submitButton(container).disabled).toBe(true);
-    await user.click(submitButton(container));
-    expect(onSubmit).toHaveBeenCalledTimes(1);
+    const fetchMock = vi.fn(async () => ({ json: async () => ({ success: true, data: { id: 'l1' } }) }));
+    vi.stubGlobal('fetch', fetchMock);
+    const createButton = await reviewStep(user);
+    await user.click(createButton());
+    expect(router.push).toHaveBeenCalledWith('/admin/leagues/l1');
+    expect(createButton().disabled).toBe(true);
+    await user.click(createButton());
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('a double click sends one create', async () => {
+    const user = userEvent.setup();
+    let release: (value: unknown) => void = () => {};
+    const fetchMock = vi.fn(() => new Promise((resolve) => (release = resolve)));
+    vi.stubGlobal('fetch', fetchMock);
+    const createButton = await reviewStep(user);
+    await user.dblClick(createButton());
+    release({ json: async () => ({ success: true, data: { id: 'l1' } }) });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 

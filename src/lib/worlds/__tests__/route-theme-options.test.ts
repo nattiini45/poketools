@@ -1,7 +1,7 @@
 /**
  * B1: shared 3D World Theme select-option derivation.
  *
- * `getRouteThemeOptions` is the pure option list used by both LeagueForm
+ * `getRouteThemeOptions` is the pure option list used by both NewCompetitionWizard
  * (create) and LeagueThemeControl (post-create admin picker). It must lead
  * with the Auto option and then mirror `getRegisteredRouteThemeIds()` 1:1
  * (order preserved, labels capitalized) — never the wider DB CHECK union.

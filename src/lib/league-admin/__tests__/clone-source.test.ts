@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   buildCreateRequest,
   cloneFormDefaults,
-  createFormInitialData,
   isCloneSourceFormat,
   type CloneSourceOption,
 } from '../clone-source';
@@ -89,24 +88,5 @@ describe('buildCreateRequest', () => {
     buildCreateRequest(data, { sourceId: SOURCE.id, copyRoster: true, copyAdmins: false }, true);
 
     expect(data).toEqual(FORM);
-  });
-});
-
-describe('createFormInitialData', () => {
-  const TYPED = { name: 'Spring League', start_date: '2027-03-01', end_date: '2027-05-01' };
-
-  it('keeps the typed name and dates when a source is picked', () => {
-    expect(createFormInitialData(SOURCE, TYPED)).toEqual({ ...cloneFormDefaults(SOURCE), ...TYPED });
-  });
-
-  it('keeps the typed name and dates when the source is cleared again', () => {
-    expect(createFormInitialData(null, TYPED)).toEqual(TYPED);
-  });
-
-  it('the source never supplies a name or dates', () => {
-    const data = createFormInitialData(SOURCE, { name: '', start_date: '', end_date: '' });
-    expect(data.name).toBe('');
-    expect(data.start_date).toBe('');
-    expect(data.end_date).toBe('');
   });
 });

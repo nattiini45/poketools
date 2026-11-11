@@ -17,7 +17,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
 - [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
-- [Form submission](#form-submission) — `client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)`
+- [Form submission](#form-submission) — `client: useSubmitPhase (TournamentForm, NewCompetitionWizard, EpbImportPanel)`
 - [Visible poller](#visible-poller) — `client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)`
 - [Draft pool pause](#draft-pool-pause) — `draft_pools.paused_at (+ paused_by, pause_reason) while phase = 'drafting'`
 - [Draft pool (queue engine)](#draft-pool-queue-engine) — `draft_pools.phase where engine = 'queue' (+ the status twin)`
@@ -299,7 +299,7 @@ stateDiagram-v2
 ## Form submission
 
 - **Id:** `client.submit_phase`
-- **State lives in:** client: useSubmitPhase (TournamentForm, LeagueForm, EpbImportPanel)
+- **State lives in:** client: useSubmitPhase (TournamentForm, NewCompetitionWizard, EpbImportPanel)
 - **States:** `idle`, `submitting`, `done`, `failed`
 - **Actors:** `viewer`, `request`
 
@@ -318,10 +318,10 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `submit` | `idle`, `failed` | `submitting` | viewer | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` |  |
-| `succeed` | `submitting` | `done` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A create that navigates, a live import. |
-| `settle` | `submitting` | `idle` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A success that keeps the form open: an edit save, a dry run. |
-| `fail` | `submitting` | `failed` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/LeagueForm.tsx`<br>`src/components/league/EpbImportPanel.tsx` | The form shows the error; a retry is a new submit. |
+| `submit` | `idle`, `failed` | `submitting` | viewer | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/wizard/NewCompetitionWizard.tsx`<br>`src/components/league/EpbImportPanel.tsx` |  |
+| `succeed` | `submitting` | `done` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/wizard/NewCompetitionWizard.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A create that navigates, a live import. |
+| `settle` | `submitting` | `idle` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/wizard/NewCompetitionWizard.tsx`<br>`src/components/league/EpbImportPanel.tsx` | A success that keeps the form open: an edit save, a dry run. |
+| `fail` | `submitting` | `failed` | request | `src/lib/ui/use-submit-phase.ts`<br>`src/components/tournament/TournamentForm.tsx`<br>`src/components/league/wizard/NewCompetitionWizard.tsx`<br>`src/components/league/EpbImportPanel.tsx` | The form shows the error; a retry is a new submit. |
 
 ## Visible poller
 

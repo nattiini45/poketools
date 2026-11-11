@@ -33,7 +33,11 @@ function stub(name: string) {
 
 vi.mock('server-only', () => ({}));
 vi.mock('next/link', () => ({
-  default: ({ href, children }: { href: string; children: ReactNode }) => <a href={href}>{children}</a>,
+  default: ({ href, children, ...rest }: { href: string; children: ReactNode }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 vi.mock('@/i18n/server', async () => {
@@ -234,6 +238,31 @@ describe('format gallery: examples', () => {
       expect(out).toContain(`href="/admin/formats/example/${id}"`);
     }
     expect(out).not.toMatch(/undefined|\{[a-z_]+\}/);
+  });
+
+  it.each([
+    ['en', 'Create a league from this', (name: string) => 'Create a league from ' + name],
+    ['de', 'Liga daraus erstellen', (name: string) => 'Liga aus ' + name + ' erstellen'],
+  ] as const)('links every example to the wizard with its preset id (%s)', async (locale, label, named) => {
+    mocks.locale = locale;
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const { PRESETS } = await import('@/lib/format-kit/client');
+    const esc = (text: string) => text.replace(/&/g, '&amp;').replace(/'/g, '&#x27;').replace(/"/g, '&quot;');
+    const out = html(await FormatsGalleryPage());
+    for (const preset of PRESETS) {
+      expect(out).toContain('href="/admin/leagues/new?preset=' + preset.id + '"');
+      const title = resolveLText(preset.definition.identity.name, { viewer: locale })?.value ?? '';
+      expect(out).toContain('aria-label="' + esc(named(title)) + '"');
+    }
+    expect(out.split('>' + label + '<')).toHaveLength(PRESETS.length + 1);
+    expect(out).not.toMatch(/undefined|\{[a-z_]+\}/);
+  });
+
+  it('keeps the open link of an example next to the wizard link', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const out = html(await FormatsGalleryPage());
+    expect(out).toContain('href="/admin/formats/example/cup"');
+    expect(out).toContain('href="/admin/leagues/new?preset=cup"');
   });
 
   it('tells the reader the examples are read-only and how to get a copy, without "for now"', async () => {
