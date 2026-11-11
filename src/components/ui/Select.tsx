@@ -21,7 +21,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
         {label && (
           <label
             htmlFor={field.controlId}
-            className="block text-sm font-heading font-semibold text-poke-text-primary"
+            className="block text-sm font-body font-medium text-poke-text-primary"
           >
             {label}
           </label>

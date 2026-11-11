@@ -13,7 +13,7 @@ export default function SetsTab() {
 
   if (slot === null || !set?.species) {
     return (
-      <div className="text-[11px] text-poke-text-muted text-center py-6">
+      <div className="text-caption text-fg-muted text-center py-6">
         {t('sets.empty')}
       </div>
     );

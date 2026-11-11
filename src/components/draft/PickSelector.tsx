@@ -194,7 +194,12 @@ export default function PickSelector({
         );
         const json = await res.json();
         if (json.success) {
-          setApiResults(json.data);
+          // The species search returns `{ name, id }` (or bare names); rows read `name` and `types`.
+          setApiResults(
+            (json.data as Array<string | (Omit<PokemonSearchResult, 'types'> & { types?: string[] })>).map((mon) =>
+              typeof mon === 'string' ? { name: mon, types: [] } : { ...mon, types: mon.types ?? [] },
+            ),
+          );
         }
       } catch (err) {
         if (err instanceof DOMException && err.name === 'AbortError') return;
@@ -287,10 +292,10 @@ export default function PickSelector({
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={hasPool || isEvoLeague ? t('picker.filterPool') : t('picker.searchPokemon')}
-          className="w-full px-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-2 transition-colors"
+          className="w-full rounded-poke-md border border-hairline-strong bg-surface px-3 py-2 text-body text-fg placeholder:text-fg-muted focus:border-accent-fill focus:ring-2 pointer-coarse:text-base"
         />
         {(hasPool || isEvoLeague) && (
-          <p className="text-xs text-poke-text-muted mt-1">
+          <p className="mt-1 text-caption text-fg-muted">
             {t('picker.poolOnly')}
           </p>
         )}
@@ -344,22 +349,23 @@ export default function PickSelector({
                   }),
                 );
               }}
-              className={`w-full flex items-center gap-3 p-2 rounded-poke-md text-left transition-colors ${
+              aria-pressed={isSelected}
+              className={`flex min-h-11 w-full items-center gap-3 rounded-poke-md border p-2 text-left ${
                 isDisabled
-                  ? 'opacity-40 cursor-not-allowed'
+                  ? 'cursor-not-allowed border-transparent opacity-50'
                   : isSelected
-                  ? 'bg-poke-blue-light border border-poke-border-focus'
-                  : 'hover:bg-poke-elevated'
+                  ? 'border-accent-fill bg-accent-subtle'
+                  : 'border-transparent hover:bg-hover'
               }`}
             >
               <PokemonSprite name={mon.name} size={40} />
               <div className="flex-1 min-w-0">
-                <div className="font-medium text-sm text-poke-text-primary">
+                <div className="text-body font-[550] text-fg">
                   {isEpb
                     ? localizeLineLabel(mon.name, mon.stage3 ?? null, dataLocale)
                     : localizeSpecies(mon.name, dataLocale)}
                 </div>
-                <div className="text-xs text-poke-text-muted">
+                <div className="text-caption text-fg-muted">
                   {mon.types.length > 0 ? mon.types.map((type) => localizeType(type, dataLocale)).join(' / ') : ''}
                   {rowPrice !== null && (
                     <span>{mon.types.length > 0 ? ' · ' : ''}{tLegacy('pts', { n: rowPrice })}</span>
@@ -396,7 +402,7 @@ export default function PickSelector({
       </div>
 
       {/* Footer: confirm + budget input */}
-      <div className="pt-4 border-t border-poke-border mt-4 space-y-3">
+      <div className="mt-4 flex flex-col gap-3 border-t border-hairline pt-4">
         {selectedReserve !== null && (
           <AuctionBidField
             value={pointsSpent}
@@ -406,7 +412,7 @@ export default function PickSelector({
           />
         )}
         {costSummary && (
-          <p className="text-sm text-poke-text-secondary" data-testid="pick-cost-summary">
+          <p className="text-body text-fg-muted" data-testid="pick-cost-summary">
             {costSummary}
           </p>
         )}
@@ -496,7 +502,7 @@ export function AuctionBidField({
         onChange={(e) => onChange(Number(e.target.value))}
         aria-invalid={problems.length > 0 || undefined}
         aria-describedby={problems.length > 0 ? 'pick-bid-min pick-bid-status' : 'pick-bid-min'}
-        className="w-20 px-2 py-1 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 transition-colors"
+        className="w-24 rounded-poke-md border border-hairline-strong bg-surface px-2 py-1 font-mono text-body text-fg tabular-nums focus:border-accent-fill focus:ring-2 pointer-coarse:text-base"
       />
       <span
         id="pick-bid-min"

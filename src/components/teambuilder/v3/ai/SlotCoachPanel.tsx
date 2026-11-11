@@ -75,7 +75,7 @@ export default function SlotCoachPanel({
   if (!set?.species) {
     return (
       <div className="p-3">
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {t('ai.coach.selectSlot')}
         </p>
       </div>
@@ -88,13 +88,13 @@ export default function SlotCoachPanel({
   return (
     <div className="p-3">
       <div className="flex items-center justify-between mb-2">
-        <h3 className="text-xs font-heading font-semibold text-poke-text-secondary">
+        <h3 className="text-caption font-[550] text-fg">
           {t('ai.coach.slotTitle', { species })}
         </h3>
         <button
           onClick={handleAnalyze}
           disabled={loading}
-          className="px-2 py-1 text-[10px] bg-poke-blue/10 text-poke-blue rounded hover:bg-poke-blue/20 transition-colors font-medium disabled:opacity-50"
+          className="px-2 py-1 text-caption bg-accent-subtle text-accent-ink rounded hover:bg-selected transition-colors font-medium disabled:opacity-50"
         >
           {loading ? t('ai.coach.analyzing') : lastSpecies === set.species ? t('ai.coach.refresh') : t('ai.coach.analyze')}
         </button>
@@ -102,7 +102,7 @@ export default function SlotCoachPanel({
 
       {loading && (
         <div className="py-4">
-          <div className="flex items-center gap-2 text-xs text-poke-text-muted">
+          <div className="flex items-center gap-2 text-xs text-fg-muted">
             <svg className="animate-spin h-3 w-3" viewBox="0 0 24 24" fill="none">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
@@ -113,19 +113,19 @@ export default function SlotCoachPanel({
       )}
 
       {error && (
-        <div className="p-2 text-xs text-poke-danger rounded mb-2">
+        <div className="p-2 text-xs text-loss rounded mb-2">
           {errorText(error)}
         </div>
       )}
 
       {content && (
-        <div className="prose-poke-ai text-xs text-poke-text-primary leading-relaxed whitespace-pre-wrap">
+        <div className="prose-poke-ai text-xs text-fg leading-relaxed whitespace-pre-wrap">
           {content}
         </div>
       )}
 
       {!loading && !content && !error && (
-        <p className="text-[11px] text-poke-text-muted">
+        <p className="text-caption text-fg-muted">
           {t('ai.coach.slotHint', { species })}
         </p>
       )}

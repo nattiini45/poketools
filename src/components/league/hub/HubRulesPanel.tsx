@@ -1,6 +1,6 @@
 import RulesetDetail, { type RulesetDetailLabels } from '@/components/ruleset/RulesetDetail';
 import CoreLigaParticipants from '@/components/league/CoreLigaParticipants';
-import { PANEL_INSET } from '@/components/world/panel';
+import { HUB_INSET as PANEL_INSET, HUB_SUBHEADING } from './hub-style';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import type { CoreTriple } from '@/types/season';
 import type { Ruleset } from '@/types/ruleset';
@@ -34,7 +34,7 @@ export default function HubRulesPanel({
     <div className="space-y-6">
       {description && description.trim().length > 0 && (
         <div className={`${PANEL_INSET} p-4`}>
-          <h4 className="font-heading text-sm font-bold uppercase tracking-wide text-arena-ink-secondary">
+          <h4 className={HUB_SUBHEADING}>
             {copy.description}
           </h4>
           <p className="mt-2 whitespace-pre-wrap text-sm text-arena-ink">{description}</p>
@@ -42,7 +42,7 @@ export default function HubRulesPanel({
       )}
       <div className="space-y-2">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h4 className="font-heading text-sm font-bold uppercase tracking-wide text-arena-ink-secondary">
+          <h4 className={HUB_SUBHEADING}>
             {copy.ruleset}
             {ruleset ? ` · ${ruleset.name}` : ''}
           </h4>

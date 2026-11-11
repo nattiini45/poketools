@@ -3,6 +3,8 @@
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import PokemonLink from '@/components/shared/PokemonLink';
 import TypeBadge from '@/components/shared/TypeBadge';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewChip from '@/components/ui/SkewChip';
 import { useDataLocale, useT } from '@/i18n/client';
 import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
 import { localizeAbility } from '@/lib/pkmn/i18n/names/abilities';
@@ -79,27 +81,19 @@ export default function TeamCardPrimitive({
             : t('teamCard.emptySlot', { n: index + 1 })
         }
         className={[
-          'border-2 border-dashed border-poke-border rounded-poke-lg',
-          'flex flex-col items-center justify-center text-poke-text-muted',
-          'transition-colors',
-          onClick ? 'cursor-pointer hover:border-poke-border-focus hover:text-poke-blue' : '',
-          size === 'sm' ? 'min-h-[80px] p-2 text-[10px]' : 'min-h-[180px] p-4 text-sm',
+          'group relative rounded-xl border border-dashed border-hairline-strong',
+          'flex flex-col items-center justify-center gap-2 text-fg-muted',
+          'transition-[background-color,border-color,color] duration-80 ease-out',
+          onClick ? 'cursor-pointer hover:border-accent-ink hover:bg-hover hover:text-fg' : '',
+          size === 'sm' ? 'min-h-[80px] p-2 text-caption' : 'min-h-[180px] p-4 text-body',
           className,
         ].filter(Boolean).join(' ')}
       >
-        <svg
-          width={size === 'sm' ? 20 : 32}
-          height={size === 'sm' ? 20 : 32}
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          className="opacity-40"
-        >
-          <circle cx="12" cy="12" r="10" />
-          <path d="M12 8v8M8 12h8" />
-        </svg>
-        {size !== 'sm' && <span className="mt-1">{t('teamCard.add')}</span>}
+        {size !== 'sm' && (
+          <SkewChip className="absolute right-3 top-3 font-mono">{index + 1}</SkewChip>
+        )}
+        <ItemIcon item="poke-ball" size={size === 'sm' ? 24 : 48} />
+        {size !== 'sm' && <span>{t('teamCard.add')}</span>}
       </div>
     );
   }
@@ -109,11 +103,7 @@ export default function TeamCardPrimitive({
 
   // Size-specific class maps
   const spriteSize = size === 'sm' ? 40 : size === 'lg' ? 96 : 72;
-  const nameClass = size === 'sm' ? 'text-[11px]' : 'text-sm font-bold';
-  const badgeClass = size === 'sm' ? 'text-[7px]! px-1! py-0! min-w-[2.5rem]!' : 'text-[9px]! px-1.5! py-0! min-w-[3.5rem]!';
-  const moveBadgeClass = size === 'sm' ? 'text-[6px]! px-0.5! py-0! min-w-[2rem]!' : 'text-[7px]! px-1! py-0! min-w-[3rem]!';
-  const metaClass = size === 'sm' ? 'text-[9px]' : 'text-xs';
-  const moveClass = size === 'sm' ? 'text-[9px]' : 'text-xs';
+  const nameClass = size === 'sm' ? 'text-caption' : 'text-title';
 
   // The nickname is the player's own text; only the species name is localized.
   const speciesName = localizeSpecies(set.species, dl);
@@ -129,49 +119,51 @@ export default function TeamCardPrimitive({
       onKeyDown={onClick ? (e) => { if (e.key === 'Enter') onClick(); } : undefined}
       aria-label={t('teamCard.slotAria', { name: displayName, n: index + 1 })}
       className={[
-        'rounded-poke-lg border relative overflow-hidden transition-colors',
-        hasErrors ? 'border-red-500/40 bg-red-500/[0.03]' : hasWarnings ? 'border-yellow-500/30 bg-yellow-500/[0.02]' : 'border-poke-border bg-poke-card',
-        onClick ? 'cursor-pointer hover:border-poke-border-focus hover:shadow-xs' : '',
+        'relative overflow-hidden rounded-xl border bg-surface transition-[background-color,border-color] duration-80 ease-out',
+        hasErrors ? 'border-loss' : hasWarnings ? 'border-accent-ink' : 'border-hairline',
+        onClick ? 'cursor-pointer hover:border-hairline-strong hover:bg-hover' : '',
         size === 'sm' ? 'p-2' : size === 'lg' ? 'p-5' : 'p-3',
         className,
       ].filter(Boolean).join(' ')}
     >
-      {/* Validation indicator dot */}
-      {hasErrors && (
-        <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500" title={t('teamCard.hasErrors')} />
-      )}
-      {!hasErrors && hasWarnings && (
-        <div className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-yellow-500" title={t('teamCard.hasWarnings')} />
-      )}
+      {/* Slot plate; it carries the validation state of the slot */}
+      <span
+        className="absolute right-3 top-3"
+        title={hasErrors ? t('teamCard.hasErrors') : hasWarnings ? t('teamCard.hasWarnings') : undefined}
+      >
+        <SkewChip tone={hasErrors ? 'loss' : hasWarnings ? 'accent' : 'neutral'} className="font-mono">
+          {index + 1}
+        </SkewChip>
+      </span>
 
       {/* Header: sprite + name + types + item */}
-      <div className="flex items-start gap-2">
+      <div className="flex items-start gap-3">
         {showSprite && (
           <div className="shrink-0">
             <PokemonSprite name={set.species} size={spriteSize} animated />
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1 flex-wrap">
-            <PokemonLink name={set.species} className="inline-flex">
-              <span className={`font-heading ${nameClass} text-poke-text-primary truncate`}>
+        <div className="min-w-0 flex-1 pr-8">
+          <div className="flex flex-wrap items-center gap-1">
+            <PokemonLink name={set.species} className="inline-flex min-w-0">
+              <span className={`font-heading ${nameClass} truncate text-fg`}>
                 {displayName}
               </span>
             </PokemonLink>
           </div>
           {/* Type badges */}
           {types.length > 0 && (
-            <div className="flex gap-0.5 mt-0.5">
+            <div className="mt-1 flex gap-1">
               {types.map((t) => (
-                <TypeBadge key={t} type={t} className={badgeClass} />
+                <TypeBadge key={t} type={t} size="compact" className="px-1.5! py-0.5!" />
               ))}
             </div>
           )}
           {/* Item + Ability + Nature */}
           {!size?.startsWith('s') && (
-            <div className={`flex gap-2 mt-1 ${metaClass} text-poke-text-muted flex-wrap`}>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-caption text-fg-muted">
               {set.item && (
-                <span className="bg-poke-elevated px-1.5 py-0.5 rounded text-[10px]">
+                <span className="rounded bg-elevated px-1.5 py-0.5 text-fg">
                   @ {localizeItem(set.item, dl)}
                 </span>
               )}
@@ -184,13 +176,13 @@ export default function TeamCardPrimitive({
 
       {/* Moves with type badges */}
       {(set.moves?.filter(Boolean).length ?? 0) > 0 && (
-        <div className={`${size === 'sm' ? 'mt-1' : 'mt-2'} grid grid-cols-2 gap-x-2 gap-y-0.5`}>
+        <div className={`${size === 'sm' ? 'mt-1' : 'mt-3'} grid grid-cols-2 gap-x-3 gap-y-1`}>
           {set.moves.filter(Boolean).map((move, i) => (
-            <div key={i} className="flex items-center gap-1 min-w-0">
+            <div key={i} className="flex min-w-0 items-center gap-1.5">
               {moveTypes[move] && (
-                <TypeBadge type={moveTypes[move]} className={moveBadgeClass} />
+                <TypeBadge type={moveTypes[move]} size="compact" className="px-1.5! py-0.5!" />
               )}
-              <span className={`${moveClass} text-poke-text-secondary truncate`}>
+              <span className="truncate text-caption text-fg">
                 {localizeMove(move, dl)}
               </span>
             </div>
@@ -198,17 +190,15 @@ export default function TeamCardPrimitive({
         </div>
       )}
 
-      {/* Stat bars — only in md/lg */}
+      {/* EV spread — only in md/lg: the scoreboard row of the card */}
       {showStats && size !== 'sm' && set.evs && (
-        <div className="mt-2 pt-2 border-t">
-          <div className={`flex gap-3 ${metaClass} text-poke-text-muted`}>
-            {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map((stat) => (
-              <span key={stat} className="flex flex-col items-center">
-                <span className="text-[9px] uppercase opacity-60">{localizeStat(stat, dl, 'short')}</span>
-                <span className="font-mono text-[10px]">{set.evs[stat]}</span>
-              </span>
-            ))}
-          </div>
+        <div className="mt-3 flex justify-between gap-2 border-t border-hairline pt-2 text-caption">
+          {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map((stat) => (
+            <span key={stat} className="flex flex-col items-center gap-0.5">
+              <span className="whitespace-nowrap text-fg-muted">{localizeStat(stat, dl, 'short')}</span>
+              <span className={`font-mono tabular-nums ${set.evs[stat] > 0 ? 'font-[550] text-fg' : 'text-fg-muted'}`}>{set.evs[stat]}</span>
+            </span>
+          ))}
         </div>
       )}
     </div>
