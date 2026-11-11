@@ -126,8 +126,8 @@ export async function composePlayerProfile(
   // computed above, alongside the standings.
   const most_used_pokemon = computeMostUsedPokemonFromAggregates(playerAggregates);
 
-  // Compute headline stats
-  const headline = computeHeadlineStats(allMatches, battleStats, playerId, standingsMap);
+  // Headline stats: KOs and unique Pokémon come from the all-time aggregates, not the capped battle_stats read
+  const headline = computeHeadlineStats(allMatches, playerAggregates, playerId, standingsMap);
 
   // Recent form: last 5 completed matches
   const recent_form = completedMatches.slice(0, 5).map((m): 'W' | 'L' | 'D' => {
@@ -375,7 +375,7 @@ async function computeBestKillPokemon(
 
 function computeHeadlineStats(
   allMatches: MatchWithTournament[],
-  battleStats: PlayerBattleStatRow[],
+  playerAggregates: PlayerAggregate[],
   playerId: string,
   standingsMap: Map<string, { rank: number; total: number; wins: number; losses: number }>
 ): ProfileHeadlineStats {
@@ -386,12 +386,8 @@ function computeHeadlineStats(
     (m) => m.winner_id !== null && m.winner_id !== playerId
   ).length;
 
-  let totalKos = 0;
-  const uniquePokemon = new Set<string>();
-  for (const stat of battleStats) {
-    totalKos += stat.kos_dealt;
-    uniquePokemon.add(stat.pokemon_name);
-  }
+  // One all-time row per (player, Pokémon): the row count is the number of distinct Pokémon used.
+  const totalKos = playerAggregates.reduce((sum, agg) => sum + agg.total_kos_dealt, 0);
 
   // Count unique tournaments entered
   const tournamentIds = new Set(allMatches.map((m) => m.tournament_id));
@@ -408,7 +404,7 @@ function computeHeadlineStats(
     total_losses: totalLosses,
     win_rate: totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0,
     total_kos_dealt: totalKos,
-    unique_pokemon_used: uniquePokemon.size,
+    unique_pokemon_used: playerAggregates.length,
     tournaments_entered: tournamentIds.size,
     tournaments_won: tournamentsWon,
   };
