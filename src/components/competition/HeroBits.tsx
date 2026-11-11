@@ -28,7 +28,7 @@ export function HeroStat({ value, label }: { value: string; label: string }) {
   );
 }
 
-/** A trainer on a hero's dark slab: the ace sprite (else the avatar) over a name plate that links to the profile. */
+/** A trainer on a hero's versus slab: the ace sprite (else the avatar) over a name plate that links to the profile. */
 export function HeroFighter({ side, standing, tier, align }: { side: HeroSide; standing: string | null; tier: 'bg-tier-1' | 'bg-tier-3'; align: 'left' | 'right' }) {
   return (
     <div className={cn('flex min-w-0 flex-col gap-2', align === 'right' ? 'items-end' : 'items-start')}>
