@@ -57,6 +57,7 @@ vi.mock('@/i18n/content/enum-label', () => ({ enumLabel: () => '' }));
 
 import TournamentPage from '../page';
 import TournamentTabsUnified from '@/components/tournament/TournamentTabsUnified';
+import TournamentHero from '@/components/tournament/TournamentHero';
 import type { ReactElement, ReactNode } from 'react';
 
 const PARTICIPANTS = [
@@ -144,6 +145,27 @@ describe('TournamentPage standings and Swiss byes', () => {
     await renderPage('single_elim', [round(1, ['p3'])]);
 
     expect((computeStandingsForFormat.mock.calls[0] as unknown[])[5]).toEqual({ byes: [] });
+  });
+});
+
+describe('TournamentPage hero', () => {
+  const TOP = { player_id: 'p2', player_name: 'Bob', player_avatar_url: null, points: 3 };
+  const heroLeader = async (bracketType: string) => {
+    reads.tournamentMatches.mockResolvedValue([
+      { id: 'm-1', round_id: 'r-1', status: 'completed', player_1_id: 'p1', player_2_id: 'p2', winner_id: 'p1', scheduled_at: null, games: [] },
+    ]);
+    computeStandingsForFormat.mockReturnValue([TOP] as never);
+    const page = await renderPage(bracketType, [round(1, [])]);
+    return (findElement(page as ReactNode, TournamentHero)?.props.view as { leader: { playerId: string } | null }).leader;
+  };
+
+  it('names the top of a Swiss table', async () => {
+    expect((await heroLeader('swiss'))?.playerId).toBe('p2');
+  });
+
+  it('names no leader or champion for an elimination bracket: the generic table does not model bracket placement', async () => {
+    expect(await heroLeader('single_elim')).toBeNull();
+    expect(await heroLeader('double_elim')).toBeNull();
   });
 });
 

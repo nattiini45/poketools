@@ -187,7 +187,8 @@ export default async function TournamentPage({ params, searchParams }: PageProps
   const [t, locale] = await Promise.all([getT(tournamentsMessages), getLocale()]);
 
   // The hero's table: the one the standings tab shows. A round robin's is computed in the client tabs (its round
-  // filter recomputes it), so the hero ranks it here with the same inputs, unfiltered.
+  // filter recomputes it), so the hero ranks it here with the same inputs, unfiltered. An elimination bracket has
+  // no table: the generic standings do not model bracket placement, so the hero names no leader or champion.
   const heroStandings = isRoundRobin
     ? computeStandingsForFormat(seasonFormatType, participantIds, participantNames, matchRecords, participantAvatars, {
         ...roundRobinMatchPoints(seasonFormatType),
@@ -196,7 +197,9 @@ export default async function TournamentPage({ params, searchParams }: PageProps
           matches.filter((m) => m.status === 'completed').map((m) => [m.id, m.games.map((game) => game.winner_id ?? '')]),
         ),
       }, participantGymTypes, { evolutionPoints, tiebreakerOrder, kit })
-    : standings;
+    : tournament.bracket_type === 'swiss'
+      ? standings
+      : [];
   const hero = buildTournamentHero({ matches, standings: heroStandings });
 
   // One link-tab strip: the tab lives in `?tab=`, every other query parameter (the world override) is kept.
