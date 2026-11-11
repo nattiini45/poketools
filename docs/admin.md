@@ -32,6 +32,7 @@ src/app/admin/
 
 src/app/api/admin/      # guarded route handlers (see API Routes)
 src/lib/admin/
+├── command-index.ts      # command menu jump-to index: contract, limit and entry links (client-safe)
 ├── dashboard.ts          # dashboard API contract + See all / counter links (client-safe)
 ├── export-rate-limit.ts  # daily export quota via Supabase RPC
 ├── format-drift.ts       # format drift report: custom tiebreaker orders and advancement rule comparison
