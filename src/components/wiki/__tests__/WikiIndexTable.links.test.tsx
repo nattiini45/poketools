@@ -67,7 +67,7 @@ describe('wiki index rows are links', () => {
     expect(link).toContain('after:absolute');
     expect(link).toContain('after:inset-0');
     expect(link).toContain('focus-visible:ring-2');
-    const row = /<tr class="([^"]*)">(?:(?!<\/tr>)[\s\S])*Earthquake/.exec(html)?.[1] ?? '';
+    const row = /<tr [^>]*class="([^"]*)"[^>]*>(?:(?!<\/tr>)[\s\S])*Earthquake/.exec(html)?.[1] ?? '';
     expect(row.split(' ')).toContain('relative');
   });
 
@@ -79,7 +79,7 @@ describe('wiki index rows are links', () => {
     );
     const link = /<a [^>]*href="\/pokemon\/Garchomp"[^>]*>/.exec(html)?.[0] ?? '';
     expect(link.match(/class="([^"]*)"/)?.[1].split(' ')).toContain('after:z-10');
-    const rowTag = /<tr class="([^"]*)">(?:(?!<\/tr>)[\s\S])*Garchomp/.exec(html)?.[1] ?? '';
+    const rowTag = /<tr [^>]*class="([^"]*)"[^>]*>(?:(?!<\/tr>)[\s\S])*Garchomp/.exec(html)?.[1] ?? '';
     const rowClasses = rowTag.split(' ');
     expect(rowClasses).toContain('relative');
     expect(rowClasses).toContain('isolate');

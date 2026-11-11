@@ -161,6 +161,202 @@
       }
     },
     {
+      "id": "d2-wiki-home",
+      "url": "/wiki",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-pokemon",
+      "url": "/wiki/pokemon",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-pokemon-filtered",
+      "url": "/wiki/pokemon?type=Dragon&sort=bst-desc",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-moves",
+      "url": "/wiki/moves",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-items",
+      "url": "/wiki/items",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-abilities",
+      "url": "/wiki/abilities",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-tera",
+      "url": "/wiki/tera",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-tera-type",
+      "url": "/wiki/tera/fire",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-move",
+      "url": "/wiki/moves/earthquake",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-item",
+      "url": "/wiki/items/choice-scarf",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-wiki-ability",
+      "url": "/wiki/abilities/intimidate",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-pokemon",
+      "url": "/pokemon/garchomp",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d2-pokemon-signed-in",
+      "url": "/pokemon/garchomp",
+      "fullPage": true,
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player"
+    },
+    {
       "id": "public-replays",
       "url": "/replays",
       "fullPage": true,

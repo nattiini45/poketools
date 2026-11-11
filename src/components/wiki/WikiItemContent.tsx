@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element */
 import WikiDescFallbackTag from '@/components/wiki/WikiDescFallbackTag';
+import { WikiDefinitionList, WikiHero, type WikiDefinition } from '@/components/wiki/WikiParts';
 import type { Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { wikiMessages } from '@/i18n/messages/wiki';
@@ -22,49 +23,44 @@ interface WikiItemContentProps {
 export default function WikiItemContent({ item, locale, dataLocale, descFallback = false }: WikiItemContentProps) {
   const t = createTranslator(wikiMessages, locale);
   const displayName = localizeItem(item.name, dataLocale);
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <img
-          src={getItemSpriteUrl(item.name)}
-          alt={displayName}
-          width={48}
-          height={48}
-          className="shrink-0"
-        />
-        <h1 className="font-heading text-2xl font-bold text-poke-text-primary">
-          {displayName}
-        </h1>
-      </div>
 
-      {/* Description */}
-      <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border">
-        <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
+  const rows: WikiDefinition[] = [
+    {
+      key: 'description',
+      term: (
+        <>
           {t('entry.description')}
           {descFallback && <WikiDescFallbackTag className="ml-2" />}
-        </h2>
-        <p className="font-body text-poke-text-primary leading-relaxed">
-          {item.description || item.shortDesc || t('entry.noDescription')}
-        </p>
-      </div>
+        </>
+      ),
+      children: item.description || item.shortDesc || t('entry.noDescription'),
+    },
+  ];
+  // Short description
+  if (item.shortDesc && item.shortDesc !== item.description) {
+    rows.push({ key: 'summary', term: t('entry.summary'), children: item.shortDesc });
+  }
 
-      {/* Short description */}
-      {item.shortDesc && item.shortDesc !== item.description && (
-        <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border">
-          <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-            {t('entry.summary')}
-          </h2>
-          <p className="font-body text-poke-text-primary">
-            {item.shortDesc}
-          </p>
-        </div>
-      )}
+  return (
+    <div className="flex flex-col gap-4">
+      <WikiHero className="flex items-center gap-4">
+        <span className="skew-plate h-16 w-[4.5rem] shrink-0">
+          <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-surface" />
+          <img
+            src={getItemSpriteUrl(item.name)}
+            alt={displayName}
+            width={48}
+            height={48}
+            className="shrink-0 [image-rendering:pixelated]"
+          />
+        </span>
+        <h1 className="font-heading text-display text-fg [overflow-wrap:anywhere]">{displayName}</h1>
+      </WikiHero>
+
+      <WikiDefinitionList rows={rows} />
 
       {/* Generation info */}
-      <p className="text-xs text-poke-text-secondary font-body">
-        {t('entry.introducedIn', { gen: item.generation })}
-      </p>
+      <p className="text-caption text-fg-muted">{t('entry.introducedIn', { gen: item.generation })}</p>
     </div>
   );
 }

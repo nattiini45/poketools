@@ -9,6 +9,11 @@ import { errorsStats } from '@/i18n/messages/errors/stats';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import type { WikiNote, WikiEntityType } from '@/types/wiki';
 import { useSignInHref } from '@/components/shared/use-sign-in-href';
+import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
+import SkewPlate from '@/components/ui/SkewPlate';
+import Textarea from '@/components/ui/Textarea';
+import { WikiEmptyState, WikiSection } from '@/components/wiki/WikiParts';
 
 /** Report reasons the API accepts; labels come from `wiki.notes.reasons.<reason>`. */
 const REPORT_REASONS = ['inaccurate', 'spam', 'abusive', 'off_topic', 'other'] as const;
@@ -52,8 +57,10 @@ function apiFailure(json: { error?: unknown; code?: unknown; params?: unknown })
 function WikiNotesSignInLink({ href }: { href: string }) {
   const t = useT(wikiMessages);
   return (
-    <Link href={href} className="inline-block text-sm font-heading font-semibold text-poke-accent hover:underline">
-      {t('notes.signIn')}
+    <Link href={href} className="inline-block self-start rounded-poke-sm">
+      <SkewPlate variant="button" className="min-h-11 px-5">
+        {t('notes.signIn')}
+      </SkewPlate>
     </Link>
   );
 }
@@ -65,15 +72,12 @@ function WikiNotesSignInLinkForPage() {
 function WikiNotesSignInPrompt() {
   const t = useT(wikiMessages);
   return (
-    <div className="space-y-3">
-      <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide">
-        {t('notes.title')}
-      </h2>
-      <p className="text-sm text-poke-text-muted">{t('notes.signInPrompt')}</p>
+    <WikiSection title={t('notes.title')}>
+      <p className="text-body text-fg-muted">{t('notes.signInPrompt')}</p>
       <Suspense fallback={<WikiNotesSignInLink href="/auth/signin" />}>
         <WikiNotesSignInLinkForPage />
       </Suspense>
-    </div>
+    </WikiSection>
   );
 }
 
@@ -160,114 +164,104 @@ function WikiNotesAuthenticated({
   }
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-heading text-lg font-bold text-poke-text-primary">
-        {t('notes.title')}
-      </h2>
-
+    <WikiSection title={t('notes.title')}>
       {/* Existing notes */}
       {localNotes.length > 0 ? (
-        <div className="space-y-3">
+        <ul className="flex flex-col gap-3">
           {localNotes.map((note) => (
-            <div
-              key={note.id}
-              className="bg-poke-surface rounded-poke-md p-4 shadow-poke-sm border border-poke-border"
-            >
-              <p className="font-body text-sm text-poke-text-primary leading-relaxed">
-                {note.content}
-              </p>
-              <div className="mt-2 flex items-center gap-2 text-xs text-poke-text-secondary font-body">
+            <li key={note.id} className="rounded-poke-lg border border-hairline bg-surface p-4">
+              <p className="max-w-[72ch] whitespace-pre-line text-body text-fg">{note.content}</p>
+              <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-fg-muted">
                 {note.author_name && <span>{t('notes.byAuthor', { name: note.author_name })}</span>}
                 <span>
                   {formatter.instant(note.created_at, 'date')}
                 </span>
-                <button
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="sm"
+                  aria-expanded={reportingNoteId === note.id}
                   onClick={() => setReportingNoteId(reportingNoteId === note.id ? null : note.id)}
-                  className="ml-auto text-poke-text-secondary hover:text-poke-accent"
+                  className="ml-auto max-md:min-h-11"
                 >
                   {t('notes.report')}
-                </button>
+                </Button>
               </div>
               {reportingNoteId === note.id && (
-                <div className="mt-3 space-y-2 border-t border-poke-border pt-3">
-                  <select
+                <div className="mt-3 flex flex-col gap-3 border-t border-hairline pt-3">
+                  <Select
+                    aria-label={t('notes.report')}
                     value={reportReason}
                     onChange={(event) => {
                       if (isReportReason(event.target.value)) setReportReason(event.target.value);
                     }}
-                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
+                    className="sm:max-w-xs"
                   >
                     {REPORT_REASONS.map((reason) => (
                       <option key={reason} value={reason}>
                         {t(`notes.reasons.${REPORT_REASON_KEYS[reason]}`)}
                       </option>
                     ))}
-                  </select>
-                  <textarea
+                  </Select>
+                  <Textarea
                     value={reportDetails}
                     onChange={(event) => setReportDetails(event.target.value)}
                     maxLength={500}
                     rows={2}
                     placeholder={t('notes.reportDetails')}
-                    className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
+                    aria-label={t('notes.reportDetails')}
                   />
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => void submitReport(note.id)}
-                    className="px-3 py-1 rounded-poke-md bg-poke-muted text-xs font-heading font-semibold text-poke-text-secondary"
+                    className="self-start max-md:min-h-11"
                   >
                     {t('notes.submitReport')}
-                  </button>
+                  </Button>
                 </div>
               )}
-            </div>
+            </li>
           ))}
-        </div>
+        </ul>
       ) : (
-        <p className="text-sm text-poke-text-secondary font-body">{t('notes.empty')}</p>
+        <WikiEmptyState title={t('notes.emptyTitle')} hint={t('notes.empty')} />
       )}
 
       {/* Submission form */}
       {submitted ? (
-        <div className="bg-poke-surface rounded-poke-md p-4 border border-poke-border">
-          <p className="font-body text-sm text-poke-text-primary">{t('notes.submitted')}</p>
-        </div>
+        <p role="status" className="rounded-poke-lg border border-hairline bg-surface p-4 text-body text-fg">
+          {t('notes.submitted')}
+        </p>
       ) : (
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <textarea
+        <form onSubmit={handleSubmit} className="flex flex-col gap-3">
+          <Textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
             placeholder={t('notes.placeholder')}
+            aria-label={t('notes.submit')}
             maxLength={2000}
             rows={3}
-            className="w-full px-4 py-2.5 rounded-poke-md bg-poke-surface border border-poke-border
-                       text-poke-text-primary font-body text-sm placeholder:text-poke-text-secondary
-                       focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent resize-y"
           />
           {error && (
-            <p className="text-xs text-poke-danger-ink font-body" role="alert">{feedbackText(error)}</p>
+            <p className="text-caption text-poke-danger-ink" role="alert">{feedbackText(error)}</p>
           )}
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-poke-text-secondary font-body">
+          <div className="flex items-center justify-between gap-3">
+            <span className="font-mono text-caption tabular-nums text-fg-muted">
               {content.length}/2000
             </span>
-            <button
-              type="submit"
-              disabled={submitting || !content.trim()}
-              className="px-4 py-1.5 rounded-poke-md bg-poke-accent text-poke-surface text-sm font-heading font-semibold
-                         hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
-            >
+            <Button type="submit" disabled={submitting || !content.trim()} className="max-md:min-h-11">
               {submitting ? t('notes.submitting') : t('notes.submit')}
-            </button>
+            </Button>
           </div>
         </form>
       )}
 
       {reportMessage && (
-        <p className="text-xs text-poke-text-secondary font-body">{feedbackText(reportMessage)}</p>
+        <p role="status" className="text-caption text-fg-muted">{feedbackText(reportMessage)}</p>
       )}
-    </div>
+    </WikiSection>
   );
 }
 

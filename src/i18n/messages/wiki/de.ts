@@ -8,11 +8,15 @@ import type en from './en';
  */
 export default defineDe<typeof en>()({
   back: {
-    wiki: '← Zurück zum Wiki',
-    moves: '← Zurück zu den Attacken',
-    items: '← Zurück zu den Items',
-    abilities: '← Zurück zu den Fähigkeiten',
-    tera: '← Zurück zu den Tera-Typen',
+    wiki: 'Zurück zum Wiki',
+    moves: 'Zurück zu den Attacken',
+    items: 'Zurück zu den Items',
+    abilities: 'Zurück zu den Fähigkeiten',
+    tera: 'Zurück zu den Tera-Typen',
+  },
+  chrome: {
+    title: 'Wiki',
+    sections: 'Wiki-Bereiche',
   },
   home: {
     title: 'Wiki / Lexikon',
@@ -49,6 +53,13 @@ export default defineDe<typeof en>()({
     searchByDescription: 'Nach Name oder Beschreibung suchen …',
     clearFilters: 'Filter zurücksetzen',
     noMatches: 'Keine Treffer',
+    noMatchesHint: 'Probier einen anderen Suchbegriff oder setz die Filter zurück.',
+    filters: 'Filter',
+    filtersActive: { one: '{count} Filter aktiv', other: '{count} Filter aktiv' },
+    showResults: { one: '{count} Ergebnis anzeigen', other: '{count} Ergebnisse anzeigen' },
+    sortBy: 'Sortieren nach',
+    sortAsc: '{column}, aufsteigend',
+    sortDesc: '{column}, absteigend',
     name: 'Name',
     types: 'Typen',
     type: 'Typ',
@@ -167,6 +178,7 @@ export default defineDe<typeof en>()({
     reportSubmitted: 'Meldung gesendet.',
     reportFailed: 'Die Meldung konnte nicht gesendet werden',
     reportFailedRetry: 'Die Meldung konnte nicht gesendet werden. Bitte versuche es noch einmal.',
+    emptyTitle: 'Noch keine Notizen',
     empty: 'Noch keine Community-Notizen. Schreib die erste!',
     submitted: 'Notiz eingereicht! Sie erscheint, sobald ein Moderator sie freigegeben hat.',
     placeholder: 'Teile Competitive-Tipps, Strategie-Notizen oder Hinweise zur Nutzung … (Anmeldung erforderlich)',
