@@ -1,6 +1,8 @@
 import Link from 'next/link';
 import GymTypedName from '@/components/shared/GymTypedName';
-import { FOCUS_RING, TABLE_HEAD } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+import SkewChip from '@/components/ui/SkewChip';
+import { HUB_TABLE_HEAD } from './hub-style';
 import type { Standing } from '@/lib/tournament/types';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import { matchesPlayed, pointsPerMatch } from '@/lib/tournament/group-standings';
@@ -38,6 +40,9 @@ interface HubStandingsTableProps {
   caption: string;
 }
 
+/** The top four ranks sit on the tier plates. */
+const RANK_TONE = ['tier-1', 'tier-2', 'tier-3', 'tier-4'] as const;
+
 function rankChange(row: Standing): number | null {
   return 'rank_change' in row && typeof row.rank_change === 'number' ? row.rank_change : null;
 }
@@ -73,9 +78,9 @@ export default function HubStandingsTable({
 
   return (
     <div className="overflow-x-auto">
-      <table className="w-full min-w-112 text-sm">
+      <table className="w-full min-w-112 text-body">
         <caption className="sr-only">{caption}</caption>
-        <thead className={TABLE_HEAD}>
+        <thead className={HUB_TABLE_HEAD}>
           <tr>
             <th scope="col" className="w-10 px-3 py-2 text-left">
               {copy.table.rank}
@@ -143,17 +148,14 @@ export default function HubStandingsTable({
                 key={row.player_id}
                 data-advancing={inZone ? 'true' : undefined}
                 className={`border-b ${
-                  lastInZone ? 'border-dashed border-arena-accent' : 'border-arena-border'
+                  lastInZone ? 'border-b-2 border-accent-fill' : 'border-hairline'
                 } last:border-b-0`}
               >
                 <td className="whitespace-nowrap px-3 py-2">
-                  <span
-                    title={inZone ? copy.table.advancementZone : undefined}
-                    className={`inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold ${
-                      inZone ? 'bg-arena-accent text-arena-surface' : 'text-arena-ink-secondary'
-                    }`}
-                  >
-                    {index + 1}
+                  <span title={inZone ? copy.table.advancementZone : undefined} className="inline-flex">
+                    <SkewChip tone={index < 4 ? RANK_TONE[index] : 'neutral'} className="min-w-7">
+                      {index + 1}
+                    </SkewChip>
                   </span>
                 </td>
                 <td className="whitespace-nowrap px-3 py-2">
@@ -197,9 +199,9 @@ export default function HubStandingsTable({
                   <td className={`${cell} text-arena-ink-secondary`}>{signed(row.kill_differential)}</td>
                 )}
                 {columns.buchholz && <td className={`${cell} text-arena-ink-secondary`}>{row.buchholz}</td>}
-                <td className={`${cell} font-heading font-bold text-arena-ink`}>{row.points}</td>
+                <td className={`${cell} font-heading text-subtitle text-fg`}>{row.points}</td>
                 {columns.pointsPerMatch && (
-                  <td className={`${cell} font-heading font-bold text-arena-ink`}>{copy.pointsPerMatchValue(pointsPerMatch(row))}</td>
+                  <td className={`${cell} font-heading text-subtitle text-fg`}>{copy.pointsPerMatchValue(pointsPerMatch(row))}</td>
                 )}
               </tr>
             );
