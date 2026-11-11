@@ -47,4 +47,11 @@ describe('achievementProgress', () => {
     expect(achievementProgress({ criteria: { type: 'custom', condition: 'x' } as unknown as AchievementCriteria }, { totalWins: 3 })).toBeNull();
     expect(achievementProgress({ criteria: { type: 'streak', stat: 'win_streak', op: 'gte', value: 5 } }, { totalWins: 3 })).toBeNull();
   });
+
+  it('ignores a stat name that only exists on the object prototype', () => {
+    for (const type of ['cumulative', 'streak', 'rating']) {
+      const criteria = { type, stat: 'constructor', op: 'gte', value: 5 } as unknown as AchievementCriteria;
+      expect(achievementProgress({ criteria }, { totalWins: 3, winStreak: 3, rating: 3 })).toBeNull();
+    }
+  });
 });

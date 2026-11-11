@@ -25,15 +25,15 @@ function currentValue(criteria: AchievementDefinition['criteria'], source: Achie
   switch (raw.type) {
     case 'cumulative':
       byStat = { total_wins: source.totalWins, total_games: source.totalGames, total_kos_dealt: source.totalKos, total_tournaments: source.totalTournaments };
-      return byStat[stat];
+      return Object.hasOwn(byStat, stat) ? byStat[stat] : undefined;
     case 'streak':
       byStat = { win_streak: source.winStreak, ko_streak: source.koStreak, flawless_streak: source.flawlessStreak };
-      return byStat[stat];
+      return Object.hasOwn(byStat, stat) ? byStat[stat] : undefined;
     case 'meta':
       return raw.condition === 'used_unique_pokemon' ? source.uniquePokemon : undefined;
     case 'rating':
       byStat = { rating: source.rating, peak_rating: source.peakRating };
-      return byStat[stat];
+      return Object.hasOwn(byStat, stat) ? byStat[stat] : undefined;
     default:
       return undefined;
   }

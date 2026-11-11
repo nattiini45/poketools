@@ -68,7 +68,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
     totalWins: profile.rating?.wins,
     totalGames: profile.rating ? profile.rating.wins + profile.rating.losses + profile.rating.draws : undefined,
     totalKos: profile.headline.total_kos_dealt,
-    totalTournaments: profile.headline.tournaments_entered,
+    totalTournaments: profile.current_participations.length + profile.past_participations.length,
     uniquePokemon: profile.headline.unique_pokemon_used,
     rating: profile.rating?.rating,
     peakRating: profile.rating?.peak_rating,
