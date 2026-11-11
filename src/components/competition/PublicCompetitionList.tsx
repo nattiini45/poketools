@@ -3,6 +3,7 @@ import Link from 'next/link';
 import ItemIcon from '@/components/ui/ItemIcon';
 import LinkTabs, { type LinkTab } from '@/components/ui/LinkTabs';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
 import type { ItemIconId } from '@/lib/pkmn/item-icons';
 import { cn } from '@/lib/utils/cn';
 
@@ -48,6 +49,8 @@ interface PublicCompetitionListProps {
   emptyText: string;
   /** Shown when the selected status has none. */
   emptyFilteredText: string;
+  /** The link back to the whole list from an empty status. */
+  showAllLabel: string;
 }
 
 /**
@@ -63,6 +66,7 @@ export default function PublicCompetitionList({
   filterLabels,
   emptyText,
   emptyFilteredText,
+  showAllLabel,
 }: PublicCompetitionListProps) {
   if (items.length === 0) return <p className="text-body text-fg-muted">{emptyText}</p>;
 
@@ -78,7 +82,14 @@ export default function PublicCompetitionList({
     <div className="flex flex-col gap-4">
       <LinkTabs tabs={tabs} activeKey={filter} label={filterLabel} glideId={`${basePath}-status`} />
       {shown.length === 0 ? (
-        <p className="text-body text-fg-muted">{emptyFilteredText}</p>
+        <div className="flex flex-col items-start gap-3 rounded-poke-lg border border-hairline bg-surface p-5">
+          <p className="text-body text-fg-muted">{emptyFilteredText}</p>
+          <Link href={basePath} scroll={false} className="relative inline-flex rounded-[3px] text-body">
+            <SkewPlate variant="button" tone="secondary">
+              {showAllLabel}
+            </SkewPlate>
+          </Link>
+        </div>
       ) : (
         <ul className="grid gap-3 lg:grid-cols-2">
           {shown.map((item) => (

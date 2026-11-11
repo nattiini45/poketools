@@ -50,6 +50,7 @@ export default async function LeaguesPage({ searchParams }: { searchParams?: Pro
         }}
         emptyText={t('list.empty')}
         emptyFilteredText={t('list.emptyFiltered')}
+        showAllLabel={t('list.showAll')}
         items={leagues.map((league) => ({
           id: league.id,
           href: `/leagues/${league.id}`,

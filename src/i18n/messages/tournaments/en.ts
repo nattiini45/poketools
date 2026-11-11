@@ -12,6 +12,7 @@ export default {
     filterLabel: 'Filter by status',
     filters: { all: 'All', active: 'Active', upcoming: 'Upcoming', completed: 'Finished' },
     emptyFiltered: 'No tournaments with this status.',
+    showAll: 'Show all tournaments',
     doubles: 'Doubles',
   },
   detail: {

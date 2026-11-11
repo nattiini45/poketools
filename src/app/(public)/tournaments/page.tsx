@@ -46,6 +46,7 @@ export default async function TournamentsPage({ searchParams }: { searchParams?:
         }}
         emptyText={t('list.empty')}
         emptyFilteredText={t('list.emptyFiltered')}
+        showAllLabel={t('list.showAll')}
         items={tournaments.map((tournament) => ({
           id: tournament.id,
           href: `/tournaments/${tournament.id}`,

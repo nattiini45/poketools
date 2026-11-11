@@ -8,6 +8,7 @@ export default defineDe<typeof en>()({
     filterLabel: 'Nach Status filtern',
     filters: { all: 'Alle', active: 'Aktiv', upcoming: 'Bevorstehend', completed: 'Beendet' },
     emptyFiltered: 'Keine Ligen mit diesem Status.',
+    showAll: 'Alle Ligen anzeigen',
     dateRange: '{start} – {end}',
     dateFrom: 'Ab {start}',
     stages: { one: '{count} Phase', other: '{count} Phasen' },

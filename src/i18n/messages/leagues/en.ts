@@ -11,6 +11,7 @@ export default {
     filterLabel: 'Filter by status',
     filters: { all: 'All', active: 'Active', upcoming: 'Upcoming', completed: 'Finished' },
     emptyFiltered: 'No leagues with this status.',
+    showAll: 'Show all leagues',
     dateRange: '{start} – {end}',
     dateFrom: 'From {start}',
     stages: { one: '{count} stage', other: '{count} stages' },

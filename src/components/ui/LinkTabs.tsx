@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react';
+'use client';
+
+import { useEffect, useRef, type ReactNode } from 'react';
 import Link from 'next/link';
 import SkewPlate from '@/components/ui/SkewPlate';
 import { cn } from '@/lib/utils/cn';
@@ -26,11 +28,22 @@ interface LinkTabsProps {
 /**
  * One strip of link tabs on skewed plates (docs/design.md, "Skewed plates"): each tab is a link, so the state
  * lives in the URL and the server renders only the selected view. The strip scrolls sideways on a phone
- * instead of wrapping.
+ * instead of wrapping, and brings the current tab into view.
  */
 export default function LinkTabs({ tabs, activeKey, label, glideId, className }: LinkTabsProps) {
+  const strip = useRef<HTMLElement>(null);
+  useEffect(() => {
+    const nav = strip.current;
+    const current = nav?.querySelector('[aria-current="page"]');
+    if (!nav || !current) return;
+    const box = nav.getBoundingClientRect();
+    const tab = current.getBoundingClientRect();
+    if (tab.right > box.right) nav.scrollLeft += tab.right - box.right + 8;
+    else if (tab.left < box.left) nav.scrollLeft -= box.left - tab.left + 8;
+  }, [activeKey]);
+
   return (
-    <nav aria-label={label} className={cn('-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]', className)}>
+    <nav ref={strip} aria-label={label} className={cn('-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]', className)}>
       <ul className="flex w-max items-center gap-2">
         {tabs.map((tab) => {
           const active = tab.key === activeKey;
@@ -40,7 +53,7 @@ export default function LinkTabs({ tabs, activeKey, label, glideId, className }:
                 href={tab.href}
                 scroll={false}
                 aria-current={active ? 'page' : undefined}
-                className="relative inline-flex whitespace-nowrap rounded-[3px] text-body"
+                className="relative inline-flex items-center whitespace-nowrap rounded-[3px] text-body max-sm:min-h-11"
               >
                 <SkewPlate variant="tab" active={active} glideId={glideId} icon={tab.icon}>
                   <span className="inline-flex items-baseline gap-1.5">
