@@ -179,10 +179,12 @@ The root is 16 px (`html { font-size: 100% }`), except on draft-room pages
   `TABLE_HEAD`) — the poke-token twin of the world contract in
   `src/components/world/panel.ts`. Compose panels from these instead of
   re-deriving radius/border/fill per page.
-- Page and section headings carry the plaza accent bar:
-  `<div className="mt-2 h-0.5 w-12 rounded-full bg-poke-accent" />` under a
-  `font-heading font-bold tracking-tight` title (`PageContainer` and
-  `Section` render it automatically).
+- Page and section headings are set in the pixel face without the former plaza
+  accent bar: `PageContainer` renders its title in the display role, `Section`
+  and `CollapsibleSection` in the title role. All three take an optional
+  `icon` (an approved `ItemIconId`), drawn left of the title at 48 px (page)
+  or 24 px (section). `Alert` sets its message in Geist Sans (`font-body`):
+  the pixel face is for titles and headings only.
 - Glass chrome (NavBar, world HUD): translucent surface + `backdrop-blur(18px)
   saturate(1.25)` + sheen gradient + inset top highlight. The NavBar sheen
   lives in `globals.css` (`[data-navbar-glass]::before`).
