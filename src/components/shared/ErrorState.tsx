@@ -6,7 +6,8 @@ import { useT } from "@/i18n/client";
 import { shellMessages } from "@/i18n/messages/shell";
 import { spriteUrl } from "@/lib/pkmn/sprite-styles";
 
-/** Showdown's gen 5 MissingNo, 96 x 96 natural, drawn at 1x so the glitch block stays crisp. */
+/** Showdown's gen 5 MissingNo: a 96 x 96 canvas whose glitch block is 24 x 57 at (36, 20). Drawn at 2x and cropped
+ *  to the block by its plate, which stays light in moonlit because the block's outline is near-black. */
 const MISSINGNO_URL = spriteUrl("Missingno", "pixel");
 
 interface ErrorStateProps {
@@ -32,9 +33,17 @@ export default function ErrorState({ title, description, retryLabel, backLabel, 
 
   return (
     <div className="flex min-h-[50vh] flex-col items-center justify-center gap-6 text-center">
-      <span className="inline-flex border border-hairline bg-surface p-2 dark:bg-fg">
-        {/* eslint-disable-next-line @next/next/no-img-element -- 96 px pixel art drawn at its natural size; next/image would resample it */}
-        <img src={MISSINGNO_URL} alt="" aria-hidden="true" width={96} height={96} decoding="async" className="[image-rendering:pixelated]" />
+      <span className="relative block h-[136px] w-20 overflow-hidden rounded-[3px] border border-hairline bg-surface dark:bg-fg">
+        {/* eslint-disable-next-line @next/next/no-img-element -- pixel art at a whole-number scale; next/image would resample it */}
+        <img
+          src={MISSINGNO_URL}
+          alt=""
+          aria-hidden="true"
+          width={192}
+          height={192}
+          decoding="async"
+          className="absolute left-[-56px] top-[-29px] max-w-none [image-rendering:pixelated]"
+        />
       </span>
       <div>
         <h2 className="font-heading text-display text-balance text-fg">{title}</h2>
