@@ -3,6 +3,7 @@ import type en from './en';
 
 export default defineDe<typeof en>()({
   links: {
+    home: 'Start',
     tournaments: 'Turniere',
     leagues: 'Ligen',
     replays: 'Replays',
@@ -10,6 +11,7 @@ export default defineDe<typeof en>()({
     wiki: 'Wiki',
     players: 'Spieler',
     teams: 'Teams',
+    more: 'Mehr',
     creator: 'Creator-Hub',
     admin: 'Admin',
   },
@@ -17,4 +19,31 @@ export default defineDe<typeof en>()({
   toggleMenu: 'Menü umschalten',
   closeMenu: 'Menü schließen',
   menuLabel: 'Seitenmenü',
+  mainLabel: 'Hauptnavigation',
+  bottomLabel: 'Schnellnavigation',
+  account: {
+    trigger: 'Kontomenü',
+    guestTrigger: 'Darstellung und Sprache',
+    settings: 'Einstellungen',
+    appearance: 'Darstellung',
+    language: 'Sprache',
+    theme: 'Farbmodus',
+    sunlit: 'Sonnig',
+    moonlit: 'Mondhell',
+  },
+  search: {
+    trigger: 'Suche',
+    placeholder: 'Pokémon, Attacken, Seiten suchen…',
+    title: 'Suche',
+    description: 'Finde ein Pokémon, eine Attacke, ein Item oder eine Seite.',
+    empty: 'Nichts gefunden.',
+    pages: 'Seiten',
+    wiki: 'Wiki',
+    elsewhere: 'Nach „{query}“ suchen',
+    inPlayers: 'Spieler mit „{query}“ im Namen',
+    inReplays: 'Replays zu „{query}“',
+    open: 'Öffnen',
+    navigate: 'Bewegen',
+    close: 'Schließen',
+  },
 });

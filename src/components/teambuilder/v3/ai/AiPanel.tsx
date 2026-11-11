@@ -30,16 +30,17 @@ export default function AiPanel() {
   return (
     <div className="space-y-3">
       {/* Tab switcher — keeps the chat and the heuristic coaches one click apart. */}
-      <div className="flex gap-1 rounded-poke-md p-1 border border-poke-border">
+      <div className="flex gap-1 rounded-[10px] bg-sunken p-1">
         {(['assistant', 'coach'] as const).map((tabId) => (
           <button
             key={tabId}
             type="button"
             onClick={() => setTab(tabId)}
-            className={`flex-1 rounded-poke-sm px-2 py-1 text-xs font-heading font-semibold capitalize transition-colors ${
+            aria-pressed={tab === tabId}
+            className={`flex-1 rounded-md px-2 py-1 text-caption transition-colors duration-80 ease-out pointer-coarse:min-h-11 ${
               tab === tabId
-                ? 'bg-poke-surface text-poke-text-primary shadow-poke-sm'
-                : 'text-poke-text-muted hover:text-poke-text-primary'
+                ? 'bg-surface font-[550] text-fg'
+                : 'text-fg-muted hover:text-fg'
             }`}
           >
             {t(`ai.tabs.${tabId}`)}
@@ -67,7 +68,7 @@ export default function AiPanel() {
             format={state.format}
             generation={state.generation}
           />
-          <div className="border-t border-poke-border" />
+          <div className="border-t border-hairline" />
           <TeamCoachPanel
             team={state.team}
             format={state.format}

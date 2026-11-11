@@ -5,12 +5,24 @@ export default defineDe<typeof en>()({
   list: {
     title: 'Turniere',
     empty: 'Noch keine Turniere.',
+    filterLabel: 'Nach Status filtern',
+    filters: { all: 'Alle', active: 'Aktiv', upcoming: 'Bevorstehend', completed: 'Beendet' },
+    emptyFiltered: 'Keine Turniere mit diesem Status.',
+    showAll: 'Alle Turniere anzeigen',
     doubles: 'Doppel',
   },
   detail: {
     backToLeague: 'Zur Liga: {name}',
     backToLeagueLabel: 'Zurück zur Liga {name}',
     insights: 'Insights',
+    tabsLabel: 'Turnierbereiche',
+  },
+  hero: {
+    statusRound: '{status} · Runde {round}',
+    stats: {
+      players: { one: 'Spieler', other: 'Spieler' },
+      rounds: { one: 'Runde', other: 'Runden' },
+    },
   },
   error: {
     title: 'Das Turnier konnte nicht geladen werden',

@@ -2,9 +2,11 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import SkewChip from '@/components/ui/SkewChip';
+import PlateButton from '@/components/match/PlateButton';
+import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsCommon } from '@/i18n/messages/errors/common';
@@ -15,6 +17,7 @@ import { saveActionRequest, submitActionRequest } from '@/lib/format-engine/runt
 import type { ActionPick } from '@/lib/format-engine/runtime/types';
 import type { ActionView, DomainEntriesView, EntryView, SubmissionState } from '@/lib/format-engine/runtime/view-types';
 import ActionIssues from './ActionIssues';
+import { EntrySprite, FOCUS_TARGET, PLAYER_CARD, TrainerTile } from './parts';
 import SpeciesLabel from './SpeciesLabel';
 import StepPicker from './StepPicker';
 import { useLText, usePlayerName } from './useLabels';
@@ -147,19 +150,19 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
     clearError();
   }
 
-  const windowBadge =
+  const windowChip =
     action.window === 'open' ? (
-      <Badge variant="green">{t('actions.windowOpen')}</Badge>
+      <SkewChip tone="live">{t('actions.windowOpen')}</SkewChip>
     ) : action.window === 'locked' ? (
-      <Badge variant="yellow">{t('actions.windowLocked')}</Badge>
+      <SkewChip>{t('actions.windowLocked')}</SkewChip>
     ) : (
-      <Badge variant="gray">{t('actions.windowNotYet')}</Badge>
+      <SkewChip>{t('actions.windowNotYet')}</SkewChip>
     );
-  const stateBadge = {
-    none: <Badge variant="gray">{t('actions.statusNone')}</Badge>,
-    draft: <Badge variant="yellow">{t('actions.statusDraft')}</Badge>,
-    submitted: <Badge variant="green">{t('actions.statusSubmitted')}</Badge>,
-    locked: <Badge variant="blue">{t('actions.statusLocked')}</Badge>,
+  const stateChip = {
+    none: <SkewChip>{t('actions.statusNone')}</SkewChip>,
+    draft: <SkewChip tone="accent">{t('actions.statusDraft')}</SkewChip>,
+    submitted: <SkewChip tone="win">{t('actions.statusSubmitted')}</SkewChip>,
+    locked: <SkewChip tone="tier-3">{t('actions.statusLocked')}</SkewChip>,
   }[state];
 
   // Why the card is read-only, in one sentence (a closed league has its own notice at the top of the page).
@@ -180,43 +183,50 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
     .filter((line) => line.ids.length > 0);
 
   return (
-    <article aria-labelledby={headingId} className="space-y-3 rounded-poke-lg border border-poke-border bg-poke-surface p-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={headingId} ref={headingRef} tabIndex={-1} className="font-heading text-base font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+    <article aria-labelledby={headingId} className={PLAYER_CARD}>
+      <header className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+        <h3 id={headingId} ref={headingRef} tabIndex={-1} className={cn('rounded-poke-sm text-subtitle font-[550] text-fg', FOCUS_TARGET)}>
           {labelOf(action.label)}
         </h3>
         <div className="flex flex-wrap gap-2">
-          {windowBadge}
-          {stateBadge}
+          {windowChip}
+          {stateChip}
         </div>
       </header>
 
       {action.target !== null ? (
-        <p className="text-sm text-poke-text-secondary">{t('actions.targetKnown', { name: nameOf(action.target) })}</p>
+        <p className="flex items-center gap-2 text-body text-fg">
+          <TrainerTile name={nameOf(action.target)} />
+          <span>{t('actions.targetKnown', { name: nameOf(action.target) })}</span>
+        </p>
       ) : action.target_hidden ? (
-        <p className="text-sm text-poke-text-secondary">{t('actions.targetHidden')}</p>
+        <p className="text-body text-fg-muted">{t('actions.targetHidden')}</p>
       ) : null}
 
-      {readOnlyReason !== null && <p className="text-sm text-poke-text-secondary">{readOnlyReason}</p>}
+      {readOnlyReason !== null && <p className="text-body text-fg-muted">{readOnlyReason}</p>}
 
       {!editable && (
-        <div className="space-y-1">
-          <p className="font-heading text-xs font-semibold text-poke-text-muted">{t('actions.yourPick')}</p>
+        <div className="flex flex-col gap-2">
+          <p className="text-caption font-[550] text-fg-muted">{t('actions.yourPick')}</p>
           {pickLines.length === 0 ? (
-            <p className="text-sm text-poke-text-secondary">{t('actions.noPick')}</p>
+            <p className="text-body text-fg-muted">{t('actions.noPick')}</p>
           ) : (
-            <ul className="space-y-0.5 text-sm text-poke-text-primary">
+            <ul className="flex flex-col gap-2">
               {pickLines.map(({ step, ids }) => (
-                <li key={step.index}>
-                  <span className="text-poke-text-secondary">
-                    {t('step.heading', { number: step.index + 1, resource: labelOf(step.resource_label) })}:{' '}
+                <li key={step.index} className="flex flex-col gap-1.5">
+                  <span className="text-caption text-fg-muted">
+                    {t('step.heading', { number: step.index + 1, resource: labelOf(step.resource_label) })}
                   </span>
-                  {ids.map((id, index) => (
-                    <span key={id}>
-                      {index > 0 && ', '}
-                      <SpeciesLabel id={id} />
-                    </span>
-                  ))}
+                  <span className="flex flex-wrap gap-2">
+                    {ids.map((id) => (
+                      <span key={id} className="flex items-center gap-2 rounded-poke-md border border-hairline bg-elevated py-1 pl-1.5 pr-3 text-body font-[550] text-fg">
+                        <EntrySprite id={id} />
+                        <span>
+                          <SpeciesLabel id={id} />
+                        </span>
+                      </span>
+                    ))}
+                  </span>
                 </li>
               ))}
             </ul>
@@ -225,7 +235,7 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
       )}
 
       {editable && (
-        <div ref={editorRef} className="space-y-4">
+        <div ref={editorRef} className="flex flex-col gap-4">
           {action.steps.map((step) => (
             <StepPicker
               key={step.index}
@@ -237,7 +247,7 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
               disabled={pending}
             />
           ))}
-          {state === 'submitted' && <p className="text-xs text-poke-text-secondary">{t('actions.resubmitHint')}</p>}
+          {state === 'submitted' && <p className="text-caption text-fg-muted">{t('actions.resubmitHint')}</p>}
         </div>
       )}
 
@@ -249,23 +259,17 @@ export default function ActionCard({ seasonId, action, domains, closed, onReload
         ))}
 
       {canAct && (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-3">
           {editable ? (
             <>
-              {canSaveDraft && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className={TOUCH}
-                  onClick={() => void save()}
-                  disabled={pending || !stepsReady || picks.length === 0}
-                >
-                  {t('buttons.saveDraft')}
-                </Button>
-              )}
-              <Button size="sm" className={TOUCH} onClick={askToSubmit} disabled={pending || !stepsReady || !complete}>
+              <PlateButton onClick={askToSubmit} disabled={pending || !stepsReady || !complete}>
                 {state === 'submitted' ? t('buttons.submitAgain') : t('buttons.submit')}
-              </Button>
+              </PlateButton>
+              {canSaveDraft && (
+                <PlateButton tone="secondary" onClick={() => void save()} disabled={pending || !stepsReady || picks.length === 0}>
+                  {t('buttons.saveDraft')}
+                </PlateButton>
+              )}
               {state === 'submitted' && (
                 <Button variant="ghost" size="sm" className={TOUCH} onClick={stopEditing} disabled={pending}>
                   {t('buttons.cancel')}

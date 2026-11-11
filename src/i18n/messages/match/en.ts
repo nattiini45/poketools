@@ -9,6 +9,8 @@ export default {
   versusTitle: '{p1} vs {p2}',
   detail: {
     title: 'Match Detail',
+    /** The page's h1: the two players. */
+    heading: '{player1} vs {player2}',
     evolutionSummary: 'Evolution League Summary',
     evolutionProgress: '{name} — Evolution Progress',
     notBrought: 'Not brought ({count})',

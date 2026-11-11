@@ -1309,29 +1309,9 @@ input[type="date"]::-webkit-calendar-picker-indicator {
    follows the site palette like any other page instead of putting plaza
    panels on a palette-coloured body. */
 
-/* League hub (inside a world's #pulse section): the shared components it
-   reuses (brackets, insights tables, ruleset, Core Liga cores) are styled
-   with poke-* utilities, so inside the hub the poke tokens read the world's
-   palette. In the plaza (no --world-* override) this is the identity; in the
-   park, pass and sky island the reused tables follow the theme, sunlit and
-   moonlit. No cycle: --world-* arrive here as inherited computed values. */
-.league-hub {
-  --poke-base: var(--world-ground);
-  --poke-surface: var(--world-surface);
-  --poke-elevated: var(--world-elevated);
-  --poke-muted: var(--world-elevated);
-  --poke-text-primary: var(--world-ink);
-  --poke-text-secondary: var(--world-ink-secondary);
-  --poke-text-muted: var(--world-ink-secondary);
-  --poke-text-tertiary: var(--world-ink-secondary);
-  --poke-accent: var(--world-accent);
-  --poke-accent-strong: var(--world-accent-strong);
-  --poke-focus: var(--world-focus);
-  --poke-live: var(--world-live);
-  --poke-glow: var(--world-glow);
-  --poke-border: var(--world-border);
-  --poke-border-strong: var(--world-border);
-}
+/* The league hub sits above the world on the site's own tokens (redesign B2,
+   components/league/hub/hub-style.ts), so nothing here re-aliases poke-* to
+   --world-* for it any more. */
 
 /* Route-tier plaza: keep section height for the conductor, hide the paint.
    (The site NavBar's live state — hidden but reachable — is the D33 block
@@ -1362,13 +1342,6 @@ html.world-route-live [data-world-route] section:not(dialog *) {
   padding-top: 0;
   padding-bottom: 0;
   background: transparent;
-}
-/* The league hub (#pulse's `after` slot) is hidden with its station, but its
-   padding, border and top margin still made a ~92 px box inside #pulse.
-   Out of the layout entirely while the world is the page; #pulse keeps its
-   fixed 100vh, so no station offset moves. */
-html.world-route-live [data-world-route] #league-hub {
-  display: none;
 }
 html.world-route-live [data-world-route] section:not(dialog *) > * {
   visibility: hidden;
@@ -1554,6 +1527,33 @@ html.world-route-live .world-nav-hud-menu[aria-expanded="true"] {
   background: var(--hud-chip-active);
   color: var(--hud-chip-active-ink);
   box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
+}
+/* The phone bottom tab bar (redesign B0) goes with the NavBar: parked below
+   the viewport while the world is the page, back with the revealed bar or
+   keyboard focus inside it. Transform / opacity only, like the bar. */
+html.world-route-live [data-site-bottom-bar] {
+  transform: translate3d(0, calc(100% + 16px), 0);
+  opacity: 0.002;
+  pointer-events: none;
+  transition:
+    transform 240ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 0ms linear 240ms;
+}
+html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] [data-site-bottom-bar],
+html:is(.world-route-live, [data-route-handoff]) [data-site-bottom-bar]:has(:focus-visible) {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0ms linear 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.world-route-live [data-site-bottom-bar],
+  html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] [data-site-bottom-bar],
+  html:is(.world-route-live, [data-route-handoff]) [data-site-bottom-bar]:has(:focus-visible) {
+    transition: none;
+  }
 }
 /* === end D33 nav reveal === */
 
@@ -3254,3 +3254,195 @@ html.world-route-live .world-nav-hud {
   }
 }
 
+
+/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar follows the theme: in sunlit it sits on the page's
+   own sand behind a hairline, in moonlit on the umber surface, so it reads as part of the page in both.
+   The current section sits on a gold plate cut to the site skew (a clip-path, because @fluid animates the plate's
+   box with inline styles); its label takes the plate ink. Unlayered on purpose: these restyle @fluid's utilities. */
+.admin-rail {
+  background-color: var(--page);
+  border-inline-end: 1px solid var(--hairline-strong);
+  color: var(--fg);
+  /* New competition keeps the amber fill beside the gold plate of the current section. */
+  --accent-fill: #CF660B;
+}
+
+[data-theme="dark"] .admin-rail {
+  background-color: var(--surface);
+  border-inline-end-color: transparent;
+}
+
+.admin-rail [data-sidebar="menu"] > .bg-active {
+  border-radius: 0;
+  background-color: var(--tier-1);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.admin-rail [data-sidebar="menu-button"][data-active="true"],
+.admin-rail [data-sidebar="menu-button"][data-active="true"] span {
+  color: var(--tier-ink);
+  font-weight: 550;
+}
+
+/* With keyboard focus @fluid's focus plate covers the gold one, so the label goes back to the rail's text colour. */
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible,
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible span {
+  color: var(--fg);
+}
+
+.admin-rail [data-sidebar="menu-sub-button"][aria-current="page"] span {
+  color: var(--accent-ink);
+  font-weight: 550;
+}
+
+/* In the phone drawer every row of the rail is a 44 px touch target. */
+[data-mobile="true"] .admin-rail [data-sidebar="menu-item"],
+[data-mobile="true"] .admin-rail [data-sidebar="menu-sub-item"] {
+  --row-h: 44px;
+}
+
+[data-mobile="true"] .admin-rail [data-sidebar="header"] :is(a, button),
+[data-mobile="true"] .admin-rail [data-sidebar="footer"] :is(a, button) {
+  min-height: 44px;
+}
+
+[data-mobile="true"] .admin-rail [data-sidebar="menu-button"],
+[data-mobile="true"] .admin-rail [data-sidebar="menu-sub-button"],
+[data-mobile="true"] .admin-rail [data-sidebar="group-label"] {
+  height: 44px;
+}
+
+/* ─── Phone bottom tab bar (redesign B0, src/components/shared/nav/BottomTabBar.tsx) ───
+   While the bar is mounted (a signed-in player, below lg) the page keeps its last rows clear of it. A draft
+   room owns its bottom edge (the pick dock of a fixed-height screen), so the bar is not drawn there and the
+   page keeps its padding. A live 3D route world parks the bar with the NavBar (D33 block above). */
+html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  html:not(.world-route-live):not(:has([data-frozen="draft-room"])) body:has([data-site-bottom-bar]) #main-content {
+    padding-bottom: calc(27px + 56px + env(safe-area-inset-bottom));
+  }
+}
+
+/* ─── League hero (redesign B2, src/components/league/hero/LeagueHero.tsx) ───
+   Direction B's versus screen: the arena sand with a hex texture, and a slab for the match. In sunlit the slab
+   is a deeper arena sand (no dark surface on the light theme); only moonlit makes it near-black. The slab
+   carries its own ink through the --hero-slab-* properties, so anything that borrows these classes follows.
+   From lg the slab's left edge leans like every skewed plate and an accent stripe runs along it. */
+.league-hero {
+  --hero-slab: #dfcd9f;
+  --hero-slab-ink: var(--fg);
+  --hero-slab-muted: var(--fg-muted);
+  --hero-vs: var(--accent-ink);
+  --hero-lean: 72px;
+  background-color: var(--sunken);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23241a0c' stroke-opacity='.07'/%3E%3C/svg%3E");
+}
+html[data-theme="dark"] .league-hero {
+  --hero-slab: #0e0b06;
+  --hero-slab-ink: #f5eddd;
+  --hero-slab-muted: #c4b596;
+  --hero-vs: var(--tier-1);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23f5eddd' stroke-opacity='.06'/%3E%3C/svg%3E");
+}
+.league-hero-slab {
+  background-color: var(--hero-slab);
+  color: var(--hero-slab-ink);
+  border-top: 3px solid var(--accent-fill);
+}
+.league-hero-slab-muted {
+  color: var(--hero-slab-muted);
+}
+.league-hero-vs {
+  color: var(--hero-vs);
+}
+.league-hero-nameplate {
+  background-color: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--hairline-strong);
+  border-radius: 3px;
+}
+@media (min-width: 1024px) {
+  .league-hero-split {
+    display: grid;
+    grid-template-columns: minmax(0, 11fr) minmax(0, 10fr);
+  }
+  .league-hero-split .league-hero-slab {
+    border-top: 0;
+    padding-left: calc(var(--hero-lean) + 36px);
+    clip-path: polygon(var(--hero-lean) 0, 100% 0, 100% 100%, 0 100%);
+  }
+  .league-hero-split .league-hero-slab::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: var(--accent-fill);
+    clip-path: polygon(var(--hero-lean) 0, calc(var(--hero-lean) + 12px) 0, 12px 100%, 0 100%);
+  }
+}
+/* The hero and the hub sit above the world; while a 3D route world is the page they leave the layout with the
+   world's own sections (the hub did the same inside #pulse). */
+html.world-route-live [data-league-top] {
+  display: none;
+}
+
+/* ─── League hub tabs and actions (redesign B2, src/components/league/hub/LeagueHub.tsx) ───
+   Skewed plates drawn with pseudo-elements, so a tab link holds only its label and its pending mark: the plate
+   is ::before, the item icon ::after (its image and, for a sheet icon, its cell arrive as custom properties). */
+.hub-tab,
+.hub-action {
+  position: relative;
+  isolation: isolate;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  padding: 6px 12px;
+  border-radius: 3px;
+  font-size: var(--text-body);
+  line-height: var(--text-body--line-height);
+  color: var(--fg);
+}
+.hub-action {
+  font-weight: 550;
+}
+/* Touch targets on a phone. */
+@media (max-width: 639px) {
+  .hub-tab,
+  .hub-action {
+    min-height: 44px;
+  }
+}
+.hub-tab::before,
+.hub-action::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: 3px;
+  border: 1px solid var(--hairline-strong);
+  background-color: var(--surface);
+  transform: skewX(var(--skew));
+  transition: background-color 80ms;
+}
+.hub-tab:hover::before,
+.hub-action:hover::before {
+  background-color: var(--hover);
+}
+.hub-tab[aria-current="page"] {
+  font-weight: 550;
+}
+.hub-tab[aria-current="page"]::before {
+  box-shadow: inset 0 -3px 0 0 var(--accent-ink);
+}
+.hub-tab::after {
+  content: "";
+  order: -1;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  background: var(--hub-tab-icon) no-repeat var(--hub-tab-icon-position, 0 0) / var(--hub-tab-icon-size, 24px 24px);
+  image-rendering: pixelated;
+}

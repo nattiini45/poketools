@@ -30,7 +30,7 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
 
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-4">
+      <h1 className="font-heading text-display text-fg mb-4">
         {t('signIn.title')}
       </h1>
       <SignInForm callbackUrl={callbackUrl} initialErrorCode={initialErrorCode} discordEnabled={discordOAuthEnabled()} />

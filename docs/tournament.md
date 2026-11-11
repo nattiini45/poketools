@@ -45,6 +45,7 @@ src/lib/tournament/
 ├── previous-round-guard.ts  # Refuses legacy elimination generation over unfinished matches
 ├── schedule-drift.ts  # Drift guard of the round-robin schedule
 ├── season-standings.ts, standings-rules.ts  # Format-aware standings entry point and the scoring rules it follows
+├── page-view.ts             # Public tournament page: its `?tab=` link tabs and the hero's view (live or next match, else the leader)
 ├── seed-errors.ts  # Domain errors of the participant seed update
 ├── settings-patch.ts, standalone-lock.ts  # Standalone settings fields and their lock after the start
 ├── round-state.ts  # roundMachine: the status moves of a round (docs/state-machines.md); the round manager's actions

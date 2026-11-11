@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
 import RulesetPageView from '@/components/ruleset-studio/RulesetPageView';
@@ -62,6 +63,7 @@ export default async function RulesetPage({ params }: PageProps) {
   return (
     <AdminGuard>
       <PageContainer title={title} maxWidth="lg">
+        <AdminCrumbName href={`/admin/rulesets/${id}`} name={title} />
         <RulesetPageView
           id={id}
           summary={summary}

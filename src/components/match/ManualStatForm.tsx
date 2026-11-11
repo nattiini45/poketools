@@ -1,9 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
+import Input from '@/components/ui/Input';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewPlate from '@/components/ui/SkewPlate';
+import PlateButton from '@/components/match/PlateButton';
+import StickyActionBar from '@/components/match/StickyActionBar';
+import { X } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
 import PokemonAutocomplete from '@/components/shared/PokemonAutocomplete';
 import { useT } from '@/i18n/client';
@@ -102,6 +107,7 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
   const [phase, setPhase] = useState<SubmitPhase>('idle');
   const [error, setError] = useState<FormError | null>(null);
   const [successKey, setSuccessKey] = useState<'resultRecorded' | 'gameRecorded' | null>(null);
+  const summaryId = useId();
 
   function updatePokemon(
     playerIdx: 0 | 1,
@@ -215,37 +221,58 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
     }
   }
 
+  // The summary under the form: what this submission records, read from the fields as they stand.
+  const winner = players.find((p) => p.id === winnerId) ?? null;
+  const sideSummary = players.map((player, idx) => {
+    const named = playerPokemon[idx].filter((p) => p.pokemon_name.trim());
+    return { id: player.id, name: player.name, count: named.length, kos: named.reduce((sum, p) => sum + p.kos_dealt, 0) };
+  });
+  const CHECK = 'flex min-h-11 items-center gap-2 text-body text-fg sm:min-h-0';
+  const BOX = 'size-4 shrink-0 cursor-pointer accent-accent-fill';
+
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {/* Winner Selection */}
-      <div>
-        <label className="block text-sm font-heading font-semibold text-poke-text-primary mb-2">{t('common.winner')}</label>
-        <div className="flex gap-3">
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-caption font-[550] text-fg">{t('common.winner')}</legend>
+        <div className="flex flex-wrap gap-x-3 gap-y-2 px-1">
           {players.map((p) => (
             <button
               key={p.id}
               type="button"
+              aria-pressed={winnerId === p.id}
               onClick={() => setWinnerId(p.id)}
-              className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                winnerId === p.id
-                  ? 'bg-poke-blue text-poke-on-blue border-poke-blue shadow-poke-sm'
-                  : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-              }`}
+              className="inline-flex min-h-11 items-stretch text-body transition-[filter] duration-80 ease-out hover:brightness-95 motion-reduce:transition-none"
             >
-              {p.name}
+              {winnerId === p.id ? (
+                <SkewPlate variant="rank" tier={1} className="px-5 py-2">
+                  {p.name}
+                </SkewPlate>
+              ) : (
+                <SkewPlate variant="button" tone="secondary" className="px-5 py-2">
+                  {p.name}
+                </SkewPlate>
+              )}
             </button>
           ))}
         </div>
-      </div>
+        <p className="text-caption text-fg-muted">{t('manual.winnerHint')}</p>
+      </fieldset>
 
       {/* Per-Player Pokémon Stats */}
       {players.map((player, playerIdx) => (
-        <Card key={player.id} variant="outlined" padding="md">
-          <h3 className="font-heading font-semibold text-sm text-poke-text-primary mb-3">{t('common.pokemonOf', { name: player.name })}</h3>
+        <section key={player.id} className="flex flex-col gap-3 border-t border-hairline pt-5">
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h3 className="text-subtitle font-[550] text-fg">{t('common.pokemonOf', { name: player.name })}</h3>
+            <span className="text-caption tabular-nums text-fg-muted">{t('manual.rosterCount', { count: playerPokemon[playerIdx].length })}</span>
+          </div>
 
-          <div className="space-y-3">
+          <ul className="flex flex-col gap-2">
             {playerPokemon[playerIdx].map((poke, pokeIdx) => (
-              <div key={pokeIdx} className="grid grid-cols-12 gap-2 items-center">
+              <li
+                key={pokeIdx}
+                className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 rounded-poke-md border border-hairline bg-elevated p-2 md:grid-cols-[minmax(0,1.3fr)_7rem_auto_auto_minmax(0,1.2fr)_auto]"
+              >
                 <PokemonAutocomplete
                   value={poke.pokemon_name}
                   onChange={(name) =>
@@ -253,86 +280,109 @@ export default function ManualStatForm({ matchId, players, onSuccess, initialTea
                   }
                   generation={generation}
                   placeholder={t('common.pokemonName')}
-                  className="col-span-3"
-                />
-                <div className="col-span-2 flex items-center gap-1">
-                  <label className="text-xs text-poke-text-muted">{t('manual.kosLabel')}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={poke.kos_dealt}
-                    onChange={(e) =>
-                      updatePokemon(
-                        playerIdx as 0 | 1,
-                        pokeIdx,
-                        'kos_dealt',
-                        parseInt(e.target.value) || 0
-                      )
-                    }
-                    className="w-12 px-1 py-1 border border-poke-border rounded-poke-md text-sm text-center bg-poke-surface text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
-                  />
-                </div>
-                <label className="col-span-2 flex items-center gap-1 text-xs text-poke-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={poke.was_koed}
-                    onChange={(e) =>
-                      updatePokemon(playerIdx as 0 | 1, pokeIdx, 'was_koed', e.target.checked)
-                    }
-                    className="accent-poke-accent"
-                  />
-                  {t('common.koed')}
-                </label>
-                <label className="col-span-2 flex items-center gap-1 text-xs text-poke-text-secondary">
-                  <input
-                    type="checkbox"
-                    checked={poke.was_lead}
-                    onChange={(e) =>
-                      updatePokemon(playerIdx as 0 | 1, pokeIdx, 'was_lead', e.target.checked)
-                    }
-                    className="accent-poke-blue"
-                  />
-                  {t('common.lead')}
-                </label>
-                <input
-                  type="text"
-                  placeholder={t('manual.moves')}
-                  value={poke.moves_used}
-                  onChange={(e) =>
-                    updatePokemon(playerIdx as 0 | 1, pokeIdx, 'moves_used', e.target.value)
-                  }
-                  className="col-span-2 px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
+                  className="[&_input]:h-9 [&_input]:px-3"
                 />
                 <button
                   type="button"
                   onClick={() => removePokemon(playerIdx as 0 | 1, pokeIdx)}
-                  className="col-span-1 text-poke-danger hover:text-poke-danger/70 text-sm transition-colors"
+                  className="grid size-11 place-items-center rounded-poke-md text-fg-muted transition-colors duration-80 hover:bg-hover hover:text-loss md:order-last md:size-9"
+                  aria-label={t('manual.removeAria', { n: pokeIdx + 1 })}
                   title={t('common.remove')}
                 >
-                  ×
+                  <X aria-hidden="true" className="size-4" />
                 </button>
-              </div>
+                <div className="col-span-2 flex flex-wrap items-center gap-x-4 gap-y-1 md:contents">
+                  {/* stats: the KO count, then the two flags (they wrap as a pair on a narrow phone) */}
+                  <div className="flex items-center gap-2">
+                    <span aria-hidden="true" className="text-caption text-fg-muted md:hidden">{t('manual.kosLabel')}</span>
+                    <Input
+                      type="number"
+                      min={0}
+                      aria-label={t('manual.kosAria', { n: pokeIdx + 1 })}
+                      value={poke.kos_dealt}
+                      onChange={(e) =>
+                        updatePokemon(
+                          playerIdx as 0 | 1,
+                          pokeIdx,
+                          'kos_dealt',
+                          parseInt(e.target.value) || 0
+                        )
+                      }
+                      className="w-24 tabular-nums md:w-full"
+                    />
+                  </div>
+                  <div className="flex items-center gap-4 md:contents">
+                  <label className={CHECK}>
+                    <input
+                      type="checkbox"
+                      checked={poke.was_koed}
+                      onChange={(e) =>
+                        updatePokemon(playerIdx as 0 | 1, pokeIdx, 'was_koed', e.target.checked)
+                      }
+                      className={BOX}
+                    />
+                    {t('common.koed')}
+                  </label>
+                  <label className={CHECK}>
+                    <input
+                      type="checkbox"
+                      checked={poke.was_lead}
+                      onChange={(e) =>
+                        updatePokemon(playerIdx as 0 | 1, pokeIdx, 'was_lead', e.target.checked)
+                      }
+                      className={BOX}
+                    />
+                    {t('common.lead')}
+                  </label>
+                  </div>
+                </div>
+                <div className="col-span-2 md:col-span-1">
+                  <Input
+                    type="text"
+                    aria-label={t('manual.movesAria', { n: pokeIdx + 1 })}
+                    placeholder={t('manual.moves')}
+                    value={poke.moves_used}
+                    onChange={(e) =>
+                      updatePokemon(playerIdx as 0 | 1, pokeIdx, 'moves_used', e.target.value)
+                    }
+                  />
+                </div>
+              </li>
             ))}
-          </div>
+          </ul>
 
           {playerPokemon[playerIdx].length < 6 && (
-            <button
-              type="button"
-              onClick={() => addPokemon(playerIdx as 0 | 1)}
-              className="mt-2 text-xs text-poke-blue hover:text-poke-blue-hover font-heading font-semibold"
-            >
+            <Button type="button" variant="ghost" size="sm" className="min-h-11 self-start sm:min-h-0" onClick={() => addPokemon(playerIdx as 0 | 1)}>
               {t('common.addPokemon')}
-            </button>
+            </Button>
           )}
-        </Card>
+        </section>
       ))}
+
+      {/* What this submission records, to check before sending it */}
+      <section aria-labelledby={summaryId} className="flex flex-col gap-2 rounded-poke-md border border-hairline bg-elevated p-3">
+        <h3 id={summaryId} className="flex items-center gap-2 text-caption font-[550] text-fg-muted">
+          <ItemIcon item="rare-candy" />
+          {t('manual.summaryTitle')}
+        </h3>
+        <p className={winner ? 'font-heading text-title text-win' : 'text-body text-fg-muted'}>
+          {winner ? t('manual.summaryWinner', { name: winner.name }) : t('manual.summaryNoWinner')}
+        </p>
+        <ul className="flex flex-col gap-0.5 text-body tabular-nums text-fg-muted">
+          {sideSummary.map((side) => (
+            <li key={side.id}>{t('manual.summarySide', { name: side.name, count: side.count, kos: side.kos })}</li>
+          ))}
+        </ul>
+      </section>
 
       {error && <Alert variant="error">{errorMessage(error)}</Alert>}
       {successKey && <Alert variant="success">{t(`manual.${successKey}`)}</Alert>}
 
-      <Button type="submit" variant="primary" loading={phase === 'submitting'} disabled={phase === 'done'}>
-        {t('common.submitResult')}
-      </Button>
+      <StickyActionBar>
+        <PlateButton type="submit" loading={phase === 'submitting'} disabled={phase === 'done'} className="flex-1 sm:flex-none">
+          {t('common.submitResult')}
+        </PlateButton>
+      </StickyActionBar>
     </form>
   );
 }

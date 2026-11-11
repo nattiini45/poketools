@@ -120,6 +120,7 @@ export default defineDe<typeof en>()({
     title: 'Bereit zum Start?',
     intro: 'Das braucht eine eigene Liga vor der ersten Runde.',
     ready: 'Alles bereit. Du kannst die Liga starten.',
+    progress: '{done} von {total}',
     state: {
       met: 'Erledigt',
       unmet: 'Offen',

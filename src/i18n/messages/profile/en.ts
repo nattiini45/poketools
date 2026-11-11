@@ -17,6 +17,14 @@ export default {
     streakHint: 'Win streaks appear after 3 wins in a row.',
     signInPrompt: 'Sign in with Discord to view match history and streak details.',
     signIn: 'Sign in',
+    editProfile: 'Edit profile',
+    noRatedMatchOwn: 'You have no rated match yet. Finish one and your rating starts here.',
+    trophiesEmpty: 'No podium finish yet. A top-three finish in a tournament puts a trophy here.',
+    browseTournaments: 'Browse tournaments',
+    participationsEmpty: 'Not in a league or tournament yet.',
+    browseLeagues: 'Browse leagues',
+    spotlightEmpty: 'No Pokémon stats yet. They appear after the first reported match.',
+    noRecentMatchesOwn: 'No completed matches yet. Join a league to get your first pairing.',
   },
   header: {
     ps: 'PS:',
@@ -29,10 +37,12 @@ export default {
     pokemon: 'Pokemon',
     titles: 'Titles',
     form: 'Form',
+    signatureCount: '{count} of {total} unlocked',
   },
   matchList: {
     empty: 'No matches',
     viewMatch: 'View match vs {opponent}',
+    versus: 'vs',
   },
   participations: {
     current: 'Current ({count})',

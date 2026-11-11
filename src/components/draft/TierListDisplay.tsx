@@ -1,16 +1,20 @@
 'use client';
 
 import PokemonSprite from '@/components/shared/PokemonSprite';
+import SkewPlate from '@/components/ui/SkewPlate';
 import { useDataLocale, useT } from '@/i18n/client';
 import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { EvolutionTier, DraftTierLimit, PowerTier } from '@/types/evolution';
-import { POWER_TIERS, POWER_TIER_COLORS } from '@/types/evolution';
+import { POWER_TIERS } from '@/types/evolution';
 
 interface TierListDisplayProps {
   tiers: EvolutionTier[];
   tierLimits: DraftTierLimit[];
 }
+
+/** S to C on the four rank plates (Direction B): gold, peach, blue, green. */
+const TIER_PLATE: Record<PowerTier, 1 | 2 | 3 | 4> = { S: 1, A: 2, B: 3, C: 4 };
 
 export default function TierListDisplay({ tiers, tierLimits }: TierListDisplayProps) {
   const t = useT(draftLegacyBoardMessages);
@@ -29,60 +33,52 @@ export default function TierListDisplay({ tiers, tierLimits }: TierListDisplayPr
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Limits summary */}
-      <div className="flex flex-wrap gap-2">
+      <ul className="flex flex-wrap gap-x-5 gap-y-2">
         {POWER_TIERS.map((pt) => {
           const count = tiersByPower[pt].length;
           if (count === 0) return null;
           const limit = limitsMap[pt];
-          const colors = POWER_TIER_COLORS[pt];
           return (
-            <div
-              key={pt}
-              className={`px-3 py-1.5 rounded-poke-md border ${colors.border} ${colors.bg} text-sm`}
-            >
-              <span className={`font-heading font-bold ${colors.text}`}>{t('tierList.tier', { tier: pt })}</span>
-              <span className="text-poke-text-muted ml-1.5">
+            <li key={pt} className="flex items-center gap-2 text-body">
+              <SkewPlate variant="rank" tier={TIER_PLATE[pt]} className="font-heading">
+                {t('tierList.tier', { tier: pt })}
+              </SkewPlate>
+              <span className="text-fg-muted">
                 {limit && limit > 0
                   ? t('tierList.availableLimited', { count, max: limit })
                   : t('tierList.availableUnlimited', { count })}
               </span>
-            </div>
+            </li>
           );
         })}
-      </div>
+      </ul>
 
       {/* Tier groups */}
       {POWER_TIERS.map((pt) => {
         const tiersInGroup = tiersByPower[pt];
         if (tiersInGroup.length === 0) return null;
-        const colors = POWER_TIER_COLORS[pt];
 
         return (
-          <div key={pt} className={`border ${colors.border} rounded-poke-lg overflow-hidden`}>
-            <div className={`px-3 py-1.5 ${colors.bg} flex items-center gap-2`}>
-              <span className={`font-heading font-bold text-sm ${colors.text}`}>
+          <section key={pt} className="overflow-hidden rounded-poke-lg border border-hairline bg-surface">
+            <div className="flex items-center gap-3 border-b border-hairline bg-elevated px-3 py-2">
+              <SkewPlate variant="rank" tier={TIER_PLATE[pt]} className="font-heading">
                 {t('tierList.tier', { tier: pt })}
-              </span>
-              <span className="text-xs text-poke-text-muted">
+              </SkewPlate>
+              <span className="text-caption text-fg-muted">
                 {limitsMap[pt] && limitsMap[pt] > 0
                   ? t('tierList.groupCountLimited', { count: tiersInGroup.length, max: limitsMap[pt] })
                   : t('tierList.groupCount', { count: tiersInGroup.length })}
               </span>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-0 divide-y sm:divide-y-0 divide-poke-border">
+            <ul className="grid grid-cols-1 gap-px bg-hairline sm:grid-cols-2 lg:grid-cols-3">
               {tiersInGroup.map((tier) => (
-                <div
-                  key={tier.id}
-                  className="flex items-center gap-2 px-3 py-2 text-sm sm:border-b sm:border-r border-poke-border"
-                >
+                <li key={tier.id} className="flex items-center gap-2 bg-surface px-3 py-2 text-body">
                   <PokemonSprite name={tier.base_pokemon} size={28} />
                   <div className="min-w-0">
-                    <div className="font-medium text-poke-text-primary truncate">
-                      {localizeSpecies(tier.base_pokemon, dataLocale)}
-                    </div>
-                    <div className="text-xs text-poke-text-muted truncate">
+                    <div className="truncate font-[550] text-fg">{localizeSpecies(tier.base_pokemon, dataLocale)}</div>
+                    <div className="truncate text-caption text-fg-muted">
                       {t('tierList.nextStage', {
                         name: localizeSpecies(tier.stage2_pokemon, dataLocale),
                         count: tier.stage2_kos,
@@ -94,10 +90,10 @@ export default function TierListDisplay({ tiers, tierLimits }: TierListDisplayPr
                         })}`}
                     </div>
                   </div>
-                </div>
+                </li>
               ))}
-            </div>
-          </div>
+            </ul>
+          </section>
         );
       })}
     </div>

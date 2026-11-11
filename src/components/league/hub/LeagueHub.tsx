@@ -1,5 +1,8 @@
 import Link from 'next/link';
-import { FOCUS_RING, PANEL, PANEL_INSET } from '@/components/world/panel';
+import { FOCUS_RING } from '@/components/world/panel';
+import type { CSSProperties } from 'react';
+import { itemIconSource, type ItemIconId } from '@/lib/pkmn/item-icons';
+import { HUB_INSET, HUB_PANEL, HUB_SUBHEADING } from './hub-style';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { isEvolutionPointBuy, leagueDraftHref } from '@/lib/season/format-utils';
 import { LEAGUE_TIME_ZONE, type Locale } from '@/i18n/config';
@@ -33,6 +36,32 @@ export interface LeagueHubProps {
   tabs: readonly LeagueHubTab[];
   activeTab: LeagueHubTab;
   panel: LeagueHubPanelData;
+}
+
+/** The item icon of each hub tab (the approved map's league tabs). */
+const TAB_ICON: Record<LeagueHubTab, ItemIconId> = {
+  standings: 'star-piece',
+  matches: 'vs-seeker',
+  groups: 'town-map',
+  playoffs: 'kings-rock',
+  phases: 'metronome',
+  insights: 'scope-lens',
+  rules: 'ability-shield',
+  reports: 'poke-flute',
+};
+
+/**
+ * A tab's icon as CSS variables: `.hub-tab` (globals.css) draws the plate and the icon with pseudo-elements, so
+ * the link holds nothing but its label and the pending mark.
+ */
+function tabIconStyle(tab: LeagueHubTab): CSSProperties {
+  const source = itemIconSource(TAB_ICON[tab]);
+  return {
+    '--hub-tab-icon': `url(${source.url})`,
+    ...(source.kind === 'sheet'
+      ? { '--hub-tab-icon-position': `${source.coords.left}px ${source.coords.top}px`, '--hub-tab-icon-size': 'auto' }
+      : {}),
+  } as CSSProperties;
 }
 
 /** The DOM id of the active panel; the active tab points at it. */
@@ -75,7 +104,7 @@ function Panel({
       if (groupStandings.length <= 1) {
         return (
           <div className="space-y-2">
-            <p className="text-xs text-arena-ink-secondary">
+            <p className="text-caption text-fg-muted">
               {copy.standingsNote} {scoring}
               {byPointsPerMatch ? ` ${copy.combinedByPointsPerMatch}` : ''}
             </p>
@@ -100,8 +129,8 @@ function Panel({
             className="grid grid-cols-[minmax(0,1fr)] gap-4 xl:grid-cols-2"
           >
             {groupStandings.map((group) => (
-              <div key={group.groupId} className={`${PANEL_INSET} min-w-0 space-y-3 p-4`} data-hub-group-table={group.groupId}>
-                <h4 className="font-heading text-sm font-bold uppercase tracking-wide text-arena-ink-secondary">
+              <div key={group.groupId} className={`${HUB_INSET} min-w-0 space-y-3 p-4`} data-hub-group-table={group.groupId}>
+                <h4 className={HUB_SUBHEADING}>
                   {group.name}
                 </h4>
                 <HubStandingsTable
@@ -115,7 +144,7 @@ function Panel({
             ))}
           </div>
           <div className="space-y-2" data-hub-combined-table={panel.standingsRanking ?? 'points'}>
-            <h4 className="font-heading text-lg font-bold text-arena-ink">{copy.combinedTable}</h4>
+            <h4 className="font-heading text-title text-fg">{copy.combinedTable}</h4>
             <p className="text-xs text-arena-ink-secondary">
               {byPointsPerMatch ? copy.combinedByPointsPerMatch : copy.combinedByPoints}
             </p>
@@ -244,14 +273,14 @@ export default function LeagueHub({
       role="region"
       aria-labelledby="league-hub-heading"
       data-league-hub={activeTab}
-      className={`league-hub mt-8 scroll-mt-24 ${PANEL} p-4 sm:p-6`}
+      className={`league-hub scroll-mt-24 ${HUB_PANEL} p-4 sm:p-6`}
     >
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div className="min-w-0 space-y-1">
-          <h3 id="league-hub-heading" className="font-heading text-xl font-bold tracking-tight text-arena-ink">
+          <h2 id="league-hub-heading" className="font-heading text-title text-fg">
             {copy.heading}
-          </h3>
-          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-arena-ink-secondary">
+          </h2>
+          <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-body text-fg-muted">
             {facts.map((fact, index) => (
               <span key={fact} className="inline-flex items-center gap-2">
                 {index > 0 && <span aria-hidden="true">·</span>}
@@ -267,7 +296,7 @@ export default function LeagueHub({
             <li key={link.href}>
               <Link
                 href={link.href}
-                className={`inline-flex items-center rounded-lg border border-arena-border bg-arena-elevated px-3 py-1.5 text-sm font-semibold text-arena-ink transition-colors duration-150 hover:border-arena-accent motion-reduce:transition-none ${FOCUS_RING}`}
+                className={`hub-action ${FOCUS_RING}`}
               >
                 {link.label}
               </Link>
@@ -276,8 +305,8 @@ export default function LeagueHub({
         </ul>
       </div>
 
-      <nav aria-label={copy.tablistLabel} className="mt-5 border-b border-arena-border">
-        <ul data-hub-tab-strip className="-mb-px flex gap-1 overflow-x-auto">
+      <nav aria-label={copy.tablistLabel} className="mt-5 border-b border-hairline pb-3">
+        <ul data-hub-tab-strip className="-mx-1 flex gap-2 overflow-x-auto px-1 py-1 [scrollbar-width:none]">
           {tabs.map((tab) => {
             const active = tab === activeTab;
             return (
@@ -290,11 +319,8 @@ export default function LeagueHub({
                   aria-current={active ? 'page' : undefined}
                   aria-controls={active ? LEAGUE_HUB_PANEL_ID : undefined}
                   data-hub-tab={tab}
-                  className={`inline-flex items-center whitespace-nowrap border-b-2 px-3 py-2 font-heading text-sm font-semibold transition-colors duration-150 motion-reduce:transition-none ${FOCUS_RING} focus-visible:outline-offset-[-2px] ${
-                    active
-                      ? 'border-arena-accent text-arena-ink'
-                      : 'border-transparent text-arena-ink-secondary hover:border-arena-border hover:text-arena-ink'
-                  }`}
+                  style={tabIconStyle(tab)}
+                  className={`hub-tab ${FOCUS_RING} focus-visible:outline-offset-[-2px]`}
                 >
                   {tabLabel(tab, stages, copy)}
                   <HubTabPending />
