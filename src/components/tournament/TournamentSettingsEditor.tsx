@@ -103,7 +103,7 @@ export default function TournamentSettingsEditor({
         onSubmit={handleSubmit}
       />
       {saved && (
-        <p role="status" className="text-sm text-poke-green">
+        <p role="status" className="text-body text-win">
           {t('form.saved')}
         </p>
       )}

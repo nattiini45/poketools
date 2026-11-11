@@ -3,6 +3,7 @@
 import { useId } from 'react';
 import type { BracketType, BoOverrides } from '@/types/tournament';
 import Card from '@/components/ui/Card';
+import Select from '@/components/ui/Select';
 import { useLocale, useT } from '@/i18n/client';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { commonMessages } from '@/i18n/messages/common';
@@ -55,23 +56,24 @@ export default function BoOverrideEditor({
 
   return (
     <Card variant="outlined" padding="sm">
-      <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+      <p className="text-subtitle font-[550] text-fg">
         {t('boOverrides.title')}
-      </label>
-      <p className="text-xs text-poke-text-muted mt-1">
+      </p>
+      <p className="text-caption text-fg-muted mt-1">
         {t('boOverrides.hint', { bo: defaultBo })}
       </p>
       <div className="space-y-1.5 mt-2">
         {roundNames.map((name, index) => (
-          <div key={name} className="flex items-center gap-3">
-            <label htmlFor={`${idPrefix}-${index}`} className="text-sm text-poke-text-primary w-28">
+          <div key={name} className="flex flex-wrap items-center gap-3">
+            <label htmlFor={`${idPrefix}-${index}`} className="text-body text-fg w-28">
               {translateEngineLabel('round', name, locale)}
             </label>
-            <select
+            <div className="w-48 max-w-full">
+            <Select
               id={`${idPrefix}-${index}`}
               value={overrides[name] ?? 0}
               onChange={(e) => handleChange(name, Number(e.target.value))}
-              className="border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+              className="h-11 py-1 sm:h-9"
             >
               <option value={0}>{t('boOverrides.defaultOption', { bo: defaultBo })}</option>
               {bestOfChoices(overrides[name]).filter((v) => v !== defaultBo).map((v) => (
@@ -79,7 +81,8 @@ export default function BoOverrideEditor({
                   {tCommon('bestOf', { count: v })}
                 </option>
               ))}
-            </select>
+            </Select>
+            </div>
           </div>
         ))}
       </div>

@@ -24,6 +24,8 @@ export default {
     settings: 'Settings',
     settingsHint:
       'Name, ruleset, best-of, doubles, bracket type and visibility. Bracket type, ruleset and doubles lock once the tournament has started.',
+    /** Names the strip of in-page links to these sections. */
+    sectionsNav: 'Sections of this tournament',
   },
   lifecycle: {
     markCompleted: 'Mark Completed',

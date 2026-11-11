@@ -8,6 +8,7 @@ import { isTripleInPool, tripleKey } from '@/lib/season/core-assignment';
 import { formatPack } from '@/lib/format-pack';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
+import Select from '@/components/ui/Select';
 import Table, { type Column } from '@/components/ui/Table';
 import TypeSprite from '@/components/shared/TypeSprite';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
@@ -317,7 +318,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
 
   type ParticipantRow = CoresResponse['participants'][number];
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('cores.loading')}</p>;
+  if (loading) return <p className="text-body text-fg-muted">{t('cores.loading')}</p>;
   if (!data) return null;
 
   function errorMessage(e: CoresError): string {
@@ -352,29 +353,32 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
 
         return (
           <div className="flex flex-wrap items-center gap-2">
-            <select
-              value={selectedKey}
-              onChange={(e) => updateParticipantSelection(p.playerId, e.target.value)}
-              className="border border-poke-border bg-poke-surface rounded-poke-md px-1.5 py-1 text-xs text-poke-text-primary min-w-[10rem]"
-            >
-              {options.map((triple) => (
-                <option key={tripleKey(triple)} value={tripleKey(triple)}>
-                  {tripleLabel(triple, ' / ')}
-                </option>
-              ))}
-            </select>
+            <div className="w-52 max-w-full shrink-0">
+              <Select
+                value={selectedKey}
+                onChange={(e) => updateParticipantSelection(p.playerId, e.target.value)}
+                aria-label={t('cores.columns.core')}
+                className="h-11 py-1 text-caption sm:h-9"
+              >
+                {options.map((triple) => (
+                  <option key={tripleKey(triple)} value={tripleKey(triple)}>
+                    {tripleLabel(triple, ' / ')}
+                  </option>
+                ))}
+              </Select>
+            </div>
             {hasCore && p.coreTypes && (
               <span className="inline-flex gap-0.5 items-center">
                 {p.coreTypes.map((type) => (
                   <TypeSprite key={type} type={type} size={14} />
                 ))}
-                <span className="text-xs text-poke-text-secondary ml-1">
+                <span className="text-caption text-fg-muted ml-1">
                   {tripleLabel(p.coreTypes, ' / ')}
                 </span>
               </span>
             )}
             {offPool && (
-              <span className="text-xs text-poke-danger">
+              <span className="text-caption text-loss">
                 {t('cores.offPool')}
               </span>
             )}
@@ -388,7 +392,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
       sortable: true,
       sortValue: (p) => p.coreAssignedAt ?? '',
       render: (p) => (
-        <span className="text-xs text-poke-text-muted">
+        <span className="text-caption text-fg-muted">
           {p.coreAssignedAt ? formatter.instant(p.coreAssignedAt, 'dateTimeYear') : '—'}
         </span>
       ),
@@ -423,7 +427,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
                 loading={busy === 'clear'}
                 disabled={busy != null}
                 onClick={() => clearParticipantCore(p.playerId)}
-                className="text-poke-danger hover:text-poke-danger"
+                className="text-loss hover:text-loss"
               >
                 {t('cores.clear')}
               </Button>
@@ -441,26 +445,28 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
 
       {/* Curated pool editor */}
       <div>
-        <h4 className="font-heading font-semibold text-sm text-poke-text-primary mb-2">
+        <h4 className="mb-2 text-subtitle font-[550] text-fg">
           {t('cores.poolHeading', { count: draftPool.length })}
         </h4>
-        <p className="text-xs text-poke-text-muted mb-3">{t('cores.poolHint')}</p>
+        <p className="text-caption text-fg-muted mb-3">{t('cores.poolHint')}</p>
         <div className="space-y-2">
           {draftPool.map((triple, idx) => (
-            <div key={idx} className="flex items-center gap-2">
+            <div key={idx} className="flex flex-wrap items-center gap-2">
               {[0, 1, 2].map((slot) => (
-                <select
-                  key={slot}
-                  value={triple[slot as 0 | 1 | 2]}
-                  onChange={(e) => updateTriple(idx, slot as 0 | 1 | 2, e.target.value)}
-                  className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
-                >
-                  {POKEMON_TYPES.map((type) => (
-                    <option key={type} value={type}>
-                      {localizeType(type, dataLocale)}
-                    </option>
-                  ))}
-                </select>
+                <div key={slot} className="w-32 min-w-0 shrink-0">
+                  <Select
+                    value={triple[slot as 0 | 1 | 2]}
+                    onChange={(e) => updateTriple(idx, slot as 0 | 1 | 2, e.target.value)}
+                    aria-label={t('cores.slotAria', { slot: slot + 1, triple: idx + 1 })}
+                    className="h-11 py-1 text-caption sm:h-9"
+                  >
+                    {POKEMON_TYPES.map((type) => (
+                      <option key={type} value={type}>
+                        {localizeType(type, dataLocale)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               ))}
               <Button variant="ghost" size="sm" onClick={() => removeTriple(idx)}>
                 {t('cores.remove')}
@@ -479,8 +485,8 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
       </div>
 
       {/* Bulk random assign */}
-      <div className="border-t border-poke-border pt-4">
-        <h4 className="font-heading font-semibold text-sm text-poke-text-primary mb-2">
+      <div className="border-t border-hairline pt-4">
+        <h4 className="mb-2 text-subtitle font-[550] text-fg">
           {t('cores.bulkHeading')}
         </h4>
         <label className="flex items-center gap-2 mb-2">
@@ -490,7 +496,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
             onChange={(e) => setForceReroll(e.target.checked)}
             className="accent-poke-accent"
           />
-          <span className="text-sm text-poke-text-primary">{t('cores.forceReroll')}</span>
+          <span className="text-body text-fg">{t('cores.forceReroll')}</span>
         </label>
         <Button variant="primary" size="sm" loading={assigning} onClick={assignCores}>
           {forceReroll ? t('cores.rerollAll') : t('cores.assignMissing')}
@@ -498,13 +504,13 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
       </div>
 
       {/* Participants table */}
-      <div className="border-t border-poke-border pt-4">
-        <h4 className="font-heading font-semibold text-sm text-poke-text-primary mb-2">
+      <div className="border-t border-hairline pt-4">
+        <h4 className="mb-2 text-subtitle font-[550] text-fg">
           {t('cores.participantsHeading', { count: data.participants.length })}
         </h4>
-        <p className="text-xs text-poke-text-muted mb-3">{t('cores.participantsHint')}</p>
+        <p className="text-caption text-fg-muted mb-3">{t('cores.participantsHint')}</p>
         {savedPool.length === 0 ? (
-          <p className="text-sm text-poke-text-muted">{t('cores.savePoolFirst')}</p>
+          <p className="text-body text-fg-muted">{t('cores.savePoolFirst')}</p>
         ) : (
           <Table
             columns={participantColumns}

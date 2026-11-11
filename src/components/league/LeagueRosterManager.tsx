@@ -23,7 +23,10 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import Input from '@/components/ui/Input';
+import ItemIcon from '@/components/ui/ItemIcon';
 import Modal from '@/components/ui/Modal';
+import Select from '@/components/ui/Select';
+import SkewChip from '@/components/ui/SkewChip';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import GuestBadge from '@/components/shared/GuestBadge';
 import TypeSprite from '@/components/shared/TypeSprite';
@@ -38,6 +41,7 @@ import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { leagueRosterMessages } from '@/i18n/messages/league-roster';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
 import { isSeasonClosed } from '@/lib/season/season-state';
+import { cn } from '@/lib/utils/cn';
 
 interface LeagueRosterManagerProps {
   seasonId: string;
@@ -144,6 +148,10 @@ export function rosterLoadPaths(seasonId: string): [string, string] {
   return [`/api/seasons/${seasonId}/participants`, `/api/seasons/${seasonId}/phases`];
 }
 
+/** A text action in a roster row: 44 px tall on a phone, a compact line from sm up. The colour comes with it. */
+const ROW_ACTION =
+  'inline-flex min-h-11 items-center rounded-poke-sm px-1 text-caption font-[550] hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0';
+
 const UNAVAILABLE_KEY = {
   onRoster: 'roster.alreadyOnRoster',
   selected: 'roster.alreadySelected',
@@ -235,7 +243,7 @@ function PlayerSearchNotes({
     <>
       {search.error && <Alert variant="error">{errorText(search.error)}</Alert>}
       {search.more && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-caption text-fg-muted">
           {t('roster.searchTruncated', { shown: search.more.shown, total: search.more.total })}
         </p>
       )}
@@ -375,10 +383,10 @@ export default function LeagueRosterManager({
   function renderPlayerOption(option: ComboboxOption) {
     const reason = option.meta?.unavailable as RosterUnavailable | null | undefined;
     return (
-      <span className={reason ? 'flex items-center gap-2 text-poke-text-muted opacity-60' : 'flex items-center gap-2'}>
+      <span className={reason ? 'flex items-center gap-2 text-fg-muted opacity-60' : 'flex items-center gap-2'}>
         <span>{option.label}</span>
         {option.meta?.is_guest ? <GuestBadge /> : null}
-        {reason ? <span className="text-xs">{t(UNAVAILABLE_KEY[reason])}</span> : null}
+        {reason ? <span className="text-caption">{t(UNAVAILABLE_KEY[reason])}</span> : null}
       </span>
     );
   }
@@ -520,10 +528,10 @@ export default function LeagueRosterManager({
   // scope is dropped when the scope changes and the pick is no longer valid.
   const substituteInPlayer = substituteIn && substituteSearch.pick(substituteIn.id) ? substituteIn : null;
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('roster.loading')}</p>;
+  if (loading) return <p className="text-body text-fg-muted">{t('roster.loading')}</p>;
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-6">
       {error && (
         <Alert variant="error">
           {'api' in error ? errorText(error.api) : t(`roster.errors.${error.key}`)}
@@ -531,49 +539,52 @@ export default function LeagueRosterManager({
       )}
 
       <div>
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
-          {t('roster.heading', { count: participants.length })}
-        </h3>
+        <h3 className="mb-3 text-subtitle font-[550] text-fg">{t('roster.heading', { count: participants.length })}</h3>
         {substitutionClosed && (
-          <p className="mb-2 text-xs text-poke-text-muted">
+          <p className="mb-3 text-caption text-fg-muted">
             {leagueState.archived ? t('roster.closedArchived') : t('roster.closedCompleted')}
           </p>
         )}
         {participants.length === 0 ? (
-          <p className="text-sm text-poke-text-muted">{t('roster.empty')}</p>
+          <div className="flex flex-col items-center gap-2 rounded-poke-md border border-dashed border-hairline-strong px-4 py-8 text-center">
+            <ItemIcon item="lucky-egg" size={48} />
+            <p className="text-body text-fg-muted">{t('roster.empty')}</p>
+            <a href="#league-roster-add" className={cn(ROW_ACTION, 'text-accent-ink')}>
+              {t('roster.addHeading')}
+            </a>
+          </div>
         ) : (
-          <ul className="space-y-1">
+          <ul className="divide-y divide-hairline overflow-hidden rounded-poke-md border border-hairline bg-surface">
             {participants.map((p) => (
               <li
                 key={p.id}
-                className="flex items-center justify-between gap-2 p-2 bg-poke-elevated rounded-poke-md text-sm text-poke-text-primary"
+                className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3 py-2 text-body text-fg motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={20} />
-                  <span className="truncate">{p.name}</span>
+                <div className="flex min-w-0 items-center gap-2.5">
+                  <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={24} />
+                  <span className="min-w-0 truncate">{p.name}</span>
                   {p.is_guest && <GuestBadge />}
-                  {p.is_test_account && (
-                    <span className="inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-poke-amber-ink">
-                      {t('roster.testBadge')}
-                    </span>
-                  )}
+                  {p.is_test_account && <SkewChip tone="tier-1">{t('roster.testBadge')}</SkewChip>}
                 </div>
-                <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                <div className="flex shrink-0 flex-wrap items-center justify-end gap-x-3 gap-y-1">
                   {showTypeSelector && (
                     <>
-                      <select
-                        value={p.gym_type ?? ''}
-                        onChange={(e) => setGymType(p.id, e.target.value || null)}
-                        className="text-xs bg-poke-base border border-poke-border rounded-poke-md px-1.5 py-1 text-poke-text-secondary focus:border-poke-border-focus focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
-                        title={t('roster.gymTypeTitle')}
-                      >
-                        <option value="">{t('roster.noType')}</option>
-                        {POKEMON_TYPES.map((type) => (
-                          <option key={type} value={type}>
-                            {localizeType(type, dataLocale)}
-                          </option>
-                        ))}
-                      </select>
+                      <div className="w-36 shrink-0">
+                        <Select
+                          value={p.gym_type ?? ''}
+                          onChange={(e) => setGymType(p.id, e.target.value || null)}
+                          className="h-11 py-1 text-caption sm:h-9"
+                          title={t('roster.gymTypeTitle')}
+                          aria-label={t('roster.gymTypeTitle')}
+                        >
+                          <option value="">{t('roster.noType')}</option>
+                          {POKEMON_TYPES.map((type) => (
+                            <option key={type} value={type}>
+                              {localizeType(type, dataLocale)}
+                            </option>
+                          ))}
+                        </Select>
+                      </div>
                       {p.gym_type && <TypeSprite type={p.gym_type} size={16} />}
                     </>
                   )}
@@ -585,7 +596,7 @@ export default function LeagueRosterManager({
                         setLinkSource(null);
                         linkSearch.reset();
                       }}
-                      className="text-xs text-poke-blue hover:underline"
+                      className={cn(ROW_ACTION, 'text-accent-ink')}
                     >
                       {t('roster.linkAccount')}
                     </button>
@@ -594,16 +605,12 @@ export default function LeagueRosterManager({
                     <button
                       type="button"
                       onClick={() => openSubstitute({ id: p.id, name: p.name, onRoster: true })}
-                      className="text-xs text-poke-blue hover:underline"
+                      className={cn(ROW_ACTION, 'text-accent-ink')}
                     >
                       {t('roster.substitute')}
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => removePlayer(p.id)}
-                    className="text-xs text-poke-danger hover:underline"
-                  >
+                  <button type="button" onClick={() => removePlayer(p.id)} className={cn(ROW_ACTION, 'text-loss')}>
                     {t('roster.remove')}
                   </button>
                 </div>
@@ -615,25 +622,19 @@ export default function LeagueRosterManager({
 
       {reserves.length > 0 && (
         <div>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-1">
-            {t('roster.reservesHeading', { count: reserves.length })}
-          </h3>
-          <p className="mb-2 text-xs text-poke-text-muted">{t('roster.reservesHint')}</p>
-          <ul className="space-y-1">
+          <h3 className="mb-1 text-subtitle font-[550] text-fg">{t('roster.reservesHeading', { count: reserves.length })}</h3>
+          <p className="mb-3 text-caption text-fg-muted">{t('roster.reservesHint')}</p>
+          <ul className="divide-y divide-hairline overflow-hidden rounded-poke-md border border-hairline bg-surface">
             {reserves.map((reserve) => (
-              <li
-                key={reserve.id}
-                className="flex items-center justify-between gap-2 p-2 bg-poke-elevated rounded-poke-md text-sm text-poke-text-primary"
-              >
+              <li key={reserve.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-3 py-2 text-body text-fg">
                 <span className="min-w-0 truncate">
-                  {reserve.name}{' '}
-                  <span className="text-xs text-poke-text-muted">({reserve.phases.join(', ')})</span>
+                  {reserve.name} <span className="text-caption text-fg-muted">({reserve.phases.join(', ')})</span>
                 </span>
                 {!substitutionClosed && (
                   <button
                     type="button"
                     onClick={() => openSubstitute({ id: reserve.id, name: reserve.name, onRoster: false })}
-                    className="shrink-0 text-xs text-poke-blue hover:underline"
+                    className={cn(ROW_ACTION, 'shrink-0 text-accent-ink')}
                   >
                     {t('roster.substitute')}
                   </button>
@@ -644,8 +645,8 @@ export default function LeagueRosterManager({
         </div>
       )}
 
-      <div className="space-y-3 border-t border-poke-border pt-4">
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('roster.addHeading')}</h3>
+      <div id="league-roster-add" className="flex scroll-mt-4 flex-col gap-3 border-t border-hairline pt-5">
+        <h3 className="text-subtitle font-[550] text-fg">{t('roster.addHeading')}</h3>
         <Combobox
           mode="async"
           label={t('roster.searchLabel')}
@@ -664,19 +665,19 @@ export default function LeagueRosterManager({
         <PlayerSearchNotes search={addSearch} errorText={errorText} t={t} />
 
         {pending.length > 0 && (
-          <div className="space-y-2">
-            <p className="text-xs text-poke-text-muted">{t('roster.selected', { count: pending.length })}</p>
+          <div className="flex flex-col gap-3 rounded-poke-md border border-accent-ink bg-selected p-3">
+            <p className="text-caption text-fg-muted">{t('roster.selected', { count: pending.length })}</p>
             <div className="flex flex-wrap gap-2">
               {pending.map((player) => (
                 <span
                   key={player.id}
-                  className="inline-flex items-center gap-1 rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-xs"
+                  className="inline-flex items-center gap-1 rounded-poke-md border border-hairline-strong bg-surface py-1 pl-2.5 pr-1 text-caption text-fg"
                 >
                   {player.name}
                   <button
                     type="button"
                     onClick={() => unstagePlayer(player.id)}
-                    className="text-poke-text-muted hover:text-poke-text-primary"
+                    className="inline-flex h-6 w-6 items-center justify-center rounded-poke-sm text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-1 focus-visible:outline-[var(--focus-ring)]"
                     aria-label={t('roster.removeAria', { name: player.name })}
                   >
                     ×
@@ -684,14 +685,11 @@ export default function LeagueRosterManager({
                 </span>
               ))}
             </div>
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={bulkAddPlayers}
-              disabled={bulkAdding}
-            >
-              {bulkAdding ? t('roster.adding') : t('roster.addCount', { count: pending.length })}
-            </Button>
+            <div>
+              <Button variant="primary" size="sm" onClick={bulkAddPlayers} disabled={bulkAdding}>
+                {bulkAdding ? t('roster.adding') : t('roster.addCount', { count: pending.length })}
+              </Button>
+            </div>
           </div>
         )}
 
@@ -709,12 +707,7 @@ export default function LeagueRosterManager({
                 placeholder={t('roster.guestPlaceholder')}
                 className="max-w-xs"
               />
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={createGuest}
-                disabled={creatingGuest || !guestName.trim()}
-              >
+              <Button variant="primary" size="sm" onClick={createGuest} disabled={creatingGuest || !guestName.trim()}>
                 {creatingGuest ? t('roster.creating') : t('roster.create')}
               </Button>
               <Button variant="ghost" size="sm" onClick={() => setShowGuestForm(false)}>
@@ -750,30 +743,22 @@ export default function LeagueRosterManager({
             </div>
 
             <div>
-              <label className="block text-xs font-heading font-semibold text-poke-text-secondary mb-1">
-                {t('substitute.scope')}
-              </label>
-              <select
+              <Select
+                label={t('substitute.scope')}
                 value={substituteScope}
                 onChange={(e) => {
                   setSubstituteScope(e.target.value);
                   setSubstituteIn(null);
                 }}
-                className="w-full text-sm bg-poke-surface border border-poke-border rounded-poke-md px-2 py-2"
-              >
-                {scopeOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
+                options={scopeOptions}
+              />
               {scopeOptions.length === 0 && (
-                <p className="mt-1 text-xs text-poke-text-muted">
+                <p className="mt-1 text-caption text-fg-muted">
                   {t('substitute.noScope', { name: substituteOut.name })}
                 </p>
               )}
               {substituteScope !== 'league' && (
-                <p className="mt-1 text-xs text-poke-text-muted">
+                <p className="mt-1 text-caption text-fg-muted">
                   {t('substitute.phaseOnlyHint')}
                 </p>
               )}
@@ -820,7 +805,7 @@ export default function LeagueRosterManager({
           title={t('link.title', { name: linkGuest.name })}
         >
           <div className="space-y-4">
-            <p className="text-sm text-poke-text-secondary">{t('link.hint')}</p>
+            <p className="text-body text-fg-muted">{t('link.hint')}</p>
             <div className="space-y-1">
               <Combobox
                 mode="async"

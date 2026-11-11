@@ -653,6 +653,82 @@
       ]
     },
     {
+      "id": "admin-league-participants",
+      "url": "/admin/leagues/{leagueSakura}?tab=participants",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "admin-league-phases",
+      "url": "/admin/leagues/{leagueSakura}?tab=phases",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura"
+      ]
+    },
+    {
+      "id": "admin-league-epb-phases",
+      "url": "/admin/leagues/{leagueEpb}?tab=phases",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-phase",
+      "url": "/admin/leagues/{leagueSakura}/phases/{stageSakura}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueSakura",
+        "stageSakura"
+      ]
+    },
+    {
+      "id": "admin-tournament-standalone",
+      "url": "/admin/tournaments/{tournamentStandalone}/rounds",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "tournamentStandalone"
+      ]
+    },
+    {
       "id": "admin-matches",
       "url": "/admin/matches",
       "fullPage": true,

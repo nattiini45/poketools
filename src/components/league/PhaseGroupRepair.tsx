@@ -137,28 +137,28 @@ export function GroupRepairPlanView({ plan }: { plan: GroupRepairResult }) {
   const groupName = (name: string) => translateEngineLabel('group', name, locale);
 
   if (!plan.grouped) {
-    return <p className="text-xs text-poke-text-muted">{t('repair.noGroups')}</p>;
+    return <p className="text-caption text-fg-muted">{t('repair.noGroups')}</p>;
   }
 
   const { orphaned_rows: orphanedRows, ungrouped_players: ungroupedPlayers } = plan.unresolved;
   const listClass =
-    'max-h-40 overflow-y-auto space-y-1 rounded-poke-md border border-poke-border bg-poke-elevated p-2';
+    'max-h-40 overflow-y-auto space-y-1 rounded-poke-md border border-hairline bg-elevated p-2';
 
   return (
-    <div className="space-y-3 text-xs">
+    <div className="space-y-3 text-caption">
       {plan.moves.length === 0 ? (
-        <p className="text-poke-text-muted">{t('repair.noMoves')}</p>
+        <p className="text-fg-muted">{t('repair.noMoves')}</p>
       ) : (
         <div>
-          <p className="font-heading font-semibold text-poke-text-primary mb-1">
+          <p className="mb-1 font-[550] text-fg">
             {t('repair.movesHeading', { count: plan.moves.length })}
           </p>
           <ul className={listClass}>
             {plan.moves.map((move) => (
-              <li key={`${move.group_id}:${move.from_player_id}`} className="text-poke-text-secondary">
-                <span className="text-poke-text-muted">{groupName(move.group_name)}:</span>{' '}
-                {move.from_player_name} → <strong className="text-poke-text-primary">{move.to_player_name}</strong>{' '}
-                <span className="text-poke-text-muted">({basisLabel(move.basis)})</span>
+              <li key={`${move.group_id}:${move.from_player_id}`} className="text-fg-muted">
+                <span className="text-fg-muted">{groupName(move.group_name)}:</span>{' '}
+                {move.from_player_name} → <strong className="text-fg">{move.to_player_name}</strong>{' '}
+                <span className="text-fg-muted">({basisLabel(move.basis)})</span>
               </li>
             ))}
           </ul>
@@ -167,14 +167,14 @@ export function GroupRepairPlanView({ plan }: { plan: GroupRepairResult }) {
 
       {orphanedRows.length > 0 && (
         <div>
-          <p className="font-heading font-semibold text-poke-text-primary mb-1">
+          <p className="mb-1 font-[550] text-fg">
             {t('repair.orphanedHeading', { count: orphanedRows.length })}
           </p>
           <ul className={listClass}>
             {orphanedRows.map((row) => (
-              <li key={`${row.group_id}:${row.player_id}`} className="text-poke-text-secondary">
-                <span className="text-poke-text-muted">{groupName(row.group_name)}:</span> {row.player_name}{' '}
-                <span className="text-poke-text-muted">({rowReasonLabel(row.reason)})</span>
+              <li key={`${row.group_id}:${row.player_id}`} className="text-fg-muted">
+                <span className="text-fg-muted">{groupName(row.group_name)}:</span> {row.player_name}{' '}
+                <span className="text-fg-muted">({rowReasonLabel(row.reason)})</span>
               </li>
             ))}
           </ul>
@@ -183,14 +183,14 @@ export function GroupRepairPlanView({ plan }: { plan: GroupRepairResult }) {
 
       {ungroupedPlayers.length > 0 && (
         <div>
-          <p className="font-heading font-semibold text-poke-text-primary mb-1">
+          <p className="mb-1 font-[550] text-fg">
             {t('repair.ungroupedHeading', { count: ungroupedPlayers.length })}
           </p>
           <ul className={listClass}>
             {ungroupedPlayers.map((player) => (
-              <li key={player.player_id} className="text-poke-text-secondary">
+              <li key={player.player_id} className="text-fg-muted">
                 {player.player_name}{' '}
-                <span className="text-poke-text-muted">({playerReasonLabel(player.reason)})</span>
+                <span className="text-fg-muted">({playerReasonLabel(player.reason)})</span>
               </li>
             ))}
           </ul>
@@ -198,7 +198,7 @@ export function GroupRepairPlanView({ plan }: { plan: GroupRepairResult }) {
       )}
 
       {(orphanedRows.length > 0 || ungroupedPlayers.length > 0) && (
-        <p className="text-poke-text-muted">{t('repair.unresolvedNote')}</p>
+        <p className="text-fg-muted">{t('repair.unresolvedNote')}</p>
       )}
 
       {plan.history.truncated && <Alert variant="warning">{t('repair.historyTruncated')}</Alert>}
@@ -209,7 +209,7 @@ export function GroupRepairPlanView({ plan }: { plan: GroupRepairResult }) {
         </Alert>
       )}
       {plan.history.unreadable > 0 && (
-        <p className="text-poke-text-muted">{t('repair.unreadable', { count: plan.history.unreadable })}</p>
+        <p className="text-fg-muted">{t('repair.unreadable', { count: plan.history.unreadable })}</p>
       )}
     </div>
   );
@@ -225,7 +225,7 @@ export function GroupRepairHandedOver({ moves }: { moves: readonly GroupRepairMo
   return (
     <Alert variant="success">
       <p>{t('repair.handedOver', { count: moves.length })}</p>
-      <ul className="mt-1 space-y-0.5 text-xs">
+      <ul className="mt-1 space-y-0.5 text-caption">
         {moves.map((move) => (
           <li key={`${move.group_id}:${move.from_player_id}`}>
             {translateEngineLabel('group', move.group_name, locale)}: {move.from_player_name} →{' '}
@@ -302,10 +302,10 @@ export default function PhaseGroupRepair({ seasonId, phaseId, reloadGroups }: Ph
   }
 
   return (
-    <div className="space-y-3 rounded-poke-md border border-poke-border p-3">
+    <div className="space-y-3 rounded-poke-md border border-hairline p-3">
       <div>
-        <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('repair.title')}</h4>
-        <p className="text-xs text-poke-text-muted">{t('repair.intro')}</p>
+        <h4 className="text-subtitle font-[550] text-fg">{t('repair.title')}</h4>
+        <p className="text-caption text-fg-muted">{t('repair.intro')}</p>
       </div>
 
       {error && (
@@ -313,7 +313,7 @@ export default function PhaseGroupRepair({ seasonId, phaseId, reloadGroups }: Ph
           {'api' in error ? errorText(error.api) : t(`repair.errors.${error.key}`)}
         </Alert>
       )}
-      {rechecked && <p className="text-xs text-poke-text-muted">{t('repair.rechecked')}</p>}
+      {rechecked && <p className="text-caption text-fg-muted">{t('repair.rechecked')}</p>}
       {handedOver && <GroupRepairHandedOver moves={handedOver} />}
 
       <div className="flex flex-wrap gap-2">

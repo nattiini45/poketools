@@ -386,5 +386,7 @@ export default {
     participants: 'Participants',
     groups: 'Groups',
     rounds: 'Rounds',
+    /** Names the strip of in-page links to these sections. */
+    sectionsNav: 'Sections of this phase',
   },
 } as const;

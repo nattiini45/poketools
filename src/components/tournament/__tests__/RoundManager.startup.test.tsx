@@ -353,7 +353,8 @@ describe('RoundManager round rows', () => {
   it('lets the row and its action buttons wrap, so Delete is not clipped on a narrow screen', () => {
     const html = render({ rounds: [roundN(1, 'pending')], participants: summary(8) });
     expect(html).toMatch(/class="p-3 flex flex-wrap items-center justify-between gap-2"/);
-    expect(html).toMatch(/<div class="flex flex-wrap items-center gap-2 min-w-0 max-w-full"><select/);
+    // The best-of control (the Select primitive wraps its native select) is the first thing in the wrapping action row.
+    expect(html).toMatch(/<div class="flex flex-wrap items-center gap-2 min-w-0 max-w-full"><div class="w-24 shrink-0">[\s\S]{0,160}<select/);
   });
 });
 

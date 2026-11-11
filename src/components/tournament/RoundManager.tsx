@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import type { Round, RoundStatus, RoundWithMatches } from '@/types/round';
 import { canRoundEvent } from '@/lib/tournament/round-state';
 import type { PublicMatch } from '@/lib/match/public-match';
@@ -10,6 +11,9 @@ import type { ApiResult, ApiWarning } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Badge from '@/components/ui/Badge';
 import Card from '@/components/ui/Card';
+import ItemIcon from '@/components/ui/ItemIcon';
+import Select from '@/components/ui/Select';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import Modal from '@/components/ui/Modal';
@@ -29,6 +33,7 @@ import { errorsAdmin, errorsMatches, errorsSeasons, errorsTournaments } from '@/
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { bestOfChoices } from '@/lib/tournament/best-of';
+import { cn } from '@/lib/utils/cn';
 import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
@@ -169,7 +174,7 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
   const tEnum = useT(enumMessages);
   const errorText = useApiErrorText(errorsTournaments);
   if (loading) {
-    return <p className="text-xs text-poke-text-muted">{t('rounds.loadingMatches')}</p>;
+    return <p className="text-caption text-fg-muted">{t('rounds.loadingMatches')}</p>;
   }
   if (error) {
     const message =
@@ -186,22 +191,22 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
     );
   }
   if (!matches || matches.length === 0) {
-    return <p className="text-xs text-poke-text-muted">{t('rounds.noMatches')}</p>;
+    return <p className="text-caption text-fg-muted">{t('rounds.noMatches')}</p>;
   }
   return (
-    <div className="space-y-1">
+    <ul className="divide-y divide-hairline overflow-hidden rounded-poke-md border border-hairline">
       {matches.map((m) => (
+        <li key={m.id}>
         <Link
-          key={m.id}
           href={`/admin/matches/${m.id}`}
-          className="flex items-center justify-between p-2 rounded-poke-md hover:bg-poke-elevated text-sm transition-colors"
+          className="flex min-h-11 items-center justify-between gap-3 bg-surface px-3 py-2 text-body motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover sm:min-h-0"
         >
-          <div className="flex items-center gap-2 text-poke-text-primary">
-            <span className={m.winner_id === m.player_1_id ? 'font-semibold' : m.winner_id ? 'text-poke-text-muted' : ''}>
+          <div className="flex items-center gap-2 text-fg">
+            <span className={m.winner_id === m.player_1_id ? 'font-semibold' : m.winner_id ? 'text-fg-muted' : ''}>
               {m.player_1_name}
             </span>
-            <span className="text-poke-text-muted">{t('rounds.versus')}</span>
-            <span className={m.winner_id === m.player_2_id ? 'font-semibold' : m.winner_id ? 'text-poke-text-muted' : ''}>
+            <span className="text-fg-muted">{t('rounds.versus')}</span>
+            <span className={m.winner_id === m.player_2_id ? 'font-semibold' : m.winner_id ? 'text-fg-muted' : ''}>
               {m.player_2_name}
             </span>
           </div>
@@ -209,8 +214,9 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
             {enumLabel(tEnum, 'matchStatus', m.winner_id ? 'completed' : m.status)}
           </Badge>
         </Link>
+        </li>
       ))}
-    </div>
+    </ul>
   );
 }
 
@@ -250,7 +256,7 @@ interface RoundByeNoticeProps {
  */
 export const ROUND_ROW_HEADER_CLASS = 'p-3 flex flex-wrap items-center justify-between gap-2';
 export const ROUND_ROW_TITLE_CLASS = 'text-left min-w-0 basis-full sm:basis-0 sm:flex-1';
-export const ROUND_ROW_HEADING_CLASS = 'font-heading font-medium text-sm text-poke-text-primary break-words';
+export const ROUND_ROW_HEADING_CLASS = 'text-subtitle font-[550] text-fg break-words';
 export const ROUND_ROW_ACTIONS_CLASS = 'flex flex-wrap items-center gap-2 min-w-0 max-w-full';
 
 /** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
@@ -260,7 +266,7 @@ export function RoundByeNotice({ playerIds, names, settled }: RoundByeNoticeProp
   const label = playerIds
     .map((id) => names?.[id] ?? t('rounds.byeUnknownPlayer'))
     .join(', ');
-  return <p className="text-xs text-poke-text-secondary">{t('rounds.bye', { names: label })}</p>;
+  return <p className="text-caption text-fg-muted">{t('rounds.bye', { names: label })}</p>;
 }
 
 /** A round is overdue when its deadline has passed and it is not completed. */
@@ -319,14 +325,14 @@ export function RoundDeadlineRow({
   const t = useT(tournamentsAdminMessages);
   if (editing) {
     return (
-      <div className="flex items-center gap-2 flex-wrap text-xs">
+      <div className="flex items-center gap-2 flex-wrap text-caption">
         <input
           type="datetime-local"
           aria-label={t('rounds.deadline.inputLabel')}
           value={draft}
           disabled={saving}
           onChange={(e) => onDraftChange(e.target.value)}
-          className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
+          className="h-11 rounded-poke-md border border-hairline-strong bg-surface px-2 text-caption text-fg sm:h-8 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
         />
         <Button
           variant="secondary"
@@ -349,12 +355,12 @@ export function RoundDeadlineRow({
     );
   }
   return (
-    <div className="flex items-center gap-2 flex-wrap text-xs text-poke-text-secondary">
+    <div className="flex items-center gap-2 flex-wrap text-caption text-fg-muted">
       <span>{t('rounds.deadline.label')}:</span>
       {round.deadline ? (
-        <LocalTime value={round.deadline} preset="dateTimeYear" className="text-poke-text-primary" />
+        <LocalTime value={round.deadline} preset="dateTimeYear" className="text-fg" />
       ) : (
-        <span className="text-poke-text-muted">{t('rounds.deadline.none')}</span>
+        <span className="text-fg-muted">{t('rounds.deadline.none')}</span>
       )}
       {isRoundOverdue(round, now) && (
         <Badge variant="red" size="sm">
@@ -985,10 +991,10 @@ export default function RoundManager({
         />
       )}
 
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-lg border border-hairline bg-elevated p-3">
         {showsGenerateBracket && (
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
             onClick={generateBracket}
             disabled={showManualForm || isBusy || generateBlocked}
@@ -1026,7 +1032,7 @@ export default function RoundManager({
         )}
         {showsGenerateNext && (
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
             onClick={() => void generateNextRound()}
             disabled={!canGenerate || showManualForm || isBusy || generateBlocked || Boolean(roundRobin?.pastLast)}
@@ -1049,25 +1055,24 @@ export default function RoundManager({
           </Button>
         )}
         {allGeneratedCount !== null && (
-          <span className="text-sm text-poke-text-muted">
+          <span className="text-body text-fg-muted">
             {t('rounds.allGenerated', { count: allGeneratedCount })}
           </span>
         )}
         <Button
-          variant="ghost"
+          variant="secondary"
           size="sm"
           onClick={() => setShowManualForm((v) => !v)}
           disabled={!canGenerate || isBusy || showsGenerateBracket}
-          className="border border-poke-border"
         >
           {showManualForm ? t('rounds.cancelManual') : t('rounds.createManual')}
         </Button>
-        <span className="text-sm text-poke-text-secondary">
+        <span className="text-body text-fg-muted sm:ml-auto">
           {enumLabel(tEnum, 'bracketType', tournament.bracket_type)} &middot;{' '}
           {tCommon('bestOf', { count: tournament.best_of_default })}
         </span>
         {tournament.bracket_type === 'double_elim' && (
-          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+          <label className="flex items-center gap-2 text-body text-fg">
             <input
               type="checkbox"
               checked={bracketResetEnabled}
@@ -1082,7 +1087,7 @@ export default function RoundManager({
 
       {(showsGenerateBracket || showsGenerateNext || showsGenerateAll) && (
         <div className="space-y-0.5">
-          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+          <label className="flex items-center gap-2 text-body text-fg">
             <input
               type="checkbox"
               checked={startNow}
@@ -1093,7 +1098,7 @@ export default function RoundManager({
             />
             {t('rounds.startNow.label')}
           </label>
-          <p id={startNowHintId} className="pl-6 text-xs text-poke-text-muted">
+          <p id={startNowHintId} className="pl-6 text-caption text-fg-muted">
             {t('rounds.startNow.hint')}
             {showsGenerateAll && ` ${t('rounds.startNow.hintAll')}`}
           </p>
@@ -1130,9 +1135,10 @@ export default function RoundManager({
       )}
 
       {rounds.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">
-          {t('rounds.empty')}
-        </p>
+        <div className="flex flex-col items-center gap-2 rounded-poke-md border border-dashed border-hairline-strong px-4 py-8 text-center">
+          <ItemIcon item="vs-seeker" size={48} />
+          <p className="text-body text-fg-muted">{t('rounds.empty')}</p>
+        </div>
       ) : (
         <div className="space-y-3">
           {rounds.map((round) => {
@@ -1140,41 +1146,49 @@ export default function RoundManager({
             const matches = matchesByRound[round.id];
 
             return (
-              <Card key={round.id} variant="outlined" padding="none">
+              <Card key={round.id} variant="muted" padding="none" className="overflow-hidden">
                 <div className={ROUND_ROW_HEADER_CLASS}>
-                  <button
-                    type="button"
-                    onClick={() => toggleRoundMatches(round.id)}
-                    className={ROUND_ROW_TITLE_CLASS}
-                  >
-                    <h4 className={ROUND_ROW_HEADING_CLASS}>
-                      <span className="mr-1.5 text-poke-text-muted">{isExpanded ? '▾' : '▸'}</span>
-                      {translateEngineLabel('round', round.name, locale)}
-                      <span className="ml-2 text-xs text-poke-text-muted font-normal">
+                  <h4 className={ROUND_ROW_TITLE_CLASS}>
+                    <button
+                      type="button"
+                      onClick={() => toggleRoundMatches(round.id)}
+                      aria-expanded={isExpanded}
+                      aria-controls={`${startNowHintId}-round-${round.id}`}
+                      className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-poke-sm text-left max-sm:min-h-11 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+                    >
+                      <ChevronRight
+                        aria-hidden="true"
+                        className={cn(
+                          'h-4 w-4 shrink-0 text-fg-muted motion-safe:transition-transform motion-safe:duration-80',
+                          isExpanded && 'rotate-90',
+                        )}
+                      />
+                      <span className={ROUND_ROW_HEADING_CLASS}>{translateEngineLabel('round', round.name, locale)}</span>
+                      <span className="text-caption font-normal text-fg-muted">
                         {tCommon('bestOf', { count: round.best_of })}
                       </span>
-                    </h4>
-                    <Badge variant={getStatusVariant(round.status)} size="sm">
-                      {enumLabel(tEnum, 'roundStatus', round.status)}
-                    </Badge>
-                  </button>
+                      <SkewChip tone={roundTone(round.status)}>{enumLabel(tEnum, 'roundStatus', round.status)}</SkewChip>
+                    </button>
+                  </h4>
                   <div className={ROUND_ROW_ACTIONS_CLASS}>
                     {round.status === 'pending' && (
                       <>
-                        <select
-                          value={round.best_of}
-                          onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
-                          disabled={boFeedback?.roundId === round.id && boFeedback.state === 'saving'}
-                          aria-label={t('rounds.bestOfLabel', { name: translateEngineLabel('round', round.name, locale) })}
-                          className="border border-poke-border rounded-poke-md px-2 py-1 text-xs bg-poke-surface text-poke-text-primary"
-                        >
-                          {bestOfChoices(round.best_of).map((bo) => (
-                            <option key={bo} value={bo}>
-                              {tCommon('bestOf', { count: bo })}
-                            </option>
-                          ))}
-                        </select>
-                        <span role="status" aria-live="polite" className="text-xs text-poke-text-muted empty:hidden">
+                        <div className="w-24 shrink-0">
+                          <Select
+                            value={round.best_of}
+                            onChange={(e) => updateRoundBo(round.id, Number(e.target.value))}
+                            disabled={boFeedback?.roundId === round.id && boFeedback.state === 'saving'}
+                            aria-label={t('rounds.bestOfLabel', { name: translateEngineLabel('round', round.name, locale) })}
+                            className="h-11 py-1 text-caption sm:h-8"
+                          >
+                            {bestOfChoices(round.best_of).map((bo) => (
+                              <option key={bo} value={bo}>
+                                {tCommon('bestOf', { count: bo })}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
+                        <span role="status" aria-live="polite" className="text-caption text-fg-muted empty:hidden">
                           {boFeedback?.roundId === round.id
                             ? t(boFeedback.state === 'saving' ? 'rounds.bestOfSaving' : 'rounds.bestOfSaved')
                             : null}
@@ -1208,13 +1222,13 @@ export default function RoundManager({
                           </Button>
                           {blocked && (
                             <>
-                              <span id={blockedId} className="text-xs text-poke-text-muted">
+                              <span id={blockedId} className="text-caption text-fg-muted">
                                 {t('rounds.completeBlocked', { count: open })}
                               </span>
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                className="text-poke-danger"
+                                className="text-loss"
                                 onClick={() => {
                                   setForceReason('');
                                   setForceRoundId(round.id);
@@ -1244,7 +1258,7 @@ export default function RoundManager({
                         variant="ghost"
                         size="sm"
                         onClick={() => setDeleteRoundId(round.id)}
-                        className="text-poke-danger"
+                        className="text-loss"
                       >
                         {t('rounds.delete')}
                       </Button>
@@ -1252,7 +1266,7 @@ export default function RoundManager({
                   </div>
                 </div>
 
-                <div className="px-3 pb-2 space-y-1">
+                <div className="space-y-1 px-3 pb-3">
                   <RoundByeNotice
                     playerIds={round.bye_player_ids ?? []}
                     names={participantNames}
@@ -1276,7 +1290,7 @@ export default function RoundManager({
                 </div>
 
                 {isExpanded && (
-                  <div className="border-t border-poke-border px-3 py-2">
+                  <div id={`${startNowHintId}-round-${round.id}`} className="border-t border-hairline bg-surface px-3 py-3">
                     <RoundMatchesPanel
                       loading={loadingMatches === round.id}
                       error={matchErrors[round.id]?.error ?? null}
@@ -1368,7 +1382,7 @@ export default function RoundManager({
             void handleForceComplete();
           }}
         >
-          <p className="text-sm text-poke-text-secondary">
+          <p className="text-body text-fg-muted">
             {t('rounds.forceComplete.message', { count: forceRoundId ? (openMatchCount(forceRoundId) ?? 0) : 0 })}
           </p>
           <Textarea
@@ -1394,13 +1408,13 @@ export default function RoundManager({
   );
 }
 
-function getStatusVariant(status: RoundStatus): 'gray' | 'blue' | 'green' {
+function roundTone(status: RoundStatus): SkewChipTone {
   switch (status) {
     case 'pending':
-      return 'gray';
+      return 'neutral';
     case 'active':
-      return 'blue';
+      return 'live';
     case 'completed':
-      return 'green';
+      return 'win';
   }
 }

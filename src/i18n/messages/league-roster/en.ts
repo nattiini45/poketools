@@ -149,6 +149,7 @@ export default {
     poolHint:
       'Each triple is a possible Core Liga assignment. Manual and bulk assignment both draw from this list only. No two participants will receive the same triple.',
     remove: 'Remove',
+    slotAria: 'Type {slot} of triple {triple}',
     addTriple: '+ Add triple',
     savePool: 'Save pool',
     bulkHeading: 'Bulk random assign',
