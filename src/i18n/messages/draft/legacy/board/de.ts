@@ -41,6 +41,8 @@ export default defineDe<typeof en>()({
       other: 'Draft abgeschlossen · {count} Runden · {picks} Picks',
     },
     completeNoRounds: 'Draft abgeschlossen · {picks} Picks',
+    notStarted: 'Der Draft hat noch nicht begonnen.',
+    seatOrder: 'Pick-Reihenfolge dieser Runde',
     startDraft: 'Draft starten',
     undoLastPick: 'Letzten Pick zurücknehmen',
     yourTurn: 'Du bist am Zug!',
