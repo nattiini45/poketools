@@ -1,9 +1,7 @@
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { renderWithI18n } from '@/test/i18n';
-import PalettePicker, { PaletteOptions, PalettePickerSection } from '../PalettePicker';
+import { PaletteOptions, PalettePickerSection } from '../PalettePicker';
 
 const noop = () => {};
 const count = (html: string, pattern: RegExp) => (html.match(pattern) ?? []).length;
@@ -46,7 +44,6 @@ describe('PaletteOptions', () => {
       expect(html).toContain(`>${label}<`);
     }
     expect(html).toContain('>Warmer Sand · Standard<');
-    expect(renderWithI18n(<PalettePicker />, { locale: 'de' })).toContain('aria-label="Farbschema"');
   });
 
   it('checks nothing before hydration (value null)', () => {
@@ -74,45 +71,10 @@ describe('PaletteOptions', () => {
   });
 });
 
-describe('PalettePicker (server render)', () => {
-  it('renders the closed trigger only, named without a palette (server snapshot is null)', () => {
-    const html = renderToStaticMarkup(<PalettePicker />);
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toMatch(/aria-controls="[^"]+"/);
-    expect(html).toContain('aria-label="Color scheme"');
-    expect(html).toContain('type="button"');
-    expect(html).not.toContain('<fieldset');
-    expect(html).not.toContain('type="radio"');
-  });
-
-  it('the mobile section renders its own group with nothing checked on the server', () => {
-    const html = renderToStaticMarkup(<PalettePickerSection />);
-    expect(count(html, /name="site-palette-mobile"/g)).toBe(4);
+describe('PalettePickerSection (server render)', () => {
+  it('renders its own group with nothing checked on the server', () => {
+    const html = renderToStaticMarkup(<PalettePickerSection name="site-menu-palette" />);
+    expect(count(html, /name="site-menu-palette"/g)).toBe(4);
     expect(html).not.toContain('checked=""');
-  });
-});
-
-describe('PalettePicker source contract', () => {
-  const source = readFileSync(path.resolve(__dirname, '../PalettePicker.tsx'), 'utf8');
-
-  it('consumes the panel Escape natively on its wrapper, so the D33 bar stays open (C6)', () => {
-    expect(source).toMatch(/wrapper\.addEventListener\('keydown'/);
-    expect(source).toContain('event.stopPropagation()');
-    expect(source).not.toMatch(/onKeyDown=\{/);
-  });
-
-  it('is never portalled (the panel stays inside #site-nav)', () => {
-    expect(source).not.toContain('createPortal');
-    expect(source).not.toMatch(/@radix-ui/);
-  });
-
-  it('closes on a soft navigation: the open state is keyed to the pathname it opened on', () => {
-    expect(source).toContain('const pathname = usePathname();');
-    expect(source).toMatch(/const open = openOn !== null && openOn\.path === pathname;/);
-    expect(source).not.toMatch(/useState\(false\)/);
-  });
-
-  it('drops the open record on another pathname, so returning to the page never re-opens it', () => {
-    expect(source).toMatch(/if \(openOn !== null && openOn\.path !== pathname\) setOpenOn\(null\);/);
   });
 });

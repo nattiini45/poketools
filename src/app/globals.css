@@ -1555,6 +1555,33 @@ html.world-route-live .world-nav-hud-menu[aria-expanded="true"] {
   color: var(--hud-chip-active-ink);
   box-shadow: inset 0 0 0 1px var(--hud-chip-active-ring);
 }
+/* The phone bottom tab bar (redesign B0) goes with the NavBar: parked below
+   the viewport while the world is the page, back with the revealed bar or
+   keyboard focus inside it. Transform / opacity only, like the bar. */
+html.world-route-live [data-site-bottom-bar] {
+  transform: translate3d(0, calc(100% + 16px), 0);
+  opacity: 0.002;
+  pointer-events: none;
+  transition:
+    transform 240ms cubic-bezier(0.4, 0, 1, 1),
+    opacity 0ms linear 240ms;
+}
+html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] [data-site-bottom-bar],
+html:is(.world-route-live, [data-route-handoff]) [data-site-bottom-bar]:has(:focus-visible) {
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
+  pointer-events: auto;
+  transition:
+    transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0ms linear 0ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  html.world-route-live [data-site-bottom-bar],
+  html:is(.world-route-live, [data-route-handoff])[data-route-nav="open"] [data-site-bottom-bar],
+  html:is(.world-route-live, [data-route-handoff]) [data-site-bottom-bar]:has(:focus-visible) {
+    transition: none;
+  }
+}
 /* === end D33 nav reveal === */
 
 /* === D32 theme veil === */
@@ -3264,6 +3291,8 @@ html.world-route-live .world-nav-hud {
   --lightningcss-dark: initial;
   /* New competition keeps the amber fill beside the gold plate of the current section. */
   --accent-fill: #CF660B;
+  /* Declared again so it takes the rail's own (moonlit) accent, not the page's. */
+  --focus-ring: var(--accent-ink);
 }
 
 .admin-rail [data-sidebar="menu"] > .bg-active {
@@ -3278,6 +3307,12 @@ html.world-route-live .world-nav-hud {
   font-weight: 550;
 }
 
+/* With keyboard focus @fluid's focus plate covers the gold one, so the label goes back to the rail's text colour. */
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible,
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible span {
+  color: var(--fg);
+}
+
 .admin-rail [data-sidebar="menu-sub-button"][aria-current="page"] span {
   color: var(--accent-ink);
   font-weight: 550;
@@ -3289,8 +3324,27 @@ html.world-route-live .world-nav-hud {
   --row-h: 44px;
 }
 
+[data-mobile="true"] .admin-rail [data-sidebar="header"] :is(a, button),
+[data-mobile="true"] .admin-rail [data-sidebar="footer"] :is(a, button) {
+  min-height: 44px;
+}
+
 [data-mobile="true"] .admin-rail [data-sidebar="menu-button"],
 [data-mobile="true"] .admin-rail [data-sidebar="menu-sub-button"],
 [data-mobile="true"] .admin-rail [data-sidebar="group-label"] {
   height: 44px;
+}
+
+/* ─── Phone bottom tab bar (redesign B0, src/components/shared/nav/BottomTabBar.tsx) ───
+   While the bar is mounted (a signed-in player, below lg) the page keeps its last rows clear of it. A draft
+   room owns its bottom edge (the pick dock of a fixed-height screen), so the bar is not drawn there and the
+   page keeps its padding. A live 3D route world parks the bar with the NavBar (D33 block above). */
+html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {
+  display: none;
+}
+
+@media (max-width: 1023.98px) {
+  html:not(.world-route-live):not(:has([data-frozen="draft-room"])) body:has([data-site-bottom-bar]) #main-content {
+    padding-bottom: calc(27px + 56px + env(safe-area-inset-bottom));
+  }
 }

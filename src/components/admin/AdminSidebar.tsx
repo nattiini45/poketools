@@ -36,7 +36,7 @@ import {
 } from './adminNav';
 import { NAV_ICONS } from './nav-icons';
 
-const RAIL_FOCUS = 'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
+const RAIL_FOCUS = 'focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
 
 function NavGroup({ group, activeHref }: { group: VisibleAdminNavGroup; activeHref: string | null }) {
   const t = useT(shellMessages);
