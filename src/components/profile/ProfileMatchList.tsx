@@ -7,6 +7,8 @@ import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import SkewChip from '@/components/ui/SkewChip';
 import type { PublicPlayer } from '@/types/player';
 import type { ProfileMatch } from '@/types/profile';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS } from './focus';
 import ResultToken from './ResultToken';
 
 interface ProfileMatchListProps {
@@ -29,7 +31,7 @@ function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: 
     <li className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-poke-md border border-hairline bg-elevated px-3 py-2 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover">
       <Link
         href={`/tournaments/${match.tournament_id}/matches/${match.id}`}
-        className="absolute inset-0 z-0 rounded-poke-md"
+        className={cn('absolute inset-0 z-0 rounded-poke-md', FOCUS)}
         aria-label={t('matchList.viewMatch', { opponent: match.opponent_name })}
       />
       <div className="flex min-w-0 items-center gap-2.5">
@@ -42,7 +44,7 @@ function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: 
         )}
         <Link
           href={`/players/${match.opponent_id}`}
-          className="relative z-10 flex min-h-7 min-w-0 items-center gap-2 rounded-poke-sm text-body font-[550] text-fg hover:text-accent-ink"
+          className={cn('relative z-10 flex min-h-7 min-w-0 items-center gap-2 rounded-poke-sm text-body font-[550] text-fg hover:text-accent-ink', FOCUS)}
         >
           <PlayerAvatar avatarUrl={match.opponent_avatar_url} name={match.opponent_name} size={28} />
           <span className="truncate">{match.opponent_name}</span>
@@ -52,7 +54,7 @@ function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: 
       <div className="ml-auto flex min-w-0 items-center gap-3">
         <Link
           href={`/tournaments/${match.tournament_id}`}
-          className="relative z-10 truncate text-caption text-fg-muted hover:text-accent-ink"
+          className={cn('relative z-10 min-h-6 truncate rounded-poke-sm text-caption/6 text-fg-muted hover:text-accent-ink', FOCUS)}
         >
           {match.tournament_name}
         </Link>

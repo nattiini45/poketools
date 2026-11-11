@@ -190,7 +190,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
               {hasParticipations ? (
                 <ProfileParticipations current={profile.current_participations} past={profile.past_participations} />
               ) : (
-                <ProfileEmpty action={isOwnProfile ? <PlateLink href="/leagues">{t('page.browseLeagues')}</PlateLink> : undefined}>
+                <ProfileEmpty doll action={isOwnProfile ? <PlateLink href="/leagues">{t('page.browseLeagues')}</PlateLink> : undefined}>
                   {t('page.participationsEmpty')}
                 </ProfileEmpty>
               )}

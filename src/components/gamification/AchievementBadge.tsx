@@ -6,7 +6,7 @@ import { useFormatter, useLocale, useT } from '@/i18n/client';
 import { achievementText } from '@/i18n/content/achievements';
 import { gamificationMessages } from '@/i18n/messages/gamification';
 import { cn } from '@/lib/utils/cn';
-import { achievementIcon } from './achievement-icons';
+import { AchievementIcon } from './achievement-icons';
 
 interface AchievementBadgeProps {
   achievement: EarnedAchievement;
@@ -35,7 +35,6 @@ export default function AchievementBadge({ achievement, size = 'md' }: Achieveme
   const formatter = useFormatter();
   const text = achievementText(achievement, locale);
   const earnedDate = formatter.instant(achievement.earned_at, 'date');
-  const Icon = achievementIcon(achievement);
   const plate = TIER_PLATE[achievement.tier] ?? FALLBACK_PLATE;
   const tooltip = t('achievements.earnedTooltip', { description: text.description, date: earnedDate });
   const tier = t.dynamic(`achievements.tierNames.${achievement.tier}`, undefined, achievement.tier);
@@ -45,7 +44,7 @@ export default function AchievementBadge({ achievement, size = 'md' }: Achieveme
       <span aria-hidden="true" className={cn('skew-plate-bg', plate.soft)} />
       <span className="skew-plate h-10 w-10">
         <span aria-hidden="true" className={cn('skew-plate-bg', plate.solid)} />
-        <Icon aria-hidden="true" className="h-5 w-5" />
+        <AchievementIcon definition={achievement} className="h-5 w-5" />
       </span>
       <div className="min-w-0">
         <div className="truncate text-body font-[550]">{text.name}</div>
@@ -71,14 +70,13 @@ export function LockedAchievement({ definition, progress }: LockedAchievementPro
   const locale = useLocale();
   const formatter = useFormatter();
   const text = achievementText(definition, locale);
-  const Icon = achievementIcon(definition);
 
   return (
     <div title={text.description} className="skew-plate h-full w-full grid-cols-[auto_minmax(0,1fr)] place-items-start gap-x-3 px-4 py-3">
       <span aria-hidden="true" className="skew-plate-bg border border-hairline bg-elevated" />
       <span className="skew-plate h-10 w-10 text-fg-muted">
         <span aria-hidden="true" className="skew-plate-bg bg-sunken" />
-        <Icon aria-hidden="true" className="h-5 w-5" />
+        <AchievementIcon definition={definition} className="h-5 w-5" />
       </span>
       <div className="min-w-0 justify-self-stretch">
         <div className="truncate text-body font-[550] text-fg">{text.name}</div>
@@ -101,7 +99,7 @@ export function LockedAchievement({ definition, progress }: LockedAchievementPro
               })}
               className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-sunken"
             >
-              <div className="h-full rounded-full bg-accent-fill" style={{ width: `${(progress.current / progress.target) * 100}%` }} />
+              <div className="h-full rounded-full bg-accent-ink" style={{ width: `${(progress.current / progress.target) * 100}%` }} />
             </div>
             <span aria-hidden="true" className="shrink-0 font-mono text-micro text-fg-muted tabular-nums">
               {t('achievements.progress', { current: formatter.number(progress.current), target: formatter.number(progress.target) })}

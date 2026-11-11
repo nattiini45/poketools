@@ -35,7 +35,7 @@ export default function ProfileSection({ title, children, defaultCollapsed = fal
       <h2>
         <button
           type="button"
-          className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors duration-80 ease-out hover:bg-hover sm:px-5"
+          className="flex min-h-12 w-full cursor-pointer items-center gap-3 px-4 py-2.5 text-left transition-colors duration-80 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink sm:px-5"
           onClick={() => setCollapsed((prev) => !prev)}
           aria-expanded={isOpen}
           aria-controls={contentId}

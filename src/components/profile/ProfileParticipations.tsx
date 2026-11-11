@@ -10,6 +10,8 @@ import { useT } from '@/i18n/client';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { profileMessages } from '@/i18n/messages/profile';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS } from './focus';
 import { ordinalSuffix } from './ordinal';
 
 interface ProfileParticipationsProps {
@@ -32,7 +34,10 @@ function ParticipationRow({ p }: { p: ProfileParticipation }) {
     <li>
       <Link
         href={`/tournaments/${p.id}`}
-        className="flex items-center gap-3 rounded-poke-md border border-hairline bg-elevated px-3 py-2.5 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover"
+        className={cn(
+          'flex items-center gap-3 rounded-poke-md border border-hairline bg-elevated px-3 py-2.5 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover',
+          FOCUS,
+        )}
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1">

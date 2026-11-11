@@ -1,3 +1,4 @@
+import { createElement } from 'react';
 import {
   Award,
   Backpack,
@@ -103,4 +104,9 @@ export function achievementIcon(definition: { key: string; icon: string | null; 
     BY_CATEGORY[definition.category as AchievementCategory] ??
     Award
   );
+}
+
+/** The achievement's icon, decorative: the name beside it labels the badge. */
+export function AchievementIcon({ definition, className }: { definition: Parameters<typeof achievementIcon>[0]; className?: string }) {
+  return createElement(achievementIcon(definition), { 'aria-hidden': true, className });
 }

@@ -6,6 +6,8 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { profileMessages } from '@/i18n/messages/profile';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS } from './focus';
 import { ordinalSuffix } from './ordinal';
 import type { ProfilePokemonStat, ProfileKillRanking } from '@/types/profile';
 
@@ -19,7 +21,7 @@ function SpotlightRow({ name, displayName, children }: { name: string; displayNa
     <li>
       <Link
         href={`/pokemon/${encodeURIComponent(name)}`}
-        className="flex min-h-11 items-center gap-3 rounded-poke-sm text-fg transition-colors duration-80 ease-out hover:text-accent-ink"
+        className={cn('flex min-h-11 items-center gap-3 rounded-poke-sm text-fg transition-colors duration-80 ease-out hover:text-accent-ink', FOCUS)}
       >
         <PokemonSprite name={name} size={40} />
         <div className="min-w-0">

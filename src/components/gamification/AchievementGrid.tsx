@@ -39,7 +39,7 @@ export default function AchievementGrid({ achievements, allDefinitions, progress
           {t('achievements.earnedCount', { earned: formatter.number(earnedCount), total: formatter.number(definitions.length) })}
         </p>
         <div aria-hidden="true" className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-sunken">
-          <div className="h-full rounded-full bg-accent-fill" style={{ width: `${(earnedCount / definitions.length) * 100}%` }} />
+          <div className="h-full rounded-full bg-accent-ink" style={{ width: `${(earnedCount / definitions.length) * 100}%` }} />
         </div>
       </div>
 

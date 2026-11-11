@@ -31,13 +31,13 @@ interface ProfileHeaderProps {
 
 function StatPlate({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="skew-plate justify-items-start px-3.5 py-2">
+    <li className="skew-plate justify-items-start px-3.5 py-2">
       <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-surface" />
-      <div className="flex flex-col-reverse">
-        <dt className="text-caption text-fg-muted">{label}</dt>
-        <dd className="font-heading text-title text-fg tabular-nums">{value}</dd>
-      </div>
-    </div>
+      <span className="flex flex-col">
+        <span className="font-heading text-title text-fg tabular-nums">{value}</span>
+        <span className="text-caption text-fg-muted">{label}</span>
+      </span>
+    </li>
   );
 }
 
@@ -94,7 +94,7 @@ export default function ProfileHeader({ player, headline, recentForm, rating, st
         )}
 
         {/* Headline stats */}
-        <dl className="flex flex-wrap gap-x-4 gap-y-2.5 px-1.5">
+        <ul className="flex flex-wrap gap-x-4 gap-y-2.5 px-1.5">
           <StatPlate
             label={t('header.record')}
             value={t('header.recordValue', { wins: headline.total_wins, losses: headline.total_losses })}
@@ -105,7 +105,7 @@ export default function ProfileHeader({ player, headline, recentForm, rating, st
           {headline.tournaments_won > 0 && (
             <StatPlate label={t('header.titles')} value={formatter.number(headline.tournaments_won)} />
           )}
-        </dl>
+        </ul>
 
         {/* Recent form */}
         {recentForm.length > 0 && (
@@ -123,10 +123,9 @@ export default function ProfileHeader({ player, headline, recentForm, rating, st
       {/* Signature team */}
       {signatures && (
         <div className="relative flex flex-col gap-4 border-t border-hairline bg-elevated p-5 sm:p-6 lg:border-t-0 lg:pl-4">
-          <span
-            aria-hidden="true"
-            className="absolute inset-y-0 -left-12 hidden w-24 border-l-4 border-accent-fill bg-elevated lg:block [transform:skewX(var(--skew))]"
-          />
+          {/* The amber slash between the two sides, as on the versus slab. */}
+          <span aria-hidden="true" className="absolute inset-y-0 -left-12 hidden w-24 bg-elevated lg:block [transform:skewX(var(--skew))]" />
+          <span aria-hidden="true" className="absolute inset-y-0 -left-12 hidden w-1 bg-accent-fill lg:block [transform:skewX(var(--skew))]" />
           <div className="relative flex items-center gap-2.5">
             <ItemIcon item="choice-scarf" />
             <h2 className="min-w-0 flex-1 font-heading text-title text-fg">{t('page.signatures')}</h2>
