@@ -3,9 +3,14 @@ import type en from './en';
 
 export default defineDe<typeof en>()({
   hero: {
-    eyebrow: 'Private Pokémon-Wettkampfliga',
     intro: 'Tabellen, Statistiken, Teams und Wiki an einem Ort – hier spielt sich die ganze Saison deiner Liga ab.',
     browseTournaments: 'Turniere ansehen',
+    dashboard: 'Dein Dashboard',
+    stats: {
+      leagues: { one: 'Liga', other: 'Ligen' },
+      tournaments: { one: 'Turnier', other: 'Turniere' },
+      live: { one: 'läuft gerade', other: 'laufen gerade' },
+    },
   },
   dividerTitle: 'Schnapp sie dir alle!',
   featured: {

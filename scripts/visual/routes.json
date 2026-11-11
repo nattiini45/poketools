@@ -49,6 +49,37 @@
       }
     },
     {
+      "id": "d1-home",
+      "url": "/",
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      }
+    },
+    {
+      "id": "d1-home-signed-in",
+      "url": "/",
+      "viewports": [
+        "phone",
+        "desktop"
+      ],
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "player"
+    },
+    {
       "id": "public-leagues",
       "url": "/leagues",
       "fullPage": true,
