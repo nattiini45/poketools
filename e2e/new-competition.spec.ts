@@ -10,7 +10,10 @@ test.describe('new-competition wizard', () => {
     await page.goto('/admin/formats');
     await page.getByRole('link', { name: 'Create a league from Wichtelcup' }).click();
     await expect(page).toHaveURL(/\/admin\/leagues\/new\?preset=wichtelcup$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'New competition' })).toBeVisible();
+    // The admin's page transition keeps the leaving page beside the arriving one for its exit tween: wait it out.
+    const title = page.getByRole('heading', { level: 1, name: 'New competition' });
+    await expect(title).toHaveCount(1);
+    await expect(title).toBeVisible();
     await expect(page.getByRole('radio', { name: /Wichtelcup/ })).toBeChecked();
     const rail = page.getByRole('complementary', { name: 'What gets created' });
     await expect(rail.getByText('Wichtelcup, your private copy')).toBeVisible();
@@ -29,7 +32,9 @@ test.describe('new-competition wizard', () => {
     await page.getByRole('button', { name: 'Create league' }).click();
 
     await expect(page).toHaveURL(/\/admin\/leagues\/[0-9a-f-]{36}$/);
-    await expect(page.getByRole('heading', { level: 1, name })).toBeVisible();
+    const leagueTitle = page.getByRole('heading', { level: 1, name });
+    await expect(leagueTitle).toHaveCount(1);
+    await expect(leagueTitle).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Ready to start?' })).toBeVisible();
   });
 
@@ -40,7 +45,9 @@ test.describe('new-competition wizard', () => {
     await expect(kinds.getByRole('link', { name: 'League' })).toHaveAttribute('aria-current', 'page');
     await kinds.getByRole('link', { name: 'Tournament' }).click();
     await expect(page).toHaveURL(/\/admin\/tournaments\/new$/);
-    await expect(page.getByRole('heading', { level: 1, name: 'New competition' })).toBeVisible();
+    const title = page.getByRole('heading', { level: 1, name: 'New competition' });
+    await expect(title).toHaveCount(1);
+    await expect(title).toBeVisible();
     await expect(kinds.getByRole('link', { name: 'Tournament' })).toHaveAttribute('aria-current', 'page');
   });
 });
