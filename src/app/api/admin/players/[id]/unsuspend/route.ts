@@ -4,6 +4,7 @@ import { superadminPlayerProtectedResponse } from '@/lib/auth/superadmin-player-
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { unsuspendPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
+import { expirePlayerVisibilityReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { Player } from '@/types/player';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -30,6 +31,8 @@ export async function POST(
       resource_id: id,
       resource_name: player.name,
     });
+
+    expirePlayerVisibilityReads(id);
 
     return NextResponse.json<ApiResult<Player>>({ success: true, data: player });
   } catch (err) {

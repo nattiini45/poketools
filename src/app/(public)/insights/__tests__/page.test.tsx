@@ -9,6 +9,7 @@ const h = vi.hoisted(() => ({
     tournamentList: vi.fn(),
     ratingLeaderboard: vi.fn(),
     streakLeaderboard: vi.fn(),
+    hiddenPlayerIds: vi.fn(),
     aggregatesSummary: vi.fn(),
     totalGames: vi.fn(),
     season: vi.fn(),
@@ -76,6 +77,7 @@ beforeEach(() => {
   reads.tournamentList.mockResolvedValue([]);
   reads.ratingLeaderboard.mockResolvedValue([]);
   reads.streakLeaderboard.mockResolvedValue([]);
+  reads.hiddenPlayerIds.mockResolvedValue([]);
   reads.aggregatesSummary.mockResolvedValue([]);
   reads.totalGames.mockResolvedValue(0);
   reads.seasonParticipants.mockResolvedValue(players);

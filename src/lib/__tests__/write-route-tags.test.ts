@@ -31,6 +31,7 @@ import {
   expireFormatLibraryReads,
   expireSeasonReads,
   expireTournamentReads,
+  playerVisibilityTags,
   publicTags,
   seasonWriteTags,
   tournamentWriteTags,
@@ -55,6 +56,8 @@ const EXTRA_ROUTES = [
   'drafts/route.ts',
   'admin/league-trash/[id]/restore/route.ts',
   'admin/league-trash/[id]/rebuild/route.ts',
+  'admin/players/[id]/suspend/route.ts',
+  'admin/players/[id]/unsuspend/route.ts',
 ];
 
 /**
@@ -64,7 +67,7 @@ const EXTRA_ROUTES = [
  * so a live-format route that calls one of them has expired what it changed.
  */
 const EXPIRE_CALL =
-  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge)\(/;
+  /\b(expireTournamentReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePlayerVisibilityReads|expirePublicTags|revalidateMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge)\(/;
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
@@ -247,6 +250,15 @@ describe('write tags: what each route helper expires', () => {
   it('a standalone tournament write: its reads, the list and the profiles', () => {
     expect(tournamentWriteTags('t1')).toEqual(['tournament:t1', 'tournaments', 'player-profiles']);
     expect(tournamentWriteTags('t1', null)).toEqual(tournamentWriteTags('t1'));
+  });
+
+  it('a ban, suspension or reinstatement expires the hidden-player set, leaderboards and profiles', () => {
+    expect(playerVisibilityTags('p1')).toEqual([
+      publicTags.players,
+      publicTags.ratings,
+      publicTags.playerProfiles,
+      publicTags.player('p1'),
+    ]);
   });
 
   it('a league stage write also expires the league and the season list', () => {

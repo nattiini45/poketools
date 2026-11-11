@@ -11,7 +11,7 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
 
 // Item usage goes through the tagged public read cache (H9).
 vi.mock('@/lib/cache/public-reads', () => ({
-  publicReads: { itemUsage: vi.fn() },
+  publicReads: { itemUsage: vi.fn(), hiddenPlayerIds: vi.fn(async () => []) },
 }));
 
 // Reads whose cache key is not bounded by real data skip the cache.
@@ -103,6 +103,24 @@ describe('GET /api/pokemon/[name]/stats', () => {
     const json = await (await GET(req, ctx)).json();
 
     expect(json.data.players.map((p: { player_name: string | null }) => p.player_name)).toEqual(['Ash', null]);
+  });
+
+  it('leaves out the rows of players the public directory hides', async () => {
+    vi.mocked(publicReads.hiddenPlayerIds).mockResolvedValueOnce(['p2']);
+    mockGetTotalGames.mockResolvedValue(100);
+    mockGetAggregate.mockResolvedValue(SAMPLE_AGG);
+    mockGetPlayerAggs.mockResolvedValue([
+      { player_id: 'p1', total_games: 2, total_appearances: 2, total_kos_dealt: 1, total_koed: 0, total_brought: 2, total_led: 1, total_wins: 1 },
+      { player_id: 'p2', total_games: 1, total_appearances: 1, total_kos_dealt: 0, total_koed: 1, total_brought: 1, total_led: 0, total_wins: 0 },
+    ]);
+    mockGetItems.mockResolvedValue([]);
+    mockResolveNames.mockResolvedValue({ p1: 'Ash' });
+
+    const [req, ctx] = makeArgs('Garchomp');
+    const json = await (await GET(req, ctx)).json();
+
+    expect(json.data.players.map((p: { player_id: string }) => p.player_id)).toEqual(['p1']);
+    expect(mockResolveNames).toHaveBeenCalledWith(['p1']);
   });
 
   it('returns 400 for invalid scope', async () => {
