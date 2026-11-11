@@ -42,9 +42,34 @@ import MatchAnalysisCard from '@/components/match/MatchAnalysisCard';
 import MatchSchedulingPanel from '@/components/match/MatchSchedulingPanel';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
+import { enumLabel } from '@/i18n/content/enum-label';
+import { translateEngineLabel } from '@/i18n/content/engine-labels';
+import { enumMessages } from '@/i18n/messages/enums';
+import type { ItemIconId } from '@/lib/pkmn/item-icons';
+import type { MatchStatus } from '@/types/match';
 
 export const dynamic = 'force-dynamic';
+
+const STATUS_TONE: Record<MatchStatus, SkewChipTone> = {
+  scheduled: 'accent',
+  in_progress: 'live',
+  pending_confirmation: 'accent',
+  completed: 'neutral',
+  disputed: 'loss',
+};
+
+/** A page section's heading: an item icon and the title in the display role (the frozen card needs no heading). */
+function SectionHeading({ icon, children }: { icon: ItemIconId; children: string }) {
+  return (
+    <div className="flex items-center gap-3">
+      <ItemIcon item={icon} size={24} />
+      <h2 className="min-w-0 font-heading text-title text-fg">{children}</h2>
+    </div>
+  );
+}
 
 interface PageProps {
   params: Promise<{ id: string; mid: string }>;
@@ -224,8 +249,9 @@ export default async function MatchDetailPage({ params }: PageProps) {
     hasStoredAnalysis || player?.isAdmin
       ? await resolveContentLocale({ seasonId: tournament?.season_id })
       : undefined;
-  const [t, viewerLocale, viewerDataLocale] = await Promise.all([
+  const [t, tEnum, viewerLocale, viewerDataLocale] = await Promise.all([
     getT(matchMessages),
+    getT(enumMessages),
     getLocale(),
     getDataLocale(),
   ]);
@@ -273,7 +299,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
   return (
     <PageContainer
-      title={t('detail.title')}
+      title={t('detail.heading', { player1: match.player_1_name, player2: match.player_2_name })}
+      icon="vs-seeker"
+      subtitle={[tournament?.season_name, tournament?.name, round ? translateEngineLabel('round', round.name, viewerLocale) : null]
+        .filter(Boolean)
+        .join(' · ')}
       maxWidth="md"
       action={
         <div className="flex flex-wrap items-center gap-2">
@@ -294,6 +324,46 @@ export default async function MatchDetailPage({ params }: PageProps) {
         </div>
       }
     >
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <SkewChip tone={STATUS_TONE[match.status]} className="text-body">
+            {enumLabel(tEnum, 'matchStatus', match.status)}
+          </SkewChip>
+          <Link
+            href={`/tournaments/${id}`}
+            className="inline-flex min-h-6 items-center gap-1 rounded-[3px] text-body font-[550] text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus max-sm:min-h-11"
+          >
+            <span aria-hidden="true">←</span> {t('detail.backToTournament')}
+          </Link>
+        </div>
+        {/* Participant / Admin actions */}
+        {(isParticipant || player?.isAdmin) && (canAct || canConfirm) && (
+          <div className="flex flex-wrap gap-x-4 gap-y-3">
+            {canAct && isParticipant && (
+              <Link href={`/dashboard/match-prep/${mid}`} className="inline-flex rounded-[3px] text-body">
+                <SkewPlate variant="button" tone="secondary">
+                  {t('detail.planTeam')}
+                </SkewPlate>
+              </Link>
+            )}
+            {canAct && (
+              <Link href={`/dashboard/submit/${mid}`} className="inline-flex rounded-[3px] text-body">
+                <SkewPlate variant="button" tone="primary">
+                  {t('detail.submitResult')}
+                </SkewPlate>
+              </Link>
+            )}
+            {canConfirm && (
+              <Link href={`/dashboard/confirm/${mid}`} className="inline-flex rounded-[3px] text-body">
+                <SkewPlate variant="button" tone="primary">
+                  {t('detail.confirmResult')}
+                </SkewPlate>
+              </Link>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Match Hero Card */}
       <MatchHighlightCard {...highlightProps} />
 
@@ -310,9 +380,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
       {/* ── Evolution Point Buy match summary ─────────────────────── */}
       {isEpb && epbSnapshots.length > 0 && (
         <div className="space-y-3">
-          <h3 className="text-sm font-heading font-medium text-poke-text-secondary">
-            {t('detail.evolutionSummary')}
-          </h3>
+          <SectionHeading icon="rare-candy">{t('detail.evolutionSummary')}</SectionHeading>
           <div className="grid gap-3 sm:grid-cols-2">
             {/* evolutionPointEarned: some(evolution_triggered) is exact — the
                 award in finalize uses the same matchday events, max 1/matchday */}
@@ -360,9 +428,9 @@ export default async function MatchDetailPage({ params }: PageProps) {
             const benchModels = playerModels.filter((m) => !m.snapshot.brought);
             return (
               <Card key={pid} padding="md">
-                <h4 className="mb-2 text-sm font-heading font-semibold text-poke-text-primary">
+                <h3 className="mb-2 font-heading text-title text-fg">
                   {t('detail.evolutionProgress', { name: playerName })}
-                </h4>
+                </h3>
                 <div className="divide-y">
                   {broughtModels.map((m) => (
                     <EpbPokemonRow
@@ -376,7 +444,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
                 </div>
                 {benchModels.length > 0 && (
                   <details className="mt-2">
-                    <summary className="cursor-pointer text-xs text-poke-text-muted hover:text-poke-text-secondary">
+                    <summary className="flex min-h-6 cursor-pointer items-center text-caption text-fg-muted hover:text-fg max-sm:min-h-11">
                       {t('detail.notBrought', { count: benchModels.length })}
                     </summary>
                     <div className="divide-y opacity-60">
@@ -398,42 +466,10 @@ export default async function MatchDetailPage({ params }: PageProps) {
         </div>
       )}
 
-      {/* Participant / Admin actions */}
-      {(isParticipant || player?.isAdmin) && (canAct || canConfirm) && (
-        <div className="flex gap-3">
-          {canAct && (
-            <>
-              {isParticipant && (
-                <Link
-                  href={`/dashboard/match-prep/${mid}`}
-                  className={getButtonClasses('ghost', 'md')}
-                >
-                  {t('detail.planTeam')}
-                </Link>
-              )}
-              <Link
-                href={`/dashboard/submit/${mid}`}
-                className={getButtonClasses('secondary', 'md')}
-              >
-                {t('detail.submitResult')}
-              </Link>
-            </>
-          )}
-          {canConfirm && (
-            <Link
-              href={`/dashboard/confirm/${mid}`}
-              className={getButtonClasses('success', 'md')}
-            >
-              {t('detail.confirmResult')}
-            </Link>
-          )}
-        </div>
-      )}
-
       {/* Games with full battle detail */}
       {match.games.length > 0 ? (
-        <div className="space-y-4">
-          <h3 className="text-sm font-heading font-medium text-poke-text-secondary">{t('detail.games')}</h3>
+        <div className="space-y-3">
+          <SectionHeading icon="dubious-disc">{t('detail.games')}</SectionHeading>
           {match.games.map((game) => (
             <GameDetailCard
               key={game.id}
@@ -451,7 +487,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
           ))}
         </div>
       ) : (
-        <p className="text-sm text-poke-text-muted">{t('detail.noGames')}</p>
+        <p className="text-body text-fg-muted">{t('detail.noGames')}</p>
       )}
 
       {/* AI Analysis — show for completed/pending_confirmation matches */}
@@ -467,19 +503,12 @@ export default async function MatchDetailPage({ params }: PageProps) {
       {/* Notes — admin/dispute data, visible to (live-checked) site admins only */}
       {showAdminNotes && (
         <div>
-          <h3 className="text-sm font-heading font-medium text-poke-text-secondary mb-1">{t('detail.notes')}</h3>
+          <h2 className="mb-2 font-heading text-title text-fg">{t('detail.notes')}</h2>
           <Card variant="muted" padding="sm">
-            <p className="text-sm text-poke-text-muted">{match.notes}</p>
+            <p className="whitespace-pre-wrap text-body text-fg-muted">{match.notes}</p>
           </Card>
         </div>
       )}
-
-      <Link
-        href={`/tournaments/${id}`}
-        className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
-      >
-        &larr; {t('detail.backToTournament')}
-      </Link>
     </PageContainer>
   );
 }

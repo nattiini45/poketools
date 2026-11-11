@@ -4,6 +4,8 @@ import { useEffect, useId, useRef } from 'react';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import type { ActionIssue, ActionIssueCode } from '@/lib/format-engine/runtime/actions';
+import { cn } from '@/lib/utils/cn';
+import { FOCUS_TARGET } from './parts';
 import SpeciesLabel from './SpeciesLabel';
 
 /** Every problem code of a pick, so a new code in `runtime/actions.ts` is a type error here until it has a sentence. */
@@ -51,17 +53,17 @@ export default function ActionIssues({ issues }: ActionIssuesProps) {
       tabIndex={-1}
       role="alert"
       aria-labelledby={headingId}
-      className="space-y-1 rounded-poke-md border border-poke-danger/20 bg-poke-danger-light px-3 py-2 text-sm text-poke-danger focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-focus"
+      className={cn('flex flex-col gap-1 rounded-poke-md border border-hairline-strong bg-loss-bg px-3 py-2 text-body text-fg', FOCUS_TARGET)}
     >
-      <p id={headingId} className="font-heading font-semibold">
+      <p id={headingId} className="font-[550] text-loss">
         {t('issue.heading')}
       </p>
-      <ul className="list-disc space-y-0.5 pl-5">
+      <ul className="flex list-disc flex-col gap-0.5 pl-5">
         {issues.map((issue, index) => (
           <li key={`${issue.code}-${issue.step ?? 'x'}-${issue.item_id ?? 'x'}-${index}`}>
-            {issue.step !== undefined && <span className="font-semibold">{t('issue.step', { number: issue.step + 1 })}: </span>}
+            {issue.step !== undefined && <span className="font-[550]">{t('issue.step', { number: issue.step + 1 })}: </span>}
             {issue.item_id !== undefined && (
-              <span className="font-semibold">
+              <span className="font-[550]">
                 <SpeciesLabel id={issue.item_id} />:{' '}
               </span>
             )}

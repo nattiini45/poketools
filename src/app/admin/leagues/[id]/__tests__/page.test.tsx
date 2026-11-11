@@ -90,7 +90,6 @@ vi.mock('@/i18n/LocalTime', () => ({ LocalTime: stub('LocalTime').default }));
 vi.mock('@/lib/supabase/queries/format-rules', () => ({ getFormatRules: mocks.getFormatRules }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
-vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
 vi.mock('@/components/ui/Section', () => stub('Section'));
 vi.mock('@/components/ui/Badge', () => stub('Badge'));
 vi.mock('@/components/league/LeagueRosterManager', () => stub('LeagueRosterManager'));
@@ -121,8 +120,8 @@ vi.mock('../_components/EpbDraftRoomCreate', () => stub('EpbDraftRoomCreate'));
 import AdminLeagueDetailPage from '../page';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
-import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
+import WorkspaceCard from '@/components/admin/WorkspaceCard';
 import DraftPoolManager from '@/components/draft/DraftPoolManager';
 import TokenAdminSummary from '@/components/draft-admin/TokenAdminSummary';
 import EvolutionTierEditor from '@/components/league/EvolutionTierEditor';
@@ -140,6 +139,9 @@ import DeleteResourceButton from '@/components/shared/DeleteResourceButton';
 import PhaseTimeline from '@/components/league/PhaseTimeline';
 import EpbDraftRoomCreate from '../_components/EpbDraftRoomCreate';
 import LeagueAdminTabs from '../_components/LeagueAdminTabs';
+import LeagueWorkspaceHeader from '../_components/LeagueWorkspaceHeader';
+import LeaguePrimaryAction from '../_components/LeaguePrimaryAction';
+import AliasSectionScroll from '../_components/AliasSectionScroll';
 import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
 import { createTranslator } from '@/i18n/core';
 import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
@@ -160,7 +162,9 @@ function walk(node: ReactNode, visit: (el: El) => void): void {
   if (isValidElement<Record<string, unknown>>(node)) {
     visit(node);
     walk(node.props.children as ReactNode, visit);
+    // The workspace header takes its status control and primary action as props.
     if (node.props.action) walk(node.props.action as ReactNode, visit);
+    if (node.props.status) walk(node.props.status as ReactNode, visit);
   }
 }
 
@@ -172,8 +176,13 @@ function findByType(node: ReactNode, type: unknown): El[] {
   return found;
 }
 
+/** The titles of the panel's cards in reading order: `Section`s and the workspace cards of the overview. */
 function sectionTitles(node: ReactNode): string[] {
-  return findByType(node, Section).map((s) => String(s.props.title));
+  const titles: string[] = [];
+  walk(node, (el) => {
+    if (el.type === Section || el.type === WorkspaceCard) titles.push(String(el.props.title));
+  });
+  return titles;
 }
 
 function sectionTitled(node: ReactNode, title: string): El | undefined {
@@ -187,11 +196,12 @@ function visibleText(node: ReactNode, sep = ' | '): string {
     if (typeof n === 'string' || typeof n === 'number') out.push(String(n));
     else if (Array.isArray(n)) n.forEach((c) => collect(c as ReactNode));
     else if (isValidElement<Record<string, unknown>>(n)) {
-      for (const k of ['title', 'subtitle', 'pendingMessage'] as const) {
+      for (const k of ['name', 'title', 'subtitle', 'testLabel', 'label', 'pendingMessage'] as const) {
         if (typeof n.props[k] === 'string') out.push(n.props[k] as string);
       }
       collect(n.props.children as ReactNode);
       if (n.props.action) collect(n.props.action as ReactNode);
+      if (n.props.status) collect(n.props.status as ReactNode);
     }
   };
   collect(node);
@@ -312,11 +322,11 @@ beforeEach(() => {
 
 describe('admin league page tabs (?tab=)', () => {
   it.each([
-    ['singles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
-    ['doubles', ['overview', 'participants', 'phases', 'format', 'settings', 'danger']],
-    ['draft', ['overview', 'participants', 'draft', 'phases', 'rules', 'format', 'settings', 'danger']],
+    ['singles', ['overview', 'participants', 'phases', 'format', 'settings']],
+    ['doubles', ['overview', 'participants', 'phases', 'format', 'settings']],
+    ['draft', ['overview', 'participants', 'phases', 'format', 'draft', 'settings']],
     ['evolution_point_buy', LEAGUE_ADMIN_TABS.filter((tab) => tab !== 'live')],
-    ['custom', ['overview', 'participants', 'phases', 'format', 'live', 'settings', 'danger']],
+    ['custom', ['overview', 'participants', 'phases', 'format', 'live', 'settings']],
   ])('%s: the tab strip shows the format’s tabs', async (format, expected) => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: format }));
     const nav = tabsOf(await render());
@@ -331,7 +341,7 @@ describe('admin league page tabs (?tab=)', () => {
     expect(panelOf(tree).props['aria-labelledby']).toBe('league-admin-tab-overview');
     expect(tabReads()).toEqual([]);
     expect(mocks.getSeasonWithDetails).toHaveBeenCalledTimes(1);
-    expect(sectionTitles(tree)).toEqual(['At a glance', 'Description']);
+    expect(sectionTitles(tree)).toEqual(['Needs attention', 'At a glance', 'Description']);
     expect(findByType(tree, EditableDescription)[0].props).toEqual({
       resourceType: 'season',
       resourceId: S1,
@@ -346,16 +356,16 @@ describe('admin league page tabs (?tab=)', () => {
     expect(text).toContain('Open the public league page');
   });
 
-  it.each([['nope'], ['DRAFT'], [['draft', 'rules']], ['']])('an invalid tab (%j) falls back to the overview', async (tab) => {
+  it.each([['nope'], ['DRAFT'], [['draft', 'format']], ['']])('an invalid tab (%j) falls back to the overview', async (tab) => {
     const tree = await render(tab);
     expect(panelOf(tree).props['data-admin-panel']).toBe('overview');
     expect(tabsOf(tree).props.activeTab).toBe('overview');
     expect(tabReads()).toEqual([]);
   });
 
-  it('a tab the format does not have falls back to the overview (singles has no draft or rules tab)', async () => {
+  it('a tab the format does not have falls back to the overview (singles has no draft or live tab)', async () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', point_buy_list_id: null }));
-    for (const tab of ['draft', 'rules']) {
+    for (const tab of ['draft', 'live']) {
       vi.clearAllMocks();
       mocks.getLiveAccess.mockResolvedValue(liveAccess());
       mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', point_buy_list_id: null }));
@@ -374,19 +384,25 @@ describe('admin league page tabs (?tab=)', () => {
       ['Draft Room', 'Redraft', 'Tokens'],
     ],
     ['evolution_point_buy', 'phases', ['listRulesetOptionsFor'], ['Phases', 'Evolution Points']],
-    ['evolution_point_buy', 'rules', ['getSeasonPhaseStartSignals'], ['Point-Buy List', 'Format Rules', 'Data Import']],
-    // No phases (the default mock): the empty state, no section.
-    ['evolution_point_buy', 'format', ['loadLeagueFormat'], []],
+    // Format and rules: the format view (no phases in the default mock: the empty state, no section), then the rules editors.
+    [
+      'evolution_point_buy',
+      'format',
+      ['loadLeagueFormat', 'getSeasonPhaseStartSignals'],
+      ['Point-Buy List', 'Format Rules', 'Data Import'],
+    ],
+    // Settings ends with the danger zone, which reads nothing.
     [
       'evolution_point_buy',
       'settings',
       ['listRulesetOptionsFor', 'getRulesetPinInfo', 'getSeasonPhaseStartSignals'],
-      ['League details', '3D World Theme', 'Content Language', 'Test League', 'League Admins'],
+      ['League details', '3D World Theme', 'Content Language', 'Test League', 'League Admins', 'Danger zone'],
     ],
-    ['evolution_point_buy', 'danger', [], ['Danger zone']],
     ['draft', 'participants', [], ['Participants', 'League groups', 'Type Cores (Core Liga)']],
     ['draft', 'draft', ['getSeasonGroups', 'getDraftPoolBySeason'], ['Draft Pool Pokémon', 'Draft Room']],
-    ['draft', 'rules', ['getSeasonParticipants'], ['Evolution Tiers', 'Draft Settings']],
+    ['draft', 'format', ['loadLeagueFormat', 'getSeasonParticipants'], ['Evolution Tiers', 'Draft Settings']],
+    // A format without rules editors: the format view alone, no rules read.
+    ['singles', 'format', ['loadLeagueFormat'], []],
     ['singles', 'phases', ['listRulesetOptionsFor'], ['Phases']],
     // A custom league: the overview adds its readiness checklist, the Format tab its checklist and the attach panel.
     ['custom', 'overview', ['loadLeagueFormatState'], ['At a glance', 'Description']],
@@ -409,14 +425,15 @@ describe('admin league page tabs (?tab=)', () => {
     }
   });
 
-  it('the header (test badge, status control) is on every tab; archive and delete only on the danger tab', async () => {
+  it('the header (test badge, status control) is on every tab; archive and delete only on the settings tab', async () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ is_test_season: true }));
     for (const tab of LEAGUE_ADMIN_TABS) {
       const tree = await render(tab);
       expect(findByType(tree, LeagueStatusControl), tab).toHaveLength(1);
       expect(visibleText(tree), tab).toContain('Test');
-      expect(findByType(tree, ArchiveButton).length, tab).toBe(tab === 'danger' ? 1 : 0);
-      expect(findByType(tree, DeleteResourceButton).length, tab).toBe(tab === 'danger' ? 1 : 0);
+      expect(findByType(tree, LeagueWorkspaceHeader), tab).toHaveLength(1);
+      expect(findByType(tree, ArchiveButton).length, tab).toBe(tab === 'settings' ? 1 : 0);
+      expect(findByType(tree, DeleteResourceButton).length, tab).toBe(tab === 'settings' ? 1 : 0);
     }
   });
 
@@ -446,6 +463,50 @@ describe('admin league page tabs (?tab=)', () => {
     const tree = await render();
     expect(findByType(tree, Link)).toHaveLength(0);
     expect(visibleText(tree)).not.toContain('Edit dates');
+  });
+
+  it('an old ?tab=rules link opens Format and rules at the rules editors', async () => {
+    const tree = await render('rules');
+    expect(panelOf(tree).props['data-admin-panel']).toBe('format');
+    expect(panelOf(tree).props['aria-labelledby']).toBe('league-admin-tab-format');
+    expect(tabsOf(tree).props.activeTab).toBe('format');
+    expect(tabReads().sort()).toEqual(['getSeasonPhaseStartSignals', 'loadLeagueFormat']);
+    expect(sectionTitles(tree)).toEqual(['Point-Buy List', 'Format Rules', 'Data Import']);
+    // The rules editors sit in the anchored section the alias scrolls to.
+    let rules: El | undefined;
+    walk(tree, (el) => {
+      if (el.props.id === 'league-rules') rules = el;
+    });
+    expect(rules).toBeDefined();
+    expect(sectionTitles(rules)).toEqual(['Point-Buy List', 'Format Rules', 'Data Import']);
+    expect(findByType(tree, AliasSectionScroll).map((el) => el.props.sectionId)).toEqual(['league-rules']);
+  });
+
+  it('an old ?tab=rules link on a format without rules editors opens the format view, with no rules read', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', point_buy_list_id: null }));
+    const tree = await render('rules');
+    expect(panelOf(tree).props['data-admin-panel']).toBe('format');
+    expect(tabReads()).toEqual(['loadLeagueFormat']);
+  });
+
+  it('an old ?tab=danger link opens Settings at the danger zone, its last section', async () => {
+    const tree = await render('danger');
+    expect(panelOf(tree).props['data-admin-panel']).toBe('settings');
+    expect(tabsOf(tree).props.activeTab).toBe('settings');
+    expect(sectionTitles(tree).at(-1)).toBe('Danger zone');
+    let zone: El | undefined;
+    walk(tree, (el) => {
+      if (el.props.id === 'danger-zone') zone = el;
+    });
+    expect(zone).toBeDefined();
+    expect(findByType(zone, ArchiveButton)).toHaveLength(1);
+    expect(findByType(tree, AliasSectionScroll).map((el) => el.props.sectionId)).toEqual(['danger-zone']);
+  });
+
+  it('a tab opened by its own id scrolls nowhere', async () => {
+    for (const tab of [undefined, 'settings', 'format', 'schedule']) {
+      expect(findByType(await render(tab), AliasSectionScroll), String(tab)).toHaveLength(0);
+    }
   });
 
   it('an old ?tab=schedule link opens the phases tab', async () => {
@@ -478,7 +539,7 @@ describe('admin league page tabs (?tab=)', () => {
 
     it('the strip lists the tab between Format and Settings, labelled Live format / Live-Format', async () => {
       const nav = tabsOf(await render());
-      expect(nav.props.tabs).toEqual(['overview', 'participants', 'phases', 'format', 'live', 'settings', 'danger']);
+      expect(nav.props.tabs).toEqual(['overview', 'participants', 'phases', 'format', 'live', 'settings']);
       expect((nav.props.labels as Record<string, string>).live).toBe('Live format');
       mocks.locale = 'de';
       expect((tabsOf(await render()).props.labels as Record<string, string>).live).toBe('Live-Format');
@@ -512,13 +573,11 @@ describe('admin league page tabs (?tab=)', () => {
     expect(nav.props.labels).toEqual({
       overview: 'Übersicht',
       participants: 'Teilnehmer',
-      draft: 'Draft',
       phases: 'Phasen',
-      rules: 'Regeln',
-      format: 'Format',
+      format: 'Format und Regeln',
+      draft: 'Draft',
       live: 'Live-Format',
       settings: 'Einstellungen',
-      danger: 'Gefahrenzone',
     });
   });
 });
@@ -531,7 +590,7 @@ describe('site-admin parts follow the live access check', () => {
     const settings = await render('settings');
     expect(findByType(settings, LeagueTestFlagControl)).toHaveLength(0);
     expect(findByType(settings, ResourceAdminManager)).toHaveLength(0);
-    expect(sectionTitles(settings)).toEqual(['League details', '3D World Theme', 'Content Language']);
+    expect(sectionTitles(settings)).toEqual(['League details', '3D World Theme', 'Content Language', 'Danger zone']);
 
     const phases = await render('phases');
     expect(findByType(phases, PhaseTimeline)[0].props.canDelete).toBe(false);
@@ -751,8 +810,8 @@ describe('settings tab', () => {
     expect(form.props.rulesetLocked).toBe(locked);
   });
 
-  it('reads the phase signals for the settings tab and the point-buy rules tab only', async () => {
-    for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings' && t !== 'rules')) {
+  it('reads the phase signals for the settings tab and the point-buy rules editors (Format and rules) only', async () => {
+    for (const tab of LEAGUE_ADMIN_TABS.filter((t) => t !== 'settings' && t !== 'format')) {
       vi.clearAllMocks();
       mocks.getLiveAccess.mockResolvedValue(liveAccess());
       mocks.getSeasonWithDetails.mockResolvedValue(season());
@@ -768,7 +827,7 @@ describe('settings tab', () => {
       await render(tab);
       expect(mocks.getSeasonPhaseStartSignals, tab).not.toHaveBeenCalled();
     }
-    await render('rules');
+    await render('format');
     expect(mocks.getSeasonPhaseStartSignals).toHaveBeenCalledWith(S1);
   });
 
@@ -920,15 +979,15 @@ describe('draft tab (DF7b, draft-frontend §7.4)', () => {
     expect(findByType(await render('draft'), EpbDraftRoomCreate)).toHaveLength(1);
   });
 
-  it('EPB: with neither a list nor participants, the list comes first (linked to the Rules tab)', async () => {
+  it('EPB: with neither a list nor participants, the list comes first (linked to the rules editors)', async () => {
     mocks.getDraftPoolBySeason.mockResolvedValue(null);
     mocks.getSeasonWithDetails.mockResolvedValue(season({ point_buy_list_id: null }));
     mocks.getSeasonParticipants.mockResolvedValue([]);
     const tree = await render('draft');
     const text = plainText(tree);
-    expect(text).toContain('Bind a point-buy list on the Rules tab first.');
+    expect(text).toContain('Bind a point-buy list on the Format and rules tab first.');
     expect(text).not.toContain('Add participants');
-    expect(findByType(tree, Link).map((l) => l.props.href)).toContain(`/admin/leagues/${S1}?tab=rules`);
+    expect(findByType(tree, Link).map((l) => l.props.href)).toContain(`/admin/leagues/${S1}?tab=format#league-rules`);
   });
 
   it('EPB: more participants than a draft has seats: no create summary, the limit is named', async () => {
@@ -962,7 +1021,7 @@ describe('draft tab (DF7b, draft-frontend §7.4)', () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ point_buy_list_id: null }));
     const tree = await render('draft');
     expect(findByType(tree, EpbDraftRoomCreate)).toHaveLength(0);
-    expect(plainText(tree)).toContain('Bind a point-buy list on the Rules tab first.');
+    expect(plainText(tree)).toContain('Bind a point-buy list on the Format and rules tab first.');
   });
 
   it('EPB: a started pool shows "pool active" and no create form', async () => {
@@ -1060,23 +1119,24 @@ describe('page header and i18n', () => {
       const tree = await render(tab);
       expect(visibleText(tree), tab).not.toMatch(/Hinrunde|Rückrunde|Archiviert|Beschreibung|Gefahrenzone/);
     }
-    const [container] = findByType(await render(), PageContainer);
-    expect(container.props.subtitle).toBe('Evolution Point Buy · Reg H');
-    // The header actions are not in PageContainer's non-wrapping action slot.
-    expect(container.props.action).toBeUndefined();
+    const [header] = findByType(await render(), LeagueWorkspaceHeader);
+    expect(header.props.name).toBe('Summer League S3');
+    expect(header.props.subtitle).toBe('Evolution Point Buy · Reg H');
+    // A real league carries no test chip.
+    expect(header.props.testLabel).toBeUndefined();
   });
 
   it('German: section titles, subtitle and archived marker are translated', async () => {
     mocks.locale = 'de';
     mocks.getSeasonWithDetails.mockResolvedValue(season({ archived: true, ruleset_name: null }));
-    expect(sectionTitles(await render())).toEqual(['Auf einen Blick', 'Beschreibung']);
+    expect(sectionTitles(await render())).toEqual(['Braucht dich', 'Auf einen Blick', 'Beschreibung']);
     expect(sectionTitles(await render('settings'))).toEqual(
       expect.arrayContaining(['Liga-Daten', 'Inhaltssprache', '3D-Welt-Thema']),
     );
     expect(sectionTitles(await render('draft'))).toEqual(['Draft-Raum', 'Redraft', 'Tokens']);
     const tree = await render('draft');
-    const [container] = findByType(tree, PageContainer);
-    expect(container.props.subtitle).toBe('Evolution Point Buy · Archiviert');
+    const [header] = findByType(tree, LeagueWorkspaceHeader);
+    expect(header.props.subtitle).toBe('Evolution Point Buy · Archiviert');
     expect(visibleText(tree)).toContain('Hin- und Rückrunde');
     expect(visibleText(await render('danger'))).toContain('Gefahrenzone');
   });
@@ -1284,5 +1344,112 @@ describe('custom league: readiness checklist and the disabled Active status', ()
     await render('format');
     expect(mocks.getSeasonFormatSummary).not.toHaveBeenCalled();
     expect(mocks.loadLeagueFormatState).not.toHaveBeenCalled();
+  });
+});
+
+// ─── Workspace header: primary action; overview: attention ──────────
+
+describe('workspace header primary action', () => {
+  /** The header's action and the phone bar's: the same action twice, the bar's filling its row. */
+  function actionsOf(tree: ReactNode): El[] {
+    return findByType(tree, LeaguePrimaryAction);
+  }
+
+  it('a running league links to its rounds from the header and from the phone action bar, on every tab, without a read', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', point_buy_list_id: null }));
+    for (const tab of ['overview', 'participants', 'settings']) {
+      const actions = actionsOf(await render(tab));
+      expect(actions.map((a) => a.props.block), tab).toEqual([false, true]);
+      for (const action of actions) {
+        expect(action.props.action, tab).toEqual({ id: 'manageRounds', kind: 'link', href: `/admin/leagues/${S1}?tab=phases` });
+        expect(action.props.label, tab).toBe('Manage rounds');
+      }
+    }
+    expect(mocks.getSeasonFormatSummary).not.toHaveBeenCalled();
+  });
+
+  it('a league that is set up and not started offers Activate, to the status the league machine names', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ status: 'upcoming' }));
+    const [action] = actionsOf(await render());
+    expect(action.props).toMatchObject({
+      action: { id: 'activate', kind: 'status', to: 'active' },
+      label: 'Activate league',
+      seasonId: S1,
+      currentStatus: 'upcoming',
+    });
+  });
+
+  it('a custom league without a format is sent to the attach panel instead of a blocked Activate (en + de)', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'custom', status: 'upcoming', point_buy_list_id: null }));
+    const [action] = actionsOf(await render());
+    expect(action.props.action).toEqual({ id: 'attachFormat', kind: 'link', href: `/admin/leagues/${S1}?tab=format#format-attach` });
+    expect(action.props.label).toBe('Attach a format');
+    mocks.locale = 'de';
+    expect(actionsOf(await render())[0].props.label).toBe('Format anhängen');
+    // Still the one cheap read the status control needs, nothing more.
+    expect(mocks.getSeasonFormatSummary).toHaveBeenCalledTimes(2);
+  });
+
+  it('an archived league has no primary action and no action bar', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ archived: true }));
+    const tree = await render();
+    expect(actionsOf(tree)).toHaveLength(0);
+    let bar = false;
+    walk(tree, (el) => {
+      if (el.props['data-admin-league-actionbar'] !== undefined) bar = true;
+    });
+    expect(bar).toBe(false);
+  });
+
+  it('an admin of another league gets no header and no action', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    const tree = await render();
+    expect(findByType(tree, LeagueWorkspaceHeader)).toHaveLength(0);
+    expect(actionsOf(tree)).toHaveLength(0);
+  });
+});
+
+describe('overview attention list', () => {
+  it('names what the league still needs, each linked to the tab that fixes it, from the league row alone', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(
+      season({ format_type: 'singles', status: 'upcoming', point_buy_list_id: null, participant_count: 0, tournament_count: 0, ruleset_id: null, ruleset_name: null, start_date: null }),
+    );
+    const tree = await render();
+    const text = visibleText(tree);
+    for (const line of [
+      'The league has no participants yet.',
+      'The league has no phase yet, so no round can be generated.',
+      'No battle ruleset is set for the league.',
+      'The league has no start date.',
+    ])
+      expect(text).toContain(line);
+    const hrefs = findByType(tree, Link).map((l) => l.props.href);
+    expect(hrefs).toContain(`/admin/leagues/${S1}?tab=participants`);
+    expect(hrefs).toContain(`/admin/leagues/${S1}?tab=phases`);
+    expect(tabReads()).toEqual([]);
+  });
+
+  it('a league that needs nothing says so (en + de)', async () => {
+    expect(visibleText(await render())).toContain('Nothing needs you here right now.');
+    mocks.locale = 'de';
+    expect(visibleText(await render())).toContain('Hier ist gerade nichts zu tun.');
+  });
+
+  it('a custom league that has not started shows its readiness checklist instead of an empty attention list', async () => {
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'custom', status: 'upcoming', point_buy_list_id: null }));
+    const tree = await render();
+    expect(findByType(tree, ReadinessCard)).toHaveLength(1);
+    expect(sectionTitles(tree)).toEqual(['At a glance', 'Description']);
+  });
+
+  it('the facts keep their hook and list the content language', async () => {
+    let facts: El | undefined;
+    const tree = await render();
+    walk(tree, (el) => {
+      if (el.props['data-admin-overview-facts'] !== undefined) facts = el;
+    });
+    expect(facts?.type).toBe('dl');
+    expect(visibleText(facts)).toContain('Deutsch');
   });
 });

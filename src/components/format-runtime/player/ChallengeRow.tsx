@@ -3,8 +3,9 @@
 import Link from 'next/link';
 import { useRef } from 'react';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
+import { cn } from '@/lib/utils/cn';
 import { RelativeTime } from '@/i18n/LocalTime';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -14,6 +15,7 @@ import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/play
 import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-state';
 import { answerChallengeRequest, withdrawChallengeRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ChallengeState, ChallengeView } from '@/lib/format-engine/runtime/view-types';
+import { FOCUS_TARGET, TrainerTile } from './parts';
 import { usePlayerName } from './useLabels';
 import { useRuntimeAction } from './useRuntimeAction';
 
@@ -34,13 +36,13 @@ export interface ChallengeRowProps {
   onStatus?: (status: LadderStatus) => void;
 }
 
-const STATE_VARIANT = {
-  open: 'yellow',
-  accepted: 'green',
-  declined: 'gray',
-  expired: 'gray',
-  cancelled: 'gray',
-} as const satisfies Record<ChallengeState, 'yellow' | 'green' | 'gray'>;
+const STATE_TONE = {
+  open: 'accent',
+  accepted: 'win',
+  declined: 'neutral',
+  expired: 'neutral',
+  cancelled: 'neutral',
+} as const satisfies Record<ChallengeState, 'accent' | 'win' | 'neutral'>;
 
 /**
  * One of the viewer's challenges. The challenger can withdraw an open one, the defender can accept or decline it; a
@@ -83,31 +85,34 @@ export default function ChallengeRow({ seasonId, challenge, viewerId, closed, on
     <li
       ref={rowRef}
       tabIndex={-1}
-      className="space-y-2 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+      className={cn('flex flex-col gap-2 rounded-poke-md border border-hairline bg-elevated px-3 py-2', FOCUS_TARGET)}
       data-challenge={challenge.id}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="space-y-0.5">
-          <p className="text-sm font-semibold text-poke-text-primary">
-            {outgoing ? t('ladder.outgoing', { name: otherName }) : t('ladder.incoming', { name: otherName })}
-          </p>
-          <p className="text-xs text-poke-text-secondary">
-            {t('ladder.round', { round: challenge.round })}
-            {state === 'open' && (
-              <>
-                {' · '}
-                {t('ladder.expires')} <RelativeTime value={challenge.expires_at} />
-              </>
-            )}
-          </p>
+        <div className="flex min-w-0 items-center gap-2">
+          <TrainerTile name={otherName} />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <p className="text-body font-[550] text-fg">
+              {outgoing ? t('ladder.outgoing', { name: otherName }) : t('ladder.incoming', { name: otherName })}
+            </p>
+            <p className="text-caption text-fg-muted">
+              {t('ladder.round', { round: challenge.round })}
+              {state === 'open' && (
+                <>
+                  {' · '}
+                  {t('ladder.expires')} <RelativeTime value={challenge.expires_at} />
+                </>
+              )}
+            </p>
+          </div>
         </div>
-        <Badge variant={STATE_VARIANT[state]}>{t(`ladder.state.${state}`)}</Badge>
+        <SkewChip tone={STATE_TONE[state]}>{t(`ladder.state.${state}`)}</SkewChip>
       </div>
 
       {state === 'accepted' && challenge.match_id !== null && (
         <Link
           href={`/tournaments/${encodeURIComponent(challenge.phase_id)}/matches/${encodeURIComponent(challenge.match_id)}`}
-          className={`inline-flex items-center text-sm font-medium text-poke-blue hover:underline ${TOUCH}`}
+          className={cn('inline-flex items-center self-start text-body font-[550] text-accent-ink underline-offset-4 hover:underline', TOUCH)}
         >
           {t('ladder.matchLink')}
         </Link>

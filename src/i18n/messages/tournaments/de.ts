@@ -15,6 +15,14 @@ export default defineDe<typeof en>()({
     backToLeague: 'Zur Liga: {name}',
     backToLeagueLabel: 'Zurück zur Liga {name}',
     insights: 'Insights',
+    tabsLabel: 'Turnierbereiche',
+  },
+  hero: {
+    statusRound: '{status} · Runde {round}',
+    stats: {
+      players: { one: 'Spieler', other: 'Spieler' },
+      rounds: { one: 'Runde', other: 'Runden' },
+    },
   },
   error: {
     title: 'Das Turnier konnte nicht geladen werden',

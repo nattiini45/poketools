@@ -32,6 +32,9 @@ export default {
     /** Read out after a clause that the team check does not enforce. */
     informational: 'informational',
     informationalNote: 'Clauses marked as informational apply in the battle. The team check does not enforce them.',
+    /** The field that filters the ban and allow lists; also its placeholder. */
+    search: 'Search these lists',
+    noMatches: 'Nothing on these lists matches “{query}”.',
   },
   select: {
     generation: 'Generation {gen}',

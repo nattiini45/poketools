@@ -222,13 +222,13 @@ describe('loadLeagueFormat result', () => {
     it('Evolution Point Buy links its module to the Rules tab', async () => {
       const result = await loadLeagueFormat(league('s1', { format_type: 'evolution_point_buy' }));
       if (result.kind !== 'ok') throw new Error('expected ok');
-      expect(result.editorLinks).toEqual({ epb: '/admin/leagues/s1?tab=rules' });
+      expect(result.editorLinks).toEqual({ epb: '/admin/leagues/s1?tab=format#league-rules' });
     });
 
     it('the classic draft links its module to the Rules tab', async () => {
       const result = await loadLeagueFormat(league('s1', { format_type: 'draft' }));
       if (result.kind !== 'ok') throw new Error('expected ok');
-      expect(result.editorLinks).toEqual({ legacy_draft: '/admin/leagues/s1?tab=rules' });
+      expect(result.editorLinks).toEqual({ legacy_draft: '/admin/leagues/s1?tab=format#league-rules' });
     });
 
     it('Core Liga links its module to the Participants tab', async () => {

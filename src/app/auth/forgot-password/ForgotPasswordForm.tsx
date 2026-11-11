@@ -70,8 +70,8 @@ export default function ForgotPasswordForm() {
           {t('forgotPassword.submit')}
         </Button>
       </form>
-      <p className="text-sm text-poke-text-secondary text-center">
-        <Link href="/auth/signin" className="underline hover:text-poke-text-primary">
+      <p className="text-sm text-fg-muted text-center">
+        <Link href="/auth/signin" className="text-accent-ink underline underline-offset-2 hover:text-fg">
           {t('forgotPassword.backToSignIn')}
         </Link>
       </p>
