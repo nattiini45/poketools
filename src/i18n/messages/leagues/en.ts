@@ -7,6 +7,12 @@ export default {
   list: {
     title: 'Leagues',
     empty: 'No leagues yet.',
+    /** The status link tabs over the list. */
+    filterLabel: 'Filter by status',
+    filters: { all: 'All', active: 'Active', upcoming: 'Upcoming', completed: 'Finished' },
+    emptyFiltered: 'No leagues with this status.',
+    dateRange: '{start} – {end}',
+    dateFrom: 'From {start}',
     stages: { one: '{count} stage', other: '{count} stages' },
     /** Badge on a test league (`is_test_season`) wherever leagues are listed. */
     testBadge: 'Test league',

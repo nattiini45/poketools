@@ -5,6 +5,11 @@ export default defineDe<typeof en>()({
   list: {
     title: 'Ligen',
     empty: 'Noch keine Ligen.',
+    filterLabel: 'Nach Status filtern',
+    filters: { all: 'Alle', active: 'Aktiv', upcoming: 'Bevorstehend', completed: 'Beendet' },
+    emptyFiltered: 'Keine Ligen mit diesem Status.',
+    dateRange: '{start} – {end}',
+    dateFrom: 'Ab {start}',
     stages: { one: '{count} Phase', other: '{count} Phasen' },
     testBadge: 'Testliga',
   },

@@ -8,6 +8,10 @@ export default {
   list: {
     title: 'Tournaments',
     empty: 'No tournaments yet.',
+    /** The status link tabs over the list. */
+    filterLabel: 'Filter by status',
+    filters: { all: 'All', active: 'Active', upcoming: 'Upcoming', completed: 'Finished' },
+    emptyFiltered: 'No tournaments with this status.',
     doubles: 'Doubles',
   },
   detail: {
