@@ -96,9 +96,9 @@ export default function SignInForm({ callbackUrl, initialErrorCode, discordEnabl
           </Button>
 
           <div className="flex items-center gap-3">
-            <div className="h-px flex-1 bg-poke-border" />
-            <span className="text-xs text-poke-text-muted">{t('signIn.orEmail')}</span>
-            <div className="h-px flex-1 bg-poke-border" />
+            <div className="h-px flex-1 bg-hairline" />
+            <span className="text-xs text-fg-muted">{t('signIn.orEmail')}</span>
+            <div className="h-px flex-1 bg-hairline" />
           </div>
         </>
       )}
@@ -126,10 +126,10 @@ export default function SignInForm({ callbackUrl, initialErrorCode, discordEnabl
       </form>
 
       <div className="flex items-center justify-between text-sm">
-        <Link href="/auth/forgot-password" className="text-poke-text-secondary hover:text-poke-text-primary underline">
+        <Link href="/auth/forgot-password" className="text-accent-ink underline underline-offset-2 hover:text-fg">
           {t('signIn.forgotPassword')}
         </Link>
-        <Link href="/auth/signup" className="text-poke-text-secondary hover:text-poke-text-primary underline">
+        <Link href="/auth/signup" className="text-accent-ink underline underline-offset-2 hover:text-fg">
           {t('signIn.createAccount')}
         </Link>
       </div>

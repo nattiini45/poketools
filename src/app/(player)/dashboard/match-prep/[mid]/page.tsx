@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { isSuperadminNow } from '@/lib/auth/helpers';
@@ -10,11 +9,11 @@ import { getMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { getMatchPrepAnalysis } from '@/lib/supabase/queries/match-prep-analyses';
 import { isValidUuid } from '@/lib/utils/uuid';
 import MatchPrepClient from '@/components/match/MatchPrepClient';
-import MatchStatusBadge from '@/components/match/MatchStatusBadge';
-import PageContainer from '@/components/ui/PageContainer';
+import MatchPageBackLink from '@/components/match/MatchPageBackLink';
+import MatchVersusHeader from '@/components/match/MatchVersusHeader';
+import { getSpeciesNatDex } from '@/lib/pkmn/dex';
 import { getT } from '@/i18n/server';
 import { resolveContentLocale } from '@/i18n/content-locale';
-import { matchMessages } from '@/i18n/messages/match';
 import { matchAiMessages } from '@/i18n/messages/match/ai';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 
@@ -68,16 +67,40 @@ export default async function MatchPrepPage({ params }: PageProps) {
       ? await resolveContentLocale({ seasonId: tournament?.season_id })
       : undefined;
 
-  const [t, tAi, tForms] = await Promise.all([getT(matchMessages), getT(matchAiMessages), getT(matchFormsMessages)]);
+  // The types of the Pokémon the report names, for the type badges on the scouting card: a dex lookup, no read.
+  const scouted = match.status === 'scheduled' && scoutingAnalysis?.status === 'completed' ? scoutingAnalysis.analysis : null;
+  const scoutedSpecies = scouted
+    ? [
+        ...(scouted.signature_pokemon ?? []).map((entry) => entry.pokemon),
+        ...(scouted.suggested_picks ?? []).map((entry) => entry.pokemon),
+      ]
+    : [];
+  const speciesTypes = Object.fromEntries(
+    scoutedSpecies.map((name) => [name, [...(getSpeciesNatDex(name)?.entity.types ?? [])]]),
+  );
+
+  const [tAi, tForms] = await Promise.all([getT(matchAiMessages), getT(matchFormsMessages)]);
 
   return (
     <AuthGuard>
-      <PageContainer
-        title={tAi('prep.title')}
-        subtitle={t('versusTitle', { p1: match.player_1_name, p2: match.player_2_name })}
-        action={<MatchStatusBadge status={match.status} />}
-        maxWidth="full"
-      >
+      <div className="flex flex-col gap-6">
+        <MatchVersusHeader
+          title={tAi('prep.title')}
+          status={match.status}
+          players={[
+            { name: match.player_1_name, avatarUrl: match.player_1_avatar_url },
+            { name: match.player_2_name, avatarUrl: match.player_2_avatar_url },
+          ]}
+          viewerSide={isParticipant ? (isP1 ? 0 : 1) : null}
+          meta={
+            ruleset?.name ? (
+              <span>
+                {tAi('prep.format')} <span className="font-[550] text-fg">{ruleset.name}</span>
+              </span>
+            ) : undefined
+          }
+          labels={{ versus: tForms('versus.vs'), you: tForms('versus.you'), winner: tForms('versus.winner') }}
+        />
         <MatchPrepClient
           matchId={mid}
           tournamentId={match.tournament_id}
@@ -92,15 +115,11 @@ export default async function MatchPrepPage({ params }: PageProps) {
           hasExistingPrepTeam={!!prepTeam?.pokemon?.length}
           isAdmin={player.isAdmin}
           contentLocale={contentLocale}
+          speciesTypes={speciesTypes}
         />
 
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
-        >
-          &larr; {tForms('common.backToDashboard')}
-        </Link>
-      </PageContainer>
+        <MatchPageBackLink label={tForms('common.backToDashboard')} />
+      </div>
     </AuthGuard>
   );
 }

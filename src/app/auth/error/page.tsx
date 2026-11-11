@@ -29,16 +29,16 @@ export default async function AuthErrorPage({ searchParams }: AuthErrorPageProps
 
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-3">
+      <h1 className="font-heading text-display text-fg mb-4">
         {t('errorPage.title')}
       </h1>
       <div className="space-y-4">
         <Alert variant="error">{message}</Alert>
         <div className="flex items-center gap-4 text-sm">
-          <Link href="/auth/signin" className="underline text-poke-text-secondary hover:text-poke-text-primary">
+          <Link href="/auth/signin" className="text-accent-ink underline underline-offset-2 hover:text-fg">
             {t('errorPage.backToSignIn')}
           </Link>
-          <Link href="/" className="underline text-poke-text-secondary hover:text-poke-text-primary">
+          <Link href="/" className="text-accent-ink underline underline-offset-2 hover:text-fg">
             {t('errorPage.home')}
           </Link>
         </div>

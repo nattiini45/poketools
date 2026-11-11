@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Button from '@/components/ui/Button';
+import PlateButton from '@/components/match/PlateButton';
+import StickyActionBar from '@/components/match/StickyActionBar';
 import Alert from '@/components/ui/Alert';
 import Textarea from '@/components/ui/Textarea';
 import { MATCH_REASON_MAX_LENGTH } from '@/lib/admin/match-detail';
@@ -85,7 +86,7 @@ export default function ConfirmMatchClient({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-4 rounded-poke-lg border border-hairline bg-surface p-4 sm:p-5">
       {error && (
         <Alert variant="error">
           {error.kind === 'api' ? apiErrorText(error.error) : t('confirm.updateFailed')}
@@ -94,7 +95,7 @@ export default function ConfirmMatchClient({
       {successKey && <Alert variant="success">{t(`confirm.${successKey}`)}</Alert>}
 
       {canDispute && (
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1">
           <Textarea
             id="dispute-reason"
             label={t('confirm.disputeReasonLabel')}
@@ -106,37 +107,40 @@ export default function ConfirmMatchClient({
             disabled={phase !== 'idle'}
             onChange={(e) => setReason(e.target.value)}
           />
-          <p className="text-right text-xs text-poke-text-muted">
+          <p className="text-right text-caption tabular-nums text-fg-muted">
             {t('confirm.disputeReasonCount', { count: reason.length, max: MATCH_REASON_MAX_LENGTH })}
           </p>
         </div>
       )}
 
-      <div className="flex gap-3">
-        {canConfirm && (
-          <Button
-            variant="success"
-            loading={loading}
-            disabled={phase === 'done'}
-            onClick={() => handleAction('confirm')}
-          >
-            {t('confirm.confirmResult')}
-          </Button>
-        )}
-        {canDispute && (
-          <Button
-            variant="danger"
-            loading={loading}
-            disabled={phase === 'done'}
-            onClick={() => handleAction('dispute')}
-          >
-            {t('confirm.disputeResult')}
-          </Button>
-        )}
-      </div>
+      {(canConfirm || canDispute) && (
+        <StickyActionBar>
+          {canConfirm && (
+            <PlateButton
+              className="flex-1 sm:flex-none"
+              loading={loading}
+              disabled={phase === 'done'}
+              onClick={() => handleAction('confirm')}
+            >
+              {t('confirm.confirmResult')}
+            </PlateButton>
+          )}
+          {canDispute && (
+            <PlateButton
+              tone="secondary"
+              className="flex-1 sm:flex-none"
+              loading={loading}
+              disabled={phase === 'done'}
+              onClick={() => handleAction('dispute')}
+            >
+              {t('confirm.disputeResult')}
+            </PlateButton>
+          )}
+        </StickyActionBar>
+      )}
 
       {!canConfirm && !canDispute && (
-        <p className="text-sm text-poke-text-muted">
+        <p className="text-body text-fg-muted">
           {t('confirm.cannotAct')}
         </p>
       )}

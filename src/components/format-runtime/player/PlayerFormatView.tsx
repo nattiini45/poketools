@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from 'react';
 import Alert from '@/components/ui/Alert';
+import ItemIcon from '@/components/ui/ItemIcon';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import { loadMyFormatView } from '@/lib/format-engine/runtime/client-api';
@@ -77,12 +78,17 @@ export default function PlayerFormatView({ seasonId, viewerId, initialView, clos
   const empty = view.actions.length === 0 && !hasRelations && !hasItems && view.ladders.length === 0;
 
   return (
-    <div className="space-y-6">
-      <div role="status" aria-live="polite" className="min-h-5 text-sm text-poke-text-secondary" data-player-status>
+    <div className="flex flex-col gap-6">
+      <div role="status" aria-live="polite" className="-mb-3 min-h-5 text-body text-fg-muted" data-player-status>
         {status === null ? '' : t(`status.${status}`)}
       </div>
       {reloadFailed && <Alert variant="warning">{t('status.reloadFailed')}</Alert>}
-      {empty && <p className="text-sm text-poke-text-secondary">{t('page.empty')}</p>}
+      {empty && (
+        <div className="flex items-center gap-4 rounded-poke-lg border border-hairline bg-surface p-4 sm:p-5">
+          <ItemIcon item="poke-doll" size={48} />
+          <p className="text-body text-fg-muted">{t('page.empty')}</p>
+        </div>
+      )}
       {view.actions.length > 0 && (
         <ActionsSection seasonId={seasonId} actions={view.actions} domains={view.domains} closed={closed} onReload={reload} onStatus={announce} />
       )}

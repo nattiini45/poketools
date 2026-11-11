@@ -1,14 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import Link from 'next/link';
 import TeamsEditor from '@/components/teambuilder/v3/editor/TeamsEditor';
-import { getButtonClasses } from '@/components/ui/Button';
+import { PlateLink } from '@/components/match/PlateButton';
 import ScoutingReportCard from '@/components/match/ScoutingReportCard';
 import { getGenFromBaseFormat } from '@/lib/pkmn/format-mapping';
 import { useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
-import { matchAiMessages } from '@/i18n/messages/match/ai';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 import type { PokemonSet } from '@/types/team';
 import type { MatchPrepAnalysis } from '@/types/game';
@@ -22,6 +20,7 @@ interface MatchPrepClientProps {
   tournamentId?: string | null;
   seasonId?: string | null;
   rulesetId?: string;
+  /** The ruleset's name. The page's versus header shows it now; the prop stays so the page's contract is unchanged. */
   rulesetName?: string;
   /** Base format from the tournament's ruleset (e.g. 'gen9ou') */
   baseFormat?: string;
@@ -36,6 +35,8 @@ interface MatchPrepClientProps {
   isAdmin?: boolean;
   /** Language of the stored scouting report (the league's content language). */
   contentLocale?: Locale;
+  /** The types of the Pokémon the scouting report names, by English species name (resolved on the server). */
+  speciesTypes?: Record<string, string[]>;
 }
 
 export default function MatchPrepClient({
@@ -43,7 +44,6 @@ export default function MatchPrepClient({
   tournamentId,
   seasonId,
   rulesetId,
-  rulesetName,
   baseFormat,
   gen,
   opponentName,
@@ -52,29 +52,18 @@ export default function MatchPrepClient({
   hasExistingPrepTeam = false,
   isAdmin = false,
   contentLocale,
+  speciesTypes,
 }: MatchPrepClientProps) {
-  const t = useT(matchAiMessages);
   const tForms = useT(matchFormsMessages);
   const [teamSavedThisSession, setTeamSavedThisSession] = useState(false);
   const generation = gen ?? getGenFromBaseFormat(baseFormat ?? 'gen9ou');
 
   return (
-    <div className="space-y-4">
-      {/* Match-specific header */}
-      <div className="text-sm text-poke-text-muted px-1">
-        {t('prep.opponent')} <span className="font-medium text-poke-text-secondary">{opponentName}</span>
-        {rulesetName && (
-          <>
-            {' · '}{t('prep.format')} <span className="font-medium text-poke-text-secondary">{rulesetName}</span>
-          </>
-        )}
-        <Link
-          href={`/dashboard/submit/${matchId}`}
-          className={`ml-3 ${getButtonClasses('secondary', 'sm')}`}
-        >
-          {tForms('common.submitResult')}
-        </Link>
-      </div>
+    <div className="flex flex-col gap-4">
+      {/* Played already? The step after preparing. */}
+      <PlateLink href={`/dashboard/submit/${matchId}`} className="self-start">
+        {tForms('common.submitResult')}
+      </PlateLink>
 
       {/* Professor Linden scouting report */}
       <ScoutingReportCard
@@ -83,6 +72,8 @@ export default function MatchPrepClient({
         showRescout={teamSavedThisSession || hasExistingPrepTeam}
         isAdmin={isAdmin}
         contentLocale={contentLocale}
+        opponentName={opponentName}
+        speciesTypes={speciesTypes}
       />
 
       {/* v3 TeamsEditor in plan mode.
@@ -104,6 +95,7 @@ export default function MatchPrepClient({
           onSaveSuccess={() => setTeamSavedThisSession(true)}
         />
       </div>
+
     </div>
   );
 }

@@ -122,7 +122,7 @@ describe('FormatDriftReportView', () => {
   it('loaded: lists both findings with links to the league tabs and the phase pages', () => {
     const html = view({ status: 'loaded' }, report());
 
-    expect(html).toContain(`href="/admin/leagues/${L1}?tab=rules"`);
+    expect(html).toContain(`href="/admin/leagues/${L1}?tab=format#league-rules"`);
     expect(html).toContain(`href="/admin/leagues/${L2}?tab=phases"`);
     expect(html).toContain(`href="/admin/leagues/${L2}/phases/ph-1"`);
     expect(html).toContain(`href="/admin/leagues/${L2}/phases/ph-2"`);

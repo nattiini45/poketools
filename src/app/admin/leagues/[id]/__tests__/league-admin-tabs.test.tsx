@@ -1,7 +1,7 @@
 /**
- * The league admin tab strip: a `<nav>` landmark of links (`?tab=`), the active
- * one marked `aria-current="page"` and pointing at the panel, a strip that
- * scrolls sideways inside itself, and 44 px tall tabs on phones.
+ * The league workspace tab strip: a `<nav>` landmark of links (`?tab=`), the active
+ * one marked `aria-current="page"` and pointing at the panel, each on a skewed plate with its item icon, a strip that
+ * scrolls sideways inside itself on a phone, and 44 px tall tabs there.
  * Node + static markup (the client pieces are stubbed).
  */
 import { renderToStaticMarkup } from 'react-dom/server';
@@ -29,13 +29,11 @@ const { default: LeagueAdminTabs, LEAGUE_ADMIN_PANEL_ID } = await import('../_co
 const LABELS: Record<LeagueAdminTab, string> = {
   overview: 'Overview',
   participants: 'Participants',
-  draft: 'Draft',
   phases: 'Phases',
-  rules: 'Rules',
-  format: 'Format',
+  format: 'Format and rules',
+  draft: 'Draft',
   live: 'Live format',
   settings: 'Settings',
-  danger: 'Danger zone',
 };
 
 function html(activeTab: LeagueAdminTab, tabs: readonly LeagueAdminTab[] = LEAGUE_ADMIN_TABS): string {
@@ -58,15 +56,18 @@ describe('LeagueAdminTabs', () => {
     expect(out.match(/<a /g)).toHaveLength(LEAGUE_ADMIN_TABS.length);
     expect(out).toContain('href="/admin/leagues/s1?tab=format"');
     expect(out).toContain('href="/admin/leagues/s1"');
-    expect(out).toContain('href="/admin/leagues/s1?tab=danger"');
+    expect(out).toContain('href="/admin/leagues/s1?tab=settings"');
+    // The former Rules and Danger zone tabs are sections now: no tab links to them.
+    expect(out).not.toContain('?tab=rules');
+    expect(out).not.toContain('?tab=danger');
   });
 
   it('marks only the active tab, which controls the panel', () => {
-    const out = html('rules');
+    const out = html('format');
     expect(out.match(/aria-current="page"/g)).toHaveLength(1);
-    expect(out).toMatch(/<a href="\/admin\/leagues\/s1\?tab=rules"[^>]*aria-current="page"[^>]*aria-controls="league-admin-panel"/);
+    expect(out).toMatch(/<a href="\/admin\/leagues\/s1\?tab=format" id="league-admin-tab-format" aria-current="page" aria-controls="league-admin-panel"/);
     expect(LEAGUE_ADMIN_PANEL_ID).toBe('league-admin-panel');
-    expect(out).toContain('id="league-admin-tab-rules"');
+    expect(out.match(/aria-controls=/g)).toHaveLength(1);
   });
 
   it('guards the panel region against a tab switch with unsaved input (one guard, the panel id, the copy)', () => {
@@ -81,22 +82,33 @@ describe('LeagueAdminTabs', () => {
   it('links the live tab with its label and marks it when it is the open one', () => {
     const out = html('live');
     expect(out).toContain('href="/admin/leagues/s1?tab=live"');
-    expect(out).toMatch(/<a href="\/admin\/leagues\/s1\?tab=live"[^>]*aria-current="page"[^>]*aria-controls="league-admin-panel"/);
-    expect(out).toContain('id="league-admin-tab-live"');
+    expect(out).toMatch(/<a href="\/admin\/leagues\/s1\?tab=live" id="league-admin-tab-live" aria-current="page" aria-controls="league-admin-panel"/);
     expect(out).toContain('Live format');
   });
 
   it('renders only the tabs it is given', () => {
-    const out = html('overview', ['overview', 'participants', 'phases', 'settings', 'danger']);
+    const out = html('overview', ['overview', 'participants', 'phases', 'settings']);
     expect(out).not.toContain('?tab=live');
     expect(out).not.toContain('?tab=draft');
     expect(out).not.toContain('?tab=format');
-    expect(out).not.toContain('?tab=rules');
   });
 
-  it('scrolls sideways inside the strip, no fixed label width, 44 px tabs on phones', () => {
+  it('every tab sits on a plate with its item icon; only the active plate has the accent underside', () => {
+    const out = html('phases');
+    expect(out.match(/data-variant="tab"/g)).toHaveLength(LEAGUE_ADMIN_TABS.length);
+    expect(out.match(/skew-plate-underside/g)).toHaveLength(1);
+    // The icons are decoration: the label names the tab.
+    for (const icon of out.match(/<img [^>]*>/g) ?? []) {
+      expect(icon).toContain('alt=""');
+      expect(icon).toContain('aria-hidden="true"');
+    }
+    for (const label of Object.values(LABELS)) expect(out).toContain(label);
+  });
+
+  it('scrolls sideways inside the strip on a phone and wraps from md up, no fixed label width, 44 px tabs on phones', () => {
     const out = html('overview');
     expect(out).toContain('overflow-x-auto');
+    expect(out).toContain('md:flex-wrap');
     expect(out).toContain('min-w-0');
     expect(out).toContain('min-h-11');
     expect(out).toContain('sm:min-h-0');

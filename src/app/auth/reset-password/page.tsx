@@ -21,7 +21,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
 
   return (
     <Card padding="lg">
-      <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-2">
+      <h1 className="font-heading text-display text-fg mb-4">
         {t('resetPassword.title')}
       </h1>
       {tokenHash ? (
@@ -31,7 +31,7 @@ export default async function ResetPasswordPage({ searchParams }: ResetPasswordP
           <Alert variant="error">
             {t('resetPassword.missingToken')}
           </Alert>
-          <Link href="/auth/forgot-password" className="text-sm underline text-poke-text-secondary hover:text-poke-text-primary">
+          <Link href="/auth/forgot-password" className="text-sm text-accent-ink underline underline-offset-2 hover:text-fg">
             {t('resetPassword.requestNew')}
           </Link>
         </div>
