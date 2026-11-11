@@ -20,17 +20,20 @@ export interface AchievementProgressSource {
 function currentValue(criteria: AchievementDefinition['criteria'], source: AchievementProgressSource): number | undefined {
   // The column is jsonb: a row may carry a criteria type the union does not list yet.
   const raw = criteria as { type?: string; stat?: string; condition?: string };
+  const stat = raw.stat ?? '';
+  let byStat: Record<string, number | undefined>;
   switch (raw.type) {
     case 'cumulative':
-      return { total_wins: source.totalWins, total_games: source.totalGames, total_kos_dealt: source.totalKos, total_tournaments: source.totalTournaments }[
-        raw.stat ?? ''
-      ];
+      byStat = { total_wins: source.totalWins, total_games: source.totalGames, total_kos_dealt: source.totalKos, total_tournaments: source.totalTournaments };
+      return byStat[stat];
     case 'streak':
-      return { win_streak: source.winStreak, ko_streak: source.koStreak, flawless_streak: source.flawlessStreak }[raw.stat ?? ''];
+      byStat = { win_streak: source.winStreak, ko_streak: source.koStreak, flawless_streak: source.flawlessStreak };
+      return byStat[stat];
     case 'meta':
       return raw.condition === 'used_unique_pokemon' ? source.uniquePokemon : undefined;
     case 'rating':
-      return { rating: source.rating, peak_rating: source.peakRating }[raw.stat ?? ''];
+      byStat = { rating: source.rating, peak_rating: source.peakRating };
+      return byStat[stat];
     default:
       return undefined;
   }
