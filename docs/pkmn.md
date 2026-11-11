@@ -26,6 +26,7 @@ src/lib/pkmn/
 ├── game-pipeline.ts  # Replay/manual game result pipeline helpers
 ├── german-names.ts  # German → English species name map (incl. import aliases), derived from i18n/data/species.de.json
 ├── i18n/  # German/English Pokémon data layer (see Localization below)
+├── item-icons.ts  # Redesign item icons (ItemIcon): file icons and Showdown item-sheet cells per item id
 ├── replay-binding.ts  # BoundReplay: one fetched log, its hash and its parsed stats; the replay result (winner, stats) per side
 ├── replay-frames.ts  # Frame extraction from replay logs
 ├── replay-identity.ts  # Replay hash (SHA-256 of the canonical battle log) and the backfill's collision check; dependency-free

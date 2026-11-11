@@ -131,6 +131,15 @@ export default [
       }],
     },
   },
+  // Vendored Fluid Functionalism code (src/lib/design/vendored.ts) stays as the registry ships it; its effects
+  // and refs predate the React Compiler rules.
+  {
+    files: ['src/components/ui/fluid/**/*', 'src/lib/fluid/**/*', 'src/hooks/fluid/**/*'],
+    rules: {
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/refs': 'off',
+    },
+  },
   // Tracked node scripts: eslint:recommended (no-undef, no-regex-spaces, no-useless-escape, ...)
   // with Node globals. The TS no-unused-vars rule above (with the ^_ policy) stays in charge, so
   // the base rule is off here.

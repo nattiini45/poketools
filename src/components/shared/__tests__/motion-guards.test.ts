@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { isFrozenSource } from '@/lib/design/frozen-surfaces';
+import { isVendoredFluidSource } from '@/lib/design/vendored';
 
 const SRC = path.resolve(__dirname, '../../..');
 
@@ -52,9 +53,10 @@ describe('motion setup', () => {
 });
 
 describe('no hard-coded transition durations', () => {
-  it('has no `transition={{ duration: <number> }}` literal under src/components', () => {
+  it('has no `transition={{ duration: <number> }}` literal under src/components (vendored @fluid code keeps its own)', () => {
     const offenders = uiSources().filter(
-      ({ file, text }) => rel(file).startsWith('components/') && /transition=\{\{\s*duration:\s*[\d.]/.test(text),
+      ({ file, text }) =>
+        rel(file).startsWith('components/') && !isVendoredFluidSource(rel(file)) && /transition=\{\{\s*duration:\s*[\d.]/.test(text),
     );
     expect(offenders.map(({ file }) => rel(file))).toEqual([]);
   });

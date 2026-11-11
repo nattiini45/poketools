@@ -9,7 +9,9 @@
     { "glob": "src/lib/ai/**/prompts/**", "reason": "LLM prompts stay English" },
     { "glob": "src/lib/avatar/prompt-template.ts", "reason": "image-model prompt fragments" },
     { "glob": "src/lib/import/**", "reason": "parser keys (sheet names)" },
-    { "glob": "src/format-packs/**", "reason": "format pack data and messages; contract-tested by src/lib/format-pack/__tests__/pack-contract.test.ts" }
+    { "glob": "src/format-packs/**", "reason": "format pack data and messages; contract-tested by src/lib/format-pack/__tests__/pack-contract.test.ts" },
+    { "glob": "src/components/ui/fluid/**", "reason": "vendored @fluid components (src/lib/design/vendored.ts); wrappers pass translated labels from the ui namespace" },
+    { "glob": "src/app/(public)/ui-preview/**", "reason": "dev-only primitive fixtures (notFound in prod, like draft-preview)" }
   ],
   "tokens": ["PokéTools", "EvoLiga", "Discord", "Showdown", "Pokémon", "OBS", "Smogon", "Bo3", "Bo5", "Buchholz"]
 }
