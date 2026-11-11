@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
@@ -146,6 +147,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
   return (
     <AdminGuard>
       <PageContainer title={league.name} subtitle={subtitle} maxWidth="lg">
+        <AdminCrumbName href={`/admin/leagues/${id}`} name={league.name} />
         {/* Below the title, not in PageContainer's `action` slot: that slot does not wrap, and the
             status control plus the badge would widen the page at phone width. */}
         <div className="flex flex-wrap items-center gap-3" data-admin-league-header>

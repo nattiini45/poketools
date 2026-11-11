@@ -3282,6 +3282,59 @@ html.world-route-live .world-nav-hud {
 }
 
 
+/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar is a dark umber rail in both themes: it carries
+   data-theme="dark", so the tokens inside resolve to their moonlit values, and the @fluid light-dark() pair follows.
+   The current section sits on a gold plate cut to the site skew (a clip-path, because @fluid animates the plate's
+   box with inline styles); its label takes the plate ink. Unlayered on purpose: these restyle @fluid's utilities. */
+.admin-rail {
+  --lightningcss-light: ;
+  --lightningcss-dark: initial;
+  /* New competition keeps the amber fill beside the gold plate of the current section. */
+  --accent-fill: #CF660B;
+  /* Declared again so it takes the rail's own (moonlit) accent, not the page's. */
+  --focus-ring: var(--accent-ink);
+}
+
+.admin-rail [data-sidebar="menu"] > .bg-active {
+  border-radius: 0;
+  background-color: var(--tier-1);
+  clip-path: polygon(6px 0, 100% 0, calc(100% - 6px) 100%, 0 100%);
+}
+
+.admin-rail [data-sidebar="menu-button"][data-active="true"],
+.admin-rail [data-sidebar="menu-button"][data-active="true"] span {
+  color: var(--tier-ink);
+  font-weight: 550;
+}
+
+/* With keyboard focus @fluid's focus plate covers the gold one, so the label goes back to the rail's text colour. */
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible,
+.admin-rail [data-sidebar="menu-button"][data-active="true"]:focus-visible span {
+  color: var(--fg);
+}
+
+.admin-rail [data-sidebar="menu-sub-button"][aria-current="page"] span {
+  color: var(--accent-ink);
+  font-weight: 550;
+}
+
+/* In the phone drawer every row of the rail is a 44 px touch target. */
+[data-mobile="true"] .admin-rail [data-sidebar="menu-item"],
+[data-mobile="true"] .admin-rail [data-sidebar="menu-sub-item"] {
+  --row-h: 44px;
+}
+
+[data-mobile="true"] .admin-rail [data-sidebar="header"] :is(a, button),
+[data-mobile="true"] .admin-rail [data-sidebar="footer"] :is(a, button) {
+  min-height: 44px;
+}
+
+[data-mobile="true"] .admin-rail [data-sidebar="menu-button"],
+[data-mobile="true"] .admin-rail [data-sidebar="menu-sub-button"],
+[data-mobile="true"] .admin-rail [data-sidebar="group-label"] {
+  height: 44px;
+}
+
 /* ─── Phone bottom tab bar (redesign B0, src/components/shared/nav/BottomTabBar.tsx) ───
    While the bar is mounted (a signed-in player, below lg) the page keeps its last rows clear of it. A draft
    room owns its bottom edge (the pick dock of a fixed-height screen), so the bar is not drawn there and the

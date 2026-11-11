@@ -1,3 +1,4 @@
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 import { notFound, redirect } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
@@ -46,6 +47,7 @@ export default async function FormatEditPage({ params }: PageProps) {
   return (
     <AdminGuard>
       <PageContainer title={title} maxWidth="xl">
+        <AdminCrumbName href={`/admin/formats/${id}`} name={title} />
         <FormatEditor
           definitionId={id}
           summary={detail.definition}
