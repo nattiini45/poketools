@@ -213,13 +213,14 @@ export default function LeagueSettingsForm({
       </div>
 
       {/* The save bar of the details form: the foot of the sheet while nothing changed, stuck to the bottom of the
-          viewport while there is something to save (on a phone it then covers the page's primary-action bar). */}
+          viewport while there is something to save (on a phone the page's primary-action bar steps aside while it shows). */}
       <div
         className={cn(
           'z-30 -mx-4 flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-hairline bg-page px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:-mx-6 sm:px-6 lg:-mx-8 lg:px-8',
           dirty && 'sticky bottom-0',
         )}
         data-league-settings-savebar
+        data-dirty={dirty ? 'true' : 'false'}
       >
         <div className="flex min-w-0 flex-1 basis-64 flex-col gap-0.5 text-body">
           <p role="status" aria-live="polite" className={cn('flex items-center gap-2', dirty ? 'text-fg' : saved ? 'text-win' : 'text-fg-muted')}>

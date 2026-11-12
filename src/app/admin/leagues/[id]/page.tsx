@@ -193,7 +193,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
 
   return (
     <AdminGuard>
-      <div className="flex flex-col gap-6" data-admin-league-workspace>
+      <div className="flex flex-col gap-6 has-[[data-league-settings-savebar][data-dirty=true]]:[&_[data-admin-league-actionbar]]:hidden" data-admin-league-workspace>
         <AdminCrumbName href={`/admin/leagues/${id}`} name={league.name} />
         <LeagueWorkspaceHeader
           name={league.name}
