@@ -142,31 +142,31 @@ export default function LeagueTestFlagControl({ seasonId, isTestSeason }: League
   }
 
   return (
-    <div className="space-y-2">
-      <label className="flex items-start gap-2 text-sm text-poke-text-primary">
+    <div className="flex max-w-[68ch] flex-col gap-2">
+      <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-poke-md border border-hairline-strong px-3 py-2.5 text-body text-fg has-[:checked]:border-accent-ink has-[:checked]:bg-selected has-[:disabled]:cursor-default has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--focus-ring)] motion-safe:transition-colors motion-safe:duration-80">
         <input
           type="checkbox"
-          className="mt-0.5"
+          className="mt-0.5 size-4 shrink-0 accent-[var(--accent-fill)] outline-none"
           checked={checked}
           disabled={saving}
           onChange={(e) => handleChange(e.target.checked)}
         />
         <span>{t('testFlag.label')}</span>
       </label>
-      <p className="text-xs text-poke-text-muted">{t('testFlag.hint')}</p>
-      {saving && <p className="text-xs text-poke-text-muted">{t('testFlag.saving')}</p>}
+      <p className="text-caption text-fg-muted">{t('testFlag.hint')}</p>
+      {saving && <p className="text-caption text-fg-muted">{t('testFlag.saving')}</p>}
       {error && (
-        <p className="text-xs text-poke-danger">
+        <p className="text-caption text-loss">
           {error.error || error.code ? errorText(error) : t('testFlag.saveFailed')}
         </p>
       )}
       {unconfirmed && (
-        <p role="status" className="text-xs text-poke-danger">
+        <p role="status" className="text-caption text-loss">
           {t('testFlag.saveUnconfirmed')}
         </p>
       )}
       {warning && (
-        <p role="status" className="text-xs text-poke-amber-ink">
+        <p role="status" className="text-caption text-accent-ink">
           {t('testFlag.ratingRebuildWarning', { warning: errorText(warning) })}
         </p>
       )}

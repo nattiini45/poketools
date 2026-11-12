@@ -12,7 +12,6 @@ import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import type { SeasonStatus } from '@/types/season';
 import { leaguePrimaryAction } from '@/lib/league-admin/primary-action';
 import {
-  LEAGUE_ADMIN_DANGER_SECTION,
   LEAGUE_ADMIN_RULES_SECTION,
   LEAGUE_ADMIN_TAB_PARAM,
   availableLeagueAdminTabs,
@@ -70,17 +69,12 @@ async function formatAndRulesPanel(ctx: LeagueAdminPanelContext): Promise<ReactN
   );
 }
 
-/** Settings: the settings sections, then the danger zone (the former Danger zone tab, `#danger-zone`), which reads nothing. */
+/**
+ * Settings: one sheet of sections with the danger zone (the former Danger zone tab, `#danger-zone`) as the last
+ * one. The danger zone reads nothing.
+ */
 async function settingsAndDangerPanel(ctx: LeagueAdminPanelContext): Promise<ReactNode> {
-  const [settings, danger] = await Promise.all([settingsPanel(ctx), dangerPanel(ctx)]);
-  return (
-    <>
-      {settings}
-      <div id={LEAGUE_ADMIN_DANGER_SECTION} className="scroll-mt-4">
-        {danger}
-      </div>
-    </>
-  );
+  return settingsPanel(ctx, await dangerPanel(ctx));
 }
 
 /** One renderer per tab; each performs only its own reads. */

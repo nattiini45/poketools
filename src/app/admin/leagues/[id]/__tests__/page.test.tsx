@@ -122,6 +122,7 @@ import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import Section from '@/components/ui/Section';
 import WorkspaceCard from '@/components/admin/WorkspaceCard';
+import SettingsSection from '@/components/admin/SettingsSection';
 import DraftPoolManager from '@/components/draft/DraftPoolManager';
 import TokenAdminSummary from '@/components/draft-admin/TokenAdminSummary';
 import EvolutionTierEditor from '@/components/league/EvolutionTierEditor';
@@ -165,6 +166,8 @@ function walk(node: ReactNode, visit: (el: El) => void): void {
     // The workspace header takes its status control and primary action as props.
     if (node.props.action) walk(node.props.action as ReactNode, visit);
     if (node.props.status) walk(node.props.status as ReactNode, visit);
+    // The settings frame takes the pin card of the details section as a prop.
+    if (node.props.pinCard) walk(node.props.pinCard as ReactNode, visit);
   }
 }
 
@@ -176,17 +179,27 @@ function findByType(node: ReactNode, type: unknown): El[] {
   return found;
 }
 
-/** The titles of the panel's cards in reading order: `Section`s and the workspace cards of the overview. */
+/**
+ * What draws a titled section of a panel: `Section`, the workspace cards of the overview, and on the Settings tab
+ * the sheet's sections and the details form, which renders the first one itself.
+ */
+const SECTION_TYPES: unknown[] = [Section, WorkspaceCard, SettingsSection, LeagueSettingsForm];
+
+/** The titles of the panel's sections in reading order. */
 function sectionTitles(node: ReactNode): string[] {
   const titles: string[] = [];
   walk(node, (el) => {
-    if (el.type === Section || el.type === WorkspaceCard) titles.push(String(el.props.title));
+    if (SECTION_TYPES.includes(el.type)) titles.push(String(el.props.title));
   });
   return titles;
 }
 
 function sectionTitled(node: ReactNode, title: string): El | undefined {
-  return findByType(node, Section).find((s) => s.props.title === title);
+  let found: El | undefined;
+  walk(node, (el) => {
+    if (found === undefined && SECTION_TYPES.includes(el.type) && el.props.title === title) found = el;
+  });
+  return found;
 }
 
 /** Every string a viewer sees, joined with `sep`: string children plus title/subtitle props. */
@@ -396,7 +409,7 @@ describe('admin league page tabs (?tab=)', () => {
       'evolution_point_buy',
       'settings',
       ['listRulesetOptionsFor', 'getRulesetPinInfo', 'getSeasonPhaseStartSignals'],
-      ['League details', '3D World Theme', 'Content Language', 'Test League', 'League Admins', 'Danger zone'],
+      ['League details', 'Content Language', '3D World Theme', 'League Admins', 'Test League', 'Danger zone'],
     ],
     ['draft', 'participants', [], ['Participants', 'League groups', 'Type Cores (Core Liga)']],
     ['draft', 'draft', ['getSeasonGroups', 'getDraftPoolBySeason'], ['Draft Pool Pokémon', 'Draft Room']],
@@ -590,7 +603,7 @@ describe('site-admin parts follow the live access check', () => {
     const settings = await render('settings');
     expect(findByType(settings, LeagueTestFlagControl)).toHaveLength(0);
     expect(findByType(settings, ResourceAdminManager)).toHaveLength(0);
-    expect(sectionTitles(settings)).toEqual(['League details', '3D World Theme', 'Content Language', 'Danger zone']);
+    expect(sectionTitles(settings)).toEqual(['League details', 'Content Language', '3D World Theme', 'Danger zone']);
 
     const phases = await render('phases');
     expect(findByType(phases, PhaseTimeline)[0].props.canDelete).toBe(false);
@@ -702,6 +715,8 @@ describe('settings tab', () => {
   it('the settings controls sit in plain sections (no collapse remount) and get the stored values', async () => {
     mocks.getSeasonWithDetails.mockResolvedValue(season({ is_test_season: true, route_theme: 'sakura' }));
     const tree = await render('settings');
+    // The sheet's sections have no collapse at all, and no collapsible `Section` is left on the tab.
+    expect(findByType(tree, SettingsSection).length).toBeGreaterThan(0);
     for (const section of findByType(tree, Section)) expect(section.props.collapsible).toBeUndefined();
     expect(findByType(tree, LeagueTestFlagControl)[0].props).toEqual({ seasonId: S1, isTestSeason: true });
     expect(findByType(tree, LeagueThemeControl)[0].props).toEqual({ seasonId: S1, currentTheme: 'sakura' });

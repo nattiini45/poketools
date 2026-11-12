@@ -72,7 +72,7 @@ export default function LeagueThemeControl({ seasonId, currentTheme }: LeagueThe
   }
 
   return (
-    <div className="max-w-xs space-y-2">
+    <div className="flex max-w-xs flex-col gap-2">
       <Select
         label={t('theme.label')}
         value={theme}
@@ -80,9 +80,9 @@ export default function LeagueThemeControl({ seasonId, currentTheme }: LeagueThe
         options={options}
         disabled={saving}
       />
-      {saving && <p className="text-xs text-poke-text-muted">{t('theme.saving')}</p>}
+      {saving && <p className="text-caption text-fg-muted">{t('theme.saving')}</p>}
       {error && (
-        <p className="text-xs text-poke-danger">
+        <p className="text-caption text-loss">
           {error.error || error.code ? errorText(error) : t('theme.saveFailed')}
         </p>
       )}
