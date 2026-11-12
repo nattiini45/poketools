@@ -10,6 +10,7 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsCommon } from '@/i18n/messages/errors/common';
 import { uiMessages } from '@/i18n/messages/ui';
 import { useApiErrorText } from '@/i18n/use-api-error';
+import { cn } from '@/lib/utils/cn';
 import { unsavedMarker } from '@/lib/league-admin/unsaved';
 import type { SaveState } from '@/lib/studio-core/editor-state';
 import type { ShellText } from './text';
@@ -119,7 +120,10 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
         role="complementary"
         aria-label={previewLabel}
         hidden={!open}
-        className="fixed inset-x-0 bottom-0 z-50 flex max-h-[85dvh] min-w-0 flex-col rounded-t-poke-lg border border-hairline bg-surface shadow-poke-lg sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[26rem] sm:max-w-full sm:rounded-none sm:border-y-0 sm:border-r-0 2xl:w-[30rem]"
+        className={cn(
+          open ? 'flex' : 'hidden',
+          'fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] min-w-0 flex-col rounded-t-poke-lg border border-hairline bg-surface shadow-poke-lg sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[26rem] sm:max-w-full sm:rounded-none sm:border-y-0 sm:border-r-0 2xl:w-[30rem]',
+        )}
       >
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
           <p className="font-heading text-title text-fg">{previewLabel}</p>
