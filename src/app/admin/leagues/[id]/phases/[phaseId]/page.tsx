@@ -32,6 +32,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 export const dynamic = 'force-dynamic';
 
@@ -151,7 +152,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           />
         </div>
 
-        {isNewPhase && <Alert variant="info">{t('phasePage.newPhaseHint')}</Alert>}
+        {isNewPhase && <Alert variant="info" className={INFO_CALLOUT}>{t('phasePage.newPhaseHint')}</Alert>}
 
         <Section id="tournament-overview" icon="town-map" title={t('phasePage.overview')} collapsible>
           <PhaseOverviewEditor seasonId={seasonId} phase={phase} rulesets={rulesets} />

@@ -1,5 +1,6 @@
 'use client';
 
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 import { useState } from 'react';
 import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
@@ -119,7 +120,7 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
           </li>
         ))}
       </ul>
-      {!canAdjust && <Alert variant="info">{t('actions.notAllowed')}</Alert>}
+      {!canAdjust && <Alert variant="info" className={INFO_CALLOUT}>{t('actions.notAllowed')}</Alert>}
 
       <ReasonDialog
         open={dialog !== null}

@@ -16,6 +16,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import type { CardLine, CardStep, CardTarget, ProposalCard as StoredCard } from '@/lib/ai/admin-agent/proposals/card';
 import { approveProposal, declineProposal, getProposal, resumeProposal } from './api';
 import type { CardView, ProposalDetail, ProposalResultView } from './types';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 type StepView = CardView['steps'][number];
 
@@ -522,7 +523,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
               <ul className="list-disc space-y-0.5 pl-4">{stored.warnings.map(lineView)}</ul>
             </Alert>
           )}
-          {stored.existingEntity && <Alert variant="info">{cards('lines.existing_entity')}</Alert>}
+          {stored.existingEntity && <Alert variant="info" className={INFO_CALLOUT}>{cards('lines.existing_entity')}</Alert>}
 
           {stored.outwardEffects.length > 0 && (
             <div className="space-y-1">

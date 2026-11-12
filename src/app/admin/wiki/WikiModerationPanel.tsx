@@ -8,6 +8,7 @@ import Textarea from '@/components/ui/Textarea';
 import AdminDialog from '@/components/admin/AdminDialog';
 import AdminEmpty from '@/components/admin/AdminEmpty';
 import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
+import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 import { TOUCH } from '@/components/admin/admin-table';
 import { cn } from '@/lib/utils/cn';
 import type { WikiNote, WikiNoteReport } from '@/types/wiki';
@@ -167,7 +168,7 @@ export function RejectedNoteCard({ note, isSuperadmin, onApprove, onDelete, onBl
             {t('wiki.allowResubmission')}
           </Button>
         )}
-        <Button type="button" size="sm" variant="danger" className={TOUCH} onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
+        <Button type="button" size="sm" variant="secondary" className={cn(DANGER_OUTLINE, TOUCH)} onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
       </div>
     </article>
   );
@@ -388,7 +389,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                 {offers(note, 'reject') && (
                   <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void rejectNote(note)}>{t('wiki.reject')}</Button>
                 )}
-                <Button type="button" size="sm" variant="danger" className={TOUCH} onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
+                <Button type="button" size="sm" variant="secondary" className={cn(DANGER_OUTLINE, TOUCH)} onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
               </div>
             </article>
           ))}

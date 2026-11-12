@@ -7,7 +7,7 @@ import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
 import Alert from '@/components/ui/Alert';
 import Textarea from '@/components/ui/Textarea';
-import { CHOICE, CHOICE_OFF, CHOICE_ON, FIELD_LABEL, FOCUS, INSET_ROW, TEXT_LINK, TOUCH } from '@/components/admin/match-styles';
+import { CHOICE, CHOICE_OFF, CHOICE_ON, FIELD_LABEL, FOCUS, INSET_ROW, TEXT_LINK, TOUCH, DANGER_OUTLINE } from '@/components/admin/match-styles';
 import { cn } from '@/lib/utils/cn';
 import ReasonDialog from '@/components/admin/ReasonDialog';
 import type { MatchStatus, GameSummary } from '@/types/match';
@@ -571,7 +571,7 @@ export default function AdminMatchActions({
 
             {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
             {!resetInCard && (
-              <Button variant="danger" size="sm" onClick={openResetDialog} disabled={busy} className={TOUCH}>
+              <Button variant="secondary" size="sm" onClick={openResetDialog} disabled={busy} className={cn(DANGER_OUTLINE, TOUCH)}>
                 {t('actions.resetMatch')}
               </Button>
             )}
@@ -690,7 +690,7 @@ export default function AdminMatchActions({
         <Section title={t('actions.adminActions')} icon="everstone" collapsible keepMounted>
           <div className="flex flex-col items-start gap-3">
             <p className="text-body text-fg-muted">{t('actions.completedHint')}</p>
-            <Button variant="danger" size="sm" disabled={busy} onClick={openResetDialog} className={TOUCH}>
+            <Button variant="secondary" size="sm" disabled={busy} onClick={openResetDialog} className={cn(DANGER_OUTLINE, TOUCH)}>
               {t('actions.resetMatch')}
             </Button>
           </div>

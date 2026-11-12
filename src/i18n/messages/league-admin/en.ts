@@ -286,6 +286,7 @@ export default {
     discard: 'Discard',
     /** The chip on a section whose control saves as soon as it changes. */
     savesOnChange: 'Saves on change',
+    saving: 'Saving…',
     sections: 'Settings sections',
   },
   theme: {

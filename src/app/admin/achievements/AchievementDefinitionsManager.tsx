@@ -22,6 +22,7 @@ import { SortHeadButton, ariaSort } from '@/components/admin/SortIcon';
 import { TablePagination } from '@/components/ui/Table';
 import { useClientTable } from '@/lib/ui/use-client-table';
 import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
+import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 import { cn } from '@/lib/utils/cn';
 import { useLocale, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -492,7 +493,7 @@ export default function AchievementDefinitionsManager() {
                           <Button size="sm" variant="secondary" className={TOUCH} onClick={() => handleStartEdit(definition)}>
                             {tc('actions.edit')}
                           </Button>
-                          <Button size="sm" variant="danger" className={TOUCH} onClick={() => void handleDelete(definition)}>
+                          <Button size="sm" variant="secondary" className={cn(DANGER_OUTLINE, TOUCH)} onClick={() => void handleDelete(definition)}>
                             {tc('actions.delete')}
                           </Button>
                         </div>

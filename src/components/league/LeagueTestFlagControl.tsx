@@ -142,7 +142,7 @@ export default function LeagueTestFlagControl({ seasonId, isTestSeason }: League
   }
 
   return (
-    <div className="flex max-w-[68ch] flex-col gap-2">
+    <div className="flex max-w-[68ch] flex-col gap-2" data-saving={saving || undefined}>
       <label className="flex min-h-11 cursor-pointer items-start gap-3 rounded-poke-md border border-hairline-strong px-3 py-2.5 text-body text-fg has-[:checked]:border-accent-ink has-[:checked]:bg-selected has-[:disabled]:cursor-default has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[var(--focus-ring)] motion-safe:transition-colors motion-safe:duration-80">
         <input
           type="checkbox"
