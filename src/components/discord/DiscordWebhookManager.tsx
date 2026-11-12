@@ -4,8 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
+import Alert from '@/components/ui/Alert';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminDialog from '@/components/admin/AdminDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import { TOUCH } from '@/components/admin/admin-table';
+import { CHOICE, CHOICE_OFF, CHOICE_ON } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
 import type {
   DiscordWebhookView,
   WebhookScopeType,
@@ -300,23 +305,21 @@ export default function DiscordWebhookManager() {
         }}
         options={languageOptions}
       />
-      <p className="text-xs text-poke-text-muted">{t('discord.language.hint')}</p>
+      <p className="text-caption text-fg-muted">{t('discord.language.hint')}</p>
     </div>
   );
 
   return (
     <div className="space-y-6">
       {errorMessage && (
-        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-poke-md text-sm text-poke-danger-tint-ink">
-          {errorMessage}
-        </div>
+        <Alert variant="error">{errorMessage}</Alert>
       )}
 
       {/* Action bar */}
       <div className="flex justify-end">
         <Button
           variant={showForm ? 'ghost' : 'primary'}
-          size="sm"
+          size="sm" className={TOUCH}
           onClick={() => setShowForm(!showForm)}
         >
           {showForm ? t('common.cancel') : t('discord.addWebhook')}
@@ -324,12 +327,8 @@ export default function DiscordWebhookManager() {
       </div>
 
       {/* Create form */}
-      {showForm && (
-        <Card>
+      <AdminDialog open={showForm} onClose={() => setShowForm(false)} title={t('discord.newWebhook')} size="lg">
           <form onSubmit={handleCreate} className="space-y-4">
-            <h3 className="font-heading font-semibold text-poke-text-primary">
-              {t('discord.newWebhook')}
-            </h3>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
@@ -369,10 +368,10 @@ export default function DiscordWebhookManager() {
 
             {/* Event filter */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+              <label className="block text-caption font-medium text-fg">
                 {t('common.eventFilter')}
               </label>
-              <p className="text-xs text-poke-text-muted mb-2">
+              <p className="mb-2 text-caption text-fg-muted">
                 {t('common.eventFilterHint')}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -382,14 +381,7 @@ export default function DiscordWebhookManager() {
                     type="button"
                     aria-pressed={formEventFilter.includes(evt)}
                     onClick={() => toggleEventFilter(evt)}
-                    className={`
-                      px-2.5 py-1 text-xs rounded-full border transition-colors
-                      ${
-                        formEventFilter.includes(evt)
-                          ? 'border-poke-primary text-poke-primary'
-                          : 'bg-poke-surface border-poke-border text-poke-text-secondary hover:border-poke-border-hover'
-                      }
-                    `}
+                    className={cn(CHOICE, formEventFilter.includes(evt) ? CHOICE_ON : CHOICE_OFF, 'text-caption')}
                   >
                     {eventLabel(evt)}
                   </button>
@@ -399,23 +391,23 @@ export default function DiscordWebhookManager() {
 
             {/* Format options */}
             <div className="space-y-1.5">
-              <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+              <label className="block text-caption font-medium text-fg">
                 {t('discord.messageOptions')}
               </label>
               <div className="space-y-2 mt-2">
                 {FORMAT_OPTION_KEYS.map((key) => (
-                  <label key={key} className="flex items-start gap-2.5 cursor-pointer group">
+                  <label key={key} className="flex items-start gap-2.5 min-h-11 cursor-pointer sm:min-h-0">
                     <input
                       type="checkbox"
                       checked={formFormatOptions[key]}
                       onChange={() => toggleFormatOption(key)}
-                      className="mt-0.5 rounded border-poke-border bg-poke-surface text-poke-primary"
+                      className="mt-0.5 size-4 accent-[var(--accent-fill)]"
                     />
                     <div>
-                      <span className="text-sm text-poke-text-primary">
+                      <span className="text-body text-fg">
                         {t(`discord.formatOptions.${key}.label`)}
                       </span>
-                      <p className="text-xs text-poke-text-muted">{t(`discord.formatOptions.${key}.description`)}</p>
+                      <p className="text-caption text-fg-muted">{t(`discord.formatOptions.${key}.description`)}</p>
                     </div>
                   </label>
                 ))}
@@ -426,54 +418,49 @@ export default function DiscordWebhookManager() {
               setFormFormatOptions((prev) => ({ ...prev, language })),
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-hairline pt-4">
+              <Button type="button" variant="ghost" size="sm" className={TOUCH} onClick={() => setShowForm(false)}>
                 {t('common.cancel')}
               </Button>
-              <Button type="submit" size="sm" loading={submitting}>
+              <Button type="submit" size="sm" className={TOUCH} loading={submitting}>
                 {t('discord.createWebhook')}
               </Button>
             </div>
           </form>
-        </Card>
-      )}
+      </AdminDialog>
 
       {/* Webhook list */}
       {loading ? (
-        <p className="text-sm text-poke-text-muted">{t('discord.loading')}</p>
+        <p className="text-body text-fg-muted">{t('discord.loading')}</p>
       ) : webhooks.length === 0 ? (
-        <Card>
-          <p className="text-center text-poke-text-secondary py-4">
-            {t('discord.empty')}
-          </p>
-        </Card>
+        <AdminEmpty title={t('discord.empty')} icon="old-amber" />
       ) : (
         <div className="space-y-3">
           {webhooks.map((webhook) => (
-            <Card key={webhook.id}>
+            <div key={webhook.id} className="rounded-poke-lg border border-hairline bg-surface p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h3 className="font-heading font-semibold text-poke-text-primary truncate">
+                    <h3 className="min-w-0 break-words font-heading text-subtitle text-fg">
                       {webhook.label}
                     </h3>
-                    <Badge variant={webhook.enabled ? 'green' : 'default'}>
+                    <SkewChip tone={webhook.enabled ? 'win' : 'neutral'}>
                       {webhook.enabled ? t('common.active') : t('common.disabled')}
-                    </Badge>
-                    <Badge variant="blue">
+                    </SkewChip>
+                    <SkewChip tone="accent">
                       {webhook.scope_type === 'global'
                         ? t('common.global')
                         : webhook.scope_id
                           ? `${t(`scopes.${webhook.scope_type}`)}: ${webhook.scope_id.slice(0, 8)}…`
                           : t(`scopes.${webhook.scope_type}`)}
-                    </Badge>
-                    <Badge variant="default">
+                    </SkewChip>
+                    <SkewChip>
                       {t('discord.language.badge', {
                         language: t(`discord.language.${webhook.format_options.language ?? 'league'}`),
                       })}
-                    </Badge>
+                    </SkewChip>
                   </div>
-                  <p className="text-xs text-poke-text-muted truncate">
+                  <p className="break-all text-caption text-fg-muted">
                     {t('discord.webhookUrlSaved', { hint: webhook.webhook_url_hint })}
                   </p>
 
@@ -483,7 +470,7 @@ export default function DiscordWebhookManager() {
                       {webhook.event_filter.map((evt) => (
                         <span
                           key={evt}
-                          className="px-1.5 py-0.5 text-[10px] rounded bg-poke-surface border border-poke-border text-poke-text-secondary"
+                          className="rounded-poke-sm border border-hairline bg-elevated px-1.5 py-0.5 text-caption text-fg-muted"
                         >
                           {ALL_EVENT_TYPES.includes(evt) ? eventLabel(evt) : evt}
                         </span>
@@ -496,11 +483,10 @@ export default function DiscordWebhookManager() {
                     {FORMAT_OPTION_KEYS.map((key) => (
                       <span
                         key={key}
-                        className={`px-1.5 py-0.5 text-[10px] rounded ${
-                          webhook.format_options[key]
-                            ? 'text-poke-primary border'
-                            : 'bg-poke-surface text-poke-text-muted border border-poke-border line-through'
-                        }`}
+                        className={cn(
+                          'rounded-poke-sm border px-1.5 py-0.5 text-caption',
+                          webhook.format_options[key] ? 'border-hairline bg-win-bg text-win' : 'border-hairline bg-surface text-fg-muted line-through',
+                        )}
                       >
                         {t(`discord.formatOptions.${key}.label`)}
                       </span>
@@ -511,28 +497,28 @@ export default function DiscordWebhookManager() {
                 <div className="flex flex-wrap gap-1.5 md:shrink-0">
                   <Button
                     variant="ghost"
-                    size="sm"
+                    size="sm" className={TOUCH}
                     onClick={() => handleTest(webhook)}
                   >
                     {t('common.test')}
                   </Button>
                   <Button
                     variant="ghost"
-                    size="sm"
-                    onClick={() => editingId === webhook.id ? cancelEditing() : startEditing(webhook)}
+                    size="sm" className={TOUCH}
+                    onClick={() => startEditing(webhook)}
                   >
-                    {editingId === webhook.id ? t('common.cancel') : t('common.edit')}
+                    {t('common.edit')}
                   </Button>
                   <Button
                     variant={webhook.enabled ? 'secondary' : 'success'}
-                    size="sm"
+                    size="sm" className={TOUCH}
                     onClick={() => handleToggle(webhook)}
                   >
                     {webhook.enabled ? t('common.disable') : t('common.enable')}
                   </Button>
                   <Button
                     variant="danger"
-                    size="sm"
+                    size="sm" className={TOUCH}
                     onClick={() => handleDelete(webhook.id)}
                   >
                     {t('common.delete')}
@@ -540,82 +526,83 @@ export default function DiscordWebhookManager() {
                 </div>
               </div>
 
-              {/* Inline edit form */}
-              {editingId === webhook.id && (
-                <div className="mt-4 pt-4 border-t border-poke-border space-y-4">
-                  {/* Event filter */}
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-heading font-semibold text-poke-text-primary">
-                      {t('common.eventFilter')}
-                    </label>
-                    <p className="text-xs text-poke-text-muted mb-2">
-                      {t('common.eventFilterHint')}
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      {EVENT_TYPES.map((evt) => (
-                        <button
-                          key={evt}
-                          type="button"
-                          aria-pressed={editEventFilter.includes(evt)}
-                          onClick={() => toggleEditEventFilter(evt)}
-                          className={`
-                            px-2.5 py-1 text-xs rounded-full border transition-colors
-                            ${
-                              editEventFilter.includes(evt)
-                                ? 'border-poke-primary text-poke-primary'
-                                : 'bg-poke-surface border-poke-border text-poke-text-secondary hover:border-poke-border-hover'
-                            }
-                          `}
-                        >
-                          {eventLabel(evt)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Format options */}
-                  <div className="space-y-1.5">
-                    <label className="block text-sm font-heading font-semibold text-poke-text-primary">
-                      {t('discord.messageOptions')}
-                    </label>
-                    <div className="space-y-2 mt-2">
-                      {FORMAT_OPTION_KEYS.map((key) => (
-                        <label key={key} className="flex items-start gap-2.5 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            checked={editFormatOptions[key]}
-                            onChange={() => toggleEditFormatOption(key)}
-                            className="mt-0.5 rounded border-poke-border bg-poke-surface text-poke-primary"
-                          />
-                          <div>
-                            <span className="text-sm text-poke-text-primary">
-                              {t(`discord.formatOptions.${key}.label`)}
-                            </span>
-                            <p className="text-xs text-poke-text-muted">{t(`discord.formatOptions.${key}.description`)}</p>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  {renderLanguageSelect(`discord-webhook-language-${webhook.id}`, editFormatOptions.language, (language) =>
-                    setEditFormatOptions((prev) => ({ ...prev, language })),
-                  )}
-
-                  <div className="flex justify-end gap-2">
-                    <Button variant="ghost" size="sm" onClick={cancelEditing}>
-                      {t('common.cancel')}
-                    </Button>
-                    <Button size="sm" loading={editSaving} onClick={() => handleSaveEdit(webhook.id)}>
-                      {t('discord.saveChanges')}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </Card>
+            </div>
           ))}
         </div>
       )}
+
+      <AdminDialog
+        open={editingId !== null}
+        onClose={cancelEditing}
+        title={webhooks.find((w) => w.id === editingId)?.label ?? ''}
+        size="lg"
+      >
+        {editingId && (
+          <div className="space-y-4">
+                  {/* Event filter */}
+                <div className="space-y-1.5">
+                  <label className="block text-caption font-medium text-fg">
+                    {t('common.eventFilter')}
+                  </label>
+                  <p className="mb-2 text-caption text-fg-muted">
+                    {t('common.eventFilterHint')}
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {EVENT_TYPES.map((evt) => (
+                      <button
+                        key={evt}
+                        type="button"
+                        aria-pressed={editEventFilter.includes(evt)}
+                        onClick={() => toggleEditEventFilter(evt)}
+                        className={cn(CHOICE, editEventFilter.includes(evt) ? CHOICE_ON : CHOICE_OFF, 'text-caption')}
+                      >
+                        {eventLabel(evt)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Format options */}
+                <div className="space-y-1.5">
+                  <label className="block text-caption font-medium text-fg">
+                    {t('discord.messageOptions')}
+                  </label>
+                  <div className="space-y-2 mt-2">
+                    {FORMAT_OPTION_KEYS.map((key) => (
+                      <label key={key} className="flex items-start gap-2.5 min-h-11 cursor-pointer sm:min-h-0">
+                        <input
+                          type="checkbox"
+                          checked={editFormatOptions[key]}
+                          onChange={() => toggleEditFormatOption(key)}
+                          className="mt-0.5 size-4 accent-[var(--accent-fill)]"
+                        />
+                        <div>
+                          <span className="text-body text-fg">
+                            {t(`discord.formatOptions.${key}.label`)}
+                          </span>
+                          <p className="text-caption text-fg-muted">{t(`discord.formatOptions.${key}.description`)}</p>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {renderLanguageSelect(`discord-webhook-language-${editingId}`, editFormatOptions.language, (language) =>
+                  setEditFormatOptions((prev) => ({ ...prev, language })),
+                )}
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="ghost" size="sm" className={TOUCH} onClick={cancelEditing}>
+                    {t('common.cancel')}
+                  </Button>
+                  <Button size="sm" className={TOUCH} loading={editSaving} onClick={() => handleSaveEdit(editingId)}>
+                    {t('discord.saveChanges')}
+                  </Button>
+                </div>
+
+          </div>
+        )}
+      </AdminDialog>
     </div>
   );
 }

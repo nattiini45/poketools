@@ -1,9 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Badge from '@/components/ui/Badge';
+import Alert from '@/components/ui/Alert';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminDialog from '@/components/admin/AdminDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import { TOUCH } from '@/components/admin/admin-table';
+import { CHOICE, CHOICE_OFF, CHOICE_ON } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
 import type {
@@ -327,25 +332,21 @@ export default function SocialIntegrationManager() {
   return (
     <div className="space-y-6">
       {errorMessage && (
-        <div role="alert" className="p-3 bg-red-500/10 border border-red-500/20 rounded-poke-md text-sm text-poke-danger-tint-ink">
-          {errorMessage}
-        </div>
+        <Alert variant="error">{errorMessage}</Alert>
       )}
 
       <div className="flex justify-end">
         <Button
           variant={showForm ? 'ghost' : 'primary'}
-          size="sm"
+          size="sm" className={TOUCH}
           onClick={() => setShowForm((prev) => !prev)}
         >
           {showForm ? t('common.cancel') : t('social.addIntegration')}
         </Button>
       </div>
 
-      {showForm && (
-        <Card>
+      <AdminDialog open={showForm} onClose={() => setShowForm(false)} title={t('social.newIntegration')} size="lg">
           <form onSubmit={handleCreate} className="space-y-4">
-            <h3 className="font-heading font-semibold text-poke-text-primary">{t('social.newIntegration')}</h3>
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Select
@@ -383,10 +384,10 @@ export default function SocialIntegrationManager() {
             />
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+              <label className="block text-caption font-medium text-fg">
                 {t('common.eventFilter')}
               </label>
-              <p className="text-xs text-poke-text-muted mb-2">
+              <p className="mb-2 text-caption text-fg-muted">
                 {t('common.eventFilterHint')}
               </p>
               <div className="flex flex-wrap gap-2">
@@ -396,14 +397,7 @@ export default function SocialIntegrationManager() {
                     type="button"
                     aria-pressed={formEventFilter.includes(eventType)}
                     onClick={() => toggleEventFilter(eventType)}
-                    className={`
-                      px-2.5 py-1 text-xs rounded-full border transition-colors
-                      ${
-                        formEventFilter.includes(eventType)
-                          ? 'border-poke-primary text-poke-primary'
-                          : 'bg-poke-surface border-poke-border text-poke-text-secondary hover:border-poke-border-hover'
-                      }
-                    `}
+                    className={cn(CHOICE, formEventFilter.includes(eventType) ? CHOICE_ON : CHOICE_OFF, 'text-caption')}
                   >
                     {t(`events.${eventType}`)}
                   </button>
@@ -412,23 +406,23 @@ export default function SocialIntegrationManager() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+              <label className="block text-caption font-medium text-fg">
                 {t('social.postOptions')}
               </label>
               <div className="space-y-2 mt-2">
                 {POST_OPTION_KEYS.map((key) => (
-                  <label key={key} className="flex items-start gap-2.5 cursor-pointer group">
+                  <label key={key} className="flex items-start gap-2.5 min-h-11 cursor-pointer sm:min-h-0">
                     <input
                       type="checkbox"
                       checked={formPostOptions[key]}
                       onChange={() => togglePostOption(key)}
-                      className="mt-0.5 rounded border-poke-border bg-poke-surface text-poke-primary"
+                      className="mt-0.5 size-4 accent-[var(--accent-fill)]"
                     />
                     <div>
-                      <span className="text-sm text-poke-text-primary">
+                      <span className="text-body text-fg">
                         {t(`social.postOptionLabels.${key}.label`)}
                       </span>
-                      <p className="text-xs text-poke-text-muted">{t(`social.postOptionLabels.${key}.description`)}</p>
+                      <p className="text-caption text-fg-muted">{t(`social.postOptionLabels.${key}.description`)}</p>
                     </div>
                   </label>
                 ))}
@@ -436,8 +430,8 @@ export default function SocialIntegrationManager() {
             </div>
 
             {formProvider === 'x' && (
-              <div className="space-y-3 border border-poke-border rounded-poke-md p-3">
-                <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('social.credentials.xTitle')}</h4>
+              <div className="space-y-3 rounded-poke-md border border-hairline bg-elevated p-3">
+                <h4 className="text-subtitle text-fg">{t('social.credentials.xTitle')}</h4>
                 <Input
                   label={t('social.credentials.accessToken')}
                   value={xAccessToken}
@@ -466,8 +460,8 @@ export default function SocialIntegrationManager() {
             )}
 
             {formProvider === 'threads' && (
-              <div className="space-y-3 border border-poke-border rounded-poke-md p-3">
-                <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('social.credentials.threadsTitle')}</h4>
+              <div className="space-y-3 rounded-poke-md border border-hairline bg-elevated p-3">
+                <h4 className="text-subtitle text-fg">{t('social.credentials.threadsTitle')}</h4>
                 <Input
                   label={t('social.credentials.accessToken')}
                   value={threadsAccessToken}
@@ -491,8 +485,8 @@ export default function SocialIntegrationManager() {
             )}
 
             {formProvider === 'bluesky' && (
-              <div className="space-y-3 border border-poke-border rounded-poke-md p-3">
-                <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('social.credentials.blueskyTitle')}</h4>
+              <div className="space-y-3 rounded-poke-md border border-hairline bg-elevated p-3">
+                <h4 className="text-subtitle text-fg">{t('social.credentials.blueskyTitle')}</h4>
                 <Input
                   label={t('social.credentials.handle')}
                   value={blueskyHandle}
@@ -516,48 +510,43 @@ export default function SocialIntegrationManager() {
               </div>
             )}
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(false)}>
+            <div className="flex flex-wrap justify-end gap-2 border-t border-hairline pt-4">
+              <Button type="button" variant="ghost" size="sm" className={TOUCH} onClick={() => setShowForm(false)}>
                 {t('common.cancel')}
               </Button>
-              <Button type="submit" size="sm" loading={submitting}>
+              <Button type="submit" size="sm" className={TOUCH} loading={submitting}>
                 {t('social.createIntegration')}
               </Button>
             </div>
           </form>
-        </Card>
-      )}
+      </AdminDialog>
 
       {loading ? (
-        <p className="text-sm text-poke-text-muted">{t('social.loading')}</p>
+        <p className="text-body text-fg-muted">{t('social.loading')}</p>
       ) : sortedIntegrations.length === 0 ? (
-        <Card>
-          <p className="text-center text-poke-text-secondary py-4">
-            {t('social.empty')}
-          </p>
-        </Card>
+        <AdminEmpty title={t('social.empty')} icon="old-amber" />
       ) : (
         <div className="space-y-3">
           {sortedIntegrations.map((integration) => (
-            <Card key={integration.id}>
+            <div key={integration.id} className="rounded-poke-lg border border-hairline bg-surface p-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h3 className="font-heading font-semibold text-poke-text-primary truncate">
+                    <h3 className="min-w-0 break-words font-heading text-subtitle text-fg">
                       {integration.label}
                     </h3>
-                    <Badge variant={integration.enabled ? 'green' : 'default'}>
+                    <SkewChip tone={integration.enabled ? 'win' : 'neutral'}>
                       {integration.enabled ? t('common.active') : t('common.disabled')}
-                    </Badge>
-                    <Badge variant="blue">{PROVIDER_LABEL[integration.provider]}</Badge>
-                    <Badge variant="purple">
+                    </SkewChip>
+                    <SkewChip tone="accent">{PROVIDER_LABEL[integration.provider]}</SkewChip>
+                    <SkewChip tone="tier-1">
                       {integration.scope_type === 'global'
                         ? t('common.global')
                         : `${integration.scope_type}: ${integration.scope_id?.slice(0, 8)}...`}
-                    </Badge>
+                    </SkewChip>
                   </div>
 
-                  <p className="text-xs text-poke-text-muted">
+                  <p className="text-caption text-fg-muted">
                     {t('social.credentialsStatus', { status: credentialStatus(integration) })}
                   </p>
 
@@ -566,7 +555,7 @@ export default function SocialIntegrationManager() {
                       {integration.event_filter.map((eventType) => (
                         <span
                           key={eventType}
-                          className="px-1.5 py-0.5 text-[10px] rounded bg-poke-surface border border-poke-border text-poke-text-secondary"
+                          className="rounded-poke-sm border border-hairline bg-elevated px-1.5 py-0.5 text-caption text-fg-muted"
                         >
                           {EVENT_TYPES.includes(eventType) ? t(`events.${eventType}`) : eventType}
                         </span>
@@ -578,11 +567,10 @@ export default function SocialIntegrationManager() {
                     {POST_OPTION_KEYS.map((key) => (
                       <span
                         key={key}
-                        className={`px-1.5 py-0.5 text-[10px] rounded ${
-                          integration.post_options[key]
-                            ? 'text-poke-primary border'
-                            : 'bg-poke-surface text-poke-text-muted border border-poke-border line-through'
-                        }`}
+                        className={cn(
+                          'rounded-poke-sm border px-1.5 py-0.5 text-caption',
+                          integration.post_options[key] ? 'border-hairline bg-win-bg text-win' : 'border-hairline bg-surface text-fg-muted line-through',
+                        )}
                       >
                         {t(`social.postOptionLabels.${key}.label`)}
                       </span>
@@ -591,22 +579,22 @@ export default function SocialIntegrationManager() {
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 md:shrink-0">
-                  <Button variant="ghost" size="sm" onClick={() => handleTest(integration.id)}>
+                  <Button variant="ghost" size="sm" className={TOUCH} onClick={() => handleTest(integration.id)}>
                     {t('common.test')}
                   </Button>
                   <Button
                     variant={integration.enabled ? 'secondary' : 'success'}
-                    size="sm"
+                    size="sm" className={TOUCH}
                     onClick={() => handleToggle(integration)}
                   >
                     {integration.enabled ? t('common.disable') : t('common.enable')}
                   </Button>
-                  <Button variant="danger" size="sm" onClick={() => handleDelete(integration.id)}>
+                  <Button variant="danger" size="sm" className={TOUCH} onClick={() => handleDelete(integration.id)}>
                     {t('common.delete')}
                   </Button>
                 </div>
               </div>
-            </Card>
+            </div>
           ))}
         </div>
       )}
