@@ -60,19 +60,19 @@ function Facts({ entry, tag }: { entry: CatalogEntry; tag: string }) {
               <TypeSprite key={type} type={type} size={12} />
             ))}
           </span>
-          <span className="truncate text-[11px] text-poke-text-muted">
+          <span className="truncate text-[11px] text-fg-muted">
             {tag} · {entry.bst}
           </span>
         </span>
       );
     case 'moves':
       return (
-        <span className="truncate text-[11px] text-poke-text-muted">
+        <span className="truncate text-[11px] text-fg-muted">
           {entry.power > 0 ? entry.power : '–'} · {entry.accuracy === null ? '∞' : entry.accuracy} · {entry.pp}
         </span>
       );
     case 'items':
-      return <span className="truncate text-[11px] text-poke-text-muted">{tag}</span>;
+      return <span className="truncate text-[11px] text-fg-muted">{tag}</span>;
     default:
       return null;
   }
@@ -99,8 +99,8 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
     'group/option relative flex h-full w-full min-w-0 cursor-pointer select-none overflow-hidden rounded-poke-md border text-left transition-colors duration-150',
     style.card,
     selected && 'ring-2 ring-poke-accent',
-    active && !listFocused && 'border-poke-border-strong',
-    'hover:border-poke-border-strong',
+    active && !listFocused && 'border-hairline-strong',
+    'hover:border-hairline-strong',
     outline,
   );
 
@@ -113,7 +113,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
         // The 20px box keeps the card compact; its pseudo-element is the 44px touch target (the card clips it at its edge).
         HIT_SQUARE,
         'flex h-5 w-5 shrink-0 items-center justify-center rounded border transition-colors',
-        selected ? 'border-poke-accent bg-poke-accent text-poke-surface' : 'border-poke-border-strong bg-poke-surface text-transparent group-hover/option:text-poke-text-muted',
+        selected ? 'border-accent-ink bg-accent-fill text-tier-ink' : 'border-hairline-strong bg-surface text-transparent group-hover/option:text-fg-muted',
       )}
     >
       <Check className="h-3.5 w-3.5" />
@@ -129,8 +129,8 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
         HIT_BAR,
         'inline-flex h-7 shrink-0 items-center gap-1 rounded-poke-md border px-2 text-xs font-semibold transition-colors',
         legal
-          ? 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-danger/50 hover:bg-poke-danger-light hover:text-poke-danger'
-          : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-green/50 hover:bg-poke-green-light hover:text-poke-green',
+          ? 'border-hairline bg-surface text-fg-muted hover:border-loss hover:bg-poke-danger-light hover:text-loss'
+          : 'border-hairline bg-surface text-fg-muted hover:border-poke-green/50 hover:bg-poke-green-light hover:text-poke-green',
       )}
     >
       <ActionIcon className="h-3.5 w-3.5" aria-hidden="true" />
@@ -140,7 +140,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
 
   const flags =
     entry.kind === 'species' && entry.future ? (
-      <span className="shrink-0 rounded border border-poke-border px-1 text-[10px] text-poke-text-muted">{t('card.future')}</span>
+      <span className="shrink-0 rounded border border-hairline px-1 text-[10px] text-fg-muted">{t('card.future')}</span>
     ) : null;
 
   const shared = {
@@ -160,7 +160,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
       <div {...shared} className={cn(frame, 'items-center gap-2 px-2')}>
         {select}
         <EntryArt entry={entry} size="row" className={style.art} />
-        <span className="min-w-0 flex-1 truncate font-heading text-sm font-semibold text-poke-text-primary" title={name}>
+        <span className="min-w-0 flex-1 truncate font-heading text-sm font-semibold text-fg" title={name}>
           {name}
         </span>
         {room === 'roomy' && (
@@ -181,14 +181,14 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
         <EntryArt entry={entry} size="card" className={style.art} />
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex min-w-0 items-start justify-between gap-1">
-            <span className="min-w-0 truncate font-heading text-sm font-semibold leading-5 text-poke-text-primary" title={name}>
+            <span className="min-w-0 truncate font-heading text-sm font-semibold leading-5 text-fg" title={name}>
               {name}
             </span>
             {select}
           </div>
           <Facts entry={entry} tag={tag} />
           {description !== undefined && entry.kind !== 'species' && (
-            <span className="line-clamp-2 text-[11px] leading-4 text-poke-text-secondary">{description}</span>
+            <span className="line-clamp-2 text-[11px] leading-4 text-fg-muted">{description}</span>
           )}
         </div>
       </div>

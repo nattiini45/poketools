@@ -82,9 +82,9 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
       </div>
 
       {estimate === null ? (
-        <div className="space-y-2 text-sm text-poke-text-secondary">
+        <div className="space-y-2 text-sm text-fg-muted">
           <p>{t('preview.schedule.invalid')}</p>
-          <button type="button" className="font-medium text-poke-blue hover:underline" onClick={onShowIssues}>
+          <button type="button" className="font-medium text-accent-ink hover:underline" onClick={onShowIssues}>
             {t('preview.schedule.showIssues')}
           </button>
         </div>
@@ -92,11 +92,11 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
         <>
           <div className="overflow-x-auto" role="region" aria-label={t('preview.schedule.tableLabel')} tabIndex={0}>
             <table className="w-full min-w-[34rem] border-collapse text-sm">
-              <caption className="pb-2 text-left font-heading font-semibold text-poke-text-primary">
+              <caption className="pb-2 text-left font-heading font-semibold text-fg">
                 {t('preview.schedule.caption', { players: estimate.players })}
               </caption>
               <thead>
-                <tr className="border-b border-poke-border text-poke-text-secondary">
+                <tr className="border-b border-hairline text-fg-muted">
                   <th scope="col" className="px-3 py-2 text-left font-semibold">{t('preview.schedule.col.stage')}</th>
                   <th scope="col" className={`${CELL} font-semibold`}>{t('preview.schedule.col.players')}</th>
                   <th scope="col" className={`${CELL} font-semibold`}>{t('preview.schedule.col.rounds')}</th>
@@ -109,10 +109,10 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
               <tbody>
                 {estimate.stages.map((stage) => (
                   <tr key={stage.key} className="border-b">
-                    <th scope="row" className="min-w-0 break-words px-3 py-2 text-left font-medium text-poke-text-primary">
+                    <th scope="row" className="min-w-0 break-words px-3 py-2 text-left font-medium text-fg">
                       {stageName(stage.key)}
                       {stage.groups !== null && (
-                        <span className="block text-xs font-normal text-poke-text-muted">{t('preview.schedule.groups', { count: stage.groups })}</span>
+                        <span className="block text-xs font-normal text-fg-muted">{t('preview.schedule.groups', { count: stage.groups })}</span>
                       )}
                     </th>
                     <td className={CELL}>{cell(stage.participants)}</td>
@@ -125,7 +125,7 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
                 ))}
               </tbody>
               <tfoot>
-                <tr className="font-semibold text-poke-text-primary">
+                <tr className="font-semibold text-fg">
                   <th scope="row" className="px-3 py-2 text-left">{t('preview.schedule.total')}</th>
                   <td className={CELL} />
                   <td className={CELL}>{cell(estimate.totals.rounds)}</td>
@@ -137,7 +137,7 @@ export default function ScheduleTab({ doc, rulesetIds, onShowIssues }: ScheduleT
               </tfoot>
             </table>
           </div>
-          <ul className="list-disc space-y-1 pl-5 text-sm text-poke-text-muted">
+          <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
             <li>{t('preview.schedule.sequentialNote')}</li>
             <li>{t('preview.schedule.bestOfNote')}</li>
             {estimate.stages.some((s) => s.precision === 'bounds') && <li>{t('preview.schedule.boundsNote')}</li>}

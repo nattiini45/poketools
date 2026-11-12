@@ -17,7 +17,7 @@ export default function NotesSection({ doc, onChange }: NotesSectionProps) {
   const t = useT(rulesetStudioSectionsMessages);
   return (
     <div className="max-w-3xl space-y-2">
-      <p className="text-sm text-poke-text-secondary">{t('notes.intro')}</p>
+      <p className="text-sm text-fg-muted">{t('notes.intro')}</p>
       <Textarea
         id={fieldId('/custom_rules')}
         label={t('notes.label')}
@@ -26,7 +26,7 @@ export default function NotesSection({ doc, onChange }: NotesSectionProps) {
         value={doc.custom_rules}
         onChange={(event) => onChange({ ...doc, custom_rules: event.target.value })}
       />
-      <p className="flex flex-wrap justify-between gap-2 text-xs text-poke-text-muted">
+      <p className="flex flex-wrap justify-between gap-2 text-xs text-fg-muted">
         <span>{t('notes.help')}</span>
         <span>{t('notes.remaining', { count: MAX_CUSTOM_RULES_CHARS - doc.custom_rules.length })}</span>
       </p>

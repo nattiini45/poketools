@@ -109,7 +109,7 @@ export function inspectorFor({ selection, doc, diagnostics, onChange, authorBase
       return <RulesInspector {...common} part="text" />;
     default:
       return doc.stages[index] === undefined ? (
-        <p className="text-sm text-poke-text-muted">{noStageText}</p>
+        <p className="text-sm text-fg-muted">{noStageText}</p>
       ) : (
         <StageInspector key={index} {...common} index={index} rulesets={rulesets} />
       );
@@ -162,7 +162,7 @@ function UnreadableDraft({ definitionId, raw, revision }: { definitionId: string
         <a
           href={`data:application/json;charset=utf-8,${encodeURIComponent(json)}`}
           download="format-draft.json"
-          className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+          className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
         >
           {t('save.download')}
         </a>
@@ -302,6 +302,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
   return (
     <EditorLayout
       rootAttribute="data-format-editor"
+      previewLabel={t('preview.label')}
       dirty={dirty}
       onSave={() => void save()}
       toolbar={

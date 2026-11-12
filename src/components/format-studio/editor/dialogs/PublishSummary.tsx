@@ -17,8 +17,8 @@ function Findings({ heading, items, doc }: { heading: string; items: readonly Di
   if (items.length === 0) return null;
   return (
     <section className="space-y-1">
-      <h3 className="font-heading text-sm font-semibold text-poke-text-primary">{heading}</h3>
-      <ul className="list-disc space-y-1 pl-5 text-sm text-poke-text-secondary">
+      <h3 className="font-heading text-sm font-semibold text-fg">{heading}</h3>
+      <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
         {items.map((d, i) => (
           <li key={`${d.code}:${d.json_pointer}:${i}`} className="break-words">
             {renderDiagnostic(d, locale, doc)}
@@ -43,8 +43,8 @@ export default function PublishSummary({ doc, result }: { doc: DraftDocument; re
     <>
       <Findings heading={t('publish.errorsHeading', { count: errors.length })} items={errors} doc={doc} />
       <Findings heading={t('publish.warningsHeading', { count: warnings.length })} items={warnings} doc={doc} />
-      {notes.length > 0 && <p className="text-sm text-poke-text-muted">{t('publish.notes', { count: notes.length })}</p>}
-      {errors.length === 0 && <p className="text-sm text-poke-text-secondary">{describeCoverage(computeCoverage(doc), locale)}</p>}
+      {notes.length > 0 && <p className="text-sm text-fg-muted">{t('publish.notes', { count: notes.length })}</p>}
+      {errors.length === 0 && <p className="text-sm text-fg-muted">{describeCoverage(computeCoverage(doc), locale)}</p>}
     </>
   );
 }

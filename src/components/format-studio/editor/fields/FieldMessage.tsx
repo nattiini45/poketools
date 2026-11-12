@@ -96,7 +96,7 @@ export function FieldMessage({ state, className }: { state: FieldState; classNam
   const lines = [...state.sentences, ...(state.localError !== null ? [state.localError] : [])];
   if (lines.length === 0 && state.hint !== null) lines.push(state.hint);
   return (
-    <div id={state.messageId} className={cn('space-y-0.5 text-sm', state.invalid ? 'text-poke-danger' : 'text-poke-text-muted', className)}>
+    <div id={state.messageId} className={cn('space-y-0.5 text-sm', state.invalid ? 'text-loss' : 'text-fg-muted', className)}>
       {lines.map((line, i) => (
         <p key={i} className="break-words">
           {line}

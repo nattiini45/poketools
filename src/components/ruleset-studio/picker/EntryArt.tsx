@@ -40,7 +40,7 @@ export default function EntryArt({ entry, size, className = '' }: EntryArtProps)
       const box = size === 'card' ? 'h-[48px] w-[48px]' : 'h-[24px] w-[24px]';
       return (
         <span className={`${wrap} ${box}`} aria-hidden="true">
-          {entry.ic !== null ? <SheetIcon sheet="item" cell={entry.ic} scale={size === 'card' ? 2 : 1} /> : <Package className="h-5 w-5 text-poke-text-muted" />}
+          {entry.ic !== null ? <SheetIcon sheet="item" cell={entry.ic} scale={size === 'card' ? 2 : 1} /> : <Package className="h-5 w-5 text-fg-muted" />}
         </span>
       );
     }

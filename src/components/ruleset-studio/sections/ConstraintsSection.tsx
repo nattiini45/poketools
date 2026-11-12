@@ -17,7 +17,7 @@ export default function ConstraintsSection({ doc, onChange }: ConstraintsSection
   const t = useT(rulesetStudioSectionsMessages);
   return (
     <div className="space-y-6">
-      <p className="text-sm text-poke-text-secondary">{t('constraints.intro')}</p>
+      <p className="text-sm text-fg-muted">{t('constraints.intro')}</p>
       <div className="max-w-sm space-y-1">
         <Input
           id={fieldId('/min_shared_type_pct')}
@@ -33,10 +33,10 @@ export default function ConstraintsSection({ doc, onChange }: ConstraintsSection
             onChange({ ...doc, min_shared_type_pct: Number.isFinite(parsed) ? Math.min(100, Math.max(0, parsed)) : 0 });
           }}
         />
-        <p className="text-xs text-poke-text-muted">{t('constraints.sharedTypeHelp')}</p>
+        <p className="text-xs text-fg-muted">{t('constraints.sharedTypeHelp')}</p>
       </div>
       <div id={fieldId('/team_constraints')} className="space-y-2">
-        <h3 className="font-heading text-base font-bold text-poke-text-primary">{t('constraints.constraintsHeading')}</h3>
+        <h3 className="font-heading text-base font-bold text-fg">{t('constraints.constraintsHeading')}</h3>
         <TeamConstraintsEditor value={doc.team_constraints} onChange={(team_constraints) => onChange({ ...doc, team_constraints })} />
       </div>
     </div>

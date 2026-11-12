@@ -38,7 +38,7 @@ function Chip({ pressed, onClick, children, className }: { pressed: boolean; onC
       onClick={onClick}
       className={cn(
         CHIP,
-        pressed ? 'border-poke-accent bg-poke-accent-light text-poke-text-primary' : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-border-strong hover:bg-poke-muted',
+        pressed ? 'border-accent-ink bg-accent-subtle text-fg' : 'border-hairline bg-surface text-fg-muted hover:border-hairline-strong hover:bg-sunken',
         className,
       )}
     >
@@ -50,7 +50,7 @@ function Chip({ pressed, onClick, children, className }: { pressed: boolean; onC
 function Group({ legend, children }: { legend: string; children: ReactNode }) {
   return (
     <fieldset className="min-w-0 space-y-1.5">
-      <legend className="mb-1 text-xs font-semibold text-poke-text-secondary">{legend}</legend>
+      <legend className="mb-1 text-xs font-semibold text-fg-muted">{legend}</legend>
       <div className="flex flex-wrap gap-1.5">{children}</div>
     </fieldset>
   );
@@ -76,10 +76,10 @@ function RangeFields({ legend, range, onChange, idPrefix }: { legend: string; ra
     }
     onChange([Math.max(0, low ?? 0), Math.min(RANGE_LIMIT, high ?? RANGE_LIMIT)]);
   };
-  const box = 'h-9 w-20 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
+  const box = 'h-9 w-20 rounded-poke-md border border-hairline bg-surface px-2 text-sm text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
   return (
     <fieldset className="min-w-0 space-y-1.5">
-      <legend className="mb-1 text-xs font-semibold text-poke-text-secondary">{legend}</legend>
+      <legend className="mb-1 text-xs font-semibold text-fg-muted">{legend}</legend>
       <div className="flex items-center gap-2">
         <input
           id={`${idPrefix}-min`}
@@ -94,7 +94,7 @@ function RangeFields({ legend, range, onChange, idPrefix }: { legend: string; ra
             commit(event.target.value, max);
           }}
         />
-        <span aria-hidden="true" className="text-poke-text-muted">–</span>
+        <span aria-hidden="true" className="text-fg-muted">–</span>
         <input
           id={`${idPrefix}-max`}
           type="number"
@@ -125,7 +125,7 @@ export default function FacetPanel({ kind, filters, onChange, states, tiers, gen
   const set = (patch: Partial<PickerFilters>) => onChange({ ...filters, ...patch });
 
   return (
-    <div className="grid gap-4 rounded-poke-md border border-poke-border bg-poke-surface p-3 sm:grid-cols-2 xl:grid-cols-3">
+    <div className="grid gap-4 rounded-poke-md border border-hairline bg-surface p-3 sm:grid-cols-2 xl:grid-cols-3">
       <Group legend={t('filters.quick')}>
         <Chip pressed={filters.changedByMe} onClick={() => set({ changedByMe: !filters.changedByMe })}>{t('filters.changedByMe')}</Chip>
         <Chip pressed={filters.fromPreset} onClick={() => set({ fromPreset: !filters.fromPreset })}>{t('filters.fromPreset')}</Chip>

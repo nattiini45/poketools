@@ -55,15 +55,15 @@ export default function EntryTable({
 
   return (
     <div className="space-y-2">
-      <div className="overflow-x-auto rounded-poke-md border border-poke-border bg-poke-surface">
+      <div className="overflow-x-auto rounded-poke-md border border-hairline bg-surface">
         <table className="w-full min-w-[32rem] border-collapse text-left text-sm">
           <caption className="sr-only">{t(`table.caption.${category}`)}</caption>
-          <thead className="bg-poke-muted text-xs text-poke-text-secondary">
+          <thead className="bg-sunken text-xs text-fg-muted">
             <tr>
               <th scope="col" className="w-10 p-2">
                 <input
                   type="checkbox"
-                  className="h-4 w-4 accent-poke-accent"
+                  className="h-4 w-4 accent-accent-fill"
                   checked={allOnPage}
                   aria-label={t('table.selectAllPage')}
                   onChange={(event) => onSelectPage(rows.map((entry) => entry.id), event.target.checked)}
@@ -82,18 +82,18 @@ export default function EntryTable({
               const name = displayName(entry, dataLocale);
               const actionLabel = allowlist ? (legal ? t('action.disallow', { name }) : t('action.allow', { name })) : legal ? t('action.ban', { name }) : t('action.unban', { name });
               return (
-                <tr key={entry.id} className="border-t border-poke-border align-top">
+                <tr key={entry.id} className="border-t border-hairline align-top">
                   <td className="p-2">
                     <input
                       type="checkbox"
-                      className="h-4 w-4 accent-poke-accent"
+                      className="h-4 w-4 accent-accent-fill"
                       checked={selection.ids.has(entry.id)}
                       aria-label={t('card.select', { name })}
                       onChange={() => onToggleSelected(entry.id)}
                     />
                   </td>
-                  <th scope="row" className="p-2 font-heading font-semibold text-poke-text-primary">{name}</th>
-                  <td className="p-2 text-xs text-poke-text-secondary">
+                  <th scope="row" className="p-2 font-heading font-semibold text-fg">{name}</th>
+                  <td className="p-2 text-xs text-fg-muted">
                     <span className="block">{tagOf(entry)}</span>
                     {descriptions?.[entry.id] !== undefined && <span className="block max-w-prose">{descriptions[entry.id]}</span>}
                   </td>
@@ -116,7 +116,7 @@ export default function EntryTable({
           <ChevronLeft className="h-4 w-4" aria-hidden="true" />
           {t('table.previous')}
         </Button>
-        <span className="text-sm text-poke-text-secondary" aria-live="polite">
+        <span className="text-sm text-fg-muted" aria-live="polite">
           {t('table.page', { page: bounds.page, pages: pageCount(entries.length) })}
         </span>
         <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-0" disabled={bounds.page >= pageCount(entries.length)} onClick={() => onPage(bounds.page + 1)}>

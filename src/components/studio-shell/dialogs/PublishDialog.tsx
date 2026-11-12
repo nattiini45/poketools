@@ -146,12 +146,12 @@ export function PublishDialogBody({
   if (doneVersion !== null) {
     return (
       <div className="space-y-4">
-        <p role="status" className="text-sm font-semibold text-poke-text-primary">
+        <p role="status" className="text-sm font-semibold text-fg">
           {text('publish.done', { n: doneVersion })}
         </p>
-        <p className="text-sm text-poke-text-secondary">{text('publish.shareHint')}</p>
+        <p className="text-sm text-fg-muted">{text('publish.shareHint')}</p>
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <Link href={readOnlyHref} className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0">
+          <Link href={readOnlyHref} className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0">
             {text('publish.openReadOnly')}
           </Link>
           <Button type="button" variant="primary" size="sm" onClick={onClose}>
@@ -164,13 +164,13 @@ export function PublishDialogBody({
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-poke-text-secondary">{text('publish.creates', { n: nextVersion })}</p>
+      <p className="text-sm text-fg-muted">{text('publish.creates', { n: nextVersion })}</p>
       {summary}
 
-      {dirty && <p className="text-sm text-poke-text-muted">{text('publish.savesFirst')}</p>}
+      {dirty && <p className="text-sm text-fg-muted">{text('publish.savesFirst')}</p>}
 
       <div className="space-y-3">
-        <p className="text-sm font-semibold text-poke-text-primary">{text('publish.changelog')}</p>
+        <p className="text-sm font-semibold text-fg">{text('publish.changelog')}</p>
         <Textarea
           id={`${idPrefix}-changelog-en`}
           label={text('publish.changelogEn')}
@@ -195,7 +195,7 @@ export function PublishDialogBody({
 
       <div className="flex flex-wrap items-center justify-end gap-3">
         {blockedText !== null && (
-          <p id={reasonId} className="mr-auto text-sm text-poke-text-muted">
+          <p id={reasonId} className="mr-auto text-sm text-fg-muted">
             {blockedText}
           </p>
         )}

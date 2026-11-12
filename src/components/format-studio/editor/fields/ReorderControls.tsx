@@ -48,7 +48,7 @@ export function useMoveFocus() {
 }
 
 const BUTTON =
-  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-poke-md border border-poke-border bg-poke-elevated text-poke-text-primary transition-colors hover:border-poke-accent hover:bg-poke-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8';
+  'inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-poke-md border border-hairline bg-elevated text-fg transition-colors hover:border-accent-ink hover:bg-sunken focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-50 sm:h-8 sm:w-8';
 
 /**
  * Up, down, duplicate and remove for one row of a list. Icon-only buttons, each with an accessible name that
@@ -112,7 +112,7 @@ export default function ReorderControls({
         </button>
       )}
       {onRemove !== undefined && labels.remove !== undefined && (
-        <button type="button" className={cn(BUTTON, 'hover:border-poke-danger hover:text-poke-danger')} aria-label={labels.remove} title={labels.remove} onClick={onRemove}>
+        <button type="button" className={cn(BUTTON, 'hover:border-loss hover:text-loss')} aria-label={labels.remove} title={labels.remove} onClick={onRemove}>
           <Trash2 className="h-4 w-4" aria-hidden="true" />
         </button>
       )}

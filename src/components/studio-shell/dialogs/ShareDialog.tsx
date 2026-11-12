@@ -71,7 +71,7 @@ export function ShareDialogBody({ text, idPrefix, actor, definition, hasPublishe
           const reason = disabledFor(value);
           const id = `${idPrefix}-share-${value}`;
           return (
-            <div key={value} className="flex items-start gap-3 rounded-poke-md border border-poke-border p-3">
+            <div key={value} className="flex items-start gap-3 rounded-poke-md border border-hairline p-3">
               <input
                 id={id}
                 type="radio"
@@ -81,13 +81,13 @@ export function ShareDialogBody({ text, idPrefix, actor, definition, hasPublishe
                 disabled={reason !== null && selected !== value}
                 aria-describedby={`${id}-help`}
                 onChange={() => onSelect(value)}
-                className="mt-1 h-4 w-4 shrink-0 accent-poke-accent"
+                className="mt-1 h-4 w-4 shrink-0 accent-accent-fill"
               />
               <div className="min-w-0">
-                <label htmlFor={id} className="block text-sm font-semibold text-poke-text-primary">
+                <label htmlFor={id} className="block text-sm font-semibold text-fg">
                   {text(`toolbar.visibility.${value}`)}
                 </label>
-                <p id={`${id}-help`} className="text-sm text-poke-text-muted">
+                <p id={`${id}-help`} className="text-sm text-fg-muted">
                   {text(`share.${value}Help`)}
                   {reason !== null && selected !== value && ` ${text(`share.${reason}`)}`}
                 </p>
@@ -97,7 +97,7 @@ export function ShareDialogBody({ text, idPrefix, actor, definition, hasPublishe
         })}
       </fieldset>
 
-      {locked !== null && <p className="text-sm text-poke-text-muted">{text(`share.${locked}`)}</p>}
+      {locked !== null && <p className="text-sm text-fg-muted">{text(`share.${locked}`)}</p>}
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
 
       <div className="flex flex-wrap justify-end gap-3">

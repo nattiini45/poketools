@@ -81,7 +81,7 @@ export default function EntryList({
       onKeyDown={onKeyDown}
       onFocus={onFocus}
       onBlur={onBlur}
-      className="relative h-[min(62vh,44rem)] min-h-[20rem] overflow-y-auto overscroll-contain rounded-poke-md border border-poke-border bg-poke-base p-2 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+      className="relative h-[min(62vh,44rem)] min-h-[20rem] overflow-y-auto overscroll-contain rounded-poke-md border border-hairline bg-page p-2 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
     >
       <div role="presentation" className="relative w-full" style={{ height: virtualizer.getTotalSize() }}>
         {virtualizer.getVirtualItems().map((item) => {

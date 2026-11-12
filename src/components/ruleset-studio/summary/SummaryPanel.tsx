@@ -99,9 +99,9 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
   const gameKey = resolved?.doubles ? 'doubles' : 'singles';
 
   return (
-    <section id="rf-summary" aria-labelledby={`${baseId}-heading`} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border bg-poke-surface p-3 xl:sticky xl:top-4">
+    <section id="rf-summary" aria-labelledby={`${baseId}-heading`} className="min-w-0 space-y-3 rounded-poke-lg border border-hairline bg-surface p-3 xl:sticky xl:top-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 id={`${baseId}-heading`} className="font-heading text-base font-bold text-poke-text-primary">
+        <h2 id={`${baseId}-heading`} className="font-heading text-base font-bold text-fg">
           {t('heading')}
         </h2>
         <div className="flex items-center gap-1">
@@ -114,7 +114,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
         </div>
       </div>
 
-      <div role="tablist" aria-label={t('tablist')} className="flex flex-wrap gap-1 border-b border-poke-border">
+      <div role="tablist" aria-label={t('tablist')} className="flex flex-wrap gap-1 border-b border-hairline">
         {TABS.map((id) => {
           const selected = tab === id;
           const issueCount = id === 'issues' ? model.counts.errors + model.counts.warnings : 0;
@@ -131,7 +131,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
               onKeyDown={onTabKey}
               className={cn(
                 'inline-flex min-h-11 items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
-                selected ? 'border-poke-accent text-poke-text-primary' : 'border-transparent text-poke-text-secondary hover:text-poke-text-primary',
+                selected ? 'border-accent-ink text-fg' : 'border-transparent text-fg-muted hover:text-fg',
               )}
             >
               {t(`tab.${id}`)}
@@ -145,20 +145,20 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
       <div role="tabpanel" id={`${baseId}-panel-${tab}`} aria-labelledby={`${baseId}-tab-${tab}`} tabIndex={0} className="min-w-0 space-y-3 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus">
         {tab === 'summary' && (
           <div className="space-y-3">
-            <p className="text-sm text-poke-text-secondary">{catalogPreset === undefined ? t('vsBlank') : t('vs', { preset: catalogPreset.name })}</p>
+            <p className="text-sm text-fg-muted">{catalogPreset === undefined ? t('vsBlank') : t('vs', { preset: catalogPreset.name })}</p>
             {counts.total === 0 ? (
-              <p className="text-sm font-semibold text-poke-text-primary">{t('nothingChanged')}</p>
+              <p className="text-sm font-semibold text-fg">{t('nothingChanged')}</p>
             ) : (
-              <p className="text-sm font-semibold text-poke-text-primary">{t('diffLine', { banned: counts.youBanned, unbanned: counts.youUnbanned })}</p>
+              <p className="text-sm font-semibold text-fg">{t('diffLine', { banned: counts.youBanned, unbanned: counts.youUnbanned })}</p>
             )}
             {resolved === null ? (
-              <p className="text-sm text-poke-text-secondary">{t('notReady')}</p>
+              <p className="text-sm text-fg-muted">{t('notReady')}</p>
             ) : (
               <>
-                <p className="text-xs font-semibold text-poke-text-secondary">
+                <p className="text-xs font-semibold text-fg-muted">
                   {t('format', { gen: resolved.gen, game: t(`game.${gameKey}`) })} · {t(`universe.${resolved.universe}`)}
                 </p>
-                <ul className="space-y-1 text-sm text-poke-text-primary">
+                <ul className="space-y-1 text-sm text-fg">
                   {RULESET_CATEGORIES.map((category) => {
                     const list = resolved[category];
                     const own = counts.perCategory[category];
@@ -168,7 +168,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                           {list.mode === 'allow' ? t(`categoryAllow.${category}`, { count: list.ids.length }) : t(`category.${category}`, { count: list.ids.length })}
                         </button>
                         {list.mode === 'block' && own.baseCount > 0 && (
-                          <span className="text-xs text-poke-text-muted">
+                          <span className="text-xs text-fg-muted">
                             {t('fromPreset', { count: own.baseCount })}
                             {own.youBanned + own.youUnbanned > 0 && ` · ${t('yours', { count: own.youBanned + own.youUnbanned })}`}
                           </span>
@@ -190,15 +190,15 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
         {tab === 'changes' && (
           <div className="space-y-2">
             {changes.length === 0 && counts.clausesAdded + counts.clausesRemoved === 0 ? (
-              <p className="text-sm text-poke-text-secondary">{t('noChanges')}</p>
+              <p className="text-sm text-fg-muted">{t('noChanges')}</p>
             ) : (
               <>
-                <h3 className="text-xs font-semibold text-poke-text-secondary">{t('changeList')}</h3>
+                <h3 className="text-xs font-semibold text-fg-muted">{t('changeList')}</h3>
                 <ul className="space-y-1">
                   {doc.clauses.add.map((id) => (
                     <li key={`clause-add-${id}`} className="flex items-center justify-between gap-2 text-sm">
                       <span>
-                        <span className="text-poke-text-secondary">{t('clauseAdded')}: </span>
+                        <span className="text-fg-muted">{t('clauseAdded')}: </span>
                         {clauseName(id)}
                       </span>
                       <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-0" onClick={() => model.setClauseOn(id, false)} aria-label={t('revertName', { name: clauseName(id) })}>
@@ -209,7 +209,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                   {doc.clauses.remove.map((id) => (
                     <li key={`clause-remove-${id}`} className="flex items-center justify-between gap-2 text-sm">
                       <span>
-                        <span className="text-poke-text-secondary">{t('clauseRemoved')}: </span>
+                        <span className="text-fg-muted">{t('clauseRemoved')}: </span>
                         {clauseName(id)}
                       </span>
                       <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-0" onClick={() => model.setClauseOn(id, true)} aria-label={t('revertName', { name: clauseName(id) })}>
@@ -222,7 +222,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                     return (
                       <li key={`${change.category}-${change.kind}-${change.id}`} className="flex items-center justify-between gap-2 text-sm">
                         <span className="min-w-0 truncate">
-                          <span className="text-poke-text-secondary">{t(`kind.${change.kind}`)}: </span>
+                          <span className="text-fg-muted">{t(`kind.${change.kind}`)}: </span>
                           {name}
                         </span>
                         <Button
@@ -239,7 +239,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                     );
                   })}
                 </ul>
-                {changes.length > MAX_CHANGES && <p className="text-xs text-poke-text-muted">{t('moreChanges', { count: changes.length - MAX_CHANGES })}</p>}
+                {changes.length > MAX_CHANGES && <p className="text-xs text-fg-muted">{t('moreChanges', { count: changes.length - MAX_CHANGES })}</p>}
               </>
             )}
           </div>
@@ -248,18 +248,18 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
         {tab === 'issues' && (
           <div className="space-y-2">
             {model.rows.length === 0 ? (
-              <p className="text-sm text-poke-text-secondary" role="status">{t('issuesNone')}</p>
+              <p className="text-sm text-fg-muted" role="status">{t('issuesNone')}</p>
             ) : (
               <ul className="space-y-2">
                 {model.rows.map((row) => {
                   const d = row.diagnostic;
                   return (
-                    <li key={row.key} className="space-y-1.5 rounded-poke-md border border-poke-border bg-poke-base p-2.5">
+                    <li key={row.key} className="space-y-1.5 rounded-poke-md border border-hairline bg-page p-2.5">
                       <div className="flex items-start gap-2">
                         <Badge variant={d.severity === 'error' ? 'red' : d.severity === 'warning' ? 'yellow' : 'blue'}>
                           {t(`severity.${d.severity}`)}
                         </Badge>
-                        <p className="min-w-0 flex-1 text-sm text-poke-text-primary">{diagnosticText(d, tDiag, model.nameOf)}</p>
+                        <p className="min-w-0 flex-1 text-sm text-fg">{diagnosticText(d, tDiag, model.nameOf)}</p>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button type="button" variant="ghost" size="sm" className="min-h-11 sm:min-h-0" onClick={() => goTo(d.path, row.section)}>
@@ -281,7 +281,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
 
         {tab === 'rules' && (
           <div className="space-y-3">
-            <div role="group" aria-label={t('rulesLanguage')} className="inline-flex overflow-hidden rounded-poke-md border border-poke-border">
+            <div role="group" aria-label={t('rulesLanguage')} className="inline-flex overflow-hidden rounded-poke-md border border-hairline">
               {(['en', 'de'] as const).map((locale) => (
                 <button
                   key={locale}
@@ -290,7 +290,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                   onClick={() => setRulesLocale(locale)}
                   className={cn(
                     'min-h-11 px-3 text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
-                    rulesLocale === locale ? 'bg-poke-accent text-poke-surface' : 'bg-poke-surface text-poke-text-secondary hover:bg-poke-muted',
+                    rulesLocale === locale ? 'bg-accent-fill text-tier-ink' : 'bg-surface text-fg-muted hover:bg-sunken',
                   )}
                 >
                   {locale === 'en' ? t('rulesEnglish') : t('rulesGerman')}
@@ -298,20 +298,20 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
               ))}
             </div>
             {described === null ? (
-              <p className="text-sm text-poke-text-secondary">{t('rulesPending')}</p>
+              <p className="text-sm text-fg-muted">{t('rulesPending')}</p>
             ) : (
               <div lang={rulesLocale} className="space-y-3">
                 {described.sections.map((section) => (
                   <div key={section.id} className="space-y-1">
-                    <h3 className="text-xs font-semibold text-poke-text-secondary">{section.heading}</h3>
+                    <h3 className="text-xs font-semibold text-fg-muted">{section.heading}</h3>
                     {section.lines.map((line) => (
-                      <p key={line} className="whitespace-pre-wrap break-words text-sm text-poke-text-primary">
+                      <p key={line} className="whitespace-pre-wrap break-words text-sm text-fg">
                         {line}
                       </p>
                     ))}
                   </div>
                 ))}
-                <p className="text-xs font-semibold text-poke-text-muted">{described.coverage}</p>
+                <p className="text-xs font-semibold text-fg-muted">{described.coverage}</p>
               </div>
             )}
           </div>

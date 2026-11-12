@@ -30,7 +30,7 @@ function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () =>
       type="button"
       aria-pressed={pressed}
       onClick={onClick}
-      className={cn(CHIP, pressed ? 'border-poke-accent bg-poke-accent-light text-poke-text-primary' : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:bg-poke-muted')}
+      className={cn(CHIP, pressed ? 'border-accent-ink bg-accent-subtle text-fg' : 'border-hairline bg-surface text-fg-muted hover:bg-sunken')}
     >
       {children}
     </button>
@@ -77,16 +77,16 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
           disabled={current}
           className={cn(
             'flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-poke-md border px-3 py-2 text-left transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
-            current ? 'border-poke-accent bg-poke-accent-light' : 'border-poke-border bg-poke-surface hover:border-poke-border-strong hover:bg-poke-muted',
+            current ? 'border-accent-ink bg-accent-subtle' : 'border-hairline bg-surface hover:border-hairline-strong hover:bg-sunken',
           )}
         >
-          <span className="font-heading text-sm font-semibold text-poke-text-primary">{entry.name}</span>
-          <span className="text-xs text-poke-text-secondary">
+          <span className="font-heading text-sm font-semibold text-fg">{entry.name}</span>
+          <span className="text-xs text-fg-muted">
             {entry.genLabel} · {entry.tierLabel}
           </span>
-          {entry.source === 'smogon-draft' && <span className="rounded-full border border-poke-blue/30 bg-poke-blue-light px-2 text-[11px] font-semibold text-poke-blue">{t('presets.draftTag')}</span>}
+          {entry.source === 'smogon-draft' && <span className="rounded-full border border-poke-blue/30 bg-poke-blue-light px-2 text-[11px] font-semibold text-accent-ink">{t('presets.draftTag')}</span>}
           {current && (
-            <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-poke-text-primary">
+            <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-fg">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
               {t('presets.current')}
             </span>
@@ -100,7 +100,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
     <Modal open={open} onClose={onClose} title={t('presets.title')} size="lg">
       <div className="space-y-4">
         <div>
-          <label htmlFor={searchId} className="mb-1 block text-sm font-semibold text-poke-text-primary">
+          <label htmlFor={searchId} className="mb-1 block text-sm font-semibold text-fg">
             {t('presets.search')}
           </label>
           <input
@@ -110,13 +110,13 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
             placeholder={t('presets.searchPlaceholder')}
             autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
-            className="h-10 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+            className="h-10 w-full rounded-poke-md border border-hairline bg-surface px-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
           />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <fieldset className="space-y-1.5">
-            <legend className="text-xs font-semibold text-poke-text-secondary">{t('presets.sourceLegend')}</legend>
+            <legend className="text-xs font-semibold text-fg-muted">{t('presets.sourceLegend')}</legend>
             <div className="flex flex-wrap gap-1.5">
               <Chip pressed={source === 'all'} onClick={() => { setSource('all'); setFamily('all'); }}>{t('presets.sourceAll')}</Chip>
               <Chip pressed={source === 'showdown'} onClick={() => { setSource('showdown'); setFamily('all'); }}>{t('presets.sourceShowdown')}</Chip>
@@ -125,7 +125,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
             </div>
           </fieldset>
           <fieldset className="space-y-1.5">
-            <legend className="text-xs font-semibold text-poke-text-secondary">{t('presets.gameLegend')}</legend>
+            <legend className="text-xs font-semibold text-fg-muted">{t('presets.gameLegend')}</legend>
             <div className="flex flex-wrap gap-1.5">
               <Chip pressed={game === 'all'} onClick={() => setGame('all')}>{t('presets.gameAll')}</Chip>
               <Chip pressed={game === 'singles'} onClick={() => setGame('singles')}>{t('base.singles')}</Chip>
@@ -133,7 +133,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
             </div>
           </fieldset>
           <fieldset className="space-y-1.5">
-            <legend className="text-xs font-semibold text-poke-text-secondary">{t('presets.generation')}</legend>
+            <legend className="text-xs font-semibold text-fg-muted">{t('presets.generation')}</legend>
             <div className="flex flex-wrap gap-1.5">
               <Chip pressed={gen === 'all'} onClick={() => setGen('all')}>{t('presets.generationAll')}</Chip>
               {[...GENERATIONS].reverse().map((generation) => (
@@ -144,7 +144,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
             </div>
           </fieldset>
           <fieldset className="space-y-1.5">
-            <legend className="text-xs font-semibold text-poke-text-secondary">{t('presets.familyLegend')}</legend>
+            <legend className="text-xs font-semibold text-fg-muted">{t('presets.familyLegend')}</legend>
             <div className="flex flex-wrap gap-1.5">
               <Chip pressed={family === 'all'} onClick={() => setFamily('all')}>{t('presets.familyAll')}</Chip>
               {familiesOfSource.map((candidate) => (
@@ -156,17 +156,17 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
           </fieldset>
         </div>
 
-        <p role="status" className="text-xs text-poke-text-secondary">
+        <p role="status" className="text-xs text-fg-muted">
           {t('presets.results', { count: matches.length })}
         </p>
 
         <div className="max-h-[45vh] space-y-4 overflow-y-auto pr-1">
           {groups.length === 0 ? (
-            <p className="rounded-poke-md border border-dashed border-poke-border p-4 text-sm text-poke-text-secondary">{t('presets.none')}</p>
+            <p className="rounded-poke-md border border-dashed border-hairline p-4 text-sm text-fg-muted">{t('presets.none')}</p>
           ) : (
             groups.map((group) => (
               <section key={group.key} aria-label={`${group.genLabel}, ${familyLabel(group.family)}`}>
-                <h3 className="mb-1.5 text-xs font-semibold text-poke-text-secondary">
+                <h3 className="mb-1.5 text-xs font-semibold text-fg-muted">
                   {group.genLabel} · {familyLabel(group.family)}
                 </h3>
                 <ul className="grid gap-1.5 sm:grid-cols-2">{group.presets.map(card)}</ul>

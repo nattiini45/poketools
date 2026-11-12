@@ -67,7 +67,7 @@ export default function IssuesTab({ doc, diagnostics, rows, counts, onEdit, onSe
 
   return (
     <div className="space-y-3">
-      <p className="flex flex-wrap items-center gap-2 text-sm text-poke-text-secondary">
+      <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
         <span>{t('toolbar.issues.errors', { count: counts.errors })}</span>
         <span aria-hidden="true">·</span>
         <span>{t('toolbar.issues.warnings', { count: counts.warnings })}</span>
@@ -76,7 +76,7 @@ export default function IssuesTab({ doc, diagnostics, rows, counts, onEdit, onSe
       </p>
 
       {rows.length === 0 ? (
-        <p className="flex flex-wrap items-center gap-2 text-sm text-poke-text-secondary">
+        <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
           <Badge variant="green">{t('preview.issues.none')}</Badge>
         </p>
       ) : (
@@ -85,12 +85,12 @@ export default function IssuesTab({ doc, diagnostics, rows, counts, onEdit, onSe
             const diagnostic = diagnostics[i];
             const sentence = diagnostic === undefined ? row.code : renderDiagnostic(diagnostic, locale, doc);
             return (
-              <li key={row.id} className="min-w-0 space-y-2 rounded-poke-md border border-poke-border p-3">
+              <li key={row.id} className="min-w-0 space-y-2 rounded-poke-md border border-hairline p-3">
                 <div className="flex flex-col items-start gap-1 sm:flex-row sm:gap-3">
                   <Badge variant={SEVERITY_VARIANT[row.severity]} className="shrink-0">
                     {renderSeverity(row.severity, locale)}
                   </Badge>
-                  <span className="min-w-0 break-words text-sm text-poke-text-primary">{sentence}</span>
+                  <span className="min-w-0 break-words text-sm text-fg">{sentence}</span>
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {row.selection !== null ? (
@@ -108,7 +108,7 @@ export default function IssuesTab({ doc, diagnostics, rows, counts, onEdit, onSe
                       {t('preview.issues.goTo')}
                     </Button>
                   ) : (
-                    <span className="text-xs text-poke-text-muted">{t('preview.issues.noTarget')}</span>
+                    <span className="text-xs text-fg-muted">{t('preview.issues.noTarget')}</span>
                   )}
                   {row.fixes.map((f, j) => (
                     <Button key={`${f.id}-${j}`} type="button" variant="primary" size="sm" className="min-h-11 sm:min-h-0" onClick={() => fix(f)}>

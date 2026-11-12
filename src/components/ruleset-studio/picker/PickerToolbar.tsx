@@ -90,7 +90,7 @@ export default function PickerToolbar({
           <label htmlFor={searchId} className="sr-only">
             {t(`search.label.${category}`)}
           </label>
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-poke-text-muted" aria-hidden="true" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
           <input
             id={searchId}
             ref={searchRef}
@@ -107,7 +107,7 @@ export default function PickerToolbar({
                 else onSearchEscape();
               }
             }}
-            className="h-11 w-full rounded-poke-md border border-poke-border bg-poke-surface pl-9 pr-9 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-9 [&::-webkit-search-cancel-button]:hidden"
+            className="h-11 w-full rounded-poke-md border border-hairline bg-surface pl-9 pr-9 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-9 [&::-webkit-search-cancel-button]:hidden"
           />
           {query !== '' && (
             <button
@@ -117,7 +117,7 @@ export default function PickerToolbar({
                 onQuery('');
                 searchRef.current?.focus();
               }}
-              className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-poke-md text-poke-text-muted hover:text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-7 sm:w-7"
+              className="absolute right-1 top-1/2 inline-flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-poke-md text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:h-7 sm:w-7"
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
@@ -128,17 +128,17 @@ export default function PickerToolbar({
           type="button"
           aria-expanded={filtersOpen}
           onClick={() => onFiltersOpen(!filtersOpen)}
-          className={cn(BUTTON, filtersOpen || filterCount > 0 ? 'border-poke-accent bg-poke-accent-light text-poke-text-primary' : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:bg-poke-muted')}
+          className={cn(BUTTON, filtersOpen || filterCount > 0 ? 'border-accent-ink bg-accent-subtle text-fg' : 'border-hairline bg-surface text-fg-muted hover:bg-sunken')}
         >
           <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
           {filterCount > 0 ? t('filters.toggleCount', { count: filterCount }) : t('filters.toggle')}
         </button>
 
         <div className="flex items-center gap-1">
-          <button type="button" className={cn(BUTTON, 'w-11 border-poke-border bg-poke-surface text-poke-text-secondary hover:bg-poke-muted sm:w-9 sm:px-0')} disabled={!canUndo} onClick={onUndo} aria-label={t('history.undo')} aria-keyshortcuts="Control+Z Meta+Z">
+          <button type="button" className={cn(BUTTON, 'w-11 border-hairline bg-surface text-fg-muted hover:bg-sunken sm:w-9 sm:px-0')} disabled={!canUndo} onClick={onUndo} aria-label={t('history.undo')} aria-keyshortcuts="Control+Z Meta+Z">
             <Undo2 className="h-4 w-4" aria-hidden="true" />
           </button>
-          <button type="button" className={cn(BUTTON, 'w-11 border-poke-border bg-poke-surface text-poke-text-secondary hover:bg-poke-muted sm:w-9 sm:px-0')} disabled={!canRedo} onClick={onRedo} aria-label={t('history.redo')} aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z">
+          <button type="button" className={cn(BUTTON, 'w-11 border-hairline bg-surface text-fg-muted hover:bg-sunken sm:w-9 sm:px-0')} disabled={!canRedo} onClick={onRedo} aria-label={t('history.redo')} aria-keyshortcuts="Control+Shift+Z Control+Y Meta+Shift+Z">
             <Redo2 className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
@@ -146,7 +146,7 @@ export default function PickerToolbar({
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
         <div className="flex items-center gap-1.5">
-          <label htmlFor={sortId} className="text-xs font-semibold text-poke-text-secondary">
+          <label htmlFor={sortId} className="text-xs font-semibold text-fg-muted">
             {t('sort.label')}
           </label>
           <select
@@ -154,7 +154,7 @@ export default function PickerToolbar({
             value={sort.key}
             disabled={queryDecidesOrder}
             onChange={(event) => onSort({ key: event.target.value as SortKey, direction: event.target.value === 'bst' || event.target.value === 'power' ? 'desc' : 'asc' })}
-            className="h-11 rounded-poke-md border border-poke-border bg-poke-surface px-2 text-sm text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus disabled:opacity-50 sm:h-9"
+            className="h-11 rounded-poke-md border border-hairline bg-surface px-2 text-sm text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus disabled:opacity-50 sm:h-9"
           >
             {sorts.map((key) => (
               <option key={key} value={key}>
@@ -167,14 +167,14 @@ export default function PickerToolbar({
             aria-label={`${t('sort.direction')}: ${sort.direction === 'asc' ? t('sort.asc') : t('sort.desc')}`}
             disabled={queryDecidesOrder}
             onClick={() => onSort({ ...sort, direction: sort.direction === 'asc' ? 'desc' : 'asc' })}
-            className={cn(BUTTON, 'w-11 border-poke-border bg-poke-surface px-0 text-poke-text-secondary hover:bg-poke-muted sm:w-9')}
+            className={cn(BUTTON, 'w-11 border-hairline bg-surface px-0 text-fg-muted hover:bg-sunken sm:w-9')}
           >
             {sort.direction === 'asc' ? <ArrowUp className="h-4 w-4" aria-hidden="true" /> : <ArrowDown className="h-4 w-4" aria-hidden="true" />}
           </button>
-          {queryDecidesOrder && <span className="hidden text-xs text-poke-text-muted lg:inline">{t('sort.byQuery')}</span>}
+          {queryDecidesOrder && <span className="hidden text-xs text-fg-muted lg:inline">{t('sort.byQuery')}</span>}
         </div>
 
-        <div role="radiogroup" aria-label={t('density.label')} className="inline-flex overflow-hidden rounded-poke-md border border-poke-border">
+        <div role="radiogroup" aria-label={t('density.label')} className="inline-flex overflow-hidden rounded-poke-md border border-hairline">
           {DENSITIES.map((option) => {
             const Icon = DENSITY_ICON[option];
             const checked = option === density;
@@ -191,7 +191,7 @@ export default function PickerToolbar({
                 onKeyDown={onDensityKey}
                 className={cn(
                   'inline-flex min-h-11 items-center gap-1.5 px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
-                  checked ? 'bg-poke-accent text-poke-surface' : 'bg-poke-surface text-poke-text-secondary hover:bg-poke-muted',
+                  checked ? 'bg-accent-fill text-tier-ink' : 'bg-surface text-fg-muted hover:bg-sunken',
                 )}
               >
                 <Icon className="h-4 w-4" aria-hidden="true" />
@@ -202,8 +202,8 @@ export default function PickerToolbar({
         </div>
 
         {kind === 'species' && (
-          <label htmlFor={formesId} className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-poke-text-secondary sm:min-h-9" title={t('forme.includeHelp')}>
-            <input id={formesId} type="checkbox" className="h-4 w-4 accent-poke-accent" checked={includeFormes} onChange={(event) => onIncludeFormes(event.target.checked)} />
+          <label htmlFor={formesId} className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-fg-muted sm:min-h-9" title={t('forme.includeHelp')}>
+            <input id={formesId} type="checkbox" className="h-4 w-4 accent-accent-fill" checked={includeFormes} onChange={(event) => onIncludeFormes(event.target.checked)} />
             {t('forme.include')}
           </label>
         )}

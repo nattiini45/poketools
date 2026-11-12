@@ -294,9 +294,9 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
   };
 
   const renderHeader = (header: HeaderItem) => (
-    <div aria-hidden="true" className="flex h-full items-end gap-2 px-1 pb-1 text-xs font-semibold text-poke-text-secondary">
+    <div aria-hidden="true" className="flex h-full items-end gap-2 px-1 pb-1 text-xs font-semibold text-fg-muted">
       <span>{headerLabel(header)}</span>
-      <span className="tabular-nums text-poke-text-muted">{header.count}</span>
+      <span className="tabular-nums text-fg-muted">{header.count}</span>
       <span className="mb-1.5 h-px flex-1 bg-poke-border" />
     </div>
   );
@@ -359,13 +359,13 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
 
       {filtersOpen && <FacetPanel kind={kind} filters={filters} onChange={updateFilters} states={states} tiers={tiers} gens={gens} itemCategories={itemCategories} />}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-poke-text-secondary">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-fg-muted">
         <p role="status">{t('filters.results', { count: entries.length, total: view.total })}</p>
         {narrowed && (
           <button
             type="button"
             onClick={() => updateFilters(EMPTY_FILTERS)}
-            className="min-h-9 rounded-poke-md px-2 font-semibold text-poke-blue hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+            className="min-h-9 rounded-poke-md px-2 font-semibold text-accent-ink hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
           >
             {t('filters.clear')}
           </button>
@@ -374,7 +374,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
 
       <div ref={wrapRef}>
         {entries.length === 0 ? (
-          <div className="rounded-poke-md border border-dashed border-poke-border bg-poke-surface p-6 text-center text-sm text-poke-text-secondary">
+          <div className="rounded-poke-md border border-dashed border-hairline bg-surface p-6 text-center text-sm text-fg-muted">
             <p>{view.total === 0 ? t('empty.noEntries') : t('empty.none')}</p>
             {narrowed && (
               <Button type="button" variant="secondary" size="sm" className="mt-3 min-h-11 sm:min-h-0" onClick={() => updateFilters(EMPTY_FILTERS)}>
@@ -457,8 +457,8 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
         }}
       />
 
-      <details className="rounded-poke-md border border-poke-border bg-poke-surface text-sm text-poke-text-secondary">
-        <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 font-semibold text-poke-text-primary sm:min-h-9">
+      <details className="rounded-poke-md border border-hairline bg-surface text-sm text-fg-muted">
+        <summary className="flex min-h-11 cursor-pointer items-center gap-2 px-3 font-semibold text-fg sm:min-h-9">
           <Keyboard className="h-4 w-4" aria-hidden="true" />
           {t('kb.title')}
         </summary>
