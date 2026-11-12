@@ -76,8 +76,9 @@ describe('wall layout CSS', () => {
     const screen = rule('.screen', media('(min-width: 1024px)', '.screen'));
     expect(screen).toMatch(/height: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/);
     expect(CSS).toMatch(/--draft-page-pad-y: 54px;/);
-    // The floor: in a very short window the page scrolls instead of crushing the panes.
-    expect(screen).toMatch(/min-height: 600px;/);
+    // The floor: in a short window the page scrolls instead of crushing the panes; it is the wall's measured
+    // offset plus two card rows, so the wall always shows two full rows.
+    expect(screen).toMatch(/min-height: calc\(var\(--draft-lower-top, 360px\) \+ 2 \* var\(--draft-card-h\) \+ 45px\);/);
   });
 
   it('gives the page header its own grid row, ahead of the clock row, so it sits inside the fixed height', () => {
@@ -147,7 +148,7 @@ describe('wall layout CSS', () => {
     // Too short a window: the card keeps its content height (the column scrolls) rather than overflowing its box.
     expect(desktop).toMatch(/min-height: min-content;/);
     // The dock's height is measured (a verdict can wrap), not assumed: the screen hands the dock to the offsets hook.
-    expect(SCREEN_SRC).toMatch(/useStickyOffsets\(rootRef, clockRowRef, dockRef\);/);
+    expect(SCREEN_SRC).toMatch(/useStickyOffsets\(rootRef, clockRowRef, dockRef, wallScrollRef\);/);
     expect(SCREEN_SRC).toMatch(/<div ref=\{dockRef\} className=\{`\$\{styles\.ctaDock\}/);
     expect(rule('.tokens,\n.root')).toMatch(/--draft-dock-h: [\d.]+px;/);
   });
@@ -585,6 +586,14 @@ describe('applyStickyOffsets', () => {
     expect(set.get('--nav-h')).toBe('65px');
     expect(set.get('--draft-clock-h')).toBe('52px');
     expect(set.get('--draft-dock-h')).toBe('119px');
+  });
+
+  it("writes how far the wall's scroller starts below the screen's top, rounded up", () => {
+    const set = new Map<string, string>();
+    const root = { ...rootOf(set), getBoundingClientRect: () => ({ top: 100 }) as DOMRect };
+    const wall = { getBoundingClientRect: () => ({ top: 532.2 }) as DOMRect } as unknown as HTMLElement;
+    applyStickyOffsets(root, bars({ wall }));
+    expect(set.get('--draft-lower-top')).toBe('433px');
   });
 
   it('observes the nav, the clock row and the dock, re-applies on resize and disconnects on clean-up', () => {
