@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import type { DraftPoolEntry, DraftPoolTemplate, DraftPoolTemplateEntry } from '@/types/draft-pool';
@@ -598,13 +599,12 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                     <label className="block text-xs font-heading font-semibold text-fg mb-1">
                       {t('poolEditor.powerTier')}
                     </label>
-                    <select
+                    <Select
                       value={addTier}
                       onChange={(e) => setAddTier(e.target.value)}
-                      className="border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                     >
                       <TierOptions />
-                    </select>
+                    </Select>
                   </div>
                   <div>
                     <label className="block text-xs font-heading font-semibold text-fg mb-1">
@@ -878,14 +878,14 @@ function EntryRow({ entry, editing, onEditTier, onEditCost, onRemove }: EntryRow
       </span>
 
       {/* Inline tier edit */}
-      <select
+      <Select
         value={entry.power_tier ?? ''}
         onChange={(e) => onEditTier(e.target.value)}
         disabled={editing}
-        className="border border-hairline bg-surface rounded-poke-md px-1.5 py-1 text-xs text-fg focus:border-accent-ink transition-colors disabled:opacity-50"
+        className="h-8 px-1.5 py-1 text-xs"
       >
         <TierOptions />
-      </select>
+      </Select>
 
       {/* Inline cost edit */}
       <div className="flex items-center gap-1">

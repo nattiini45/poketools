@@ -189,7 +189,7 @@ export default function LiveControls({
           </Button>
         </div>
       ) : null}
-      {vm.paused ? <p className="text-sm font-semibold uppercase text-poke-text-primary">{tGlossary('draft.paused')}</p> : null}
+      {vm.paused ? <p className="text-sm font-semibold text-poke-text-primary">{tGlossary('draft.paused')}</p> : null}
       <InlineError text={pauseCall.error ? errorText(pauseCall.error) : null} />
 
       <div className="flex flex-wrap gap-2">

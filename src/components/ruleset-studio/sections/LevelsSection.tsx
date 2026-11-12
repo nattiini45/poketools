@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useEffect, useRef, useState, type ComponentProps } from 'react';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
@@ -123,15 +124,15 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="space-y-1 text-sm font-medium text-fg">
           <span>{t('levels.policy')}</span>
-          <select
+          <Select
             id={fieldId('/levels/policy')}
-            className="min-h-11 w-full rounded-poke-md border border-hairline bg-surface px-3"
+            className="min-h-11"
             value={levels.policy}
             onChange={(event) => onChange({ ...doc, levels: { ...levels, policy: event.target.value === 'exact' ? 'exact' : 'max' } })}
           >
             <option value="max">{t('levels.max')}</option>
             <option value="exact">{t('levels.exact')}</option>
-          </select>
+          </Select>
         </label>
         <DraftInput
           id={fieldId('/levels/default')}
@@ -172,15 +173,15 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
             />
             <label className="space-y-1 text-sm font-medium text-fg">
               <span>{t('levels.status')}</span>
-              <select
+              <Select
                 id={fieldId(`/levels/entries/${index}/status`)}
-                className="min-h-11 w-full rounded-poke-md border border-hairline bg-surface px-3"
+                className="min-h-11"
                 value={entry.status}
                 onChange={(event) => update(index, { status: event.target.value === 'approved' ? 'approved' : 'experimental' })}
               >
                 <option value="experimental">{t('levels.experimental')}</option>
                 <option value="approved">{t('levels.approved')}</option>
-              </select>
+              </Select>
             </label>
             <Button
               type="button"

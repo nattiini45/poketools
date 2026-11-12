@@ -43,7 +43,7 @@ import { FluidHoverHighlight } from "@/components/ui/fluid/fluid-hover-highlight
 //
 // Built on Radix Select, which owns positioning (popper collision flipping),
 // dismissal (outside press, Escape), list keyboard navigation + typeahead
-// (open and closed), combobox ARIA, and the hidden native <select> for forms.
+// (open and closed), combobox ARIA, and the hidden native select element for forms.
 // This layer keeps the fluid-hover overlays, the
 // spring open/close animation, and the animated checkmark.
 //
@@ -463,7 +463,7 @@ const SelectContent = forwardRef<HTMLDivElement, SelectContentProps>(
 
     // Rendered unconditionally: while closed, Radix parks these children in a
     // detached DocumentFragment so the items stay registered (typeahead on
-    // the closed trigger, native <select> options, and the ItemText → Value
+    // the closed trigger, native select options, and the ItemText → Value
     // label portal all depend on it).
     return (
       <SelectPrimitive.Portal>

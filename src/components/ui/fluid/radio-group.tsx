@@ -400,7 +400,7 @@ const RadioItem = forwardRef<HTMLDivElement, RadioItemProps>(
               isSelected
                 ? "border-[1.5px] border-transparent"
                 : isActive
-                ? "border-[1.5px] border-neutral-400 dark:border-neutral-500"
+                ? "border-[1.5px] border-hairline-strong"
                 : "border-[1.5px] border-border"
             )}
           />

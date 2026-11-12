@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import { ArrowDown, ArrowUp, X } from 'lucide-react';
@@ -385,7 +386,7 @@ export function FormatRulesEditorView({
           </p>
         )}
         {unusedSteps.length > 0 ? (
-          <select
+          <Select
             id="format-rules-add-step"
             aria-label={t('formatRules.addStep')}
             value=""
@@ -393,7 +394,6 @@ export function FormatRulesEditorView({
               const step = unusedSteps.find((candidate) => candidate === e.target.value);
               if (step) onChange({ ...values, tiebreaker_order: addTiebreakerStep(values.tiebreaker_order, step) });
             }}
-            className="h-10 rounded-poke-md border border-hairline bg-surface px-3 text-sm text-fg"
           >
             <option value="" disabled>
               {t('formatRules.addStep')}
@@ -403,7 +403,7 @@ export function FormatRulesEditorView({
                 {stepLabel(step)}
               </option>
             ))}
-          </select>
+          </Select>
         ) : (
           <p className="text-xs text-fg-muted">{t('formatRules.addStepNone')}</p>
         )}

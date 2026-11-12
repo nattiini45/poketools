@@ -6,6 +6,7 @@
  * (`useLineText`, data locale) with their price. The server re-checks the
  * choice.
  */
+import Select from '@/components/ui/Select';
 import { useId, useMemo } from 'react';
 import { useT } from '@/i18n/client';
 import { draftAdminMessages } from '@/i18n/messages/draft/admin';
@@ -35,7 +36,7 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
       <label htmlFor={id} className={LABEL}>
         {label}
       </label>
-      <select
+      <Select
         id={id}
         value={value}
         disabled={disabled}
@@ -43,7 +44,6 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
           const next = e.target.value;
           onChange(allowed.has(next) ? (next as LineId) : '');
         }}
-        className={FIELD}
       >
         <option value="">{t('lineSelect.chooseLine')}</option>
         {lineIds.map((lineId) => (
@@ -54,7 +54,7 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
             })}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }

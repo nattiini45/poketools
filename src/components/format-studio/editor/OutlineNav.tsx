@@ -109,7 +109,7 @@ export default function OutlineNav({ doc, selection, diagnostics, onSelect, onAd
   });
 
   const stagesFull = doc.stages.length >= MAX_STAGES;
-  const caption = 'px-1 pb-1 font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted';
+  const caption = 'px-1 pb-1 font-heading text-xs font-semibold text-fg-muted';
 
   return (
     <div className="min-w-0">

@@ -9,6 +9,7 @@
  * mirror BE §8.2 (`invalidDraftConfigField`); the server is authoritative.
  * The deadline of a redraft is edited in `RedraftPhaseManager`.
  */
+import Select from '@/components/ui/Select';
 import { useId, useState, type ReactNode } from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import Button from '@/components/ui/frozen/Button';
@@ -165,15 +166,14 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
 
       <fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
         <Field id={ids.mode} label={t('config.mode')}>
-          <select
+          <Select
             id={ids.mode}
             value={form.mode}
             onChange={(e) => setMode(e.target.value === 'slow' ? 'slow' : 'live')}
-            className={FIELD}
           >
             <option value="live">{tGlossary('draft.liveDraft')}</option>
             <option value="slow">{tGlossary('draft.slowDraft')}</option>
-          </select>
+          </Select>
         </Field>
         <Field id={ids.roster} label={t('config.rosterSize')}>
           <input
