@@ -115,7 +115,7 @@ export function FormatRulesEditorView({
   const hasErrorText = error !== null && Boolean(error.error || error.code);
 
   if (state.kind === 'loading') {
-    return <p className="text-sm text-poke-text-secondary">{t('formatRules.loading')}</p>;
+    return <p className="text-sm text-fg-muted">{t('formatRules.loading')}</p>;
   }
 
   if (state.kind === 'failed') {
@@ -146,7 +146,7 @@ export function FormatRulesEditorView({
         {error && (
           <Alert variant="error">{hasErrorText ? errorText(error) : t('formatRules.initializeFailed')}</Alert>
         )}
-        <p className="text-sm text-poke-text-secondary">{t('formatRules.empty')}</p>
+        <p className="text-sm text-fg-muted">{t('formatRules.empty')}</p>
         <Button type="button" onClick={onInitialize} disabled={busy}>
           {busy ? t('formatRules.initializing') : t('formatRules.initialize')}
         </Button>
@@ -213,7 +213,7 @@ export function FormatRulesEditorView({
   const listError = (field: 'banned_moves' | 'banned_items') => {
     const e = errorFor(field);
     return e ? (
-      <p id={`format-rules-${field}-error`} className="mt-1 text-sm text-poke-danger">
+      <p id={`format-rules-${field}-error`} className="mt-1 text-sm text-loss">
         {fieldErrorText(e)}
       </p>
     ) : null;
@@ -244,7 +244,7 @@ export function FormatRulesEditorView({
             const describedBy = [`${id}-hint`, fieldError ? `${id}-error` : null].filter(Boolean).join(' ');
             return (
               <div key={field} className="space-y-1.5">
-                <label htmlFor={id} className="block text-sm font-heading font-semibold text-poke-text-primary">
+                <label htmlFor={id} className="block text-sm font-heading font-semibold text-fg">
                   {numberLabels[field]}
                 </label>
                 <input
@@ -259,15 +259,15 @@ export function FormatRulesEditorView({
                   aria-invalid={fieldError ? true : undefined}
                   aria-describedby={describedBy}
                   className={cn(
-                    'flex h-10 w-full rounded-poke-md border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
-                    fieldError ? 'border-poke-danger' : 'border-poke-border',
+                    'flex h-10 w-full rounded-poke-md border bg-surface px-3 py-2 text-sm text-fg shadow-xs transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+                    fieldError ? 'border-loss' : 'border-hairline',
                   )}
                 />
-                <p id={`${id}-hint`} className="text-xs text-poke-text-muted">
+                <p id={`${id}-hint`} className="text-xs text-fg-muted">
                   {t('formatRules.range', limits)}
                 </p>
                 {fieldError && (
-                  <p id={`${id}-error`} className="text-sm text-poke-danger">
+                  <p id={`${id}-error`} className="text-sm text-loss">
                     {fieldErrorText(fieldError)}
                   </p>
                 )}
@@ -275,7 +275,7 @@ export function FormatRulesEditorView({
             );
           })}
         </div>
-        <p className="text-xs text-poke-text-muted">{t('formatRules.poolHint')}</p>
+        <p className="text-xs text-fg-muted">{t('formatRules.poolHint')}</p>
       </div>
 
       {/* Banned moves and items (canonical English names, shown in the viewer's data locale) */}
@@ -300,7 +300,7 @@ export function FormatRulesEditorView({
 
       {/* Tera rules: pinned to the format pack */}
       <div className="space-y-1.5">
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('formatRules.teraRules')}</h3>
+        <h3 className="text-sm font-heading font-semibold text-fg">{t('formatRules.teraRules')}</h3>
         <div className="flex flex-wrap gap-2">
           {TERA_STAGES.map(({ key, stage, variant }) => (
             <Badge key={key} variant={variant} size="md">
@@ -311,22 +311,22 @@ export function FormatRulesEditorView({
             </Badge>
           ))}
         </div>
-        <p className="text-xs text-poke-text-muted">{t('formatRules.teraPinned')}</p>
+        <p className="text-xs text-fg-muted">{t('formatRules.teraPinned')}</p>
       </div>
 
       {/* Redraft phase: a status line, the dedicated toggle changes it */}
       <div className="space-y-1">
-        <p className="text-sm text-poke-text-primary">
+        <p className="text-sm text-fg">
           <span className="font-heading font-semibold">{t('formatRules.redraftPhase.label')}</span>
           {': '}
           {redraftPhaseOpen ? t('formatRules.redraftPhase.open') : t('formatRules.redraftPhase.closed')}
         </p>
-        <p className="text-xs text-poke-text-muted">{t('formatRules.redraftPhase.hint')}</p>
+        <p className="text-xs text-fg-muted">{t('formatRules.redraftPhase.hint')}</p>
       </div>
 
       {/* Tiebreaker order */}
       <div className="space-y-2">
-        <h3 id="format-rules-tiebreaker-heading" className="text-sm font-heading font-semibold text-poke-text-primary">
+        <h3 id="format-rules-tiebreaker-heading" className="text-sm font-heading font-semibold text-fg">
           {t('formatRules.tiebreakerOrder')}
         </h3>
         <ol aria-labelledby="format-rules-tiebreaker-heading" className="space-y-1.5">
@@ -336,10 +336,10 @@ export function FormatRulesEditorView({
             return (
               <li
                 key={step}
-                className="flex items-center gap-2 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm"
+                className="flex items-center gap-2 rounded-poke-md border border-hairline bg-surface px-3 py-1.5 text-sm"
               >
-                <span className="w-5 shrink-0 tabular-nums text-poke-text-muted">{index + 1}.</span>
-                <span className="flex-1 text-poke-text-primary">{name}</span>
+                <span className="w-5 shrink-0 tabular-nums text-fg-muted">{index + 1}.</span>
+                <span className="flex-1 text-fg">{name}</span>
                 <Button
                   type="button"
                   variant="ghost"
@@ -380,7 +380,7 @@ export function FormatRulesEditorView({
           })}
         </ol>
         {tiebreakerError && (
-          <p id="format-rules-tiebreaker-error" className="text-sm text-poke-danger">
+          <p id="format-rules-tiebreaker-error" className="text-sm text-loss">
             {fieldErrorText(tiebreakerError)}
           </p>
         )}
@@ -393,7 +393,7 @@ export function FormatRulesEditorView({
               const step = unusedSteps.find((candidate) => candidate === e.target.value);
               if (step) onChange({ ...values, tiebreaker_order: addTiebreakerStep(values.tiebreaker_order, step) });
             }}
-            className="h-10 rounded-poke-md border border-poke-border bg-poke-surface px-3 text-sm text-poke-text-primary"
+            className="h-10 rounded-poke-md border border-hairline bg-surface px-3 text-sm text-fg"
           >
             <option value="" disabled>
               {t('formatRules.addStep')}
@@ -405,9 +405,9 @@ export function FormatRulesEditorView({
             ))}
           </select>
         ) : (
-          <p className="text-xs text-poke-text-muted">{t('formatRules.addStepNone')}</p>
+          <p className="text-xs text-fg-muted">{t('formatRules.addStepNone')}</p>
         )}
-        <p className="text-xs text-poke-text-muted">{t('formatRules.tiebreakerHint')}</p>
+        <p className="text-xs text-fg-muted">{t('formatRules.tiebreakerHint')}</p>
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -420,7 +420,7 @@ export function FormatRulesEditorView({
         <p
           role="status"
           aria-live="polite"
-          className={cn('text-sm', saved ? 'text-poke-green' : 'text-poke-text-muted')}
+          className={cn('text-sm', saved ? 'text-win' : 'text-fg-muted')}
         >
           {statusText}
         </p>

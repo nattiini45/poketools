@@ -61,7 +61,7 @@ export default function ModuleFacts({ modules, editorLinks, parentLevel }: Modul
               {href !== undefined && (
                 <>
                   {' '}
-                  <Link href={href} className="font-medium text-poke-blue hover:underline">
+                  <Link href={href} className="font-[550] text-accent-ink hover:underline">
                     {t('detail.editIn')}
                   </Link>
                 </>

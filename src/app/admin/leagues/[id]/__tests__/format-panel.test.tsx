@@ -58,7 +58,8 @@ vi.mock('@/components/format-studio/attach/ReadinessCard', () => stub('Readiness
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/shared/ResourceForbidden', () => stub('ResourceForbidden'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
-vi.mock('@/components/ui/Section', () => stub('Section'));
+vi.mock('@/components/admin/AccordionSection', () => stub('AccordionSection'));
+vi.mock('@/components/admin/WorkspaceCard', () => stub('WorkspaceCard'));
 vi.mock('@/components/ui/Badge', () => stub('Badge'));
 vi.mock('@/components/league/LeagueStatusControl', () => stub('LeagueStatusControl'));
 vi.mock('@/components/league/hub/HubTabStripScroll', () => stub('HubTabStripScroll'));
@@ -76,7 +77,8 @@ vi.mock('../_components/panels/DangerPanel', () => ({ dangerPanel: mocks.otherPa
 import AdminLeagueDetailPage from '../page';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
-import Section from '@/components/ui/Section';
+import AccordionSection from '@/components/admin/AccordionSection';
+import WorkspaceCard from '@/components/admin/WorkspaceCard';
 import FormatDetail from '@/components/format-studio/FormatDetail';
 import FormatAttachPanel from '@/components/format-studio/attach/FormatAttachPanel';
 import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
@@ -237,7 +239,7 @@ describe('Format tab (?tab=format)', () => {
     expect(detail.props.example).toBeUndefined();
 
     const t = studioT();
-    const [section] = findByType(tree, Section);
+    const [section] = findByType(tree, AccordionSection);
     expect(section.props.title).toBe(t('tab.title'));
     expect(section.props.subtitle).toBe(t('tab.subtitle'));
     const studioLink = findByType(tree, Link).find((l) => l.props.href === `/admin/formats/league/${S1}`);
@@ -266,7 +268,7 @@ describe('Format tab (?tab=format)', () => {
     const tree = await render('format');
     const panel = panelOf(tree);
     expect(findByType(panel, FormatDetail)).toHaveLength(0);
-    expect(findByType(panel, Section)).toHaveLength(0);
+    expect(findByType(panel, AccordionSection)).toHaveLength(0);
     expect(findByType(panel, Link).map((l) => l.props.href)).toEqual([`/admin/leagues/${S1}?tab=phases`]);
     expect(textOf(panel).trim().length).toBeGreaterThan(0);
   });
@@ -314,7 +316,7 @@ describe('Format tab (?tab=format)', () => {
     const labels = findByType(tree, LeagueAdminTabs)[0].props.labels as Record<string, string>;
     expect(labels.format).toBe(createTranslator(leagueAdminSeasonPageMessages, 'de')('tabs.format'));
     expect(labels.format).toBe('Format und Regeln');
-    const [section] = findByType(tree, Section);
+    const [section] = findByType(tree, AccordionSection);
     expect(section.props.title).toBe(studioT('de')('tab.title'));
     expect(String(section.props.title)).not.toMatch(/Ã|Â|�/);
   });
@@ -355,7 +357,7 @@ describe('Format tab of a custom league', () => {
     expect(blockOrder(panel)).toEqual(['readiness', 'attach']);
     const [card] = findByType(panel, ReadinessCard);
     expect(card.props).toEqual({ id: 'format-readiness', result: CUSTOM_STATE.readiness, seasonId: S1 });
-    const [section] = findByType(panel, Section);
+    const [section] = findByType(panel, WorkspaceCard);
     expect(section.props.title).toBe('Format');
   });
 
