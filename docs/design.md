@@ -74,7 +74,12 @@ Declared in `globals.css` (" Direction B tokens") and mapped to Tailwind in
 | `--skew` | `-10deg` | same | Every skewed plate (F4) |
 
 The legacy names alias onto the set: `poke-base` → `page`, `poke-surface` → `surface`, `poke-elevated` → `elevated`, `poke-text-primary` → `fg`, `poke-text-secondary` → `fg-muted`, `poke-border(-strong)` → `hairline(-strong)`, `poke-accent` → `accent-ink`, `poke-accent-light` → `accent-subtle`, `poke-live` → `live`, and shadcn's
-`--background` / `--foreground`. A site palette (`html[data-palette]`) still
+`--background` / `--foreground`. Z1 deleted the aliases that no class or `var()` reads
+(shadcn's `popover`, `popover-foreground`, `input`, `card-foreground` and
+`accent-foreground`, and `destructive-light`)
+and the colour mappings no class uses (`dm-*`, `warning`, `success`, `info`,
+`tint`, `shadow-color`, `fluid-accent`, `poke-live`, `poke-glow`, `arena-glow`);
+variables that code reads with `var()` stay. A site palette (`html[data-palette]`) still
 overrides these aliases; reducing it to the accent alone (D6) is a later step.
 The tables below describe the legacy names as they stand for themed worlds and
 site palettes.
@@ -138,9 +143,10 @@ half), `art-ball-ink` (`#241A0C`, its outline, band and button ring),
 (`#3B82F6`). `shared/Pokeball.tsx` draws from these three ball inks only, so
 the ball is the same in both themes and every palette.
 
-`src/lib/design/tokens.ts` mirrors the sunlit values as TS constants for
-charts and inline styles; prefer the CSS-variable-backed Tailwind classes
-wherever possible (they swap with the theme, the constants cannot).
+`src/lib/design/tokens.ts` holds one thing: `typeColors`, the Pokémon type colours
+as TS constants for charts and inline styles. It no longer mirrors the site
+palette; read colours through the CSS-variable-backed Tailwind classes, which
+swap with the theme.
 
 ### Typography
 
@@ -177,11 +183,13 @@ The root is 16 px (`html { font-size: 100% }`), except on draft-room pages
   the sand palette.
 
 ### Panel recipes & headings
-- `src/components/ui/panel.ts` exports the app-wide surface class strings
-  (`PANEL`, `PANEL_INSET`, `PANEL_NOTICE`, `PANEL_HOVER`, `FOCUS_RING`,
-  `TABLE_HEAD`) — the poke-token twin of the world contract in
-  `src/components/world/panel.ts`. Compose panels from these instead of
-  re-deriving radius/border/fill per page.
+- `src/components/ui/panel.ts` exports three class strings, `PANEL`, `PANEL_INSET`
+  and `FOCUS_RING`, which the nav, the assistant drawer and the league hub use
+  (the hub keeps its own table head and notice in `hub-style.ts` and
+  `HubBits.tsx`). `src/components/world/panel.ts` is the world twin with the
+  `arena-*` tokens (`PANEL`, `PANEL_INSET`, `PANEL_NOTICE`, `PANEL_HOVER`,
+  `FOCUS_RING`, `TABLE_HEAD`). The notice, hover-lift and table-head recipes
+  of the `ui` file were removed once nothing used them.
 - Page and section headings are set in the pixel face without the former plaza
   accent bar: `PageContainer` renders its title in the display role, `Section`
   and `CollapsibleSection` in the title role. All three take an optional
@@ -282,11 +290,14 @@ diff (`docs/visual-harness.md`). They were built against an 18 px root, so:
 
 ## Guardrails
 
-`npm run design:guards` (`scripts/design/check-design-guards.mts`) reports, at warn level
-and outside the frozen surfaces (`src/lib/design/frozen-surfaces.ts`): text below 11
-px, `uppercase` and `tracking-*`, static Tailwind palette colours, and raw
-`<select>`. Pass `--paths "<files>"` to list the hits in the files you touched;
-new code should add none.
+`npm run design:guards` (`scripts/design/check-design-guards.mts`) is an error-level
+check. Outside the frozen surfaces (`src/lib/design/frozen-surfaces.ts`) it fails
+with exit code 1, and prints the file and line of each hit, when code uses text
+below 11 px, `uppercase` or `tracking-*`, a static Tailwind palette colour, or a
+raw `<select>`. CI runs it as its own step ("Design guardrails"), as does
+`npm run verify:ci`, so a hit blocks the merge. Pass `--paths "<files>"` to check
+only the files you touched. Tests are skipped, and a frozen file's classes stay as
+they are.
 
 ## Direction B primitives (redesign F4)
 

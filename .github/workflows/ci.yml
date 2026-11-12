@@ -66,6 +66,13 @@ jobs:
         # i18n sweep (i18n-core §12.2 #2); keep in step with the 5b-i18n-strings
         # STEPS entry in scripts/verify-ci.mjs.
 
+      - name: Design guardrails (enforce)
+        run: npm run design:guards
+        # Enforce: fails CI when non-frozen UI code uses a type size below 11 px,
+        # uppercase or tracking, a Tailwind palette colour or a raw <select>
+        # (docs/design.md, "Guardrails"). Keep in step with the 5b-design-guards
+        # STEPS entry in scripts/verify-ci.mjs.
+
       - name: Type-check (example format pack)
         run: npm run typecheck:example
         # tsc against the pack this job builds (tsconfig.example.json pins @format-pack to the

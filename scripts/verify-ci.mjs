@@ -120,6 +120,7 @@ const STEPS = [
     args: ['scripts/check-i18n-strings.mjs', '--all'],
     env: { ENFORCE: '1' },
   },
+  { name: '5b-design-guards', shellText: 'npm run design:guards', cmd: NPM, args: ['run', 'design:guards'] },
   { name: '5c-typecheck-example', shellText: 'npm run typecheck:example', cmd: NPM, args: ['run', 'typecheck:example'] },
   { name: '6-build', shellText: 'npm run build', cmd: NPM, args: ['run', 'build'], env: BUILD_ENV },
   // The coverage run is the only Vitest run: it executes every project and enforces the thresholds.

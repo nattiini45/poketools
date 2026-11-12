@@ -1,6 +1,7 @@
 // usage: npx --no-install tsx scripts/design/check-design-guards.mts [--paths "<files>"]
-// Direction B guardrails (redesign F3), warn level: lists what new and redesigned code should not use, and always
-// exits 0. Frozen surfaces (src/lib/design/frozen-surfaces.ts) are skipped. docs/design.md, "Guardrails".
+// Direction B guardrails (redesign F3, error level since Z1): fails with exit 1 when any file uses what new and
+// redesigned code should not. Frozen surfaces (src/lib/design/frozen-surfaces.ts) are skipped. --paths limits the run to the
+// given files. Every hit prints as file:line. docs/design.md, "Guardrails".
 import { execSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { isFrozenSource } from '../../src/lib/design/frozen-surfaces';
@@ -28,8 +29,14 @@ for (const file of files) {
     for (const rule of RULES) if (rule.test(line, file)) hits.get(rule.id)!.push(`${file}:${index + 1}`);
   });
 }
+let total = 0;
 for (const rule of RULES) {
   const list = hits.get(rule.id)!;
+  total += list.length;
   console.log(`design-guards: ${rule.id}: ${list.length} (${rule.why})`);
-  if (pathsArg >= 0) for (const hit of list) console.log('  ' + hit);
+  for (const hit of list) console.log('  ' + hit);
+}
+if (total > 0) {
+  console.error(`design-guards: ${total} hit(s)`);
+  process.exit(1);
 }
