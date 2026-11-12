@@ -158,7 +158,7 @@ export default function NavBar({
       >
         <div className="mx-auto max-w-[1440px] px-[18px] sm:px-[27px] lg:px-[36px]">
           <div className="flex h-16 items-center justify-between gap-3">
-            <div className="flex min-w-0 items-center gap-3 xl:gap-5">
+            <div className="flex shrink-0 items-center gap-3 xl:gap-5">
               <Wordmark href={player ? '/dashboard' : '/'} />
               <div ref={rowRef} {...hover.handlers} className="relative hidden items-center gap-0.5 lg:flex">
                 <FluidHoverHighlight
@@ -185,7 +185,7 @@ export default function NavBar({
               </div>
             </div>
 
-            <div className="flex shrink-0 items-center gap-1.5">
+            <div className="flex min-w-0 items-center gap-1.5">
               <SiteSearch signedIn={Boolean(player)} extraLinks={extraLinks} />
               {player ? <NotificationBell /> : <DiscordLoginButton />}
               <AccountMenu />
