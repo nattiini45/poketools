@@ -145,7 +145,7 @@ export default function AssistantDrawer() {
           aria-label={t('drawer.title')}
           tabIndex={-1}
           style={{ ['--assistant-w' as string]: `${width}px` }}
-          className="fixed inset-0 z-40 flex w-full flex-col border-l border-hairline bg-page shadow-poke-lg outline-2 outline-offset-2 outline-transparent sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[var(--assistant-w)]"
+          className="fixed inset-0 z-40 flex w-full flex-col border-l border-hairline bg-poke-base shadow-poke-lg outline-2 outline-offset-2 outline-transparent sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[var(--assistant-w)]"
         >
           <div
             role="separator"
