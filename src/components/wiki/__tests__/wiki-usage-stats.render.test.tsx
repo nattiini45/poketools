@@ -2,7 +2,7 @@
  * The wiki usage widget renders the appearance summary with plural forms and
  * labels an unresolved player (`player_name: null`) in the viewer's language.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import type { PokemonDetailStats, PokemonPlayerRow } from '@/types/game';
 
@@ -28,25 +28,6 @@ vi.mock('@/components/ui/Table', () => ({
     </table>
   ),
 }));
-
-vi.mock('@/components/shared/ScopeSelector', () => ({ default: () => null }));
-
-const seed = vi.hoisted(() => ({ stats: null as unknown, nullCalls: 0 }));
-
-// Seeds one server render: the first null initial is `stats`, later ones
-// (`filters`) stay null; `loading` (the only `true` initial) is false.
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react')>();
-  return {
-    ...actual,
-    useState: <T,>(initial: T | (() => T)) => {
-      const value = typeof initial === 'function' ? (initial as () => T)() : initial;
-      if (value === true) return [false, () => undefined];
-      if (value === null) return [seed.nullCalls++ === 0 ? seed.stats : null, () => undefined];
-      return [value, () => undefined];
-    },
-  };
-});
 
 import WikiUsageStats from '../WikiUsageStats';
 import { renderWithI18n } from '@/test/i18n';
@@ -81,23 +62,27 @@ function stats(appearances: number, games: number): PokemonDetailStats {
   };
 }
 
-function render(s: PokemonDetailStats, locale: 'en' | 'de' = 'en'): string {
-  seed.stats = s;
-  seed.nullCalls = 0;
-  return renderWithI18n(<WikiUsageStats pokemonName="Garchomp" />, { locale });
+function render(s: PokemonDetailStats, locale: 'en' | 'de' = 'en', props: { loading?: boolean; playerId?: string } = {}): string {
+  return renderWithI18n(<WikiUsageStats stats={s} loading={props.loading ?? false} playerId={props.playerId ?? ''} onSelectPlayer={() => undefined} />, { locale });
 }
 
 describe('WikiUsageStats render', () => {
-  beforeEach(() => {
-    seed.stats = null;
-    seed.nullCalls = 0;
+  it('has no scope picker, stat tiles or move usage of its own: those belong to the stats section above', () => {
+    const html = render({ ...stats(3, 12), moves: [{ name: 'Earthquake', count: 3, usage_percent: 100 }] });
+    expect(html).not.toContain('Scope');
+    expect(html).not.toContain('Move Usage');
+    expect(html).not.toContain('Usage%');
+    expect(html).toContain('Player Breakdown');
   });
 
-  it('pluralizes the appearance summary', () => {
-    expect(render(stats(1, 1))).toContain('1 appearance across 1 game');
-    expect(render(stats(3, 12))).toContain('3 appearances across 12 games');
-    expect(render(stats(1, 1), 'de')).toContain('1 Einsatz in 1 Partie');
-    expect(render(stats(3, 12), 'de')).toContain('3 Einsätze in 12 Partien');
+  it('shows the item usage and hides the breakdown once a player is picked', () => {
+    const s = { ...stats(3, 12), items: [{ name: 'Choice Scarf', count: 2, usage_percent: 66 }] };
+    expect(render(s)).toContain('Item Usage');
+    expect(render(s, 'en', { playerId: 'p1' })).not.toContain('Player Breakdown');
+  });
+
+  it('renders nothing while the stats load', () => {
+    expect(render(stats(3, 12), 'en', { loading: true })).not.toContain('Player Breakdown');
   });
 
   it('labels an unresolved player in the viewer language', () => {
