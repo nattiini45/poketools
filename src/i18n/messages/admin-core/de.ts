@@ -182,16 +182,18 @@ export default defineDe<typeof en>()({
   },
   matches: {
     listTitle: 'Alle Spiele',
+    listSubtitle: 'Alle Spiele, die du verwaltest. Filtere die Liste, öffne ein Spiel oder bearbeite mehrere auf einmal.',
     accessDenied: {
       title: 'Zugriff verweigert',
       body: 'Für diese Seite brauchst du Admin-Rechte für das Turnier oder die Liga dieses Spiels.',
     },
     detail: {
-      title: 'Admin-Eingriff',
-      status: 'Status:',
+      vs: 'VS',
       winner: 'Sieger:',
-      notes: 'Notizen:',
-      importReplay: '+ Replay importieren (manuelle Zuordnung)',
+      notesTitle: 'Notizen',
+      importReplay: 'Replay importieren',
+      noGamesHint: 'Importiere ein Replay oder trag das Ergebnis unter „Spielaktionen“ ein.',
+      actionsRail: 'Spielaktionen',
       backToMatches: 'Zurück zu den Spielen',
     },
     importReplay: {

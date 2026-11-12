@@ -176,6 +176,8 @@ export default {
       moreFilters: 'More filters',
       moreFiltersActive: 'More filters ({count})',
       clearAll: 'Clear all',
+      /** The button of the empty list when filters are active. */
+      clearFilters: 'Clear filters',
       activeFilters: 'Active filters',
       removeFilter: 'Remove filter: {label}',
       noFilterResults: 'No matches fit these filters.',

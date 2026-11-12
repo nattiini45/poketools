@@ -201,16 +201,20 @@ export default {
   },
   matches: {
     listTitle: 'All Matches',
+    listSubtitle: 'Every match you administer. Filter the list, open a match, or act on several at once.',
     accessDenied: {
       title: 'Access Denied',
       body: "You need admin rights for this match's tournament or league to view this page.",
     },
     detail: {
-      title: 'Match Override',
-      status: 'Status:',
+      /** Between the two names in the header while no game is recorded. */
+      vs: 'VS',
       winner: 'Winner:',
-      notes: 'Notes:',
-      importReplay: '+ Import replay (manual assign)',
+      notesTitle: 'Notes',
+      importReplay: 'Import replay',
+      noGamesHint: 'Import a replay, or record the result under Match actions.',
+      /** Names the column of controls (schedule, result, reopen, history) for assistive technology. */
+      actionsRail: 'Match actions',
       backToMatches: 'Back to matches',
     },
     importReplay: {

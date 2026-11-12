@@ -4,7 +4,9 @@ import { useId, useState, useSyncExternalStore } from 'react';
 import { useRouter } from 'next/navigation';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
+import { TOUCH } from '@/components/admin/match-styles';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { useT } from '@/i18n/client';
 import { LocalTime } from '@/i18n/LocalTime';
@@ -102,37 +104,35 @@ export default function MatchSchedulePanel({
 
   if (status === 'completed') {
     return (
-      <Section title={t('schedule.title')}>
-        <div className="space-y-2 text-sm">
+      <Section title={t('schedule.title')} icon="metronome" collapsible keepMounted>
+        <div className="flex flex-col gap-2 text-body text-fg">
           <p>
-            <span className="text-poke-text-muted">{t('schedule.current')}:</span>{' '}
+            <span className="text-fg-muted">{t('schedule.current')}:</span>{' '}
             {scheduledAt ? <LocalTime value={scheduledAt} preset="dateTimeYear" /> : t('header.notScheduled')}
           </p>
-          <p className="text-poke-text-muted">{t('schedule.completedNote')}</p>
+          <p className="text-caption text-fg-muted">{t('schedule.completedNote')}</p>
         </div>
       </Section>
     );
   }
 
   return (
-    <Section title={t('schedule.title')} subtitle={t('schedule.hint')}>
-      <div className="space-y-3">
+    <Section title={t('schedule.title')} icon="metronome" collapsible keepMounted>
+      <div className="flex flex-col gap-3">
+        <p className="text-body text-fg-muted">{t('schedule.hint')}</p>
         <div>
-          <label htmlFor={inputId} className="block text-sm font-heading text-poke-text-muted mb-1">
-            {t('schedule.inputLabel')}
-          </label>
-          <input
+          <Input
             id={inputId}
             type="datetime-local"
+            label={t('schedule.inputLabel')}
+            hint={t('schedule.browserZoneHint')}
             value={value}
             disabled={saving || !hydrated}
             onChange={(e) => setEdited(e.target.value)}
-            className="border border-poke-border rounded-poke-md px-3 py-2 text-sm bg-poke-surface text-poke-text-primary"
           />
-          <p className="mt-1 text-xs text-poke-text-muted">{t('schedule.browserZoneHint')}</p>
           {iso && (
-            <p className="mt-1 text-sm text-poke-text-secondary">
-              <span className="text-poke-text-muted">{t('schedule.instantLabel')}:</span>{' '}
+            <p className="mt-2 text-body text-fg">
+              <span className="text-fg-muted">{t('schedule.instantLabel')}:</span>{' '}
               <LocalTime value={iso} preset="dateTimeYear" zone="both" />
             </p>
           )}
@@ -143,12 +143,12 @@ export default function MatchSchedulePanel({
           <Alert variant="warning">{t('schedule.pendingProposals', { count: pendingProposals })}</Alert>
         )}
 
-        <div className="flex flex-wrap gap-3">
-          <Button size="sm" loading={saving} disabled={!canSave} onClick={() => send(iso)}>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" loading={saving} disabled={!canSave} onClick={() => send(iso)} className={TOUCH}>
             {t('schedule.save')}
           </Button>
           {scheduledAt && (
-            <Button variant="ghost" size="sm" disabled={saving} onClick={() => send(null)}>
+            <Button variant="ghost" size="sm" disabled={saving} onClick={() => send(null)} className={TOUCH}>
               {t('schedule.clear')}
             </Button>
           )}

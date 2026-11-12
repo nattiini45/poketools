@@ -1,7 +1,8 @@
 'use client';
 
 import { useId, useState, type ReactNode } from 'react';
-import Modal from '@/components/ui/Modal';
+import AdminDialog from '@/components/admin/AdminDialog';
+import Textarea from '@/components/ui/Textarea';
 import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { uiMessages } from '@/i18n/messages/ui';
@@ -83,14 +84,12 @@ export default function ReasonDialog({
   const showRequired = reasonRequired && missing;
 
   return (
-    <Modal open={open} onClose={close} title={title} size="md">
-      <p className="text-sm text-poke-text-secondary mb-4">{message}</p>
-      {children && <div className="mb-4 text-sm text-poke-text-secondary space-y-2">{children}</div>}
-      <label htmlFor={fieldId} className="block text-sm font-heading font-semibold text-poke-text-primary mb-1">
-        {reasonLabel}
-      </label>
-      <textarea
+    <AdminDialog open={open} onClose={close} title={title} size="md">
+      <p className="mb-4 text-body text-fg">{message}</p>
+      {children && <div className="mb-4 flex flex-col gap-2 text-body text-fg-muted">{children}</div>}
+      <Textarea
         id={fieldId}
+        label={reasonLabel}
         value={reason}
         onChange={(e) => setReason(e.target.value)}
         maxLength={maxLength}
@@ -99,15 +98,14 @@ export default function ReasonDialog({
         placeholder={reasonPlaceholder}
         aria-required={reasonRequired}
         aria-describedby={showRequired ? `${requiredId} ${counterId}` : counterId}
-        className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2 disabled:opacity-50"
       />
-      <div className="mt-1 mb-4 flex justify-between gap-3 text-xs text-poke-text-muted">
+      <div className="mb-4 mt-1 flex justify-between gap-3 text-caption tabular-nums text-fg-muted">
         <span id={requiredId}>{showRequired ? tMatch('reason.required') : ''}</span>
         <span id={counterId}>{tMatch('reason.counter', { count: reason.length, max: maxLength })}</span>
       </div>
       {error && <div className="mb-4">{error}</div>}
-      <div className="flex justify-end gap-3">
-        <Button variant="ghost" size="sm" onClick={close} disabled={loading}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={close} disabled={loading} className="max-sm:min-h-11">
           {t('confirmDialog.cancel')}
         </Button>
         <Button
@@ -116,10 +114,11 @@ export default function ReasonDialog({
           onClick={() => onConfirm(reason.trim())}
           loading={loading}
           disabled={missing || confirmDisabled}
+          className="max-sm:min-h-11"
         >
           {confirmLabel ?? t('confirmDialog.confirm')}
         </Button>
       </div>
-    </Modal>
+    </AdminDialog>
   );
 }

@@ -78,7 +78,7 @@ const render = (r: AdminMatchRow, backQuery = '', locale: 'en' | 'de' = 'en') =>
 
 /** The text of line two (the muted paragraph). */
 function detailsOf(html: string): string {
-  const match = /<p class="text-\[11px\][^>]*>(.*?)<\/p>/.exec(html);
+  const match = /<p class="text-caption[^>]*>(.*?)<\/p>/.exec(html);
   if (!match) throw new Error('line two not found');
   let text = match[1].replace(/<span[^>]*aria-hidden="true"[^>]*>·<\/span>/g, ' · ');
   // Repeat until no tag is left (the loop is the shape CodeQL expects for multi-character stripping).
@@ -276,11 +276,13 @@ describe('AdminMatchRowCard selection checkbox', () => {
       requestTime: NOW,
     });
   const checkboxes = (html: string) => html.match(/<input [^>]*type="checkbox"[^>]*>/g) ?? [];
+  /** The classes of the row itself (its buttons carry a focus ring of their own). */
+  const rowClasses = (html: string) => /^<div class="([^"]*)"/.exec(html)?.[1] ?? '';
 
   it('renders no checkbox without the selection prop, and the row is unchanged', () => {
     const plain = render(row());
     expect(checkboxes(plain)).toHaveLength(0);
-    expect(plain).not.toContain('ring-1');
+    expect(rowClasses(plain)).not.toContain('ring-1');
   });
 
   it('renders one checkbox named after the pairing, in English and German', () => {
@@ -296,7 +298,7 @@ describe('AdminMatchRowCard selection checkbox', () => {
     expect(checkboxes(select(true))[0]).toContain('checked=""');
     const selected = select(true);
     expect(selected).toContain('border-poke-border-focus ring-1 ring-poke-border-focus');
-    expect(select(false)).not.toContain('ring-1');
+    expect(rowClasses(select(false))).not.toContain('ring-1');
     expect(selected).not.toMatch(/bg-(black|slate|gray|zinc|neutral)-/);
   });
 

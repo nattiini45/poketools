@@ -9,6 +9,7 @@ import { matchPageBackSuffix } from '@/lib/admin/match-list';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,11 +51,15 @@ export default async function EditGamePage({ params, searchParams }: PageProps) 
     searchParams,
   ]);
 
+  const versus = t('versus', { player1: match.player_1_name, player2: match.player_2_name });
+
   return (
     <AdminGuard>
+      <AdminCrumbName href={`/admin/matches/${matchId}`} name={versus} />
       <PageContainer
         title={t('matches.editGame.title', { number: game.game_number })}
-        subtitle={t('versus', { player1: match.player_1_name, player2: match.player_2_name })}
+        icon="vs-seeker"
+        subtitle={versus}
         maxWidth="md"
       >
         <EditGameForm

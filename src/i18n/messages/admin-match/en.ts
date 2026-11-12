@@ -6,6 +6,7 @@
  */
 export default {
   header: {
+    title: 'Match details',
     league: 'League',
     standalone: 'Standalone tournament',
     phase: 'Phase',

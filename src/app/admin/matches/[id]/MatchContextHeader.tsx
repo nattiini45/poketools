@@ -3,7 +3,9 @@
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import Badge from '@/components/ui/Badge';
-import Card from '@/components/ui/Card';
+import Section from '@/components/ui/Section';
+import { FACT_LABEL, FACT_VALUE, TEXT_LINK, TOUCH } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import { useFormatter, useT } from '@/i18n/client';
 import { LocalTime, RelativeTime } from '@/i18n/LocalTime';
@@ -44,8 +46,8 @@ export function isDefaultRoundName(roundNumber: number, roundName: string | null
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-heading text-poke-text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm text-poke-text-primary">{children}</dd>
+      <dt className={FACT_LABEL}>{label}</dt>
+      <dd className={FACT_VALUE}>{children}</dd>
     </div>
   );
 }
@@ -73,8 +75,8 @@ export default function MatchContextHeader({
     : '';
 
   return (
-    <Card variant="muted" padding="md">
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+    <Section title={t('header.title')} icon="town-map">
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-4 sm:grid-cols-2 lg:grid-cols-3" data-admin-match-facts>
         <Row label={t('header.league')}>{context.league_name ?? t('header.standalone')}</Row>
         <Row label={t('header.phase')}>{context.phase_name}</Row>
         <Row label={t('header.round')}>
@@ -108,7 +110,7 @@ export default function MatchContextHeader({
             {autoConfirmAt ? (
               <span className="inline-flex flex-wrap items-center gap-2">
                 <LocalTime value={autoConfirmAt} preset="dateTimeYear" />
-                <span className="text-poke-text-muted">
+                <span className="text-fg-muted">
                   (<RelativeTime value={autoConfirmAt} />)
                 </span>
               </span>
@@ -118,18 +120,18 @@ export default function MatchContextHeader({
           </Row>
         )}
       </dl>
-      <p className="mt-3 text-xs text-poke-text-muted">{t('header.timeZoneHint', { zone: formatter.timeZone })}</p>
-      <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-heading">
-        <Link href={`/tournaments/${tournamentId}/matches/${matchId}`} className="text-poke-blue hover:underline">
+      <p className="mt-4 text-caption text-fg-muted">{t('header.timeZoneHint', { zone: formatter.timeZone })}</p>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-hairline pt-3 text-body">
+        <Link href={`/tournaments/${tournamentId}/matches/${matchId}`} className={cn('inline-flex items-center', TEXT_LINK, TOUCH)}>
           {t('header.publicPage')}
         </Link>
         <Link
           href={listHref ?? (matchesSearch ? `/admin/matches?${matchesSearch}` : '/admin/matches')}
-          className="text-poke-blue hover:underline"
+          className={cn('inline-flex items-center', TEXT_LINK, TOUCH)}
         >
           {t('header.matchesList')}
         </Link>
       </div>
-    </Card>
+    </Section>
   );
 }

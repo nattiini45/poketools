@@ -3,6 +3,7 @@ import type en from './en';
 
 export default defineDe<typeof en>()({
   header: {
+    title: 'Spieldetails',
     league: 'Liga',
     standalone: 'Eigenständiges Turnier',
     phase: 'Phase',

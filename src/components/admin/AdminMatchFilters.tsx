@@ -39,7 +39,11 @@ import {
   type PlayerSearchScope,
 } from '@/lib/players/player-search';
 import { matchPlayerSearchScope, offersStandaloneLeague, rulesetChoices } from '@/components/admin/match-list-view';
+import { ChevronDown, Search, X } from 'lucide-react';
+import { FOCUS } from '@/components/admin/match-styles';
 import Alert from '@/components/ui/Alert';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import { useFormatter, useLocale, useT } from '@/i18n/client';
 import { enumLabel } from '@/i18n/content/enum-label';
@@ -72,17 +76,23 @@ const PANEL_FILTER_KEYS: readonly MatchListFilterKey[] = [
   'showArchived',
 ];
 
-const SELECT_CLASSES =
-  'border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-full';
-/** A native date input needs room for the full date next to its calendar icon, so it gets less side padding than a select. */
-const DATE_INPUT_CLASSES = SELECT_CLASSES.replace('px-3', 'px-2');
-const FIELD_LABEL_CLASSES = 'block text-xs font-heading font-semibold text-poke-text-secondary mb-1';
-const FIELDSET_CLASSES = 'min-w-0 space-y-3 rounded-poke-md border border-poke-border p-3';
-const LEGEND_CLASSES = 'px-1 text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted';
-const TOGGLE_BASE_CLASSES =
-  'px-2.5 py-1 text-xs font-heading font-medium rounded-full border transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
-const TOGGLE_ON_CLASSES = 'border-poke-accent bg-poke-accent-light text-poke-accent';
-const TOGGLE_OFF_CLASSES = 'border-poke-border text-poke-text-secondary hover:border-poke-border-focus hover:text-poke-text-primary';
+const FIELD_LABEL_CLASSES = 'mb-1.5 block text-caption font-medium text-fg';
+const FIELDSET_CLASSES = 'min-w-0 space-y-3 rounded-poke-md border border-hairline bg-elevated p-3';
+const LEGEND_CLASSES = 'px-1 text-caption font-[550] text-fg-muted';
+/** A pill is a full 44 px target on a phone and 28 px from `sm` up. */
+const TOGGLE_BASE_CLASSES = `inline-flex min-h-11 shrink-0 items-center whitespace-nowrap rounded-full border px-3 text-caption motion-safe:transition-colors motion-safe:duration-80 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-7 ${FOCUS}`;
+const TOGGLE_ON_CLASSES = 'border-accent-ink bg-accent-subtle text-accent-ink';
+const TOGGLE_OFF_CLASSES = 'border-hairline-strong text-fg-muted hover:bg-hover hover:text-fg';
+/**
+ * A status tab: a skewed plate drawn behind the label (the label stays the button's only child, which the list's
+ * tests read), with the amber underside on the pressed one.
+ */
+const STATUS_TAB_CLASSES =
+  'relative isolate inline-flex min-h-11 items-center whitespace-nowrap px-3.5 text-body sm:min-h-8 before:absolute before:inset-0 before:-z-1 before:rounded-[3px] before:border before:[transform:skewX(var(--skew))] before:motion-safe:transition-colors before:motion-safe:duration-80 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-b-[3px] after:[transform:skewX(var(--skew))] focus-visible:outline-none focus-visible:before:outline-2 focus-visible:before:outline-solid focus-visible:before:outline-offset-2 focus-visible:before:outline-[var(--focus-ring)]';
+const STATUS_TAB_ON_CLASSES = 'font-[550] text-fg before:border-hairline-strong before:bg-surface after:bg-accent-fill';
+const STATUS_TAB_OFF_CLASSES = 'text-fg-muted hover:text-fg before:border-hairline before:bg-transparent hover:before:bg-hover';
+/** The selects of the bar sit on the 36 px step next to the search field. */
+const SELECT_SIZE = 'h-9';
 
 /** A pressed / unpressed pill button (quick filters, date ranges). */
 function ToggleButton({
@@ -119,12 +129,12 @@ function CheckboxField({
   label: string;
 }) {
   return (
-    <label className="flex items-center gap-2 text-sm text-poke-text-primary cursor-pointer">
+    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-body text-fg sm:min-h-0">
       <input
         type="checkbox"
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        className="rounded border-poke-border bg-poke-surface text-poke-primary"
+        className={`size-4 shrink-0 cursor-pointer accent-accent-fill ${FOCUS}`}
       />
       <span>{label}</span>
     </label>
@@ -381,32 +391,28 @@ export default function AdminMatchFilters({
   };
 
   return (
-    <section aria-label={t('admin.matches.filtersRegion')} className="space-y-4">
-      {/* Search + League / Phase / Round */}
-      <div className="flex flex-col lg:flex-row gap-3">
-        <div className="relative flex-1">
-          <svg
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poke-text-muted pointer-events-none"
-            fill="none"
-            viewBox="0 0 24 24"
-            strokeWidth={2}
-            stroke="currentColor"
-            aria-hidden="true"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" />
-          </svg>
-          <input
+    <section
+      aria-label={t('admin.matches.filtersRegion')}
+      className="flex flex-col gap-4 rounded-poke-lg border border-hairline bg-surface p-4"
+      data-admin-match-filters
+    >
+      {/* Search + League / Phase / Round. On a phone the three scope selects open with "More filters". */}
+      <div className="flex flex-col gap-3 xl:flex-row">
+        <div className="relative flex-1" role="search">
+          <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-muted" />
+          <Input
             type="text"
             value={searchInput}
             maxLength={ADMIN_MATCH_SEARCH_MAX_LENGTH}
             onChange={(e) => onSearchChange(e.target.value)}
             placeholder={t('admin.matches.searchPlaceholder')}
             aria-label={t('admin.matches.searchLabel')}
-            className="w-full pl-9 pr-3 py-2 border border-poke-border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
+            autoComplete="off"
+            className="pl-9"
           />
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 lg:w-[48rem]">
-          <select
+        <div className={`grid-cols-1 gap-3 sm:grid sm:grid-cols-3 xl:w-[40rem] ${panelOpen ? 'grid' : 'hidden'}`}>
+          <Select
             value={url.league}
             onChange={(e) =>
               update({
@@ -419,7 +425,7 @@ export default function AdminMatchFilters({
               })
             }
             aria-label={t('admin.matches.league')}
-            className={SELECT_CLASSES}
+            className={SELECT_SIZE}
           >
             <option value="">{t('admin.matches.allLeagues')}</option>
             {offersStandaloneLeague(options, isStandalone) && (
@@ -431,13 +437,13 @@ export default function AdminMatchFilters({
                 {optionLabel(league.name, { archived: league.archived, test: league.is_test_season })}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             value={url.phase}
             onChange={(e) => update({ phase: e.target.value, round: '', page: 1 })}
             disabled={url.league === ''}
             aria-label={phaseLabel}
-            className={SELECT_CLASSES}
+            className={SELECT_SIZE}
           >
             <option value="">{phaseAll}</option>
             {!phaseKnown && <option value={url.phase}>{unknownPhaseLabel()}</option>}
@@ -446,13 +452,13 @@ export default function AdminMatchFilters({
                 {optionLabel(phase.name, { archived: phase.archived })}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             value={url.round}
             onChange={(e) => update({ round: e.target.value, page: 1 })}
             disabled={url.phase === ''}
             aria-label={t('admin.matches.round')}
-            className={SELECT_CLASSES}
+            className={SELECT_SIZE}
           >
             <option value="">{t('admin.matches.allRounds')}</option>
             {!roundKnown && <option value={url.round}>{unknownRoundLabel(url.round)}</option>}
@@ -461,34 +467,36 @@ export default function AdminMatchFilters({
                 {roundLabel(round)}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
       {alerts}
 
-      {/* Status tabs */}
-      <div className="flex gap-1 border-b border-poke-border overflow-x-auto">
-        {STATUS_TABS.map((status) => (
-          <button
-            key={status || 'all'}
-            type="button"
-            onClick={() => update({ status, page: 1 })}
-            aria-pressed={url.status === status}
-            className={`px-3 py-2 text-xs font-heading font-medium border-b-2 transition-colors whitespace-nowrap ${
-              url.status === status
-                ? 'border-poke-accent text-poke-accent'
-                : 'border-transparent text-poke-text-muted hover:text-poke-text-primary'
-            }`}
-          >
-            {t(`admin.matches.status.${status || 'all'}`)}
-          </button>
-        ))}
+      {/* Status tabs: skewed plates with an accent underside on the pressed one; the strip scrolls on a phone. */}
+      <div className="-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]">
+        <div className="flex w-max items-center gap-2">
+          {STATUS_TABS.map((status) => (
+            <button
+              key={status || 'all'}
+              type="button"
+              onClick={() => update({ status, page: 1 })}
+              aria-pressed={url.status === status}
+              className={`${STATUS_TAB_CLASSES} ${url.status === status ? STATUS_TAB_ON_CLASSES : STATUS_TAB_OFF_CLASSES}`}
+            >
+              {t(`admin.matches.status.${status || 'all'}`)}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Quick filters, sort and the disclosure */}
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div role="group" aria-label={t('admin.matches.presetsLabel')} className="flex flex-wrap items-center gap-2">
+        <div
+          role="group"
+          aria-label={t('admin.matches.presetsLabel')}
+          className="-mx-1 flex max-w-full items-center gap-2 overflow-x-auto px-1 py-0.5 [scrollbar-width:none] sm:flex-wrap"
+        >
           {ADMIN_MATCH_PRESETS.map((preset) => (
             <ToggleButton key={preset} pressed={url.preset === preset} onClick={() => togglePreset(preset)}>
               {presetLabel(preset)}
@@ -496,43 +504,34 @@ export default function AdminMatchFilters({
           ))}
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <label className="flex items-center gap-2 text-xs font-heading font-semibold text-poke-text-secondary">
+          <label className="flex items-center gap-2 text-caption text-fg-muted">
             <span>{t('admin.matches.sortLabel')}</span>
-            <select
+            <Select
               value={url.sort}
               onChange={(e) => {
                 const sort = ADMIN_MATCH_SORTS.find((s) => s === e.target.value);
                 if (sort) update({ sort, page: 1 });
               }}
-              className={`${SELECT_CLASSES} w-auto font-normal`}
+              className={SELECT_SIZE}
             >
               {ADMIN_MATCH_SORTS.map((sort) => (
                 <option key={sort} value={sort}>
                   {t(`admin.matches.sort.${sort}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <button
             type="button"
             onClick={() => setPanelOpen((open) => !open)}
             aria-expanded={panelOpen}
             aria-controls={panelId}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-heading font-medium rounded-poke-md border border-poke-border text-poke-text-primary hover:border-poke-border-focus transition-colors"
+            className={`inline-flex min-h-11 items-center gap-1.5 whitespace-nowrap rounded-poke-md border border-hairline-strong bg-surface px-3 text-body text-fg hover:bg-hover motion-safe:transition-colors motion-safe:duration-80 sm:min-h-9 ${FOCUS}`}
           >
             {panelActiveCount > 0
               ? t('admin.matches.moreFiltersActive', { count: f.number(panelActiveCount) })
               : t('admin.matches.moreFilters')}
-            <svg
-              className={`w-3.5 h-3.5 transition-transform ${panelOpen ? 'rotate-180' : ''}`}
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path strokeLinecap="round" strokeLinejoin="round" d="m19.5 8.25-7.5 7.5-7.5-7.5" />
-            </svg>
+            <ChevronDown aria-hidden="true" className={`size-4 text-fg-muted motion-safe:transition-transform ${panelOpen ? 'rotate-180' : ''}`} />
           </button>
         </div>
       </div>
@@ -543,41 +542,29 @@ export default function AdminMatchFilters({
           <legend className={LEGEND_CLASSES}>{t('admin.matches.date.legend')}</legend>
           <label className="block">
             <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.date.field')}</span>
-            <select
+            <Select
               value={dateField}
               onChange={(e) => {
                 const field = ADMIN_MATCH_DATE_FIELDS.find((d) => d === e.target.value);
                 if (field) changeDateField(field);
               }}
-              className={SELECT_CLASSES}
+              className={SELECT_SIZE}
             >
               {ADMIN_MATCH_DATE_FIELDS.map((field) => (
                 <option key={field} value={field}>
                   {t(`admin.matches.date.fieldOption.${field}`)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <div className="grid grid-cols-[repeat(auto-fit,minmax(10rem,1fr))] gap-2">
             <label className="block">
               <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.date.from')}</span>
-              <input
-                type="date"
-                value={url.from}
-                max={url.to || undefined}
-                onChange={(e) => changeDay('from', e.target.value)}
-                className={DATE_INPUT_CLASSES}
-              />
+              <Input type="date" className="px-2" value={url.from} max={url.to || undefined} onChange={(e) => changeDay('from', e.target.value)} />
             </label>
             <label className="block">
               <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.date.to')}</span>
-              <input
-                type="date"
-                value={url.to}
-                min={url.from || undefined}
-                onChange={(e) => changeDay('to', e.target.value)}
-                className={DATE_INPUT_CLASSES}
-              />
+              <Input type="date" className="px-2" value={url.to} min={url.from || undefined} onChange={(e) => changeDay('to', e.target.value)} />
             </label>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -601,14 +588,14 @@ export default function AdminMatchFilters({
           <legend className={LEGEND_CLASSES}>{t('admin.matches.format.legend')}</legend>
           <label className="block">
             <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.type')}</span>
-            <select
+            <Select
               value={url.format}
               onChange={(e) => {
                 const format = ADMIN_MATCH_FORMAT_TYPES.find((v) => v === e.target.value);
                 update({ format: format ?? '', page: 1 });
               }}
               disabled={isStandalone}
-              className={SELECT_CLASSES}
+              className={SELECT_SIZE}
             >
               <option value="">{t('admin.matches.format.anyType')}</option>
               {ADMIN_MATCH_FORMAT_TYPES.map((format) => (
@@ -616,17 +603,17 @@ export default function AdminMatchFilters({
                   {enumLabel(te, 'formatType', format)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="block">
             <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.bracket')}</span>
-            <select
+            <Select
               value={url.bracket}
               onChange={(e) => {
                 const bracket = ADMIN_MATCH_BRACKET_TYPES.find((v) => v === e.target.value);
                 update({ bracket: bracket ?? '', page: 1 });
               }}
-              className={SELECT_CLASSES}
+              className={SELECT_SIZE}
             >
               <option value="">{t('admin.matches.format.anyBracket')}</option>
               {ADMIN_MATCH_BRACKET_TYPES.map((bracket) => (
@@ -634,15 +621,15 @@ export default function AdminMatchFilters({
                   {enumLabel(te, 'bracketType', bracket)}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <div className="grid grid-cols-2 gap-2">
             <label className="block">
-              <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.bestOf')}</span>
-              <select
+            <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.bestOf')}</span>
+            <Select
                 value={url.bestOf === null ? '' : String(url.bestOf)}
                 onChange={(e) => update({ bestOf: e.target.value === '' ? null : Number(e.target.value), page: 1 })}
-                className={SELECT_CLASSES}
+                className={SELECT_SIZE}
               >
                 <option value="">{t('admin.matches.format.anyBestOf')}</option>
                 {/* A deep-linked value outside the usual 1 / 3 / 5 stays selectable. */}
@@ -654,14 +641,14 @@ export default function AdminMatchFilters({
                     {t('admin.matches.format.bestOfOption', { count })}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
             <label className="block">
-              <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.ruleset')}</span>
-              <select
+            <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.format.ruleset')}</span>
+            <Select
                 value={url.ruleset}
                 onChange={(e) => update({ ruleset: e.target.value, page: 1 })}
-                className={SELECT_CLASSES}
+                className={SELECT_SIZE}
               >
                 <option value="">{t('admin.matches.format.anyRuleset')}</option>
                 {!rulesetKnown && <option value={url.ruleset}>{rulesetName(url.ruleset)}</option>}
@@ -670,7 +657,7 @@ export default function AdminMatchFilters({
                     {ruleset.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           </div>
         </fieldset>
@@ -710,7 +697,7 @@ export default function AdminMatchFilters({
             </div>
           )}
           {scope === null && options !== null && (
-            <p className="text-xs text-poke-text-muted">{t('admin.matches.player.noScope')}</p>
+            <p className="text-caption text-fg-muted">{t('admin.matches.player.noScope')}</p>
           )}
         </fieldset>
 
@@ -718,7 +705,7 @@ export default function AdminMatchFilters({
           <legend className={LEGEND_CLASSES}>{t('admin.matches.content.legend')}</legend>
           <label className="block">
             <span className={FIELD_LABEL_CLASSES}>{t('admin.matches.content.replay')}</span>
-            <select
+            <Select
               value={url.replay}
               onChange={(e) => {
                 const replay = e.target.value === 'has' || e.target.value === 'none' ? e.target.value : '';
@@ -731,12 +718,12 @@ export default function AdminMatchFilters({
                   page: 1,
                 });
               }}
-              className={SELECT_CLASSES}
+              className={SELECT_SIZE}
             >
               <option value="">{t('admin.matches.content.replayAny')}</option>
               <option value="has">{t('admin.matches.content.replayHas')}</option>
               <option value="none">{t('admin.matches.content.replayNone')}</option>
-            </select>
+            </Select>
           </label>
           <CheckboxField
             checked={url.edited}
@@ -794,26 +781,17 @@ export default function AdminMatchFilters({
                 type="button"
                 onClick={() => update(clearMatchListFilters(url, [key]))}
                 aria-label={t('admin.matches.removeFilter', { label })}
-                className="inline-flex items-center gap-1.5 max-w-full pl-2.5 pr-2 py-1 text-xs font-heading font-medium rounded-full border border-poke-border bg-poke-elevated text-poke-text-primary hover:border-poke-danger hover:text-poke-danger transition-colors"
+                className={`inline-flex min-h-11 max-w-full items-center gap-1.5 rounded-full border border-hairline-strong bg-elevated pl-3 pr-2 text-caption text-fg hover:border-loss hover:text-loss motion-safe:transition-colors motion-safe:duration-80 sm:min-h-7 ${FOCUS}`}
               >
                 <span className="truncate">{label}</span>
-                <svg
-                  className="w-3 h-3 shrink-0"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  aria-hidden="true"
-                >
-                  <path d="M3 3l8 8M11 3l-8 8" />
-                </svg>
+                <X aria-hidden="true" className="size-3.5 shrink-0" />
               </button>
             );
           })}
           <button
             type="button"
             onClick={() => update(clearMatchListFilters(url))}
-            className="px-2 py-1 text-xs font-heading font-medium text-poke-text-muted underline hover:text-poke-text-primary transition-colors"
+            className={`inline-flex min-h-11 items-center rounded-sm px-2 text-caption text-fg-muted underline underline-offset-2 hover:text-fg sm:min-h-7 ${FOCUS}`}
           >
             {t('admin.matches.clearAll')}
           </button>
@@ -841,7 +819,7 @@ function PlayerSearchNotes({
         </Alert>
       )}
       {picker.more && (
-        <p className="mt-1 text-xs text-poke-text-muted">
+        <p className="mt-1 text-caption text-fg-muted">
           {t('admin.matches.player.searchTruncated', { shown: f.number(picker.more.shown), total: f.number(picker.more.total) })}
         </p>
       )}

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
+import Input from '@/components/ui/Input';
+import Section from '@/components/ui/Section';
 import Alert from '@/components/ui/Alert';
 import type { BattleStat } from '@/types/game';
 import { useDataLocale, useT } from '@/i18n/client';
@@ -22,6 +24,12 @@ import {
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import type { Locale } from '@/i18n/config';
+import { CHOICE, CHOICE_OFF, CHOICE_ON, FIELD_LABEL, FOCUS, INSET_ROW, NATIVE_SECONDARY } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
+
+/** A flag of one Pokémon (KO'd, lead, brought): a 44 px row on a phone. */
+const FLAG_LABEL = 'inline-flex min-h-11 items-center gap-2 text-caption text-fg sm:min-h-8';
+const FLAG_BOX = 'size-4 shrink-0 accent-[var(--accent-fill)]';
 
 interface PlayerInfo {
   id: string;
@@ -115,6 +123,7 @@ export default function EditGameForm({
   const router = useRouter();
   const t = useT(adminCoreMessages);
   const dataLocale = useDataLocale();
+  const winnerLabelId = useId();
   const players = [player1, player2];
 
   // Split existing stats by player
@@ -240,21 +249,20 @@ export default function EditGameForm({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-6">
+    <form onSubmit={handleSubmit} className="flex flex-col gap-6">
       {/* Winner Selection */}
-      <div>
-        <label className="block text-sm font-heading text-poke-text-muted mb-2">{t('editGame.winner')}</label>
-        <div className="flex gap-3">
+      <div role="group" aria-labelledby={winnerLabelId}>
+        <p id={winnerLabelId} className={FIELD_LABEL}>
+          {t('editGame.winner')}
+        </p>
+        <div className="mt-1.5 flex flex-wrap gap-2">
           {players.map((p) => (
             <button
               key={p.id}
               type="button"
+              aria-pressed={winnerId === p.id}
               onClick={() => setWinnerId(p.id)}
-              className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                winnerId === p.id
-                  ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
-                  : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-              }`}
+              className={cn(CHOICE, 'min-w-28', winnerId === p.id ? CHOICE_ON : CHOICE_OFF)}
             >
               {p.name}
             </button>
@@ -264,116 +272,106 @@ export default function EditGameForm({
 
       {/* Per-player Pokemon */}
       {players.map((player, pIdx) => (
-        <Card key={player.id} variant="outlined" padding="md">
-          <h3 className="text-sm font-heading font-semibold text-poke-text-secondary mb-3">
-            {player.name}
-          </h3>
-          <div className="space-y-3">
+        <Section key={player.id} title={player.name} icon="poke-ball">
+          <div className="flex flex-col gap-3">
             {playerPokemon[pIdx].map((poke, pokeIdx) => {
               const nameHint = speciesHint(poke.pokemon_name, dataLocale);
               const moveHint = movesHint(poke.moves_used, dataLocale);
               return (
-              <div key={pokeIdx} className="grid grid-cols-12 gap-2 items-end">
-                <div className="col-span-3">
-                  <label className="text-[10px] text-poke-text-muted">{t('editGame.name')}</label>
-                  <input
-                    type="text"
-                    value={poke.pokemon_name}
-                    onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'pokemon_name', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                    placeholder={t('editGame.namePlaceholder')}
-                  />
-                  {nameHint && (
-                    <p className="mt-0.5 truncate text-[10px] text-poke-text-muted">
-                      {t('editGame.shownAs', { name: nameHint })}
-                    </p>
-                  )}
-                </div>
-                <div className="col-span-1">
-                  <label className="text-[10px] text-poke-text-muted">{t('editGame.kos')}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={poke.kos_dealt}
-                    onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'kos_dealt', parseInt(e.target.value) || 0)}
-                    className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                  />
-                </div>
-                <div className="col-span-1">
-                  <label className="text-[10px] text-poke-text-muted">{t('editGame.turns')}</label>
-                  <input
-                    type="number"
-                    min={0}
-                    value={poke.turns_active}
-                    onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'turns_active', parseInt(e.target.value) || 0)}
-                    className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                  />
-                </div>
-                <div className="col-span-3">
-                  <label className="text-[10px] text-poke-text-muted">{t('editGame.moves')}</label>
-                  <input
-                    type="text"
-                    value={poke.moves_used}
-                    onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'moves_used', e.target.value)}
-                    className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
-                    placeholder={t('editGame.movesPlaceholder')}
-                  />
-                  {moveHint && (
-                    <p className="mt-0.5 truncate text-[10px] text-poke-text-muted">
-                      {t('editGame.shownAs', { name: moveHint })}
-                    </p>
-                  )}
-                </div>
-                <div className="col-span-3 flex gap-3 items-center pb-0.5">
-                  <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                    <input
-                      type="checkbox"
-                      checked={poke.was_koed}
-                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_koed', e.target.checked)}
+                <div key={pokeIdx} className={cn(INSET_ROW, 'grid grid-cols-2 gap-x-3 gap-y-3 py-3 sm:grid-cols-12')}>
+                  <div className="col-span-2 sm:col-span-4">
+                    <Input
+                      label={t('editGame.name')}
+                      type="text"
+                      value={poke.pokemon_name}
+                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'pokemon_name', e.target.value)}
+                      placeholder={t('editGame.namePlaceholder')}
+                      hint={nameHint ? t('editGame.shownAs', { name: nameHint }) : undefined}
                     />
-                    {t('editGame.koed')}
-                  </label>
-                  <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                    <input
-                      type="checkbox"
-                      checked={poke.was_lead}
-                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_lead', e.target.checked)}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Input
+                      label={t('editGame.kos')}
+                      type="number"
+                      min={0}
+                      value={poke.kos_dealt}
+                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'kos_dealt', parseInt(e.target.value) || 0)}
+                      className="tabular-nums"
                     />
-                    {t('editGame.lead')}
-                  </label>
-                  <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
-                    <input
-                      type="checkbox"
-                      checked={poke.was_brought}
-                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_brought', e.target.checked)}
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Input
+                      label={t('editGame.turns')}
+                      type="number"
+                      min={0}
+                      value={poke.turns_active}
+                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'turns_active', parseInt(e.target.value) || 0)}
+                      className="tabular-nums"
                     />
-                    {t('editGame.brought')}
-                  </label>
+                  </div>
+                  <div className="col-span-2 sm:col-span-4">
+                    <Input
+                      label={t('editGame.moves')}
+                      type="text"
+                      value={poke.moves_used}
+                      onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'moves_used', e.target.value)}
+                      placeholder={t('editGame.movesPlaceholder')}
+                      hint={moveHint ? t('editGame.shownAs', { name: moveHint }) : undefined}
+                    />
+                  </div>
+                  <div className="col-span-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 sm:col-span-12">
+                    <div className="flex flex-wrap items-center gap-x-4">
+                      <label className={FLAG_LABEL}>
+                        <input
+                          type="checkbox"
+                          className={FLAG_BOX}
+                          checked={poke.was_koed}
+                          onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_koed', e.target.checked)}
+                        />
+                        {t('editGame.koed')}
+                      </label>
+                      <label className={FLAG_LABEL}>
+                        <input
+                          type="checkbox"
+                          className={FLAG_BOX}
+                          checked={poke.was_lead}
+                          onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_lead', e.target.checked)}
+                        />
+                        {t('editGame.lead')}
+                      </label>
+                      <label className={FLAG_LABEL}>
+                        <input
+                          type="checkbox"
+                          className={FLAG_BOX}
+                          checked={poke.was_brought}
+                          onChange={(e) => updatePokemonField(pIdx, pokeIdx, 'was_brought', e.target.checked)}
+                        />
+                        {t('editGame.brought')}
+                      </label>
+                    </div>
+                    {playerPokemon[pIdx].length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removePokemon(pIdx, pokeIdx)}
+                        className={cn('inline-flex size-11 items-center justify-center rounded-poke-md text-fg-muted hover:bg-hover hover:text-loss sm:size-8', FOCUS)}
+                        aria-label={t('editGame.removePokemon')}
+                      >
+                        <X aria-hidden="true" className="size-4" />
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <div className="col-span-1 flex items-end pb-0.5">
-                  {playerPokemon[pIdx].length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => removePokemon(pIdx, pokeIdx)}
-                      className="text-poke-accent text-xs hover:underline"
-                      aria-label={t('editGame.removePokemon')}
-                    >
-                      <span aria-hidden="true">&times;</span>
-                    </button>
-                  )}
-                </div>
-              </div>
               );
             })}
             <button
               type="button"
               onClick={() => addPokemon(pIdx)}
-              className="text-xs text-poke-blue hover:underline font-heading"
+              className={cn(NATIVE_SECONDARY, 'min-h-11 self-start sm:min-h-8')}
             >
               {t('editGame.addPokemon')}
             </button>
           </div>
-        </Card>
+        </Section>
       ))}
 
       {error && 'local' in error && <Alert variant="error">{t(`editGame.${error.local}`)}</Alert>}
@@ -385,9 +383,9 @@ export default function EditGameForm({
       )}
       <GameChangeAlerts error={error && 'api' in error ? error.api : null} warnings={warnings} isSiteAdmin={isSiteAdmin} />
 
-      <div className="flex gap-3">
+      <div className="flex flex-wrap gap-2">
         {/* A saved edit cannot be saved again from this page: its version is spent (the next save would answer 409). */}
-        <Button type="submit" variant="primary" loading={loading} disabled={success}>
+        <Button type="submit" variant="primary" loading={loading} disabled={success} className="max-sm:min-h-11">
           {t('editGame.save')}
         </Button>
         <Button
@@ -395,6 +393,7 @@ export default function EditGameForm({
           variant="ghost"
           onClick={() => router.push(returnHref)}
           disabled={loading}
+          className="max-sm:min-h-11"
         >
           {success ? t('editGame.backToMatch') : t('editGame.cancel')}
         </Button>

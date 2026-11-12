@@ -18,7 +18,8 @@ import { bulkConfirmPreview, bulkResultRows, bulkScheduleSplit } from '@/compone
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import Modal from '@/components/ui/Modal';
+import AdminDialog from '@/components/admin/AdminDialog';
+import SkewChip from '@/components/ui/SkewChip';
 import Textarea from '@/components/ui/Textarea';
 import { useFormatter, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -127,7 +128,7 @@ export function AdminMatchBulkDialogBody(props: BodyProps) {
 
   const form = (
     <form
-      className="space-y-4"
+      className="flex flex-col gap-4"
       onSubmit={(event: FormEvent) => {
         event.preventDefault();
         if (canSubmit) props.onSubmit();
@@ -175,29 +176,27 @@ function BulkConfirmFields({ rows }: { rows: readonly DialogRow[] }) {
   const preview = bulkConfirmPreview(rows, versus);
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-poke-text-secondary">{t('admin.matches.bulk.confirm.intro')}</p>
+    <div className="flex flex-col gap-3">
+      <p className="text-body text-fg-muted">{t('admin.matches.bulk.confirm.intro')}</p>
       {preview.items.length === 0 ? (
         <Alert variant="warning">{t('admin.matches.bulk.confirm.nothingEligible')}</Alert>
       ) : (
         <section aria-label={t('admin.matches.bulk.confirm.willConfirm', { count: preview.items.length })}>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
+          <h3 className="text-body font-[550] text-fg">
             {t('admin.matches.bulk.confirm.willConfirm', { count: preview.items.length })}
           </h3>
-          <ul className="mt-1 max-h-48 space-y-1 overflow-y-auto text-sm">
+          <ul className="mt-1.5 flex max-h-48 flex-col divide-y divide-hairline overflow-y-auto rounded-poke-md border border-hairline bg-elevated text-body">
             {preview.items.map((item) => (
-              <li key={item.id} className="flex flex-wrap items-baseline gap-x-2">
-                <span className="font-medium text-poke-text-primary">{item.label}</span>
+              <li key={item.id} className="flex flex-wrap items-center gap-x-2 gap-y-0.5 px-3 py-1.5">
+                <span className="font-[550] text-fg">{item.label}</span>
                 {item.score && (
-                  <span className="text-xs font-heading font-semibold text-poke-text-secondary">
-                    {t('admin.matches.row.score', { p1: item.score.p1, p2: item.score.p2 })}
-                  </span>
+                  <SkewChip className="font-heading text-body font-normal">{t('admin.matches.row.score', { p1: item.score.p1, p2: item.score.p2 })}</SkewChip>
                 )}
                 {item.bestOf > 0 && (
-                  <span className="text-xs text-poke-text-muted">{t('admin.matches.row.bestOf', { count: item.bestOf })}</span>
+                  <span className="text-caption text-fg-muted">{t('admin.matches.row.bestOf', { count: item.bestOf })}</span>
                 )}
                 {item.winnerName && (
-                  <span className="text-xs text-poke-green">{t('admin.matches.bulk.confirm.winner', { name: item.winnerName })}</span>
+                  <span className="text-caption text-win">{t('admin.matches.bulk.confirm.winner', { name: item.winnerName })}</span>
                 )}
               </li>
             ))}
@@ -206,10 +205,10 @@ function BulkConfirmFields({ rows }: { rows: readonly DialogRow[] }) {
       )}
       {preview.skipped.length > 0 && (
         <section aria-label={t('admin.matches.bulk.confirm.skippedHeading', { count: preview.skipped.length })}>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-muted">
+          <h3 className="text-body font-[550] text-fg-muted">
             {t('admin.matches.bulk.confirm.skippedHeading', { count: preview.skipped.length })}
           </h3>
-          <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-xs text-poke-text-muted">
+          <ul className="mt-1 flex max-h-32 flex-col gap-0.5 overflow-y-auto text-caption text-fg-muted">
             {preview.skipped.map((item) => (
               <li key={item.id}>
                 {t('admin.matches.bulk.result.reasonLine', { match: item.label, reason: errorText({ code: item.code }) })}
@@ -244,8 +243,8 @@ function BulkScheduleFields({
   const completed = split.skipped.length;
 
   return (
-    <div className="space-y-3">
-      <p className="text-sm text-poke-text-secondary">{t('admin.matches.bulk.schedule.intro')}</p>
+    <div className="flex flex-col gap-3">
+      <p className="text-body text-fg-muted">{t('admin.matches.bulk.schedule.intro')}</p>
       <Input
         id="bulk-schedule-at"
         type="datetime-local"
@@ -257,8 +256,8 @@ function BulkScheduleFields({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       />
-      <p className="text-xs text-poke-text-muted">{t('admin.matches.bulk.schedule.zoneHint', { zone: timeZone })}</p>
-      <p className="text-sm text-poke-text-secondary">
+      <p className="text-caption text-fg-muted">{t('admin.matches.bulk.schedule.zoneHint', { zone: timeZone })}</p>
+      <p className="text-body text-fg-muted">
         {t('admin.matches.bulk.schedule.applies', { eligible: split.eligibleIds.length, total: rows.length })}
         {completed > 0 && <> {t('admin.matches.bulk.schedule.skippedCompleted', { count: completed })}</>}
       </p>
@@ -283,8 +282,8 @@ function BulkNoteFields({
   const over = used > ADMIN_MATCH_NOTE_MAX_LENGTH;
 
   return (
-    <div className="space-y-2">
-      <p className="text-sm text-poke-text-secondary">{t('admin.matches.bulk.note.intro')}</p>
+    <div className="flex flex-col gap-2">
+      <p className="text-body text-fg-muted">{t('admin.matches.bulk.note.intro')}</p>
       <Textarea
         id="bulk-note"
         label={t('admin.matches.bulk.note.field')}
@@ -294,7 +293,7 @@ function BulkNoteFields({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       />
-      <p className={`text-right text-xs ${over ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
+      <p className={`text-right text-caption tabular-nums ${over ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
         {t('admin.matches.bulk.note.counter', { used: f.number(used), max: f.number(ADMIN_MATCH_NOTE_MAX_LENGTH) })}
       </p>
     </div>
@@ -347,14 +346,14 @@ export function BulkResultsPanel({
   useEffect(() => container.current?.focus(), []);
 
   return (
-    <div ref={container} tabIndex={-1} className="space-y-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
-      <p className="text-sm font-heading font-semibold text-poke-text-primary">
+    <div ref={container} tabIndex={-1} className="flex flex-col gap-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <p className="text-subtitle text-fg">
         {summaryText(results)}
       </p>
       {failed.length > 0 && (
         <section>
-          <h3 className="text-sm font-heading font-semibold text-poke-danger">{t('admin.matches.bulk.result.failedHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-sm text-poke-danger">
+          <h3 className="text-body font-[550] text-poke-danger">{t('admin.matches.bulk.result.failedHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-poke-danger">
             {failed.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}
@@ -363,8 +362,8 @@ export function BulkResultsPanel({
       )}
       {warnings.length > 0 && (
         <section>
-          <h3 className="text-sm font-heading font-semibold text-poke-yellow-ink">{t('admin.matches.bulk.result.warningHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-sm text-poke-yellow-ink">
+          <h3 className="text-body font-[550] text-poke-yellow-ink">{t('admin.matches.bulk.result.warningHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-poke-yellow-ink">
             {warnings.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}
@@ -373,8 +372,8 @@ export function BulkResultsPanel({
       )}
       {skipped.length > 0 && (
         <section>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-muted">{t('admin.matches.bulk.result.skippedHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-xs text-poke-text-muted">
+          <h3 className="text-body font-[550] text-poke-text-muted">{t('admin.matches.bulk.result.skippedHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-caption text-poke-text-muted">
             {skipped.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}
@@ -445,12 +444,7 @@ export default function AdminMatchBulkDialog({
   }, [kind, rows, scheduleValue, note, timeZone, onDone]);
 
   return (
-    <Modal
-      open
-      onClose={phase === 'submitting' ? () => {} : onClose}
-      title={t(`admin.matches.bulk.${kind}.title`)}
-      size="lg"
-    >
+    <AdminDialog open onClose={phase === 'submitting' ? () => {} : onClose} title={t(`admin.matches.bulk.${kind}.title`)} size="lg">
       <AdminMatchBulkDialogBody
         kind={kind}
         rows={rows}
@@ -465,6 +459,6 @@ export default function AdminMatchBulkDialog({
         onSubmit={() => void submit()}
         onClose={onClose}
       />
-    </Modal>
+    </AdminDialog>
   );
 }

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
+import { TOUCH } from '@/components/admin/match-styles';
 import ReasonDialog from '@/components/admin/ReasonDialog';
 import { useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -89,8 +90,8 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
     // After a reopen the page refreshes to in progress: keep the outcome, drop the controls.
     if (!outcome) return null;
     return (
-      <Section title={t('reopen.title')}>
-        <div className="space-y-2">
+      <Section title={t('reopen.title')} icon="rare-candy">
+        <div className="flex flex-col gap-2">
           {'reopened' in outcome ? (
             <Alert variant="success">{t('reopen.success')}</Alert>
           ) : (
@@ -109,13 +110,14 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
   const effects = status === 'completed' ? 'completed' : status === 'disputed' ? 'disputed' : 'pending';
 
   return (
-    <Section title={t('reopen.title')}>
-      <div className="space-y-3 text-sm text-poke-text-secondary">
+    <Section title={t('reopen.title')} icon="rare-candy">
+      <div className="flex flex-col items-start gap-3 text-body text-fg-muted">
         <p>{t('reopen.intro')}</p>
         <p>{t('reopen.finishHint')}</p>
         <Button
           variant="secondary"
           size="sm"
+          className={TOUCH}
           onClick={() => {
             setError(null);
             setOpen(true);

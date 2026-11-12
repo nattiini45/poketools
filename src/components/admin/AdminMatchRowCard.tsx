@@ -7,8 +7,10 @@ import { matchRowActions, type AdminMatchViewer } from '@/lib/admin/match-row-ac
 import { autoConfirmCountdown, matchScore, replayCount } from '@/components/admin/match-list-view';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import Badge from '@/components/ui/Badge';
-import Card from '@/components/ui/Card';
-import { getButtonClasses } from '@/components/ui/Button';
+import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
+import { ExternalLink } from 'lucide-react';
+import { FOCUS } from '@/components/admin/match-styles';
 import { useLocale, useT } from '@/i18n/client';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { LocalTime, useMinuteClock } from '@/i18n/LocalTime';
@@ -78,39 +80,36 @@ export function MatchListRow({
   }
 
   return (
-    <Card
-      variant="outlined"
-      padding="sm"
-      className={`group relative transition-colors hover:border-poke-border-focus focus-within:border-poke-border-focus ${
-        selection?.checked ? 'border-poke-border-focus ring-1 ring-poke-border-focus' : ''
+    <div
+      className={`group relative border border-transparent px-3 py-2.5 motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover focus-within:bg-hover ${
+        selection?.checked ? 'border-poke-border-focus ring-1 ring-poke-border-focus bg-selected ring-inset' : ''
       }`}
+      data-admin-match-row={row.id}
     >
       <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 min-w-0 max-w-full">
           {selection && (
-            <label className="relative z-10 -my-1 -ml-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center">
+            <label className="relative z-10 -my-1 -ml-1.5 flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center max-sm:-my-2.5 max-sm:h-11 max-sm:w-11">
               <input
                 type="checkbox"
                 checked={selection.checked}
                 onChange={(event) => selection.onChange(event.target.checked)}
                 aria-label={t('admin.matches.bulk.selectRow', { player1: row.player_1_name, player2: row.player_2_name })}
-                className="relative z-10 h-4 w-4 cursor-pointer rounded-poke-sm border-poke-border accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+                className={`relative z-10 h-4 w-4 cursor-pointer accent-accent-fill ${FOCUS}`}
               />
             </label>
           )}
           <Link
             href={href}
-            className="font-heading font-medium text-sm text-poke-text-primary max-w-full truncate group-hover:text-poke-accent transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent after:absolute after:inset-0 after:rounded-poke-lg focus-visible:after:ring-2 focus-visible:after:ring-poke-border-focus"
+            className="max-w-full truncate text-body font-[550] text-fg group-hover:text-accent-ink motion-safe:transition-colors motion-safe:duration-80 focus-visible:outline-none after:absolute after:inset-0 focus-visible:after:outline-2 focus-visible:after:outline-solid focus-visible:after:-outline-offset-2 focus-visible:after:outline-[var(--focus-ring)]"
           >
             {t('admin.matches.versus', { player1: row.player_1_name, player2: row.player_2_name })}
           </Link>
           {score && (
-            <span className="text-xs font-heading font-semibold text-poke-text-secondary shrink-0">
-              {t('admin.matches.row.score', { p1: score.p1, p2: score.p2 })}
-            </span>
+            <SkewChip className="shrink-0 font-heading text-body font-normal">{t('admin.matches.row.score', { p1: score.p1, p2: score.p2 })}</SkewChip>
           )}
           {row.winner_name && (
-            <span className="text-xs text-poke-green">{t('admin.matches.winner', { name: row.winner_name })}</span>
+            <span className="text-caption text-win">{t('admin.matches.winner', { name: row.winner_name })}</span>
           )}
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
@@ -128,7 +127,7 @@ export function MatchListRow({
         </div>
       </div>
       <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2">
-        <p className="text-[11px] text-poke-text-muted min-w-0">
+        <p className="text-caption text-fg-muted min-w-0">
           {details.map((part, index) => (
             <Fragment key={part.key}>
               {index > 0 && (
@@ -142,39 +141,26 @@ export function MatchListRow({
         </p>
         <div className="flex flex-wrap items-center gap-2 sm:shrink-0">
           {actions.submitResult && (
-            <Link href={`/dashboard/submit/${row.id}`} className={`${getButtonClasses('secondary', 'sm')} relative z-10`}>
-              {t('admin.matches.submitResult')}
-            </Link>
+            <Button asChild variant="secondary" size="sm" className="relative z-10 max-sm:min-h-11">
+              <Link href={`/dashboard/submit/${row.id}`}>{t('admin.matches.submitResult')}</Link>
+            </Button>
           )}
           {actions.viewPrep && (
-            <Link href={`/dashboard/match-prep/${row.id}`} className={`${getButtonClasses('ghost', 'sm')} relative z-10`}>
-              {t('admin.matches.viewPrep')}
-            </Link>
+            <Button asChild variant="ghost" size="sm" className="relative z-10 max-sm:min-h-11">
+              <Link href={`/dashboard/match-prep/${row.id}`}>{t('admin.matches.viewPrep')}</Link>
+            </Button>
           )}
           <Link
             href={publicHref}
             title={t('admin.matches.row.publicPage')}
             aria-label={t('admin.matches.row.publicPageLabel', { player1: row.player_1_name, player2: row.player_2_name })}
-            className={`${getButtonClasses('ghost', 'sm')} relative z-10`}
+            className={`relative z-10 inline-flex size-11 items-center justify-center rounded-poke-md text-fg-muted hover:bg-selected hover:text-fg sm:size-8 ${FOCUS}`}
           >
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
-              aria-hidden="true"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M13.5 6H18m0 0v4.5M18 6l-7.5 7.5M10.5 6H6.75A2.25 2.25 0 0 0 4.5 8.25v9A2.25 2.25 0 0 0 6.75 19.5h9a2.25 2.25 0 0 0 2.25-2.25V13.5"
-              />
-            </svg>
+            <ExternalLink aria-hidden="true" className="size-4" />
           </Link>
         </div>
       </div>
-    </Card>
+    </div>
   );
 }
 

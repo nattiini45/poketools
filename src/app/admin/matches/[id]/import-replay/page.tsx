@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -13,6 +14,9 @@ import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { enumMessages } from '@/i18n/messages/enums';
 import { enumLabel } from '@/i18n/content/enum-label';
+import AdminCrumbName from '@/components/admin/admin-crumb-names';
+import { FOCUS, TOUCH } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,11 +47,15 @@ export default async function ImportReplayPage({ params, searchParams }: PagePro
   const [t, tEnums, query] = await Promise.all([getT(adminCoreMessages), getT(enumMessages), searchParams]);
   const matchHref = `/admin/matches/${id}${matchPageBackSuffix(query?.back)}`;
 
+  const versus = t('versus', { player1: match.player_1_name, player2: match.player_2_name });
+
   return (
     <AdminGuard>
+      <AdminCrumbName href={`/admin/matches/${id}`} name={versus} />
       <PageContainer
         title={t('matches.importReplay.title')}
-        subtitle={t('versus', { player1: match.player_1_name, player2: match.player_2_name })}
+        icon="dubious-disc"
+        subtitle={versus}
         action={<MatchStatusBadge status={match.status} />}
         maxWidth="md"
       >
@@ -74,9 +82,9 @@ export default async function ImportReplayPage({ params, searchParams }: PagePro
 
         <Link
           href={matchHref}
-          className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
+          className={cn('inline-flex items-center gap-1.5 self-start text-caption text-fg-muted hover:text-fg', TOUCH, FOCUS)}
         >
-          <span aria-hidden="true">&larr;</span> {t('matches.importReplay.backToMatch')}
+          <ArrowLeft aria-hidden="true" className="size-3.5" /> {t('matches.importReplay.backToMatch')}
         </Link>
       </PageContainer>
     </AdminGuard>

@@ -534,6 +534,66 @@
       "needs": []
     },
     {
+      "id": "admin-match",
+      "url": "/admin/matches/{matchCompletedBo3}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "matchCompletedBo3"
+      ]
+    },
+    {
+      "id": "admin-match-live",
+      "url": "/admin/matches/{matchLive}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "matchLive"
+      ]
+    },
+    {
+      "id": "admin-match-scheduled",
+      "url": "/admin/matches/{matchScheduled}",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "matchScheduled"
+      ]
+    },
+    {
+      "id": "admin-match-import-replay",
+      "url": "/admin/matches/{matchScheduled}/import-replay",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "matchScheduled"
+      ]
+    },
+    {
       "id": "admin-players",
       "url": "/admin/players",
       "fullPage": true,

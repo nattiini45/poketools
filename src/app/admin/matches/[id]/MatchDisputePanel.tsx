@@ -2,7 +2,8 @@
 
 import type { ReactNode } from 'react';
 import Badge from '@/components/ui/Badge';
-import Card from '@/components/ui/Card';
+import Section from '@/components/ui/Section';
+import { FACT_LABEL, FACT_VALUE } from '@/components/admin/match-styles';
 import { useT } from '@/i18n/client';
 import { LocalTime } from '@/i18n/LocalTime';
 import { adminMatchMessages } from '@/i18n/messages/admin-match';
@@ -19,8 +20,8 @@ interface MatchDisputePanelProps {
 function Row({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div>
-      <dt className="text-xs font-heading text-poke-text-muted">{label}</dt>
-      <dd className="mt-0.5 text-sm text-poke-text-primary">{children}</dd>
+      <dt className={FACT_LABEL}>{label}</dt>
+      <dd className={FACT_VALUE}>{children}</dd>
     </div>
   );
 }
@@ -30,11 +31,8 @@ export default function MatchDisputePanel({ dispute, reportedWinnerName, reporte
   const t = useT(adminMatchMessages);
 
   return (
-    <Card variant="outlined" padding="md" className="border-poke-danger/40">
-      <h2 className="text-lg font-heading font-bold tracking-tight text-poke-text-primary mb-3">
-        {t('dispute.title')}
-      </h2>
-      <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+    <Section title={t('dispute.title')} icon="scope-lens" collapsible keepMounted className="border-loss">
+      <dl className="grid grid-cols-1 gap-x-6 gap-y-3 sm:grid-cols-2">
         {dispute ? (
           <>
             <Row label={t('dispute.disputedBy')}>
@@ -47,16 +45,16 @@ export default function MatchDisputePanel({ dispute, reportedWinnerName, reporte
               <LocalTime value={dispute.disputed_at} preset="dateTimeYear" />
             </Row>
             <div className="sm:col-span-2">
-              <dt className="text-xs font-heading text-poke-text-muted">{t('dispute.reason')}</dt>
-              <dd className="mt-0.5 text-sm text-poke-text-primary whitespace-pre-line">
-                {dispute.reason ?? <span className="text-poke-text-muted">{t('dispute.noReason')}</span>}
+              <dt className={FACT_LABEL}>{t('dispute.reason')}</dt>
+              <dd className={`${FACT_VALUE} whitespace-pre-line`}>
+                {dispute.reason ?? <span className="text-fg-muted">{t('dispute.noReason')}</span>}
               </dd>
             </div>
           </>
         ) : (
           <div className="sm:col-span-2">
-            <dt className="text-xs font-heading text-poke-text-muted">{t('dispute.details')}</dt>
-            <dd className="mt-0.5 text-sm text-poke-text-muted">{t('dispute.notRecorded')}</dd>
+            <dt className={FACT_LABEL}>{t('dispute.details')}</dt>
+            <dd className="mt-0.5 text-body text-fg-muted">{t('dispute.notRecorded')}</dd>
           </div>
         )}
         <Row label={t('dispute.reportedWinner')}>{reportedWinnerName ?? t('dispute.noWinner')}</Row>
@@ -65,6 +63,6 @@ export default function MatchDisputePanel({ dispute, reportedWinnerName, reporte
           {reportedWinnerName === null ? t('header.noSubmitter') : (reporterName ?? t('header.noSubmitter'))}
         </Row>
       </dl>
-    </Card>
+    </Section>
   );
 }

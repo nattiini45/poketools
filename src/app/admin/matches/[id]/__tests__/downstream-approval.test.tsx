@@ -114,7 +114,8 @@ describe('deleting a game that affects the played part of the bracket', () => {
     expect(second.method).toBe('DELETE');
     expect(JSON.parse(second.body as string)).toEqual({ reason: 'Wrong replay', confirm_downstream: ['m-semi', 'm-final'] });
     await screen.findByText('2 later bracket matches were reset.');
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // The dialog leaves after its closing motion.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 
   it('asks again, with the new list, when a later match was played since the prompt', async () => {
@@ -176,6 +177,7 @@ describe('deleting a game that affects the played part of the bracket', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Reset them and apply the change' }));
 
     await screen.findByText(/while you were editing it/);
-    expect(screen.queryByRole('dialog')).toBeNull();
+    // The dialog leaves after its closing motion.
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

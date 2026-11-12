@@ -3,7 +3,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
+import Section from '@/components/ui/Section';
+import SkewChip from '@/components/ui/SkewChip';
+import { ArrowRight, Check } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
 import Input from '@/components/ui/Input';
 import { useDataLocale, useT } from '@/i18n/client';
@@ -47,6 +49,8 @@ interface PreviewState {
   winnerSide: 0 | 1 | null;
   replayHash: string;
 }
+
+const FLAG_ICON = 'inline-block size-4 text-fg';
 
 /**
  * Admin replay import with manual side assignment (the username gate is skipped).
@@ -247,9 +251,10 @@ export default function ReplayImportForm({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="flex flex-col gap-6">
       {/* Step 1: Replay URL + parse */}
-      <form onSubmit={handleParse} className="space-y-3">
+      <form onSubmit={handleParse} className="flex flex-col items-start gap-3 rounded-poke-lg border border-hairline bg-surface p-5">
+        <div className="w-full">
         <Input
           label={t('replayImport.urlLabel')}
           type="text"
@@ -259,100 +264,94 @@ export default function ReplayImportForm({
           disabled={parsing || submitting}
           autoComplete="off"
         />
+        </div>
         {parseError && <Alert variant="error">{errorMessage(parseError)}</Alert>}
-        <Button type="submit" variant="secondary" loading={parsing} disabled={submitting}>
+        <Button type="submit" variant={preview ? 'secondary' : 'primary'} loading={parsing} disabled={submitting} className="max-sm:min-h-11">
           {preview ? t('replayImport.reparse') : t('replayImport.parse')}
         </Button>
       </form>
 
       {/* Step 2: Assign sides, review the replay's result, import */}
       {preview && (
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6">
           <Alert variant="info">
             {t('replayImport.skipNote')}
           </Alert>
 
           {/* Side → player assignment */}
-          <Card variant="outlined" padding="md">
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="font-heading font-semibold text-sm text-poke-text-primary">
-                {t('replayImport.sideAssignment')}
-              </h3>
-              <Button type="button" variant="ghost" onClick={() => setSwapped((s) => !s)} disabled={submitting || parsing}>
+          <Section title={t('replayImport.sideAssignment')} icon="vs-seeker">
+            <div className="flex flex-col items-start gap-2 text-body">
+              <Button type="button" variant="secondary" size="sm" onClick={() => setSwapped((s) => !s)} disabled={submitting || parsing} className="mb-1 max-sm:min-h-11">
                 {t('replayImport.swapSides')}
               </Button>
-            </div>
-            <div className="space-y-2 text-sm">
               {([0, 1] as const).map((sideIdx) => (
-                <div key={sideIdx} className="flex items-center gap-2">
-                  <span className="font-mono text-poke-text-secondary">
+                <div key={sideIdx} className="flex flex-wrap items-center gap-2">
+                  <span className="break-all font-mono text-fg-muted">
                     {preview.psUsernames[sideIdx] || t('replayImport.side', { n: sideIdx + 1 })}
                   </span>
-                  <span className="text-poke-text-muted">→</span>
-                  <span className="font-heading font-semibold text-poke-text-primary">
-                    {assignedPlayer(sideIdx).name}
-                  </span>
+                  <ArrowRight aria-hidden="true" className="size-4 shrink-0 text-fg-muted" />
+                  <span className="font-[550] text-fg">{assignedPlayer(sideIdx).name}</span>
                 </div>
               ))}
             </div>
-          </Card>
+          </Section>
 
           {/* Winner: the replay's, following the side assignment */}
           {preview.winnerSide === null ? (
             <Alert variant="error">{t('replayImport.noWinner')}</Alert>
           ) : (
-            <p className="text-sm font-heading font-semibold text-poke-text-primary">
-              {t('replayImport.winnerFromReplay', { name: assignedPlayer(preview.winnerSide).name })}
+            <p className="self-start">
+              <SkewChip tone="win" className="px-3 py-1 text-body">
+                {t('replayImport.winnerFromReplay', { name: assignedPlayer(preview.winnerSide).name })}
+              </SkewChip>
             </p>
           )}
 
           {/* Per-side stats, read-only */}
           {([0, 1] as const).map((sideIdx) => (
-            <Card key={sideIdx} variant="outlined" padding="md">
-              <h3 className="font-heading font-semibold text-sm text-poke-text-primary mb-3">
-                {t('common.pokemonOf', { name: assignedPlayer(sideIdx).name })}{' '}
-                <span className="font-mono font-normal text-xs text-poke-text-muted">
-                  ({preview.psUsernames[sideIdx]})
-                </span>
-              </h3>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+            <Section
+              key={sideIdx}
+              title={t('common.pokemonOf', { name: assignedPlayer(sideIdx).name })}
+              subtitle={preview.psUsernames[sideIdx]}
+              icon="poke-ball"
+            >
+              <div className="-mx-5 -my-5 overflow-x-auto">
+                <table className="w-full min-w-[36rem] text-left text-body">
                   <thead>
-                    <tr className="text-left text-[10px] text-poke-text-muted">
-                      <th className="py-1 pr-2 font-normal">{t('common.pokemonName')}</th>
-                      <th className="py-1 pr-2 font-normal">{t('common.kos')}</th>
-                      <th className="py-1 pr-2 font-normal">{t('common.turns')}</th>
-                      <th className="py-1 pr-2 font-normal">{t('replayImport.moves')}</th>
-                      <th className="py-1 pr-2 font-normal">{t('common.koed')}</th>
-                      <th className="py-1 pr-2 font-normal">{t('common.lead')}</th>
-                      <th className="py-1 font-normal">{t('common.brought')}</th>
+                    <tr className="bg-elevated text-caption text-fg-muted">
+                      <th scope="col" className="px-5 py-2 font-[550]">{t('common.pokemonName')}</th>
+                      <th scope="col" className="px-2 py-2 text-right font-[550]">{t('common.kos')}</th>
+                      <th scope="col" className="px-2 py-2 text-right font-[550]">{t('common.turns')}</th>
+                      <th scope="col" className="px-2 py-2 font-[550]">{t('replayImport.moves')}</th>
+                      <th scope="col" className="px-2 py-2 text-center font-[550]">{t('common.koed')}</th>
+                      <th scope="col" className="px-2 py-2 text-center font-[550]">{t('common.lead')}</th>
+                      <th scope="col" className="py-2 pl-2 pr-5 text-center font-[550]">{t('common.brought')}</th>
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-hairline">
                     {preview.sidePokemon[sideIdx].map((poke) => (
-                      <tr key={poke.pokemon_name} className="border-t border-poke-border text-poke-text-primary">
-                        <td className="py-1 pr-2">{localizeSpecies(poke.pokemon_name, dataLocale)}</td>
-                        <td className="py-1 pr-2">{poke.kos_dealt}</td>
-                        <td className="py-1 pr-2">{poke.turns_active}</td>
-                        <td className="py-1 pr-2 text-poke-text-secondary">
+                      <tr key={poke.pokemon_name} className="text-fg">
+                        <td className="px-5 py-2 font-[550]">{localizeSpecies(poke.pokemon_name, dataLocale)}</td>
+                        <td className="px-2 py-2 text-right font-mono tabular-nums">{poke.kos_dealt}</td>
+                        <td className="px-2 py-2 text-right font-mono tabular-nums">{poke.turns_active}</td>
+                        <td className="px-2 py-2 text-fg-muted">
                           {poke.moves_used.map((m) => localizeMove(m, dataLocale)).join(', ')}
                         </td>
-                        <td className="py-1 pr-2">{poke.was_koed ? '✓' : ''}</td>
-                        <td className="py-1 pr-2">{poke.was_lead ? '✓' : ''}</td>
-                        <td className="py-1">{poke.was_brought ? '✓' : ''}</td>
+                        <td className="px-2 py-2 text-center">{poke.was_koed ? <Check aria-label={t('common.koed')} className={FLAG_ICON} /> : ''}</td>
+                        <td className="px-2 py-2 text-center">{poke.was_lead ? <Check aria-label={t('common.lead')} className={FLAG_ICON} /> : ''}</td>
+                        <td className="py-2 pl-2 pr-5 text-center">{poke.was_brought ? <Check aria-label={t('common.brought')} className={FLAG_ICON} /> : ''}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            </Card>
+            </Section>
           ))}
 
           {submitError && <Alert variant="error">{errorMessage(submitError)}</Alert>}
           {successKey && <Alert variant="success">{t(`replayImport.${successKey}`)}</Alert>}
 
-          <Button type="submit" variant="primary" loading={submitting} disabled={preview.winnerSide === null || parsing}>
+          <Button type="submit" variant="primary" loading={submitting} disabled={preview.winnerSide === null || parsing} className="self-start max-sm:min-h-11">
             {t('replayImport.importGame')}
           </Button>
         </form>

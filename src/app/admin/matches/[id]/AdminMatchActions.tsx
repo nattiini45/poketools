@@ -6,6 +6,9 @@ import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
 import Alert from '@/components/ui/Alert';
+import Textarea from '@/components/ui/Textarea';
+import { CHOICE, CHOICE_OFF, CHOICE_ON, FIELD_LABEL, FOCUS, INSET_ROW, TEXT_LINK, TOUCH } from '@/components/admin/match-styles';
+import { cn } from '@/lib/utils/cn';
 import ReasonDialog from '@/components/admin/ReasonDialog';
 import type { MatchStatus, GameSummary } from '@/types/match';
 import type { MatchRecalculationSummary } from '@/types/game';
@@ -138,7 +141,7 @@ export function ResetImpact({ state }: { state: ResetPreviewState }) {
       {preview.was_completed && <p>{tMatch('impact.ratingsRebuilt')}</p>}
       {preview.downstream.length > 0 && (
         <div>
-          <p className="font-semibold text-poke-text-primary">{tMatch('impact.downstreamHeading')}</p>
+          <p className="font-[550] text-fg">{tMatch('impact.downstreamHeading')}</p>
           <ul className="mt-1 list-disc pl-5">
             {preview.downstream.map((m) => (
               <li key={m.id}>
@@ -521,34 +524,29 @@ export default function AdminMatchActions({
     <>
       {/* Reset Match Controls — shown for every match that can be reset */}
       {canReset && !(resetInCard && games.length === 0) && (
-        <Section title={t('actions.resetSection')}>
-          <div className="space-y-4">
+        <Section title={t('actions.resetSection')} icon="dubious-disc" collapsible keepMounted>
+          <div className="flex flex-col items-start gap-4">
             {/* Per-game actions */}
             {games.length > 0 && (
-              <div>
-                <p className="text-xs text-poke-text-muted mb-2">{t('actions.gameActions')}</p>
-                <div className="space-y-2">
+              <div className="w-full">
+                <p className="mb-2 text-caption text-fg-muted">{t('actions.gameActions')}</p>
+                <div className="flex flex-col gap-2">
                   {games.map((game) => (
-                    <div
-                      key={game.id}
-                      className="flex items-center justify-between px-3 py-2 bg-poke-surface-alt rounded-poke-md border border-poke-border"
-                    >
-                      <div className="text-sm">
-                        <span className="font-heading font-semibold text-poke-text-secondary">
-                          {t('actions.gameNumber', { number: game.game_number })}
-                        </span>
+                    <div key={game.id} className={`flex flex-wrap items-center justify-between gap-x-3 gap-y-1 ${INSET_ROW}`}>
+                      <div className="min-w-0 text-body">
+                        <span className="font-heading text-fg">{t('actions.gameNumber', { number: game.game_number })}</span>
                         {game.winner_id && (
-                          <span className="ml-2 text-poke-text-muted">
+                          <span className="ml-2 text-caption text-fg-muted">
                             {t('actions.gameWinner', {
                               name: game.winner_id === player1.id ? player1.name : player2.name,
                             })}
                           </span>
                         )}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex items-center gap-4">
                         <Link
                           href={`/admin/matches/${matchId}/games/${game.id}/edit${backSuffix}`}
-                          className="text-xs text-poke-blue hover:underline font-heading"
+                          className={cn('inline-flex items-center text-caption', TEXT_LINK, TOUCH)}
                         >
                           {t('actions.edit')}
                         </Link>
@@ -556,7 +554,11 @@ export default function AdminMatchActions({
                           type="button"
                           disabled={busy}
                           onClick={() => setDeleteGameId(game.id)}
-                          className="text-xs text-poke-accent hover:underline font-heading"
+                          className={cn(
+                            'inline-flex items-center rounded-sm text-caption font-[550] text-loss underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50',
+                            TOUCH,
+                            FOCUS,
+                          )}
                         >
                           {t('actions.delete')}
                         </button>
@@ -569,12 +571,7 @@ export default function AdminMatchActions({
 
             {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
             {!resetInCard && (
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={openResetDialog}
-                disabled={busy}
-              >
+              <Button variant="danger" size="sm" onClick={openResetDialog} disabled={busy} className={TOUCH}>
                 {t('actions.resetMatch')}
               </Button>
             )}
@@ -584,130 +581,104 @@ export default function AdminMatchActions({
 
       {/* Override Actions — for a match an admin can complete from here */}
       {canComplete && (
-        <Section title={t('actions.overrideSection')}>
-          {/* Recorded games, so the result is picked with the series in view */}
-          <div className="mb-4 space-y-1 text-sm">
-            <p className="font-heading text-poke-text-muted">{t('actions.tally.label')}</p>
-            <p className="text-poke-text-primary">
-              <SeriesTallyLine tally={tally} player1={player1} player2={player2} />
-            </p>
-            {tally.bestOf !== null && tally.winsNeeded !== null && (
-              <p className="text-xs text-poke-text-muted">
-                {t('actions.tally.bestOf', { bestOf: tally.bestOf, needed: tally.winsNeeded })}
+        <Section title={t('actions.overrideSection')} icon="vs-seeker" collapsible keepMounted>
+          <div className="flex flex-col gap-4">
+            {/* Recorded games, so the result is picked with the series in view */}
+            <div className={`flex flex-col gap-0.5 ${INSET_ROW}`}>
+              <p className="text-caption text-fg-muted">{t('actions.tally.label')}</p>
+              <p className="text-body font-[550] text-fg">
+                <SeriesTallyLine tally={tally} player1={player1} player2={player2} />
               </p>
-            )}
-          </div>
-
-          {/* Winner Selection */}
-          <div>
-            <label className="block text-sm font-heading text-poke-text-muted mb-2">{t('actions.setWinner')}</label>
-            <div className="flex gap-3">
-              {[player1, player2].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => setWinnerId(p.id)}
-                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                    winnerId === p.id
-                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
-                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-                  }`}
-                >
-                  {p.name}
-                  {leader?.id === p.id && (
-                    <span className="ml-2 text-xs font-normal opacity-80">{t('actions.tally.byGames')}</span>
-                  )}
-                </button>
-              ))}
+              {tally.bestOf !== null && tally.winsNeeded !== null && (
+                <p className="text-caption text-fg-muted">
+                  {t('actions.tally.bestOf', { bestOf: tally.bestOf, needed: tally.winsNeeded })}
+                </p>
+              )}
             </div>
-          </div>
 
-          {/* Notes */}
-          <div className="mt-4">
-            <label htmlFor="admin-notes" className="block text-sm font-heading text-poke-text-muted mb-1">
-              {t('actions.notesLabel')}
-            </label>
-            <textarea
+            {/* Winner Selection */}
+            <div>
+              <p className={`${FIELD_LABEL} mb-1.5`}>{t('actions.setWinner')}</p>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label={t('actions.setWinner')}>
+                {[player1, player2].map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={winnerId === p.id}
+                    onClick={() => setWinnerId(p.id)}
+                    className={cn(CHOICE, 'min-w-0 flex-col gap-0', winnerId === p.id ? CHOICE_ON : CHOICE_OFF)}
+                  >
+                    <span className="max-w-full break-words">{p.name}</span>
+                    {leader?.id === p.id && <span className="text-caption font-normal text-fg-muted">{t('actions.tally.byGames')}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Notes */}
+            <Textarea
               id="admin-notes"
+              label={t('actions.notesLabel')}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={2}
-              className="w-full px-3 py-2 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
               placeholder={t('actions.notesPlaceholder')}
             />
-          </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-3 mt-4">
-            <Button
-              variant="success"
-              loading={loading}
-              disabled={busy}
-              onClick={() => requestOverride('completed')}
-            >
-              {t('actions.completeMatch')}
-            </Button>
-
-            {canMarkDisputed && (
-              <Button
-                variant="danger"
-                loading={loading}
-                disabled={busy}
-                onClick={() => requestOverride('disputed')}
-              >
-                {t('actions.markDisputed')}
+            {/* Action Buttons */}
+            <div className="flex flex-wrap gap-2">
+              <Button variant="primary" loading={loading} disabled={busy} onClick={() => requestOverride('completed')} className={TOUCH}>
+                {t('actions.completeMatch')}
               </Button>
-            )}
+
+              {canMarkDisputed && (
+                <Button variant="secondary" loading={loading} disabled={busy} onClick={() => requestOverride('disputed')} className={TOUCH}>
+                  {t('actions.markDisputed')}
+                </Button>
+              )}
+            </div>
           </div>
         </Section>
       )}
 
       {/* A match that has not started: settle it directly (admin-only, audited) */}
       {canSettle && (
-        <Section title={tMatch('actions.settle.section')}>
-          <p className="text-sm text-poke-text-muted mb-4">{tMatch('actions.settle.hint')}</p>
-          <div>
-            <p className="block text-sm font-heading text-poke-text-muted mb-2">{tMatch('actions.settle.winnerLabel')}</p>
-            <div className="flex gap-3" role="group" aria-label={tMatch('actions.settle.winnerLabel')}>
-              {[player1, player2].map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  aria-pressed={settleWinnerId === p.id}
-                  onClick={() => setSettleWinnerId(p.id)}
-                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                    settleWinnerId === p.id
-                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
-                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-                  }`}
-                >
-                  {p.name}
-                </button>
-              ))}
+        <Section title={tMatch('actions.settle.section')} icon="vs-seeker">
+          <div className="flex flex-col items-start gap-4">
+            <p className="text-body text-fg-muted">{tMatch('actions.settle.hint')}</p>
+            <div className="w-full">
+              <p className={`${FIELD_LABEL} mb-1.5`}>{tMatch('actions.settle.winnerLabel')}</p>
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label={tMatch('actions.settle.winnerLabel')}>
+                {[player1, player2].map((p) => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    aria-pressed={settleWinnerId === p.id}
+                    onClick={() => setSettleWinnerId(p.id)}
+                    className={cn(CHOICE, 'min-w-0', settleWinnerId === p.id ? CHOICE_ON : CHOICE_OFF)}
+                  >
+                    <span className="max-w-full break-words">{p.name}</span>
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="mt-4">
-            <p className="block text-sm font-heading text-poke-text-muted mb-2">{tMatch('actions.settle.outcomeLabel')}</p>
-            <div className="flex flex-wrap gap-3" role="group" aria-label={tMatch('actions.settle.outcomeLabel')}>
-              {ADMIN_OUTCOME_KINDS.map((kind) => (
-                <button
-                  key={kind}
-                  type="button"
-                  aria-pressed={settleOutcome === kind}
-                  onClick={() => setSettleOutcome(kind)}
-                  className={`px-4 py-2 rounded-poke-md text-sm border transition-colors font-heading font-semibold ${
-                    settleOutcome === kind
-                      ? 'bg-poke-accent text-poke-surface border-poke-accent shadow-poke-sm'
-                      : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
-                  }`}
-                >
-                  {tMatch(`actions.settle.outcome.${kind}`)}
-                </button>
-              ))}
+            <div className="w-full">
+              <p className={`${FIELD_LABEL} mb-1.5`}>{tMatch('actions.settle.outcomeLabel')}</p>
+              <div className="flex flex-wrap gap-2" role="group" aria-label={tMatch('actions.settle.outcomeLabel')}>
+                {ADMIN_OUTCOME_KINDS.map((kind) => (
+                  <button
+                    key={kind}
+                    type="button"
+                    aria-pressed={settleOutcome === kind}
+                    onClick={() => setSettleOutcome(kind)}
+                    className={cn(CHOICE, settleOutcome === kind ? CHOICE_ON : CHOICE_OFF)}
+                  >
+                    {tMatch(`actions.settle.outcome.${kind}`)}
+                  </button>
+                ))}
+              </div>
             </div>
-          </div>
-          <div className="mt-4">
-            <Button variant="success" loading={settling} disabled={busy} onClick={requestSettle}>
+            <Button variant="primary" loading={settling} disabled={busy} onClick={requestSettle} className={TOUCH}>
               {tMatch('actions.settle.button')}
             </Button>
           </div>
@@ -716,22 +687,19 @@ export default function AdminMatchActions({
 
       {/* Completed match — show reset option only */}
       {resetInCard && (
-        <Section title={t('actions.adminActions')}>
-          <p className="text-sm text-poke-text-muted mb-3">{t('actions.completedHint')}</p>
-          <Button
-            variant="danger"
-            size="sm"
-            disabled={busy}
-            onClick={openResetDialog}
-          >
-            {t('actions.resetMatch')}
-          </Button>
+        <Section title={t('actions.adminActions')} icon="everstone" collapsible keepMounted>
+          <div className="flex flex-col items-start gap-3">
+            <p className="text-body text-fg-muted">{t('actions.completedHint')}</p>
+            <Button variant="danger" size="sm" disabled={busy} onClick={openResetDialog} className={TOUCH}>
+              {t('actions.resetMatch')}
+            </Button>
+          </div>
         </Section>
       )}
 
       {/* Feedback */}
       {error && 'local' in error && (
-        <Alert variant="error" className="mt-4">
+        <Alert variant="error">
           {error.local === 'settleSelectWinner' || error.local === 'settleFailed'
             ? tMatch(error.local === 'settleFailed' ? 'actions.settle.failed' : 'actions.settle.selectWinner')
             : t(`actions.errors.${error.local}`)}
@@ -740,19 +708,19 @@ export default function AdminMatchActions({
       {/* API failures with their recovery (reload after a concurrent change, data tools
           for a game left uncounted) and the warnings of a saved change. */}
       {((error && 'api' in error) || warnings.length > 0) && (
-        <div className="mt-4">
+        <div>
           <GameChangeAlerts error={error && 'api' in error ? error.api : null} warnings={warnings} isSiteAdmin={isSiteAdmin} />
         </div>
       )}
       {success && (
-        <Alert variant={success.kind === 'settledIncomplete' ? 'warning' : 'success'} className="mt-4">
-          <div className="space-y-1">
+        <Alert variant={success.kind === 'settledIncomplete' ? 'warning' : 'success'}>
+          <div className="flex flex-col gap-1">
             <p>{successText(success)}</p>
             {/* Itemized recalculation summary (spec §24). Rendered when the
                 reset API returned a `recalculation` object so the admin can
                 confirm exactly which derived records were rebuilt. */}
             {recalculation && (
-              <ul className="mt-2 space-y-1 text-xs">
+              <ul className="mt-2 flex flex-col gap-1 text-caption">
                 <li>{t('actions.recalc.gamesDeleted', { count: recalculation.gamesDeleted })}</li>
                 {/*
                   Children cleanup — render EVERY field of MatchChildrenCleanup
@@ -779,14 +747,14 @@ export default function AdminMatchActions({
                   </li>
                 )}
                 {recalculation.impossibleLineups.length > 0 && (
-                  <li className="text-poke-danger">
+                  <li className="text-loss">
                     {t('actions.recalc.impossibleLineups', { count: recalculation.impossibleLineups.length })}
                   </li>
                 )}
               </ul>
             )}
-            {downstreamWarning && <p className="text-xs">{t('actions.downstreamWarning')}</p>}
-            {downstreamReset > 0 && <p className="text-xs">{t('gameChange.downstream.done', { count: downstreamReset })}</p>}
+            {downstreamWarning && <p className="text-caption">{t('actions.downstreamWarning')}</p>}
+            {downstreamReset > 0 && <p className="text-caption">{t('gameChange.downstream.done', { count: downstreamReset })}</p>}
           </div>
         </Alert>
       )}
@@ -847,8 +815,7 @@ export default function AdminMatchActions({
         open={settleDialogOpen}
         onClose={() => setSettleDialogOpen(false)}
         onConfirm={handleSettle}
-        title={tMatch('actions.settle.dialogTitle')}
-        message={tMatch('actions.settle.dialogMessage', {
+        title={tMatch('actions.settle.dialogTitle')}        message={tMatch('actions.settle.dialogMessage', {
           winner: settleWinnerId === player1.id ? player1.name : player2.name,
         })}
         confirmLabel={tMatch('actions.settle.button')}
