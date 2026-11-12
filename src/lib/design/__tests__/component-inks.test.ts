@@ -28,16 +28,10 @@ const read = (path: string) => readFileSync(join(SRC, path), 'utf8');
 const STATIC_INK = /(?<![:\w-])(?:hover:)?text-(red-500|red-400|amber-600|yellow-700)\b/g;
 
 const MIGRATED: Record<string, string> = {
-  'components/avatar/AiAvatarGenerator.tsx': 'text-poke-danger-ink',
-  'components/avatar/AvatarBuilder.tsx': 'text-poke-danger-ink',
-  'components/avatar/PhotoTransformPanel.tsx': 'text-poke-danger-ink',
-  'components/avatar/ShowdownPicker.tsx': 'text-poke-danger-ink',
   'components/wiki/WikiNotesSection.tsx': 'text-poke-danger-ink',
   'components/creator/studio/CastStudio.tsx': 'text-poke-danger-tint-ink',
   'components/creator/studio/SessionManager.tsx': 'text-poke-danger-tint-ink',
   'components/league/LeagueRosterManager.tsx': 'text-poke-amber-ink',
-  'components/teambuilder/LegalityBadge.tsx': 'text-poke-yellow-ink',
-  'components/bracket/RoundRobinTable.tsx': 'text-poke-yellow-ink',
   'components/match/MatchHighlightCard.tsx': 'text-poke-yellow-ink',
   'components/tournament/TournamentReportCard.tsx': 'text-poke-yellow-ink',
   'components/ui/Alert.tsx': 'text-poke-yellow-ink',
@@ -45,6 +39,12 @@ const MIGRATED: Record<string, string> = {
 
 /** Files moved to the direction B tokens (redesign A12): no palette ink to require, but still no static status ink. */
 const REDESIGNED = [
+  'components/avatar/AiAvatarGenerator.tsx',
+  'components/avatar/AvatarBuilder.tsx',
+  'components/avatar/PhotoTransformPanel.tsx',
+  'components/avatar/ShowdownPicker.tsx',
+  'components/teambuilder/LegalityBadge.tsx',
+  'components/bracket/RoundRobinTable.tsx',
   'app/admin/wiki/WikiModerationPanel.tsx',
   'components/discord/DiscordWebhookManager.tsx',
   'components/social/SocialIntegrationManager.tsx',
