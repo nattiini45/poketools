@@ -96,6 +96,64 @@ describe('DashboardContent: the queue names where a match is played', () => {
   });
 });
 
+describe('DashboardContent: the queue beyond matches', () => {
+  const queue = (locale: 'en' | 'de', extra: Partial<React.ComponentProps<typeof DashboardContent>> = {}) =>
+    renderWithI18n(
+      <DashboardContent
+        playerId="p1"
+        playerName="Misty"
+        initialPlayer={null}
+        initialMatches={[]}
+        initialTournaments={[]}
+        playerRating={null}
+        playerStreaks={null}
+        leagueStandings={[
+          { leagueId: 'l1', leagueName: 'Kanto League', status: 'active', formatType: 'draft', participantCount: 8, isTestSeason: false, snapshot: null },
+        ]}
+        teamsUsed={[]}
+        {...extra}
+      />,
+      { locale, timeZone: 'UTC' },
+    );
+  const TURN = { poolId: 'pool1', leagueName: 'Kanto League', href: '/leagues/l1/draft', deadlineAt: '2026-11-12T18:00:00.000Z', paused: false, redraft: false };
+  const ACTION = { leagueId: 'l2', leagueName: 'Kit League', openActions: 2, challenges: 1, answerBy: '2026-11-13T10:00:00.000Z' };
+
+  it('a draft on the clock leads the queue with its league, its deadline and a link to the draft', () => {
+    const html = queue('en', { draftTurns: [TURN] });
+    expect(html).toContain('Your pick');
+    expect(html).toContain('On the clock');
+    expect(html).toContain('Pick by');
+    expect(html).toContain('href="/leagues/l1/draft"');
+    expect(html).toContain('1 thing needs attention');
+    expect(html).not.toContain('all caught up');
+    expect(queue('de', { draftTurns: [TURN] })).toContain('Du bist am Zug');
+  });
+
+  it('a paused draft shows no deadline and is not marked as waiting for the viewer', () => {
+    const html = queue('en', { draftTurns: [{ ...TURN, paused: true }] });
+    expect(html).toContain('Paused');
+    expect(html).not.toContain('Pick by');
+    expect(html).not.toContain('border-accent-fill');
+  });
+
+  it('a custom league with open actions and a challenge links to its play page', () => {
+    const html = queue('en', { formatActions: [ACTION] });
+    expect(html).toContain('League actions');
+    expect(html).toContain('Kit League');
+    expect(html).toContain('2 actions open');
+    expect(html).toContain('1 challenge to answer');
+    expect(html).toContain('href="/dashboard/leagues/l2/play"');
+    expect(queue('de', { formatActions: [ACTION] })).toContain('2 Aktionen offen');
+  });
+
+  it('an upcoming match without a registered team says so, and only that match', () => {
+    const upcoming = match('scheduled', { round_status: 'pending' } as Partial<MatchWithPlayers>);
+    expect(queue('en', { initialMatches: [upcoming], teamlessMatchIds: ['m1'] })).toContain('No team yet');
+    expect(queue('en', { initialMatches: [upcoming], teamlessMatchIds: ['m9'] })).not.toContain('No team yet');
+    expect(queue('en', { initialMatches: [upcoming] })).toContain('1 match needs attention');
+  });
+});
+
 describe('DashboardContent: result actions', () => {
   it.each(['scheduled', 'in_progress'])('%s in a live round: submit a result', (status) => {
     const html = render(match(status));
