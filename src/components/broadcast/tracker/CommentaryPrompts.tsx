@@ -49,7 +49,7 @@ export default function CommentaryPrompts({ state, seriesScore }: CommentaryProm
 
   return (
     <div className="space-y-1.5">
-      <h4 className="text-[10px] font-semibold text-poke-text-secondary uppercase tracking-wider px-1">
+      <h4 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider px-1">
         {t("tracker.talkingPoints")}
       </h4>
       {prompts.slice(0, 5).map((prompt, i) => (

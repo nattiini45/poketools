@@ -55,7 +55,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
       <div className="flex items-center gap-3">
         <h3 className={`text-lg font-bold ${color}`}>{player.name}</h3>
         {player.rating && (
-          <span className="text-xs text-poke-text-secondary font-mono">
+          <span className="text-xs text-fg-muted font-mono">
             {t("cheatSheet.rating", { rating: String(Math.round(player.rating)) })}
           </span>
         )}
@@ -69,7 +69,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
       </div>
 
       {/* Record */}
-      <div className="text-xs text-poke-text-secondary">
+      <div className="text-xs text-fg-muted">
         {player.record.draws > 0
           ? t("cheatSheet.recordWithDraws", {
               wins: player.record.wins,
@@ -78,7 +78,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
             })
           : t("cheatSheet.record", { wins: player.record.wins, losses: player.record.losses })}
         {player.archetype && (
-          <span className="ml-2 px-2 py-0.5 rounded-full bg-poke-elevated text-poke-text font-medium">
+          <span className="ml-2 px-2 py-0.5 rounded-full bg-elevated text-fg font-medium">
             {archetypeLabel(player.archetype.primary)}
             {player.archetype.secondary && ` / ${archetypeLabel(player.archetype.secondary)}`}
           </span>
@@ -90,16 +90,16 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
         {player.pokemon.map((p) => (
           <div key={p.species} className="flex items-center gap-2 px-2 py-1.5 rounded-lg border">
             <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold text-poke-text truncate">{species(p.species)}</div>
+              <div className="text-xs font-semibold text-fg truncate">{species(p.species)}</div>
               <div className="flex items-center gap-0.5 mt-0.5">
                 {p.types.map((type) => (
                   <TypeBadge key={type} type={type} className="text-[8px] px-0.5 py-0" />
                 ))}
               </div>
             </div>
-            <div className="text-right text-[10px] text-poke-text-secondary">
+            <div className="text-right text-[10px] text-fg-muted">
               {p.ability && <div>{localizeAbility(p.ability, dataLocale)}</div>}
-              {p.item && <div className="text-poke-text-muted">{localizeItem(p.item, dataLocale)}</div>}
+              {p.item && <div className="text-fg-muted">{localizeItem(p.item, dataLocale)}</div>}
             </div>
           </div>
         ))}
@@ -107,14 +107,14 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
 
       {/* Speed Top-5 */}
       <div>
-        <h4 className="text-[10px] font-semibold text-poke-text-secondary uppercase tracking-wider mb-1">
+        <h4 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1">
           {t("cheatSheet.speedTiersMax")}
         </h4>
         <div className="flex gap-2 text-[10px]">
           {topSpeeds.map((p) => (
             <span
               key={p.species}
-              className="inline-flex min-w-0 px-1.5 py-0.5 rounded bg-poke-elevated text-poke-text font-mono"
+              className="inline-flex min-w-0 px-1.5 py-0.5 rounded bg-elevated text-fg font-mono"
               title={species(p.species)}
             >
               {/* Localized names vary in length: truncate by width, not characters. */}
@@ -145,15 +145,15 @@ export default function CheatSheet({ data }: CheatSheetProps) {
       <Card className="p-4">
         <div className="flex items-center justify-between">
           <div>
-            <div className="text-xs text-poke-text-secondary">
+            <div className="text-xs text-fg-muted">
               {data.roundName && translateEngineLabel("round", data.roundName, locale)}
             </div>
-            <div className="text-sm text-poke-text-muted">
+            <div className="text-sm text-fg-muted">
               {t("cheatSheet.bestOf", { bestOf: data.bestOf, format: data.format ?? "" })}
             </div>
           </div>
           {data.h2h.player1Wins + data.h2h.player2Wins > 0 && (
-            <div className="text-xs text-poke-text-secondary">
+            <div className="text-xs text-fg-muted">
               {t("cheatSheet.h2h", { a: data.h2h.player1Wins, b: data.h2h.player2Wins })}
             </div>
           )}
@@ -173,14 +173,14 @@ export default function CheatSheet({ data }: CheatSheetProps) {
       {/* Standings context */}
       {data.standings && data.standings.length > 0 && (
         <Card className="p-4">
-          <h3 className="text-sm font-bold text-poke-text mb-2">{t("cheatSheet.standingsTop8")}</h3>
+          <h3 className="text-sm font-bold text-fg mb-2">{t("cheatSheet.standingsTop8")}</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-1 text-xs">
             {data.standings.slice(0, 8).map((s) => {
               const isInMatch = s.playerId === data.player1.id || s.playerId === data.player2.id;
               return (
                 <div
                   key={s.playerId}
-                  className={`flex items-center justify-between px-2 py-1 rounded ${isInMatch ? 'text-poke-accent font-medium' : 'text-poke-text-secondary'}`}
+                  className={`flex items-center justify-between px-2 py-1 rounded ${isInMatch ? 'text-accent-ink font-medium' : 'text-fg-muted'}`}
                 >
                   <span>#{s.rank} {s.playerName}</span>
                   <span className="font-mono">{s.wins}-{s.losses}</span>

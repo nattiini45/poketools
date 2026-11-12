@@ -32,11 +32,11 @@ export default function AvatarCategoryPicker({
   return (
     <div>
       <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-heading font-bold text-poke-text-primary">
+        <h3 className="text-sm font-heading font-bold text-fg">
           {tw.dynamic(`categories.${avatarMessageKey(category.id)}`, undefined, category.label)}
         </h3>
         {!category.required && (
-          <span className="text-xs text-poke-text-muted">{t('builder.optional')}</span>
+          <span className="text-xs text-fg-muted">{t('builder.optional')}</span>
         )}
       </div>
 
@@ -49,12 +49,12 @@ export default function AvatarCategoryPicker({
               relative w-14 h-14 rounded-poke-md border-2 transition-all duration-150
               flex items-center justify-center
               ${selectedOptionId === null
-                ? 'border-poke-accent bg-poke-accent-light shadow-poke-sm'
-                : 'border-poke-border bg-poke-surface hover:border-poke-text-muted'
+                ? 'border-accent-ink bg-accent-subtle shadow-poke-sm'
+                : 'border-hairline bg-surface hover:border-hairline-strong'
               }
             `}
           >
-            <span className="text-xs text-poke-text-muted font-heading">{t('builder.none')}</span>
+            <span className="text-xs text-fg-muted font-heading">{t('builder.none')}</span>
           </button>
         </div>
       )}
@@ -65,7 +65,7 @@ export default function AvatarCategoryPicker({
           <div key={style.id}>
             {/* Style label (skip for single-style categories like skin tone) */}
             {!isSingleStyle && (
-              <h4 className="text-xs font-heading font-semibold text-poke-text-secondary mb-2">
+              <h4 className="text-xs font-heading font-semibold text-fg-muted mb-2">
                 {tw.dynamic(`styles.${avatarMessageKey(style.id)}`, undefined, style.label)}
               </h4>
             )}
@@ -116,8 +116,8 @@ function VariantButton({
         relative w-14 h-14 rounded-poke-md border-2 transition-all duration-150
         overflow-hidden
         ${isSelected
-          ? 'border-poke-accent bg-poke-accent-light shadow-poke-sm scale-105'
-          : 'border-poke-border bg-poke-elevated hover:border-poke-text-muted'
+          ? 'border-accent-ink bg-accent-subtle shadow-poke-sm scale-105'
+          : 'border-hairline bg-elevated hover:border-hairline-strong'
         }
       `}
     >

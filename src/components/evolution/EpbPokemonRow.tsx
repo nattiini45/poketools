@@ -56,15 +56,15 @@ export default function EpbPokemonRow({
         {/* Name + stage + price */}
         <div className="flex items-center gap-1.5 flex-wrap">
           <PokemonLink name={snapshot.species_at_match}>
-            <span className="text-xs font-heading font-semibold text-poke-text-primary hover:underline">
+            <span className="text-xs font-heading font-semibold text-fg hover:underline">
               {speciesLabel}
             </span>
           </PokemonLink>
-          <span className="rounded bg-poke-surface px-1.5 py-0.5 text-[10px] font-medium text-poke-text-secondary">
+          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-fg-muted">
             {tLegacy('stageShort', { n: snapshot.stage_at_match })}
           </span>
           {price !== null && (
-            <span className="text-[10px] text-poke-text-muted">{tLegacy('pts', { n: price })}</span>
+            <span className="text-[10px] text-fg-muted">{tLegacy('pts', { n: price })}</span>
           )}
           {snapshot.evolution_triggered && (
             <Badge variant="yellow" size="xs">
@@ -87,24 +87,24 @@ export default function EpbPokemonRow({
         {!isFullyEvolved && nextStageRequirement && (
           <div className="mt-1.5">
             <div className="flex items-center gap-2">
-              <div className="flex-1 h-2 overflow-hidden rounded-full bg-poke-surface">
+              <div className="flex-1 h-2 overflow-hidden rounded-full bg-surface">
                 <div
                   className={`h-full rounded-full transition-all ${
                     snapshot.evolution_triggered
-                      ? 'bg-poke-yellow'
+                      ? 'bg-tier-1'
                       : progressPercent >= 70
-                        ? 'bg-poke-blue'
-                        : 'bg-poke-text-muted'
+                        ? 'bg-accent-fill'
+                        : 'bg-fg-muted'
                   }`}
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <span className="text-[10px] font-mono text-poke-text-secondary whitespace-nowrap">
+              <span className="text-[10px] font-mono text-fg-muted whitespace-nowrap">
                 {snapshot.progress_before}/{nextStageRequirement} → {snapshot.progress_after}/{nextStageRequirement}
               </span>
             </div>
             {nextForm && (
-              <p className="mt-0.5 text-[10px] text-poke-text-muted">
+              <p className="mt-0.5 text-[10px] text-fg-muted">
                 {snapshot.evolution_triggered
                   ? t('row.evolvedInto', { form: localizeSpecies(nextForm, dataLocale) })
                   : nextStageRequirement - snapshot.progress_after > 0
@@ -119,12 +119,12 @@ export default function EpbPokemonRow({
         )}
 
         {isFullyEvolved && (
-          <p className="mt-0.5 text-[10px] text-poke-green">{t('row.fullyEvolved')}</p>
+          <p className="mt-0.5 text-[10px] text-win">{t('row.fullyEvolved')}</p>
         )}
 
         {/* Per-match progress source breakdown (compact), with the spec's token names */}
         {(snapshot.draft_tokens_delta > 0 || snapshot.kill_tokens_delta > 0 || snapshot.cosmo_points_delta > 0) && (
-          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-poke-text-secondary">
+          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-fg-muted">
             {snapshot.draft_tokens_delta > 0 && (
               <span className="flex items-center gap-0.5">
                 <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />

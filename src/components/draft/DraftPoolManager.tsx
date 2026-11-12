@@ -173,7 +173,7 @@ function readNumberField(target: HTMLInputElement): NumberFieldState {
 }
 
 const INPUT_CLASS =
-  'w-32 px-3 py-1.5 border bg-poke-surface rounded-poke-md text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-2 transition-colors';
+  'w-32 px-3 py-1.5 border bg-surface rounded-poke-md text-sm text-fg focus:border-accent-ink focus:ring-2 transition-colors';
 
 interface DraftPoolManagerProps {
   seasonId: string;
@@ -283,8 +283,8 @@ export default function DraftPoolManager({
 
   return (
     <Card variant="default" padding="md" className="space-y-4">
-      <h3 className="font-heading font-semibold text-lg text-poke-text-primary">{t('poolManager.create')}</h3>
-      <p className="text-sm text-poke-text-muted">
+      <h3 className="font-heading font-semibold text-lg text-fg">{t('poolManager.create')}</h3>
+      <p className="text-sm text-fg-muted">
         {t.rich('poolManager.setupFor', { season: seasonName, b: (chunks) => <strong>{chunks}</strong> })}
       </p>
 
@@ -333,7 +333,7 @@ export default function DraftPoolManager({
 
       {!pointBuy && (
         <div>
-          <label htmlFor={roundsIds.rounds} className="block text-sm font-heading font-semibold text-poke-text-primary mb-1">
+          <label htmlFor={roundsIds.rounds} className="block text-sm font-heading font-semibold text-fg mb-1">
             {t('poolManager.rounds')}
           </label>
           {/* onInput as well: a badInput change can leave `value` at '' and skip React's onChange. */}
@@ -349,20 +349,20 @@ export default function DraftPoolManager({
             onInput={(e) => setRounds(readNumberField(e.currentTarget))}
             aria-invalid={fieldErrors.rounds !== null || undefined}
             aria-describedby={fieldErrors.rounds ? `${roundsIds.roundsHint} ${roundsIds.roundsError}` : roundsIds.roundsHint}
-            className={`${INPUT_CLASS} ${fieldErrors.rounds ? 'border-poke-danger' : 'border-poke-border'}`}
+            className={`${INPUT_CLASS} ${fieldErrors.rounds ? 'border-loss' : 'border-hairline'}`}
           />
-          <p id={roundsIds.roundsHint} className="text-xs text-poke-text-muted mt-1">
+          <p id={roundsIds.roundsHint} className="text-xs text-fg-muted mt-1">
             {t('poolManager.roundsHint', { min: LEGACY_ROUNDS.min, max: LEGACY_ROUNDS.max, standard: LEGACY_ROUNDS.default })}
           </p>
           {fieldErrors.rounds && (
-            <p id={roundsIds.roundsError} className="text-xs text-poke-danger-ink mt-1">
+            <p id={roundsIds.roundsError} className="text-xs text-loss mt-1">
               {fieldErrorText(fieldErrors.rounds)}
             </p>
           )}
         </div>
       )}
 
-      <p className="text-sm text-poke-text-secondary">
+      <p className="text-sm text-fg-muted">
         {needsBudget && fieldErrors.budget === null
           ? t('poolManager.summaryWithBudget', {
               order: t(`poolManager.orders.${order}.name`),
@@ -376,7 +376,7 @@ export default function DraftPoolManager({
       </p>
 
       {error && (
-        <p role="alert" className="text-sm text-poke-danger">
+        <p role="alert" className="text-sm text-loss">
           {error.kind === 'api' ? apiErrorText(error.error) : t('poolManager.createFailed')}
         </p>
       )}
@@ -405,7 +405,7 @@ function OptionGroup<T extends string>({ idBase, heading, note, options, selecte
   const noteId = `${idBase}-note`;
   return (
     <div role="group" aria-labelledby={headingId} className="space-y-2">
-      <p id={headingId} className="block text-sm font-heading font-semibold text-poke-text-primary">
+      <p id={headingId} className="block text-sm font-heading font-semibold text-fg">
         {heading}
       </p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -423,21 +423,21 @@ function OptionGroup<T extends string>({ idBase, heading, note, options, selecte
             onClick={() => onSelect(option.value)}
             className={`p-3 border rounded-poke-lg text-left transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
               selected === option.value
-                ? 'border-poke-border-focus bg-poke-blue-light'
-                : 'border-poke-border hover:border-poke-border-strong'
+                ? 'border-accent-ink bg-accent-subtle'
+                : 'border-hairline hover:border-hairline-strong'
             }`}
           >
-            <span id={`${idBase}-${option.value}-name`} className="block font-medium text-sm text-poke-text-primary">
+            <span id={`${idBase}-${option.value}-name`} className="block font-medium text-sm text-fg">
               {option.name}
             </span>
-            <span id={`${idBase}-${option.value}-desc`} className="block mt-1 text-xs text-poke-text-muted">
+            <span id={`${idBase}-${option.value}-desc`} className="block mt-1 text-xs text-fg-muted">
               {option.description}
             </span>
           </button>
         ))}
       </div>
       {note && (
-        <p id={noteId} className="text-xs text-poke-text-secondary">
+        <p id={noteId} className="text-xs text-fg-muted">
           {note}
         </p>
       )}
@@ -474,7 +474,7 @@ export function PoolBudgetFields({
   return (
     <div className="flex flex-wrap gap-4">
       <div>
-        <label htmlFor={ids.budget} className="block text-sm font-heading font-semibold text-poke-text-primary mb-1">
+        <label htmlFor={ids.budget} className="block text-sm font-heading font-semibold text-fg mb-1">
           {t('poolManager.pointBudget')}
         </label>
         {/* onInput as well: a badInput change can leave `value` at '' and skip React's onChange. */}
@@ -490,17 +490,17 @@ export function PoolBudgetFields({
           onInput={(e) => onBudgetChange(readNumberField(e.currentTarget))}
           aria-invalid={budgetError !== null || undefined}
           aria-describedby={budgetError ? ids.budgetError : undefined}
-          className={`${INPUT_CLASS} ${budgetError ? 'border-poke-danger' : 'border-poke-border'}`}
+          className={`${INPUT_CLASS} ${budgetError ? 'border-loss' : 'border-hairline'}`}
         />
         {budgetError && (
-          <p id={ids.budgetError} className="text-xs text-poke-danger-ink mt-1">
+          <p id={ids.budgetError} className="text-xs text-loss mt-1">
             {budgetError}
           </p>
         )}
       </div>
       {showsDefaultPrice && (
         <div>
-          <label htmlFor={ids.price} className="block text-sm font-heading font-semibold text-poke-text-primary mb-1">
+          <label htmlFor={ids.price} className="block text-sm font-heading font-semibold text-fg mb-1">
             {t('poolManager.defaultPrice')}
           </label>
           <input
@@ -515,13 +515,13 @@ export function PoolBudgetFields({
             onInput={(e) => onDefaultPriceChange(readNumberField(e.currentTarget))}
             aria-invalid={defaultPriceError !== null || undefined}
             aria-describedby={defaultPriceError ? `${ids.priceHint} ${ids.priceError}` : ids.priceHint}
-            className={`${INPUT_CLASS} ${defaultPriceError ? 'border-poke-danger' : 'border-poke-border'}`}
+            className={`${INPUT_CLASS} ${defaultPriceError ? 'border-loss' : 'border-hairline'}`}
           />
-          <p id={ids.priceHint} className="text-xs text-poke-text-muted mt-1">
+          <p id={ids.priceHint} className="text-xs text-fg-muted mt-1">
             {t('poolManager.defaultPriceHint')}
           </p>
           {defaultPriceError && (
-            <p id={ids.priceError} className="text-xs text-poke-danger-ink mt-1">
+            <p id={ids.priceError} className="text-xs text-loss mt-1">
               {defaultPriceError}
             </p>
           )}

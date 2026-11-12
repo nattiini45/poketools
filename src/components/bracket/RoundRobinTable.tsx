@@ -62,24 +62,24 @@ export default function RoundRobinTable({
   }
 
   function getCellStyle(result: CellResult): string {
-    if (result === 'win') return 'bg-poke-green-light text-poke-green font-medium';
-    if (result === 'loss') return 'bg-poke-danger-light text-poke-danger font-medium';
-    if (result === 'draw') return 'bg-poke-yellow-light text-poke-yellow-ink font-medium';
-    return 'text-poke-text-muted';
+    if (result === 'win') return 'bg-win-bg text-win font-medium';
+    if (result === 'loss') return 'bg-loss-bg text-loss font-medium';
+    if (result === 'draw') return 'bg-tier-1-soft text-fg font-medium';
+    return 'text-fg-muted';
   }
 
   return (
-    <div className="overflow-x-auto rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-card">
+    <div className="overflow-x-auto rounded-poke-lg border border-hairline bg-surface shadow-poke-card">
       <table className="text-xs">
         <thead>
           <tr>
-            <th className="px-4 py-3 text-left font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary">
+            <th className="px-4 py-3 text-left font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">
               {labels.player}
             </th>
             {participants.map((p) => (
               <th
                 key={p.id}
-                className="py-1 px-2 text-center text-poke-text-secondary max-w-16 truncate"
+                className="py-1 px-2 text-center text-fg-muted max-w-16 truncate"
                 title={p.name}
               >
                 {p.name}
@@ -90,7 +90,7 @@ export default function RoundRobinTable({
         <tbody>
           {participants.map((row) => (
             <tr key={row.id} className="border-t">
-              <td className="py-1 px-2 font-heading font-semibold text-poke-text-primary whitespace-nowrap">
+              <td className="py-1 px-2 font-heading font-semibold text-fg whitespace-nowrap">
                 {row.name}
               </td>
               {participants.map((col) => {

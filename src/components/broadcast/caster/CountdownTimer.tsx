@@ -60,7 +60,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-bold text-poke-text">{t("timer.title")}</h3>
+      <h3 className="text-sm font-bold text-fg">{t("timer.title")}</h3>
 
       {/* Label input */}
       <input
@@ -68,15 +68,15 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
         value={label}
         onChange={(e) => setCustomLabel(e.target.value)}
         placeholder={t("timer.labelPlaceholder")}
-        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+        className="w-full px-3 py-1.5 text-xs rounded-lg bg-surface border text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       />
 
       {/* Display */}
       <div className="text-center">
-        <div className={`text-4xl font-mono font-bold ${displayRemaining <= 10 && endTime ? "text-red-400 animate-pulse" : "text-poke-text"}`}>
+        <div className={`text-4xl font-mono font-bold ${displayRemaining <= 10 && endTime ? "text-red-400 animate-pulse" : "text-fg"}`}>
           {display}
         </div>
-        {label && <div className="text-xs text-poke-text-secondary mt-1">{label}</div>}
+        {label && <div className="text-xs text-fg-muted mt-1">{label}</div>}
       </div>
 
       {/* Presets */}
@@ -86,7 +86,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
             key={minutes}
             type="button"
             onClick={() => startTimer(minutes * 60)}
-            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-poke-elevated text-poke-text-secondary hover:text-poke-text transition-colors"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium bg-elevated text-fg-muted hover:text-fg transition-colors"
           >
             {t("timer.preset", { minutes })}
           </button>

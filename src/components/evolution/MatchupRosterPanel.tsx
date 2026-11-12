@@ -42,10 +42,10 @@ export default function MatchupRosterPanel({
   const chipLabels = progressChipLabels(useT(draftSharedMessages));
   const dataLocale = useDataLocale();
   return (
-    <div className="rounded-lg border border-poke-border">
-      <div className="border-b border-poke-border bg-poke-elevated px-4 py-2">
+    <div className="rounded-lg border border-hairline">
+      <div className="border-b border-hairline bg-elevated px-4 py-2">
         <h3 className="text-sm font-semibold">{name}</h3>
-        <p className="text-xs text-poke-text-secondary">{t('roster.lines', { count: trackers.length })}</p>
+        <p className="text-xs text-fg-muted">{t('roster.lines', { count: trackers.length })}</p>
       </div>
       <div className="divide-y">
         {trackers.map((tracker) => {
@@ -83,11 +83,11 @@ export default function MatchupRosterPanel({
                         ))}
                       </span>
                     )}
-                    <span className="rounded bg-poke-elevated px-1.5 py-0.5 text-xs text-poke-text-secondary">
+                    <span className="rounded bg-elevated px-1.5 py-0.5 text-xs text-fg-muted">
                       {tLegacy('stageShort', { n: tracker.current_stage })}
                     </span>
                     {price !== undefined && (
-                      <span className="text-xs text-poke-text-muted">{tLegacy('pts', { n: price })}</span>
+                      <span className="text-xs text-fg-muted">{tLegacy('pts', { n: price })}</span>
                     )}
                     {tera !== 'none' && (
                       <span className={`rounded px-1.5 py-0.5 text-xs ${tera === 'any' ? 'bg-[rgb(20_83_45/0.3)] text-green-400' : 'bg-[rgb(113_63_18/0.3)] text-yellow-400'}`}>
@@ -99,12 +99,12 @@ export default function MatchupRosterPanel({
                     )}
                   </div>
                   {/* Total progress, then the self-earned KOs (`real_kills`) and one chip per other source (§8.3). */}
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-poke-text-secondary">
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-fg-muted">
                     <span>{t('roster.progressTotal', { n: sources.totalProgress })}</span>
                     <ProgressSourceChips sources={sources} compact labels={chipLabels} />
                   </div>
                   {monRoles.length > 0 && (
-                    <p className="mt-1 truncate text-[10px] text-poke-text-muted">
+                    <p className="mt-1 truncate text-[10px] text-fg-muted">
                       {t('roster.roles', {
                         list: monRoles.map((r) => localizeMove(r.move_name, dataLocale)).join(', '),
                       })}
@@ -116,7 +116,7 @@ export default function MatchupRosterPanel({
           );
         })}
         {trackers.length === 0 && (
-          <div className="px-4 py-6 text-center text-xs text-poke-text-secondary">
+          <div className="px-4 py-6 text-center text-xs text-fg-muted">
             {t('roster.empty')}
           </div>
         )}

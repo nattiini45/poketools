@@ -99,7 +99,7 @@ export default function StatRadar({ stats, size = 80 }: StatRadarProps) {
             dominantBaseline="middle"
             fontSize={7}
             fontWeight={600}
-            className="fill-poke-text-secondary"
+            className="fill-fg-muted"
           >
             {localizeStat(stat, dataLocale, "short")}
           </text>

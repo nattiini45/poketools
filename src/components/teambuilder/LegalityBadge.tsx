@@ -113,8 +113,8 @@ export default function LegalityBadge({
 
   if (relevantIssues.length === 0 && teamIssues.length === 0) {
     return (
-      <span className={`inline-flex items-center gap-1 text-xs font-medium text-poke-green ${className}`}>
-        <span className="w-2 h-2 rounded-full bg-poke-green" />
+      <span className={`inline-flex items-center gap-1 text-xs font-medium text-win ${className}`}>
+        <span className="w-2 h-2 rounded-full bg-win" />
         {t('legality.legal')}
       </span>
     );
@@ -125,24 +125,24 @@ export default function LegalityBadge({
       {/* Summary badge */}
       <span
         className={`inline-flex items-center gap-1 text-xs font-medium ${
-          hasErrors ? 'text-poke-danger' : 'text-poke-yellow-ink'
+          hasErrors ? 'text-loss' : 'text-accent-ink'
         }`}
       >
-        <span className={`w-2 h-2 rounded-full ${hasErrors ? 'bg-poke-danger' : 'bg-poke-yellow'}`} />
+        <span className={`w-2 h-2 rounded-full ${hasErrors ? 'bg-loss' : 'bg-tier-1'}`} />
         {hasErrors ? t('legality.illegal') : t('legality.warnings')}
       </span>
 
       {/* Issue list */}
       <ul className="mt-1 space-y-0.5">
         {teamIssues.map((issue, i) => (
-          <li key={`team-${i}`} className="text-xs text-poke-danger" lang={issue.code ? undefined : 'en'}>
+          <li key={`team-${i}`} className="text-xs text-loss" lang={issue.code ? undefined : 'en'}>
             {issueText(issue)}
           </li>
         ))}
         {relevantIssues.map((issue, i) => (
           <li
             key={`set-${i}`}
-            className={`text-xs ${issue.severity === 'error' ? 'text-poke-danger' : 'text-poke-yellow-ink'}`}
+            className={`text-xs ${issue.severity === 'error' ? 'text-loss' : 'text-accent-ink'}`}
           >
             {pokemonIndex === undefined && <span className="font-medium">{localizeSpecies(issue.species, dl)}: </span>}
             <span lang={issue.code ? undefined : 'en'}>{issueText(issue)}</span>

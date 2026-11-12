@@ -58,11 +58,11 @@ export default function NarrativeNotes({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-poke-text-secondary uppercase tracking-wider">
+        <h4 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
           {t("notes.title")}
         </h4>
         {saving && (
-          <span className="text-[10px] text-poke-text-muted animate-pulse">
+          <span className="text-[10px] text-fg-muted animate-pulse">
             {t("notes.saving")}
           </span>
         )}
@@ -77,7 +77,7 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("player1", e.target.value)}
           placeholder={t("notes.playerPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-surface border text-fg placeholder:text-fg-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
 
@@ -90,12 +90,12 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("player2", e.target.value)}
           placeholder={t("notes.playerPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-surface border text-fg placeholder:text-fg-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
 
       <div>
-        <label className="text-[10px] text-poke-text-secondary font-medium block mb-1">
+        <label className="text-[10px] text-fg-muted font-medium block mb-1">
           {t("notes.matchNotes")}
         </label>
         <textarea
@@ -103,7 +103,7 @@ export default function NarrativeNotes({
           onChange={(e) => handleChange("match", e.target.value)}
           placeholder={t("notes.matchPlaceholder")}
           rows={3}
-          className="w-full px-2 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+          className="w-full px-2 py-1.5 text-xs rounded-lg bg-surface border text-fg placeholder:text-fg-muted resize-none focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
       </div>
     </div>

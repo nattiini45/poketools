@@ -50,7 +50,7 @@ export default function GameChangeAlerts({ error, warnings = [], isSiteAdmin }: 
         </Alert>
       ))}
       {dataTools && !isSiteAdmin && (
-        <p className="text-sm text-poke-text-secondary">{t('gameChange.askSiteAdmin')}</p>
+        <p className="text-sm text-fg-muted">{t('gameChange.askSiteAdmin')}</p>
       )}
       {(hints.reload || (dataTools && isSiteAdmin)) && (
         <div className="flex flex-wrap gap-3">

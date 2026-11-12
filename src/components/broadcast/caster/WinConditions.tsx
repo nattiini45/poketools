@@ -17,8 +17,8 @@ const IMPORTANCE_COLORS: Record<number, string> = {
   5: "text-red-400 bg-[rgb(239_68_68/0.1)] border-[rgb(239_68_68/0.3)]",
   4: "text-orange-400 bg-[rgb(249_115_22/0.1)] border-[rgb(249_115_22/0.3)]",
   3: "text-yellow-400 bg-[rgb(234_179_8/0.1)] border-[rgb(234_179_8/0.3)]",
-  2: "text-poke-text-secondary bg-poke-surface",
-  1: "text-poke-text-muted bg-poke-surface",
+  2: "text-fg-muted bg-surface",
+  1: "text-fg-muted bg-surface",
 };
 
 export default function WinConditions() {
@@ -41,7 +41,7 @@ export default function WinConditions() {
 
   if (!data || conditions.length === 0) {
     return (
-      <div className="text-xs text-poke-text-secondary text-center py-4">
+      <div className="text-xs text-fg-muted text-center py-4">
         {t("winConditions.needBothTeams")}
       </div>
     );
@@ -61,7 +61,7 @@ export default function WinConditions() {
             </span>
             <div className="min-w-0">
               <div className="text-xs font-medium">{cond.description}</div>
-              <div className="text-[10px] text-poke-text-muted mt-0.5">
+              <div className="text-[10px] text-fg-muted mt-0.5">
                 {cond.player === 1 ? data.player1.name : data.player2.name} •{" "}
                 {t(`winConditions.type.${cond.type}`)}
               </div>

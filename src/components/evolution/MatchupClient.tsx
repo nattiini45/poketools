@@ -207,7 +207,7 @@ export default function MatchupClient({
       )}
 
       {!player1 && !player2 && (
-        <div className="rounded-lg border border-poke-border p-8 text-center text-sm text-poke-text-secondary">
+        <div className="rounded-lg border border-hairline p-8 text-center text-sm text-fg-muted">
           {t('matchup.selectTwo')}
         </div>
       )}
@@ -229,11 +229,11 @@ function PlayerSelect({
   const t = useT(draftLegacyEvolutionMessages);
   return (
     <div>
-      <label className="mb-1 block text-xs font-medium text-poke-text-secondary">{label}</label>
+      <label className="mb-1 block text-xs font-medium text-fg-muted">{label}</label>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+        className="rounded-lg border border-hairline bg-elevated px-3 py-2 text-sm text-fg focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       >
         <option value="">{t('matchup.select')}</option>
         {participants.map((p) => (
@@ -256,7 +256,7 @@ function CollapsibleSection({
   children: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-poke-border">
+    <div className="rounded-lg border border-hairline">
       <button
         type="button"
         onClick={onToggle}
@@ -264,9 +264,9 @@ function CollapsibleSection({
         aria-expanded={open}
       >
         {title}
-        <span className="text-poke-text-muted">{open ? '▾' : '▸'}</span>
+        <span className="text-fg-muted">{open ? '▾' : '▸'}</span>
       </button>
-      {open && <div className="border-t border-poke-border p-4">{children}</div>}
+      {open && <div className="border-t border-hairline p-4">{children}</div>}
     </div>
   );
 }
@@ -298,14 +298,14 @@ function RoleComparison({
         return (
           <div
             key={cat}
-            className={`rounded p-2 ${missingBoth ? '' : 'bg-poke-elevated'}`}
+            className={`rounded p-2 ${missingBoth ? '' : 'bg-elevated'}`}
           >
-            <p className="text-xs font-medium text-poke-text-secondary">{tLegacy(`teamRole.${cat}`)}</p>
+            <p className="text-xs font-medium text-fg-muted">{tLegacy(`teamRole.${cat}`)}</p>
             <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
               <div>
                 <span className="text-blue-400">{p1Name.split(' ')[0]}</span>
                 {p1Roles.length === 0 ? (
-                  <p className="text-poke-text-secondary italic">{t('matchup.none')}</p>
+                  <p className="text-fg-muted italic">{t('matchup.none')}</p>
                 ) : (
                   p1Roles.map((r, i) => (
                     <p key={i} className="truncate">{roleLine(r)}</p>
@@ -315,7 +315,7 @@ function RoleComparison({
               <div>
                 <span className="text-red-400">{p2Name.split(' ')[0]}</span>
                 {p2Roles.length === 0 ? (
-                  <p className="text-poke-text-secondary italic">{t('matchup.none')}</p>
+                  <p className="text-fg-muted italic">{t('matchup.none')}</p>
                 ) : (
                   p2Roles.map((r, i) => (
                     <p key={i} className="truncate">{roleLine(r)}</p>

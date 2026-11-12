@@ -208,7 +208,7 @@ export default function OverlayUrlBuilder({
 
   return (
     <Card>
-      <h3 className="text-lg font-heading font-bold text-poke-text-primary mb-4">
+      <h3 className="text-lg font-heading font-bold text-fg mb-4">
         {t('builder.title')}
       </h3>
 
@@ -285,8 +285,8 @@ export default function OverlayUrlBuilder({
 
         {/* Step 3: Configure Overlay */}
         {typeDef && entityId && (
-          <div className="border-t border-poke-border pt-4 space-y-4">
-            <h4 className="text-sm font-heading font-semibold text-poke-text-secondary uppercase tracking-wider">
+          <div className="border-t border-hairline pt-4 space-y-4">
+            <h4 className="text-sm font-heading font-semibold text-fg-muted uppercase tracking-wider">
               {t('builder.configuration')}
             </h4>
 
@@ -307,12 +307,12 @@ export default function OverlayUrlBuilder({
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
-                <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+                <label className="block text-sm font-heading font-semibold text-fg">
                   {t('builder.accentColor')}
                 </label>
                 <div className="flex items-center gap-2">
                   <div
-                    className="w-8 h-8 rounded-poke-md border border-poke-border shrink-0"
+                    className="w-8 h-8 rounded-poke-md border border-hairline shrink-0"
                     style={{ backgroundColor: config.accent ?? OVERLAY_DEFAULTS.accent }}
                   />
                   <input
@@ -320,17 +320,17 @@ export default function OverlayUrlBuilder({
                     value={config.accent ?? OVERLAY_DEFAULTS.accent}
                     onChange={(e) => updateConfig('accent', e.target.value)}
                     placeholder="#EF4444"
-                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
+                    className="w-full px-3 py-2 bg-surface text-fg border border-hairline rounded-poke-md focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2"
                   />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="block text-sm font-heading font-semibold text-poke-text-primary">
+                <label className="block text-sm font-heading font-semibold text-fg">
                   {t('builder.accentColor2')}
                 </label>
                 <div className="flex items-center gap-2">
                   <div
-                    className="w-8 h-8 rounded-poke-md border border-poke-border shrink-0"
+                    className="w-8 h-8 rounded-poke-md border border-hairline shrink-0"
                     style={{ backgroundColor: config.accent2 ?? OVERLAY_DEFAULTS.accent2 }}
                   />
                   <input
@@ -338,7 +338,7 @@ export default function OverlayUrlBuilder({
                     value={config.accent2 ?? OVERLAY_DEFAULTS.accent2}
                     onChange={(e) => updateConfig('accent2', e.target.value)}
                     placeholder="#3B82F6"
-                    className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
+                    className="w-full px-3 py-2 bg-surface text-fg border border-hairline rounded-poke-md focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2"
                   />
                 </div>
               </div>
@@ -398,7 +398,7 @@ export default function OverlayUrlBuilder({
                   if (isLocale(e.target.value)) setLang(e.target.value);
                 }}
               />
-              <p className="text-xs text-poke-text-secondary">{t('builder.overlayLanguageHint')}</p>
+              <p className="text-xs text-fg-muted">{t('builder.overlayLanguageHint')}</p>
             </div>
 
             {/* Recap / Usage Chart: Tournament + Round selectors */}
@@ -459,15 +459,15 @@ export default function OverlayUrlBuilder({
 
         {/* Output */}
         {generatedUrl && (
-          <div className="border-t border-poke-border pt-4 space-y-3">
-            <h4 className="text-sm font-heading font-semibold text-poke-text-secondary uppercase tracking-wider">
+          <div className="border-t border-hairline pt-4 space-y-3">
+            <h4 className="text-sm font-heading font-semibold text-fg-muted uppercase tracking-wider">
               {t('builder.generatedUrl')}
             </h4>
             <div className="flex items-stretch gap-2">
               <input
                 readOnly
                 value={`${typeof window !== 'undefined' ? window.location.origin : ''}${generatedUrl}`}
-                className="flex-1 px-3 py-2 bg-poke-muted text-poke-text-primary border border-poke-border rounded-poke-md text-sm font-mono select-all"
+                className="flex-1 px-3 py-2 bg-sunken text-fg border border-hairline rounded-poke-md text-sm font-mono select-all"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
               <Button variant="primary" size="sm" onClick={handleCopy}>
@@ -480,17 +480,17 @@ export default function OverlayUrlBuilder({
                 href={generatedUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-sm text-poke-accent hover:underline"
+                className="text-sm text-accent-ink hover:underline"
               >
                 {t('common.openPreview')}
               </a>
 
               {onSavePreset && (
                 <>
-                  <span className="text-poke-border">|</span>
+                  <span className="text-hairline-strong">|</span>
                   <button
                     onClick={() => setShowSavePreset(!showSavePreset)}
-                    className="text-sm text-poke-text-secondary hover:text-poke-text-primary transition-colors"
+                    className="text-sm text-fg-muted hover:text-fg transition-colors"
                   >
                     {showSavePreset ? t('common.cancel') : t('builder.saveAsPreset')}
                   </button>

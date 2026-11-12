@@ -83,7 +83,7 @@ export default function TrackerControls({
     <div className="flex flex-col gap-4">
       {/* Winner selection */}
       <div className="flex flex-col gap-2">
-        <label className="text-xs text-poke-text-secondary uppercase tracking-wider font-semibold">
+        <label className="text-xs text-fg-muted uppercase tracking-wider font-semibold">
           {t('controls.gameWinner')}
         </label>
         <div className="flex gap-2">
@@ -94,7 +94,7 @@ export default function TrackerControls({
               flex-1 py-3 rounded-xl font-semibold text-sm transition-all
               ${winnerId === player1.player_id
                 ? 'bg-blue-500 text-white ring-2 ring-blue-400'
-                : 'bg-poke-elevated text-poke-text hover:bg-poke-border'}
+                : 'bg-elevated text-fg hover:bg-hairline'}
             `}
           >
             {displayName(player1.player_name)}
@@ -106,7 +106,7 @@ export default function TrackerControls({
               flex-1 py-3 rounded-xl font-semibold text-sm transition-all
               ${winnerId === player2.player_id
                 ? 'bg-red-500 text-white ring-2 ring-red-400'
-                : 'bg-poke-elevated text-poke-text hover:bg-poke-border'}
+                : 'bg-elevated text-fg hover:bg-hairline'}
             `}
           >
             {displayName(player2.player_name)}
@@ -151,7 +151,7 @@ export default function TrackerControls({
       {/* Producer Mode: Moment markers */}
       {producerMode && (
         <div className="flex flex-col gap-2 pt-2 border-t">
-          <label className="text-xs text-poke-text-secondary uppercase tracking-wider font-semibold">
+          <label className="text-xs text-fg-muted uppercase tracking-wider font-semibold">
             {t('controls.markMoment')}
           </label>
           <input
@@ -160,7 +160,7 @@ export default function TrackerControls({
             onChange={(e) => setMomentNote(e.target.value)}
             maxLength={MOMENT_DESCRIPTION_MAX_LENGTH}
             placeholder={t('controls.notePlaceholder')}
-            className="w-full px-3 py-2 rounded-lg bg-poke-elevated border border-poke-border text-sm text-poke-text placeholder:text-poke-text-muted"
+            className="w-full px-3 py-2 rounded-lg bg-elevated border border-hairline text-sm text-fg placeholder:text-fg-muted"
           />
           <div className="flex flex-wrap gap-1">
             {MOMENT_TYPES.map((mt) => (
@@ -169,19 +169,19 @@ export default function TrackerControls({
                 type="button"
                 onClick={() => handleMoment(mt.value)}
                 disabled={momentLimitReached}
-                className="px-3 py-1.5 rounded-lg bg-poke-elevated text-xs font-semibold text-poke-text hover:bg-poke-border transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-1.5 rounded-lg bg-elevated text-xs font-semibold text-fg hover:bg-hairline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {mt.emoji} {t(`controls.momentType.${mt.value}`)}
               </button>
             ))}
           </div>
           {state.current_game.moments.length > 0 && (
-            <div className="text-xs text-poke-text-secondary">
+            <div className="text-xs text-fg-muted">
               {t('controls.momentsMarked', { count: state.current_game.moments.length })}
             </div>
           )}
           {momentLimitReached && (
-            <div className="text-xs text-poke-text-secondary" role="status">
+            <div className="text-xs text-fg-muted" role="status">
               {t('controls.momentLimitReached', { max: MOMENT_MAX_PER_GAME })}
             </div>
           )}

@@ -199,7 +199,7 @@ export default function MoveUsageTable({
     pokemonQuery.trim() !== '' || moveQuery.trim() !== '' || activeTypes.size > 0;
 
   if (loading) {
-    return <div className="py-8 text-center text-poke-text-muted">{labels.loading}</div>;
+    return <div className="py-8 text-center text-fg-muted">{labels.loading}</div>;
   }
 
   if (error) {
@@ -209,7 +209,7 @@ export default function MoveUsageTable({
   }
 
   if (rows.length === 0) {
-    return <div className="py-8 text-center text-poke-text-muted">{labels.empty}</div>;
+    return <div className="py-8 text-center text-fg-muted">{labels.empty}</div>;
   }
 
   return (
@@ -228,7 +228,7 @@ export default function MoveUsageTable({
       />
       <SubViewToggle view={view} onChange={setView} labels={labels} />
       {filteredRows.length === 0 ? (
-        <div className="py-8 text-center text-poke-text-muted">
+        <div className="py-8 text-center text-fg-muted">
           {labels.noMatches}
         </div>
       ) : view === 'by-pokemon' ? (
@@ -264,33 +264,33 @@ function Filters({
   dataLocale: DataLocale;
 }) {
   return (
-    <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-3 space-y-3">
+    <div className="rounded-poke-lg border border-hairline bg-surface p-3 space-y-3">
       <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-xs text-poke-text-secondary">
+        <label className="flex flex-col gap-1 text-xs text-fg-muted">
           <span>{labels.pokemon}</span>
           <input
             type="text"
             value={pokemonQuery}
             onChange={(e) => onPokemonChange(e.target.value)}
             placeholder={labels.searchPokemon}
-            className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-elevated text-poke-text-primary placeholder:text-poke-text-muted min-w-[12rem]"
+            className="px-2 py-1 border border-hairline rounded-poke-sm text-sm bg-elevated text-fg placeholder:text-fg-muted min-w-[12rem]"
           />
         </label>
-        <label className="flex flex-col gap-1 text-xs text-poke-text-secondary">
+        <label className="flex flex-col gap-1 text-xs text-fg-muted">
           <span>{labels.move}</span>
           <input
             type="text"
             value={moveQuery}
             onChange={(e) => onMoveChange(e.target.value)}
             placeholder={labels.searchMoves}
-            className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-elevated text-poke-text-primary placeholder:text-poke-text-muted min-w-[12rem]"
+            className="px-2 py-1 border border-hairline rounded-poke-sm text-sm bg-elevated text-fg placeholder:text-fg-muted min-w-[12rem]"
           />
         </label>
         {hasFilters && (
           <button
             type="button"
             onClick={onClear}
-            className="text-xs text-poke-text-secondary hover:text-poke-text-primary underline ml-auto"
+            className="text-xs text-fg-muted hover:text-fg underline ml-auto"
           >
             {labels.clearFilters}
           </button>
@@ -310,7 +310,7 @@ function Filters({
               aria-pressed={active}
               className={`rounded-poke-sm transition-all ${
                 active
-                  ? 'ring-2 ring-poke-accent ring-offset-2 ring-offset-poke-surface'
+                  ? 'ring-2 ring-accent-ink ring-offset-2 ring-offset-poke-surface'
                   : 'opacity-60 hover:opacity-100'
               }`}
             >
@@ -338,7 +338,7 @@ function SubViewToggle({
   ];
 
   return (
-    <div className="inline-flex gap-1 p-1 bg-poke-elevated border border-poke-border rounded-poke-md">
+    <div className="inline-flex gap-1 p-1 bg-elevated border border-hairline rounded-poke-md">
       {options.map((option) => (
         <button
           key={option.id}
@@ -346,8 +346,8 @@ function SubViewToggle({
           onClick={() => onChange(option.id)}
           className={`px-3 py-1.5 text-xs font-heading font-medium rounded-poke-sm transition-colors ${
             view === option.id
-              ? 'bg-poke-accent text-poke-surface'
-              : 'text-poke-text-secondary hover:bg-poke-border'
+              ? 'bg-accent-fill text-tier-ink'
+              : 'text-fg-muted hover:bg-hairline'
           }`}
         >
           {option.label}
@@ -391,12 +391,12 @@ function ByPokemonView({
             <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
               <PokemonLink name={pokemon}>
                 <PokemonSprite name={pokemon} size={28} />
-                <h4 className="font-heading font-semibold text-sm text-poke-text-primary">
+                <h4 className="font-heading font-semibold text-sm text-fg">
                   {localizeSpecies(pokemon, dataLocale)}
                 </h4>
               </PokemonLink>
               {totalBrought > 0 && (
-                <span className="text-xs text-poke-text-muted font-medium">
+                <span className="text-xs text-fg-muted font-medium">
                   {used} {totalBrought}×
                 </span>
               )}
@@ -466,7 +466,7 @@ function ByMoveView({
               {move.move_type && <TypeSprite type={move.move_type} size={14} />}
               <Link
                 href={`/wiki/moves/${encodeURIComponent(move.move_name)}`}
-                className="font-heading font-semibold text-sm text-poke-text-primary hover:text-poke-blue transition-colors"
+                className="font-heading font-semibold text-sm text-fg hover:text-accent-ink transition-colors"
               >
                 {localizeMove(move.move_name, dataLocale)}
               </Link>
@@ -474,7 +474,7 @@ function ByMoveView({
                 <CategoryIcon category={move.move_category} size={16} />
               )}
             </div>
-            <span className="text-xs text-poke-text-muted font-medium">
+            <span className="text-xs text-fg-muted font-medium">
               {used} {move.total}×
             </span>
           </div>
@@ -499,13 +499,13 @@ function MoveChip({ row, dataLocale }: { row: MoveUsageRow; dataLocale: DataLoca
   return (
     <Link
       href={`/wiki/moves/${encodeURIComponent(row.move_name)}`}
-      className="inline-flex items-center gap-1.5 px-2 py-1 bg-poke-muted hover:bg-poke-border rounded-poke-sm text-xs transition-colors"
+      className="inline-flex items-center gap-1.5 px-2 py-1 bg-sunken hover:bg-hairline rounded-poke-sm text-xs transition-colors"
       title={name}
     >
       {row.move_type && <TypeSprite type={row.move_type} size={12} />}
-      <span className="font-medium text-poke-text-primary">{name}</span>
+      <span className="font-medium text-fg">{name}</span>
       {row.move_category && <CategoryIcon category={row.move_category} size={14} />}
-      <span className="text-poke-text-muted">×{row.count}</span>
+      <span className="text-fg-muted">×{row.count}</span>
     </Link>
   );
 }
@@ -523,12 +523,12 @@ function PokemonChip({
   return (
     <Link
       href={`/pokemon/${encodeURIComponent(pokemon_name)}`}
-      className="inline-flex items-center gap-1.5 px-2 py-1 bg-poke-muted hover:bg-poke-border rounded-poke-sm text-xs transition-colors"
+      className="inline-flex items-center gap-1.5 px-2 py-1 bg-sunken hover:bg-hairline rounded-poke-sm text-xs transition-colors"
       title={name}
     >
       <PokemonSprite name={pokemon_name} size={20} />
-      <span className="font-medium text-poke-text-primary">{name}</span>
-      <span className="text-poke-text-muted">×{count}</span>
+      <span className="font-medium text-fg">{name}</span>
+      <span className="text-fg-muted">×{count}</span>
     </Link>
   );
 }

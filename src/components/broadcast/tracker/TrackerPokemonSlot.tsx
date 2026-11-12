@@ -70,7 +70,7 @@ export default function TrackerPokemonSlot({
   // Empty slot
   if (!slot.pokemon_name) {
     return (
-      <div className="relative flex items-center justify-center w-full min-h-[72px] rounded-xl border-2 border-dashed text-poke-text-muted text-xs">
+      <div className="relative flex items-center justify-center w-full min-h-[72px] rounded-xl border-2 border-dashed text-fg-muted text-xs">
         {t('tracker.emptySlot')}
       </div>
     );
@@ -128,7 +128,7 @@ export default function TrackerPokemonSlot({
 
       {/* Info */}
       <div className="flex-1 text-left min-w-0">
-        <div className="text-sm font-semibold text-poke-text truncate">
+        <div className="text-sm font-semibold text-fg truncate">
           {localizeSpecies(slot.pokemon_name, dataLocale)}
         </div>
 
@@ -152,7 +152,7 @@ export default function TrackerPokemonSlot({
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-poke-text-secondary mt-0.5">
+        <div className="flex items-center gap-2 text-xs text-fg-muted mt-0.5">
           {slot.was_brought && (
             <span className="text-emerald-400">{t('tracker.brought')}</span>
           )}
@@ -174,7 +174,7 @@ export default function TrackerPokemonSlot({
             px-2 py-1 rounded-lg text-xs font-bold transition-colors
             ${slot.was_koed
               ? 'bg-red-500 text-white'
-              : 'bg-poke-elevated text-poke-text-secondary hover:bg-[rgb(239_68_68/0.2)] hover:text-red-400'}
+              : 'bg-elevated text-fg-muted hover:bg-[rgb(239_68_68/0.2)] hover:text-red-400'}
           `}
           title={slot.was_koed ? t('tracker.undoKo') : t('tracker.markKoed')}
         >
@@ -183,7 +183,7 @@ export default function TrackerPokemonSlot({
         <button
           type="button"
           onClick={handleKoDeal}
-          className="px-2 py-1 rounded-lg text-xs font-bold bg-poke-elevated text-poke-text-secondary hover:bg-[rgb(249_115_22/0.2)] hover:text-orange-400 transition-colors"
+          className="px-2 py-1 rounded-lg text-xs font-bold bg-elevated text-fg-muted hover:bg-[rgb(249_115_22/0.2)] hover:text-orange-400 transition-colors"
           title={t('tracker.recordKoDealt')}
         >
           +KO
@@ -213,7 +213,7 @@ export default function TrackerPokemonSlot({
           <button
             type="button"
             onClick={() => setMovesExpanded(!movesExpanded)}
-            className="text-xs text-poke-text-secondary hover:text-poke-text transition-colors px-2"
+            className="text-xs text-fg-muted hover:text-fg transition-colors px-2"
           >
             {movesExpanded ? '▾' : '▸'} {t('tracker.moves')}{' '}
             {slot.moves_used.length > 0 && `(${slot.moves_used.length})`}

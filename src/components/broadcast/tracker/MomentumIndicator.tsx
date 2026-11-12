@@ -48,9 +48,9 @@ export default function MomentumIndicator({ state }: MomentumIndicatorProps) {
           style={{ left: `${leftPct}%` }}
         />
       </div>
-      <div className="flex justify-between text-[9px] text-poke-text-muted mt-0.5">
+      <div className="flex justify-between text-[9px] text-fg-muted mt-0.5">
         <span>{data?.player1.name}</span>
-        <span className="text-poke-text-secondary">{momentum.label}</span>
+        <span className="text-fg-muted">{momentum.label}</span>
         <span>{data?.player2.name}</span>
       </div>
     </div>

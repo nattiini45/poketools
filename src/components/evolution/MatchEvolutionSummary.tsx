@@ -47,12 +47,12 @@ export default function MatchEvolutionSummary({
   if (!hasData) return null;
 
   return (
-    <div className="rounded-lg border border-poke-border bg-poke-elevated p-3">
+    <div className="rounded-lg border border-hairline bg-elevated p-3">
       <div className="mb-2 flex items-center gap-2">
-        <span className="text-sm font-heading font-semibold text-poke-text-primary">
+        <span className="text-sm font-heading font-semibold text-fg">
           {playerName}
         </span>
-        {isWinner && <span className="text-xs text-poke-green">★</span>}
+        {isWinner && <span className="text-xs text-win">★</span>}
       </div>
 
       <div className="flex flex-wrap gap-2">
@@ -94,15 +94,15 @@ export default function MatchEvolutionSummary({
       {evolutions.length > 0 && (
         <div className="mt-2 space-y-1">
           {evolutions.map((s) => (
-            <p key={s.id} className="text-xs text-poke-text-secondary">
-              <span className="font-medium text-poke-text-primary">
+            <p key={s.id} className="text-xs text-fg-muted">
+              <span className="font-medium text-fg">
                 {localizeSpecies(s.species_at_match, dataLocale)}
               </span>
               {' → '}
-              <span className="text-poke-blue">
+              <span className="text-accent-ink">
                 {evolvedInto[s.id] ? localizeSpecies(evolvedInto[s.id], dataLocale) : '?'}
               </span>
-              <span className="text-poke-text-muted">
+              <span className="text-fg-muted">
                 {' '}({s.progress_before} → {s.progress_after})
               </span>
             </p>

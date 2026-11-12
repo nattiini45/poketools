@@ -62,13 +62,13 @@ export function AuditRow({ entry, lineLabel }: { entry: AuditEntryDTO; lineLabel
   const { pairs, more } = auditChanges(entry.before, entry.after);
   const actionKey = `audit.action.${entry.action}`;
   return (
-    <tr className="border-t border-poke-border">
+    <tr className="border-t border-hairline">
       <td className={TD}>
         <LocalTime value={entry.occurred_at} preset="dateTimeYear" zone="both" />
       </td>
       <td className={TD}>
         <span>{entry.actor.role === 'system' ? t('audit.system') : entry.actor.name}</span>{' '}
-        <span className="rounded-poke-sm border border-poke-border px-1 text-xs text-poke-text-secondary">
+        <span className="rounded-poke-sm border border-hairline px-1 text-xs text-fg-muted">
           {t(`audit.role.${entry.actor.role}`)}
         </span>
       </td>
@@ -199,7 +199,7 @@ export default function DraftAuditViewer({
 
         <div className="space-y-1">
           <p className={LABEL}>{t('audit.filters.actions')}</p>
-          <details className="rounded-poke-md border border-poke-border bg-poke-surface text-sm">
+          <details className="rounded-poke-md border border-hairline bg-surface text-sm">
             <summary className="cursor-pointer px-3 py-2">
               {filters.actions.length === 0
                 ? t('audit.filters.allActions')
