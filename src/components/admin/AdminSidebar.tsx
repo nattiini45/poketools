@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ArrowLeft, Search } from 'lucide-react';
+import { ArrowLeft, ChevronDown, Search } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import ItemIcon from '@/components/ui/ItemIcon';
 import SkewPlate from '@/components/ui/SkewPlate';
@@ -119,6 +119,30 @@ export default function AdminSidebar({ groups, onOpenCommand }: { groups: readon
     setOpenMobile(false);
   }, [pathname, setOpenMobile]);
 
+  const navRegionRef = useRef<HTMLDivElement>(null);
+  const [moreBelow, setMoreBelow] = useState(false);
+
+  // The rail's list scrolls on short windows; while rows are hidden below the fold a chevron says so.
+  useEffect(() => {
+    const scroller = navRegionRef.current?.querySelector<HTMLElement>('.scroll-fade');
+    if (!scroller) return;
+    const update = () => setMoreBelow(scroller.scrollTop + scroller.clientHeight < scroller.scrollHeight - 2);
+    update();
+    scroller.addEventListener('scroll', update, { passive: true });
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    if (scroller.firstElementChild) observer.observe(scroller.firstElementChild);
+    return () => {
+      scroller.removeEventListener('scroll', update);
+      observer.disconnect();
+    };
+  }, []);
+
+  const scrollRailDown = useCallback(() => {
+    const scroller = navRegionRef.current?.querySelector<HTMLElement>('.scroll-fade');
+    scroller?.scrollBy({ top: Math.max(scroller.clientHeight * 0.8, 96), behavior: 'smooth' });
+  }, []);
+
   return (
     <Sidebar bordered={false}>
       <div data-admin-rail="" className="admin-rail flex h-full min-h-0 w-full flex-col">
@@ -149,13 +173,25 @@ export default function AdminSidebar({ groups, onOpenCommand }: { groups: readon
           </button>
         </SidebarHeader>
 
-        <SidebarContent>
-          <nav aria-label={t('admin.navLabel')}>
-            {groups.map((group) => (
-              <NavGroup key={group.id} group={group} activeHref={activeHref} />
-            ))}
-          </nav>
-        </SidebarContent>
+        <div ref={navRegionRef} className="relative flex min-h-0 w-full flex-1 flex-col">
+          <SidebarContent>
+            <nav aria-label={t('admin.navLabel')}>
+              {groups.map((group) => (
+                <NavGroup key={group.id} group={group} activeHref={activeHref} />
+              ))}
+            </nav>
+          </SidebarContent>
+          {moreBelow && (
+            <button
+              type="button"
+              onClick={scrollRailDown}
+              aria-label={t('admin.moreItems')}
+              className={`absolute bottom-1 right-3 z-10 flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-hairline-strong bg-elevated text-fg shadow-sm transition-colors duration-80 hover:bg-hover ${RAIL_FOCUS}`}
+            >
+              <ChevronDown className="h-4 w-4" aria-hidden="true" />
+            </button>
+          )}
+        </div>
 
         <SidebarFooter className="border-t border-hairline p-2">
           <Link

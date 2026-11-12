@@ -48,6 +48,7 @@ export default {
     newCompetition: 'New competition',
     backToSite: 'Back to site',
     breadcrumbLabel: 'Breadcrumb',
+    moreItems: 'Show more menu items',
     sidebar: {
       expand: 'Expand sidebar',
       collapse: 'Collapse sidebar',

@@ -240,8 +240,8 @@ describe('composePlayerProfile', () => {
     expect(profile!.headline.tournaments_entered).toBe(1);
   });
 
-  it('builds the headline KOs and unique Pokémon from the all-time aggregates, not the capped battle_stats read', async () => {
-    // getPlayerBattleStats caps at 500 rows: 500 Pikachu rows of 1 KO each.
+  it('builds the headline KOs and unique Pokémon from the all-time aggregates, not the battle_stats read', async () => {
+    // the battle_stats read holds a slice of the history: 500 Pikachu rows of 1 KO each.
     vi.mocked(getPlayerBattleStats).mockResolvedValueOnce(
       Array.from({ length: 500 }, () => ({
         pokemon_name: 'Pikachu', kos_dealt: 1, was_koed: false, match_won: true, tournament_id: 'tourney-1',
