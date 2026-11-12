@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
+import { INSET_ROW, TOUCH } from '@/components/admin/match-styles';
 import { useT } from '@/i18n/client';
 import { LocalTime } from '@/i18n/LocalTime';
 import { auditActionLabel } from '@/i18n/content/audit-actions';
@@ -50,7 +51,7 @@ export function appendHistoryEntries(
 function ChangeValue({ item, value }: { item: HistoryChangeItem; value: string | null }) {
   const t = useT(adminMatchMessages);
   const tEnums = useT(enumMessages);
-  if (value === null) return <span className="text-poke-text-muted">{t('history.change.cleared')}</span>;
+  if (value === null) return <span className="text-fg-muted">{t('history.change.cleared')}</span>;
   switch (item.kind) {
     case 'status':
       return <>{enumLabel(tEnums, 'matchStatus', value)}</>;
@@ -67,24 +68,22 @@ function HistoryEntry({ entry, players }: { entry: MatchHistoryEntry; players: H
   const changes = describeHistoryChanges(entry.changes, players);
 
   return (
-    <li className="px-3 py-2 bg-poke-surface-alt rounded-poke-md border border-poke-border text-sm">
+    <li className={`${INSET_ROW} text-body`}>
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <span className="font-heading font-semibold text-poke-text-primary">
-          {auditActionLabel(tCore, entry.action)}
-        </span>
-        <span className="text-poke-text-secondary">{entry.actor_name || t('history.unknownActor')}</span>
-        <LocalTime value={entry.created_at} preset="dateTimeYear" className="text-xs text-poke-text-muted" />
+        <span className="font-[550] text-fg">{auditActionLabel(tCore, entry.action)}</span>
+        <span className="text-fg-muted">{entry.actor_name || t('history.unknownActor')}</span>
       </div>
+      <LocalTime value={entry.created_at} preset="dateTimeYear" className="block text-caption text-fg-muted" />
       {entry.reason && (
-        <p className="mt-1 whitespace-pre-line text-poke-text-primary">
-          <span className="text-poke-text-muted">{t('history.reason')}:</span> {entry.reason}
+        <p className="mt-1 whitespace-pre-line text-fg">
+          <span className="text-fg-muted">{t('history.reason')}:</span> {entry.reason}
         </p>
       )}
       {changes.length > 0 && (
-        <ul className="mt-1 space-y-0.5 text-xs text-poke-text-secondary">
+        <ul className="mt-1 flex flex-col gap-0.5 text-caption text-fg">
           {changes.map((item) => (
             <li key={item.kind}>
-              <span className="text-poke-text-muted">{t(`history.change.${item.kind}`)}:</span>{' '}
+              <span className="text-fg-muted">{t(`history.change.${item.kind}`)}:</span>{' '}
               <ChangeValue item={item} value={item.before} />{' → '}<ChangeValue item={item} value={item.after} />
             </li>
           ))}
@@ -125,25 +124,25 @@ export default function MatchHistoryPanel({ matchId, initialPage, loadFailed = f
   }
 
   return (
-    <Section title={t('history.title')} collapsible keepMounted>
+    <Section title={t('history.title')} icon="old-amber" collapsible keepMounted>
       {entries.length === 0 && !failed ? (
-        <p className="text-sm text-poke-text-muted">{t('history.empty')}</p>
+        <p className="text-body text-fg-muted">{t('history.empty')}</p>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col items-start gap-3">
           {entries.length > 0 && (
             <>
-              <ul className="space-y-2">
+              <ul className="flex w-full flex-col gap-2">
                 {entries.map((entry) => (
                   <HistoryEntry key={entry.id} entry={entry} players={players} />
                 ))}
               </ul>
-              <p className="text-xs text-poke-text-muted">
+              <p className="text-caption text-fg-muted">
                 {t('history.showing', { shown: entries.length, total })}
               </p>
             </>
           )}
           {failed && (
-            <Alert variant="error">
+            <Alert variant="error" className="w-full">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <span>{t('history.loadFailed')}</span>
                 <Button variant="secondary" size="sm" onClick={loadMore} disabled={loading}>
@@ -153,7 +152,7 @@ export default function MatchHistoryPanel({ matchId, initialPage, loadFailed = f
             </Alert>
           )}
           {!failed && canLoadMoreHistory(entries.length, total) && (
-            <Button variant="secondary" size="sm" loading={loading} onClick={loadMore}>
+            <Button variant="secondary" size="sm" loading={loading} onClick={loadMore} className={TOUCH}>
               {loading ? t('history.loading') : t('history.loadMore')}
             </Button>
           )}

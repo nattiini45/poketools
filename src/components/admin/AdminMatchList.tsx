@@ -8,7 +8,9 @@ import {
   ADMIN_MATCH_SEARCH_PLAYER_CAP,
   adminMatchLastPage,
   buildMatchListApiQuery,
+  activeMatchListFilters,
   buildMatchListSearch,
+  clearMatchListFilters,
   parseMatchListUrl,
   matchListScopeCorrection,
   reconcileMatchListScope,
@@ -26,7 +28,9 @@ import { useMatchSelection } from '@/components/admin/useMatchSelection';
 import type { AdminMatchViewer } from '@/lib/admin/match-row-actions';
 import Alert from '@/components/ui/Alert';
 import Skeleton from '@/components/ui/Skeleton';
-import Button, { getButtonClasses } from '@/components/ui/Button';
+import Button from '@/components/ui/Button';
+import ItemIcon from '@/components/ui/ItemIcon';
+import { FOCUS, NATIVE_SECONDARY } from '@/components/admin/match-styles';
 import { AnimatedList, AnimatedListItem } from '@/components/shared/AnimatedList';
 import { useFormatter, useT, useTimeZone } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -103,8 +107,8 @@ export function MatchListPager({
   const totalPages = adminMatchLastPage(total, pageSize);
 
   return (
-    <div className="flex items-center justify-between pt-2">
-      <div className="flex flex-wrap gap-x-3 text-xs text-poke-text-muted">
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div className="flex flex-wrap gap-x-3 text-caption text-fg-muted">
         <span>
           {t('admin.matches.range', {
             from: f.number(from),
@@ -122,7 +126,7 @@ export function MatchListPager({
             type="button"
             onClick={() => onPageChange(Math.max(1, page - 1))}
             disabled={page <= 1}
-            className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
+            className={`${NATIVE_SECONDARY} min-h-11 sm:min-h-8`}
           >
             {t('admin.matches.previous')}
           </button>
@@ -130,7 +134,7 @@ export function MatchListPager({
             type="button"
             onClick={() => onPageChange(Math.min(totalPages, page + 1))}
             disabled={page >= totalPages}
-            className={`${getButtonClasses('ghost', 'sm')} disabled:opacity-40 disabled:cursor-not-allowed`}
+            className={`${NATIVE_SECONDARY} min-h-11 sm:min-h-8`}
           >
             {t('admin.matches.next')}
           </button>
@@ -177,9 +181,9 @@ export function MatchListSelectionHeader({
   const exporting = exportState?.kind === 'working';
 
   return (
-    <div className="space-y-1">
+    <div className="flex flex-col gap-1">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-        <label className="flex min-h-[32px] cursor-pointer items-center gap-2 text-xs text-poke-text-muted">
+        <label className="flex min-h-11 cursor-pointer items-center gap-2 text-caption text-fg-muted sm:min-h-8">
           <input
             type="checkbox"
             checked={pageState === 'all'}
@@ -189,7 +193,7 @@ export function MatchListSelectionHeader({
             onChange={onTogglePage}
             data-state={pageState}
             aria-label={t('admin.matches.bulk.selectPage', { count: pageCount })}
-            className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+            className={`h-4 w-4 cursor-pointer accent-accent-fill ${FOCUS}`}
           />
           <span>{t('admin.matches.range', { from: f.number(from), to: f.number(to), total: f.number(total) })}</span>
         </label>
@@ -199,13 +203,13 @@ export function MatchListSelectionHeader({
           size="sm"
           onClick={onExport}
           disabled={exporting || total === 0}
-          className="min-h-[36px]"
+          className="max-sm:min-h-11"
         >
           {exporting ? t('admin.matches.export.working') : t('admin.matches.export.button', { count: total, number: f.number(total) })}
         </Button>
       </div>
       {/* Mounted before it has text, so the working and done lines are announced when they appear. */}
-      <div role="status" className={exportState?.kind === 'done' ? 'space-y-0.5 text-xs text-poke-text-secondary' : 'sr-only'}>
+      <div role="status" className={exportState?.kind === 'done' ? 'flex flex-col gap-0.5 text-caption text-fg-muted' : 'sr-only'}>
         {exporting && <p>{t('admin.matches.export.working')}</p>}
         {exportState?.kind === 'done' && (
           <>
@@ -226,11 +230,11 @@ export function MatchListSelectionHeader({
         )}
       </div>
       {exportState?.kind === 'failed' && (
-        <p role="alert" className="text-xs text-poke-danger">
+        <p role="alert" className="text-caption text-loss">
           {t('admin.matches.export.failed')}: {errorText(exportState.error)}
         </p>
       )}
-      <p className="text-xs text-poke-text-muted">{t('admin.matches.bulk.hint', { max: ADMIN_MATCH_BULK_MAX })}</p>
+      <p className="text-caption text-fg-muted">{t('admin.matches.bulk.hint', { max: ADMIN_MATCH_BULK_MAX })}</p>
     </div>
   );
 }
@@ -463,7 +467,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
   const alerts = (
     <>
       {optionsError && (
-        <Alert variant="error" className="flex items-center justify-between gap-3">
+        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-3">
           <span>
             {t('admin.matches.filtersFailed')}
             {optionsError.kind === 'api' ? `: ${errorText(optionsError.error)}` : ''}
@@ -472,7 +476,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
             <button
               type="button"
               onClick={() => setOptionsKey((key) => key + 1)}
-              className={getButtonClasses('secondary', 'sm')}
+              className={`${NATIVE_SECONDARY} min-h-11 shrink-0 sm:min-h-8`}
             >
               {t('admin.matches.retry')}
             </button>
@@ -480,7 +484,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
         </Alert>
       )}
       {roundsError && (
-        <Alert variant="error" className="flex items-center justify-between gap-3">
+        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-3">
           <span>
             {t('admin.matches.roundsFailed')}
             {roundsError.kind === 'api' ? `: ${errorText(roundsError.error)}` : ''}
@@ -489,7 +493,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
             <button
               type="button"
               onClick={() => setRoundsKey((key) => key + 1)}
-              className={getButtonClasses('secondary', 'sm')}
+              className={`${NATIVE_SECONDARY} min-h-11 shrink-0 sm:min-h-8`}
             >
               {t('admin.matches.retry')}
             </button>
@@ -500,7 +504,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
   );
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       <AdminMatchFilters
         url={url}
         update={update}
@@ -516,7 +520,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
       />
 
       {error && (
-        <Alert variant="error" className="flex items-center justify-between gap-3">
+        <Alert variant="error" className="flex flex-wrap items-center justify-between gap-3">
           <span>{error.kind === 'loadFailed' ? t('admin.matches.loadFailed') : errorText(error.error)}</span>
           {isRetryableLoadError(error) && (
             <button
@@ -525,7 +529,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
                 setAnchorMs(Date.now());
                 setReloadKey((key) => key + 1);
               }}
-              className={getButtonClasses('secondary', 'sm')}
+              className={`${NATIVE_SECONDARY} min-h-11 shrink-0 sm:min-h-8`}
             >
               {t('admin.matches.retry')}
             </button>
@@ -538,13 +542,23 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
       )}
 
       {loading ? (
-        <div className="space-y-2">
-          {[...Array(4)].map((_, i) => (
-            <Skeleton key={i} height="72px" rounded="lg" />
+        <div className="flex flex-col gap-px overflow-hidden rounded-poke-lg border border-hairline bg-surface">
+          {[...Array(6)].map((_, i) => (
+            <Skeleton key={i} height="64px" rounded="sm" />
           ))}
         </div>
       ) : !data || data.rows.length === 0 ? (
-        !error && <p className="text-sm text-poke-text-muted">{emptyText}</p>
+        !error && (
+          <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-dashed border-hairline-strong bg-surface px-4 py-10 text-center">
+            <ItemIcon item="poke-doll" size={48} />
+            <p className="max-w-prose text-subtitle text-fg">{emptyText}</p>
+            {activeMatchListFilters(url).length > 0 && (
+              <button type="button" onClick={() => update(clearMatchListFilters(url))} className={`${NATIVE_SECONDARY} min-h-11 sm:min-h-9`}>
+                {t('admin.matches.clearFilters')}
+              </button>
+            )}
+          </div>
+        )
       ) : (
         <>
           <MatchListSelectionHeader
@@ -558,7 +572,7 @@ export default function AdminMatchList({ viewer = null }: { viewer?: AdminMatchV
             onExport={runExport}
           />
 
-          <AnimatedList className="space-y-2">
+          <AnimatedList className="divide-y divide-hairline overflow-hidden rounded-poke-lg border border-hairline bg-surface">
             {data.rows.map((row) => (
               <AnimatedListItem key={row.id}>
                 <MatchListRow

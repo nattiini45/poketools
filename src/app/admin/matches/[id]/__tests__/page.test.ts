@@ -58,6 +58,7 @@ vi.mock('../MatchReopenSection', () => ({ default: () => null }));
 vi.mock('../MatchSchedulePanel', () => ({ default: () => null }));
 
 import AdminMatchPage from '../page';
+import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import AdminMatchActions from '../AdminMatchActions';
 import MatchContextHeader from '../MatchContextHeader';
 import MatchDisputePanel from '../MatchDisputePanel';
@@ -377,10 +378,12 @@ describe('AdminMatchPage: language (i18n-core §8.2)', () => {
   it('English by default: chrome and the labelled status', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
 
-    const { texts } = await renderPage();
+    const { texts, props } = await renderPage();
 
     expect(texts).toContain('Back to matches');
-    expect(texts).toContain('Completed');
+    expect(texts).toContain('Winner:');
+    // The status is worded by the badge alone (its labels: MatchStatusBadge.test.tsx).
+    expect(props.get(MatchStatusBadge)).toMatchObject({ status: 'completed' });
   });
 
   it('German with plc_locale=de: chrome and the status label from the enums namespace', async () => {
@@ -390,7 +393,7 @@ describe('AdminMatchPage: language (i18n-core §8.2)', () => {
     const { texts } = await renderPage();
 
     expect(texts).toContain('Zurück zu den Spielen');
-    expect(texts).toContain('Beendet');
+    expect(texts).toContain('Sieger:');
     expect(texts).not.toContain('completed');
   });
 

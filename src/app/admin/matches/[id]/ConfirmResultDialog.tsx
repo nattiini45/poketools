@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import Modal from '@/components/ui/Modal';
+import AdminDialog from '@/components/admin/AdminDialog';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
@@ -88,8 +88,8 @@ export function ConfirmResultBody({
 
   if (kind === 'disputed') {
     return (
-      <div className="space-y-2 text-sm text-poke-text-secondary">
-        <p className="font-semibold text-poke-text-primary">
+      <div className="flex flex-col gap-2 text-body text-fg-muted">
+        <p className="font-[550] text-fg">
           {winnerId
             ? t('actions.confirm.dispute.winner', { winner: nameOf(winnerId) })
             : t('actions.confirm.dispute.noWinner')}
@@ -101,12 +101,12 @@ export function ConfirmResultBody({
   }
 
   return (
-    <div className="space-y-3 text-sm text-poke-text-secondary">
-      <div className="space-y-1">
-        <p className="font-semibold text-poke-text-primary">
+    <div className="flex flex-col gap-3 text-body text-fg-muted">
+      <div className="flex flex-col gap-1">
+        <p className="font-[550] text-fg">
           {t('actions.confirm.complete.result', { winner: nameOf(winnerId) })}
         </p>
-        <p>
+        <p className="tabular-nums">
           <SeriesTallyLine tally={tally} player1={player1} player2={player2} />
         </p>
         {tally.bestOf !== null && tally.winsNeeded !== null && (
@@ -116,16 +116,16 @@ export function ConfirmResultBody({
       <p>{t('actions.confirm.complete.effects')}</p>
       {trimmedNote && <p>{t('actions.confirm.note', { note: trimmedNote })}</p>}
       {warnings.length > 0 && (
-        <Alert variant="warning" className="space-y-2">
-          <ul className="list-disc space-y-1 pl-5">
+        <Alert variant="warning" className="flex flex-col gap-2">
+          <ul className="flex list-disc flex-col gap-1 pl-5">
             {warnings.map((w) => (
               <li key={w.kind}>{warningText(w)}</li>
             ))}
           </ul>
-          <label className="flex items-start gap-2 font-medium text-poke-text-primary">
+          <label className="flex min-h-11 items-center gap-2 font-medium text-fg sm:min-h-0">
             <input
               type="checkbox"
-              className="mt-0.5"
+              className="size-4 shrink-0 accent-[var(--accent-fill)]"
               checked={acknowledged}
               onChange={(e) => onAcknowledgedChange(e.target.checked)}
             />
@@ -155,9 +155,9 @@ export default function ConfirmResultDialog({ open, onClose, onConfirm, loading,
   const t = useT(adminCoreMessages);
   const title = body.kind === 'completed' ? t('actions.confirm.complete.title') : t('actions.confirm.dispute.title');
   return (
-    <Modal open={open} onClose={onClose} title={title} size="sm">
+    <AdminDialog open={open} onClose={onClose} title={title} size="sm">
       <ConfirmResultContent {...body} onClose={onClose} onConfirm={onConfirm} loading={loading} />
-    </Modal>
+    </AdminDialog>
   );
 }
 
@@ -175,16 +175,17 @@ function ConfirmResultContent({
 
   return (
     <>
-      <div className="mb-6">
+      <div className="mb-5">
         <ConfirmResultBody {...body} acknowledged={acknowledged} onAcknowledgedChange={setAcknowledged} />
       </div>
-      <div className="flex justify-end gap-3">
-        <Button variant="ghost" size="sm" onClick={onClose} disabled={loading}>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button variant="ghost" size="sm" onClick={onClose} disabled={loading} className="max-sm:min-h-11">
           {tUi('confirmDialog.cancel')}
         </Button>
         <Button
-          variant={complete ? 'success' : 'danger'}
+          variant={complete ? 'primary' : 'danger'}
           size="sm"
+          className="max-sm:min-h-11"
           onClick={onConfirm}
           loading={loading}
           disabled={complete && needsAcknowledge && !acknowledged}

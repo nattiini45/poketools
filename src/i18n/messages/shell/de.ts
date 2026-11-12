@@ -173,6 +173,7 @@ export default defineDe<typeof en>()({
       moreFilters: 'Weitere Filter',
       moreFiltersActive: 'Weitere Filter ({count})',
       clearAll: 'Alle zurücksetzen',
+      clearFilters: 'Filter zurücksetzen',
       activeFilters: 'Aktive Filter',
       removeFilter: 'Filter entfernen: {label}',
       noFilterResults: 'Keine Spiele passen zu diesen Filtern.',

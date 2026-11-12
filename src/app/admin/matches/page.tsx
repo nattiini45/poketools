@@ -23,7 +23,7 @@ export default async function AdminMatchesPage() {
     : null;
   return (
     <AdminGuard>
-      <PageContainer title={t('matches.listTitle')}>
+      <PageContainer title={t('matches.listTitle')} subtitle={t('matches.listSubtitle')} icon="vs-seeker">
         {/* The list keeps its filters in the query string (useSearchParams). */}
         <Suspense fallback={<Skeleton height="72px" rounded="lg" />}>
           <AdminMatchList viewer={viewer} />
