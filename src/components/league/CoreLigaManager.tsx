@@ -478,7 +478,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
           <Button variant="secondary" size="sm" onClick={addTriple}>
             {t('cores.addTriple')}
           </Button>
-          <Button variant="success" size="sm" loading={saving} onClick={savePool}>
+          <Button variant="primary" size="sm" loading={saving} onClick={savePool}>
             {t('cores.savePool')}
           </Button>
         </div>

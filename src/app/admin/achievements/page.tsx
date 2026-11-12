@@ -11,7 +11,7 @@ export default async function AdminAchievementsPage() {
   return (
     <SiteAdminGuard>
       <PageContainer title={t('achievements.title')} maxWidth="xl">
-        <p className="text-sm text-poke-text-secondary mb-6">
+        <p className="mb-6 text-body text-fg-muted">
           {t('achievements.intro')}
         </p>
         <AchievementDefinitionsManager />

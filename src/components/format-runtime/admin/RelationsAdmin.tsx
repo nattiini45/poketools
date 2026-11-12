@@ -16,8 +16,8 @@ import type {
   RelationLinkView,
   UnmaskedRelationView,
 } from '@/lib/format-engine/runtime/view-types';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { BUTTON_TOUCH, labelText } from './admin-shared';
-import ScrollRegion from '../ScrollRegion';
 import ReasonDialog from './ReasonDialog';
 import { useAdminRequest } from './useAdminRequest';
 import { useStatusFocus } from './useStatusFocus';
@@ -139,13 +139,13 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
   }
 
   if (relations.length === 0 && actions.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('relations.empty')}</p>;
+    return <p className="text-body text-fg-muted">{t('relations.empty')}</p>;
   }
 
   return (
     <div className="space-y-4" data-live-relations>
-      <p className="text-sm text-poke-text-secondary">{t('relations.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <p className="text-body text-fg-muted">{t('relations.intro')}</p>
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-body text-live focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {revealed !== null ? t('relations.revealed', { relation: revealed }) : drawn !== null ? t('relations.drawn', { relation: drawn }) : ''}
       </div>
 
@@ -175,7 +175,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
       {unmask.errorMessage !== null && <Alert variant="error">{unmask.errorMessage}</Alert>}
       {unmasked !== null && hiddenOwn > 0 && (
         <div className="flex flex-wrap items-center gap-2" data-own-rows>
-          <p className="text-sm text-poke-text-secondary">
+          <p className="text-body text-fg-muted">
             {showOwn ? t('relations.ownShown') : t('relations.ownHidden', { count: hiddenOwn })}
           </p>
           {/* One button for both states, so a keyboard user keeps their focus when it toggles. */}
@@ -190,15 +190,15 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
           const links = showOwn ? relation.links : relation.links.filter((link) => !involvesViewer(link));
           const ownHiddenHere = relation.links.length - links.length;
           return (
-          <li key={relation.key} className="space-y-3 rounded-poke-md border border-poke-border bg-poke-surface p-4" data-relation-key={relation.key}>
+          <li key={relation.key} className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4" data-relation-key={relation.key}>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{labelText(relation.label, locale, relation.key)}</h3>
+              <h3 className="text-subtitle text-fg">{labelText(relation.label, locale, relation.key)}</h3>
               <Badge variant="gray">{t(`relations.shape.${relation.shape}`)}</Badge>
-              <span className="text-xs text-poke-text-muted">{t('relations.linkCount', { count: relation.link_count })}</span>
+              <span className="text-caption text-fg-muted">{t('relations.linkCount', { count: relation.link_count })}</span>
               {isRevealed(relation) && <Badge variant="green">{t('relations.publicBadge')}</Badge>}
             </div>
             {links.length === 0 ? (
-              <p className="text-sm text-poke-text-muted">
+              <p className="text-body text-fg-muted">
                 {ownHiddenHere > 0
                   ? t('relations.ownHiddenNote')
                   : relation.link_count === 0
@@ -208,25 +208,25 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                       : t('relations.noLinks')}
               </p>
             ) : (
-              <ScrollRegion label={t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })}>
-                <table className="w-full min-w-[20rem] text-left text-sm">
+              <div className={TABLE_FRAME} role="region" aria-label={t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })} tabIndex={0}>
+                <table className={TABLE}>
                   <caption className="sr-only">{t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })}</caption>
-                  <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+                  <thead className={THEAD}>
                     <tr>
-                      <th scope="col" className="px-3 py-2">{t('relations.from')}</th>
-                      <th scope="col" className="px-3 py-2">{t('relations.to')}</th>
+                      <th scope="col" className={TH}>{t('relations.from')}</th>
+                      <th scope="col" className={TH}>{t('relations.to')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-poke-border">
+                  <tbody className={TBODY}>
                     {links.map((link, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2 text-poke-text-primary">{refName(link.from)}</td>
-                        <td className="px-3 py-2 text-poke-text-primary">{refName(link.to)}</td>
+                      <tr key={index} className={ROW}>
+                        <td className={NAME_CELL}>{refName(link.from)}</td>
+                        <td className={CELL} data-label={t('relations.to')}>{refName(link.to)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </ScrollRegion>
+              </div>
             )}
             {canReveal && relation.link_count === 0 && relation.shape !== 'manual' && (
               <Button
@@ -257,38 +257,38 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
 
       {unmasked !== null && unmasked.submissions.length > 0 && (
         <div className="space-y-3" data-live-submissions>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('relations.submissionsHeading')}</h3>
+          <h3 className="text-subtitle text-fg">{t('relations.submissionsHeading')}</h3>
           {unmasked.submissions.map((entry) => {
             const rows = showOwn ? entry.rows : entry.rows.filter((row) => !row.involves_viewer);
             return (
             <div key={entry.action} className="space-y-2">
-              <h4 className="text-sm text-poke-text-secondary">{actionName(entry.action)}</h4>
+              <h4 className="text-body text-fg-muted">{actionName(entry.action)}</h4>
               {rows.length === 0 ? (
-                <p className="text-sm text-poke-text-muted">
+                <p className="text-body text-fg-muted">
                   {entry.rows.length > 0 ? t('relations.ownHiddenNote') : t('relations.noSubmissions')}
                 </p>
               ) : (
-                <ScrollRegion label={t('relations.submissionsCaption', { action: actionName(entry.action) })}>
-                  <table className="w-full min-w-[24rem] text-left text-sm">
+                <div className={TABLE_FRAME} role="region" aria-label={t('relations.submissionsCaption', { action: actionName(entry.action) })} tabIndex={0}>
+                  <table className={TABLE}>
                     <caption className="sr-only">{t('relations.submissionsCaption', { action: actionName(entry.action) })}</caption>
-                    <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+                    <thead className={THEAD}>
                       <tr>
-                        <th scope="col" className="px-3 py-2">{t('relations.player')}</th>
-                        <th scope="col" className="px-3 py-2">{t('relations.state')}</th>
-                        <th scope="col" className="px-3 py-2">{t('relations.target')}</th>
+                        <th scope="col" className={TH}>{t('relations.player')}</th>
+                        <th scope="col" className={TH}>{t('relations.state')}</th>
+                        <th scope="col" className={TH}>{t('relations.target')}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-poke-border">
+                    <tbody className={TBODY}>
                       {rows.map((row) => (
-                        <tr key={row.player.id}>
-                          <td className="px-3 py-2 text-poke-text-primary">{row.player.name ?? t('formerPlayer')}</td>
-                          <td className="px-3 py-2 text-poke-text-secondary">{t(`relations.submission.${row.state}`)}</td>
-                          <td className="px-3 py-2 text-poke-text-primary">{row.target === null ? t('relations.noTarget') : refName(row.target)}</td>
+                        <tr key={row.player.id} className={ROW}>
+                          <td className={NAME_CELL}>{row.player.name ?? t('formerPlayer')}</td>
+                          <td className={CELL} data-label={t('relations.state')}>{t(`relations.submission.${row.state}`)}</td>
+                          <td className={CELL} data-label={t('relations.target')}>{row.target === null ? t('relations.noTarget') : refName(row.target)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </ScrollRegion>
+                </div>
               )}
             </div>
             );
@@ -331,7 +331,7 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
         message={
           <>
             <p>{t('relations.drawBody')}</p>
-            <p className="font-semibold text-poke-text-primary">{t('relations.drawRoster', { count: roster.length })}</p>
+            <p className="font-semibold text-fg">{t('relations.drawRoster', { count: roster.length })}</p>
             {roster.length === 0 ? (
               <p>{t('relations.drawRosterEmpty')}</p>
             ) : (

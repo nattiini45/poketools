@@ -11,6 +11,7 @@ import Alert from '@/components/ui/Alert';
 import { useT } from '@/i18n/client';
 import { toApiErrorLike } from '@/i18n/api-errors';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 interface PhaseOverviewEditorProps {
   seasonId: string;
@@ -47,7 +48,7 @@ export default function PhaseOverviewEditor({
 
   return (
     <div className="space-y-3">
-      {completed && <Alert variant="info">{t('overview.lockedCompleted')}</Alert>}
+      {completed && <Alert variant="info" className={INFO_CALLOUT}>{t('overview.lockedCompleted')}</Alert>}
       {saved && (
         <p className="text-caption text-win">{t('overview.saved')}</p>
       )}

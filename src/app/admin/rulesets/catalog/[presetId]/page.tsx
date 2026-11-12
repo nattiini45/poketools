@@ -21,7 +21,7 @@ interface PageProps {
   params: Promise<{ presetId: string }>;
 }
 
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0';
 
 /**
  * `/admin/rulesets/catalog/[presetId]`: the read-only page of one catalog rule preset. An unknown preset is a 404; a

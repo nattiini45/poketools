@@ -37,7 +37,7 @@ interface LeagueSettingsFormProps {
   /** The title and the sentence of the details section, which this form renders as the first section of the sheet. */
   title: string;
   subtitle: string;
-  /** The section index, shown beside the sheet from `lg` up. */
+  /** The section index: a horizontal scroll strip above the sheet below `lg`, a column beside it from `lg` up. */
   aside?: ReactNode;
   /** The pin card of the league's ruleset, under the fields of the details section. */
   pinCard?: ReactNode;
@@ -166,7 +166,7 @@ export default function LeagueSettingsForm({
   return (
     <div className="group/settings flex flex-col gap-6" data-league-settings>
       <div className="grid grid-cols-1 gap-x-8 gap-y-6 lg:grid-cols-[13rem_minmax(0,46rem)] lg:items-start">
-        {aside && <div className="hidden lg:sticky lg:top-[4.5rem] lg:block">{aside}</div>}
+        {aside && <div className="min-w-0 lg:sticky lg:top-[4.5rem]">{aside}</div>}
         <div className="min-w-0 divide-y divide-hairline rounded-poke-lg border border-hairline bg-surface shadow-poke-card" data-league-settings-sheet>
           <SettingsSection id="settings-details" icon="everstone" title={title} subtitle={subtitle}>
             <form id={formId} onSubmit={handleSubmit} className="flex max-w-lg flex-col gap-4" {...unsavedMarker(dirty)}>

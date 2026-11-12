@@ -38,7 +38,7 @@ export default function RelationFields({ targets, value, onChange, disabled }: R
         ))}
       </Select>
       <div className="space-y-1">
-        <label htmlFor={revealId} className={`inline-flex items-center gap-2 text-sm text-poke-text-primary ${BUTTON_TOUCH}`}>
+        <label htmlFor={revealId} className={`inline-flex items-center gap-2 text-body text-fg ${BUTTON_TOUCH}`}>
           <input
             id={revealId}
             type="checkbox"
@@ -46,11 +46,11 @@ export default function RelationFields({ targets, value, onChange, disabled }: R
             disabled={disabled}
             aria-describedby={hintId}
             onChange={(event) => onChange({ ...value, reveal: event.target.checked })}
-            className="h-4 w-4 accent-poke-accent"
+            className="h-4 w-4 accent-accent-fill"
           />
           {t('adjust.fields.reveal')}
         </label>
-        <p id={hintId} className="text-xs text-poke-text-muted">
+        <p id={hintId} className="text-caption text-fg-muted">
           {t('adjust.fields.revealHint')}
         </p>
       </div>

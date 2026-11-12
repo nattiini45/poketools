@@ -64,7 +64,7 @@ export default function ContentLanguageControl({ seasonId, currentLanguage }: Co
   }
 
   return (
-    <div className="flex max-w-xs flex-col gap-2">
+    <div className="flex max-w-xs flex-col gap-2" data-saving={saving || undefined}>
       <Select
         label={tForm('form.contentLanguage')}
         value={language}

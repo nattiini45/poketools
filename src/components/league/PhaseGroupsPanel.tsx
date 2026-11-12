@@ -18,6 +18,7 @@ import { errorsSeasons } from '@/i18n/messages/errors/seasons';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 import { PHASE_GROUP_COUNTS, redrawNeedsConfirm } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 interface PhaseGroupsPanelProps {
   seasonId: string;
@@ -212,7 +213,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
 
       {leagueManaged ? (
         <>
-          <Alert variant="info">{t.rich('groups.leagueManaged', { link: participantsLink })}</Alert>
+          <Alert variant="info" className={INFO_CALLOUT}>{t.rich('groups.leagueManaged', { link: participantsLink })}</Alert>
           <p className="text-caption text-fg-muted">{t('groups.placementPause')}</p>
         </>
       ) : (

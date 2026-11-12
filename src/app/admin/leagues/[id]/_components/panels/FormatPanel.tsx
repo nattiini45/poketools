@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import Section from '@/components/ui/Section';
+import AccordionSection from '@/components/admin/AccordionSection';
+import WorkspaceCard from '@/components/admin/WorkspaceCard';
 import FormatDetail from '@/components/format-studio/FormatDetail';
 import FormatAttachPanel from '@/components/format-studio/attach/FormatAttachPanel';
 import ReadinessCard from '@/components/format-studio/attach/ReadinessCard';
@@ -29,6 +30,8 @@ import type { LeagueAdminPanelContext } from './context';
  * the format detail it loads carries the labels of the stored rulesets the spec names, and the league's own pin is a prop. Only plain props reach the client: no spec, no seed, no
  * player row.
  */
+const TEXT_LINK = 'inline-flex min-h-11 items-center font-[550] text-accent-ink hover:underline sm:min-h-0';
+
 export async function formatPanel(ctx: LeagueAdminPanelContext) {
   if (ctx.league.format_type === 'custom') return customFormatPanel(ctx);
   return readOnlyFormatPanel(ctx);
@@ -40,7 +43,7 @@ async function readOnlyFormatPanel({ id, league, tabLink }: LeagueAdminPanelCont
   if (result.kind === 'no_phases') {
     // A custom league gets its phases from the attached format; a hand-made phase would block the attach.
     return (
-      <p className="text-sm text-poke-text-muted">
+      <p className="text-body text-fg-muted">
         {league.format_type === 'custom'
           ? tStudio('detail.noPhasesCustom')
           : tStudio.rich('detail.noPhases', { link: tabLink('phases') })}
@@ -49,17 +52,14 @@ async function readOnlyFormatPanel({ id, league, tabLink }: LeagueAdminPanelCont
   }
 
   return (
-    <Section title={tStudio('tab.title')} subtitle={tStudio('tab.subtitle')}>
+    <AccordionSection id="format-detail" icon="rare-candy" title={tStudio('tab.title')} subtitle={tStudio('tab.subtitle')} defaultOpen>
       <div className="space-y-4">
-        <Link
-          href={`/admin/formats/league/${id}`}
-          className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
-        >
+        <Link href={`/admin/formats/league/${id}`} className={TEXT_LINK}>
           {tStudio('tab.openStudio')}
         </Link>
         <FormatDetail view={result.view} variant="tab" editorLinks={result.editorLinks} />
       </div>
-    </Section>
+    </AccordionSection>
   );
 }
 
@@ -77,10 +77,10 @@ async function customFormatPanel({ id, league, playerId, isSiteAdmin }: LeagueAd
   ]);
 
   return (
-    <>
+    <div className="space-y-6">
       {state !== null && !state.started && <ReadinessCard id="format-readiness" result={state.readiness} seasonId={id} />}
 
-      <Section title={tAttach('panel.title')}>
+      <WorkspaceCard headingId="format-attach-title" icon="town-map" title={tAttach('panel.title')}>
         <FormatAttachPanel
           seasonId={id}
           started={state?.started ?? false}
@@ -93,21 +93,18 @@ async function customFormatPanel({ id, league, playerId, isSiteAdmin }: LeagueAd
           capped={candidates.capped}
           phasesHref={leagueAdminHref(id, 'phases')}
         />
-      </Section>
+      </WorkspaceCard>
 
       {result.kind === 'ok' && (
-        <Section title={tStudio('tab.title')} subtitle={tStudio('tab.subtitle')}>
+        <AccordionSection id="format-detail" icon="rare-candy" title={tStudio('tab.title')} subtitle={tStudio('tab.subtitle')}>
           <div className="space-y-4">
-            <Link
-              href={`/admin/formats/league/${id}`}
-              className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
-            >
+            <Link href={`/admin/formats/league/${id}`} className={TEXT_LINK}>
               {tStudio('tab.openStudio')}
             </Link>
             <FormatDetail view={result.view} variant="tab" editorLinks={result.editorLinks} />
           </div>
-        </Section>
+        </AccordionSection>
       )}
-    </>
+    </div>
   );
 }

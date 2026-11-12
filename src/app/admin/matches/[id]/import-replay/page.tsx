@@ -15,7 +15,7 @@ import { adminCoreMessages } from '@/i18n/messages/admin-core';
 import { enumMessages } from '@/i18n/messages/enums';
 import { enumLabel } from '@/i18n/content/enum-label';
 import AdminCrumbName from '@/components/admin/admin-crumb-names';
-import { FOCUS, TOUCH } from '@/components/admin/match-styles';
+import { FOCUS, TOUCH, INFO_CALLOUT } from '@/components/admin/match-styles';
 import { cn } from '@/lib/utils/cn';
 
 export const dynamic = 'force-dynamic';
@@ -59,7 +59,7 @@ export default async function ImportReplayPage({ params, searchParams }: PagePro
         action={<MatchStatusBadge status={match.status} />}
         maxWidth="md"
       >
-        <Alert variant="info">{t('matches.importReplay.info')}</Alert>
+        <Alert variant="info" className={INFO_CALLOUT}>{t('matches.importReplay.info')}</Alert>
 
         {!canImport ? (
           <Alert variant="warning">

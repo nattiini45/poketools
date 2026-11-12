@@ -53,7 +53,7 @@ export default function RulesetSelect({ id, label, value, onChange, options, pla
         ))}
       </Select>
       {studioLink && (
-        <Link href={RULESETS_HREF} className="inline-flex min-h-11 items-center text-xs font-medium text-poke-blue hover:underline sm:min-h-0">
+        <Link href={RULESETS_HREF} className="inline-flex min-h-11 items-center text-xs font-medium text-accent-ink hover:underline sm:min-h-0">
           {t('select.openStudio')}
         </Link>
       )}

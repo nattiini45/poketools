@@ -330,6 +330,7 @@ export default defineDe<typeof en>()({
     subtitle: 'Community-Notizen und Meldungen prüfen',
     pendingNotes: 'Offene Notizen',
     loading: 'Wird geladen …',
+    allCaughtUp: 'Alles erledigt',
     noPending: 'Keine offenen Notizen.',
     by: 'Von {name}',
     flags: 'Markierungen: {flags}',
