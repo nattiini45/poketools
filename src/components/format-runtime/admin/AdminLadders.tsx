@@ -62,13 +62,13 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
   }
 
   if (phases.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('challenges.noLadders')}</p>;
+    return <p className="text-body text-fg-muted">{t('challenges.noLadders')}</p>;
   }
 
   return (
     <div className="space-y-4" data-live-challenges>
-      <p className="text-sm text-poke-text-secondary">{t('challenges.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <p className="text-body text-fg-muted">{t('challenges.intro')}</p>
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-body text-live focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {withdrawn ? t('challenges.withdrawn') : ''}
       </div>
       {errorMessage !== null && <Alert variant="error">{errorMessage}</Alert>}
@@ -76,14 +76,14 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
         const rows = challenges.filter((challenge) => challenge.phase_id === phase.id);
         return (
           <div key={phase.id} className="space-y-2" data-ladder-phase={phase.id}>
-            <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{labelText(phase.label, locale, phase.id)}</h3>
+            <h3 className="text-subtitle text-fg">{labelText(phase.label, locale, phase.id)}</h3>
             {rows.length === 0 ? (
-              <p className="text-sm text-poke-text-muted">{t('challenges.none')}</p>
+              <p className="text-body text-fg-muted">{t('challenges.none')}</p>
             ) : (
-              <div className="overflow-x-auto rounded-poke-md border border-poke-border">
-                <table className="w-full min-w-[32rem] text-left text-sm">
+              <div className="overflow-x-auto rounded-poke-lg border border-hairline">
+                <table className="w-full min-w-[32rem] text-left text-body">
                   <caption className="sr-only">{t('challenges.caption', { phase: labelText(phase.label, locale, phase.id) })}</caption>
-                  <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+                  <thead className="bg-elevated text-caption font-[550] text-fg-muted">
                     <tr>
                       <th scope="col" className="px-3 py-2">{t('challenges.columns.challenger')}</th>
                       <th scope="col" className="px-3 py-2">{t('challenges.columns.defender')}</th>
@@ -94,13 +94,13 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-poke-border">
+                  <tbody className="divide-y divide-hairline">
                     {rows.map((challenge) => (
                       <tr key={challenge.id} className="align-middle">
-                        <td className="px-3 py-2 text-poke-text-primary">{challenge.challenger.name ?? t('formerPlayer')}</td>
-                        <td className="px-3 py-2 text-poke-text-primary">{challenge.defender.name ?? t('formerPlayer')}</td>
-                        <td className="px-3 py-2 text-poke-text-secondary">{challenge.round}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+                        <td className="px-3 py-2 text-fg">{challenge.challenger.name ?? t('formerPlayer')}</td>
+                        <td className="px-3 py-2 text-fg">{challenge.defender.name ?? t('formerPlayer')}</td>
+                        <td className="px-3 py-2 text-fg-muted">{challenge.round}</td>
+                        <td className="whitespace-nowrap px-3 py-2 text-fg-muted">
                           {challenge.lapsed ? <Badge variant="gray">{t('challenges.expired')}</Badge> : <RelativeTime value={challenge.expires_at} />}
                         </td>
                         <td className="px-3 py-2 text-right">
@@ -125,7 +125,7 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
                           {challenge.match_id !== null && (
                             <Link
                               href={`/admin/matches/${encodeURIComponent(challenge.match_id)}`}
-                              className={`inline-flex items-center font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}
+                              className={`inline-flex items-center font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}
                             >
                               {t('challenges.openMatch')}
                             </Link>
@@ -140,7 +140,7 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
           </div>
         );
       })}
-      <p className="text-xs text-poke-text-muted">{t('challenges.matchNote')}</p>
+      <p className="text-caption text-fg-muted">{t('challenges.matchNote')}</p>
 
       <ConfirmDialog
         open={target !== null}

@@ -66,26 +66,26 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
   }
 
   if (actions.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('actions.empty')}</p>;
+    return <p className="text-body text-fg-muted">{t('actions.empty')}</p>;
   }
 
   const name = (action: AdminActionView): string => labelText(action.label, locale, action.id);
 
   return (
     <div className="space-y-4" data-live-actions>
-      <p className="text-sm text-poke-text-secondary">{t('actions.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <p className="text-body text-fg-muted">{t('actions.intro')}</p>
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-body text-live focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {done !== null ? t(done.state === 'open' ? 'actions.done.open' : 'actions.done.locked', { action: name(done.action) }) : ''}
       </div>
       <ul className="space-y-3">
         {actions.map((action) => (
-          <li key={action.id} className="space-y-3 rounded-poke-md border border-poke-border bg-poke-surface p-4" data-action-id={action.id}>
+          <li key={action.id} className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4" data-action-id={action.id}>
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{name(action)}</h3>
+              <h3 className="text-subtitle text-fg">{name(action)}</h3>
               <Badge variant={WINDOW_VARIANT[action.window]}>{t(`actions.window.${action.window}`)}</Badge>
               <Badge variant="gray">{t(`actions.lockMode.${action.lock}`)}</Badge>
             </div>
-            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
+            <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-body sm:grid-cols-5">
               <Count label={t('actions.counts.actors')} value={action.actors} />
               <Count label={t('actions.counts.missing')} value={action.counts.missing} />
               <Count label={t('actions.counts.draft')} value={action.counts.draft} />
@@ -146,8 +146,8 @@ export default function ActionsOverview({ seasonId, actions, canAdjust }: Action
 function Count({ label, value }: { label: string; value: number }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-heading text-poke-text-muted">{label}</dt>
-      <dd className="text-poke-text-primary">{value}</dd>
+      <dt className="text-caption font-[550] text-fg-muted">{label}</dt>
+      <dd className="text-fg">{value}</dd>
     </div>
   );
 }

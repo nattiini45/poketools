@@ -45,25 +45,25 @@ export default function LateJoiners({ lateJoiners }: LateJoinersProps) {
 
   return (
     <ScrollRegion label={t('lateJoiners.caption')} data-live-late-joiners>
-      <table className="w-full min-w-[28rem] text-left text-sm">
+      <table className="w-full min-w-[28rem] text-left text-body">
         <caption className="sr-only">{t('lateJoiners.caption')}</caption>
-        <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+        <thead className="bg-elevated text-caption font-[550] text-fg-muted">
           <tr>
             <th scope="col" className="px-3 py-2">{t('lateJoiners.columns.player')}</th>
             <th scope="col" className="px-3 py-2">{t('lateJoiners.columns.missed')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-poke-border">
+        <tbody className="divide-y divide-hairline">
           {lateJoiners.map((joiner) => (
             <tr key={joiner.player.id}>
-              <th scope="row" className="px-3 py-2 align-top font-normal text-poke-text-primary">
+              <th scope="row" className="px-3 py-2 align-top font-normal text-fg">
                 {joiner.player.name ?? t('formerPlayer')}
               </th>
               <td className="px-3 py-2">
                 <ul className="space-y-2">
                   {joiner.missed.map((event, index) => (
                     <li key={`${event.event}-${event.stage ?? 'x'}-${event.round ?? 'x'}-${event.action ?? 'x'}-${event.mark ?? 'x'}-${index}`} className="space-y-1">
-                      <p className="text-poke-text-primary">{eventText(event)}</p>
+                      <p className="text-fg">{eventText(event)}</p>
                       <p className="flex flex-wrap gap-1">
                         {event.effects.map((effect) => (
                           <Badge key={`${effect.kind}-${effect.key}`} variant="gray">

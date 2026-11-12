@@ -90,15 +90,15 @@ export default function AdjustmentHistory({ seasonId, initial, total, targets, n
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('adjust.history.empty')}</p>;
+    return <p className="text-body text-fg-muted">{t('adjust.history.empty')}</p>;
   }
 
   return (
     <div className="space-y-3" data-live-adjustment-history>
       <ScrollRegion label={t('adjust.history.caption')}>
-        <table className="w-full min-w-[40rem] text-left text-sm">
+        <table className="w-full min-w-[40rem] text-left text-body">
           <caption className="sr-only">{t('adjust.history.caption')}</caption>
-          <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+          <thead className="bg-elevated text-caption font-[550] text-fg-muted">
             <tr>
               <th scope="col" className="px-3 py-2">{t('adjust.history.columns.kind')}</th>
               <th scope="col" className="px-3 py-2">{t('adjust.history.columns.what')}</th>
@@ -107,16 +107,16 @@ export default function AdjustmentHistory({ seasonId, initial, total, targets, n
               <th scope="col" className="px-3 py-2">{t('adjust.history.columns.when')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-poke-border">
+          <tbody className="divide-y divide-hairline">
             {rows.map((row) => (
               <tr key={row.id} className="align-top">
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">{t(`adjust.kind.${row.kind}`)}</td>
-                <td className="px-3 py-2 text-poke-text-primary">{summary(row)}</td>
-                <td className="px-3 py-2 text-poke-text-secondary">{row.reason}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2 text-fg-muted">{t(`adjust.kind.${row.kind}`)}</td>
+                <td className="px-3 py-2 text-fg">{summary(row)}</td>
+                <td className="px-3 py-2 text-fg-muted">{row.reason}</td>
+                <td className="whitespace-nowrap px-3 py-2 text-fg-muted">
                   {row.admin === null ? t('adjust.history.system') : (row.admin.name ?? t('formerPlayer'))}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+                <td className="whitespace-nowrap px-3 py-2 text-fg-muted">
                   <LocalTime value={row.created_at} preset="dateTimeYear" />
                 </td>
               </tr>
