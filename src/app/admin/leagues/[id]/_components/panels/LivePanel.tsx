@@ -37,8 +37,8 @@ export async function formatLivePanel({ id, playerId, isSiteAdmin, tabLink }: Le
 
   if (ctx === null) {
     return (
-      <Section title={t('notRunning.title')}>
-        <p className="text-sm text-poke-text-secondary">{t.rich('notRunning.body', { link: tabLink('format') })}</p>
+      <Section icon="poke-doll" title={t('notRunning.title')}>
+        <p className="text-body text-fg-muted">{t.rich('notRunning.body', { link: tabLink('format') })}</p>
       </Section>
     );
   }
@@ -69,15 +69,15 @@ export async function formatLivePanel({ id, playerId, isSiteAdmin, tabLink }: Le
 
   return (
     <>
-      <Section title={t('panel.checksTitle')} subtitle={t('panel.checksSubtitle')}>
+      <Section icon="everstone" title={t('panel.checksTitle')} subtitle={t('panel.checksSubtitle')}>
         <ChecksInbox seasonId={id} initial={checks} names={names} labels={{ stages: stageLabels, actions: actionLabels }} />
       </Section>
 
-      <Section title={t('panel.adjustTitle')} subtitle={t('panel.adjustSubtitle')}>
+      <Section icon="rare-candy" title={t('panel.adjustTitle')} subtitle={t('panel.adjustSubtitle')}>
         <div className="space-y-6">
           <AdjustmentsPanel seasonId={id} allowed={overview.allowed_adjustments} targets={adjustments.targets} />
           <div className="space-y-2">
-            <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('panel.historyHeading')}</h3>
+            <h3 className="text-subtitle text-fg">{t('panel.historyHeading')}</h3>
             <AdjustmentHistory
               seasonId={id}
               initial={adjustments.history}
@@ -89,17 +89,17 @@ export async function formatLivePanel({ id, playerId, isSiteAdmin, tabLink }: Le
         </div>
       </Section>
 
-      <Section title={t('panel.actionsTitle')}>
+      <Section icon="poke-flute" title={t('panel.actionsTitle')}>
         <ActionsOverview seasonId={id} actions={overview.actions} canAdjust={overview.allowed_adjustments.includes('action')} />
       </Section>
 
       {overview.late_joiners.length > 0 && (
-        <Section title={t('lateJoiners.title')} subtitle={t('lateJoiners.subtitle')}>
+        <Section icon="metronome" title={t('lateJoiners.title')} subtitle={t('lateJoiners.subtitle')}>
           <LateJoiners lateJoiners={overview.late_joiners} />
         </Section>
       )}
 
-      <Section title={t('panel.relationsTitle')}>
+      <Section icon="kings-rock" title={t('panel.relationsTitle')}>
         <RelationsAdmin
           seasonId={id}
           relations={overview.relations}
@@ -110,12 +110,12 @@ export async function formatLivePanel({ id, playerId, isSiteAdmin, tabLink }: Le
       </Section>
 
       {ladderPhases.length > 0 && (
-        <Section title={t('panel.challengesTitle')}>
+        <Section icon="town-map" title={t('panel.challengesTitle')}>
           <AdminLadders seasonId={id} phases={ladderPhases} challenges={challenges} />
         </Section>
       )}
 
-      <Section title={t('panel.domainsTitle')}>
+      <Section icon="dubious-disc" title={t('panel.domainsTitle')}>
         <DomainsSummary domains={overview.domains} />
       </Section>
     </>

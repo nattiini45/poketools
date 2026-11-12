@@ -40,6 +40,8 @@ export default {
     moreOpen: 'Show more open checks',
     rule: 'Rule: {rule}',
     opened: 'Opened',
+    caption: 'Open checks',
+    columns: { check: 'Details', source: 'Kind', opened: 'Opened', verdict: 'Verdict' },
     openMatch: 'Open the match',
     unknownStage: 'a stage',
     unknownRound: '?',

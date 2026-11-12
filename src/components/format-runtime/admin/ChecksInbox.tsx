@@ -21,6 +21,7 @@ import type { CheckVerdict, CheckView, ChecksPage } from '@/lib/format-engine/ru
 import { speciesDisplayName } from '../player/entry-names';
 import type { LText } from '@/lib/studio-core/ltext';
 import type { ValidationIssueCode, ValidationIssueParams } from '@/types/team';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { BUTTON_TOUCH, PAGE_SIZE, TEXT_MAX, codePointLength, labelText, nameOf, type PlayerNames } from './admin-shared';
 import { describeCheck, matchIdOf, type CheckDescription } from './check-subject';
 import { useAdminRequest } from './useAdminRequest';
@@ -114,7 +115,7 @@ function CheckBody({ check, names, labels, sentenceId }: BodyProps) {
             </p>
           )}
           {reason !== null && (
-            <p className="text-poke-text-muted">
+            <p className="text-fg-muted">
               {isKnownReason(reason) ? t(`checks.reason.${reason}`) : t('checks.reason.unknown', { reason })}
             </p>
           )}
@@ -165,7 +166,7 @@ function CheckBody({ check, names, labels, sentenceId }: BodyProps) {
             )}
             {description.editedAfterPlay && <li>{t('checks.audit.edited_after_play')}</li>}
           </ul>
-          {description.teamHidden === true && <p className="text-poke-text-muted">{t('checks.audit.team_hidden')}</p>}
+          {description.teamHidden === true && <p className="text-fg-muted">{t('checks.audit.team_hidden')}</p>}
         </div>
       );
       break;
@@ -177,12 +178,12 @@ function CheckBody({ check, names, labels, sentenceId }: BodyProps) {
 
   const matchId = matchIdOf(description);
   return (
-    <div className="space-y-1 text-sm text-poke-text-primary">
+    <div className="space-y-1 text-body text-fg">
       <div id={description.kind === 'team_audit' ? undefined : sentenceId}>{sentence}</div>
       {matchId !== null && (
         <Link
           href={`/admin/matches/${encodeURIComponent(matchId)}`}
-          className={`inline-flex items-center font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}
+          className={`inline-flex items-center font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}
         >
           {t('checks.openMatch')}
         </Link>
@@ -200,8 +201,8 @@ function CheckHeader({ check, children }: { check: CheckView; children?: ReactNo
       <Badge variant={check.source === 'team_audit' ? 'purple' : 'blue'}>
         {isKnownSource(check.source) ? t(`checks.source.${check.source}`) : t('checks.source.unknown')}
       </Badge>
-      <span className="text-xs text-poke-text-muted">{t('checks.rule', { rule })}</span>
-      <span className="text-xs text-poke-text-muted">
+      <span className="text-caption text-fg-muted">{t('checks.rule', { rule })}</span>
+      <span className="text-caption text-fg-muted">
         {t('checks.opened')} <LocalTime value={check.opened_at} preset="dateTimeYear" />
       </span>
       {children}
@@ -219,6 +220,7 @@ interface CardProps extends BodyProps {
 /** An open check: its sentence and the verdict form (Confirm or Reject, with an optional note). */
 function CheckCard({ seasonId, check, names, labels, onResolved, onStale }: CardProps) {
   const t = useT(formatRuntimeAdminMessages);
+  const locale = useLocale();
   const { pending, errorMessage, run, refresh } = useAdminRequest();
   const [verdict, setVerdict] = useState<CheckVerdict | null>(null);
   const [note, setNote] = useState('');
@@ -248,26 +250,41 @@ function CheckCard({ seasonId, check, names, labels, onResolved, onStale }: Card
   }
 
   return (
-    <li className="space-y-3 rounded-poke-md border border-poke-border bg-poke-surface p-4" data-check-id={check.id}>
-      <CheckHeader check={check} />
-      <CheckBody check={check} names={names} labels={labels} sentenceId={sentenceId} />
-      {/* Every card repeats the same controls: the form is named after the sentence of its check, so a screen reader
+    <tr className={ROW} data-check-id={check.id}>
+      <td className={`${NAME_CELL} max-xl:col-span-2 xl:w-1/3`}>
+        <CheckBody check={check} names={names} labels={labels} sentenceId={sentenceId} />
+      </td>
+      <td className={CELL} data-label={t('checks.columns.source')}>
+        <div className="space-y-1">
+          <Badge variant={check.source === 'team_audit' ? 'purple' : 'blue'}>
+            {isKnownSource(check.source) ? t(`checks.source.${check.source}`) : t('checks.source.unknown')}
+          </Badge>
+          <p className="text-caption text-fg-muted">{t('checks.rule', { rule: labelText(check.rule_label, locale, check.rule_id) })}</p>
+        </div>
+      </td>
+      <td className={CELL} data-label={t('checks.columns.opened')}>
+        <span className="text-caption text-fg-muted">
+          <LocalTime value={check.opened_at} preset="dateTimeYear" />
+        </span>
+      </td>
+      <td className={CELL} data-label={t('checks.columns.verdict')}>
+      {/* Every row repeats the same controls: the form is named after the sentence of its check, so a screen reader
           user in forms navigation can tell which check a verdict resolves. */}
-      <form onSubmit={submit} className="space-y-3" aria-busy={pending} aria-labelledby={sentenceId}>
+      <form onSubmit={submit} className="w-full min-w-0 space-y-3" aria-busy={pending} aria-labelledby={sentenceId}>
         <fieldset className="space-y-1" disabled={pending}>
-          <legend id={groupId} className="text-sm font-heading font-semibold text-poke-text-primary">
+          <legend id={groupId} className="text-subtitle text-fg">
             {t('checks.verdict.legend')}
           </legend>
           <div className="flex flex-wrap gap-x-5 gap-y-1" role="radiogroup" aria-labelledby={groupId}>
             {(['confirmed', 'rejected'] as const).map((value) => (
-              <label key={value} className={`inline-flex items-center gap-2 text-sm text-poke-text-primary ${BUTTON_TOUCH}`}>
+              <label key={value} className={`inline-flex items-center gap-2 text-body text-fg ${BUTTON_TOUCH}`}>
                 <input
                   type="radio"
                   name={`verdict-${check.id}`}
                   value={value}
                   checked={verdict === value}
                   onChange={() => setVerdict(value)}
-                  className="h-4 w-4 accent-poke-accent"
+                  className="h-4 w-4 accent-accent-fill"
                 />
                 {t(`checks.verdict.${value}`)}
               </label>
@@ -282,7 +299,7 @@ function CheckCard({ seasonId, check, names, labels, onResolved, onStale }: Card
           disabled={pending}
           rows={2}
         />
-        <p id={noteCounterId} className={`text-xs ${tooLong ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
+        <p id={noteCounterId} className={`text-caption ${tooLong ? 'text-loss' : 'text-fg-muted'}`}>
           {t('adjust.reason.counter', { used: length, max: TEXT_MAX })}
         </p>
         {errorMessage !== null && !stale && <Alert variant="error">{errorMessage}</Alert>}
@@ -290,7 +307,8 @@ function CheckCard({ seasonId, check, names, labels, onResolved, onStale }: Card
           {t('checks.resolve')}
         </Button>
       </form>
-    </li>
+      </td>
+    </tr>
   );
 }
 
@@ -303,12 +321,12 @@ const SYSTEM_RESET_NOTE = 'match_reset';
 function ResolvedRow({ check, names, labels }: BodyProps) {
   const t = useT(formatRuntimeAdminMessages);
   return (
-    <li className="space-y-2 rounded-poke-md border border-poke-border px-4 py-3" data-check-id={check.id}>
+    <li className="space-y-2 rounded-poke-lg border border-hairline px-4 py-3" data-check-id={check.id}>
       <CheckHeader check={check}>
         <Badge variant={check.state === 'confirmed' ? 'green' : 'gray'}>{t(`checks.state.${check.state}`)}</Badge>
       </CheckHeader>
       <CheckBody check={check} names={names} labels={labels} />
-      <p className="text-xs text-poke-text-muted">
+      <p className="text-caption text-fg-muted">
         {check.resolved_by !== null && <>{t('checks.resolvedBy', { name: check.resolved_by.name ?? t('formerPlayer') })} </>}
         {check.resolved_at !== null && <LocalTime value={check.resolved_at} preset="dateTimeYear" />}
         {check.resolved_by === null && check.note === SYSTEM_RESET_NOTE ? (
@@ -447,25 +465,38 @@ export default function ChecksInbox({ seasonId, initial, names, labels }: Checks
 
   return (
     <div className="space-y-4" data-live-checks>
-      <p className="text-sm text-poke-text-secondary">{t('checks.intro')}</p>
-      <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('checks.openCount', { count: openCount })}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green">
+      <p className="text-body text-fg-muted">{t('checks.intro')}</p>
+      <p className="text-subtitle text-fg">{t('checks.openCount', { count: openCount })}</p>
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-body text-live">
         {status !== null ? t(`checks.done.${status.verdict}`) : ''}
       </div>
       {staleError !== null && <Alert variant="error">{errorText(staleError)}</Alert>}
 
       {open.length === 0 ? (
-        <p className="rounded-poke-md border border-dashed border-poke-border px-3 py-4 text-sm text-poke-text-muted">{t('checks.empty')}</p>
+        <p className="rounded-poke-lg border border-dashed border-hairline px-3 py-4 text-body text-fg-muted">{t('checks.empty')}</p>
       ) : (
-        <ul className="space-y-3">
-          {open.map((check) => (
-            <CheckCard key={check.id} seasonId={seasonId} check={check} names={names} labels={labels} onResolved={resolved} onStale={setStaleError} />
-          ))}
-        </ul>
+        <div className={TABLE_FRAME}>
+          <table className={TABLE}>
+            <caption className="sr-only">{t('checks.caption')}</caption>
+            <thead className={THEAD}>
+              <tr>
+                <th scope="col" className={TH}>{t('checks.columns.check')}</th>
+                <th scope="col" className={TH}>{t('checks.columns.source')}</th>
+                <th scope="col" className={TH}>{t('checks.columns.opened')}</th>
+                <th scope="col" className={TH}>{t('checks.columns.verdict')}</th>
+              </tr>
+            </thead>
+            <tbody className={TBODY}>
+              {open.map((check) => (
+                <CheckCard key={check.id} seasonId={seasonId} check={check} names={names} labels={labels} onResolved={resolved} onStale={setStaleError} />
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
       {open.length > 0 && open.length < openCount && (
         <div className="space-y-2">
-          <p className="text-sm text-poke-text-muted">{t('checks.openShown', { shown: open.length, total: openCount })}</p>
+          <p className="text-body text-fg-muted">{t('checks.openShown', { shown: open.length, total: openCount })}</p>
           <Button variant="secondary" size="sm" className={BUTTON_TOUCH} loading={moreOpenRequest.pending} onClick={() => void loadMoreOpen()}>
             {t('checks.moreOpen')}
           </Button>
@@ -473,7 +504,7 @@ export default function ChecksInbox({ seasonId, initial, names, labels }: Checks
         </div>
       )}
 
-      <div className="space-y-3 border-t border-poke-border pt-3">
+      <div className="space-y-3 border-t border-hairline pt-3">
         <Button variant="secondary" size="sm" className={BUTTON_TOUCH} aria-expanded={history.open} loading={historyRequest.pending && !history.loaded} onClick={toggleHistory}>
           {history.open ? t('checks.history.hide') : t('checks.history.show')}
         </Button>
@@ -481,7 +512,7 @@ export default function ChecksInbox({ seasonId, initial, names, labels }: Checks
         {history.open && (
           <div className="space-y-3">
             {history.rows.length === 0 ? (
-              <p className="text-sm text-poke-text-muted">
+              <p className="text-body text-fg-muted">
                 {history.fetched < history.total ? t('checks.history.noneYet') : t('checks.history.empty')}
               </p>
             ) : (
