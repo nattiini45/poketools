@@ -89,7 +89,7 @@ const TOGGLE_OFF_CLASSES = 'border-hairline-strong text-fg-muted hover:bg-hover 
  */
 const STATUS_TAB_CLASSES =
   'relative isolate inline-flex min-h-11 items-center whitespace-nowrap px-3.5 text-body sm:min-h-8 before:absolute before:inset-0 before:-z-1 before:rounded-[3px] before:border before:[transform:skewX(var(--skew))] before:motion-safe:transition-colors before:motion-safe:duration-80 after:absolute after:inset-x-0 after:bottom-0 after:h-[3px] after:rounded-b-[3px] after:[transform:skewX(var(--skew))] focus-visible:outline-none focus-visible:before:outline-2 focus-visible:before:outline-solid focus-visible:before:outline-offset-2 focus-visible:before:outline-[var(--focus-ring)]';
-const STATUS_TAB_ON_CLASSES = 'font-[550] text-fg before:border-hairline-strong before:bg-surface after:bg-accent-fill';
+const STATUS_TAB_ON_CLASSES = 'font-[550] text-tier-ink before:border-transparent before:bg-tier-1 after:bg-accent-fill';
 const STATUS_TAB_OFF_CLASSES = 'text-fg-muted hover:text-fg before:border-hairline before:bg-transparent hover:before:bg-hover';
 /** The selects of the bar sit on the 36 px step next to the search field. */
 const SELECT_SIZE = 'h-9';

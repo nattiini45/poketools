@@ -23,7 +23,7 @@ export const FIELD_LABEL = 'block text-caption font-medium text-fg';
 
 /** A pick among a few options (winner, outcome): a bordered choice that fills with the selected wash. */
 export const CHOICE = `inline-flex min-h-11 items-center justify-center gap-2 rounded-poke-md border px-3 py-2 text-body motion-safe:transition-colors motion-safe:duration-80 sm:min-h-9 ${FOCUS}`;
-export const CHOICE_ON = 'border-accent-ink bg-selected font-[550] text-fg';
+export const CHOICE_ON = 'border-transparent bg-tier-1 font-[550] text-tier-ink';
 export const CHOICE_OFF = 'border-hairline-strong bg-surface text-fg-muted hover:bg-hover hover:text-fg';
 
 /** A row inside a card: a game, a history entry. */
