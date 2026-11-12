@@ -5,16 +5,21 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Player, PlayerRegistration } from '@/types/player';
 import type { ApiResponse, ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
 import GuestBadge from '@/components/shared/GuestBadge';
-import Card from '@/components/ui/Card';
+import Select from '@/components/ui/Select';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminDialog from '@/components/admin/AdminDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, TOUCH } from '@/components/admin/admin-table';
+import { CHOICE, CHOICE_OFF, CHOICE_ON, FOCUS } from '@/components/admin/match-styles';
+import { TablePagination } from '@/components/ui/Table';
+import SortIcon from '@/components/admin/SortIcon';
+import { cn } from '@/lib/utils/cn';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import Modal from '@/components/ui/Modal';
-import Table, { type Column } from '@/components/ui/Table';
 import { useT } from '@/i18n/client';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
+import { uiMessages } from '@/i18n/messages/ui';
 import type { PlayerSortColumn } from '@/lib/players/player-sort';
 import { playerStatusMachine } from '@/lib/players/player-status-state';
 import { cycleColumnSort } from '@/lib/ui/table-params';
@@ -72,6 +77,9 @@ const CONFIRM_VARIANT: Record<RosterConfirmKind, 'danger' | 'primary'> = {
   delete: 'danger',
   reinstate: 'primary',
 };
+
+const FIELD = `min-h-11 w-full rounded-poke-md border border-hairline-strong bg-surface px-2 py-1 text-body text-fg sm:min-h-9 ${FOCUS}`;
+const ACT = `rounded-sm px-1 font-[550] underline-offset-2 hover:underline min-h-11 sm:min-h-0 ${FOCUS}`;
 
 /** One JSON request to a players route; a network or parse failure throws. */
 async function requestJson(url: string, init?: RequestInit): Promise<ApiResult<unknown>> {
@@ -169,6 +177,7 @@ export default function PlayerRoster({ canManageCreators, protectedPlayerId = nu
   const [fetching, setFetching] = useState(false);
   const latestRequest = useRef(0);
   const t = useT(adminCoreMessages);
+  const tui = useT(uiMessages);
   const errorMessage = useRosterErrorText();
   // Why the directory could not be loaded; apart from `actionNotice`, which never touches the rows.
   const [loadError, setLoadError] = useState<RosterError | null>(null);
@@ -468,342 +477,352 @@ export default function PlayerRoster({ canManageCreators, protectedPlayerId = nu
     }
   }, [editForm, editingId, fetchPlayers, players, runAction]);
 
-  const rosterColumns = useMemo((): Column<Player>[] => [
-    {
-      key: 'name' satisfies PlayerSortColumn,
-      header: t('players.columns.name'),
-      sortable: true,
-      render: (player) =>
-        editingId === player.id ? (
-          <input
-            value={editForm.name}
-            onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-            className="w-full border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary"
-          />
-        ) : (
-          <span className="inline-flex items-center gap-2 text-poke-text-primary">
-            {player.name}
-            {player.is_guest && <GuestBadge />}
-          </span>
-        ),
-    },
-    {
-      key: 'discord_id' satisfies PlayerSortColumn,
-      header: t('players.columns.discordId'),
-      sortable: true,
-      render: (player) =>
-        <span className="text-sm text-poke-text-secondary">{player.discord_id ?? '—'}</span>,
-    },
-    {
-      key: 'ps_username' satisfies PlayerSortColumn,
-      header: t('players.columns.psUsername'),
-      sortable: true,
-      render: (player) =>
-        editingId === player.id ? (
-          <input
-            value={editForm.ps_username}
-            onChange={(e) => setEditForm((f) => ({ ...f, ps_username: e.target.value }))}
-            className="w-full border border-poke-border rounded-poke-md px-2 py-1 text-sm bg-poke-surface text-poke-text-primary"
-          />
-        ) : (
-          <span className="text-poke-text-primary">{player.ps_username || '—'}</span>
-        ),
-    },
-    {
-      key: 'status' satisfies PlayerSortColumn,
-      header: t('players.columns.status'),
-      sortable: true,
-      render: (player) => <RosterStatusCell player={player} />,
-    },
-    {
-      key: 'admin',
-      header: t('players.columns.admin'),
-      render: (player) =>
-        editingId === player.id || !canManageCreators ? (
-          <Badge variant={player.is_admin ? 'green' : 'gray'}>
-            {player.is_admin ? t('players.roles.admin') : t('players.roles.player')}
-          </Badge>
-        ) : (
-          <button type="button" onClick={() => askConfirm(roleConfirmKind(player, 'is_admin'), player)}>
-            <Badge variant={player.is_admin ? 'green' : 'gray'}>
-              {player.is_admin ? t('players.roles.admin') : t('players.roles.player')}
-            </Badge>
-          </button>
-        ),
-    },
-    {
-      key: 'creator',
-      header: t('players.columns.creator'),
-      render: (player) =>
-        editingId === player.id ? (
-          <Badge variant={player.is_creator ? 'purple' : 'gray'}>
-            {player.is_creator ? t('players.roles.creator') : '—'}
-          </Badge>
-        ) : canManageCreators ? (
-          <button type="button" onClick={() => askConfirm(roleConfirmKind(player, 'is_creator'), player)}>
-            <Badge variant={player.is_creator ? 'purple' : 'gray'}>
-              {player.is_creator ? t('players.roles.creator') : '—'}
-            </Badge>
-          </button>
-        ) : (
-          <Badge variant={player.is_creator ? 'purple' : 'gray'}>
-            {player.is_creator ? t('players.roles.creator') : '—'}
-          </Badge>
-        ),
-    },
-    {
-      key: 'actions',
-      header: t('players.columns.actions'),
-      render: (player) =>
-        editingId === player.id ? (
-          <span className="space-x-2">
-            <button type="button" onClick={handleSaveEdit} className="text-poke-green text-sm hover:underline">
-              {t('players.rowActions.save')}
-            </button>
-            <button type="button" onClick={() => setEditingId(null)} className="text-poke-text-muted text-sm hover:underline">
-              {t('players.rowActions.cancel')}
-            </button>
-          </span>
-        ) : (
-          <span className="space-x-2">
-            {player.id !== protectedPlayerId && (
-              <button type="button" onClick={() => startEditing(player)} className="text-accent-ink text-sm hover:underline">
-                {t('players.rowActions.edit')}
-              </button>
-            )}
-            {player.is_guest && (
-              <button
-                type="button"
-                onClick={() => {
-                  setDialogError(null);
-                  setLinkGuest(player);
-                  setLinkSourceId('');
-                  setLinkSearch('');
-                  setLinkResults([]);
-                }}
-                className="text-accent-ink text-sm hover:underline"
-              >
-                {t('players.rowActions.linkAccount')}
-              </button>
-            )}
-            {player.id !== protectedPlayerId && (
-              <>
-                {canModerate(player, 'reinstate') && (
-                  <button type="button" onClick={() => askConfirm('reinstate', player)} className="text-poke-green text-sm hover:underline">
-                    {t('players.rowActions.reinstate')}
-                  </button>
-                )}
-                {canModerate(player, 'suspend') && (
-                  <button type="button" onClick={() => openSuspendDialog(player)} className="text-poke-yellow text-sm hover:underline">
-                    {t('players.rowActions.suspend')}
-                  </button>
-                )}
-                {canModerate(player, 'ban') && (
-                  <button type="button" onClick={() => openBanDialog(player)} className="text-poke-danger text-sm hover:underline">
-                    {t('players.rowActions.ban')}
-                  </button>
-                )}
-                <button type="button" onClick={() => askConfirm('delete', player)} className="text-poke-danger text-sm hover:underline">
-                  {t('players.rowActions.delete')}
-                </button>
-              </>
-            )}
-          </span>
-        ),
-    },
-  ], [
-    askConfirm,
-    canManageCreators,
-    editForm,
-    editingId,
-    handleSaveEdit,
-    openBanDialog,
-    openSuspendDialog,
-    protectedPlayerId,
-    startEditing,
-    t,
-  ]);
-
   const view = rosterView({ loaded, hasLoadedOnce, hasLoadError: loadError !== null });
-  if (view === 'loading') return <p className="text-poke-text-muted">{t('players.loading')}</p>;
+  if (view === 'loading') return <p className="text-fg-muted">{t('players.loading')}</p>;
   // The first load failed: no rows, and no telling an empty directory from an unreachable one.
   if (view === 'blocked' && loadError) return <RosterLoadError error={loadError} onRetry={retryLoad} />;
 
   const dialog = openDialog(suspendTarget, suspendAction);
 
+  const sortable: { key: PlayerSortColumn; header: string }[] = [
+    { key: 'name', header: t('players.columns.name') },
+    { key: 'discord_id', header: t('players.columns.discordId') },
+    { key: 'ps_username', header: t('players.columns.psUsername') },
+    { key: 'status', header: t('players.columns.status') },
+  ];
+  const totalPages = Math.max(1, lastPage(total, perPage));
+  const editingRow = (player: Player) => editingId === player.id;
+
+  const roleChip = (player: Player, role: 'is_admin' | 'is_creator') => {
+    const on = role === 'is_admin' ? player.is_admin : player.is_creator;
+    const label =
+      role === 'is_admin'
+        ? on ? t('players.roles.admin') : t('players.roles.player')
+        : on ? t('players.roles.creator') : '—';
+    const chip = <SkewChip tone={on ? (role === 'is_admin' ? 'accent' : 'tier-1') : 'neutral'}>{label}</SkewChip>;
+    if (editingRow(player) || !canManageCreators) return chip;
+    return (
+      <button
+        type="button"
+        onClick={() => askConfirm(roleConfirmKind(player, role), player)}
+        className={cn('inline-flex min-h-11 items-center rounded-sm sm:min-h-0', FOCUS)}
+      >
+        {chip}
+      </button>
+    );
+  };
+
   return (
     <div>
-      <Button
-        variant="primary"
-        size="sm"
-        onClick={() => setShowForm(!showForm)}
-        className="mb-4"
-      >
-        {showForm ? t('players.cancel') : t('players.addPlayer')}
-      </Button>
+      <div className="mb-4 flex flex-wrap items-end gap-3">
+        <div className="min-w-0 flex-1 sm:max-w-sm">
+          <Input
+            label={t('players.search.label')}
+            type="search"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+            placeholder={t('players.search.placeholder')}
+            maxLength={100}
+          />
+        </div>
+        <Button variant="primary" onClick={() => setShowForm(!showForm)} className={TOUCH}>
+          {showForm ? t('players.cancel') : t('players.addPlayer')}
+        </Button>
+      </div>
 
       {showForm && <AddPlayerForm onSubmit={handleAdd} />}
-
-      <div className="mb-4 max-w-sm">
-        <Input
-          label={t('players.search.label')}
-          type="search"
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          placeholder={t('players.search.placeholder')}
-          maxLength={100}
-        />
-      </div>
 
       {actionNotice && <RosterActionAlert notice={actionNotice} onDismiss={() => setActionNotice(null)} />}
       {loadError && <RosterLoadError error={loadError} onRetry={retryLoad} />}
 
-      <div aria-busy={fetching} className={fetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
-        <Table
-          columns={rosterColumns}
-          data={players}
-          keyExtractor={(player) => player.id}
-          emptyMessage={search ? t('players.noMatches') : t('players.empty')}
-          clientEngine={false}
-          sort={sort}
-          onSort={handleSort}
-          page={page}
-          perPage={perPage}
-          totalItems={total}
-          onPageChange={(next) => update({ page: next })}
-          onPerPageChange={(size) => update({ perPage: size, page: 1 })}
-        />
+      <div role="group" aria-label={t('players.sortBy')} className="mb-3 flex flex-wrap items-center gap-2 xl:hidden">
+        <span className="text-caption text-fg-muted">{t('players.sortBy')}</span>
+        {sortable.map((column) => (
+          <button
+            key={column.key}
+            type="button"
+            onClick={() => handleSort(column.key)}
+            aria-pressed={sortKey === column.key}
+            className={cn(CHOICE, sortKey === column.key ? CHOICE_ON : CHOICE_OFF)}
+          >
+            {column.header}
+            <SortIcon active={sortKey === column.key} direction={sortDirection} />
+          </button>
+        ))}
       </div>
 
-      {pendingConfirm && (
-        <ConfirmDialog
-          open
-          onClose={() => {
-            if (!confirming) setPendingConfirm(null);
-          }}
-          onConfirm={handleConfirm}
-          title={t(`players.confirm.${pendingConfirm.kind}.title`, { name: pendingConfirm.player.name })}
-          message={t(`players.confirm.${pendingConfirm.kind}.body`, { name: pendingConfirm.player.name })}
-          confirmLabel={t(`players.confirm.${pendingConfirm.kind}.confirm`)}
-          confirmVariant={CONFIRM_VARIANT[pendingConfirm.kind]}
-          loading={confirming}
-        />
-      )}
+      <div aria-busy={fetching} className={fetching ? 'opacity-60 transition-opacity' : 'transition-opacity'}>
+        {players.length === 0 ? (
+          <AdminEmpty
+            title={search ? t('players.noMatches') : t('players.empty')}
+            hint={search ? t('players.noMatchesHint') : t('players.emptyHint')}
+            data-roster-empty
+          />
+        ) : (
+          <div className={TABLE_FRAME}>
+            <table className={TABLE} data-roster-table>
+              <caption className="sr-only">{t('players.title')}</caption>
+              <thead className="max-xl:hidden xl:table-header-group">
+                <tr>
+                  {sortable.map((column) => (
+                    <th
+                      key={column.key}
+                      scope="col"
+                      className={TH}
+                      aria-sort={sortKey === column.key ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
+                    >
+                      <button
+                        type="button"
+                        onClick={() => handleSort(column.key)}
+                        className={cn('inline-flex items-center gap-1 rounded-sm hover:text-fg', FOCUS, sortKey === column.key && 'text-fg')}
+                      >
+                        <span>{column.header}</span>
+                        <SortIcon active={sortKey === column.key} direction={sortDirection} />
+                      </button>
+                    </th>
+                  ))}
+                  <th scope="col" className={TH}>{t('players.columns.admin')}</th>
+                  <th scope="col" className={TH}>{t('players.columns.creator')}</th>
+                  <th scope="col" className={cn(TH, 'xl:text-right')}>{t('players.columns.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className={TBODY}>
+                {players.map((player) => (
+                  <tr key={player.id} className={ROW}>
+                    <td className={NAME_CELL}>
+                      {editingRow(player) ? (
+                        <input
+                          value={editForm.name}
+                          onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                          aria-label={t('players.columns.name')}
+                          className={FIELD}
+                        />
+                      ) : (
+                        <span className="inline-flex flex-wrap items-center gap-2 break-words text-subtitle text-fg xl:text-body xl:font-[550]">
+                          {player.name}
+                          {player.is_guest && <GuestBadge />}
+                        </span>
+                      )}
+                    </td>
+                    <td data-label={t('players.columns.discordId')} className={CELL}>
+                      <span className="min-w-0 break-all text-fg-muted">{player.discord_id ?? '—'}</span>
+                    </td>
+                    <td data-label={t('players.columns.psUsername')} className={CELL}>
+                      {editingRow(player) ? (
+                        <input
+                          value={editForm.ps_username}
+                          onChange={(e) => setEditForm((f) => ({ ...f, ps_username: e.target.value }))}
+                          aria-label={t('players.columns.psUsername')}
+                          className={FIELD}
+                        />
+                      ) : (
+                        <span className="min-w-0 break-words text-fg">{player.ps_username || '—'}</span>
+                      )}
+                    </td>
+                    <td data-label={t('players.columns.status')} className={CELL}>
+                      <RosterStatusCell player={player} />
+                    </td>
+                    <td data-label={t('players.columns.admin')} className={CELL}>
+                      {roleChip(player, 'is_admin')}
+                    </td>
+                    <td data-label={t('players.columns.creator')} className={CELL}>
+                      {roleChip(player, 'is_creator')}
+                    </td>
+                    <td className="block max-xl:col-span-2 max-xl:border-t max-xl:border-hairline max-xl:pt-2 xl:table-cell xl:px-3 xl:py-3 xl:align-top xl:text-right">
+                      <span className="flex flex-wrap gap-x-3 gap-y-1 xl:justify-end">
+                        {editingRow(player) ? (
+                          <>
+                            <button type="button" onClick={handleSaveEdit} className={cn(ACT, 'text-win')}>
+                              {t('players.rowActions.save')}
+                            </button>
+                            <button type="button" onClick={() => setEditingId(null)} className={cn(ACT, 'text-fg-muted')}>
+                              {t('players.rowActions.cancel')}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            {player.id !== protectedPlayerId && (
+                              <button type="button" onClick={() => startEditing(player)} className={cn(ACT, 'text-accent-ink')}>
+                                {t('players.rowActions.edit')}
+                              </button>
+                            )}
+                            {player.is_guest && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDialogError(null);
+                                  setLinkGuest(player);
+                                  setLinkSourceId('');
+                                  setLinkSearch('');
+                                  setLinkResults([]);
+                                }}
+                                className={cn(ACT, 'text-accent-ink')}
+                              >
+                                {t('players.rowActions.linkAccount')}
+                              </button>
+                            )}
+                            {player.id !== protectedPlayerId && (
+                              <>
+                                {canModerate(player, 'reinstate') && (
+                                  <button type="button" onClick={() => askConfirm('reinstate', player)} className={cn(ACT, 'text-win')}>
+                                    {t('players.rowActions.reinstate')}
+                                  </button>
+                                )}
+                                {canModerate(player, 'suspend') && (
+                                  <button type="button" onClick={() => openSuspendDialog(player)} className={cn(ACT, 'text-fg')}>
+                                    {t('players.rowActions.suspend')}
+                                  </button>
+                                )}
+                                {canModerate(player, 'ban') && (
+                                  <button type="button" onClick={() => openBanDialog(player)} className={cn(ACT, 'text-loss')}>
+                                    {t('players.rowActions.ban')}
+                                  </button>
+                                )}
+                                <button type="button" onClick={() => askConfirm('delete', player)} className={cn(ACT, 'text-loss')}>
+                                  {t('players.rowActions.delete')}
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {total > 0 && (
+          <TablePagination
+            className="mt-3"
+            page={page}
+            totalPages={totalPages}
+            perPage={perPage}
+            totalItems={total}
+            onPageChange={(next) => update({ page: next })}
+            onPerPageChange={(size) => update({ perPage: size, page: 1 })}
+          />
+        )}
+      </div>
 
-      {/* Link guest account */}
-      {linkGuest && (
-        <Modal
-          open
-          onClose={() => setLinkGuest(null)}
-          title={t('players.link.title', { name: linkGuest.name })}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-poke-text-secondary">{t('players.link.body')}</p>
-            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
-            <Input
-              label={t('players.link.searchLabel')}
-              type="search"
-              value={linkSearch}
-              onChange={(e) => {
-                setLinkSearch(e.target.value);
-                setLinkSourceId('');
-              }}
-              placeholder={t('players.link.searchPlaceholder')}
-              maxLength={100}
-            />
-            {linkSearch && linkCandidates.length === 0 && (
-              <p className="text-sm text-poke-text-muted">{t('players.link.noMatches')}</p>
-            )}
-            <select
-              value={linkSourceId}
-              onChange={(e) => setLinkSourceId(e.target.value)}
-              className="w-full text-sm bg-poke-surface border border-poke-border rounded-poke-md px-2 py-2"
-            >
-              <option value="">{t('players.link.selectPlaceholder')}</option>
-              {linkCandidates.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-            <div className="flex justify-end gap-2">
-              <Button variant="ghost" size="sm" onClick={() => setLinkGuest(null)}>
-                {t('players.cancel')}
+      <AdminDialog
+        open={pendingConfirm !== null}
+        onClose={() => {
+          if (!confirming) setPendingConfirm(null);
+        }}
+        title={pendingConfirm ? t(`players.confirm.${pendingConfirm.kind}.title`, { name: pendingConfirm.player.name }) : ''}
+        size="sm"
+      >
+        {pendingConfirm && (
+          <>
+            <p className="mb-5 text-body text-fg-muted">
+              {t(`players.confirm.${pendingConfirm.kind}.body`, { name: pendingConfirm.player.name })}
+            </p>
+            <div className="flex flex-wrap justify-end gap-3">
+              <Button variant="ghost" className={TOUCH} onClick={() => setPendingConfirm(null)} disabled={confirming}>
+                {tui('confirmDialog.cancel')}
               </Button>
-              <Button
-                variant="primary"
-                size="sm"
-                disabled={!linkSourceId || linking}
-                onClick={handleLinkAccount}
-              >
-                {linking ? t('players.link.linking') : t('players.link.submit')}
+              <Button variant={CONFIRM_VARIANT[pendingConfirm.kind]} className={TOUCH} onClick={handleConfirm} loading={confirming}>
+                {t(`players.confirm.${pendingConfirm.kind}.confirm`)}
               </Button>
             </div>
-          </div>
-        </Modal>
-      )}
+          </>
+        )}
+      </AdminDialog>
 
-      {/* Suspend Dialog */}
-      {suspendTarget && dialog === 'suspend' && (
-        <Modal
-          open={true}
-          onClose={closeDialog}
-          title={t('players.suspend.title', { name: suspendTarget.name })}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-poke-text-secondary">{t('players.suspend.body')}</p>
-            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
-            <Input
-              label={t('players.suspend.untilLabel')}
-              type="datetime-local"
-              value={suspendUntil}
-              onChange={e => setSuspendUntil(e.target.value)}
-              required
-            />
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={closeDialog}>{t('players.cancel')}</Button>
-              <Button
-                variant="secondary"
-                onClick={handleSuspend}
-                disabled={!localDateTimeToIso(suspendUntil) || actionLoading}
-              >
-                {actionLoading ? t('players.suspend.submitting') : t('players.suspend.submit')}
-              </Button>
-            </div>
+      <AdminDialog
+        open={linkGuest !== null}
+        onClose={() => setLinkGuest(null)}
+        title={linkGuest ? t('players.link.title', { name: linkGuest.name }) : ''}
+      >
+        <div className="space-y-4">
+          <p className="text-body text-fg-muted">{t('players.link.body')}</p>
+          {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
+          <Input
+            label={t('players.link.searchLabel')}
+            type="search"
+            value={linkSearch}
+            onChange={(e) => {
+              setLinkSearch(e.target.value);
+              setLinkSourceId('');
+            }}
+            placeholder={t('players.link.searchPlaceholder')}
+            maxLength={100}
+          />
+          {linkSearch && linkCandidates.length === 0 && (
+            <p className="text-body text-fg-muted">{t('players.link.noMatches')}</p>
+          )}
+          <Select value={linkSourceId} onChange={(e) => setLinkSourceId(e.target.value)} aria-label={t('players.link.selectPlaceholder')}>
+            <option value="">{t('players.link.selectPlaceholder')}</option>
+            {linkCandidates.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name}
+              </option>
+            ))}
+          </Select>
+          <div className="flex flex-wrap justify-end gap-3 border-t border-hairline pt-4">
+            <Button variant="ghost" className={TOUCH} onClick={() => setLinkGuest(null)}>
+              {t('players.cancel')}
+            </Button>
+            <Button variant="primary" className={TOUCH} disabled={!linkSourceId || linking} onClick={handleLinkAccount}>
+              {linking ? t('players.link.linking') : t('players.link.submit')}
+            </Button>
           </div>
-        </Modal>
-      )}
+        </div>
+      </AdminDialog>
 
-      {/* Ban Dialog */}
-      {suspendTarget && dialog === 'ban' && (
-        <Modal
-          open={true}
-          onClose={closeDialog}
-          title={t('players.ban.title', { name: suspendTarget.name })}
-        >
-          <div className="space-y-4">
-            <p className="text-sm text-poke-text-secondary">{t('players.ban.body')}</p>
-            {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
-            <Input
-              label={t('players.ban.reasonLabel')}
-              value={banReason}
-              onChange={e => setBanReason(e.target.value)}
-              placeholder={t('players.ban.reasonPlaceholder')}
-              required
-            />
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={closeDialog}>{t('players.cancel')}</Button>
-              <Button
-                variant="danger"
-                onClick={handleBan}
-                disabled={!banReason.trim() || actionLoading}
-              >
-                {actionLoading ? t('players.ban.submitting') : t('players.ban.submit')}
-              </Button>
-            </div>
+      <AdminDialog
+        open={suspendTarget !== null && dialog === 'suspend'}
+        onClose={closeDialog}
+        title={suspendTarget ? t('players.suspend.title', { name: suspendTarget.name }) : ''}
+      >
+        <div className="space-y-4">
+          <p className="text-body text-fg-muted">{t('players.suspend.body')}</p>
+          {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
+          <Input
+            label={t('players.suspend.untilLabel')}
+            type="datetime-local"
+            value={suspendUntil}
+            onChange={(e) => setSuspendUntil(e.target.value)}
+            required
+          />
+          <div className="flex flex-wrap justify-end gap-3 border-t border-hairline pt-4">
+            <Button variant="ghost" className={TOUCH} onClick={closeDialog}>
+              {t('players.cancel')}
+            </Button>
+            <Button variant="secondary" className={TOUCH} onClick={handleSuspend} disabled={!localDateTimeToIso(suspendUntil) || actionLoading}>
+              {actionLoading ? t('players.suspend.submitting') : t('players.suspend.submit')}
+            </Button>
           </div>
-        </Modal>
-      )}
+        </div>
+      </AdminDialog>
+
+      <AdminDialog
+        open={suspendTarget !== null && dialog === 'ban'}
+        onClose={closeDialog}
+        title={suspendTarget ? t('players.ban.title', { name: suspendTarget.name }) : ''}
+      >
+        <div className="space-y-4">
+          <p className="text-body text-fg-muted">{t('players.ban.body')}</p>
+          {dialogError && <Alert variant="error">{errorMessage(dialogError)}</Alert>}
+          <Input
+            label={t('players.ban.reasonLabel')}
+            value={banReason}
+            onChange={(e) => setBanReason(e.target.value)}
+            placeholder={t('players.ban.reasonPlaceholder')}
+            required
+          />
+          <div className="flex flex-wrap justify-end gap-3 border-t border-hairline pt-4">
+            <Button variant="ghost" className={TOUCH} onClick={closeDialog}>
+              {t('players.cancel')}
+            </Button>
+            <Button variant="danger" className={TOUCH} onClick={handleBan} disabled={!banReason.trim() || actionLoading}>
+              {actionLoading ? t('players.ban.submitting') : t('players.ban.submit')}
+            </Button>
+          </div>
+        </div>
+      </AdminDialog>
     </div>
   );
 }
@@ -829,39 +848,21 @@ function AddPlayerForm({ onSubmit }: { onSubmit: (data: PlayerRegistration) => v
   };
 
   return (
-    <Card variant="muted" className="mb-6">
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <label className="flex items-center gap-2 text-sm text-poke-text-secondary">
-          <input
-            type="checkbox"
-            checked={isGuest}
-            onChange={(e) => setIsGuest(e.target.checked)}
-          />
-          {t('players.form.guest')}
-        </label>
-        <Input
-          label={t('players.form.name')}
-          value={name}
-          onChange={e => setName(e.target.value)}
-          required
-        />
+    <form onSubmit={handleSubmit} className="mb-6 space-y-3 rounded-poke-lg border border-hairline bg-surface p-4">
+      <label className="flex min-h-11 items-center gap-2 text-body text-fg sm:min-h-0">
+        <input type="checkbox" checked={isGuest} onChange={(e) => setIsGuest(e.target.checked)} className="size-4 accent-[var(--accent-fill)]" />
+        {t('players.form.guest')}
+      </label>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <Input label={t('players.form.name')} value={name} onChange={(e) => setName(e.target.value)} required />
         {!isGuest && (
-          <Input
-            label={t('players.form.discordId')}
-            value={discordId}
-            onChange={e => setDiscordId(e.target.value)}
-            required
-          />
+          <Input label={t('players.form.discordId')} value={discordId} onChange={(e) => setDiscordId(e.target.value)} required />
         )}
-        <Input
-          label={t('players.form.psUsername')}
-          value={psUsername}
-          onChange={e => setPsUsername(e.target.value)}
-        />
-        <Button type="submit" variant="primary" size="sm">
-          {isGuest ? t('players.form.addGuest') : t('players.form.addPlayer')}
-        </Button>
-      </form>
-    </Card>
+        <Input label={t('players.form.psUsername')} value={psUsername} onChange={(e) => setPsUsername(e.target.value)} />
+      </div>
+      <Button type="submit" variant="primary" className={TOUCH}>
+        {isGuest ? t('players.form.addGuest') : t('players.form.addPlayer')}
+      </Button>
+    </form>
   );
 }

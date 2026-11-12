@@ -4,7 +4,7 @@ import Badge from '@/components/ui/Badge';
 import { useLocale, useT } from '@/i18n/client';
 import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin';
 import type { LateJoinerView, MissedEffect, MissedEvent } from '@/lib/format-engine/runtime/view-types';
-import ScrollRegion from '../ScrollRegion';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { labelText } from './admin-shared';
 
 export interface LateJoinersProps {
@@ -44,26 +44,26 @@ export default function LateJoiners({ lateJoiners }: LateJoinersProps) {
   const effectText = (effect: MissedEffect): string => t(`lateJoiners.effect.${effect.kind}`, { name: labelText(effect.label, locale, effect.key) });
 
   return (
-    <ScrollRegion label={t('lateJoiners.caption')} data-live-late-joiners>
-      <table className="w-full min-w-[28rem] text-left text-sm">
+    <div className={TABLE_FRAME} role="region" aria-label={t('lateJoiners.caption')} tabIndex={0} data-live-late-joiners>
+      <table className={TABLE}>
         <caption className="sr-only">{t('lateJoiners.caption')}</caption>
-        <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+        <thead className={THEAD}>
           <tr>
-            <th scope="col" className="px-3 py-2">{t('lateJoiners.columns.player')}</th>
-            <th scope="col" className="px-3 py-2">{t('lateJoiners.columns.missed')}</th>
+            <th scope="col" className={TH}>{t('lateJoiners.columns.player')}</th>
+            <th scope="col" className={TH}>{t('lateJoiners.columns.missed')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-poke-border">
+        <tbody className={TBODY}>
           {lateJoiners.map((joiner) => (
-            <tr key={joiner.player.id}>
-              <th scope="row" className="px-3 py-2 align-top font-normal text-poke-text-primary">
+            <tr key={joiner.player.id} className={ROW}>
+              <th scope="row" className={`${NAME_CELL} max-xl:col-span-2`}>
                 {joiner.player.name ?? t('formerPlayer')}
               </th>
-              <td className="px-3 py-2">
+              <td className={CELL} data-label={t('lateJoiners.columns.missed')}>
                 <ul className="space-y-2">
                   {joiner.missed.map((event, index) => (
                     <li key={`${event.event}-${event.stage ?? 'x'}-${event.round ?? 'x'}-${event.action ?? 'x'}-${event.mark ?? 'x'}-${index}`} className="space-y-1">
-                      <p className="text-poke-text-primary">{eventText(event)}</p>
+                      <p className="text-fg">{eventText(event)}</p>
                       <p className="flex flex-wrap gap-1">
                         {event.effects.map((effect) => (
                           <Badge key={`${effect.kind}-${effect.key}`} variant="gray">
@@ -79,6 +79,6 @@ export default function LateJoiners({ lateJoiners }: LateJoinersProps) {
           ))}
         </tbody>
       </table>
-    </ScrollRegion>
+    </div>
   );
 }

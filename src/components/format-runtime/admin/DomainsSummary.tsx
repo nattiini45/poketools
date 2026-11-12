@@ -4,7 +4,7 @@ import Badge from '@/components/ui/Badge';
 import { useLocale, useT } from '@/i18n/client';
 import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin';
 import type { AdminDomainView } from '@/lib/format-engine/runtime/view-types';
-import ScrollRegion from '../ScrollRegion';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { labelText } from './admin-shared';
 
 export interface DomainsSummaryProps {
@@ -17,34 +17,34 @@ export default function DomainsSummary({ domains }: DomainsSummaryProps) {
   const locale = useLocale();
 
   if (domains.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('domains.empty')}</p>;
+    return <p className="text-body text-fg-muted">{t('domains.empty')}</p>;
   }
 
   return (
-    <ScrollRegion label={t('domains.caption')} data-live-domains>
-      <table className="w-full min-w-[28rem] text-left text-sm">
+    <div className={TABLE_FRAME} role="region" aria-label={t('domains.caption')} tabIndex={0} data-live-domains>
+      <table className={TABLE}>
         <caption className="sr-only">{t('domains.caption')}</caption>
-        <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+        <thead className={THEAD}>
           <tr>
-            <th scope="col" className="px-3 py-2">{t('domains.columns.list')}</th>
-            <th scope="col" className="px-3 py-2">{t('domains.columns.visibility')}</th>
-            <th scope="col" className="px-3 py-2">{t('domains.columns.lock')}</th>
-            <th scope="col" className="px-3 py-2">{t('domains.columns.entries')}</th>
+            <th scope="col" className={TH}>{t('domains.columns.list')}</th>
+            <th scope="col" className={TH}>{t('domains.columns.visibility')}</th>
+            <th scope="col" className={TH}>{t('domains.columns.lock')}</th>
+            <th scope="col" className={TH}>{t('domains.columns.entries')}</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-poke-border">
+        <tbody className={TBODY}>
           {domains.map((domain) => (
-            <tr key={domain.key}>
-              <td className="px-3 py-2 text-poke-text-primary">{labelText(domain.label, locale, domain.key)}</td>
-              <td className="px-3 py-2 text-poke-text-secondary">{t(`domains.visibility.${domain.visibility}`)}</td>
-              <td className="px-3 py-2">
+            <tr key={domain.key} className={ROW}>
+              <td className={NAME_CELL}>{labelText(domain.label, locale, domain.key)}</td>
+              <td className={CELL} data-label={t('domains.columns.visibility')}>{t(`domains.visibility.${domain.visibility}`)}</td>
+              <td className={CELL} data-label={t('domains.columns.lock')}>
                 <Badge variant={domain.unlocked ? 'green' : 'gray'}>{domain.unlocked ? t('domains.unlocked') : t('domains.locked')}</Badge>
               </td>
-              <td className="px-3 py-2 text-poke-text-secondary">{domain.entry_count}</td>
+              <td className={CELL} data-label={t('domains.columns.entries')}>{domain.entry_count}</td>
             </tr>
           ))}
         </tbody>
       </table>
-    </ScrollRegion>
+    </div>
   );
 }

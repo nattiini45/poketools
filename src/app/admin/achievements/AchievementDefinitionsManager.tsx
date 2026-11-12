@@ -8,7 +8,21 @@ import type {
   AchievementDefinition,
   AchievementTier,
 } from '@/types/achievement';
-import Table, { type Column } from '@/components/ui/Table';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import Input from '@/components/ui/Input';
+import Section from '@/components/ui/Section';
+import Select from '@/components/ui/Select';
+import SkewChip from '@/components/ui/SkewChip';
+import Textarea from '@/components/ui/Textarea';
+import AdminDialog from '@/components/admin/AdminDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
+import { SortHeadButton, ariaSort } from '@/components/admin/SortIcon';
+import { TablePagination } from '@/components/ui/Table';
+import { useClientTable } from '@/lib/ui/use-client-table';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
+import { cn } from '@/lib/utils/cn';
 import { useLocale, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -148,7 +162,6 @@ function toManagerError(e: unknown, fallback: ErrorKey): ManagerError {
 }
 
 function DefinitionForm({
-  title,
   form,
   onChange,
   onSubmit,
@@ -157,7 +170,6 @@ function DefinitionForm({
   busy,
   catalogHint,
 }: {
-  title: string;
   form: DefinitionFormState;
   onChange: (patch: Partial<DefinitionFormState>) => void;
   onSubmit: () => void;
@@ -170,131 +182,85 @@ function DefinitionForm({
   const t = useT(adminToolsMessages);
   const tc = useT(commonMessages);
   return (
-    <section className="bg-poke-elevated border border-poke-border rounded-poke-lg p-4 space-y-3">
-      <h3 className="text-sm font-heading font-bold text-poke-text-primary">{title}</h3>
-      <p className="text-xs text-poke-text-tertiary">{t('achievements.catalogNote')}</p>
+    <div className="space-y-4">
+      <p className="text-caption text-fg-muted">{t('achievements.catalogNote')}</p>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-        <label className="text-sm">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.key')}</span>
-          <input
-            value={form.key}
-            onChange={(event) => onChange({ key: event.target.value })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          />
-        </label>
-
-        <label className="text-sm">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.name')}</span>
-          <input
-            value={form.name}
-            onChange={(event) => onChange({ name: event.target.value })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          />
-          {catalogHint && (
-            <span className="block mt-1 text-xs text-poke-text-tertiary">
-              {t('achievements.catalogHint', { name: catalogHint })}
-            </span>
-          )}
-        </label>
-
-        <label className="text-sm md:col-span-2">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.description')}</span>
-          <input
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <Input label={t('achievements.form.key')} value={form.key} onChange={(event) => onChange({ key: event.target.value })} />
+        <Input
+          label={t('achievements.form.name')}
+          value={form.name}
+          onChange={(event) => onChange({ name: event.target.value })}
+          hint={catalogHint ? t('achievements.catalogHint', { name: catalogHint }) : undefined}
+        />
+        <div className="md:col-span-2">
+          <Input
+            label={t('achievements.form.description')}
             value={form.description}
             onChange={(event) => onChange({ description: event.target.value })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
           />
-        </label>
-
-        <label className="text-sm">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.icon')}</span>
-          <input
-            value={form.icon}
-            onChange={(event) => onChange({ icon: event.target.value })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          />
-        </label>
-
-        <label className="text-sm">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.category')}</span>
-          <select
-            value={form.category}
-            onChange={(event) => onChange({ category: event.target.value as AchievementCategory })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          >
-            {CATEGORY_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {t(`achievements.categories.${option}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="text-sm">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.tier')}</span>
-          <select
-            value={form.tier}
-            onChange={(event) => onChange({ tier: event.target.value as AchievementTier })}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          >
-            {TIER_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {t(`achievements.tiers.${option}`)}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label className="inline-flex items-center gap-2 text-sm text-poke-text-secondary">
-          <input
-            type="checkbox"
-            checked={form.repeatable}
-            onChange={(event) => onChange({ repeatable: event.target.checked })}
-          />
-          {t('achievements.form.repeatable')}
-        </label>
-
-        <label className="inline-flex items-center gap-2 text-sm text-poke-text-secondary">
-          <input
-            type="checkbox"
-            checked={form.hidden}
-            onChange={(event) => onChange({ hidden: event.target.checked })}
-          />
-          {t('achievements.form.hidden')}
-        </label>
-
-        <label className="text-sm md:col-span-2">
-          <span className="block text-poke-text-secondary mb-1">{t('achievements.form.criteria')}</span>
-          <textarea
+        </div>
+        <Input label={t('achievements.form.icon')} value={form.icon} onChange={(event) => onChange({ icon: event.target.value })} />
+        <Select
+          label={t('achievements.form.category')}
+          value={form.category}
+          onChange={(event) => onChange({ category: event.target.value as AchievementCategory })}
+        >
+          {CATEGORY_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {t(`achievements.categories.${option}`)}
+            </option>
+          ))}
+        </Select>
+        <Select label={t('achievements.form.tier')} value={form.tier} onChange={(event) => onChange({ tier: event.target.value as AchievementTier })}>
+          {TIER_OPTIONS.map((option) => (
+            <option key={option} value={option}>
+              {t(`achievements.tiers.${option}`)}
+            </option>
+          ))}
+        </Select>
+        <div className="flex flex-col justify-end gap-1">
+          <label className="flex min-h-11 items-center gap-2 text-body text-fg sm:min-h-9">
+            <input
+              type="checkbox"
+              checked={form.repeatable}
+              onChange={(event) => onChange({ repeatable: event.target.checked })}
+              className="size-4 accent-[var(--accent-fill)]"
+            />
+            {t('achievements.form.repeatable')}
+          </label>
+          <label className="flex min-h-11 items-center gap-2 text-body text-fg sm:min-h-9">
+            <input
+              type="checkbox"
+              checked={form.hidden}
+              onChange={(event) => onChange({ hidden: event.target.checked })}
+              className="size-4 accent-[var(--accent-fill)]"
+            />
+            {t('achievements.form.hidden')}
+          </label>
+        </div>
+        <div className="md:col-span-2">
+          <Textarea
+            label={t('achievements.form.criteria')}
             value={form.criteriaJson}
             onChange={(event) => onChange({ criteriaJson: event.target.value })}
             rows={8}
-            className="w-full px-3 py-2 border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary font-mono text-xs"
+            className="font-mono text-caption"
           />
-        </label>
+        </div>
       </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          type="button"
-          onClick={onSubmit}
-          disabled={busy}
-          className="px-3 py-2 bg-poke-accent text-poke-surface rounded-poke-md text-sm font-semibold disabled:opacity-60"
-        >
-          {busy ? t('achievements.form.saving') : submitLabel}
-        </button>
+      <div className="flex flex-wrap justify-end gap-3 border-t border-hairline pt-4">
         {onCancel && (
-          <button
-            type="button"
-            onClick={onCancel}
-            className="px-3 py-2 border border-poke-border text-poke-text-secondary rounded-poke-md text-sm font-semibold"
-          >
+          <Button variant="ghost" className={TOUCH} onClick={onCancel}>
             {tc('actions.cancel')}
-          </button>
+          </Button>
         )}
+        <Button variant="primary" className={TOUCH} onClick={onSubmit} disabled={busy}>
+          {busy ? t('achievements.form.saving') : submitLabel}
+        </Button>
       </div>
-    </section>
+    </div>
   );
 }
 
@@ -418,90 +384,23 @@ export default function AchievementDefinitionsManager() {
     [locale],
   );
 
-  const definitionColumns = useMemo((): Column<AchievementDefinition>[] => [
-    {
-      key: 'key',
-      header: t('achievements.list.columns.key'),
-      sortable: true,
-      sortValue: (d) => d.key,
-      render: (definition) => (
-        <span className="font-mono text-xs text-poke-text-primary">{definition.key}</span>
-      ),
-    },
-    {
-      key: 'name',
-      header: t('achievements.list.columns.name'),
-      sortable: true,
-      sortValue: (d) => d.name,
-      render: (definition) => {
-        const hint = catalogName(definition);
-        return (
-          <span className="text-poke-text-primary">
-            {definition.name}
-            {hint && (
-              <span className="block text-xs text-poke-text-tertiary">
-                {t('achievements.catalogHint', { name: hint })}
-              </span>
-            )}
-          </span>
-        );
-      },
-    },
-    {
-      key: 'tier',
-      header: t('achievements.list.columns.tier'),
-      sortable: true,
-      sortValue: (d) => d.tier,
-      render: (definition) => (
-        <span className="text-poke-text-secondary">
-          {t.dynamic(`achievements.tiers.${definition.tier}`, undefined, definition.tier)}
-        </span>
-      ),
-    },
-    {
-      key: 'category',
-      header: t('achievements.list.columns.category'),
-      sortable: true,
-      sortValue: (d) => d.category,
-      render: (definition) => (
-        <span className="text-poke-text-secondary">
-          {t.dynamic(`achievements.categories.${definition.category}`, undefined, definition.category)}
-        </span>
-      ),
-    },
-    {
-      key: 'criteria',
-      header: t('achievements.list.columns.criteria'),
-      render: (definition) => (
-        <code className="text-[11px] text-poke-text-tertiary">
-          {JSON.stringify(definition.criteria).slice(0, 100)}
-          {JSON.stringify(definition.criteria).length > 100 ? '…' : ''}
-        </code>
-      ),
-    },
-    {
-      key: 'actions',
-      header: t('achievements.list.columns.actions'),
-      render: (definition) => (
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => handleStartEdit(definition)}
-            className="px-2 py-1 text-xs border border-poke-border rounded-poke-md text-poke-text-secondary"
-          >
-            {tc('actions.edit')}
-          </button>
-          <button
-            type="button"
-            onClick={() => void handleDelete(definition)}
-            className="px-2 py-1 text-xs border border-red-300 rounded-poke-md text-red-600"
-          >
-            {tc('actions.delete')}
-          </button>
-        </div>
-      ),
-    },
-  ], [handleStartEdit, handleDelete, catalogName, t, tc]);
+  const sortConfigs = useMemo(
+    () => [
+      { key: 'key', accessor: (d: AchievementDefinition) => d.key },
+      { key: 'name', accessor: (d: AchievementDefinition) => d.name },
+      { key: 'tier', accessor: (d: AchievementDefinition) => d.tier },
+      { key: 'category', accessor: (d: AchievementDefinition) => d.category },
+    ],
+    [],
+  );
+  const table = useClientTable(definitions, sortConfigs, { key: 'key', direction: 'asc' });
+  const { sort } = table;
+  const sortableColumns: { key: string; header: string }[] = [
+    { key: 'key', header: t('achievements.list.columns.key') },
+    { key: 'name', header: t('achievements.list.columns.name') },
+    { key: 'tier', header: t('achievements.list.columns.tier') },
+    { key: 'category', header: t('achievements.list.columns.category') },
+  ];
 
   const errorText =
     error === null
@@ -516,59 +415,128 @@ export default function AchievementDefinitionsManager() {
 
   const editingDefinition = editingId ? definitions.find((d) => d.id === editingId) : undefined;
 
+  const errorBox = errorText && (
+    <Alert variant="error" className="mb-4">
+      {errorText}
+    </Alert>
+  );
+  const closeEdit = () => {
+    setEditingId(null);
+    setEditForm(EMPTY_FORM);
+  };
+
   return (
-    <div className="space-y-6">
-      {errorText && (
-        <div className="border border-red-300 bg-red-50 text-red-700 rounded-poke-md px-3 py-2 text-sm">
-          {errorText}
-        </div>
-      )}
+    <div className="space-y-8">
+      {!editingId && errorBox}
 
-      <DefinitionForm
-        title={t('achievements.form.createTitle')}
-        form={createForm}
-        onChange={(patch) => setCreateForm((prev) => ({ ...prev, ...patch }))}
-        onSubmit={() => void handleCreate()}
-        submitLabel={t('achievements.form.create')}
-        busy={busy}
-      />
-
-      <section className="bg-poke-surface border border-poke-border rounded-poke-lg overflow-hidden">
-        <div className="px-4 py-3 border-b border-poke-border">
-          <h3 className="text-sm font-heading font-bold text-poke-text-primary">{t('achievements.list.title')}</h3>
-        </div>
+      <section aria-labelledby="achievements-list-title" aria-busy={loading}>
+        <AdminSectionHeading
+          id="achievements-list-title"
+          icon="old-amber"
+          title={t('achievements.list.title')}
+          aside={!loading && <SkewChip>{definitions.length}</SkewChip>}
+        />
         {loading ? (
-          <p className="px-4 py-6 text-sm text-poke-text-tertiary">{t('achievements.list.loading')}</p>
+          <p className="text-body text-fg-muted">{t('achievements.list.loading')}</p>
         ) : definitions.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-poke-text-tertiary">{t('achievements.list.empty')}</p>
+          <AdminEmpty title={t('achievements.list.empty')} icon="old-amber" />
         ) : (
-          <div className="p-4">
-            <Table
-              columns={definitionColumns}
-              data={definitions}
-              keyExtractor={(definition) => definition.id}
-              emptyMessage={t('achievements.list.emptyTable')}
-              defaultSort={{ key: 'key', direction: 'asc' }}
+          <div className={TABLE_FRAME}>
+            <table className={TABLE}>
+              <caption className="sr-only">{t('achievements.list.title')}</caption>
+              <thead className={THEAD}>
+                <tr>
+                  {sortableColumns.map((column) => (
+                    <th key={column.key} scope="col" className={TH} aria-sort={ariaSort(sort, column.key)}>
+                      <SortHeadButton
+                        label={column.header}
+                        active={sort?.key === column.key}
+                        direction={sort?.key === column.key ? sort.direction : null}
+                        onClick={() => table.handleSort(column.key)}
+                      />
+                    </th>
+                  ))}
+                  <th scope="col" className={TH}>{t('achievements.list.columns.criteria')}</th>
+                  <th scope="col" className={cn(TH, 'xl:text-right')}>{t('achievements.list.columns.actions')}</th>
+                </tr>
+              </thead>
+              <tbody className={TBODY}>
+                {table.pageRows.map((definition) => {
+                  const hint = catalogName(definition);
+                  return (
+                    <tr key={definition.id} className={ROW}>
+                      <td className={NAME_CELL}>
+                        <span className="break-all font-mono text-caption text-fg">{definition.key}</span>
+                      </td>
+                      <td data-label={t('achievements.list.columns.name')} className={CELL}>
+                        <span className="min-w-0 break-words text-fg">
+                          {definition.name}
+                          {hint && <span className="block text-caption text-fg-muted">{t('achievements.catalogHint', { name: hint })}</span>}
+                        </span>
+                      </td>
+                      <td data-label={t('achievements.list.columns.tier')} className={CELL}>
+                        <span className="text-fg">
+                          {t.dynamic(`achievements.tiers.${definition.tier}`, undefined, definition.tier)}
+                        </span>
+                      </td>
+                      <td data-label={t('achievements.list.columns.category')} className={CELL}>
+                        <span className="text-fg">
+                          {t.dynamic(`achievements.categories.${definition.category}`, undefined, definition.category)}
+                        </span>
+                      </td>
+                      <td data-label={t('achievements.list.columns.criteria')} className={CELL}>
+                        <code className="min-w-0 break-all font-mono text-caption text-fg-muted">{JSON.stringify(definition.criteria)}</code>
+                      </td>
+                      <td className="block max-xl:col-span-2 max-xl:border-t max-xl:border-hairline max-xl:pt-2 xl:table-cell xl:px-3 xl:py-3 xl:align-top">
+                        <div className="flex flex-wrap gap-2 xl:justify-end">
+                          <Button size="sm" variant="secondary" className={TOUCH} onClick={() => handleStartEdit(definition)}>
+                            {tc('actions.edit')}
+                          </Button>
+                          <Button size="sm" variant="danger" className={TOUCH} onClick={() => void handleDelete(definition)}>
+                            {tc('actions.delete')}
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <TablePagination
+              className="border-t border-hairline px-3 py-3"
+              page={table.page}
+              totalPages={table.totalPages}
+              perPage={table.perPage}
+              totalItems={table.totalItems}
+              onPageChange={table.setPage}
+              onPerPageChange={table.handlePerPageChange}
             />
           </div>
         )}
       </section>
 
-      {editingId && (
+      <Section icon="scope-lens" title={t('achievements.form.createTitle')}>
         <DefinitionForm
-          title={t('achievements.form.editTitle')}
+          form={createForm}
+          onChange={(patch) => setCreateForm((prev) => ({ ...prev, ...patch }))}
+          onSubmit={() => void handleCreate()}
+          submitLabel={t('achievements.form.create')}
+          busy={busy}
+        />
+      </Section>
+
+      <AdminDialog open={editingId !== null} onClose={() => !busy && closeEdit()} title={t('achievements.form.editTitle')} size="lg">
+        {errorBox}
+        <DefinitionForm
           form={editForm}
           onChange={(patch) => setEditForm((prev) => ({ ...prev, ...patch }))}
           onSubmit={() => void handleSaveEdit()}
-          onCancel={() => {
-            setEditingId(null);
-            setEditForm(EMPTY_FORM);
-          }}
+          onCancel={closeEdit}
           submitLabel={t('achievements.form.saveChanges')}
           busy={busy}
           catalogHint={editingDefinition ? catalogName(editingDefinition) : null}
         />
-      )}
+      </AdminDialog>
     </div>
   );
 }

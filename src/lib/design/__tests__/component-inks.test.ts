@@ -28,7 +28,6 @@ const read = (path: string) => readFileSync(join(SRC, path), 'utf8');
 const STATIC_INK = /(?<![:\w-])(?:hover:)?text-(red-500|red-400|amber-600|yellow-700)\b/g;
 
 const MIGRATED: Record<string, string> = {
-  'app/admin/wiki/WikiModerationPanel.tsx': 'text-poke-danger-ink',
   'components/avatar/AiAvatarGenerator.tsx': 'text-poke-danger-ink',
   'components/avatar/AvatarBuilder.tsx': 'text-poke-danger-ink',
   'components/avatar/PhotoTransformPanel.tsx': 'text-poke-danger-ink',
@@ -36,9 +35,6 @@ const MIGRATED: Record<string, string> = {
   'components/wiki/WikiNotesSection.tsx': 'text-poke-danger-ink',
   'components/creator/studio/CastStudio.tsx': 'text-poke-danger-tint-ink',
   'components/creator/studio/SessionManager.tsx': 'text-poke-danger-tint-ink',
-  'components/discord/DiscordWebhookManager.tsx': 'text-poke-danger-tint-ink',
-  'components/social/SocialIntegrationManager.tsx': 'text-poke-danger-tint-ink',
-  'app/admin/test-players/TestPlayersConsole.tsx': 'text-poke-amber-ink',
   'components/league/LeagueRosterManager.tsx': 'text-poke-amber-ink',
   'components/teambuilder/LegalityBadge.tsx': 'text-poke-yellow-ink',
   'components/bracket/RoundRobinTable.tsx': 'text-poke-yellow-ink',
@@ -47,7 +43,21 @@ const MIGRATED: Record<string, string> = {
   'components/ui/Alert.tsx': 'text-poke-yellow-ink',
 };
 
+/** Files moved to the direction B tokens (redesign A12): no palette ink to require, but still no static status ink. */
+const REDESIGNED = [
+  'app/admin/wiki/WikiModerationPanel.tsx',
+  'components/discord/DiscordWebhookManager.tsx',
+  'components/social/SocialIntegrationManager.tsx',
+  'app/admin/test-players/TestPlayersConsole.tsx',
+];
+
 describe('component inks', () => {
+  for (const file of REDESIGNED) {
+    it(`${file} uses no static status ink`, () => {
+      expect(read(file).match(STATIC_INK) ?? []).toEqual([]);
+    });
+  }
+
   for (const [file, token] of Object.entries(MIGRATED)) {
     it(`${file} uses ${token} and no static status ink`, () => {
       const source = read(file);
