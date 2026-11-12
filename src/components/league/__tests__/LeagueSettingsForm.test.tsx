@@ -46,7 +46,15 @@ function submitButton(html: string): string {
 
 function render(initial: LeagueSettingsValues, formatLock: 'started' | 'point_buy' | null, locale?: 'de', rulesetLocked = false) {
   return renderWithI18n(
-    <LeagueSettingsForm seasonId="s1" initial={initial} rulesets={RULESETS} formatLock={formatLock} rulesetLocked={rulesetLocked} />,
+    <LeagueSettingsForm
+      seasonId="s1"
+      initial={initial}
+      rulesets={RULESETS}
+      formatLock={formatLock}
+      rulesetLocked={rulesetLocked}
+      title={locale === 'de' ? 'Liga-Daten' : 'League details'}
+      subtitle=""
+    />,
     { locale },
   );
 }
@@ -171,7 +179,7 @@ describe('LeagueSettingsForm', () => {
 
   it('matches the create form wording for the shared fields', () => {
     const html = renderToStaticMarkup(
-      <LeagueSettingsForm seasonId="s1" initial={CLASSIC} rulesets={RULESETS} formatLock={null} rulesetLocked={false} />,
+      <LeagueSettingsForm seasonId="s1" initial={CLASSIC} rulesets={RULESETS} formatLock={null} rulesetLocked={false} title="League details" subtitle="" />,
     );
 
     expect(html).toContain('League Name');

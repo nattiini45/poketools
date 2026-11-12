@@ -270,6 +270,24 @@ export default {
     rulesetEditHint:
       'The default for new phases and for team validation where a phase has no custom ruleset of its own. Existing phases keep theirs.',
   },
+  // The save bar and the section index of the Settings tab (LeagueSettingsForm, SettingsPanel)
+  settingsBar: {
+    clean: 'No unsaved changes',
+    /** `{fields}` = the changed fields of the league details as a list ("Name and End date"). */
+    unsaved: 'Not saved yet: {fields}',
+    fields: {
+      name: 'Name',
+      formatType: 'League type',
+      rulesetId: 'Battle ruleset',
+      startDate: 'Start date',
+      endDate: 'End date',
+    },
+    nameMissing: 'Enter a league name to save.',
+    discard: 'Discard',
+    /** The chip on a section whose control saves as soon as it changes. */
+    savesOnChange: 'Saves on change',
+    sections: 'Settings sections',
+  },
   theme: {
     label: 'Theme',
     auto: 'Auto (format default)',

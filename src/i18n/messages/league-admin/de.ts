@@ -240,6 +240,21 @@ export default defineDe<typeof en>()({
     rulesetEditHint:
       'Der Standard für neue Phasen und für die Teamprüfung, wo eine Phase kein eigenes Custom-Regelwerk hat. Bestehende Phasen behalten ihres.',
   },
+  settingsBar: {
+    clean: 'Keine ungespeicherten Änderungen',
+    unsaved: 'Noch nicht gespeichert: {fields}',
+    fields: {
+      name: 'Name',
+      formatType: 'Liga-Typ',
+      rulesetId: 'Battle-Regelwerk',
+      startDate: 'Startdatum',
+      endDate: 'Enddatum',
+    },
+    nameMissing: 'Gib einen Liga-Namen ein, um zu speichern.',
+    discard: 'Verwerfen',
+    savesOnChange: 'Speichert sofort',
+    sections: 'Abschnitte der Einstellungen',
+  },
   theme: {
     label: 'Thema',
     auto: 'Automatisch (Standard des Formats)',

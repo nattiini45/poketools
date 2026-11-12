@@ -894,6 +894,36 @@
       ]
     },
     {
+      "id": "admin-league-epb-settings",
+      "url": "/admin/leagues/{leagueEpb}?tab=settings",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueEpb"
+      ]
+    },
+    {
+      "id": "admin-league-custom-settings",
+      "url": "/admin/leagues/{leagueCustom}?tab=settings",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": [
+        "leagueCustom"
+      ]
+    },
+    {
       "id": "admin-league-participants",
       "url": "/admin/leagues/{leagueSakura}?tab=participants",
       "fullPage": true,

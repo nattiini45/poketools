@@ -64,7 +64,7 @@ export default function ContentLanguageControl({ seasonId, currentLanguage }: Co
   }
 
   return (
-    <div className="max-w-xs space-y-2">
+    <div className="flex max-w-xs flex-col gap-2">
       <Select
         label={tForm('form.contentLanguage')}
         value={language}
@@ -72,11 +72,11 @@ export default function ContentLanguageControl({ seasonId, currentLanguage }: Co
         options={options}
         disabled={saving}
       />
-      <p className="text-xs text-poke-text-muted" role="status" aria-live="polite">
+      <p className="text-caption text-fg-muted empty:hidden" role="status" aria-live="polite">
         {saving ? t('language.saving') : saved ? t('language.saved') : null}
       </p>
       {error && (
-        <p className="text-xs text-poke-danger" role="alert">
+        <p className="text-caption text-loss" role="alert">
           {error.error || error.code ? errorText(error) : t('language.saveFailed')}
         </p>
       )}

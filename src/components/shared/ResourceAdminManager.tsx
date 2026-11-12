@@ -7,6 +7,7 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { uiMessages } from '@/i18n/messages/ui';
 import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
 import Combobox, { type ComboboxOption } from '@/components/ui/Combobox';
 import {
   PLAYER_SEARCH_MIN_QUERY,
@@ -164,40 +165,40 @@ export default function ResourceAdminManager({
   }
 
   if (loading) {
-    return <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.loading')}</p>;
+    return <p className="text-body text-fg-muted">{t('resourceAdmins.loading')}</p>;
   }
 
   const scope = resourceType === 'season' ? { seasonId: resourceId } : { tournamentId: resourceId };
 
   return (
-    <div className="space-y-3">
+    <div className="flex max-w-lg flex-col gap-3">
       {admins.length === 0 ? (
         // A failed load is not "no admins": the alert below says why the list is missing.
-        loadFailure ? null : <p className="text-sm text-poke-text-secondary">{t('resourceAdmins.none')}</p>
+        loadFailure ? null : <p className="text-body text-fg-muted">{t('resourceAdmins.none')}</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-hairline border-y border-hairline">
           {admins.map((admin) => (
-            <li
-              key={admin.id}
-              className="flex items-center justify-between p-2 border border-poke-border rounded text-sm"
-            >
-              <span>{admin.player_name}</span>
-              <button
+            <li key={admin.id} className="flex min-h-11 items-center justify-between gap-3 py-1 text-body text-fg">
+              <span className="min-w-0 break-words">{admin.player_name}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="min-h-11 shrink-0 text-loss sm:min-h-0"
                 onClick={() => handleRemove(admin.player_id)}
                 disabled={saving}
-                className="text-red-400 hover:text-red-300 text-xs disabled:opacity-50"
               >
                 {t('resourceAdmins.remove')}
-              </button>
+              </Button>
             </li>
           ))}
         </ul>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         <Combobox
           mode="async"
-          className="flex-1"
+          className="min-w-48 flex-1"
           value={selected?.name ?? ''}
           onChange={(id) => {
             const hit = id ? seenHits.current.get(id) ?? null : null;
@@ -215,13 +216,9 @@ export default function ResourceAdminManager({
             </span>
           )}
         />
-        <button
-          onClick={handleAdd}
-          disabled={!selected || saving}
-          className="px-3 py-1.5 bg-blue-600 text-white rounded text-sm hover:bg-blue-700 disabled:opacity-50"
-        >
+        <Button type="button" variant="secondary" className="min-h-11 sm:min-h-0" onClick={handleAdd} disabled={!selected || saving}>
           {t('resourceAdmins.add')}
-        </button>
+        </Button>
       </div>
       {loadFailure && (
         <Alert variant="error">{t('resourceAdmins.loadFailed', { reason: errorText(loadFailure) })}</Alert>
