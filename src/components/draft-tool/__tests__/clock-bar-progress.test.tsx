@@ -69,6 +69,15 @@ describe('ClockBar round progress', () => {
     );
   });
 
+  it("shows the participant's points left, and nothing for a viewer who is no participant", () => {
+    const dto = snapshot();
+    expect(clockBar(dto)).toContain('150 P left');
+    expect(clockBar(dto, 'de')).toContain('150 P übrig');
+    expect(clockBar(dto)).toContain('8 picks left to fill your roster');
+    const spectator = clockBar({ ...dto, viewer: { ...dto.viewer, player_id: null, is_participant: false } });
+    expect(spectator).not.toContain('P left');
+  });
+
   it('speaks German', () => {
     expect(clockBar(snapshot(), 'de')).toContain('Runde 2 von 9 · Pick 1 von 2');
     expect(clockBar(makeupSnapshot(), 'de')).toContain('Nachhol-Pick (Runde 2)');
