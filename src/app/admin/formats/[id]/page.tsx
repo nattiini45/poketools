@@ -21,7 +21,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0';
 
 /**
  * `/admin/formats/[id]`: the read-only page of one stored format. The gate is `gateFormatDefinition`: a malformed

@@ -610,7 +610,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
           )}
           <Link
             href={namedChoice !== undefined ? rulesetReadOnlyHref(namedChoice.definition_id ?? namedChoice.id) : RULESETS_HREF}
-            className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
           >
             {t('inspector.stage.openStudio')}
           </Link>

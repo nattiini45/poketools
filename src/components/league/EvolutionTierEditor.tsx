@@ -20,6 +20,7 @@ import { draftLegacyLeagueAdminEvolutionMessages } from '@/i18n/messages/draft/l
 import type evolutionEn from '@/i18n/messages/draft/legacy/league-admin/evolution/en';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { formatPack } from '@/lib/format-pack';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 interface EvolutionTierEditorProps {
   seasonId: string;
@@ -701,7 +702,7 @@ export default function EvolutionTierEditor({
 
       {/* ── Summary ───────────────────────────────────────── */}
       {(tiers.length > 0 || wildcards.length > 0) && (
-        <Alert variant="info">
+        <Alert variant="info" className={INFO_CALLOUT}>
           {t.rich('tierEditor.summaryLines', { count: tiers.length, b: (chunks) => <strong>{chunks}</strong> })}
           {POWER_TIERS.map((pt) => {
             const count = tiersByPower[pt].length;

@@ -567,7 +567,7 @@ export default function PlayerRoster({ canManageCreators, protectedPlayerId = nu
         ) : (
           <span className="space-x-2">
             {player.id !== protectedPlayerId && (
-              <button type="button" onClick={() => startEditing(player)} className="text-poke-blue text-sm hover:underline">
+              <button type="button" onClick={() => startEditing(player)} className="text-accent-ink text-sm hover:underline">
                 {t('players.rowActions.edit')}
               </button>
             )}
@@ -581,7 +581,7 @@ export default function PlayerRoster({ canManageCreators, protectedPlayerId = nu
                   setLinkSearch('');
                   setLinkResults([]);
                 }}
-                className="text-poke-blue text-sm hover:underline"
+                className="text-accent-ink text-sm hover:underline"
               >
                 {t('players.rowActions.linkAccount')}
               </button>

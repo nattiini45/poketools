@@ -14,6 +14,7 @@ import { adminToolsMessages } from '@/i18n/messages/admin-tools';
 import { commonMessages } from '@/i18n/messages/common';
 import { noteModerationMachine, noteModerationState } from '@/lib/wiki/note-moderation-state';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
+import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 
 type ApiPayload<T> =
   | { success: true; data: T }
@@ -159,7 +160,7 @@ export function RejectedNoteCard({ note, isSuperadmin, onApprove, onDelete, onBl
             {t('wiki.allowResubmission')}
           </Button>
         )}
-        <Button type="button" size="sm" variant="danger" onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
+        <Button type="button" size="sm" variant="secondary" className={DANGER_OUTLINE} onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
       </div>
     </Card>
   );
@@ -371,7 +372,7 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                 {offers(note, 'reject') && (
                   <Button type="button" size="sm" variant="secondary" onClick={() => void rejectNote(note)}>{t('wiki.reject')}</Button>
                 )}
-                <Button type="button" size="sm" variant="danger" onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
+                <Button type="button" size="sm" variant="secondary" className={DANGER_OUTLINE} onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
               </div>
             </Card>
           ))}

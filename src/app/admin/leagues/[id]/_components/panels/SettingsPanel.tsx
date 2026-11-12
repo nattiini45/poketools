@@ -56,7 +56,14 @@ export async function settingsPanel({ id, league, playerId, isSiteAdmin, t }: Le
     endDate: league.end_date?.slice(0, 10) ?? '',
   };
 
-  const savesOnChange = <SkewChip>{tForm('settingsBar.savesOnChange')}</SkewChip>;
+  const savesOnChange = (
+    <SkewChip>
+      <span className="group-has-[[data-saving=true]]/section:hidden">{tForm('settingsBar.savesOnChange')}</span>
+      <span role="status" aria-live="polite" className="hidden group-has-[[data-saving=true]]/section:inline">
+        {tForm('settingsBar.saving')}
+      </span>
+    </SkewChip>
+  );
   const index: SettingsIndexItem[] = [
     { id: 'settings-details', icon: 'everstone', label: t('settings.details.title'), marksUnsaved: true },
     { id: 'settings-language', icon: 'poke-flute', label: t('language.title') },

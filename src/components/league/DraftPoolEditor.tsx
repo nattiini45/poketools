@@ -17,6 +17,7 @@ import type poolEn from '@/i18n/messages/draft/legacy/league-admin/pool/en';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { unsavedMarker } from '@/lib/league-admin/unsaved';
 import { poolEditorDirty } from '@/lib/league-admin/form-dirty';
+import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 
 interface DraftPoolEditorProps {
   seasonId: string;
@@ -488,7 +489,8 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                   {t('poolEditor.clearConfirm', { count: entries.length })}
                 </span>
                 <Button
-                  variant="danger"
+                  variant="secondary"
+                  className={DANGER_OUTLINE}
                   size="sm"
                   onClick={handleClearAll}
                   loading={clearing}

@@ -45,3 +45,9 @@ const NATIVE_BASE = 'inline-flex items-center justify-center gap-2 whitespace-no
 export const NATIVE_PLATE = `${NATIVE_BASE} relative isolate px-4 font-[550] text-tier-ink active:translate-y-px before:absolute before:inset-0 before:-z-1 before:rounded-[3px] before:bg-accent-fill before:[transform:skewX(var(--skew))] before:motion-safe:transition-[filter] before:motion-safe:duration-80 hover:before:brightness-105 focus-visible:outline-none focus-visible:before:outline-2 focus-visible:before:outline-solid focus-visible:before:outline-offset-2 focus-visible:before:outline-[var(--focus-ring)]`;
 export const NATIVE_SECONDARY = `${NATIVE_BASE} rounded-poke-md border border-hairline-strong bg-surface px-3 text-fg hover:bg-hover motion-safe:transition-colors motion-safe:duration-80 ${FOCUS}`;
 export const NATIVE_GHOST = `${NATIVE_BASE} rounded-poke-md px-3 text-fg-muted hover:bg-hover hover:text-fg motion-safe:transition-colors motion-safe:duration-80 ${FOCUS}`;
+
+/** A destructive lifecycle action (delete, reset): an outline in the danger colour, never a solid red fill. */
+export const DANGER_OUTLINE = 'border-poke-danger bg-transparent text-poke-danger-ink shadow-none hover:bg-poke-danger-light';
+
+/** An informational callout in the warm family, replacing the legacy blue `Alert` info tint. */
+export const INFO_CALLOUT = 'border-hairline bg-elevated text-fg';
