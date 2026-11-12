@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, type ReactNode } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { useDataLocale, useT } from '@/i18n/client';
 import { draftLegacyMessages } from '@/i18n/messages/draft/legacy';
@@ -264,7 +265,7 @@ function CollapsibleSection({
         aria-expanded={open}
       >
         {title}
-        <span className="text-poke-text-muted">{open ? '▾' : '▸'}</span>
+        <span className="text-poke-text-muted">{open ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</span>
       </button>
       {open && <div className="border-t border-poke-border p-4">{children}</div>}
     </div>

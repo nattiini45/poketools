@@ -31,7 +31,7 @@ function render(momentCount: number, locale: 'en' | 'de' = 'en') {
 }
 
 function momentButtons(html: string): string[] {
-  return html.match(/<button type="button"[^>]*>[^<]*<\/button>/g)?.filter((b) => b.includes('px-3 py-1.5')) ?? [];
+  return html.match(/<button type="button"[^>]*>.*?<\/button>/g)?.filter((b) => b.includes('px-3 py-1.5')) ?? [];
 }
 
 describe('TrackerControls moment bounds', () => {

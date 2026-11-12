@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -144,7 +145,7 @@ export default function TournamentReportCard({
             <p className="text-sm font-heading font-medium text-poke-text-primary truncate">{headline}</p>
           </div>
         </div>
-        <span className="text-poke-text-muted text-xs shrink-0 ml-2">{expanded ? '▲' : '▼'}</span>
+        <span className="text-poke-text-muted text-xs shrink-0 ml-2">{expanded ? <ChevronUp aria-hidden="true" className="size-4" /> : <ChevronDown aria-hidden="true" className="size-4" />}</span>
       </button>
 
       {expanded && (

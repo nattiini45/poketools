@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { useT } from '@/i18n/client';
 import { draftLegacyEvolutionMessages } from '@/i18n/messages/draft/legacy/evolution';
@@ -41,7 +42,7 @@ export default function DecisionMatchPanel({
         <span className="text-sm font-semibold text-amber-400">
           {t('decision.title')}
         </span>
-        <span className="text-xs text-poke-text-muted">{expanded ? '▾' : '▸'}</span>
+        <span className="text-xs text-poke-text-muted">{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</span>
       </button>
       {expanded && (
         <div className="mt-2 space-y-2 text-sm text-poke-text-secondary">

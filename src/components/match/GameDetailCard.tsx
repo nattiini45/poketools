@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Star } from 'lucide-react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import PokemonLink from '@/components/shared/PokemonLink';
 import AnimatedSprite from '@/components/shared/AnimatedSprite';
@@ -109,7 +110,7 @@ function PlayerTeamColumn({
   return (
     <div className="flex-1 min-w-0">
       <h3 className={`mb-2 font-heading text-title ${isWinner ? 'text-win' : 'text-fg-muted'}`}>
-        {playerName} {isWinner && '★'}
+        {playerName} {isWinner && <Star aria-hidden="true" className="inline size-4 fill-current align-text-top" />}
       </h3>
       <div className="space-y-0.5">
         {sorted.map((stat, i) => (
