@@ -44,6 +44,11 @@ export default defineDe<typeof en>()({
     roundPick: 'Runde {round} · Pick {pick}',
     roundOf: 'Runde {round} von {rounds} · Pick {pick} von {picks}',
     overall: 'Pick {pick} von {total}',
+    pointsLeft: '{n} P übrig',
+    pointsLeftTitle: {
+      one: '{n} Punkte übrig, noch {count} Pick bis dein Kader voll ist',
+      other: '{n} Punkte übrig, noch {count} Picks bis dein Kader voll ist',
+    },
     seatTrack: 'Runde {round}: {done} von {total} Picks gemacht',
     makeupFor: 'Nachhol-Pick (Runde {round})',
     next: 'Danach: {player}',

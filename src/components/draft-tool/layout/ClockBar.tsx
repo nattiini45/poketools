@@ -140,6 +140,14 @@ export default function ClockBar({
             <span className={`${styles.digits} text-xs font-medium text-[var(--draft-ink-2)]`}>
               {t('clock.overall', { pick: progress.overallPick, total: progress.overallTotal })}
             </span>
+            {vm.viewer.budgetRemaining !== null ? (
+              <span
+                className={`${styles.pointsChip} ${styles.digits}`}
+                title={t('clock.pointsLeftTitle', { n: vm.viewer.budgetRemaining, count: Math.max(0, vm.viewer.slotsTotal - vm.viewer.picksMade) })}
+              >
+                {t('clock.pointsLeft', { n: vm.viewer.budgetRemaining })}
+              </span>
+            ) : null}
           </span>
         </div>
       ) : null}
