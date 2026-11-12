@@ -3,6 +3,7 @@ import { assertValidUuid } from '@/lib/utils/uuid';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { isUniqueViolationOf } from '../unique-violation';
 import { readAllPages } from '../read-all-pages';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { Tables, TablesInsert } from '@/types/database';
 import type { Game, GameCreateInput, BattleStat, BattleStatInsert, AggregateScope } from '@/types/game';
 import type { PlayerBattleStatRow } from '@/types/profile';
@@ -749,20 +750,24 @@ async function fetchBattleStatsForPlayerInScope(
 export async function getPlayerBattleStats(
   playerId: string
 ): Promise<PlayerBattleStatRow[]> {
-  const { data, error } = await supabase
-    .from('battle_stats')
-    .select(`
-      pokemon_name, kos_dealt, was_koed, match_won,
-      games!inner (
-        matches!inner ( tournament_id )
-      )
-    `)
-    .eq('player_id', playerId)
-    .limit(500);
+  const { rows } = await readBoundedPages(
+    (from, to) =>
+      supabase
+        .from('battle_stats')
+        .select(`
+          pokemon_name, kos_dealt, was_koed, match_won,
+          games!inner (
+            matches!inner ( tournament_id )
+          )
+        `)
+        .eq('player_id', playerId)
+        .order('created_at', { ascending: true })
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: `getPlayerBattleStats ${playerId}` }
+  );
 
-  if (error) throw error;
-
-  return data.map((row) => {
+  return rows.map((row) => {
     const games = row.games as unknown as {
       matches: { tournament_id: string };
     };

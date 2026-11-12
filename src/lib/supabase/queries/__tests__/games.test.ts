@@ -330,9 +330,9 @@ describe('getOpponentBattleStatsInTournament', () => {
 
 describe('getPlayerBattleStats', () => {
   it('returns mapped player stats with tournament_id', async () => {
-    // Chain: from('battle_stats').select().eq('player_id').limit()
-    // .eq returns builder (default), .limit is terminal
-    mockBuilder.limit.mockReturnValueOnce({
+    // Chain: from('battle_stats').select().eq('player_id').order().order().range()
+    // .range is terminal (paged by readBoundedPages)
+    mockBuilder.range.mockReturnValueOnce({
       data: [
         {
           pokemon_name: 'Pikachu',
@@ -355,7 +355,7 @@ describe('getPlayerBattleStats', () => {
   });
 
   it('throws on database error', async () => {
-    mockBuilder.limit.mockReturnValueOnce({ data: null, error: new Error('stats err') });
+    mockBuilder.range.mockReturnValueOnce({ data: null, error: new Error('stats err') });
     await expect(getPlayerBattleStats('p-1')).rejects.toThrow('stats err');
   });
 });
