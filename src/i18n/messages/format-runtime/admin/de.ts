@@ -32,6 +32,8 @@ export default defineDe<typeof en>()({
     moreOpen: 'Weitere offene Prüfungen anzeigen',
     rule: 'Regel: {rule}',
     opened: 'Geöffnet',
+    caption: 'Offene Prüfungen',
+    columns: { check: 'Details', source: 'Art', opened: 'Geöffnet', verdict: 'Urteil' },
     openMatch: 'Spiel öffnen',
     unknownStage: 'einer Stage',
     unknownRound: '?',

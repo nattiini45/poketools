@@ -100,7 +100,7 @@ function ReasonForm({ message, confirmLabel, error, pending, typedConfirmation, 
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="space-y-2 text-sm text-poke-text-secondary">{message}</div>
+      <div className="space-y-2 text-body text-fg-muted">{message}</div>
       {typedConfirmation !== undefined && (
         <Input
           label={typedConfirmation.label}
@@ -118,7 +118,7 @@ function ReasonForm({ message, confirmLabel, error, pending, typedConfirmation, 
         disabled={pending}
         rows={3}
       />
-      <p id={counterId} className={`text-xs ${tooLong ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
+      <p id={counterId} className={`text-caption ${tooLong ? 'text-loss' : 'text-fg-muted'}`}>
         {t('adjust.reason.counter', { used: length, max: TEXT_MAX })}
       </p>
       {error !== null && <Alert variant="error">{error}</Alert>}

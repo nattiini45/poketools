@@ -249,25 +249,25 @@ export default function DraftControlPanel({
                 aria-controls={selected ? poolPanelId(idBase) : undefined}
                 tabIndex={selected ? 0 : -1}
                 onClick={() => setActive(tab.id)}
-                className={`min-h-11 rounded-poke-md border px-3 py-1.5 text-sm focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-0 ${
+                className={`min-h-11 rounded-poke-lg border px-3 py-1.5 text-body focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0 ${
                   selected
-                    ? 'border-poke-accent bg-poke-accent text-poke-surface'
-                    : 'border-poke-border bg-poke-elevated text-poke-text-primary hover:border-poke-accent'
+                    ? 'border-transparent bg-tier-1 font-[550] text-tier-ink'
+                    : 'border-hairline bg-surface text-fg hover:border-accent-ink hover:bg-hover'
                 }`}
               >
                 {tabLabel(tab)}
-                {p ? <span className="ml-2 text-xs opacity-80">{t(`panel.phase.${p.phase}`)}</span> : null}
+                {p ? <span className="ml-2 text-caption opacity-80">{t(`panel.phase.${p.phase}`)}</span> : null}
               </button>
             );
           })}
         </div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          <Link href={roomHref} className="inline-flex min-h-11 items-center text-poke-accent hover:underline sm:min-h-0">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-body">
+          <Link href={roomHref} className="inline-flex min-h-11 items-center font-[550] text-fg underline-offset-2 hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0">
             {t('panel.openRoom')}
           </Link>
           <Link
             href={pool ? `${links.audit}?pool=${encodeURIComponent(pool.id)}` : links.audit}
-            className="inline-flex min-h-11 items-center text-poke-accent hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center font-[550] text-fg underline-offset-2 hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0"
           >
             {tGlossary('draft.auditTrail')}
           </Link>
@@ -300,7 +300,7 @@ export default function DraftControlPanel({
         <p className={HINT}>{t('panel.tokensMoved')}</p>
         <Link
           href={leagueAdminHref(seasonId, 'draft')}
-          className="inline-flex min-h-11 items-center text-sm font-medium text-poke-accent hover:underline sm:min-h-0"
+          className="inline-flex min-h-11 items-center text-body font-[550] text-fg underline-offset-2 hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0"
         >
           {t('panel.tokensLink')}
         </Link>

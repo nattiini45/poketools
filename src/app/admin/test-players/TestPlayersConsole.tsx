@@ -3,10 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import { SortHeadButton, ariaSort } from '@/components/admin/SortIcon';
+import { TablePagination } from '@/components/ui/Table';
+import { useClientTable } from '@/lib/ui/use-client-table';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
+import { cn } from '@/lib/utils/cn';
 import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
-import Table, { type Column } from '@/components/ui/Table';
+import type { Column } from '@/components/ui/Table';
 import type { ApiError, ApiResult } from '@/types/api';
 import type { Player } from '@/types/player';
 import { useT } from '@/i18n/client';
@@ -62,12 +69,10 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
       sortable: true,
       sortValue: (row) => row.name.toLowerCase(),
       render: (player) => (
-        <>
-          <span className="font-heading font-semibold text-poke-text-primary">{player.name}</span>
-          <span className="ml-2 inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-poke-amber-ink">
-            {t('table.testBadge')}
-          </span>
-        </>
+        <span className="inline-flex flex-wrap items-center gap-2 break-words">
+          <span className="font-heading text-subtitle text-fg xl:text-body">{player.name}</span>
+          <SkewChip tone="tier-1">{t('table.testBadge')}</SkewChip>
+        </span>
       ),
     },
     {
@@ -75,19 +80,17 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
       header: t('table.psUsername'),
       sortable: true,
       sortValue: (row) => row.ps_username?.toLowerCase() ?? '',
-      render: (player) => (
-        <span className="font-mono text-xs">{player.ps_username || '—'}</span>
-      ),
+      render: (player) => <span className="break-all font-mono text-caption text-fg">{player.ps_username || '—'}</span>,
     },
     {
       key: 'login',
       header: t('table.login'),
       render: (player) => (
-        <span className="text-xs">
+        <span className="text-caption">
           {player.auth_user_id ? (
-            <span className="text-emerald-600">{t('table.loginEnabled')}</span>
+            <span className="text-win">{t('table.loginEnabled')}</span>
           ) : (
-            <span className="text-poke-text-muted">{t('table.loginDisabled')}</span>
+            <span className="text-fg-muted">{t('table.loginDisabled')}</span>
           )}
         </span>
       ),
@@ -96,10 +99,11 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
       key: 'actions',
       header: t('table.actions'),
       render: (player) => (
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 xl:justify-end">
           <Button
             size="sm"
             variant="secondary"
+            className={TOUCH}
             loading={busyAction === `reset:${player.id}`}
             onClick={() => onPlayerAction(player, 'reset')}
           >
@@ -108,6 +112,7 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
           <Button
             size="sm"
             variant="secondary"
+            className={TOUCH}
             loading={busyAction === `mint_login:${player.id}`}
             onClick={() => onPlayerAction(player, 'mint_login')}
           >
@@ -117,6 +122,7 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
             <Button
               size="sm"
               variant="secondary"
+              className={TOUCH}
               loading={busyAction === `clear_login:${player.id}`}
               onClick={() => onPlayerAction(player, 'clear_login')}
             >
@@ -126,6 +132,7 @@ export function buildPlayerColumns(deps: PlayerColumnDeps): Column<Player>[] {
           <Button
             size="sm"
             variant="secondary"
+            className={TOUCH}
             loading={busyAction === `remove_from_league:${player.id}`}
             disabled={!seasonId.trim()}
             aria-label={t('actions.removeFromSeasonLabel', { name: player.name })}
@@ -148,23 +155,84 @@ interface TestPlayersTableProps {
   onRemoveFromSeason: (player: Player) => void;
 }
 
-/** The test accounts with their per-player actions (presentational). */
+/** The test accounts with their per-player actions (presentational); the list sorts by name until a header says otherwise. */
 export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRemoveFromSeason }: TestPlayersTableProps) {
   const t = useT(adminTestPlayersMessages);
-
   const playerColumns = useMemo(
     () => buildPlayerColumns({ t, busyAction, seasonId, onPlayerAction: onAction, onRemoveFromSeason }),
     [t, busyAction, seasonId, onAction, onRemoveFromSeason],
   );
+  const sortConfigs = useMemo(
+    () =>
+      playerColumns
+        .filter((column) => column.sortable)
+        .map((column) => ({ key: column.key, accessor: (row: Player) => column.sortValue?.(row) })),
+    [playerColumns],
+  );
+  const table = useClientTable(players, sortConfigs, { key: 'name', direction: 'asc' });
+  const { sort } = table;
+
+  if (players.length === 0) return <AdminEmpty title={t('standard.tableEmpty')} />;
 
   return (
-    <Table
-      columns={playerColumns}
-      data={players}
-      keyExtractor={(player) => player.id}
-      emptyMessage={t('standard.tableEmpty')}
-      defaultSort={{ key: 'name', direction: 'asc' }}
-    />
+    <div className={TABLE_FRAME}>
+      <table className={TABLE}>
+        <caption className="sr-only">{t('standard.title')}</caption>
+        <thead className={THEAD}>
+          <tr>
+            {playerColumns.map((column) => (
+              <th
+                key={column.key}
+                scope="col"
+                className={cn(TH, column.key === 'actions' && 'xl:text-right')}
+                aria-sort={column.sortable ? ariaSort(sort, column.key) : undefined}
+              >
+                {column.sortable ? (
+                  <SortHeadButton
+                    label={column.header}
+                    active={sort?.key === column.key}
+                    direction={sort?.key === column.key ? sort.direction : null}
+                    onClick={() => table.handleSort(column.key)}
+                  />
+                ) : (
+                  column.header
+                )}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className={TBODY}>
+          {table.pageRows.map((player, index) => (
+            <tr key={player.id} className={ROW}>
+              {playerColumns.map((column) => {
+                const cell = column.render?.(player, index);
+                if (column.key === 'name') return <td key={column.key} className={NAME_CELL}>{cell}</td>;
+                if (column.key === 'actions')
+                  return (
+                    <td key={column.key} className="block max-xl:col-span-2 max-xl:border-t max-xl:border-hairline max-xl:pt-2 xl:table-cell xl:px-3 xl:py-3 xl:align-top">
+                      {cell}
+                    </td>
+                  );
+                return (
+                  <td key={column.key} data-label={column.header} className={CELL}>
+                    {cell}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <TablePagination
+        className="border-t border-hairline px-3 py-3"
+        page={table.page}
+        totalPages={table.totalPages}
+        perPage={table.perPage}
+        totalItems={table.totalItems}
+        onPageChange={table.setPage}
+        onPerPageChange={table.handlePerPageChange}
+      />
+    </div>
   );
 }
 
@@ -345,19 +413,19 @@ export default function TestPlayersConsole() {
 
   return (
     <div className="space-y-6">
-      <Section title={t('standard.title')}>
-        <p className="text-sm text-poke-text-muted mb-4">
+      <Section title={t('standard.title')} icon="poke-doll">
+        <p className="mb-4 text-body text-fg-muted">
           {t.rich('standard.intro', {
             code: (chunks) => (
-              <code className="px-1 py-0.5 rounded bg-poke-surface border border-poke-border">{chunks}</code>
+              <code className="rounded-poke-sm border border-hairline bg-sunken px-1 py-0.5 font-mono text-caption">{chunks}</code>
             ),
           })}
         </p>
-        <div className="flex flex-wrap gap-3 mb-4">
-          <Button onClick={handleEnsure} loading={busyAction === 'ensure'}>
+        <div className="mb-4 flex flex-wrap gap-3">
+          <Button className={TOUCH} onClick={handleEnsure} loading={busyAction === 'ensure'}>
             {t('standard.ensure')}
           </Button>
-          <Button onClick={() => void loadPlayers()} variant="secondary" disabled={loading}>
+          <Button className={TOUCH} onClick={() => void loadPlayers()} variant="secondary" disabled={loading}>
             {t('standard.refresh')}
           </Button>
         </div>
@@ -366,21 +434,23 @@ export default function TestPlayersConsole() {
         {minted && (
           <Alert variant="success" className="mb-4">
             <div>
-              <div className="font-heading font-semibold mb-1">{minted.email}</div>
-              <div className="font-mono text-sm break-all">{minted.password}</div>
-              <div className="text-xs text-poke-text-muted mt-1">
+              <div className="mb-1 break-all font-heading text-subtitle">{minted.email}</div>
+              <div className="break-all font-mono text-body">{minted.password}</div>
+              <div className="mt-1 text-caption text-fg-muted">
                 {t('standard.mintedNote')}
               </div>
             </div>
           </Alert>
         )}
 
-        {loading && <p className="text-sm text-poke-text-muted">{t('standard.loading')}</p>}
+        {loading && <p className="text-body text-fg-muted">{t('standard.loading')}</p>}
         {listError && <Alert variant="error">{errorText(t, apiErrorText, listError)}</Alert>}
         {!loading && players.length === 0 && (
-          <p className="text-sm text-poke-text-muted">
-            {t.rich('standard.empty', { strong: (chunks) => <strong>{chunks}</strong> })}
-          </p>
+          <AdminEmpty title={t('standard.tableEmpty')}>
+            <p className="max-w-prose text-body text-fg-muted">
+              {t.rich('standard.empty', { strong: (chunks) => <strong>{chunks}</strong> })}
+            </p>
+          </AdminEmpty>
         )}
         {players.length > 0 && (
           <TestPlayersTable
@@ -393,8 +463,8 @@ export default function TestPlayersConsole() {
         )}
       </Section>
 
-      <Section title={t('season.title')}>
-        <p className="text-sm text-poke-text-muted mb-4">
+      <Section title={t('season.title')} icon="old-amber">
+        <p className="mb-4 text-body text-fg-muted">
           {t.rich('season.intro', { strong: (chunks) => <strong>{chunks}</strong> })}
         </p>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
@@ -406,6 +476,7 @@ export default function TestPlayersConsole() {
           />
           <Button
             variant="secondary"
+            className={TOUCH}
             loading={busyAction === 'delete_test_matches'}
             disabled={!seasonId.trim()}
             onClick={handleDeleteTestMatches}

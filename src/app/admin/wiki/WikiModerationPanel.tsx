@@ -1,10 +1,15 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Card from '@/components/ui/Card';
+import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
-import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import SkewChip from '@/components/ui/SkewChip';
+import Textarea from '@/components/ui/Textarea';
+import AdminDialog from '@/components/admin/AdminDialog';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
+import { TOUCH } from '@/components/admin/admin-table';
+import { cn } from '@/lib/utils/cn';
 import type { WikiNote, WikiNoteReport } from '@/types/wiki';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -14,6 +19,9 @@ import { adminToolsMessages } from '@/i18n/messages/admin-tools';
 import { commonMessages } from '@/i18n/messages/common';
 import { noteModerationMachine, noteModerationState } from '@/lib/wiki/note-moderation-state';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
+
+/** One inbox item: a note or a report on its own hairline plate. */
+const ITEM = 'rounded-poke-lg border border-hairline bg-surface p-4';
 
 type ApiPayload<T> =
   | { success: true; data: T }
@@ -137,31 +145,31 @@ export function RejectedNoteCard({ note, isSuperadmin, onApprove, onDelete, onBl
   const t = useT(adminToolsMessages);
   const tc = useT(commonMessages);
   return (
-    <Card padding="md">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-poke-text-secondary">
-        <span className="font-mono">{note.entity_type}:{note.entity_name}</span>
+    <article className={ITEM}>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-fg-muted">
+        <span className="break-all font-mono">{note.entity_type}:{note.entity_name}</span>
         {note.author_name && <span>{t('wiki.by', { name: note.author_name })}</span>}
-        {isBlocked(note) && <Badge variant="red">{t('wiki.blocked')}</Badge>}
+        {isBlocked(note) && <SkewChip tone="loss">{t('wiki.blocked')}</SkewChip>}
       </div>
-      <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-poke-text-primary">{note.content}</p>
-      {isBlocked(note) && <p className="mt-2 text-xs text-poke-text-secondary">{t('wiki.blockedHint')}</p>}
+      <p className="mt-3 whitespace-pre-wrap break-words text-body text-fg">{note.content}</p>
+      {isBlocked(note) && <p className="mt-2 text-caption text-fg-muted">{t('wiki.blockedHint')}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {offers(note, 'approve') && (
-          <Button type="button" size="sm" onClick={() => onApprove(note)}>{t('wiki.approve')}</Button>
+          <Button type="button" size="sm" className={TOUCH} onClick={() => onApprove(note)}>{t('wiki.approve')}</Button>
         )}
         {canBlockResubmission(note, isSuperadmin) && (
-          <Button type="button" size="sm" variant="secondary" onClick={() => onBlock(note.id)}>
+          <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => onBlock(note.id)}>
             {t('wiki.blockResubmission')}
           </Button>
         )}
         {canAllowResubmission(note, isSuperadmin) && (
-          <Button type="button" size="sm" variant="secondary" onClick={() => onAllow(note.id)}>
+          <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => onAllow(note.id)}>
             {t('wiki.allowResubmission')}
           </Button>
         )}
-        <Button type="button" size="sm" variant="danger" onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
+        <Button type="button" size="sm" variant="danger" className={TOUCH} onClick={() => onDelete(note.id)}>{tc('actions.delete')}</Button>
       </div>
-    </Card>
+    </article>
   );
 }
 
@@ -297,41 +305,48 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
           : t(error.fallback);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
-      <section className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="font-heading text-lg font-semibold text-poke-text-primary">
-            {view === 'pending' ? t('wiki.pendingNotes') : t('wiki.rejectedNotes')}
-          </h2>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              type="button"
-              size="sm"
-              variant={view === 'pending' ? 'primary' : 'secondary'}
-              aria-pressed={view === 'pending'}
-              onClick={() => setView('pending')}
-            >
-              {t('wiki.viewPending')}
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant={view === 'rejected' ? 'primary' : 'secondary'}
-              aria-pressed={view === 'rejected'}
-              onClick={() => setView('rejected')}
-            >
-              {t('wiki.viewRejected')}
-            </Button>
-            <Button type="button" variant="secondary" size="sm" onClick={() => void load()} disabled={loading}>
-              {tc('actions.refresh')}
-            </Button>
-          </div>
+    <div className="grid gap-8 lg:grid-cols-[minmax(0,1.35fr)_minmax(320px,0.65fr)]">
+      <section aria-labelledby="wiki-notes-title" aria-busy={loading} className="min-w-0">
+        <AdminSectionHeading
+          id="wiki-notes-title"
+          icon="old-amber"
+          title={view === 'pending' ? t('wiki.pendingNotes') : t('wiki.rejectedNotes')}
+          aside={!loading && notes.length > 0 && <SkewChip tone="tier-1">{notes.length}</SkewChip>}
+        />
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            className={TOUCH}
+            variant={view === 'pending' ? 'primary' : 'secondary'}
+            aria-pressed={view === 'pending'}
+            onClick={() => setView('pending')}
+          >
+            {t('wiki.viewPending')}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className={TOUCH}
+            variant={view === 'rejected' ? 'primary' : 'secondary'}
+            aria-pressed={view === 'rejected'}
+            onClick={() => setView('rejected')}
+          >
+            {t('wiki.viewRejected')}
+          </Button>
+          <Button type="button" variant="secondary" size="sm" className={cn(TOUCH, 'sm:ml-auto')} onClick={() => void load()} disabled={loading}>
+            {tc('actions.refresh')}
+          </Button>
         </div>
 
-        {errorText && <p className="text-sm text-poke-danger-ink">{errorText}</p>}
-        {loading && <p className="text-sm text-poke-text-secondary">{t('wiki.loading')}</p>}
+        {errorText && <Alert variant="error" className="mb-3">{errorText}</Alert>}
+        {loading && <p className="text-body text-fg-muted">{t('wiki.loading')}</p>}
         {!loading && notes.length === 0 && (
-          <p className="text-sm text-poke-text-secondary">{view === 'pending' ? t('wiki.noPending') : t('wiki.noRejected')}</p>
+          view === 'pending' ? (
+            <AdminEmpty title={t('wiki.allCaughtUp')} hint={t('wiki.noPending')} icon="old-amber" />
+          ) : (
+            <AdminEmpty title={t('wiki.noRejected')} icon="old-amber" />
+          )
         )}
 
         <div className="space-y-3">
@@ -347,103 +362,118 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
             />
           ))}
           {view === 'pending' && notes.map((note) => (
-            <Card key={note.id} padding="md">
-              <div className="flex flex-wrap items-center gap-2 text-xs text-poke-text-secondary">
-                <span className="font-mono">{note.entity_type}:{note.entity_name}</span>
+            <article key={note.id} className={ITEM}>
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-fg-muted">
+                <span className="break-all font-mono">{note.entity_type}:{note.entity_name}</span>
                 {note.author_name && <span>{t('wiki.by', { name: note.author_name })}</span>}
                 {note.moderation_flags && note.moderation_flags.length > 0 && (
-                  <span className="text-yellow-500">{t('wiki.flags', { flags: note.moderation_flags.join(', ') })}</span>
+                  <SkewChip tone="tier-1">{t('wiki.flags', { flags: note.moderation_flags.join(', ') })}</SkewChip>
                 )}
               </div>
-              <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-poke-text-primary">{note.content}</p>
-              <textarea
-                value={rejecting[note.id] ?? ''}
-                onChange={(event) => setRejecting((current) => ({ ...current, [note.id]: event.target.value }))}
-                placeholder={t('wiki.rejectionReason')}
-                rows={2}
-                maxLength={500}
-                className="mt-4 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
-              />
+              <p className="mt-3 whitespace-pre-wrap break-words text-body text-fg">{note.content}</p>
+              <div className="mt-4">
+                <Textarea
+                  aria-label={t('wiki.rejectionReason')}
+                  value={rejecting[note.id] ?? ''}
+                  onChange={(event) => setRejecting((current) => ({ ...current, [note.id]: event.target.value }))}
+                  placeholder={t('wiki.rejectionReason')}
+                  rows={2}
+                  maxLength={500}
+                />
+              </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {offers(note, 'approve') && (
-                  <Button type="button" size="sm" onClick={() => void approveNote(note)}>{t('wiki.approve')}</Button>
+                  <Button type="button" size="sm" className={TOUCH} onClick={() => void approveNote(note)}>{t('wiki.approve')}</Button>
                 )}
                 {offers(note, 'reject') && (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void rejectNote(note)}>{t('wiki.reject')}</Button>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void rejectNote(note)}>{t('wiki.reject')}</Button>
                 )}
-                <Button type="button" size="sm" variant="danger" onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
+                <Button type="button" size="sm" variant="danger" className={TOUCH} onClick={() => void deleteNote(note.id)}>{tc('actions.delete')}</Button>
               </div>
-            </Card>
+            </article>
           ))}
         </div>
       </section>
 
-      <section className="space-y-3">
-        <h2 className="font-heading text-lg font-semibold text-poke-text-primary">{t('wiki.openReports')}</h2>
-        {!loading && reports.length === 0 && <p className="text-sm text-poke-text-secondary">{t('wiki.noReports')}</p>}
+      <section aria-labelledby="wiki-reports-title" aria-busy={loading} className="min-w-0">
+        <AdminSectionHeading
+          id="wiki-reports-title"
+          icon="scope-lens"
+          title={t('wiki.openReports')}
+          aside={!loading && reports.length > 0 && <SkewChip tone="loss">{reports.length}</SkewChip>}
+        />
+        {!loading && reports.length === 0 && (
+          <AdminEmpty title={t('wiki.allCaughtUp')} hint={t('wiki.noReports')} icon="scope-lens" />
+        )}
         <div className="space-y-3">
           {reports.map((report) => (
-            <Card key={report.id} padding="sm" variant="outlined">
-              <div className="text-xs text-poke-text-secondary">
-                <span className="font-mono">{report.note?.entity_type}:{report.note?.entity_name}</span>
+            <article key={report.id} className={ITEM}>
+              <div className="text-caption text-fg-muted">
+                <span className="break-all font-mono">{report.note?.entity_type}:{report.note?.entity_name}</span>
                 {report.reporter_name && <span className="ml-2">{t('wiki.by', { name: report.reporter_name })}</span>}
               </div>
-              <p className="mt-2 text-sm font-semibold text-poke-text-primary">
+              <p className="mt-2 text-subtitle text-fg">
                 {t.dynamic(`wiki.reportReasons.${reportReasonKey(report.reason)}`, undefined, report.reason)}
               </p>
-              {report.details && <p className="mt-1 text-sm text-poke-text-secondary">{report.details}</p>}
+              {report.details && <p className="mt-1 break-words text-body text-fg-muted">{report.details}</p>}
               {report.note?.content && (
-                <p className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap text-xs text-poke-text-secondary">{report.note.content}</p>
+                <p className="mt-3 max-h-40 overflow-y-auto whitespace-pre-wrap break-words rounded-poke-md border border-hairline bg-sunken p-3 text-caption text-fg-muted">
+                  {report.note.content}
+                </p>
               )}
               {report.note && (
-                <p className="mt-2 text-xs font-medium text-poke-text-secondary">
+                <p className="mt-2 text-caption font-medium text-fg-muted">
                   {report.note.approved ? t('wiki.noteLive') : t('wiki.noteHidden')}
                 </p>
               )}
               {report.note && canUnpublishReportedNote(report) && (
-                <textarea
-                  value={rejecting[report.note.id] ?? ''}
-                  onChange={(event) => {
-                    const noteId = report.note?.id;
-                    if (noteId) setRejecting((current) => ({ ...current, [noteId]: event.target.value }));
-                  }}
-                  placeholder={t('wiki.rejectionReason')}
-                  rows={2}
-                  maxLength={500}
-                  className="mt-3 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent"
-                />
+                <div className="mt-3">
+                  <Textarea
+                    aria-label={t('wiki.rejectionReason')}
+                    value={rejecting[report.note.id] ?? ''}
+                    onChange={(event) => {
+                      const noteId = report.note?.id;
+                      if (noteId) setRejecting((current) => ({ ...current, [noteId]: event.target.value }));
+                    }}
+                    placeholder={t('wiki.rejectionReason')}
+                    rows={2}
+                    maxLength={500}
+                  />
+                </div>
               )}
               <div className="mt-3 flex flex-wrap gap-2">
                 {canUnpublishReportedNote(report) && (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void unpublishReportedNote(report)}>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void unpublishReportedNote(report)}>
                     {t('wiki.unpublish')}
                   </Button>
                 )}
                 {canCloseReport(report, 'reviewed') && (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'reviewed')}>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report.id, 'reviewed')}>
                     {t('wiki.reviewed')}
                   </Button>
                 )}
                 {canCloseReport(report, 'dismissed') && (
-                  <Button type="button" size="sm" variant="secondary" onClick={() => void closeReport(report.id, 'dismissed')}>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report.id, 'dismissed')}>
                     {t('wiki.dismiss')}
                   </Button>
                 )}
               </div>
-            </Card>
+            </article>
           ))}
         </div>
       </section>
 
-      <ConfirmDialog
-        open={blockTarget !== null}
-        onClose={() => setBlockTarget(null)}
-        onConfirm={() => void confirmBlock()}
-        title={t('wiki.blockDialog.title')}
-        message={t('wiki.blockDialog.message')}
-        confirmLabel={t('wiki.blockDialog.confirm')}
-        loading={blocking}
-      />
+      <AdminDialog open={blockTarget !== null} onClose={() => setBlockTarget(null)} title={t('wiki.blockDialog.title')} size="sm">
+        <p className="mb-5 text-body text-fg-muted">{t('wiki.blockDialog.message')}</p>
+        <div className="flex flex-wrap justify-end gap-3">
+          <Button variant="ghost" className={TOUCH} onClick={() => setBlockTarget(null)} disabled={blocking}>
+            {tc('actions.cancel')}
+          </Button>
+          <Button variant="danger" className={TOUCH} onClick={() => void confirmBlock()} loading={blocking}>
+            {t('wiki.blockDialog.confirm')}
+          </Button>
+        </div>
+      </AdminDialog>
     </div>
   );
 }

@@ -101,13 +101,15 @@ describe('RosterLoadError', () => {
 describe('RosterStatusCell', () => {
   const base = { status: 'active' as const, suspended_until: null, ban_reason: null };
 
-  it('shows the ban reason of a banned player with the full text in the title', () => {
+  it('shows the ban reason of a banned player in full, wrapped and not clamped', () => {
     const reason = 'Repeated harassment of opponents in match chat and on the league Discord server';
     const html = renderWithI18n(<RosterStatusCell player={{ ...base, status: 'banned', ban_reason: reason }} />);
 
     expect(html).toContain('Banned');
-    expect(html).toContain(`title="Reason: ${reason}"`);
-    expect(html).toContain('line-clamp-2');
+    expect(html).toContain(`Reason: ${reason}`);
+    expect(html).toContain('break-words');
+    expect(html).not.toContain('line-clamp');
+    expect(html).not.toContain('title=');
   });
 
   it('German ban reason line', () => {

@@ -347,6 +347,7 @@ export default {
     subtitle: 'Review community notes and reports',
     pendingNotes: 'Pending Notes',
     loading: 'Loading...',
+    allCaughtUp: 'All caught up',
     noPending: 'No pending notes.',
     by: 'By {name}',
     flags: 'Flags: {flags}',
