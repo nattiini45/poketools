@@ -33,6 +33,26 @@ export default defineDe<typeof en>()({
     planTeam: 'Team planen',
     submitResult: 'Ergebnis eintragen',
     confirmResult: 'Ergebnis bestätigen',
+    queueAttention: {
+      one: '{count} Sache wartet auf dich',
+      other: '{count} Sachen warten auf dich',
+    },
+    teamMissing: 'Noch kein Team',
+    draft: {
+      title: 'Dein Pick',
+      redraftTitle: 'Dein Redraft-Pick',
+      onClock: 'Du bist am Zug',
+      paused: 'Pausiert',
+      pickBy: 'Pick bis {date}',
+      open: 'Zum Draft',
+    },
+    format: {
+      title: 'Liga-Aktionen',
+      actions: { one: '{count} Aktion offen', other: '{count} Aktionen offen' },
+      challenges: { one: '{count} Herausforderung zu beantworten', other: '{count} Herausforderungen zu beantworten' },
+      answerBy: 'Antwort bis {date}',
+      open: 'Zur Liga-Seite',
+    },
   },
   empty: {
     lead: 'Dein erstes Spiel beginnt mit einer Liga.',

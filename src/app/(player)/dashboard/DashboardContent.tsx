@@ -9,6 +9,7 @@ import type { SeasonFormatType, SeasonStatus } from '@/types/season';
 import type { PlayerStandingSnapshot } from '@/lib/stats/standings-preview';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { TeamUsed } from './teams-used';
+import type { NowDraftTurn, NowFormatAction } from './now-queue';
 import {
   motion,
   staggerContainer,
@@ -63,6 +64,12 @@ interface Props {
   playerStreaks: PlayerStreaks | null;
   leagueStandings: LeagueStandingSnapshot[];
   teamsUsed: TeamUsed[];
+  /** Drafts where the viewer is on the clock. */
+  draftTurns?: NowDraftTurn[];
+  /** Custom leagues with an open action or a challenge to answer. */
+  formatActions?: NowFormatAction[];
+  /** Upcoming matches the viewer has no registered team for. */
+  teamlessMatchIds?: string[];
 }
 
 export type GreetingKey = 'morning' | 'afternoon' | 'evening';
@@ -175,6 +182,9 @@ export default function DashboardContent({
   playerStreaks,
   leagueStandings,
   teamsUsed,
+  draftTurns = [],
+  formatActions = [],
+  teamlessMatchIds = [],
 }: Props) {
   const t = useT(dashboardMessages);
   const tc = useT(commonMessages);
@@ -196,6 +206,9 @@ export default function DashboardContent({
     .filter((m) => m.status === 'scheduled' || m.status === 'in_progress')
     .sort(compareScheduledAt);
   const actionMatches = [...pendingConfirmation, ...upcomingPlayable];
+  // Everything in the queue: drafts on the clock, league actions, then the matches.
+  const queueSize = draftTurns.length + formatActions.length + actionMatches.length;
+  const matchesOnly = draftTurns.length === 0 && formatActions.length === 0;
 
   const recentMatches = matches.filter(
     m => m.status === 'completed' || m.status === 'disputed'
@@ -274,15 +287,15 @@ export default function DashboardContent({
             <div className="relative flex items-center gap-2.5">
               <ItemIcon item="vs-seeker" />
               <h2 className="font-heading text-title text-fg">{t('now.title')}</h2>
-              {actionMatches.length > 0 && (
-                <SkewChip tone="accent" className="ml-auto font-heading text-title">{formatter.number(actionMatches.length)}</SkewChip>
+              {queueSize > 0 && (
+                <SkewChip tone="accent" className="ml-auto font-heading text-title">{formatter.number(queueSize)}</SkewChip>
               )}
             </div>
             <p className="relative text-body text-fg-muted">
               {isNewPlayer
                 ? t('empty.lead')
-                : actionMatches.length > 0
-                  ? t('now.needAttention', { count: actionMatches.length })
+                : queueSize > 0
+                  ? t(matchesOnly ? 'now.needAttention' : 'now.queueAttention', { count: queueSize })
                   : t('now.nothingNeeded')}
             </p>
           </div>
@@ -297,12 +310,63 @@ export default function DashboardContent({
             <p className="min-w-0 flex-1 basis-56 text-body text-fg">{t('empty.body')}</p>
             <PlateLink href="/leagues">{t('empty.cta')}</PlateLink>
           </div>
-        ) : actionMatches.length === 0 ? (
+        ) : queueSize === 0 ? (
           <p className="rounded-poke-lg border border-hairline bg-surface px-5 py-4 text-body text-fg-muted">
             {t('now.allCaughtUp')}
           </p>
         ) : (
-          <ul className={cn('grid gap-3', actionMatches.length > 1 && 'md:grid-cols-2')}>
+          <ul className={cn('grid gap-3', queueSize > 1 && 'md:grid-cols-2')}>
+            {draftTurns.map((turn) => (
+              <li
+                key={`draft:${turn.poolId}`}
+                className={cn('flex flex-col overflow-hidden rounded-poke-lg border bg-surface', turn.paused ? 'border-hairline' : 'border-accent-fill')}
+              >
+                <div className={cn('flex items-center justify-between gap-3 px-4 py-2.5', turn.paused ? 'bg-elevated' : 'bg-accent-subtle')}>
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <ItemIcon item="premier-ball" />
+                    <p className="min-w-0 truncate font-heading text-title text-fg">{t(turn.redraft ? 'now.draft.redraftTitle' : 'now.draft.title')}</p>
+                  </div>
+                  <SkewChip tone={turn.paused ? 'neutral' : 'live'} className="shrink-0">{t(turn.paused ? 'now.draft.paused' : 'now.draft.onClock')}</SkewChip>
+                </div>
+                <div className="flex flex-1 flex-col gap-3 px-4 py-3">
+                  <div className="flex flex-col gap-0.5 text-body">
+                    <p className="truncate text-fg">{turn.leagueName}</p>
+                    {turn.deadlineAt && !turn.paused && (
+                      <p className="text-fg-muted">{t('now.draft.pickBy', { date: formatter.instant(turn.deadlineAt, 'dateTime') })}</p>
+                    )}
+                  </div>
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
+                    <PlateLink href={turn.href} tone={turn.paused ? 'secondary' : 'primary'}>{t('now.draft.open')}</PlateLink>
+                  </div>
+                </div>
+              </li>
+            ))}
+            {formatActions.map((entry) => (
+              <li key={`format:${entry.leagueId}`} className="flex flex-col overflow-hidden rounded-poke-lg border border-accent-fill bg-surface">
+                <div className="flex items-center justify-between gap-3 bg-accent-subtle px-4 py-2.5">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <ItemIcon item="poke-ball" />
+                    <p className="min-w-0 truncate font-heading text-title text-fg">{t('now.format.title')}</p>
+                  </div>
+                  <SkewChip tone="accent" className="shrink-0">{formatter.number(entry.openActions + entry.challenges)}</SkewChip>
+                </div>
+                <div className="flex flex-1 flex-col gap-3 px-4 py-3">
+                  <div className="flex flex-col gap-0.5 text-body">
+                    <p className="truncate text-fg">{entry.leagueName}</p>
+                    {entry.openActions > 0 && <p className="text-fg-muted">{t('now.format.actions', { count: entry.openActions })}</p>}
+                    {entry.challenges > 0 && (
+                      <p className="text-fg-muted">
+                        {t('now.format.challenges', { count: entry.challenges })}
+                        {entry.answerBy && <> · {t('now.format.answerBy', { date: formatter.instant(entry.answerBy, 'dateTime') })}</>}
+                      </p>
+                    )}
+                  </div>
+                  <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
+                    <PlateLink href={`/dashboard/leagues/${entry.leagueId}/play`}>{t('now.format.open')}</PlateLink>
+                  </div>
+                </div>
+              </li>
+            ))}
             {actionMatches.map((m) => {
               const isP1 = m.player_1_id === playerId;
               const opponentName = isP1 ? m.player_2_name : m.player_1_name;
@@ -311,6 +375,7 @@ export default function DashboardContent({
               const canAct = !isUpcomingRound && actions.has('record_game');
               const canConfirm = actions.has('confirm');
               const needsViewer = canAct || canConfirm;
+              const teamMissing = teamlessMatchIds.includes(m.id);
               const scheduledLabel = m.scheduled_at ? formatter.instant(m.scheduled_at, 'dateTime') : null;
               const competition = competitionName(m.tournament_id);
               return (
@@ -332,10 +397,11 @@ export default function DashboardContent({
                     )}
                   </div>
                   <div className="flex flex-1 flex-col gap-3 px-4 py-3">
-                    {(competition || scheduledLabel) && (
+                    {(competition || scheduledLabel || teamMissing) && (
                       <div className="flex flex-col gap-0.5 text-body">
                         {competition && <p className="truncate text-fg">{competition}</p>}
                         {scheduledLabel && <p className="text-fg-muted">{t('now.scheduled', { date: scheduledLabel })}</p>}
+                        {teamMissing && <SkewChip tone="accent" className="mt-1 self-start">{t('now.teamMissing')}</SkewChip>}
                       </div>
                     )}
                     <div className="mt-auto flex flex-wrap items-center gap-x-3 gap-y-2 px-1">
@@ -346,7 +412,9 @@ export default function DashboardContent({
                         </PlateLink>
                       )}
                       {/* Plan Team is always available */}
-                      <PlateLink href={`/dashboard/match-prep/${m.id}`} tone="secondary">{t('now.planTeam')}</PlateLink>
+                      <PlateLink href={`/dashboard/match-prep/${m.id}`} tone={teamMissing && !canAct && !canConfirm ? 'primary' : 'secondary'}>
+                        {t('now.planTeam')}
+                      </PlateLink>
                     </div>
                   </div>
                 </li>

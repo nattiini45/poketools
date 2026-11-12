@@ -31,6 +31,26 @@ export default {
     planTeam: 'Plan Team',
     submitResult: 'Submit Result',
     confirmResult: 'Confirm Result',
+    queueAttention: {
+      one: '{count} thing needs attention',
+      other: '{count} things need attention',
+    },
+    teamMissing: 'No team yet',
+    draft: {
+      title: 'Your pick',
+      redraftTitle: 'Your redraft pick',
+      onClock: 'On the clock',
+      paused: 'Paused',
+      pickBy: 'Pick by {date}',
+      open: 'Open Draft',
+    },
+    format: {
+      title: 'League actions',
+      actions: { one: '{count} action open', other: '{count} actions open' },
+      challenges: { one: '{count} challenge to answer', other: '{count} challenges to answer' },
+      answerBy: 'answer by {date}',
+      open: 'Open League Page',
+    },
   },
   empty: {
     lead: 'Your first match starts with a league.',

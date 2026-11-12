@@ -7,10 +7,12 @@ import { getSeasonsByPlayer, listSeasonsByIds } from '@/lib/supabase/queries/sea
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerScopeUsage } from '@/lib/supabase/queries/aggregates';
+import { getPlayerFormatFacts, listActiveDraftTurns, listPlayerTeamSlots } from '@/lib/supabase/queries/dashboard-now';
 import { publicReads } from '@/lib/cache/public-reads';
 import { FULL_STANDINGS_LIMIT, playerStandingFromRows } from '@/lib/stats/standings-preview';
 import DashboardContent from './DashboardContent';
 import { buildTeamsUsed, teamsUsedScopeIds } from './teams-used';
+import { buildDraftTurns, buildFormatActions, teamlessMatchIds } from './now-queue';
 import Alert from '@/components/ui/Alert';
 import PageContainer from '@/components/ui/PageContainer';
 import { getT } from '@/i18n/server';
@@ -37,7 +39,7 @@ export default async function DashboardPage() {
 
   const playerId = livePlayer.playerId;
 
-  const [player, matches, tournaments, leagues, rating, streaks, scopeUsage] = await Promise.all([
+  const [player, matches, tournaments, leagues, rating, streaks, scopeUsage, draftTurnRows] = await Promise.all([
     getPlayerById(playerId),
     getMatchesByPlayer(playerId),
     getTournamentsByPlayer(playerId),
@@ -45,6 +47,7 @@ export default async function DashboardPage() {
     getPlayerRating(playerId),
     getPlayerStreaks(playerId),
     getPlayerScopeUsage(playerId),
+    listActiveDraftTurns(playerId),
   ]);
 
   // Stats outlive membership (a swapped-out player keeps their games), so the
@@ -52,7 +55,11 @@ export default async function DashboardPage() {
   const { leagueIds, tournamentIds } = teamsUsedScopeIds(scopeUsage);
   const knownLeagueIds = new Set(leagues.map((l) => l.id));
   const knownTournamentIds = new Set(tournaments.map((t) => t.id));
-  const [leagueStandings, extraLeagues, extraTournaments] = await Promise.all([
+  // The "Now" queue beyond matches: the team slots of the upcoming matches' tournaments, and the open business in the
+  // running custom leagues (no request when the player has neither).
+  const upcomingMatches = matches.filter((m) => m.status === 'scheduled' || m.status === 'in_progress');
+  const runningCustomLeagues = leagues.filter((l) => l.format_type === 'custom' && l.status === 'active' && !l.archived);
+  const [leagueStandings, extraLeagues, extraTournaments, teamSlots, formatFacts] = await Promise.all([
     // Completed leagues never change, so the shared cached table is read
     // instead of recomputing every league's standings per dashboard load.
     Promise.all(
@@ -72,6 +79,8 @@ export default async function DashboardPage() {
     ),
     listSeasonsByIds(leagueIds.filter((id) => !knownLeagueIds.has(id))),
     listTournamentsByIds(tournamentIds.filter((id) => !knownTournamentIds.has(id))),
+    listPlayerTeamSlots(playerId, [...new Set(upcomingMatches.map((m) => m.tournament_id))]),
+    getPlayerFormatFacts(playerId, runningCustomLeagues.map((l) => l.id)),
   ]);
 
   const teamsUsed = buildTeamsUsed(
@@ -100,6 +109,9 @@ export default async function DashboardPage() {
       playerStreaks={streaks}
       leagueStandings={leagueStandings}
       teamsUsed={teamsUsed}
+      draftTurns={buildDraftTurns(draftTurnRows)}
+      formatActions={buildFormatActions(runningCustomLeagues, formatFacts)}
+      teamlessMatchIds={teamlessMatchIds(upcomingMatches, teamSlots)}
     />
     </PageContainer>
   );
