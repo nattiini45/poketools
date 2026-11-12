@@ -5,6 +5,7 @@ import AgentSettingsForm from '@/components/player/AgentSettingsForm';
 import PushDevicesCard from '@/components/player/PushDevicesCard';
 import AccountSecuritySection from '@/components/player/AccountSecuritySection';
 import WorldExperienceSection from '@/components/player/WorldExperienceSection';
+import { SettingsSaveProvider } from '@/components/player/settings-save';
 import { LanguageSettingsSection } from '@/components/shared/LanguagePicker';
 import SpriteStyleSettingsSection from './SpriteStyleSettingsSection';
 import { getT } from '@/i18n/server';
@@ -23,15 +24,20 @@ export default async function SettingsPage() {
     <PageContainer
       title={t('settingsPage.title')}
       subtitle={t('settingsPage.subtitle')}
-      maxWidth="md"
+      maxWidth="sm"
     >
-      <AccountSecuritySection discordEnabled={discordOAuthEnabled()} />
-      <WorldExperienceSection />
-      {ExtensionSettingsSection && <ExtensionSettingsSection />}
-      <LanguageSettingsSection />
-      <SpriteStyleSettingsSection />
-      <PushDevicesCard />
-      <AgentSettingsForm />
+      {/* Each section keeps its own write path; the provider draws the page's one save bar over them. */}
+      <SettingsSaveProvider>
+        <div className="flex flex-col gap-5">
+          <AccountSecuritySection discordEnabled={discordOAuthEnabled()} />
+          <WorldExperienceSection />
+          {ExtensionSettingsSection && <ExtensionSettingsSection />}
+          <LanguageSettingsSection />
+          <SpriteStyleSettingsSection />
+          <PushDevicesCard />
+          <AgentSettingsForm />
+        </div>
+      </SettingsSaveProvider>
     </PageContainer>
   );
 }

@@ -27,8 +27,8 @@ src/lib/insights/
 src/app/(public)/insights/page.tsx # Server component — Suspense-wrapped
 
 src/components/
-├── shared/ScopeSelector.tsx       # global | league | tournament dropdown
-└── insights/InsightsTabs.tsx      # Client tabbed content (ratings/usage/...)
+├── shared/ScopeSelector.tsx       # scope select plus a searchable league or tournament combobox
+└── insights/InsightsTabs.tsx      # Link tabs (`?tab=`, scope kept in every link) and the selected tab's content
 ```
 
 ## Scope Model — `src/lib/insights/scope.ts`

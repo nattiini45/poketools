@@ -32,6 +32,12 @@ export default {
     signOutEverywhere: 'Sign out everywhere',
     signOutEverywhereFailed: 'Could not sign you out everywhere. Please try again.',
   },
+  saveBar: {
+    unsaved: { one: '{count} unsaved change', other: '{count} unsaved changes' },
+    save: 'Save changes',
+    saving: 'Saving…',
+    discard: 'Discard',
+  },
   agentSettings: {
     title: 'AI Assistant',
     badge: 'AI',

@@ -17,9 +17,8 @@ import InsightsTabs from '../InsightsTabs';
 type Props = Parameters<typeof InsightsTabs>[0];
 
 const GLOBAL: Props = {
-  initialTab: 'kills',
+  activeTab: 'kills',
   scope: { type: 'global' },
-  title: 'Global Insights',
   usageRows: [],
   isDoubles: false,
   standings: [],

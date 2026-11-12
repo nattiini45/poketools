@@ -32,6 +32,11 @@ export default {
     submitResult: 'Submit Result',
     confirmResult: 'Confirm Result',
   },
+  empty: {
+    lead: 'Your first match starts with a league.',
+    body: "You aren't in a league or tournament yet. Join a league and your matches, deadlines and results show up here.",
+    cta: 'Join a league',
+  },
   leagues: {
     title: 'My Leagues',
     count: { one: '{count} league', other: '{count} leagues' },

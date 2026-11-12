@@ -9,6 +9,7 @@ export default defineDe<typeof en>()({
     scopeNotFound: 'Bereich nicht gefunden.',
     loading: 'Insights werden geladen …',
     subtitle: 'Insights & Statistiken',
+    tabsLabel: 'Insights-Bereiche',
   },
   tabs: {
     ratings: 'Wertungen',

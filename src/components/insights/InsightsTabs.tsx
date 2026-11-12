@@ -12,7 +12,9 @@ import SupplementaryKillRanking, {
 } from '@/components/supplementary/SupplementaryKillRanking';
 import LeaderboardContent from '@/app/(public)/leaderboard/LeaderboardContent';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
-import type { InsightsScope, InsightsTab } from '@/lib/insights/scope';
+import LinkTabs from '@/components/ui/LinkTabs';
+import Select from '@/components/ui/Select';
+import { scopeToQueryString, type InsightsScope, type InsightsTab } from '@/lib/insights/scope';
 import type { PokemonUsageRow, KillRankingRow, StandingsRow } from '@/types/game';
 import type { RatingLeaderboardEntry } from '@/types/rating';
 import type { StreakLeaderboardEntry } from '@/types/insights';
@@ -20,9 +22,9 @@ import { useT } from '@/i18n/client';
 import { insightsMessages } from '@/i18n/messages/insights';
 
 interface InsightsTabsProps {
-  initialTab: InsightsTab;
+  /** The tab the URL selects (`?tab=`); a tab this scope does not have falls back to usage. */
+  activeTab: InsightsTab;
   scope: InsightsScope;
-  title: string;
   usageRows: PokemonUsageRow[];
   isDoubles: boolean;
   standings: StandingsRow[];
@@ -42,9 +44,8 @@ interface InsightsTabsProps {
 }
 
 export default function InsightsTabs({
-  initialTab,
+  activeTab: requestedTab,
   scope,
-  title,
   usageRows,
   isDoubles,
   standings,
@@ -58,7 +59,6 @@ export default function InsightsTabs({
   supplementaryKills,
 }: InsightsTabsProps) {
   const t = useT(insightsMessages);
-  const [activeTab, setActiveTab] = useState<InsightsTab>(initialTab);
 
   const showSupplementaryKills =
     scope.type === 'global' &&
@@ -77,41 +77,25 @@ export default function InsightsTabs({
     'streaks',
   ];
 
+  const activeTab = tabs.includes(requestedTab) ? requestedTab : 'usage';
+  const scopeQuery = scopeToQueryString(scope);
+
   const [h2hPlayer1, setH2hPlayer1] = useState('');
   const [h2hPlayer2, setH2hPlayer2] = useState('');
 
-  const handleTabClick = (tab: InsightsTab) => {
-    setActiveTab(tab);
-  };
-
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-heading font-bold text-poke-text-primary">{title}</h1>
-        <p className="text-sm text-poke-text-secondary mt-1">{t('page.subtitle')}</p>
-      </div>
-
-      <div className="flex gap-1 border-b border-poke-border overflow-x-auto">
-        {tabs.map((tab) => (
-          <button
-            key={tab}
-            type="button"
-            onClick={() => handleTabClick(tab)}
-            className={`px-4 py-2 text-sm font-heading font-medium border-b-2 transition-colors whitespace-nowrap ${
-              activeTab === tab
-                ? 'border-poke-accent text-poke-accent'
-                : 'border-transparent text-poke-text-muted hover:text-poke-text-secondary'
-            }`}
-          >
-            {t(`tabs.${tab}`)}
-          </button>
-        ))}
-      </div>
+      <LinkTabs
+        tabs={tabs.map((tab) => ({ key: tab, href: `/insights?${scopeQuery}&tab=${tab}`, label: t(`tabs.${tab}`) }))}
+        activeKey={activeTab}
+        label={t('page.tabsLabel')}
+        glideId="insights-tabs"
+      />
 
       {activeTab === 'ratings' && (
         <div className="space-y-2">
           {scope.type !== 'global' && (
-            <p className="text-xs text-poke-text-muted">{t('ratingsGlobalNote')}</p>
+            <p className="text-caption text-fg-muted">{t('ratingsGlobalNote')}</p>
           )}
           <LeaderboardContent initialRows={ratingRows} />
         </div>
@@ -141,30 +125,20 @@ export default function InsightsTabs({
 
       {activeTab === 'h2h' && showH2h && tournamentId && (
         <div className="space-y-4">
-          <div className="flex gap-3 items-end flex-wrap">
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('h2h.player1')}</label>
-              <select
-                value={h2hPlayer1}
-                onChange={(e) => setH2hPlayer1(e.target.value)}
-                className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="min-w-0 flex-1 basis-44 sm:max-w-xs">
+              <Select label={t('h2h.player1')} value={h2hPlayer1} onChange={(e) => setH2hPlayer1(e.target.value)}>
                 <option value="">{t('h2h.selectPlayer')}</option>
                 {participants.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
                   </option>
                 ))}
-              </select>
+              </Select>
             </div>
-            <span className="text-poke-text-muted text-sm pb-1">{t('h2h.versus')}</span>
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('h2h.player2')}</label>
-              <select
-                value={h2hPlayer2}
-                onChange={(e) => setH2hPlayer2(e.target.value)}
-                className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
+            <span className="pb-2.5 text-body text-fg-muted max-sm:hidden">{t('h2h.versus')}</span>
+            <div className="min-w-0 flex-1 basis-44 sm:max-w-xs">
+              <Select label={t('h2h.player2')} value={h2hPlayer2} onChange={(e) => setH2hPlayer2(e.target.value)}>
                 <option value="">{t('h2h.selectPlayer')}</option>
                 {participants
                   .filter((p) => p.id !== h2hPlayer1)
@@ -173,7 +147,7 @@ export default function InsightsTabs({
                       {p.name}
                     </option>
                   ))}
-              </select>
+              </Select>
             </div>
           </div>
           {h2hPlayer1 && h2hPlayer2 ? (
@@ -185,54 +159,46 @@ export default function InsightsTabs({
               player2Name={participants.find((p) => p.id === h2hPlayer2)?.name ?? ''}
             />
           ) : (
-            <p className="text-sm text-poke-text-muted py-8 text-center">{t('h2h.prompt')}</p>
+            <p className="rounded-poke-lg border border-hairline bg-surface p-5 text-body text-fg-muted">{t('h2h.prompt')}</p>
           )}
         </div>
       )}
 
       {activeTab === 'streaks' && (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-4 shadow-poke">
-          {streakEntries.length === 0 && (
-            <p className="text-sm text-poke-text-muted">{t('streaks.empty')}</p>
-          )}
+        <div className="rounded-poke-lg border border-hairline bg-surface px-5 py-2">
+          {streakEntries.length === 0 && <p className="py-3 text-body text-fg-muted">{t('streaks.empty')}</p>}
           {streakEntries.length > 0 && (
-            <ul className="space-y-2">
+            <ol>
               {streakEntries.slice(0, 20).map((row, i) => (
                 <li
                   key={row.player_id}
-                  className="flex items-center justify-between gap-3 py-2 border-b border-poke-border last:border-0"
+                  className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-hairline py-2.5 last:border-0"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-sm font-mono text-poke-text-muted w-6">{i + 1}</span>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="w-6 font-mono text-caption tabular-nums text-fg-muted">{i + 1}</span>
                     <Link
                       href={`/players/${row.player_id}`}
-                      className="flex items-center gap-2 hover:text-poke-accent"
+                      className="flex min-w-0 items-center gap-2 text-fg hover:text-accent-text"
                     >
-                      <PlayerAvatar
-                        avatarUrl={row.player_avatar_url}
-                        name={row.player_name}
-                        size={28}
-                      />
-                      <span className="font-heading font-semibold text-sm">{row.player_name}</span>
+                      <PlayerAvatar avatarUrl={row.player_avatar_url} name={row.player_name} size={28} />
+                      <span className="truncate font-heading text-body font-semibold">{row.player_name}</span>
                     </Link>
                   </div>
-                  <span className="text-sm text-poke-text-secondary">
+                  <span className="text-body tabular-nums text-fg-muted">
                     {t('streaks.winStreak', { current: row.current_win_streak, best: row.best_win_streak })}
                   </span>
                 </li>
               ))}
-            </ul>
+            </ol>
           )}
         </div>
       )}
 
       {showStandings && activeTab !== 'ratings' && (
-        <div className="mt-8">
-          <h2 className="text-lg font-heading font-semibold text-poke-text-primary mb-3">
-            {t('standings')}
-          </h2>
+        <section className="space-y-3 pt-4">
+          <h2 className="font-heading text-title text-fg">{t('standings')}</h2>
           <StandingsTable standings={standings} />
-        </div>
+        </section>
       )}
     </div>
   );

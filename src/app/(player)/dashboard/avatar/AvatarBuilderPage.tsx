@@ -1,9 +1,12 @@
 'use client';
 
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import AvatarBuilder from '@/components/avatar/AvatarBuilder';
 import PlayerUsernamesEditor from '@/components/player/PlayerUsernamesEditor';
 import { useRefreshSessionPlayer } from '@/components/shared/SessionProvider';
+import PageContainer from '@/components/ui/PageContainer';
+import Section from '@/components/ui/Section';
 import { useT } from '@/i18n/client';
 import { avatarMessages } from '@/i18n/messages/avatar';
 import type { AvatarConfig } from '@/types/avatar';
@@ -19,32 +22,23 @@ export default function AvatarBuilderPage({ playerId, initialConfig, initialPlay
   const t = useT(avatarMessages);
   const refreshSessionPlayer = useRefreshSessionPlayer();
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-heading font-bold text-poke-text-primary">
-            {t('page.title')}
-          </h1>
-          <p className="text-sm text-poke-text-muted mt-1">
-            {t('page.subtitle')}
-          </p>
-        </div>
+    <PageContainer
+      title={t('page.title')}
+      subtitle={t('page.subtitle')}
+      action={
         <Link
           href="/dashboard"
-          className="text-sm text-poke-text-secondary hover:text-poke-text-primary transition-colors"
+          className="inline-flex min-h-11 items-center gap-1.5 text-body font-[550] text-accent-ink underline-offset-4 hover:underline sm:min-h-0"
         >
+          <ArrowLeft aria-hidden="true" className="size-4" />
           {t('page.back')}
         </Link>
-      </div>
-
-      {/* Main content grid: Avatar builder (2/3) + Usernames editor (1/3) */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Avatar Builder - takes 2/3 on large screens */}
+      }
+    >
+      {/* Avatar builder (2/3) + usernames editor (1/3) */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
-          <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-6">
-            <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-4">
-              {t('page.builderHeading')}
-            </h2>
+          <Section title={t('page.builderHeading')}>
             <AvatarBuilder
               playerId={playerId}
               initialConfig={initialConfig}
@@ -62,10 +56,9 @@ export default function AvatarBuilderPage({ playerId, initialConfig, initialPlay
                 window.location.href = '/dashboard';
               }}
             />
-          </div>
+          </Section>
         </div>
 
-        {/* Usernames Editor - takes 1/3 on large screens */}
         <div className="lg:col-span-1">
           <PlayerUsernamesEditor
             playerId={playerId}
@@ -73,6 +66,6 @@ export default function AvatarBuilderPage({ playerId, initialConfig, initialPlay
           />
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

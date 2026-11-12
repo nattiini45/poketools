@@ -249,29 +249,32 @@ async function InsightsPageContent({ searchParams }: PageProps) {
 
   if (!scopeData) {
     return (
-      <PageContainer title={t('page.title')} maxWidth="xl">
-        <p className="text-poke-text-muted">{t('page.scopeNotFound')}</p>
+      <PageContainer title={t('page.title')} icon="scope-lens" maxWidth="xl">
+        <p className="text-body text-fg-muted">{t('page.scopeNotFound')}</p>
       </PageContainer>
     );
   }
 
   // The public list includes test leagues; the stats scope picker never offers one.
   const leagueOptions = insightsLeagueOptions(leagues);
-  const tournamentOptions = tournaments.map((t) => ({ id: t.id, name: t.name }));
+  const listedTournaments = tournaments.map((t) => ({ id: t.id, name: t.name }));
+  // A league stage is not in the public tournament list; while it is the scope, the picker still names it.
+  const tournamentOptions =
+    scope.type === 'tournament' && scopeData.title && !listedTournaments.some((option) => option.id === scope.id)
+      ? [{ id: scope.id, name: scopeData.title }, ...listedTournaments]
+      : listedTournaments;
 
   return (
-    <PageContainer maxWidth="xl">
+    <PageContainer title={scopeData.title ?? t('page.globalTitle')} icon="scope-lens" subtitle={t('page.subtitle')} maxWidth="xl">
       <ScopeSelector
         scope={scope}
         leagues={leagueOptions}
         tournaments={tournamentOptions}
         globalOnly={tab === 'ratings'}
-        className="mb-6"
       />
       <InsightsTabs
-        initialTab={tab}
+        activeTab={tab}
         scope={scope}
-        title={scopeData.title ?? t('page.globalTitle')}
         usageRows={scopeData.usageRows}
         isDoubles={scopeData.isDoubles}
         standings={scopeData.standings}
@@ -298,8 +301,8 @@ export default async function InsightsPage(props: PageProps) {
   return (
     <Suspense
       fallback={
-        <PageContainer title={t('page.title')} maxWidth="xl">
-          <p className="text-poke-text-muted text-sm">{t('page.loading')}</p>
+        <PageContainer title={t('page.title')} icon="scope-lens" maxWidth="xl">
+          <p className="text-body text-fg-muted">{t('page.loading')}</p>
         </PageContainer>
       }
     >

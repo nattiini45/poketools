@@ -1,7 +1,6 @@
 'use client';
 
-import { useState } from 'react';
-import Card from '@/components/ui/Card';
+import { useCallback, useState } from 'react';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import type { ApiResult } from '@/types/api';
@@ -11,6 +10,8 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { accountMessages } from '@/i18n/messages/account';
 import { errorsAuth } from '@/i18n/messages/errors';
+import SettingsSection from './SettingsSection';
+import { useSettingsSave } from './settings-save';
 
 /** The radio order; label and help text live in `account.worldExperience.options`. */
 const OPTIONS: readonly WorldExperience[] = ['auto', 'on', 'off'];
@@ -49,8 +50,7 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
   // confirmed what is actually stored.
   const [staleRead, setStaleRead] = useState(readFailed);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const save = useCallback(async () => {
     setSaving(true);
     setMessage(null);
     try {
@@ -81,7 +81,12 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
     } finally {
       setSaving(false);
     }
-  };
+  }, [value, savedValue]);
+  const reset = useCallback(() => {
+    setValue(savedValue);
+    setMessage(null);
+  }, [savedValue]);
+  const hasSaveBar = useSettingsSave('world-experience', { dirty: value !== savedValue, saving, save, reset });
 
   const messageText =
     message === null
@@ -93,34 +98,31 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
           : t(`worldExperience.${message.key}`);
 
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-1">
-        {t('worldExperience.title')}
-      </h2>
-      <p className="text-sm text-poke-text-secondary mb-4">
-        {t('worldExperience.intro')}
-      </p>
-
+    <SettingsSection icon="town-map" title={t('worldExperience.title')} description={t('worldExperience.intro')}>
       {staleRead && (
         <Alert variant="warning" className="mb-4">
           {t('worldExperience.staleRead', { option: copy.options[DEFAULT_WORLD_EXPERIENCE].label })}
         </Alert>
       )}
 
-      <form onSubmit={(e) => void handleSave(e)}>
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void save();
+        }}
+      >
         <fieldset disabled={saving}>
-          <legend className="block text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-            {t('worldExperience.legend')}
-          </legend>
-          <div className="space-y-2">
+          <legend className="mb-2 block text-caption font-medium text-fg">{t('worldExperience.legend')}</legend>
+          <div className="flex flex-col gap-2">
             {OPTIONS.map((optionValue) => {
               const option = { value: optionValue, ...copy.options[optionValue] };
               const inputId = `world-experience-${option.value}`;
               const helpId = `${inputId}-help`;
               return (
-                <div
+                <label
                   key={option.value}
-                  className="flex items-start gap-3 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2"
+                  htmlFor={inputId}
+                  className="flex cursor-pointer items-start gap-3 rounded-poke-md border border-hairline px-3 py-2.5 transition-colors duration-80 ease-out hover:bg-hover has-[:checked]:border-hairline-strong has-[:checked]:bg-accent-subtle has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-poke-focus"
                 >
                   <input
                     id={inputId}
@@ -133,20 +135,15 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
                       setValue(option.value);
                       setMessage(null);
                     }}
-                    className="mt-1 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-accent"
+                    className="mt-0.5 h-4 w-4 shrink-0 accent-accent-fill focus-visible:outline-none"
                   />
-                  <div className="min-w-0">
-                    <label
-                      htmlFor={inputId}
-                      className="block text-sm font-heading font-semibold text-poke-text-primary"
-                    >
-                      {option.label}
-                    </label>
-                    <p id={helpId} className="text-sm text-poke-text-muted">
+                  <span className="min-w-0">
+                    <span className="block text-body font-[550] text-fg">{option.label}</span>
+                    <span id={helpId} className="block text-body text-fg-muted">
                       {option.help}
-                    </p>
-                  </div>
-                </div>
+                    </span>
+                  </span>
+                </label>
               );
             })}
           </div>
@@ -158,12 +155,14 @@ export default function WorldExperienceForm({ initialValue, readFailed = false }
           </Alert>
         )}
 
-        <div className="mt-4">
-          <Button type="submit" variant="primary" size="sm" loading={saving}>
-            {t('worldExperience.save')}
-          </Button>
-        </div>
+        {!hasSaveBar && (
+          <div className="mt-4">
+            <Button type="submit" variant="primary" size="sm" loading={saving}>
+              {t('worldExperience.save')}
+            </Button>
+          </div>
+        )}
       </form>
-    </Card>
+    </SettingsSection>
   );
 }

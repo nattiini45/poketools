@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import Card from '@/components/ui/Card';
+import SettingsSection from '@/components/player/SettingsSection';
 import Alert from '@/components/ui/Alert';
 import SpriteStyleOptions from '@/components/shared/SpriteStyleOptions';
 import { useSpriteStyleChange } from '@/components/shared/sprite-style-client';
@@ -38,9 +38,7 @@ export default function SpriteStyleSettingsForm({
   }, [stored, readFailed, preference, change]);
 
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-1">{t('settings.heading')}</h2>
-      <p className="text-sm text-poke-text-secondary mb-4">{t('settings.descriptionSignedIn')}</p>
+    <SettingsSection icon="poke-doll" title={t('settings.heading')} description={t('settings.descriptionSignedIn')}>
       {readFailed && (
         <Alert variant="warning" className="mb-4">
           {t('staleRead')}
@@ -53,7 +51,7 @@ export default function SpriteStyleSettingsForm({
         value={preference}
         onChange={(next) => void change(next)}
       />
-      <p aria-live="polite" className="min-h-5 pt-2 text-xs text-poke-text-muted">
+      <p aria-live="polite" className="min-h-5 pt-2 text-caption text-fg-muted">
         {pending ? t('saving') : saved ? t('saved') : ''}
       </p>
       {failed && (
@@ -61,6 +59,6 @@ export default function SpriteStyleSettingsForm({
           {failed.code ? errorText(failed) : t('saveFailed')}
         </Alert>
       )}
-    </Card>
+    </SettingsSection>
   );
 }
