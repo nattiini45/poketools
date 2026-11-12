@@ -56,7 +56,7 @@ export function GroupCountSelect({ value, onChange }: { value: number; onChange:
 export function EmptyGroupsNote({ leagueManaged }: { leagueManaged: boolean }) {
   const t = useT(leaguePhasesMessages);
   if (leagueManaged) return null;
-  return <p className="text-sm text-poke-text-muted">{t('groups.empty')}</p>;
+  return <p className="text-body text-fg-muted">{t('groups.empty')}</p>;
 }
 
 /** An API refusal (shown by its code), or a request that got no answer. */
@@ -190,14 +190,14 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
 
   if (loading) {
     return (
-      <p className="text-sm text-poke-text-muted" role="status">
+      <p className="text-body text-fg-muted" role="status">
         {t('groups.loading')}
       </p>
     );
   }
 
   const participantsLink = (chunks: ReactNode) => (
-    <Link href={leagueAdminHref(seasonId, 'participants')} className="text-poke-text-link underline-offset-2 hover:underline">
+    <Link href={leagueAdminHref(seasonId, 'participants')} className="text-accent-ink underline-offset-2 hover:underline">
       {chunks}
     </Link>
   );
@@ -213,7 +213,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
       {leagueManaged ? (
         <>
           <Alert variant="info">{t.rich('groups.leagueManaged', { link: participantsLink })}</Alert>
-          <p className="text-xs text-poke-text-muted">{t('groups.placementPause')}</p>
+          <p className="text-caption text-fg-muted">{t('groups.placementPause')}</p>
         </>
       ) : (
       <div className="flex flex-wrap items-end gap-3">
@@ -252,35 +252,37 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         <div className="grid gap-3 sm:grid-cols-2">
           {groups.map((group) => (
             <Card key={group.id} variant="muted" padding="sm">
-              <h4 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+              <h4 className="mb-2 text-subtitle font-[550] text-fg">
                 {translateEngineLabel('group', group.name, locale)}
               </h4>
               {group.members.length === 0 ? (
-                <p className="text-xs text-poke-text-muted">{t('groups.noMembers')}</p>
+                <p className="text-caption text-fg-muted">{t('groups.noMembers')}</p>
               ) : (
-                <ul className="space-y-1">
+                <ul className="divide-y divide-hairline">
                   {group.members.map((m) => (
-                    <li key={m.player_id} className="flex items-center justify-between gap-2 text-xs">
+                    <li key={m.player_id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-body first:pt-0 last:pb-0">
                       <span className="min-w-0 break-words">
                         {m.seed > 0 && (
-                          <span className="text-poke-text-muted mr-1">#{m.seed}</span>
+                          <span className="mr-1.5 font-mono text-caption tabular-nums text-fg-muted">#{m.seed}</span>
                         )}
                         {m.player_name}
                       </span>
                       {leagueManaged ? null : (
-                        <select
-                          className={`${TOUCH} max-w-full rounded border border-poke-border bg-poke-surface px-1 py-0.5 text-xs text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus`}
-                          value={group.id}
-                          disabled={moving === m.player_id}
-                          onChange={(e) => moveMember(m.player_id, group.id, e.target.value)}
-                          aria-label={t('groups.moveAria', { name: m.player_name })}
-                        >
-                          {groups.map((g) => (
-                            <option key={g.id} value={g.id}>
-                              {translateEngineLabel('group', g.name, locale)}
-                            </option>
-                          ))}
-                        </select>
+                        <div className="w-40 max-w-full shrink-0">
+                          <Select
+                            className="h-11 py-1 text-caption sm:h-9"
+                            value={group.id}
+                            disabled={moving === m.player_id}
+                            onChange={(e) => moveMember(m.player_id, group.id, e.target.value)}
+                            aria-label={t('groups.moveAria', { name: m.player_name })}
+                          >
+                            {groups.map((g) => (
+                              <option key={g.id} value={g.id}>
+                                {translateEngineLabel('group', g.name, locale)}
+                              </option>
+                            ))}
+                          </Select>
+                        </div>
                       )}
                     </li>
                   ))}

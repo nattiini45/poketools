@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { AlertTriangle, CheckCircle2, CircleDashed, XCircle } from 'lucide-react';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import { useLocale, useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
@@ -40,11 +41,12 @@ const STATE_ICON: Record<StartupItemState, typeof CheckCircle2> = {
   unknown: CircleDashed,
 };
 
-const STATE_ICON_CLASS: Record<StartupItemState, string> = {
-  done: 'text-poke-green',
-  blocked: 'text-poke-danger',
-  attention: 'text-poke-yellow-ink',
-  unknown: 'text-poke-text-muted',
+/** The step plate's colour: finished steps in the accent, open ones in gold, blocked ones in red. */
+const STATE_TONE: Record<StartupItemState, SkewChipTone> = {
+  done: 'accent',
+  blocked: 'loss',
+  attention: 'tier-1',
+  unknown: 'neutral',
 };
 
 /** Catalog key of an item's message; `roundsRemaining` is `checklist.rounds.*` and its blocked row is `rounds.allGenerated`. */
@@ -104,13 +106,13 @@ export function StartupChecklistView({
       id={id}
       role="region"
       aria-labelledby={titleId}
-      className="rounded-poke-md border border-poke-border bg-poke-surface p-3 space-y-2"
+      className="rounded-poke-lg border border-hairline bg-surface p-4"
     >
-      <h3 id={titleId} className="font-heading font-semibold text-sm text-poke-text-primary">
+      <h3 id={titleId} className="text-subtitle font-[550] text-fg">
         {t('checklist.title')}
       </h3>
-      <ul className="space-y-1.5">
-        {checklist.items.map((item) => {
+      <ol className="mt-3 flex flex-col">
+        {checklist.items.map((item, index) => {
           const Icon = STATE_ICON[item.state];
           const href = item.link ? links[item.link] : undefined;
           const showLink = Boolean(href) && item.state !== 'done' && item.state !== 'unknown';
@@ -120,10 +122,15 @@ export function StartupChecklistView({
               key={item.id}
               data-item={item.id}
               data-state={item.state}
-              className="flex items-start gap-2 text-sm text-poke-text-primary"
+              className="relative flex items-start gap-3 pb-3 text-body text-fg last:pb-0"
             >
-              <Icon className={`mt-0.5 h-4 w-4 shrink-0 ${STATE_ICON_CLASS[item.state]}`} aria-hidden="true" />
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+              {index < checklist.items.length - 1 && (
+                <span aria-hidden="true" className="absolute bottom-0 left-4 top-6 w-px bg-hairline-strong" />
+              )}
+              <SkewChip tone={STATE_TONE[item.state]} className="shrink-0">
+                <Icon className="h-4 w-4" aria-hidden="true" />
+              </SkewChip>
+              <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
                 <span>{unknownText ?? t.dynamic(messageKey(item), messageParams(item, locale))}</span>
                 {item.id === 'seeding' && (
                   <Badge variant="gray" size="xs">
@@ -133,7 +140,7 @@ export function StartupChecklistView({
                 {showLink && href && (
                   <Link
                     href={href}
-                    className="text-poke-accent underline underline-offset-2 hover:text-poke-accent-strong"
+                    className="font-[550] text-accent-ink underline underline-offset-2 hover:text-accent-ink focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                   >
                     {t.dynamic(`checklist.${item.id}.action`)}
                   </Link>
@@ -143,14 +150,14 @@ export function StartupChecklistView({
             </li>
           );
         })}
-      </ul>
+      </ol>
       {statusLine && (
-        <div className="flex flex-wrap items-center gap-2 text-sm text-poke-text-muted">
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-body text-fg-muted">
           <span>{statusText(statusLine)}</span>
           {statusLine === 'error' && retry}
         </div>
       )}
-      {checklist.blocked && <p className="text-xs text-poke-text-muted">{t('checklist.blockedNote')}</p>}
+      {checklist.blocked && <p className="mt-3 text-caption text-fg-muted">{t('checklist.blockedNote')}</p>}
     </div>
   );
 }

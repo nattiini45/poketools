@@ -9,7 +9,9 @@ import type { ApiResult } from '@/types/api';
 import type { PhaseFormData } from '@/components/league/PhaseForm';
 import PhaseForm, { PhaseSaveError } from '@/components/league/PhaseForm';
 import Button from '@/components/ui/Button';
-import Badge from '@/components/ui/Badge';
+import ItemIcon from '@/components/ui/ItemIcon';
+import Modal from '@/components/ui/Modal';
+import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import Select from '@/components/ui/Select';
@@ -68,11 +70,10 @@ function isSuccessBody(body: unknown): boolean {
  */
 export const PHASE_ACTIONS_CLASS = 'flex items-center gap-2 flex-wrap min-w-0 max-w-full';
 
-function statusVariant(status: string): 'green' | 'accent' | 'gray' {
-  if (status === 'active') return 'green';
+function statusTone(status: string): SkewChipTone {
+  if (status === 'active') return 'live';
   if (status === 'upcoming') return 'accent';
-  if (status === 'completed') return 'gray';
-  return 'gray';
+  return 'neutral';
 }
 
 export default function PhaseTimeline({
@@ -215,10 +216,10 @@ export default function PhaseTimeline({
   const numbers = phaseNumbers(phases);
   const numberOf = (phaseId: string) => numbers.get(phaseId) ?? 0;
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('timeline.loading')}</p>;
+  if (loading) return <p className="text-body text-fg-muted">{t('timeline.loading')}</p>;
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {error && (
         <Alert variant="error">
           {'api' in error ? errorText(error.api) : t(`timeline.errors.${error.key}`)}
@@ -237,57 +238,59 @@ export default function PhaseTimeline({
         </Alert>
       )}
 
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
-          {t('timeline.heading', { count: phases.length })}
-        </h3>
-        <Button variant="secondary" size="sm" onClick={() => {
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h3 className="text-subtitle font-[550] text-fg">{t('timeline.heading', { count: phases.length })}</h3>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => {
             setShowCreate(!showCreate);
             resetPosition();
-          }}>
+          }}
+        >
           {showCreate ? t('timeline.cancel') : t('timeline.create')}
         </Button>
       </div>
 
-      {phases.length === 0 && !showCreate && (
-        <p className="text-sm text-poke-text-muted">
-          {t('timeline.empty')}
-        </p>
+      {phases.length === 0 && (
+        <div className="flex flex-col items-center gap-2 rounded-poke-md border border-dashed border-hairline-strong px-4 py-8 text-center">
+          <ItemIcon item="metronome" size={48} />
+          <p className="text-body text-fg-muted">{t('timeline.empty')}</p>
+        </div>
       )}
 
-      <div className="space-y-2">
+      <ol className="flex flex-col gap-2">
         {phases.map((phase, i) => (
-          <div key={phase.id}>
+          <li key={phase.id}>
             {i > 0 && phases[i - 1].advancement_rule && (
-              <div className="flex justify-center py-1">
-                <span className="text-xs text-poke-blue bg-poke-blue/10 px-2 py-0.5 rounded-full">
+              <div className="flex justify-center pb-2">
+                <SkewChip tone="accent">
                   {t(
-                    phases[i - 1].advancement_rule!.per_group
-                      ? 'timeline.advancesTopPerGroup'
-                      : 'timeline.advancesTop',
+                    phases[i - 1].advancement_rule!.per_group ? 'timeline.advancesTopPerGroup' : 'timeline.advancesTop',
                     { count: phases[i - 1].advancement_rule!.count },
                   )}
-                </span>
+                </SkewChip>
               </div>
             )}
             <Card variant="muted" padding="sm">
-              <div className="flex items-center justify-between gap-2 text-sm flex-wrap">
-                <div className="min-w-0">
-                  <span className="font-heading font-medium text-poke-text-primary">
-                    {numberOf(phase.id)}. {phase.name}
-                  </span>
-                  <span className="ml-2 text-xs text-poke-text-secondary">
-                    {enumLabel(tEnum, 'bracketType', phase.bracket_type)}
-                    {' · '}{tCommon('bestOf', { count: phase.best_of_default })}
-                    {' · '}{t('timeline.enrolled', { count: phase.participant_count })}
-                    {' · '}
-                    {t('timeline.rounds', { done: phase.rounds_completed, total: phase.rounds_total })}
-                  </span>
+              <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+                <div className="flex min-w-0 items-center gap-3">
+                  <SkewChip tone={phase.status === 'active' ? 'tier-1' : 'neutral'} className="shrink-0 font-heading text-body">
+                    {numberOf(phase.id)}
+                  </SkewChip>
+                  <div className="min-w-0">
+                    <p className="break-words text-subtitle font-[550] text-fg">{phase.name}</p>
+                    <p className="text-caption text-fg-muted">
+                      {enumLabel(tEnum, 'bracketType', phase.bracket_type)}
+                      {' · '}{tCommon('bestOf', { count: phase.best_of_default })}
+                      {' · '}{t('timeline.enrolled', { count: phase.participant_count })}
+                      {' · '}
+                      {t('timeline.rounds', { done: phase.rounds_completed, total: phase.rounds_total })}
+                    </p>
+                  </div>
                 </div>
                 <div className={PHASE_ACTIONS_CLASS}>
-                  <Badge variant={statusVariant(phase.status)}>
-                    {enumLabel(tEnum, 'tournamentStatus', phase.status)}
-                  </Badge>
+                  <SkewChip tone={statusTone(phase.status)}>{enumLabel(tEnum, 'tournamentStatus', phase.status)}</SkewChip>
                   {isTournamentUnstarted(phase.status) && (
                     <>
                       <Button
@@ -312,37 +315,34 @@ export default function PhaseTimeline({
                   )}
                   <Link
                     href={`/admin/leagues/${seasonId}/phases/${phase.id}`}
-                    className="text-xs text-poke-blue hover:underline"
+                    className="inline-flex min-h-11 items-center rounded-poke-sm px-1 text-body font-[550] text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0"
                   >
                     {t('timeline.manage')}
                   </Link>
                   {canDelete && isTournamentUnstarted(phase.status) && (
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => handleDelete(phase)}
-                      loading={deletingId === phase.id}
-                    >
+                    <Button variant="danger" size="sm" onClick={() => handleDelete(phase)} loading={deletingId === phase.id}>
                       {t('timeline.delete')}
                     </Button>
                   )}
                 </div>
               </div>
             </Card>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
 
-      {showCreate && (
-        <Card variant="outlined">
-          <h4 className="text-sm font-heading font-semibold text-poke-text-primary mb-3">
-            {t('timeline.newPhaseTitle')}
-          </h4>
-          <p className="text-xs text-poke-text-muted mb-4">
-            {t('timeline.newPhaseHint')}
-          </p>
+      <Modal
+        open={showCreate}
+        onClose={() => {
+          setShowCreate(false);
+          resetPosition();
+        }}
+        title={t('timeline.newPhaseTitle')}
+      >
+        <div className="flex flex-col gap-4">
+          <p className="text-caption text-fg-muted">{t('timeline.newPhaseHint')}</p>
           {phases.length > 0 && (
-            <div className="space-y-3 mb-4 max-w-lg">
+            <div className="flex max-w-lg flex-col gap-3">
               <Select
                 label={t('timeline.position.label')}
                 value={insertMode}
@@ -373,7 +373,7 @@ export default function PhaseTimeline({
                       );
                     })}
                   </Select>
-                  <p id="phase-position-hint" className="text-xs text-poke-text-muted">
+                  <p id="phase-position-hint" className="text-caption text-fg-muted">
                     {t('timeline.position.hint')}
                   </p>
                 </div>
@@ -386,8 +386,8 @@ export default function PhaseTimeline({
             onSubmit={handleCreate}
             submitLabel={t('timeline.createSubmit')}
           />
-        </Card>
-      )}
+        </div>
+      </Modal>
     </div>
   );
 }

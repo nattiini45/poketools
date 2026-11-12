@@ -62,7 +62,7 @@ export default function EvolutionPointRecalcButton({ seasonId }: EvolutionPointR
         {loading ? t('recalc.recalculating') : t('recalc.cta')}
       </Button>
       {result && (
-        <p className="text-sm text-green-600">
+        <p className="text-body text-win">
           {t('recalc.done', {
             points: t('recalc.points', { count: result.points }),
             players: t('recalc.players', { count: result.players }),
@@ -70,7 +70,7 @@ export default function EvolutionPointRecalcButton({ seasonId }: EvolutionPointR
         </p>
       )}
       {error && (
-        <p className="text-sm text-red-600">{'api' in error ? apiErrorText(error.api) : t(`recalc.${error.key}`)}</p>
+        <p className="text-body text-loss">{'api' in error ? apiErrorText(error.api) : t(`recalc.${error.key}`)}</p>
       )}
     </div>
   );

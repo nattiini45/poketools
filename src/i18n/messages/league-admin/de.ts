@@ -341,5 +341,6 @@ export default defineDe<typeof en>()({
     participants: 'Teilnehmer',
     groups: 'Gruppen',
     rounds: 'Runden',
+    sectionsNav: 'Abschnitte dieser Phase',
   },
 });

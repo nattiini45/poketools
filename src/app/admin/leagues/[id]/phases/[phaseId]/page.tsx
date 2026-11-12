@@ -1,4 +1,5 @@
 import AdminCrumbName from '@/components/admin/admin-crumb-names';
+import SectionAnchorNav from '@/components/admin/SectionAnchorNav';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
@@ -110,6 +111,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
       <AdminCrumbName href={`/admin/leagues/${seasonId}`} name={league.name} />
       <AdminCrumbName href={`/admin/leagues/${seasonId}/phases/${phaseId}`} name={phase.name} />
       <PageContainer
+        icon="metronome"
         title={phase.name}
         subtitle={t('phasePage.subtitle', {
           league: league.name,
@@ -130,20 +132,28 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           />
         }
       >
-        <Link
-          href={leagueAdminHref(seasonId, 'phases')}
-          className="inline-flex min-h-11 items-center gap-1 text-sm sm:min-h-0 text-poke-text-secondary hover:text-poke-text-primary mb-2"
-        >
-          {t('phasePage.back', { name: league.name })}
-        </Link>
+        <div className="-mt-3 flex flex-col gap-1">
+          <Link
+            href={leagueAdminHref(seasonId, 'phases')}
+            className="inline-flex min-h-11 items-center gap-1 self-start rounded-poke-sm text-body text-fg-muted hover:text-fg focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0"
+          >
+            {t('phasePage.back', { name: league.name })}
+          </Link>
+          <SectionAnchorNav
+            label={t('phasePage.sectionsNav')}
+            sections={[
+              { id: 'tournament-overview', label: t('phasePage.overview'), icon: 'town-map' },
+              { id: 'tournament-description', label: t('phasePage.description'), icon: 'weakness-policy' },
+              { id: 'tournament-participants', label: t('phasePage.participants'), icon: 'lucky-egg' },
+              { id: 'tournament-groups', label: t('phasePage.groups'), icon: 'exp-share' },
+              { id: 'tournament-rounds', label: t('phasePage.rounds'), icon: 'vs-seeker' },
+            ]}
+          />
+        </div>
 
-        {isNewPhase && (
-          <Alert variant="info" className="mb-4">
-            {t('phasePage.newPhaseHint')}
-          </Alert>
-        )}
+        {isNewPhase && <Alert variant="info">{t('phasePage.newPhaseHint')}</Alert>}
 
-        <Section id="tournament-overview" title={t('phasePage.overview')} collapsible>
+        <Section id="tournament-overview" icon="town-map" title={t('phasePage.overview')} collapsible>
           <PhaseOverviewEditor seasonId={seasonId} phase={phase} rulesets={rulesets} />
           {pin !== null && (
             <div className="mt-4">
@@ -152,7 +162,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           )}
         </Section>
 
-        <Section title={t('phasePage.description')} collapsible defaultCollapsed>
+        <Section id="tournament-description" icon="weakness-policy" title={t('phasePage.description')} collapsible defaultCollapsed>
           <EditableDescription
             resourceType="tournament"
             resourceId={phaseId}
@@ -162,6 +172,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 
         <Section
           id="tournament-participants"
+          icon="lucky-egg"
           title={t('phasePage.participants')}
           collapsible={!isNewPhase}
           defaultCollapsed={!participantsOpen}
@@ -169,11 +180,11 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
           <ParticipantManager tournamentId={phaseId} />
         </Section>
 
-        <Section title={t('phasePage.groups')} collapsible defaultCollapsed>
+        <Section id="tournament-groups" icon="exp-share" title={t('phasePage.groups')} collapsible defaultCollapsed>
           <PhaseGroupsPanel seasonId={seasonId} phaseId={phaseId} leagueManaged={leagueHasGroups} />
         </Section>
 
-        <Section id="tournament-rounds" title={t('phasePage.rounds')} collapsible>
+        <Section id="tournament-rounds" icon="vs-seeker" title={t('phasePage.rounds')} collapsible>
           <RoundManager
             tournament={tournament}
             initialRounds={rounds}

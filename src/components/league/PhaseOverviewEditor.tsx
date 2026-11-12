@@ -49,7 +49,7 @@ export default function PhaseOverviewEditor({
     <div className="space-y-3">
       {completed && <Alert variant="info">{t('overview.lockedCompleted')}</Alert>}
       {saved && (
-        <p className="text-xs text-poke-green">{t('overview.saved')}</p>
+        <p className="text-caption text-win">{t('overview.saved')}</p>
       )}
       <PhaseForm
         rulesets={rulesets}

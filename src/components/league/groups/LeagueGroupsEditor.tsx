@@ -41,9 +41,8 @@ type EditorError = EditorWriteError;
 
 /** Native selects and buttons reach 44px on phones (touch targets), the compact size from `sm` up. */
 const TOUCH = 'min-h-11 sm:min-h-0';
-const MEMBER_SELECT =
-  `${TOUCH} max-w-full rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-sm text-poke-text-primary ` +
-  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:opacity-50';
+const MEMBER_SELECT = 'h-11 py-1 text-caption sm:h-9';
+const MEMBER_SELECT_BOX = 'w-44 max-w-full shrink-0';
 
 /**
  * League groups editor (Participants tab of the admin league page; league groups design §7). Loads its data from
@@ -137,7 +136,7 @@ export default function LeagueGroupsEditor({ seasonId }: LeagueGroupsEditorProps
 
   if (loading && !data) {
     return (
-      <p className="text-sm text-poke-text-muted" role="status">
+      <p className="text-body text-fg-muted" role="status">
         {t('editor.loading')}
       </p>
     );
@@ -272,10 +271,10 @@ export function LeagueGroupsEditorView({
           ) : null}
         </div>
       ) : null}
-      {canSplit ? <p className="text-xs text-poke-text-muted">{t('editor.serpentineHint')}</p> : null}
+      {canSplit ? <p className="text-caption text-fg-muted">{t('editor.serpentineHint')}</p> : null}
 
       {groups.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">{t('editor.noGroups')}</p>
+        <p className="text-body text-fg-muted">{t('editor.noGroups')}</p>
       ) : (
         <div className="grid gap-3 md:grid-cols-2">
           {groups.map((group) => (
@@ -297,32 +296,34 @@ export function LeagueGroupsEditorView({
 
       {groups.length > 0 && unplaced.length > 0 ? (
         <Card variant="outlined" padding="sm" role="group" aria-labelledby="league-groups-unplaced">
-          <h4 id="league-groups-unplaced" className="mb-1 font-heading text-sm font-semibold text-poke-text-primary">
+          <h4 id="league-groups-unplaced" className="mb-1 text-subtitle font-[550] text-fg">
             {t('editor.unplacedTitle')}
           </h4>
-          <p className="mb-2 text-xs text-poke-text-muted">
+          <p className="mb-2 text-caption text-fg-muted">
             {data.scheduleLocked ? t('editor.unplacedLockedHint') : t('editor.unplacedHint')}
           </p>
-          <ul className="space-y-2">
+          <ul className="divide-y divide-hairline">
             {unplaced.map((p) => (
-              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-                <span className="min-w-0 break-words text-poke-text-primary">{p.name}</span>
-                <select
-                  className={MEMBER_SELECT}
-                  value=""
-                  disabled={data.scheduleLocked || moving === p.id}
-                  onChange={(e) => {
-                    if (e.target.value) onPlace(p.id, e.target.value);
-                  }}
-                  aria-label={t('editor.moveAria', { name: p.name })}
-                >
-                  <option value="">{t('editor.choose')}</option>
-                  {groups.map((g) => (
-                    <option key={g.id} value={g.id} disabled={g.locked}>
-                      {label(g)}
-                    </option>
-                  ))}
-                </select>
+              <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-body first:pt-0 last:pb-0">
+                <span className="min-w-0 break-words text-fg">{p.name}</span>
+                <div className={MEMBER_SELECT_BOX}>
+                  <Select
+                    className={MEMBER_SELECT}
+                    value=""
+                    disabled={data.scheduleLocked || moving === p.id}
+                    onChange={(e) => {
+                      if (e.target.value) onPlace(p.id, e.target.value);
+                    }}
+                    aria-label={t('editor.moveAria', { name: p.name })}
+                  >
+                    <option value="">{t('editor.choose')}</option>
+                    {groups.map((g) => (
+                      <option key={g.id} value={g.id} disabled={g.locked}>
+                        {label(g)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </li>
             ))}
           </ul>
@@ -400,7 +401,7 @@ function GroupCard({
   return (
     <Card variant="muted" padding="sm" role="group" aria-labelledby={headingId}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <h4 id={headingId} className="min-w-0 break-words font-heading text-sm font-semibold text-poke-text-primary">
+        <h4 id={headingId} className="min-w-0 break-words text-subtitle font-[550] text-fg">
           {title}
         </h4>
         <div className="flex flex-wrap items-center gap-2">
@@ -413,7 +414,7 @@ function GroupCard({
               </span>
             </Badge>
           ) : null}
-          <span className="text-xs text-poke-text-muted">{t('editor.members', { count: members.length })}</span>
+          <span className="text-caption text-fg-muted">{t('editor.members', { count: members.length })}</span>
           {!editing ? (
             <Button
               ref={renameButton}
@@ -462,36 +463,38 @@ function GroupCard({
       ) : null}
 
       {atMinimum && members.length > 0 ? (
-        <p id={minSizeId} className="mb-2 text-xs text-poke-text-muted">
+        <p id={minSizeId} className="mb-2 text-caption text-fg-muted">
           {t('editor.minSizeHint', { min: MIN_GROUP_SIZE })}
         </p>
       ) : null}
       {members.length === 0 ? (
-        <p className="text-xs text-poke-text-muted">{t('editor.noMembers')}</p>
+        <p className="text-caption text-fg-muted">{t('editor.noMembers')}</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="divide-y divide-hairline">
           {members.map((m) => (
-            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 text-sm">
-              <span className="min-w-0 break-words text-poke-text-primary">
+            <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2 text-body first:pt-0 last:pb-0">
+              <span className="min-w-0 break-words text-fg">
                 {m.seed !== null ? (
-                  <span className="mr-1 text-xs text-poke-text-muted">{t('editor.seed', { seed: m.seed })}</span>
+                  <span className="mr-1.5 font-mono text-caption tabular-nums text-fg-muted">{t('editor.seed', { seed: m.seed })}</span>
                 ) : null}
                 {m.name}
               </span>
-              <select
-                className={MEMBER_SELECT}
-                value={group.id}
-                disabled={group.locked || atMinimum || moving === m.id}
-                onChange={(e) => onMove(m.id, e.target.value)}
-                aria-label={t('editor.moveAria', { name: m.name })}
-                aria-describedby={atMinimum ? minSizeId : undefined}
-              >
-                {groups.map((g) => (
-                  <option key={g.id} value={g.id} disabled={g.id !== group.id && g.locked}>
-                    {labelOf(g)}
-                  </option>
-                ))}
-              </select>
+              <div className={MEMBER_SELECT_BOX}>
+                <Select
+                  className={MEMBER_SELECT}
+                  value={group.id}
+                  disabled={group.locked || atMinimum || moving === m.id}
+                  onChange={(e) => onMove(m.id, e.target.value)}
+                  aria-label={t('editor.moveAria', { name: m.name })}
+                  aria-describedby={atMinimum ? minSizeId : undefined}
+                >
+                  {groups.map((g) => (
+                    <option key={g.id} value={g.id} disabled={g.id !== group.id && g.locked}>
+                      {labelOf(g)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
             </li>
           ))}
         </ul>

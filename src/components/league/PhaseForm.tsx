@@ -245,7 +245,7 @@ export default function PhaseForm({
         <div className="space-y-1.5">
           <label
             htmlFor="phase-description"
-            className="block text-sm font-heading font-semibold text-poke-text-primary"
+            className="block text-body font-medium text-fg"
           >
             {t('form.description')}
           </label>
@@ -254,7 +254,7 @@ export default function PhaseForm({
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm resize-y"
+            className="w-full resize-y rounded-poke-md border border-hairline-strong bg-surface px-3 py-2 text-body text-fg focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
           />
         </div>
 
@@ -291,7 +291,7 @@ export default function PhaseForm({
         />
 
         <div className="space-y-1">
-          <label className="flex items-center gap-2 text-sm text-poke-text-primary">
+          <label className="flex items-center gap-2 text-body text-fg">
             <input
               type="checkbox"
               checked={isDoubles}
@@ -303,7 +303,7 @@ export default function PhaseForm({
             />
             {t('form.isDoubles')}
           </label>
-          <p className="text-xs text-poke-text-muted">
+          <p className="text-caption text-fg-muted">
             {t(initialData?.is_doubles !== undefined ? 'form.isDoublesHintEdit' : 'form.isDoublesHint')}
           </p>
         </div>
@@ -315,8 +315,8 @@ export default function PhaseForm({
           options={VISIBILITY_OPTIONS.map((value) => ({ value, label: enumLabel(tEnum, 'teamVisibility', value) }))}
         />
 
-        <div className="border-t border-poke-border pt-3">
-          <label className="block text-sm font-heading font-semibold text-poke-text-primary mb-1.5">
+        <div className="border-t border-hairline pt-3">
+          <label className="mb-1.5 block text-body font-medium text-fg">
             {t('form.advancement')}
           </label>
           <div className="flex items-center gap-3">
@@ -325,11 +325,11 @@ export default function PhaseForm({
               min={0}
               value={advCount}
               onChange={(e) => setAdvCount(Number(e.target.value))}
-              className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm"
+              className="h-10 w-20 rounded-poke-md border border-hairline-strong bg-surface px-3 text-body tabular-nums text-fg focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               placeholder="0"
             />
-            <span className="text-xs text-poke-text-secondary">{t('form.advancementPlayers')}</span>
-            <label className="flex items-center gap-1 text-xs text-poke-text-primary">
+            <span className="text-caption text-fg-muted">{t('form.advancementPlayers')}</span>
+            <label className="flex items-center gap-1 text-caption text-fg">
               <input
                 type="checkbox"
                 checked={advPerGroup}
@@ -339,7 +339,7 @@ export default function PhaseForm({
               {t('form.perGroup')}
             </label>
           </div>
-          <p className="text-xs text-poke-text-muted mt-1">
+          <p className="text-caption text-fg-muted mt-1">
             {t('form.advancementHint')}
           </p>
         </div>
