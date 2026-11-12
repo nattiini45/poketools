@@ -3239,6 +3239,11 @@ html.world-route-live .world-nav-hud {
   border-inline-end-color: transparent;
 }
 
+/* On a short window the rail's list scrolls: a taller fade makes the hidden rows read as cut off (the chevron in AdminSidebar completes the cue). */
+.admin-rail .scroll-fade {
+  --scroll-fade-size: 80px;
+}
+
 .admin-rail [data-sidebar="menu"] > .bg-active {
   border-radius: 0;
   background-color: var(--tier-1);

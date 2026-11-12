@@ -43,6 +43,7 @@ export default defineDe<typeof en>()({
     newCompetition: 'Neuer Wettbewerb',
     backToSite: 'Zurück zur Seite',
     breadcrumbLabel: 'Brotkrümelnavigation',
+    moreItems: 'Weitere Menüpunkte anzeigen',
     sidebar: {
       expand: 'Seitenleiste ausklappen',
       collapse: 'Seitenleiste einklappen',
