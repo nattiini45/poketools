@@ -387,6 +387,14 @@ interactivity) and consume the tokens above.
   Server pages pass `pageHref` / `perPageHref`; client tables use callbacks.
 - **`parseTableParams()`** — reads `page` (≥1) and `perPage` ∈ {20,50,100} from URL params.
 
+### Admin overview and system pages (`src/components/admin/`, redesign A13)
+
+- **`admin-table.ts`** — the competition list's table recipe (frame, head, row, cell, `ROW_LINK`) without its
+  `xl` minimum width, so the overview queue, the audit log and the drift report read as the same table.
+- **`AdminEmpty`** — dashed empty state with an approved item icon at 48 px (Poké Doll by default), a sentence and an action.
+- **`AdminSectionHeading`** — item icon, pixel-face `h2`, a count plate and links at the end.
+- **`TaskResultPanel`** — the result area of a task card (`data-task-result`): a "Result" label, a `SkewChip` and the dry-run or error output.
+
 ## Usage
 
 ```tsx
