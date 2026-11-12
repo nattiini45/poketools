@@ -313,7 +313,7 @@ describe('AttachBlockedReason', () => {
     ['busy', 'Working on it…', 'Wird ausgeführt …'],
   ])('%s', (reason, en, de) => {
     expect(render(<AttachBlockedReason reason={reason} id="why" />)).toBe(
-      `<p id="why" class="text-sm text-poke-text-muted" data-attach-reason="${reason}">${esc(en)}</p>`,
+      `<p id="why" class="text-sm text-fg-muted" data-attach-reason="${reason}">${esc(en)}</p>`,
     );
     expect(render(<AttachBlockedReason reason={reason} />, 'de')).toContain(esc(de));
   });

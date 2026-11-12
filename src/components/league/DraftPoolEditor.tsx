@@ -5,7 +5,6 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import type { DraftPoolEntry, DraftPoolTemplate, DraftPoolTemplateEntry } from '@/types/draft-pool';
 import { POWER_TIERS, POWER_TIER_COLORS } from '@/types/evolution';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import { useDataLocale, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -461,7 +460,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
     tierGroups[key].push(entry);
   }
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('poolEditor.loading')}</p>;
+  if (loading) return <p className="text-sm text-fg-muted">{t('poolEditor.loading')}</p>;
 
   const errorText = error
     ? 'api' in error
@@ -476,7 +475,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
       {/* ── Header with actions ──────────────────────────────── */}
       <div className="flex items-center justify-between">
         <div>
-          <p className="text-xs text-poke-text-muted">
+          <p className="text-xs text-fg-muted">
             {t('poolEditor.intro')}
           </p>
         </div>
@@ -484,7 +483,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
           {entries.length > 0 && (
             confirmClear ? (
               <div className="flex items-center gap-2">
-                <span className="text-xs text-poke-danger">
+                <span className="text-xs text-loss">
                   {t('poolEditor.clearConfirm', { count: entries.length })}
                 </span>
                 <Button
@@ -530,9 +529,9 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
 
       {/* ── Add Pokémon form ─────────────────────────────────── */}
       {showAddForm && (
-        <Card variant="muted" padding="md">
+        <div className="rounded-poke-md border border-hairline bg-elevated p-4">
           <div className="space-y-3">
-            <h4 className="text-sm font-heading font-semibold text-poke-text-primary">
+            <h4 className="text-sm font-heading font-semibold text-fg">
               {t('poolEditor.addTitle')}
             </h4>
 
@@ -544,27 +543,27 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={t('poolEditor.searchPlaceholder')}
-                  className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
+                  className="w-full border border-hairline bg-surface rounded-poke-md px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-1 transition-colors"
                 />
 
                 {(searchResults.length > 0 || searching) && (
-                  <div className="absolute z-10 left-0 right-0 mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-card max-h-60 overflow-y-auto">
+                  <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-hairline rounded-poke-md shadow-poke-card max-h-60 overflow-y-auto">
                     {searching && (
-                      <div className="px-3 py-2 text-sm text-poke-text-muted">{t('poolEditor.searching')}</div>
+                      <div className="px-3 py-2 text-sm text-fg-muted">{t('poolEditor.searching')}</div>
                     )}
                     {searchResults.map((r) => (
                       <button
                         key={r.id}
                         type="button"
                         onClick={() => selectPokemon(r)}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-poke-elevated transition-colors text-sm"
+                        className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-elevated transition-colors text-sm"
                       >
                         <PokemonSprite name={r.name} size={28} />
-                        <span className="text-poke-text-primary font-medium">{localizeSpecies(r.name, dl)}</span>
+                        <span className="text-fg font-medium">{localizeSpecies(r.name, dl)}</span>
                       </button>
                     ))}
                     {!searching && searchResults.length === 0 && searchQuery.length >= 2 && (
-                      <div className="px-3 py-2 text-sm text-poke-text-muted">
+                      <div className="px-3 py-2 text-sm text-fg-muted">
                         {t('poolEditor.noResults')}
                       </div>
                     )}
@@ -574,9 +573,9 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
             ) : (
               <div className="space-y-3">
                 {/* Selected Pokemon preview */}
-                <div className="flex items-center gap-3 p-3 bg-poke-elevated rounded-poke-md">
+                <div className="flex items-center gap-3 p-3 bg-elevated rounded-poke-md">
                   <PokemonSprite name={selectedPokemon} size={36} />
-                  <span className="font-medium text-poke-text-primary text-sm">
+                  <span className="font-medium text-fg text-sm">
                     {localizeSpecies(selectedPokemon, dl)}
                   </span>
                   <button
@@ -585,7 +584,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                       setSelectedPokemon(null);
                       setTimeout(() => searchInputRef.current?.focus(), 50);
                     }}
-                    className="ml-auto text-xs text-poke-danger hover:underline"
+                    className="ml-auto text-xs text-loss hover:underline"
                   >
                     {t('poolEditor.change')}
                   </button>
@@ -594,19 +593,19 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                 {/* Tier + Cost inputs */}
                 <div className="flex items-end gap-3">
                   <div>
-                    <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                    <label className="block text-xs font-heading font-semibold text-fg mb-1">
                       {t('poolEditor.powerTier')}
                     </label>
                     <select
                       value={addTier}
                       onChange={(e) => setAddTier(e.target.value)}
-                      className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                      className="border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                     >
                       <TierOptions />
                     </select>
                   </div>
                   <div>
-                    <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                    <label className="block text-xs font-heading font-semibold text-fg mb-1">
                       {t('poolEditor.pointCost')}
                     </label>
                     <input
@@ -617,7 +616,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                         setAddCost(e.target.value === '' ? '' : Number(e.target.value))
                       }
                       placeholder="—"
-                      className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 transition-colors"
+                      className="w-20 border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg text-center focus:border-accent-ink focus:ring-1 transition-colors"
                     />
                   </div>
                   <Button
@@ -632,12 +631,12 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
               </div>
             )}
           </div>
-        </Card>
+        </div>
       )}
 
       {/* ── Pool entries grouped by tier ─────────────────────── */}
       {entries.length === 0 && !showAddForm ? (
-        <p className="text-sm text-poke-text-muted">
+        <p className="text-sm text-fg-muted">
           {t('poolEditor.empty')}
         </p>
       ) : (
@@ -654,11 +653,11 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                   <span className={`font-heading font-bold text-sm ${colors.text}`}>
                     {tShared('tier', { tier: pt })}
                   </span>
-                  <span className="text-xs text-poke-text-muted">
+                  <span className="text-xs text-fg-muted">
                     {tShared('pokemonCount', { count: group.length })}
                   </span>
                 </div>
-                <div className="divide-y divide-poke-border">
+                <div className="divide-y divide-hairline">
                   {group.map((entry) => (
                     <EntryRow
                       key={entry.id}
@@ -676,16 +675,16 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
 
           {/* Untiered group */}
           {tierGroups[''] && tierGroups[''].length > 0 && (
-            <div className="border border-poke-border rounded-poke-lg overflow-hidden">
-              <div className="px-3 py-1.5 bg-poke-elevated flex items-center gap-2">
-                <span className="font-heading font-bold text-sm text-poke-text-secondary">
+            <div className="border border-hairline rounded-poke-lg overflow-hidden">
+              <div className="px-3 py-1.5 bg-elevated flex items-center gap-2">
+                <span className="font-heading font-bold text-sm text-fg-muted">
                   {t('poolEditor.untiered')}
                 </span>
-                <span className="text-xs text-poke-text-muted">
+                <span className="text-xs text-fg-muted">
                   {tShared('pokemonCount', { count: tierGroups[''].length })}
                 </span>
               </div>
-              <div className="divide-y divide-poke-border">
+              <div className="divide-y divide-hairline">
                 {tierGroups[''].map((entry) => (
                   <EntryRow
                     key={entry.id}
@@ -704,11 +703,11 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
 
       {/* ── Summary ─────────────────────────────────────────── */}
       {entries.length > 0 && (
-        <div className="flex flex-wrap gap-2 text-xs text-poke-text-muted">
+        <div className="flex flex-wrap gap-2 text-xs text-fg-muted">
           <span>
             {t.rich('poolEditor.summaryTotal', {
               count: entries.length,
-              b: (chunks) => <strong className="text-poke-text-primary">{chunks}</strong>,
+              b: (chunks) => <strong className="text-fg">{chunks}</strong>,
             })}
           </span>
           {POWER_TIERS.map((pt) => {
@@ -739,7 +738,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
       )}
 
       {/* ── Templates + CSV Import ──────────────────────────── */}
-      <div className="pt-4 border-t border-poke-border">
+      <div className="pt-4 border-t border-hairline">
         <div className="flex items-center gap-2 flex-wrap">
           <Button
             variant="ghost"
@@ -770,18 +769,18 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
             />
           </label>
 
-          <span className="text-xs text-poke-text-muted">
+          <span className="text-xs text-fg-muted">
             {t('poolEditor.csvFormat')}
           </span>
         </div>
 
         {showTemplatePanel && (
-          <Card variant="muted" padding="md" className="mt-3">
+          <div className="mt-3 rounded-poke-md border border-hairline bg-elevated p-4">
             <div className="space-y-4">
               {/* Save current pool as template */}
               {entries.length > 0 && (
                 <div>
-                  <h4 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+                  <h4 className="text-sm font-heading font-semibold text-fg mb-2">
                     {t('poolEditor.saveAsTemplate')}
                   </h4>
                   <div className="flex items-center gap-2">
@@ -790,7 +789,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                       value={templateName}
                       onChange={(e) => setTemplateName(e.target.value)}
                       placeholder={t('poolEditor.templateNamePlaceholder')}
-                      className="flex-1 border border-poke-border bg-poke-surface rounded-poke-md px-3 py-1.5 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
+                      className="flex-1 border border-hairline bg-surface rounded-poke-md px-3 py-1.5 text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-1 transition-colors"
                     />
                     <Button
                       variant="secondary"
@@ -807,25 +806,25 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
 
               {/* Load from template */}
               <div>
-                <h4 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+                <h4 className="text-sm font-heading font-semibold text-fg mb-2">
                   {t('poolEditor.loadTemplate')}
                 </h4>
                 {loadingTemplates ? (
-                  <p className="text-sm text-poke-text-muted">{t('poolEditor.loadingTemplates')}</p>
+                  <p className="text-sm text-fg-muted">{t('poolEditor.loadingTemplates')}</p>
                 ) : templates.length === 0 ? (
-                  <p className="text-sm text-poke-text-muted">{t('poolEditor.noTemplates')}</p>
+                  <p className="text-sm text-fg-muted">{t('poolEditor.noTemplates')}</p>
                 ) : (
                   <div className="space-y-2">
                     {templates.map((tpl) => (
                       <div
                         key={tpl.id}
-                        className="flex items-center justify-between p-2 bg-poke-elevated rounded-poke-md"
+                        className="flex items-center justify-between p-2 bg-elevated rounded-poke-md"
                       >
                         <div>
-                          <span className="text-sm font-medium text-poke-text-primary">
+                          <span className="text-sm font-medium text-fg">
                             {tpl.name}
                           </span>
-                          <span className="text-xs text-poke-text-muted ml-2">
+                          <span className="text-xs text-fg-muted ml-2">
                             {tShared('pokemonCount', { count: tpl.entries.length })}
                           </span>
                         </div>
@@ -839,7 +838,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                           </Button>
                           <button
                             onClick={() => handleDeleteTemplate(tpl.id)}
-                            className="text-xs text-poke-danger hover:underline"
+                            className="text-xs text-loss hover:underline"
                           >
                             {t('poolEditor.delete')}
                           </button>
@@ -850,7 +849,7 @@ export default function DraftPoolEditor({ seasonId }: DraftPoolEditorProps) {
                 )}
               </div>
             </div>
-          </Card>
+          </div>
         )}
       </div>
     </div>
@@ -870,9 +869,9 @@ function EntryRow({ entry, editing, onEditTier, onEditCost, onRemove }: EntryRow
   const t = useT(draftLegacyLeagueAdminPoolMessages);
   const dl = useDataLocale();
   return (
-    <div className="flex items-center gap-3 px-3 py-2 hover:bg-poke-elevated transition-colors">
+    <div className="flex items-center gap-3 px-3 py-2 hover:bg-elevated transition-colors">
       <PokemonSprite name={entry.pokemon_name} size={28} />
-      <span className="font-medium text-sm text-poke-text-primary min-w-[120px]">
+      <span className="font-medium text-sm text-fg min-w-[120px]">
         {localizeSpecies(entry.pokemon_name, dl)}
       </span>
 
@@ -881,14 +880,14 @@ function EntryRow({ entry, editing, onEditTier, onEditCost, onRemove }: EntryRow
         value={entry.power_tier ?? ''}
         onChange={(e) => onEditTier(e.target.value)}
         disabled={editing}
-        className="border border-poke-border bg-poke-surface rounded-poke-md px-1.5 py-1 text-xs text-poke-text-primary focus:border-poke-border-focus transition-colors disabled:opacity-50"
+        className="border border-hairline bg-surface rounded-poke-md px-1.5 py-1 text-xs text-fg focus:border-accent-ink transition-colors disabled:opacity-50"
       >
         <TierOptions />
       </select>
 
       {/* Inline cost edit */}
       <div className="flex items-center gap-1">
-        <span className="text-xs text-poke-text-muted">{t('poolEditor.cost')}</span>
+        <span className="text-xs text-fg-muted">{t('poolEditor.cost')}</span>
         <input
           type="number"
           min={0}
@@ -898,13 +897,13 @@ function EntryRow({ entry, editing, onEditTier, onEditCost, onRemove }: EntryRow
           }
           disabled={editing}
           placeholder="—"
-          className="w-14 border border-poke-border bg-poke-surface rounded-poke-md px-1.5 py-1 text-xs text-poke-text-primary text-center focus:border-poke-border-focus transition-colors disabled:opacity-50"
+          className="w-14 border border-hairline bg-surface rounded-poke-md px-1.5 py-1 text-xs text-fg text-center focus:border-accent-ink transition-colors disabled:opacity-50"
         />
       </div>
 
       <button
         onClick={onRemove}
-        className="ml-auto text-xs text-poke-danger hover:underline"
+        className="ml-auto text-xs text-loss hover:underline"
       >
         {t('poolEditor.remove')}
       </button>

@@ -58,26 +58,26 @@ export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProp
   const changeText = update === null ? null : describeChange(update.change, t);
 
   return (
-    <section className="space-y-2 rounded-poke-lg border border-poke-border bg-poke-surface p-4" aria-labelledby={`pin-${target.id}`}>
-      <h3 id={`pin-${target.id}`} className="font-heading text-sm font-semibold text-poke-text-primary">
+    <section className="space-y-2 rounded-poke-lg border border-hairline bg-surface p-4" aria-labelledby={`pin-${target.id}`}>
+      <h3 id={`pin-${target.id}`} className="font-heading text-sm font-semibold text-fg">
         {t('pin.heading')}
       </h3>
-      <p className="text-sm text-poke-text-primary">
+      <p className="text-sm text-fg">
         <span className="font-semibold">{t('pin.current', { name: pin.name, version: pin.version_no })}</span>{' '}
         {pin.can_view && (
-          <Link href={rulesetReadOnlyHref(pin.definition_id)} className="font-medium text-poke-blue hover:underline">
+          <Link href={rulesetReadOnlyHref(pin.definition_id)} className="font-medium text-accent-ink hover:underline">
             {t('pin.open')}
           </Link>
         )}
       </p>
 
       {completed ? (
-        <p className="text-sm text-poke-text-muted">{t(`pin.locked.${kind}`)}</p>
+        <p className="text-sm text-fg-muted">{t(`pin.locked.${kind}`)}</p>
       ) : update === null ? (
-        <p className="text-sm text-poke-text-muted">{t('pin.latest')}</p>
+        <p className="text-sm text-fg-muted">{t('pin.latest')}</p>
       ) : (
         <div className="space-y-2">
-          <p className="text-sm text-poke-text-secondary">
+          <p className="text-sm text-fg-muted">
             {t('pin.available', { version: update.version_no })}{' '}
             {changeText === null ? t('pin.sameRules') : t('pin.changeJoin', { changes: changeText })}
           </p>
@@ -95,7 +95,7 @@ export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProp
       )}
 
       <div role="status" aria-live="polite">
-        {movedTo !== null && <p className="text-sm text-poke-green">{t('pin.updated', { version: movedTo })}</p>}
+        {movedTo !== null && <p className="text-sm text-win">{t('pin.updated', { version: movedTo })}</p>}
       </div>
       {error !== null && (
         <Alert variant="error" role="alert">
@@ -115,8 +115,8 @@ export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProp
           onConfirm={() => void move(true)}
           onCancel={pinMove.close}
         >
-          <p className="text-sm text-poke-text-secondary">{t('pin.confirm.body', { name: target.name })}</p>
-          {changeText !== null && <p className="text-sm text-poke-text-secondary">{t('pin.changeJoin', { changes: changeText })}</p>}
+          <p className="text-sm text-fg-muted">{t('pin.confirm.body', { name: target.name })}</p>
+          {changeText !== null && <p className="text-sm text-fg-muted">{t('pin.changeJoin', { changes: changeText })}</p>}
         </PinConfirmDialog>
       )}
     </section>
