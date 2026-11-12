@@ -17,7 +17,7 @@ import {
   getMatchesByTournament,
 } from '@/lib/supabase/queries/matches';
 import { getUsageByFormat } from '@/lib/supabase/queries/meta-usage';
-import { getPlayersByIds, getPublicPlayers } from '@/lib/supabase/queries/players';
+import { getHiddenPlayerIds, getPlayersByIds, getPublicPlayers } from '@/lib/supabase/queries/players';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
 import { getLeaderboardEntries, getRatingHistory } from '@/lib/supabase/queries/ratings';
 import { getRoundsByTournament, getSwissByeRoundsBySeason } from '@/lib/supabase/queries/rounds';
@@ -186,6 +186,17 @@ const playerDirectory = cache((limit: number, offset: number) =>
       ttl: PUBLIC_LIST_TTL_S,
     },
     () => getPublicPlayers({ limit, offset }),
+  ),
+);
+
+/**
+ * Ids of the players the public directory hides (banned, suspended, test accounts). Callers drop
+ * these named rows from a ranking after its own cached read, so a ban applies without a rebuild.
+ */
+const hiddenPlayerIds = cache(() =>
+  cachedRead(
+    { name: 'hidden-player-ids', key: [], tags: [publicTags.players], ttl: PUBLIC_LIST_TTL_S },
+    () => getHiddenPlayerIds(),
   ),
 );
 
@@ -602,6 +613,7 @@ const playerRatingHistory = cache((playerId: string, limit: number) =>
  * prove every read is tagged and expired by the write paths.
  */
 export const publicReads = {
+  hiddenPlayerIds,
   seasonList,
   tournamentList,
   playerDirectory,

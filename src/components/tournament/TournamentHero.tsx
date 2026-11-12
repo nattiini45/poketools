@@ -31,7 +31,7 @@ interface TournamentHeroProps {
 
 /**
  * The tournament hero (plan §4.2, B3): the league hero's skeleton for one tournament or league phase. The name,
- * status and round on the arena sand; on the dark slab the match in progress, else the next kickoff, else the
+ * status and round on the arena sand; on the versus slab the match in progress, else the next kickoff, else the
  * top of the table. It is the page's `h1`. Server component; it renders from what the page already read.
  */
 export default function TournamentHero({ tournament, league, roundCount, view, locale }: TournamentHeroProps) {

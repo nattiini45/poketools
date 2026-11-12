@@ -44,6 +44,7 @@ vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
 import LeagueTrashPage from '../page';
 import SuperadminGuard from '@/components/shared/SuperadminGuard';
 import LeagueTrashPanel from '@/components/league-trash/LeagueTrashPanel';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import PageContainer from '@/components/ui/PageContainer';
 
 type El = ReactElement<Record<string, unknown>>;
@@ -132,6 +133,12 @@ describe('league trash page: gating', () => {
     expect(findByType(guard, PageContainer)).toHaveLength(1);
     expect(findByType(tree, LeagueTrashPanel)).toHaveLength(1);
     for (const read of reads()) expect(read).toHaveBeenCalledTimes(1);
+  });
+
+  it('the panel sits in the competition list\'s trash view (the superadmin has the link by definition)', async () => {
+    const [list] = findByType(await LeagueTrashPage(), CompetitionList);
+    expect(list.props).toMatchObject({ kind: 'league', view: 'trash', canViewTrash: true });
+    expect(findByType(list, LeagueTrashPanel)).toHaveLength(1);
   });
 });
 

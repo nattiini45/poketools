@@ -185,6 +185,19 @@ export function expireRatingReads(playerIds: readonly string[]): void {
   expirePublicTags(ratingRebuildTags(playerIds));
 }
 
+/**
+ * Tags a ban, suspension or reinstatement changes: the hidden-player set behind `players`, the
+ * leaderboards (`ratings`), and the player's own profile reads.
+ */
+export function playerVisibilityTags(playerId: string): string[] {
+  return [publicTags.players, publicTags.ratings, publicTags.playerProfiles, publicTags.player(playerId)];
+}
+
+/** Expire the public reads a ban, suspension or reinstatement changed (see `playerVisibilityTags`). */
+export function expirePlayerVisibilityReads(playerId: string): void {
+  expirePublicTags(playerVisibilityTags(playerId));
+}
+
 /** Expire the public reads a draft write changed (see `draftWriteTags`). */
 export function expireDraftReads(seasonId: string): void {
   expirePublicTags(draftWriteTags(seasonId));

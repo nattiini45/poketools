@@ -30,7 +30,7 @@ export default function PokeballSpinner({
       <span className="animate-spin motion-reduce:animate-none [animation-duration:1.6s]">
         <Pokeball className="h-10 w-10" />
       </span>
-      <span className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted">
+      <span className="text-caption text-fg-muted">
         {t('spinner.visible', { label: text })}
       </span>
     </div>

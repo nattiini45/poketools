@@ -18,11 +18,12 @@ vi.mock('@/i18n/server', async () => {
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/lib/supabase/queries/rulesets', () => ({ listRulesetOptionsFor: mocks.listRulesetOptionsFor }));
 vi.mock('@/components/shared/AdminGuard', () => ({ default: ({ children }: { children?: ReactNode }) => children ?? null }));
-vi.mock('@/components/ui/PageContainer', () => ({ default: ({ children }: { children?: ReactNode }) => children ?? null }));
+vi.mock('@/components/league/wizard/NewCompetitionHeader', () => ({ default: ({ children }: { children?: ReactNode }) => children ?? null }));
 vi.mock('../TournamentCreator', () => ({ default: () => null }));
 
 import NewTournamentPage from '../page';
 import AdminGuard from '@/components/shared/AdminGuard';
+import NewCompetitionHeader from '@/components/league/wizard/NewCompetitionHeader';
 import TournamentCreator from '../TournamentCreator';
 
 type El = ReactElement<Record<string, unknown>>;
@@ -62,6 +63,26 @@ describe('new tournament page', () => {
     expect(findByType(tree, TournamentCreator)[0].props.rulesets).toEqual([{ id: 'v1' }]);
   });
 
+  it('renders the shared create header for a tournament, above the creator, inside the guard', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const tree = await NewTournamentPage();
+    expect(isValidElement(tree) && tree.type).toBe(AdminGuard);
+    const header = findByType(tree, NewCompetitionHeader);
+    expect(header).toHaveLength(1);
+    expect(header[0].props.kind).toBe('tournament');
+    expect(findByType(tree, TournamentCreator)).toHaveLength(1);
+  });
+
+  it('titles the creator section in the viewer language', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    const tree = await NewTournamentPage();
+    const { createTranslator } = await import('@/i18n/core');
+    const { tournamentsAdminMessages } = await import('@/i18n/messages/tournaments/admin');
+    const heading = findByType(tree, 'h2');
+    expect(heading).toHaveLength(1);
+    expect(heading[0].props.children).toBe(createTranslator(tournamentsAdminMessages, 'en')('create.title'));
+  });
+
   it('the site-admin flag is the live one', async () => {
     mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true, isSiteAdmin: true }));
     await NewTournamentPage();
@@ -77,6 +98,7 @@ describe('new tournament page', () => {
     const tree = await NewTournamentPage();
     expect(isValidElement(tree) && tree.type).toBe(AdminGuard);
     expect(findByType(tree, TournamentCreator)).toHaveLength(0);
+    expect(findByType(tree, NewCompetitionHeader)).toHaveLength(0);
     expect(mocks.listRulesetOptionsFor).not.toHaveBeenCalled();
   });
 });

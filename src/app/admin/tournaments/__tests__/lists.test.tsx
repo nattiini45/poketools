@@ -42,11 +42,10 @@ vi.mock('@/lib/supabase/queries/resource-admins', () => ({
 }));
 vi.mock('@/components/shared/AdminGuard', () => stub('AdminGuard'));
 vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
-vi.mock('@/components/ui/Card', () => stub('Card'));
-vi.mock('@/components/ui/Badge', () => stub('Badge'));
 
 import AdminTournamentsPage from '../page';
 import ArchivedTournamentsPage from '../archived/page';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import AdminGuard from '@/components/shared/AdminGuard';
 import PageContainer from '@/components/ui/PageContainer';
 
@@ -69,15 +68,11 @@ function findByType(node: ReactNode, type: unknown): El[] {
   return found;
 }
 
-function text(node: ReactNode): string {
-  const out: string[] = [];
-  const visit = (n: ReactNode): void => {
-    if (typeof n === 'string' || typeof n === 'number') out.push(String(n));
-    else if (Array.isArray(n)) n.forEach(visit);
-    else if (isValidElement<Record<string, unknown>>(n)) visit(n.props.children as ReactNode);
-  };
-  visit(node);
-  return out.join(' | ');
+/** The list the page rendered: its props, and the names of its rows. */
+function listOf(tree: ReactNode) {
+  const [list] = findByType(tree, CompetitionList);
+  const rows = (list.props.rows as { name: string }[]).map((row) => row.name);
+  return { props: list.props, rows };
 }
 
 function tournament(id: string, name: string) {
@@ -124,8 +119,34 @@ describe('admin tournaments list', () => {
     const tree = await AdminTournamentsPage();
     expect(mocks.listTournaments).toHaveBeenCalledTimes(1);
     expect(mocks.listTournamentsByIds).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Open Cup');
-    expect(text(tree)).toContain('Mine Cup');
+    expect(listOf(tree).rows).toEqual(['Open Cup', 'Mine Cup']);
+    expect(listOf(tree).props).toMatchObject({ kind: 'tournament', view: 'active' });
+  });
+
+  it('maps a tournament to display data: translated labels, best-of, doubles and the next step', async () => {
+    mocks.getLiveAccess.mockResolvedValue(access({ isSiteAdmin: true, isAnyAdmin: true }));
+    mocks.listTournaments.mockResolvedValue([{ ...tournament('t1', 'Open Cup'), is_doubles: true, status: 'completed', created_at: '2026-10-03T08:00:00Z' }]);
+    expect(listOf(await AdminTournamentsPage()).props.rows).toEqual([
+      expect.objectContaining({
+        id: 't1',
+        href: '/admin/tournaments/t1/rounds',
+        actionHref: '/admin/tournaments/t1/rounds',
+        action: 'review',
+        formatLabel: 'Swiss',
+        statusLabel: 'Completed',
+        rulesetName: 'Reg H',
+        detail: 'Bo3 · Doubles',
+        players: 8,
+        startDate: null,
+        endDate: null,
+        createdAt: '2026-10-03T08:00:00Z',
+      }),
+    ]);
+  });
+
+  it('never offers the trash: tournaments have none', async () => {
+    mocks.getLiveAccess.mockResolvedValue({ ...access({ isSiteAdmin: true, isAnyAdmin: true }), isSuperadmin: true });
+    expect(listOf(await AdminTournamentsPage()).props.canViewTrash).toBeUndefined();
   });
 
   it('resource admin: only their own standalone tournaments, archived excluded', async () => {
@@ -134,8 +155,7 @@ describe('admin tournaments list', () => {
     expect(mocks.getAdminTournamentIds).toHaveBeenCalledWith('p1');
     expect(mocks.listTournamentsByIds).toHaveBeenCalledWith(['t2'], { archived: false, standaloneOnly: true });
     expect(mocks.listTournaments).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Mine Cup');
-    expect(text(tree)).not.toContain('Open Cup');
+    expect(listOf(tree).rows).toEqual(['Mine Cup']);
   });
 
   it.each([
@@ -157,7 +177,8 @@ describe('admin archived tournaments list', () => {
     const tree = await ArchivedTournamentsPage();
     expect(mocks.listArchivedTournaments).toHaveBeenCalledTimes(1);
     expect(mocks.listTournamentsByIds).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('Old Cup');
+    expect(listOf(tree).rows).toEqual(['Old Cup']);
+    expect(listOf(tree).props).toMatchObject({ kind: 'tournament', view: 'archived' });
   });
 
   it('resource admin: only their own archived tournaments, not every archived one', async () => {
@@ -167,8 +188,7 @@ describe('admin archived tournaments list', () => {
     expect(mocks.getAdminTournamentIds).toHaveBeenCalledWith('p1');
     expect(mocks.listTournamentsByIds).toHaveBeenCalledWith(['t2'], { archived: true, standaloneOnly: true });
     expect(mocks.listArchivedTournaments).not.toHaveBeenCalled();
-    expect(text(tree)).toContain('My Archived Cup');
-    expect(text(tree)).not.toContain('Old Cup');
+    expect(listOf(tree).rows).toEqual(['My Archived Cup']);
   });
 
   it.each([

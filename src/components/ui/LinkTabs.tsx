@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import SkewPlate from '@/components/ui/SkewPlate';
 import { cn } from '@/lib/utils/cn';
@@ -13,6 +13,11 @@ export interface LinkTab {
   icon?: ReactNode;
   /** A count shown after the label. */
   count?: number;
+}
+
+/** Which edges of a sideways-scrolling strip have tabs beyond them (1 px tolerance for fractional widths). */
+export function scrollEdges(scrollLeft: number, clientWidth: number, scrollWidth: number): { start: boolean; end: boolean } {
+  return { start: scrollLeft > 1, end: scrollLeft + clientWidth < scrollWidth - 1 };
 }
 
 interface LinkTabsProps {
@@ -28,7 +33,7 @@ interface LinkTabsProps {
 /**
  * One strip of link tabs on skewed plates (docs/design.md, "Skewed plates"): each tab is a link, so the state
  * lives in the URL and the server renders only the selected view. The strip scrolls sideways on a phone
- * instead of wrapping, and brings the current tab into view.
+ * instead of wrapping, brings the current tab into view, and fades the edge that has more tabs beyond it.
  */
 export default function LinkTabs({ tabs, activeKey, label, glideId, className }: LinkTabsProps) {
   const strip = useRef<HTMLElement>(null);
@@ -41,9 +46,36 @@ export default function LinkTabs({ tabs, activeKey, label, glideId, className }:
     if (tab.right > box.right) nav.scrollLeft += tab.right - box.right + 8;
     else if (tab.left < box.left) nav.scrollLeft -= box.left - tab.left + 8;
   }, [activeKey]);
+  const [fade, setFade] = useState({ start: false, end: false });
+  useEffect(() => {
+    const nav = strip.current;
+    if (!nav) return;
+    const update = () => {
+      const next = scrollEdges(nav.scrollLeft, nav.clientWidth, nav.scrollWidth);
+      setFade((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
+    };
+    update();
+    nav.addEventListener('scroll', update, { passive: true });
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    observer?.observe(nav);
+    return () => {
+      nav.removeEventListener('scroll', update);
+      observer?.disconnect();
+    };
+  }, [tabs.length]);
+  // A mask fades the tabs themselves, so the cue works on any ground (page, surface, a themed world).
+  const mask =
+    fade.start || fade.end
+      ? `linear-gradient(to right, ${fade.start ? 'transparent' : '#000'}, #000 28px, #000 calc(100% - 28px), ${fade.end ? 'transparent' : '#000'})`
+      : undefined;
 
   return (
-    <nav ref={strip} aria-label={label} className={cn('-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]', className)}>
+    <nav
+      ref={strip}
+      aria-label={label}
+      style={mask ? { maskImage: mask, WebkitMaskImage: mask } : undefined}
+      className={cn('-mx-1 overflow-x-auto px-1 py-1 [scrollbar-width:none]', className)}
+    >
       <ul className="flex w-max items-center gap-2">
         {tabs.map((tab) => {
           const active = tab.key === activeKey;

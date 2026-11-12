@@ -2,10 +2,17 @@
 
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react';
 import Link from 'next/link';
+import { Sparkles } from 'lucide-react';
+import { GlideGrid, GlideGridItem } from '@/components/discover/GlideGrid';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import PageContainer from '@/components/ui/PageContainer';
 import Input from '@/components/ui/Input';
 import Badge from '@/components/ui/Badge';
+import Button from '@/components/ui/Button';
+import ItemIcon from '@/components/ui/ItemIcon';
+import Skeleton from '@/components/ui/Skeleton';
+import SkewChip from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
 import type { TeamLibraryEntry } from '@/types/team';
 import { useFormatter, useT } from '@/i18n/client';
 import { teamsLibraryMessages } from '@/i18n/messages/teams-library';
@@ -92,7 +99,7 @@ export default function LibraryClient() {
   }, [entries, sortMode]);
 
   return (
-    <PageContainer maxWidth="lg" title={t('library.title')} subtitle={t('library.subtitle')}>
+    <PageContainer maxWidth="lg" title={t('library.title')} subtitle={t('library.subtitle')} icon="choice-scarf">
       <div className="flex flex-wrap items-center gap-3">
         <div className="w-full max-w-md">
           <Input
@@ -100,48 +107,78 @@ export default function LibraryClient() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); }}
             placeholder={t('library.searchPlaceholder')}
+            aria-label={t('library.searchPlaceholder')}
           />
         </div>
         {sortMode > 0 && (
           <Badge variant="accent" size="sm">
+            <Sparkles className="h-3 w-3" aria-hidden="true" />
             {t('library.shinySort', { mode: t(`library.sortModes.${SORT_MODES[sortMode]}`) })}
           </Badge>
         )}
       </div>
 
       {loading && entries.length === 0 ? (
-        <p className="text-sm text-poke-text-muted py-8 text-center">{t('library.loading')}</p>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" role="status" aria-label={t('library.loading')}>
+          {Array.from({ length: 6 }, (_, i) => (
+            <Skeleton key={i} className="h-52 w-full" rounded="lg" />
+          ))}
+        </div>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-poke-text-muted py-8 text-center">
-          {t('library.empty')}
-        </p>
+        <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-hairline bg-surface px-6 py-12 text-center">
+          <ItemIcon item="poke-doll" size={96} />
+          <h2 className="font-heading text-title text-fg">
+            {debouncedSearch ? t('library.emptySearch') : t('library.empty')}
+          </h2>
+          <p className="max-w-md text-body text-fg-muted">
+            {debouncedSearch ? t('library.emptySearchHint') : t('library.emptyHint')}
+          </p>
+          {debouncedSearch ? (
+            <Button type="button" variant="secondary" className="mt-2 max-sm:h-11" onClick={() => setSearch('')}>
+              {t('library.clearSearch')}
+            </Button>
+          ) : (
+            <Link href="/teambuilder" className="mt-2 inline-flex min-h-11 items-center">
+              <SkewPlate variant="button">{t('library.openTeambuilder')}</SkewPlate>
+            </Link>
+          )}
+        </div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {displayed.map((entry) => (
-              <LibraryCard key={entry.id} entry={entry} />
+          <GlideGrid className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {displayed.map((entry, index) => (
+              <GlideGridItem key={entry.id} index={index}>
+                <LibraryCard entry={entry} />
+              </GlideGridItem>
             ))}
-          </div>
+          </GlideGrid>
 
-          {/* Pagination */}
-          <div className="flex items-center justify-between mt-6">
-            <button
-              onClick={() => setOffset(Math.max(0, offset - limit))}
-              disabled={offset === 0}
-              className="px-4 py-2 text-sm border border-poke-border rounded-poke-md disabled:opacity-40 hover:bg-poke-surface transition-colors"
-            >
-              {t('library.previous')}
-            </button>
-            <span className="text-xs text-poke-text-muted">
+          <div className={total > limit ? 'flex items-center justify-between gap-3' : 'flex justify-center'}>
+            {total > limit && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="max-sm:h-11"
+                onClick={() => setOffset(Math.max(0, offset - limit))}
+                disabled={offset === 0}
+              >
+                {t('library.previous')}
+              </Button>
+            )}
+            <span className="text-caption tabular-nums text-fg-muted">
               {t('library.range', { from: offset + 1, to: Math.min(offset + limit, total), total })}
             </span>
-            <button
-              onClick={() => setOffset(offset + limit)}
-              disabled={!hasMore}
-              className="px-4 py-2 text-sm border border-poke-border rounded-poke-md disabled:opacity-40 hover:bg-poke-surface transition-colors"
-            >
-              {t('library.next')}
-            </button>
+            {total > limit && (
+              <Button
+                type="button"
+                variant="secondary"
+                className="max-sm:h-11"
+                onClick={() => setOffset(offset + limit)}
+                disabled={!hasMore}
+              >
+                {t('library.next')}
+              </Button>
+            )}
           </div>
         </>
       )}
@@ -158,48 +195,37 @@ function LibraryCard({ entry }: { entry: TeamLibraryEntry }) {
   return (
     <Link
       href={`/teams/library/${entry.id}`}
-      className="block border border-poke-border rounded-poke-md p-4 bg-poke-surface hover:border-poke-blue/40 transition-colors"
+      className="flex h-full flex-col rounded-poke-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
     >
-      {/* Title */}
-      <h2 className="font-heading font-semibold text-sm text-poke-text-primary mb-1 truncate">
-        {entry.library_title || t('library.untitled')}
-      </h2>
-
-      {/* Description */}
-      {entry.library_description && (
-        <p className="text-xs text-poke-text-muted mb-3 line-clamp-2">
-          {entry.library_description}
-        </p>
-      )}
-
-      {/* Sprite row */}
-      <div className="flex gap-1 mb-2">
+      <div className="grid grid-cols-6 justify-items-center gap-1 rounded-t-[inherit] bg-sunken px-3 py-3">
         {speciesList.map((species, i) => (
-          <PokemonSprite key={i} name={species} size={32} />
-        ))}
-        {speciesList.length < 6 && Array.from({ length: 6 - speciesList.length }).map((_, i) => (
-          <div key={`empty-${i}`} className="w-8 h-8" />
+          <PokemonSprite key={i} name={species} size={48} />
         ))}
       </div>
 
-      {/* Tags */}
-      {entry.library_tags && entry.library_tags.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {entry.library_tags.map((tag) => (
-            <span
-              key={tag}
-              className="text-[10px] px-1.5 py-0.5 bg-poke-muted rounded text-poke-text-secondary"
-            >
-              {tag}
-            </span>
-          ))}
-        </div>
-      )}
+      <div className="flex flex-1 flex-col gap-2 px-4 py-3">
+        <h2 className="truncate font-heading text-title text-fg">
+          {entry.library_title || t('library.untitled')}
+        </h2>
 
-      {/* Date */}
-      <p className="text-[10px] text-poke-text-muted mt-2">
-        {t('library.published', { date: formatter.instant(entry.library_published_at, 'date') })}
-      </p>
+        {entry.library_description && (
+          <p className="line-clamp-2 text-caption text-fg-muted">
+            {entry.library_description}
+          </p>
+        )}
+
+        {entry.library_tags && entry.library_tags.length > 0 && (
+          <div className="flex flex-wrap gap-x-2.5 gap-y-1.5 pl-0.5">
+            {entry.library_tags.map((tag) => (
+              <SkewChip key={tag}>{tag}</SkewChip>
+            ))}
+          </div>
+        )}
+
+        <p className="mt-auto pt-1 text-micro text-fg-muted">
+          {t('library.published', { date: formatter.instant(entry.library_published_at, 'date') })}
+        </p>
+      </div>
     </Link>
   );
 }

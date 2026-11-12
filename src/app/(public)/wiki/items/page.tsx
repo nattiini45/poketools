@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
-import Link from 'next/link';
 import { getLocale, getT } from '@/i18n/server';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { localizeDesc } from '@/lib/pkmn/i18n/descriptions.server';
@@ -27,16 +26,8 @@ export default async function WikiItemsIndexPage() {
   });
 
   return (
-    <div className="space-y-6">
-      <Link
-        href="/wiki"
-        className="inline-block text-sm font-body text-poke-accent hover:underline"
-      >
-        {t('back.wiki')}
-      </Link>
-      <h1 className="font-heading text-3xl font-bold text-poke-text-primary">
-        {t('index.title.items')}
-      </h1>
+    <div className="flex flex-col gap-4">
+      <h1 className="sr-only">{t('index.title.items')}</h1>
       <Suspense fallback={null}>
         <ItemsIndexClient data={items} />
       </Suspense>

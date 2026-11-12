@@ -12,7 +12,7 @@ export default function WikiDescFallbackTag({ className = '' }: { className?: st
   return (
     <abbr
       title={t('descFallbackTitle')}
-      className={`inline-block rounded-poke-sm border border-poke-border px-1 align-middle text-[10px] font-heading font-semibold uppercase text-poke-text-muted no-underline ${className}`}
+      className={`inline-block rounded-poke-sm border border-hairline-strong px-1 align-middle font-body text-micro font-[550] text-fg-muted no-underline ${className}`}
     >
       {/* The title is in the UI language; only the tag itself is English. */}
       <span lang="en">{t('descFallbackTag')}</span>

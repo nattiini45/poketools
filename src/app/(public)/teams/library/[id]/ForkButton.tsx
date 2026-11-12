@@ -2,6 +2,8 @@
 
 import { useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { GitFork } from 'lucide-react';
+import Button from '@/components/ui/Button';
 
 /** Forks a library entry into the signed-in player's teams; the only interactive part of the entry page. */
 export default function ForkButton({
@@ -35,13 +37,9 @@ export default function ForkButton({
   }, [teamId, router]);
 
   return (
-    <button
-      type="button"
-      onClick={handleFork}
-      disabled={forking}
-      className="px-4 py-2 text-sm font-medium bg-poke-blue text-poke-on-blue rounded-poke-md hover:bg-poke-blue/80 transition-colors disabled:opacity-50"
-    >
+    <Button type="button" variant="primary" onClick={handleFork} disabled={forking} className="max-sm:h-11">
+      <GitFork className="h-4 w-4" aria-hidden="true" />
       {forking ? busyLabel : label}
-    </button>
+    </Button>
   );
 }

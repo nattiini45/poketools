@@ -12,6 +12,7 @@ import { localizeMoveCategory, localizeType, typeSearchKeys } from '@/lib/pkmn/i
 import { localizeMove, moveSearchKeys } from '@/lib/pkmn/i18n/names/moves';
 import { buildSearchKeys, matchRank, NO_MATCH, type SearchKeys } from '@/lib/pkmn/i18n/search';
 import type { DataLocale, MoveCategory } from '@/lib/pkmn/i18n/types';
+import { getCategorySpriteUrl } from '@/lib/pkmn/sprites';
 import { TYPES } from '@/lib/pkmn/type-chart';
 
 /** One row as the server sends it: English `@pkmn` names and numbers only (locale-neutral). */
@@ -27,12 +28,6 @@ export interface MoveRow {
 
 /** The move categories as English `@pkmn` keys; labels come from the pkmn layer. */
 const CATEGORIES: readonly MoveCategory[] = ['Physical', 'Special', 'Status'];
-
-const CATEGORY_COLORS: Record<string, string> = {
-  Physical: 'text-orange-400',
-  Special: 'text-blue-400',
-  Status: 'text-poke-text-secondary',
-};
 
 function isMoveCategory(value: string): value is MoveCategory {
   return (CATEGORIES as readonly string[]).includes(value);
@@ -78,33 +73,34 @@ export default function MovesIndexClient({ data }: { data: readonly MoveRow[] })
         key: 'name',
         primary: true,
         header: t('index.name'),
-        width: '200px',
+        width: '220px',
         sortable: true,
+        cardClassName: 'max-md:order-1 max-md:col-span-4',
         sortValue: (row) => localizeMove(row.name, dl),
-        render: (row) => (
-          <span className="font-medium text-poke-text-primary">{localizeMove(row.name, dl)}</span>
-        ),
+        render: (row) => <span>{localizeMove(row.name, dl)}</span>,
       },
       {
         key: 'type',
         header: t('index.type'),
         width: '120px',
         sortable: true,
+        cardClassName: 'max-md:order-2 max-md:col-span-2 max-md:justify-self-end',
         sortValue: (row) => localizeType(row.type, dl),
         render: (row) => <TypeBadge type={row.type} />,
       },
       {
         key: 'category',
         header: t('index.category'),
-        width: '100px',
+        width: '140px',
         sortable: true,
+        cardClassName: 'max-md:order-3 max-md:col-span-3',
         sortValue: (row) => categoryLabel(row.category, dl),
         render: (row) => (
-          <span
-            className={`font-heading text-xs font-semibold uppercase ${
-              CATEGORY_COLORS[row.category] ?? ''
-            }`}
-          >
+          <span className="inline-flex items-center gap-2 text-caption text-fg-muted">
+            {isMoveCategory(row.category) && (
+              // eslint-disable-next-line @next/next/no-img-element -- a 32x14 Showdown category icon; next/image would resample it
+              <img src={getCategorySpriteUrl(row.category)} alt="" width={32} height={14} loading="lazy" className="shrink-0" />
+            )}
             {categoryLabel(row.category, dl)}
           </span>
         ),
@@ -113,34 +109,37 @@ export default function MovesIndexClient({ data }: { data: readonly MoveRow[] })
         key: 'basePower',
         header: t('index.power'),
         align: 'right',
-        width: '70px',
+        width: '80px',
         sortable: true,
+        numeric: true,
+        cardLabel: 'above',
+        cardClassName: 'max-md:order-4 max-md:text-center',
         sortValue: (row) => (row.basePower > 0 ? row.basePower : null),
-        render: (row) => (
-          <span className="text-poke-text-primary">{row.basePower || '—'}</span>
-        ),
+        render: (row) => <span>{row.basePower || '—'}</span>,
       },
       {
         key: 'accuracy',
         header: t('index.accuracy'),
         align: 'right',
-        width: '70px',
+        width: '80px',
         sortable: true,
+        numeric: true,
+        cardLabel: 'above',
+        cardClassName: 'max-md:order-4 max-md:text-center',
         sortValue: (row) => row.accuracy,
-        render: (row) => (
-          <span className="text-poke-text-primary">
-            {row.accuracy == null ? '—' : formatter.percentOf(row.accuracy, 0)}
-          </span>
-        ),
+        render: (row) => <span>{row.accuracy == null ? '—' : formatter.percentOf(row.accuracy, 0)}</span>,
       },
       {
         key: 'pp',
         header: t('index.pp'),
         align: 'right',
-        width: '60px',
+        width: '64px',
         sortable: true,
+        numeric: true,
+        cardLabel: 'above',
+        cardClassName: 'max-md:order-4 max-md:text-center',
         sortValue: (row) => row.pp,
-        render: (row) => <span className="text-poke-text-primary">{row.pp}</span>,
+        render: (row) => <span>{row.pp}</span>,
       },
     ],
     [t, dl, formatter],

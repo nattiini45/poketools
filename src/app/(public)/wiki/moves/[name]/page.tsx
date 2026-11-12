@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { moveMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
 import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
 import { getWikiMoveDetail } from '@/lib/wiki/index-rows.server';
@@ -11,6 +10,7 @@ import { wikiMessages } from '@/i18n/messages/wiki';
 import WikiMoveContent from '@/components/wiki/WikiMoveContent';
 import WikiMoveUsageStats from '@/components/wiki/WikiMoveUsageStats';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+import { WikiBackLink } from '@/components/wiki/WikiParts';
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
   const { name } = await params;
@@ -43,20 +43,13 @@ export default async function WikiMovePage({
     : [];
 
   return (
-    <div className="space-y-8">
-      <Link
-        href="/wiki/moves"
-        className="inline-block text-sm font-body text-poke-accent hover:underline"
-      >
-        {t('back.moves')}
-      </Link>
+    <div className="flex flex-col gap-6">
+      <WikiBackLink href="/wiki/moves" label={t('back.moves')} />
 
       <WikiMoveContent move={entry} locale={locale} dataLocale={dataLocale} descFallback={descFallback} />
 
       {/* Battle Usage Stats */}
       <WikiMoveUsageStats moveName={move.name} />
-
-      <hr className="border-poke-border" />
 
       <WikiNotesSection
         entityType="move"

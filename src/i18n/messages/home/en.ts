@@ -1,9 +1,15 @@
 /** Home page (`src/app/(public)/page.tsx`). Owned by T02. */
 export default {
   hero: {
-    eyebrow: 'Private competitive Pokémon league',
     intro: "Standings, stats, teams, and encyclopedia in one place — the home of your league's whole season.",
     browseTournaments: 'Browse tournaments',
+    dashboard: 'Your dashboard',
+    /** The scoreboard on the hero's slab: the number is drawn above its label. */
+    stats: {
+      leagues: { one: 'league', other: 'leagues' },
+      tournaments: { one: 'tournament', other: 'tournaments' },
+      live: { one: 'live now', other: 'live now' },
+    },
   },
   dividerTitle: "Gotta catch 'em all",
   featured: {

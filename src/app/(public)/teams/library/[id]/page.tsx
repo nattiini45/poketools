@@ -5,7 +5,8 @@ import { teamsLibraryMessages } from '@/i18n/messages/teams-library';
 import { metaMessages } from '@/i18n/messages/meta';
 import { loadLibraryEntry } from '@/lib/team/page-loaders';
 import { speciesList } from '@/lib/team/page-text';
-import TeamSetCard from '../../TeamSetCard';
+import SkewChip from '@/components/ui/SkewChip';
+import TeamSheet from '../../TeamSheet';
 import ForkButton from './ForkButton';
 
 /**
@@ -40,35 +41,21 @@ export default async function LibraryEntryPage({ params }: Params) {
   const [t, formatter, dataLocale] = await Promise.all([getT(teamsLibraryMessages), getFormatter(), getDataLocale()]);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-heading font-bold text-poke-text-primary mb-1">
-          {entry.library_title || t('library.untitled')}
-        </h1>
-        {entry.library_description && (
-          <p className="text-sm text-poke-text-muted mb-3">{entry.library_description}</p>
-        )}
-        <div className="flex items-center gap-3">
-          {entry.library_tags?.map((tag) => (
-            <span key={tag} className="text-[10px] px-2 py-0.5 bg-poke-muted rounded text-poke-text-secondary">
-              {tag}
-            </span>
-          ))}
-          <span className="text-[10px] text-poke-text-muted ml-auto">
+    <TeamSheet
+      title={entry.library_title || t('library.untitled')}
+      description={entry.library_description}
+      action={<ForkButton teamId={entry.id} label={t('entry.fork')} busyLabel={t('entry.forking')} />}
+      meta={
+        <>
+          {entry.library_tags?.map((tag) => <SkewChip key={tag}>{tag}</SkewChip>)}
+          <span className="text-caption text-fg-muted">
             {t('library.published', { date: formatter.instant(entry.library_published_at, 'date') })}
           </span>
-        </div>
-      </div>
-
-      <div className="mb-6">
-        <ForkButton teamId={entry.id} label={t('entry.fork')} busyLabel={t('entry.forking')} />
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {entry.pokemon.map((set, i) => (
-          <TeamSetCard key={i} set={set} index={i} t={t} dl={dataLocale} />
-        ))}
-      </div>
-    </div>
+        </>
+      }
+      sets={entry.pokemon}
+      t={t}
+      dl={dataLocale}
+    />
   );
 }

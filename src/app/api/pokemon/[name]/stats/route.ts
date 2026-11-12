@@ -7,6 +7,7 @@ import {
 } from '@/lib/supabase/queries/aggregates';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { publicReads } from '@/lib/cache/public-reads';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { getItemUsageForPokemon } from '@/lib/supabase/queries/teams';
 import { CACHE } from '@/lib/api/cache';
 import { isValidUuid } from '@/lib/utils/uuid';
@@ -172,10 +173,11 @@ export async function GET(
     }
 
     // Resolve player names
-    const playerIds = playerAggs.map((pa) => pa.player_id);
-    const playerNames = await resolvePlayerNames(playerIds);
+    const hidden = await publicReads.hiddenPlayerIds();
+    const visibleAggs = withoutHiddenPlayers(playerAggs, hidden);
+    const playerNames = await resolvePlayerNames(visibleAggs.map((pa) => pa.player_id));
 
-    const players: PokemonPlayerRow[] = playerAggs.map((pa) => ({
+    const players: PokemonPlayerRow[] = visibleAggs.map((pa) => ({
       player_id: pa.player_id,
       player_name: playerNames[pa.player_id] ?? null,
       games: pa.total_games,

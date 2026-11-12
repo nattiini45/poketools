@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import { abilityMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
-import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
 import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
 import { getWikiAbilityDetail } from '@/lib/wiki/index-rows.server';
@@ -10,6 +9,7 @@ import { getDataLocale, getLocale, getT } from '@/i18n/server';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import WikiAbilityContent from '@/components/wiki/WikiAbilityContent';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+import { WikiBackLink } from '@/components/wiki/WikiParts';
 
 export async function generateMetadata({ params }: { params: Promise<{ name: string }> }): Promise<Metadata> {
   const { name } = await params;
@@ -42,17 +42,10 @@ export default async function WikiAbilityPage({
     : [];
 
   return (
-    <div className="space-y-8">
-      <Link
-        href="/wiki/abilities"
-        className="inline-block text-sm font-body text-poke-accent hover:underline"
-      >
-        {t('back.abilities')}
-      </Link>
+    <div className="flex flex-col gap-6">
+      <WikiBackLink href="/wiki/abilities" label={t('back.abilities')} />
 
       <WikiAbilityContent ability={entry} locale={locale} dataLocale={dataLocale} descFallback={descFallback} />
-
-      <hr className="border-poke-border" />
 
       <WikiNotesSection
         entityType="ability"

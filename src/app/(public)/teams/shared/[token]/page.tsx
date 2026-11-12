@@ -7,7 +7,9 @@ import { NOINDEX } from '@/lib/seo/robots';
 import { loadSharedTeam } from '@/lib/team/page-loaders';
 import { formatShowdownSet } from '@/lib/team/showdown-set';
 import { filledSets, speciesList } from '@/lib/team/page-text';
-import TeamSetCard from '../../TeamSetCard';
+import Section from '@/components/ui/Section';
+import SkewChip from '@/components/ui/SkewChip';
+import TeamSheet from '../../TeamSheet';
 import CopyPasteButton from './CopyPasteButton';
 
 /**
@@ -43,10 +45,10 @@ export default async function SharedTeamPage({ params }: Params) {
   if (result.status === 'rate_limited') {
     // A page cannot answer 429: the notice stands in, and no team data is read or sent.
     return (
-      <div className="flex items-center justify-center min-h-[60vh]">
-        <div className="text-center">
-          <h1 className="text-lg font-heading font-bold text-poke-text-primary mb-2">{t('shared.rateLimitedTitle')}</h1>
-          <p className="text-sm text-poke-text-muted">{t('shared.rateLimited', { count: result.retryAfterSeconds })}</p>
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <div className="flex max-w-md flex-col gap-2 rounded-poke-lg border border-hairline bg-surface px-6 py-8 text-center">
+          <h1 className="font-heading text-title text-fg">{t('shared.rateLimitedTitle')}</h1>
+          <p className="text-body text-fg-muted">{t('shared.rateLimited', { count: result.retryAfterSeconds })}</p>
         </div>
       </div>
     );
@@ -59,32 +61,20 @@ export default async function SharedTeamPage({ params }: Params) {
   const paste = filled.map(formatShowdownSet).join('\n\n');
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-2">
-          <h1 className="text-xl font-heading font-bold text-poke-text-primary">{title}</h1>
-          {team.tournament_id && (
-            <span className="px-2 py-0.5 text-[10px] bg-poke-blue/10 text-poke-blue rounded font-medium">
-              {t('shared.tournament')}
-            </span>
-          )}
-        </div>
-        {team.library_description && <p className="text-sm text-poke-text-muted">{team.library_description}</p>}
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filled.map((set, i) => (
-          <TeamSetCard key={i} set={set} index={i} t={t} dl={dataLocale} showIvs />
-        ))}
-      </div>
-
-      <div className="mt-8">
-        <h2 className="text-sm font-heading font-semibold text-poke-text-secondary mb-2">{t('shared.showdownPaste')}</h2>
-        <pre className="p-4 bg-poke-surface border border-poke-border rounded-poke-md text-xs text-poke-text-primary font-mono overflow-x-auto whitespace-pre-wrap">
+    <TeamSheet
+      title={title}
+      description={team.library_description}
+      meta={team.tournament_id ? <SkewChip tone="accent">{t('shared.tournament')}</SkewChip> : undefined}
+      sets={filled}
+      t={t}
+      dl={dataLocale}
+      showIvs
+    >
+      <Section title={t('shared.showdownPaste')} action={<CopyPasteButton text={paste} label={t('shared.copyPaste')} />}>
+        <pre className="overflow-x-auto whitespace-pre-wrap rounded-poke-md bg-sunken p-4 font-mono text-caption text-fg">
           {paste}
         </pre>
-        <CopyPasteButton text={paste} label={t('shared.copyPaste')} />
-      </div>
-    </div>
+      </Section>
+    </TeamSheet>
   );
 }

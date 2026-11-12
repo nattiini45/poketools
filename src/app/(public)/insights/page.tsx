@@ -10,6 +10,7 @@ import {
   insightsLeagueOptions,
 } from '@/lib/insights/scope';
 import { publicReads } from '@/lib/cache/public-reads';
+import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { loadSupplement, packExtensions } from '@/lib/pack-extensions';
 import type { SupplementaryKillRowView } from '@/components/supplementary/SupplementaryKillRanking';
 import {
@@ -233,7 +234,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
     typeof params.tab === 'string' ? params.tab : undefined,
   );
 
-  const [leagues, tournaments, ratingRows, scopeData, streakEntries, t, supplementaryKills] = await Promise.all([
+  const [leagues, tournaments, allRatingRows, scopeData, allStreakEntries, t, supplementaryKills, hiddenPlayerIds] = await Promise.all([
     publicReads.seasonList(),
     publicReads.tournamentList(),
     publicReads.ratingLeaderboard(5),
@@ -241,7 +242,10 @@ async function InsightsPageContent({ searchParams }: PageProps) {
     publicReads.streakLeaderboard(),
     getT(insightsMessages),
     loadSupplementaryKills(scope),
+    publicReads.hiddenPlayerIds(),
   ]);
+  const ratingRows = withoutHiddenPlayers(allRatingRows, hiddenPlayerIds);
+  const streakEntries = withoutHiddenPlayers(allStreakEntries, hiddenPlayerIds);
 
   if (!scopeData) {
     return (

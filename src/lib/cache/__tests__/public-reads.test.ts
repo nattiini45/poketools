@@ -107,6 +107,7 @@ vi.mock('@/lib/supabase/queries/meta-usage', () => ({
 }));
 vi.mock('@/lib/supabase/queries/players', () => ({
   getPublicPlayers: vi.fn(async () => ({ data: [{ id: P, name: 'Mara' }], total: 1 })),
+  getHiddenPlayerIds: vi.fn(async () => ['banned-player']),
   getPlayersByIds: vi.fn(async () => new Map([[P, FULL_PLAYER_ROW]])),
 }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({
@@ -208,6 +209,7 @@ const PRELOAD = {
 const CALLS = {
   seasonList: () => publicReads.seasonList(),
   tournamentList: () => publicReads.tournamentList(),
+  hiddenPlayerIds: () => publicReads.hiddenPlayerIds(),
   playerDirectory: () => publicReads.playerDirectory(48, 0),
   ratingLeaderboard: () => publicReads.ratingLeaderboard(5),
   streakLeaderboard: () => publicReads.streakLeaderboard(),
@@ -249,6 +251,7 @@ const CALLS = {
 
 /** Reads served for 60 s (lists, leaderboards, catalogues, all-time data). */
 const LIST_READS = new Set<ReaderName>([
+  'hiddenPlayerIds',
   'seasonList',
   'tournamentList',
   'playerDirectory',
@@ -266,6 +269,7 @@ const LIST_READS = new Set<ReaderName>([
  * own write routes expire them (see the catalogue describe below).
  */
 const TTL_ONLY_READS: Partial<Record<ReaderName, string>> = {
+  hiddenPlayerIds: 'ids of banned, suspended and test accounts; the discipline and player write routes expire it',
   metaUsage: 'imported Smogon usage; the usage import routes and the monthly cron expire it',
   achievementDefinitions: 'achievement catalogue; the admin achievement routes expire it',
   teamRoles: 'team-role catalogue; the team-role import routes expire it',
@@ -561,6 +565,7 @@ describe('public read cache — the catalogue and player write routes expire exa
   it(`a player write (PATCH/DELETE /api/players/${P}, avatar) expires every read that embeds a player, and ${P}'s own`, async () => {
     expect(await missedAfterTags([publicTags.players, publicTags.player(P)])).toEqual(
       [
+        'hiddenPlayerIds',
         'playerDirectory',
         'ratingLeaderboard',
         'streakLeaderboard',

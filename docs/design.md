@@ -133,7 +133,10 @@ they come back as deliberate visual changes.
 
 **Artwork statics (`art.*`).** Colours that must never follow a palette live
 in a separate static hex group: `art-ball-red` (`#DC2626`, the Pokéball's red
-half) and `art-card-blue` (`#3B82F6`).
+half), `art-ball-ink` (`#241A0C`, its outline, band and button ring),
+`art-ball-shell` (`#FFF8E9`, its lower half and button) and `art-card-blue`
+(`#3B82F6`). `shared/Pokeball.tsx` draws from these three ball inks only, so
+the ball is the same in both themes and every palette.
 
 `src/lib/design/tokens.ts` mirrors the sunlit values as TS constants for
 charts and inline styles; prefer the CSS-variable-backed Tailwind classes

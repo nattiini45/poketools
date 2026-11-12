@@ -60,22 +60,24 @@ export default function AbilitiesIndexClient({ data }: { data: readonly AbilityR
         key: 'name',
         primary: true,
         header: t('index.name'),
-        width: '200px',
+        width: '220px',
         sortable: true,
+        cardClassName: 'max-md:order-1 max-md:col-span-6',
         sortValue: (row) => localizeAbility(row.name, dl),
-        render: (row) => (
-          <span className="font-medium text-poke-text-primary">{localizeAbility(row.name, dl)}</span>
-        ),
+        render: (row) => <span>{localizeAbility(row.name, dl)}</span>,
       },
       {
         key: 'rating',
         header: t('index.rating'),
-        width: '90px',
+        width: '96px',
         align: 'right',
         sortable: true,
+        numeric: true,
+        cardLabel: 'inline',
+        cardClassName: 'max-md:order-2 max-md:col-span-3',
         sortValue: (row) => row.rating,
         render: (row) => (
-          <span className="text-poke-text-primary tabular-nums">
+          <span>
             {row.rating > 0
               ? formatter.number(row.rating, { minimumFractionDigits: 1, maximumFractionDigits: 1 })
               : '—'}
@@ -85,19 +87,21 @@ export default function AbilitiesIndexClient({ data }: { data: readonly AbilityR
       {
         key: 'earliestGen',
         header: t('index.gen'),
-        width: '70px',
+        width: '72px',
         align: 'right',
         sortable: true,
+        numeric: true,
+        cardLabel: 'inline',
+        cardClassName: 'max-md:order-3 max-md:col-span-3 max-md:text-right',
         sortValue: (row) => row.earliestGen,
-        render: (row) => (
-          <span className="text-poke-text-secondary text-xs">{row.earliestGen}</span>
-        ),
+        render: (row) => <span>{row.earliestGen}</span>,
       },
       {
         key: 'desc',
         header: t('index.description'),
+        cardClassName: 'max-md:order-4 max-md:col-span-6',
         render: (row) => (
-          <span className="text-poke-text-secondary text-sm line-clamp-2">
+          <span className="line-clamp-2 text-body text-fg-muted">
             {row.desc}
             {row.descFallback && <WikiDescFallbackTag className="ml-1.5" />}
           </span>
