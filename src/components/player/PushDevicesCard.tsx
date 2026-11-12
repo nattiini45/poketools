@@ -13,7 +13,6 @@ import { useCallback, useEffect, useState } from 'react';
 import Alert from '@/components/ui/Alert';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import { useFormatter, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -22,6 +21,7 @@ import { pushMessages } from '@/i18n/messages/push';
 import { disablePush, PUSH_API_PATH, pushPublicKey, thisDeviceFingerprint } from '@/lib/push/client';
 import type { PushDevice } from '@/lib/supabase/queries/push-subscriptions';
 import type { ApiResult } from '@/types/api';
+import SettingsSection from './SettingsSection';
 
 type LoadState =
   | { phase: 'loading' }
@@ -117,10 +117,7 @@ export default function PushDevicesCard() {
   const devices = load.phase === 'ready' ? load.devices : [];
 
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-1">{t('settings.heading')}</h2>
-      <p className="text-sm text-poke-text-secondary mb-4">{t('settings.description')}</p>
-
+    <SettingsSection icon="electric-seed" title={t('settings.heading')} description={t('settings.description')}>
       {load.phase === 'ready' && !load.enabled ? <Alert variant="warning" className="mb-4">{t('settings.notConfigured')}</Alert> : null}
       {load.phase === 'failed' ? (
         <Alert variant="error" className="mb-4">
@@ -128,9 +125,9 @@ export default function PushDevicesCard() {
         </Alert>
       ) : null}
 
-      <h3 className="text-sm font-semibold text-poke-text-primary mb-2">{t('settings.devicesHeading')}</h3>
-      {load.phase === 'loading' ? <p className="text-sm text-poke-text-muted">{t('settings.loading')}</p> : null}
-      {load.phase === 'ready' && devices.length === 0 ? <p className="text-sm text-poke-text-muted">{t('settings.empty')}</p> : null}
+      <h3 className="mb-2 text-subtitle font-[550] text-fg">{t('settings.devicesHeading')}</h3>
+      {load.phase === 'loading' ? <p className="text-body text-fg-muted">{t('settings.loading')}</p> : null}
+      {load.phase === 'ready' && devices.length === 0 ? <p className="text-body text-fg-muted">{t('settings.empty')}</p> : null}
       {devices.length > 0 ? (
         <ul className="flex flex-col gap-2">
           {devices.map((device) => {
@@ -139,14 +136,14 @@ export default function PushDevicesCard() {
             return (
               <li
                 key={device.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-poke-md border border-poke-border px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-3 rounded-poke-md border border-hairline px-3 py-2"
               >
                 <div className="min-w-0">
-                  <p className="flex items-center gap-2 text-sm font-medium text-poke-text-primary">
+                  <p className="flex items-center gap-2 text-body font-[550] text-fg">
                     <span className="truncate">{name}</span>
                     {device.fingerprint === mine ? <Badge>{t('settings.thisDevice')}</Badge> : null}
                   </p>
-                  <p className="text-xs text-poke-text-muted">
+                  <p className="text-caption text-fg-muted">
                     {t('settings.added', { date: f.instant(device.createdAt, 'date') })}
                     {' · '}
                     {device.lastSuccessAt
@@ -170,7 +167,7 @@ export default function PushDevicesCard() {
         </ul>
       ) : null}
 
-      <p aria-live="polite" className="min-h-5 pt-2 text-xs text-poke-text-muted">
+      <p aria-live="polite" className="min-h-5 pt-2 text-caption text-fg-muted">
         {notice ? t('settings.removed') : ''}
       </p>
       {removeError ? (
@@ -179,7 +176,7 @@ export default function PushDevicesCard() {
         </Alert>
       ) : null}
 
-      <p className="mt-3 text-xs text-poke-text-muted">{t('settings.privacy')}</p>
-    </Card>
+      <p className="mt-3 max-w-[70ch] text-caption text-fg-muted">{t('settings.privacy')}</p>
+    </SettingsSection>
   );
 }

@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Card from '@/components/ui/Card';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
-import Badge from '@/components/ui/Badge';
+import ItemIcon from '@/components/ui/ItemIcon';
 import { useRefreshSessionPlayer } from '@/components/shared/SessionProvider';
 import type { ApiResult } from '@/types/api';
 import type { Player } from '@/types/player';
@@ -83,20 +83,20 @@ export default function PlayerUsernamesEditor({ playerId, initialPlayer }: Playe
 
   return (
     <Card variant="outlined" padding="lg" className="h-full">
-      <div className="flex items-center gap-2 mb-4">
-        <h2 className="text-lg font-heading font-bold text-poke-text-primary">
+      <div className="mb-3 flex items-center gap-2.5">
+        <ItemIcon item="lucky-egg" />
+        <h2 className="font-heading text-title text-fg">
           {t('usernames.title')}
         </h2>
-        <Badge variant="blue" size="sm">{t('usernames.edit')}</Badge>
       </div>
 
-      <p className="text-sm text-poke-text-muted mb-4">
+      <p className="mb-4 text-body text-fg-muted">
         {t('usernames.intro')}
       </p>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
         <div>
-          <label className="block text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-1.5">
+          <label className="mb-1.5 block text-caption font-[550] text-fg-muted">
             {t('usernames.showdown')}
           </label>
           <Input
@@ -109,7 +109,7 @@ export default function PlayerUsernamesEditor({ playerId, initialPlayer }: Playe
         </div>
 
         <div>
-          <label className="block text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-1.5">
+          <label className="mb-1.5 block text-caption font-[550] text-fg-muted">
             {t('usernames.champions')}
           </label>
           <Input
@@ -122,10 +122,8 @@ export default function PlayerUsernamesEditor({ playerId, initialPlayer }: Playe
         </div>
 
         {message && messageText && (
-          <div className={`text-sm px-3 py-2 rounded-poke-md ${
-            message.type === 'success'
-              ? 'bg-poke-green-light text-poke-green'
-              : 'bg-poke-accent-light text-poke-accent'
+          <div role="status" className={`rounded-poke-md px-3 py-2 text-body ${
+            message.type === 'success' ? 'bg-win-bg text-win' : 'bg-loss-bg text-loss'
           }`}>
             {messageText}
           </div>

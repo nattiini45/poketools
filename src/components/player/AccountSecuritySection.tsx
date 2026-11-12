@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { signIn, signOut } from 'next-auth/react';
 import { clearPwaCaches } from '@/lib/pwa/caches';
-import Card from '@/components/ui/Card';
+import SettingsSection from './SettingsSection';
 import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Alert from '@/components/ui/Alert';
@@ -25,7 +25,7 @@ interface AccountIdentities {
 
 /** A client-side failure (a key of `account.security`) or the API's own error. Never translated text. */
 type SecurityErrorKey = keyof typeof accountEn.security & (
-  'loadFailed' | 'passwordsMismatch' | 'linkEmailFailed' | 'linkDiscordFailed' | 'signOutEverywhereFailed'
+  'loadFailed' | 'linkEmailFailed' | 'linkDiscordFailed' | 'signOutEverywhereFailed'
 );
 /** `email`: the address the failed request was sent with, so a follow-up link never uses what was typed since. */
 type SecurityError = { kind: 'key'; key: SecurityErrorKey } | { kind: 'api'; error: ApiErrorLike; email?: string };
@@ -46,6 +46,8 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [formError, setFormError] = useState<SecurityError | null>(null);
+  // A field-level validation result, shown on the confirm field itself.
+  const [passwordsMismatch, setPasswordsMismatch] = useState(false);
   const [emailLinked, setEmailLinked] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [linkingDiscord, setLinkingDiscord] = useState(false);
@@ -75,9 +77,10 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
     setEmailLinked(false);
 
     if (password !== confirmPassword) {
-      setFormError({ kind: 'key', key: 'passwordsMismatch' });
+      setPasswordsMismatch(true);
       return;
     }
+    setPasswordsMismatch(false);
 
     setSubmitting(true);
     try {
@@ -156,14 +159,7 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
   };
 
   return (
-    <Card padding="lg">
-      <h2 className="text-lg font-heading font-bold text-poke-text-primary mb-1">
-        {t('security.title')}
-      </h2>
-      <p className="text-sm text-poke-text-secondary mb-4">
-        {t('security.intro')}
-      </p>
-
+    <SettingsSection icon="rocky-helmet" title={t('security.title')} description={t('security.intro')}>
       {loadError && <Alert variant="error">{describe(loadError)}</Alert>}
       {formError && (
         <Alert variant="error" className="mb-3">
@@ -182,12 +178,12 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
       {emailLinked && <Alert variant="success" className="mb-3">{t('security.emailLinked')}</Alert>}
 
       {identities && (
-        <div className="space-y-4">
+        <div className="flex flex-col gap-4">
           {(discordEnabled || identities.hasDiscord) && (
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.discord')}</p>
-                <p className="text-sm text-poke-text-muted">
+                <p className="text-subtitle font-[550] text-fg">{t('security.discord')}</p>
+                <p className="text-body text-fg-muted">
                   {identities.hasDiscord ? t('security.linked') : t('security.notLinked')}
                 </p>
               </div>
@@ -201,8 +197,8 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
 
           <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.emailPassword')}</p>
-              <p className="text-sm text-poke-text-muted">{emailStatus(identities)}</p>
+              <p className="text-subtitle font-[550] text-fg">{t('security.emailPassword')}</p>
+              <p className="text-body text-fg-muted [overflow-wrap:anywhere]">{emailStatus(identities)}</p>
             </div>
             {!identities.hasEmail && !showEmailForm && (
               <Button variant="secondary" size="sm" onClick={() => setShowEmailForm(true)}>
@@ -212,7 +208,7 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
           </div>
 
           {showEmailForm && !identities.hasEmail && (
-            <form onSubmit={handleLinkEmail} className="space-y-3 border-t border-poke-border pt-4">
+            <form onSubmit={handleLinkEmail} className="flex max-w-md flex-col gap-3 border-t border-hairline pt-4">
               <Input
                 label={t('security.email')}
                 type="email"
@@ -238,7 +234,11 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
                 autoComplete="new-password"
                 required
                 value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  setPasswordsMismatch(false);
+                }}
+                error={passwordsMismatch ? t('security.passwordsMismatch') : undefined}
               />
               <div className="flex gap-2">
                 <Button type="submit" size="sm" loading={submitting}>
@@ -253,15 +253,15 @@ export default function AccountSecuritySection({ discordEnabled }: AccountSecuri
         </div>
       )}
 
-      <div className="mt-4 flex items-center justify-between gap-4 border-t border-poke-border pt-4">
-        <div>
-          <p className="text-sm font-heading font-semibold text-poke-text-primary">{t('security.sessionsTitle')}</p>
-          <p className="text-sm text-poke-text-muted">{t('security.sessionsHint')}</p>
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-x-4 gap-y-3 border-t border-hairline pt-4">
+        <div className="min-w-0 flex-1 basis-60">
+          <p className="text-subtitle font-[550] text-fg">{t('security.sessionsTitle')}</p>
+          <p className="text-body text-fg-muted">{t('security.sessionsHint')}</p>
         </div>
         <Button variant="secondary" size="sm" onClick={handleSignOutEverywhere} loading={signingOutEverywhere}>
           {t('security.signOutEverywhere')}
         </Button>
       </div>
-    </Card>
+    </SettingsSection>
   );
 }

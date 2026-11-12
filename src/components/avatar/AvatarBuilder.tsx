@@ -14,13 +14,25 @@ import {
   useAvatarErrorText,
   type AvatarError,
 } from './avatar-error';
+import { cn } from '@/lib/utils/cn';
 import AvatarCanvas from './AvatarCanvas';
 import AvatarCategoryPicker from './AvatarCategoryPicker';
 import AiAvatarGenerator from './AiAvatarGenerator';
 import ShowdownPicker from './ShowdownPicker';
 import PhotoTransformPanel from './PhotoTransformPanel';
 
-type BuilderMode = 'build' | 'pick' | 'generate' | 'transform';
+/**
+ * Direction B's skewed plate drawn on the button itself (docs/design.md, "Skewed plates"): the plate is the button's
+ * ::before, so the button's only child stays its label.
+ */
+const PLATE =
+  'relative isolate inline-flex min-h-11 items-center justify-center px-4 text-body transition-[color,filter] duration-80 ease-out before:absolute before:inset-0 before:-z-1 before:rounded-[3px] before:[transform:skewX(var(--skew))] disabled:opacity-60';
+const PLATE_SURFACE = 'before:border before:border-hairline-strong before:bg-surface';
+const PLATE_UNDERSIDE =
+  'after:absolute after:inset-x-0 after:bottom-0 after:-z-1 after:h-[3px] after:bg-accent-ink after:[transform:skewX(var(--skew))]';
+
+const MODES = ['build', 'pick', 'generate', 'transform'] as const;
+type BuilderMode = (typeof MODES)[number];
 
 /**
  * Random index in [0, length) for the cosmetic "Randomize" button. Web Crypto
@@ -183,60 +195,21 @@ export default function AvatarBuilder({ playerId, initialConfig, onSaved }: Avat
 
   return (
     <div>
-      {/* Mode Toggle */}
-      <div className="flex gap-1 mb-6 p-1 bg-poke-elevated rounded-poke-lg w-fit">
-        <button
-          onClick={() => selectMode('build')}
-          disabled={tabsLocked}
-          className={`
-            px-4 py-2 text-sm font-heading font-semibold rounded-poke-md transition-colors
-            ${mode === 'build'
-              ? 'bg-poke-surface text-poke-text-primary shadow-poke-sm'
-              : 'text-poke-text-muted hover:text-poke-text-secondary'
-            }
-          `}
-        >
-          {t('modes.build')}
-        </button>
-        <button
-          onClick={() => selectMode('pick')}
-          disabled={tabsLocked}
-          className={`
-            px-4 py-2 text-sm font-heading font-semibold rounded-poke-md transition-colors
-            ${mode === 'pick'
-              ? 'bg-poke-surface text-poke-text-primary shadow-poke-sm'
-              : 'text-poke-text-muted hover:text-poke-text-secondary'
-            }
-          `}
-        >
-          {t('modes.pick')}
-        </button>
-        <button
-          onClick={() => selectMode('generate')}
-          disabled={tabsLocked}
-          className={`
-            px-4 py-2 text-sm font-heading font-semibold rounded-poke-md transition-colors
-            ${mode === 'generate'
-              ? 'bg-poke-surface text-poke-text-primary shadow-poke-sm'
-              : 'text-poke-text-muted hover:text-poke-text-secondary'
-            }
-          `}
-        >
-          {t('modes.generate')}
-        </button>
-        <button
-          onClick={() => selectMode('transform')}
-          disabled={tabsLocked}
-          className={`
-            px-4 py-2 text-sm font-heading font-semibold rounded-poke-md transition-colors
-            ${mode === 'transform'
-              ? 'bg-poke-surface text-poke-text-primary shadow-poke-sm'
-              : 'text-poke-text-muted hover:text-poke-text-secondary'
-            }
-          `}
-        >
-          {t('modes.transform')}
-        </button>
+      {/* Mode tabs */}
+      <div role="tablist" aria-label={t('modes.label')} className="mb-6 flex flex-wrap gap-x-2 gap-y-2 px-1">
+        {MODES.map((id) => (
+          <button
+            key={id}
+            type="button"
+            role="tab"
+            aria-selected={mode === id}
+            onClick={() => selectMode(id)}
+            disabled={tabsLocked}
+            className={cn(PLATE, PLATE_SURFACE, mode === id ? cn('font-[550] text-fg', PLATE_UNDERSIDE) : 'text-fg-muted hover:text-fg')}
+          >
+            {t(`modes.${id}`)}
+          </button>
+        ))}
       </div>
 
       {/* Showdown Trainer Sprite Picker */}
@@ -264,92 +237,71 @@ export default function AvatarBuilder({ playerId, initialConfig, onSaved }: Avat
 
       {/* Layer Builder Mode */}
       {mode === 'build' && (
-        <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex flex-col gap-6 lg:flex-row">
           {/* Preview Panel */}
           <div className="flex flex-col items-center gap-4 lg:sticky lg:top-24 lg:self-start">
             {/* Gender Toggle */}
-            <div className="flex gap-1 p-1 bg-poke-elevated rounded-poke-lg">
-              <button
-                onClick={() => updateGender('male')}
-                className={`
-                  px-4 py-1.5 text-xs font-heading font-semibold rounded-poke-md transition-colors
-                  ${config.gender === 'male'
-                    ? 'bg-blue-500 text-white shadow-poke-sm'
-                    : 'text-poke-text-muted hover:text-poke-text-secondary'
-                  }
-                `}
-              >
-                {t('builder.male')}
-              </button>
-              <button
-                onClick={() => updateGender('female')}
-                className={`
-                  px-4 py-1.5 text-xs font-heading font-semibold rounded-poke-md transition-colors
-                  ${config.gender === 'female'
-                    ? 'bg-pink-500 text-white shadow-poke-sm'
-                    : 'text-poke-text-muted hover:text-poke-text-secondary'
-                  }
-                `}
-              >
-                {t('builder.female')}
-              </button>
+            <div className="flex gap-1 rounded-poke-lg bg-sunken p-1">
+              {(['male', 'female'] as const).map((gender) => (
+                <button
+                  key={gender}
+                  type="button"
+                  aria-pressed={config.gender === gender}
+                  onClick={() => updateGender(gender)}
+                  className={cn(
+                    'min-h-9 rounded-poke-md px-4 text-body transition-colors duration-80 ease-out pointer-coarse:min-h-11',
+                    config.gender === gender ? 'bg-surface font-[550] text-fg shadow-surface-1' : 'text-fg-muted hover:text-fg',
+                  )}
+                >
+                  {t(`builder.${gender}`)}
+                </button>
+              ))}
             </div>
 
-            <div className="bg-poke-elevated rounded-poke-xl p-4 shadow-poke-card">
+            <div className="rounded-poke-xl border border-hairline bg-elevated p-4">
               <AvatarCanvas config={config} size={192} />
             </div>
 
-            <div className="flex gap-2">
-              <button
-                onClick={randomize}
-                disabled={saving}
-                className="px-4 py-2 text-sm font-heading font-semibold rounded-poke-md
-                         bg-poke-elevated text-poke-text-secondary hover:bg-poke-border
-                         transition-colors disabled:opacity-50"
-              >
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <button type="button" onClick={randomize} disabled={saving} className={cn(PLATE, PLATE_SURFACE, 'font-[550] text-fg hover:brightness-95')}>
                 {t('builder.randomize')}
               </button>
-              <button
-                onClick={save}
-                disabled={saving}
-                className="px-6 py-2 text-sm font-heading font-bold rounded-poke-md
-                         bg-poke-accent text-poke-surface
-                         transition-colors disabled:opacity-50"
-              >
+              <button type="button" onClick={save} disabled={saving} className={cn(PLATE, 'px-5 font-[550] text-tier-ink before:bg-accent-fill hover:brightness-95')}>
                 {saving ? t('builder.saving') : t('builder.save')}
               </button>
             </div>
 
             {initialConfig && (
               <button
+                type="button"
                 onClick={removeAvatar}
                 disabled={saving}
-                className="text-xs text-poke-text-muted hover:text-poke-accent transition-colors"
+                className="min-h-11 text-caption text-fg-muted underline-offset-4 transition-colors duration-80 ease-out hover:text-loss hover:underline sm:min-h-0"
               >
                 {t('builder.remove')}
               </button>
             )}
 
             {error && (
-              <p className="text-sm text-poke-danger-ink text-center max-w-[200px]">{errorText(error)}</p>
+              <p role="alert" className="max-w-[220px] text-center text-body text-poke-danger-ink">{errorText(error)}</p>
             )}
           </div>
 
           {/* Category Tabs + Option Grid */}
           <div className="flex-1 min-w-0">
-            <div className="flex flex-wrap gap-1 mb-4 pb-3 border-b border-poke-border">
+            <div className="mb-4 flex flex-wrap gap-1.5 border-b border-hairline pb-3">
               {categories.map((cat) => (
                 <button
                   key={cat.id}
                   onClick={() => setActiveTab(cat.id)}
-                  className={`
-                    px-3 py-1.5 text-xs font-heading font-semibold rounded-poke-md
-                    transition-colors
-                    ${activeTab === cat.id
-                      ? 'bg-poke-accent text-poke-surface'
-                      : 'bg-poke-elevated text-poke-text-secondary hover:bg-poke-border'
-                    }
-                  `}
+                  type="button"
+                  aria-pressed={activeTab === cat.id}
+                  className={cn(
+                    'min-h-9 rounded-poke-md border px-3 text-caption font-[550] transition-colors duration-80 ease-out pointer-coarse:min-h-11',
+                    activeTab === cat.id
+                      ? 'border-accent-fill bg-accent-subtle text-accent-ink'
+                      : 'border-hairline bg-surface text-fg-muted hover:bg-hover hover:text-fg',
+                  )}
                 >
                   {tw.dynamic(`categories.${avatarMessageKey(cat.id)}`, undefined, cat.label)}
                 </button>

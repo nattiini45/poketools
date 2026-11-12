@@ -9,6 +9,7 @@ export default defineDe<typeof en>()({
     builderHeading: 'Avatar-Editor',
   },
   modes: {
+    label: 'Avatar-Quelle',
     build: 'Zusammenstellen',
     pick: 'Trainer-Sprites',
     generate: 'Mit KI erstellen',

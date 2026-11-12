@@ -10,6 +10,7 @@ export default {
     builderHeading: 'Avatar Builder',
   },
   modes: {
+    label: 'Avatar source',
     build: 'Build',
     pick: 'Trainer Sprites',
     generate: 'Generate with AI',

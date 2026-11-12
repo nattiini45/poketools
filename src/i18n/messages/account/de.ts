@@ -31,6 +31,12 @@ export default defineDe<typeof en>()({
     signOutEverywhere: 'Überall abmelden',
     signOutEverywhereFailed: 'Die Abmeldung auf allen Geräten hat nicht geklappt. Bitte versuche es noch einmal.',
   },
+  saveBar: {
+    unsaved: { one: '{count} ungespeicherte Änderung', other: '{count} ungespeicherte Änderungen' },
+    save: 'Änderungen speichern',
+    saving: 'Speichert…',
+    discard: 'Verwerfen',
+  },
   agentSettings: {
     title: 'KI-Assistent',
     badge: 'KI',

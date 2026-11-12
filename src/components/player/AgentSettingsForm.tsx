@@ -1,7 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import Card from '@/components/ui/Card';
+import { ChevronDown, ChevronUp } from 'lucide-react';
+import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
@@ -12,6 +13,8 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { accountMessages } from '@/i18n/messages/account';
 import { errorsAi } from '@/i18n/messages/errors';
 import type accountEn from '@/i18n/messages/account/en';
+import SettingsSection from './SettingsSection';
+import { useSettingsSave } from './settings-save';
 
 type PersonaKey = keyof typeof accountEn.agentSettings.personas;
 
@@ -138,6 +141,8 @@ export default function AgentSettingsForm() {
         );
         return;
       }
+      // What is stored now: the save bar compares against it.
+      setConfig((prev) => (prev ? { ...prev, model_priority: order.map((m) => m.id), default_persona: persona } : prev));
       setMessage({ type: 'success' });
     } catch (err) {
       const apiError = toApiErrorLike(err);
@@ -150,6 +155,18 @@ export default function AgentSettingsForm() {
       setSaving(false);
     }
   }, [order, persona]);
+
+  const storedOrder = config ? orderModels(config.model_priority, config.available_models) : [];
+  const storedPersona = config?.default_persona || 'linden_teambuilding';
+  const dirty =
+    config !== null && (persona !== storedPersona || order.map((m) => m.id).join() !== storedOrder.map((m) => m.id).join());
+  const reset = useCallback(() => {
+    if (!config) return;
+    setOrder(orderModels(config.model_priority, config.available_models));
+    setPersona(config.default_persona || 'linden_teambuilding');
+    setMessage(null);
+  }, [config]);
+  const hasSaveBar = useSettingsSave('agent-settings', { dirty, saving, save, reset });
 
   const messageText =
     message === null
@@ -166,52 +183,41 @@ export default function AgentSettingsForm() {
   }));
 
   return (
-    <Card variant="outlined" padding="lg">
-      <div className="flex items-center gap-2 mb-1">
-        <h2 className="text-lg font-heading font-bold text-poke-text-primary">{t('agentSettings.title')}</h2>
-        <Badge variant="purple" size="sm">{t('agentSettings.badge')}</Badge>
-      </div>
-      <p className="text-sm text-poke-text-muted mb-4">
-        {t('agentSettings.intro')}
-      </p>
-
+    <SettingsSection
+      icon="up-grade"
+      title={t('agentSettings.title')}
+      description={t('agentSettings.intro')}
+      meta={<Badge variant="purple" size="sm">{t('agentSettings.badge')}</Badge>}
+    >
       {loading ? (
-        <p className="text-sm text-poke-text-muted py-4">{t('agentSettings.loading')}</p>
+        <p className="text-body text-fg-muted">{t('agentSettings.loading')}</p>
       ) : (
-        <div className="space-y-5">
-          <div>
-            <label className="block text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-1.5">
-              {t('agentSettings.defaultAssistant')}
-            </label>
+        <div className="flex flex-col gap-5">
+          <div className="max-w-md">
             <Select
+              label={t('agentSettings.defaultAssistant')}
               value={persona}
               options={personaOptions}
               onChange={(e) => {
                 setPersona(e.target.value);
                 setMessage(null);
               }}
-              className="w-full"
             />
           </div>
 
           <div>
-            <label className="block text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-1.5">
+            <p id="agent-model-priority" className="mb-1.5 text-caption font-medium text-fg">
               {t('agentSettings.modelPriority')}
-            </label>
-            <ul className="space-y-2">
+            </p>
+            <ol aria-labelledby="agent-model-priority" className="overflow-hidden rounded-poke-md border border-hairline">
               {order.map((m, i) => (
-                <li
-                  key={m.id}
-                  className="flex items-center justify-between gap-3 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2"
-                >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-poke-text-muted tabular-nums w-4">{i + 1}.</span>
-                    <span className="text-sm font-heading font-semibold text-poke-text-primary truncate">
-                      {MODEL_LABELS[m.id] ?? m.id}
-                    </span>
+                <li key={m.id} className="flex items-center justify-between gap-3 border-t border-hairline px-3 py-1.5 first:border-t-0">
+                  <div className="flex min-w-0 items-center gap-2.5">
+                    <span className="w-4 shrink-0 font-mono text-caption text-fg-muted tabular-nums">{i + 1}</span>
+                    <span className="truncate text-body font-[550] text-fg">{MODEL_LABELS[m.id] ?? m.id}</span>
                     <Badge variant="gray" size="sm">{m.tier}</Badge>
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex shrink-0 items-center gap-1">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -219,7 +225,7 @@ export default function AgentSettingsForm() {
                       disabled={i === 0}
                       aria-label={t('agentSettings.moveUp', { model: m.id })}
                     >
-                      ↑
+                      <ChevronUp size={16} aria-hidden="true" />
                     </Button>
                     <Button
                       variant="ghost"
@@ -228,36 +234,25 @@ export default function AgentSettingsForm() {
                       disabled={i === order.length - 1}
                       aria-label={t('agentSettings.moveDown', { model: m.id })}
                     >
-                      ↓
+                      <ChevronDown size={16} aria-hidden="true" />
                     </Button>
                   </div>
                 </li>
               ))}
-            </ul>
+            </ol>
           </div>
 
-          {message && messageText && (
-            <div
-              className={`text-sm px-3 py-2 rounded-poke-md ${
-                message.type === 'success'
-                  ? 'bg-poke-green-light text-poke-green'
-                  : 'bg-poke-accent-light text-poke-accent'
-              }`}
-            >
-              {messageText}
+          {message && messageText && <Alert variant={message.type === 'success' ? 'success' : 'error'}>{messageText}</Alert>}
+
+          {!hasSaveBar && (
+            <div>
+              <Button variant="primary" onClick={() => void save()} loading={saving} disabled={!config}>
+                {t('agentSettings.save')}
+              </Button>
             </div>
           )}
-
-          <Button
-            variant="primary"
-            onClick={() => void save()}
-            loading={saving}
-            disabled={!config}
-          >
-            {t('agentSettings.save')}
-          </Button>
         </div>
       )}
-    </Card>
+    </SettingsSection>
   );
 }
