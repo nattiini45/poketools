@@ -28,7 +28,7 @@ export function RosterStatusCell({
         )}
       </span>
       {banReasonLine && (
-        <span className="line-clamp-2 max-w-xs text-caption text-fg-muted" title={banReasonLine}>
+        <span className="max-w-xs break-words text-caption text-fg-muted">
           {banReasonLine}
         </span>
       )}
