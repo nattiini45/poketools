@@ -28,13 +28,13 @@ export default function ModuleFacts({ modules, editorLinks, parentLevel }: Modul
         const href = editorLinks?.[mod.adapter];
         return (
           <Card key={mod.adapter} padding="sm" className="space-y-2">
-            <Heading level={childLevel(parentLevel)} className="font-heading font-semibold text-poke-text-primary">{mod.label}</Heading>
-            {mod.summary !== '' && <p className="text-sm text-poke-text-secondary">{mod.summary}</p>}
+            <Heading level={childLevel(parentLevel)} className="font-heading font-semibold text-fg">{mod.label}</Heading>
+            {mod.summary !== '' && <p className="text-sm text-fg-muted">{mod.summary}</p>}
             {mod.facts.length > 0 && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-sm">
                   <thead>
-                    <tr className="border-b border-poke-border text-poke-text-muted">
+                    <tr className="border-b border-hairline text-fg-muted">
                       <th scope="col" className="py-1 pr-4 font-medium">
                         {t('detail.factLabel')}
                       </th>
@@ -46,22 +46,22 @@ export default function ModuleFacts({ modules, editorLinks, parentLevel }: Modul
                   <tbody>
                     {mod.facts.map((fact) => (
                       <tr key={fact.key} className="border-b last:border-0">
-                        <th scope="row" className="py-1 pr-4 font-normal text-poke-text-secondary">
+                        <th scope="row" className="py-1 pr-4 font-normal text-fg-muted">
                           {fact.label}
                         </th>
-                        <td className="py-1 text-poke-text-primary">{fact.value}</td>
+                        <td className="py-1 text-fg">{fact.value}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
             )}
-            <p className="text-sm text-poke-text-muted">
+            <p className="text-sm text-fg-muted">
               {t('detail.legacyNote')}
               {href !== undefined && (
                 <>
                   {' '}
-                  <Link href={href} className="font-medium text-poke-blue hover:underline">
+                  <Link href={href} className="font-medium text-accent-ink hover:underline underline-offset-2">
                     {t('detail.editIn')}
                   </Link>
                 </>

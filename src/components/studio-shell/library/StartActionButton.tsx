@@ -50,7 +50,7 @@ export default function StartActionButton({ label, hint, variant = 'primary', ru
       <Button type="button" variant={variant} className="min-h-11 sm:min-h-0" loading={busy} aria-busy={busy} onClick={() => void start()}>
         {label}
       </Button>
-      {hint !== undefined && <p className="text-sm text-poke-text-muted">{hint}</p>}
+      {hint !== undefined && <p className="text-sm text-fg-muted">{hint}</p>}
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
     </div>
   );

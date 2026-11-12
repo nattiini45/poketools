@@ -21,7 +21,7 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline underline-offset-2 sm:min-h-0';
 
 /**
  * `/admin/formats/[id]`: the read-only page of one stored format. The gate is `gateFormatDefinition`: a malformed
@@ -65,7 +65,7 @@ export default async function FormatPage({ params }: PageProps) {
               ? tEditor('list.state.draft')
               : tEditor('list.state.published', { n: summary.current_version.version_no })}
           </Badge>
-          {summary.owner !== null && <span className="text-sm text-poke-text-secondary">{tEditor('list.by', { name: summary.owner.name })}</span>}
+          {summary.owner !== null && <span className="text-sm text-fg-muted">{tEditor('list.by', { name: summary.owner.name })}</span>}
           <Link href="/admin/formats" className={LINK}>
             {t('detail.back')}
           </Link>
@@ -76,7 +76,7 @@ export default async function FormatPage({ params }: PageProps) {
           )}
         </div>
         <ForkStoredButton definitionId={id} />
-        {view === null ? <p className="text-sm text-poke-text-muted">{tEditor('page.noContent')}</p> : <FormatDetail view={view} variant="page" />}
+        {view === null ? <p className="text-sm text-fg-muted">{tEditor('page.noContent')}</p> : <FormatDetail view={view} variant="page" />}
       </PageContainer>
     </AdminGuard>
   );

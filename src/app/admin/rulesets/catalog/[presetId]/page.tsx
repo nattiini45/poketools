@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import { RULESETS_HREF } from '@/components/ruleset-studio/hrefs';
+import ReadingLayout from '@/components/studio-shell/ReadingLayout';
 import RulesView from '@/components/ruleset-studio/RulesView';
 import ForkPresetButton from '@/components/ruleset-studio/starts/ForkPresetButton';
 import Badge from '@/components/ui/Badge';
@@ -21,7 +22,7 @@ interface PageProps {
   params: Promise<{ presetId: string }>;
 }
 
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline underline-offset-2 sm:min-h-0';
 
 /**
  * `/admin/rulesets/catalog/[presetId]`: the read-only page of one catalog rule preset. An unknown preset is a 404; a
@@ -50,18 +51,20 @@ export default async function RulesetPresetPage({ params }: PageProps) {
             {t('page.back')}
           </Link>
         </div>
-        <p className="text-sm text-poke-text-secondary">{t('page.catalogIntro')}</p>
+        <p className="text-sm text-fg-muted">{t('page.catalogIntro')}</p>
         <div className="flex flex-wrap items-start gap-3">
           <ForkPresetButton presetId={presetId} />
           {entry.tourOverlay && <ForkPresetButton presetId={presetId} tourOverlay />}
         </div>
         {described !== null && (
-          <section className="space-y-3" aria-labelledby="preset-rules">
-            <h2 id="preset-rules" className="font-heading text-lg font-bold text-poke-text-primary">
-              {t('page.rulesHeading')}
-            </h2>
-            <RulesView rules={described} lang={locale} />
-          </section>
+          <ReadingLayout outlineLabel={t('page.onThisPage')} outline={described.sections.map((section) => ({ id: `rules-${section.id}`, label: section.heading }))}>
+            <section className="space-y-3" aria-labelledby="preset-rules">
+              <h2 id="preset-rules" className="font-heading text-title text-fg">
+                {t('page.rulesHeading')}
+              </h2>
+              <RulesView rules={described} lang={locale} />
+            </section>
+          </ReadingLayout>
         )}
       </PageContainer>
     </AdminGuard>

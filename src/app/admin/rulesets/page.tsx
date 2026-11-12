@@ -49,10 +49,22 @@ export default async function RulesetsGalleryPage() {
       })),
   };
 
+  const newRuleset = <NewRulesetDialog data={dialogData} />;
+
   return (
     <AdminGuard>
-      <PageContainer title={t('page.title')} subtitle={t('page.subtitle')} maxWidth="xl" action={<NewRulesetDialog data={dialogData} />}>
-        <RulesetsGalleryView t={t} locale={locale} mine={mine} shared={shared} site={site} usage={usage} catalogVersion={PRESET_RULES_VERSION} limit={LIST_LIMIT} />
+      <PageContainer title={t('page.title')} subtitle={t('page.subtitle')} maxWidth="xl" action={newRuleset}>
+        <RulesetsGalleryView
+          t={t}
+          locale={locale}
+          mine={mine}
+          shared={shared}
+          site={site}
+          usage={usage}
+          catalogVersion={PRESET_RULES_VERSION}
+          limit={LIST_LIMIT}
+          newAction={newRuleset}
+        />
       </PageContainer>
     </AdminGuard>
   );

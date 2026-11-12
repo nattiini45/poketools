@@ -21,7 +21,9 @@ export default defineDe<typeof en>()({
     siteIntro: 'Die Standard-Regelwerke der Seite, eins pro Generation und Tier. Öffne eins zum Lesen oder forke es, um es zu ändern.',
     emptySite: 'Der Seitenkatalog ist leer.',
   },
+  tabs: { label: 'Regelwerk-Galerien', yours: 'Deine', shared: 'Geteilt', examples: 'Beispiele' },
   list: {
+    emptyTitle: 'Noch keine Regelwerke',
     yours: 'Deine Regelwerke',
     yoursIntro: 'Private Entwürfe und die Regelwerke, die du veröffentlicht oder geteilt hast.',
     shared: 'Mit dir geteilt',

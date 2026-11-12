@@ -51,7 +51,7 @@ export default async function FormatExamplePage({ params }: PageProps) {
   return (
     <AdminGuard>
       <PageContainer title={title} maxWidth="lg">
-        <Link href="/admin/formats" className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0">
+        <Link href="/admin/formats" className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline underline-offset-2 sm:min-h-0">
           {t('detail.back')}
         </Link>
         <div className="flex flex-wrap items-start gap-3">
