@@ -114,7 +114,18 @@ export default function ClockBar({
       {slot && running && progress ? (
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
-            {t('clock.roundOf', { round: progress.round, rounds: progress.roundsTotal, pick: progress.pickInRound, picks: progress.picksInRound })}
+            <span>
+              {t('clock.roundOf', { round: progress.round, rounds: progress.roundsTotal, pick: progress.pickInRound, picks: progress.picksInRound })}
+              {vm.viewer.budgetRemaining !== null ? (
+                <span
+                  className={styles.digits}
+                  title={t('clock.pointsLeftTitle', { n: vm.viewer.budgetRemaining, count: Math.max(0, vm.viewer.slotsTotal - vm.viewer.picksMade) })}
+                >
+                  {' · '}
+                  {t('clock.pointsLeft', { n: vm.viewer.budgetRemaining })}
+                </span>
+              ) : null}
+            </span>
             {progress.makeupForRound !== null ? (
               <span className={styles.makeupBadge}>↻ {t('clock.makeupFor', { round: progress.makeupForRound })}</span>
             ) : null}

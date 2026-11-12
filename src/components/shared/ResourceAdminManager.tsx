@@ -171,7 +171,7 @@ export default function ResourceAdminManager({
   const scope = resourceType === 'season' ? { seasonId: resourceId } : { tournamentId: resourceId };
 
   return (
-    <div className="flex max-w-lg flex-col gap-3">
+    <div className="flex max-w-lg flex-col gap-3" data-saving={saving || undefined}>
       {admins.length === 0 ? (
         // A failed load is not "no admins": the alert below says why the list is missing.
         loadFailure ? null : <p className="text-body text-fg-muted">{t('resourceAdmins.none')}</p>

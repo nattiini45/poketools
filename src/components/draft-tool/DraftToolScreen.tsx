@@ -190,7 +190,7 @@ export default function DraftToolScreen({
   const clockRowRef = useRef<HTMLDivElement>(null);
   const dockRef = useRef<HTMLDivElement>(null);
   const wallScrollRef = useRef<HTMLDivElement>(null);
-  useStickyOffsets(rootRef, clockRowRef, dockRef);
+  useStickyOffsets(rootRef, clockRowRef, dockRef, wallScrollRef);
 
   // A new price tab starts at the top of the grid (desktop scroller; below 1024 px the page scrolls and the
   // tabs stay where they are). Filters and the pinned line are untouched (SPEC:196-199).

@@ -59,6 +59,11 @@ export default {
     roundPick: 'Round {round} · Pick {pick}',
     roundOf: 'Round {round} of {rounds} · Pick {pick} of {picks}',
     overall: 'Pick {pick} of {total}',
+    pointsLeft: '{n} P left',
+    pointsLeftTitle: {
+      one: '{n} points left, {count} pick left to fill your roster',
+      other: '{n} points left, {count} picks left to fill your roster',
+    },
     seatTrack: 'Round {round}: {done} of {total} picks made',
     makeupFor: 'Make-up pick (round {round})',
     next: 'Next: {player}',

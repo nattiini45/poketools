@@ -253,6 +253,7 @@ export default defineDe<typeof en>()({
     nameMissing: 'Gib einen Liga-Namen ein, um zu speichern.',
     discard: 'Verwerfen',
     savesOnChange: 'Speichert sofort',
+    saving: 'Speichert …',
     sections: 'Abschnitte der Einstellungen',
   },
   theme: {

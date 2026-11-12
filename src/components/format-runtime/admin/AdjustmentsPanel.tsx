@@ -99,8 +99,8 @@ export default function AdjustmentsPanel({ seasonId, allowed, targets }: Adjustm
   if (kind === null) {
     return (
       <div className="space-y-3" data-live-adjustments>
-        <p className="text-sm text-poke-text-muted">{t('adjust.noForms')}</p>
-        {apiOnlyNote !== null && <p className="text-sm text-poke-text-secondary">{apiOnlyNote}</p>}
+        <p className="text-body text-fg-muted">{t('adjust.noForms')}</p>
+        {apiOnlyNote !== null && <p className="text-body text-fg-muted">{apiOnlyNote}</p>}
       </div>
     );
   }
@@ -109,7 +109,7 @@ export default function AdjustmentsPanel({ seasonId, allowed, targets }: Adjustm
 
   return (
     <div className="space-y-3" data-live-adjustments>
-      <p className="text-sm text-poke-text-secondary">{t('adjust.intro')}</p>
+      <p className="text-body text-fg-muted">{t('adjust.intro')}</p>
       <form onSubmit={submit} className="space-y-4" aria-busy={pending} {...unsavedMarker(dirty)}>
         <Select
           label={t('adjust.fields.kind')}
@@ -142,7 +142,7 @@ export default function AdjustmentsPanel({ seasonId, allowed, targets }: Adjustm
             rows={3}
             onChange={(event) => setReason(event.target.value)}
           />
-          <p id={counterId} className={`text-xs ${tooLong ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
+          <p id={counterId} className={`text-caption ${tooLong ? 'text-loss' : 'text-fg-muted'}`}>
             {t('adjust.reason.counter', { used: length, max: TEXT_MAX })}
           </p>
         </div>
@@ -150,7 +150,7 @@ export default function AdjustmentsPanel({ seasonId, allowed, targets }: Adjustm
         {draftProblem !== null && <Alert variant="warning">{t(`adjust.error.${draftProblem}`)}</Alert>}
         {attempted && trimmed === '' && draftProblem === null && <Alert variant="warning">{t('adjust.reason.required')}</Alert>}
         {errorMessage !== null && <Alert variant="error">{errorMessage}</Alert>}
-        <div role="status" aria-live="polite" className="text-sm text-poke-green">
+        <div role="status" aria-live="polite" className="text-body text-live">
           {recorded ? t('adjust.result.recorded') : ''}
         </div>
 
@@ -158,7 +158,7 @@ export default function AdjustmentsPanel({ seasonId, allowed, targets }: Adjustm
           {t('adjust.submit')}
         </Button>
       </form>
-      {apiOnlyNote !== null && <p className="text-sm text-poke-text-secondary">{apiOnlyNote}</p>}
+      {apiOnlyNote !== null && <p className="text-body text-fg-muted">{apiOnlyNote}</p>}
     </div>
   );
 }

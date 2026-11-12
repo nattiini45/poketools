@@ -13,6 +13,7 @@ import { formatChallengeMachine } from '@/lib/format-engine/runtime/challenge-st
 import { withdrawChallengeRequest } from '@/lib/format-engine/runtime/client-api';
 import type { ChallengeView } from '@/lib/format-engine/runtime/view-types';
 import type { LText } from '@/lib/studio-core/ltext';
+import { ACTION_CELL, CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { BUTTON_TOUCH, labelText } from './admin-shared';
 import { useAdminRequest } from './useAdminRequest';
 import { useStatusFocus } from './useStatusFocus';
@@ -62,13 +63,13 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
   }
 
   if (phases.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('challenges.noLadders')}</p>;
+    return <p className="text-body text-fg-muted">{t('challenges.noLadders')}</p>;
   }
 
   return (
     <div className="space-y-4" data-live-challenges>
-      <p className="text-sm text-poke-text-secondary">{t('challenges.intro')}</p>
-      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-sm text-poke-green focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <p className="text-body text-fg-muted">{t('challenges.intro')}</p>
+      <div ref={statusRef} tabIndex={-1} role="status" aria-live="polite" className="text-body text-live focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
         {withdrawn ? t('challenges.withdrawn') : ''}
       </div>
       {errorMessage !== null && <Alert variant="error">{errorMessage}</Alert>}
@@ -76,34 +77,34 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
         const rows = challenges.filter((challenge) => challenge.phase_id === phase.id);
         return (
           <div key={phase.id} className="space-y-2" data-ladder-phase={phase.id}>
-            <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{labelText(phase.label, locale, phase.id)}</h3>
+            <h3 className="text-subtitle text-fg">{labelText(phase.label, locale, phase.id)}</h3>
             {rows.length === 0 ? (
-              <p className="text-sm text-poke-text-muted">{t('challenges.none')}</p>
+              <p className="text-body text-fg-muted">{t('challenges.none')}</p>
             ) : (
-              <div className="overflow-x-auto rounded-poke-md border border-poke-border">
-                <table className="w-full min-w-[32rem] text-left text-sm">
+              <div className={TABLE_FRAME}>
+                <table className={TABLE}>
                   <caption className="sr-only">{t('challenges.caption', { phase: labelText(phase.label, locale, phase.id) })}</caption>
-                  <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+                  <thead className={THEAD}>
                     <tr>
-                      <th scope="col" className="px-3 py-2">{t('challenges.columns.challenger')}</th>
-                      <th scope="col" className="px-3 py-2">{t('challenges.columns.defender')}</th>
-                      <th scope="col" className="px-3 py-2">{t('challenges.columns.round')}</th>
-                      <th scope="col" className="px-3 py-2">{t('challenges.columns.expires')}</th>
-                      <th scope="col" className="px-3 py-2">
+                      <th scope="col" className={TH}>{t('challenges.columns.challenger')}</th>
+                      <th scope="col" className={TH}>{t('challenges.columns.defender')}</th>
+                      <th scope="col" className={TH}>{t('challenges.columns.round')}</th>
+                      <th scope="col" className={TH}>{t('challenges.columns.expires')}</th>
+                      <th scope="col" className={TH}>
                         <span className="sr-only">{t('challenges.columns.actions')}</span>
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-poke-border">
+                  <tbody className={TBODY}>
                     {rows.map((challenge) => (
-                      <tr key={challenge.id} className="align-middle">
-                        <td className="px-3 py-2 text-poke-text-primary">{challenge.challenger.name ?? t('formerPlayer')}</td>
-                        <td className="px-3 py-2 text-poke-text-primary">{challenge.defender.name ?? t('formerPlayer')}</td>
-                        <td className="px-3 py-2 text-poke-text-secondary">{challenge.round}</td>
-                        <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+                      <tr key={challenge.id} className={ROW}>
+                        <td className={NAME_CELL}>{challenge.challenger.name ?? t('formerPlayer')}</td>
+                        <td className={CELL} data-label={t('challenges.columns.defender')}>{challenge.defender.name ?? t('formerPlayer')}</td>
+                        <td className={CELL} data-label={t('challenges.columns.round')}>{challenge.round}</td>
+                        <td className={CELL} data-label={t('challenges.columns.expires')}>
                           {challenge.lapsed ? <Badge variant="gray">{t('challenges.expired')}</Badge> : <RelativeTime value={challenge.expires_at} />}
                         </td>
-                        <td className="px-3 py-2 text-right">
+                        <td className={ACTION_CELL}>
                           {formatChallengeMachine.can(challenge.state, 'cancelled', 'admin') && !challenge.lapsed && (
                             <Button
                               variant="secondary"
@@ -125,7 +126,7 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
                           {challenge.match_id !== null && (
                             <Link
                               href={`/admin/matches/${encodeURIComponent(challenge.match_id)}`}
-                              className={`inline-flex items-center font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}
+                              className={`inline-flex items-center font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}
                             >
                               {t('challenges.openMatch')}
                             </Link>
@@ -140,7 +141,7 @@ export default function AdminLadders({ seasonId, phases, challenges }: AdminLadd
           </div>
         );
       })}
-      <p className="text-xs text-poke-text-muted">{t('challenges.matchNote')}</p>
+      <p className="text-caption text-fg-muted">{t('challenges.matchNote')}</p>
 
       <ConfirmDialog
         open={target !== null}

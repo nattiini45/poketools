@@ -33,6 +33,7 @@ import {
   resolveInsertAt,
   type PhaseInsertMode,
 } from '@/lib/league-admin/phase-controls';
+import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 
 interface PhaseTimelineProps {
   seasonId: string;
@@ -320,7 +321,7 @@ export default function PhaseTimeline({
                     {t('timeline.manage')}
                   </Link>
                   {canDelete && isTournamentUnstarted(phase.status) && (
-                    <Button variant="danger" size="sm" onClick={() => handleDelete(phase)} loading={deletingId === phase.id}>
+                    <Button variant="secondary" size="sm" className={DANGER_OUTLINE} onClick={() => handleDelete(phase)} loading={deletingId === phase.id}>
                       {t('timeline.delete')}
                     </Button>
                   )}

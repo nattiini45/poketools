@@ -95,14 +95,14 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
       }
     : null;
   const roomLink = (chunks: ReactNode) => (
-    <Link href={`/leagues/${id}/draft`} className="text-poke-blue hover:underline">
+    <Link href={`/leagues/${id}/draft`} className="text-accent-ink hover:underline">
       {chunks}
     </Link>
   );
   const panelLink = (label: string) => (
     <Link
       href={panelHref}
-      className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+      className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
     >
       {label}
     </Link>

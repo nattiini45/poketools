@@ -25,6 +25,7 @@ import { glossaryMessages } from '@/i18n/messages/glossary';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 import type { TiebreakerStep } from '@/types/format-rules';
 import type { ApiResult } from '@/types/api';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 export type FormatDriftState =
   | { status: 'idle' }
@@ -182,7 +183,7 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
       tone="accent"
       aside={t('data.formatDrift.generatedAt', { time: formatter.instant(report.generatedAt, 'dateTimeYear') })}
     >
-      <Alert variant="info">{t('data.formatDrift.readOnlyNote')}</Alert>
+      <Alert variant="info" className={INFO_CALLOUT}>{t('data.formatDrift.readOnlyNote')}</Alert>
       {(report.truncated.formatRules || report.truncated.phases) && (
         <Alert variant="warning">
           {t('data.formatDrift.truncated', { max: formatter.number(FORMAT_DRIFT_MAX_ROWS) })}

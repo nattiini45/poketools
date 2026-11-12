@@ -19,6 +19,7 @@ import type { ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin } from '@/i18n/messages/errors';
 import { adminToolsMessages } from '@/i18n/messages/admin-tools';
 import { commonMessages } from '@/i18n/messages/common';
+import { INFO_CALLOUT } from '@/components/admin/match-styles';
 
 interface ImportResponse {
   total: number;
@@ -159,7 +160,7 @@ function RatingIntegrityNotice({ report }: { report: ReconcileReport }) {
     );
   }
   if (report.dryRun && (integrity.gaps.length > 0 || integrity.unratedMatchIds.length > 0)) {
-    return <Alert variant="info">{t('data.reconcile.integrity.repairHeals')}</Alert>;
+    return <Alert variant="info" className={INFO_CALLOUT}>{t('data.reconcile.integrity.repairHeals')}</Alert>;
   }
   return null;
 }

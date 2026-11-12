@@ -121,7 +121,7 @@ export default function SiteSearch({
         aria-label={t('search.trigger')}
         aria-haspopup="dialog"
         onClick={() => setOpen(true)}
-        className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center gap-2 rounded-poke-md text-fg-muted transition-colors duration-[80ms] hover:bg-hover hover:text-fg min-[1400px]:w-60 min-[1400px]:justify-start min-[1400px]:border min-[1400px]:border-hairline min-[1400px]:bg-elevated min-[1400px]:px-2.5 ${FOCUS_RING}`}
+        className={`flex h-9 w-9 min-w-9 shrink cursor-pointer items-center justify-center gap-2 rounded-poke-md text-fg-muted transition-colors duration-[80ms] hover:bg-hover hover:text-fg min-[1400px]:w-60 min-[1400px]:min-w-36 min-[1400px]:justify-start min-[1400px]:border min-[1400px]:border-hairline min-[1400px]:bg-elevated min-[1400px]:px-2.5 ${FOCUS_RING}`}
       >
         <Search aria-hidden="true" className="size-[18px] shrink-0" />
         <span aria-hidden="true" className="hidden min-w-0 flex-1 truncate text-left text-body min-[1400px]:block">

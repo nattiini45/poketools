@@ -9,9 +9,9 @@ import { formatRuntimeAdminMessages } from '@/i18n/messages/format-runtime/admin
 import { loadAdjustmentsRequest } from '@/lib/format-engine/runtime/client-api-admin';
 import type { AdjustmentTargets, AdjustmentView } from '@/lib/format-engine/runtime/view-types';
 import { speciesDisplayName } from '../player/entry-names';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { BUTTON_TOUCH, PAGE_SIZE, labelText, nameOf, type PlayerNames } from './admin-shared';
 import { adjustmentFacts } from './adjustment-facts';
-import ScrollRegion from '../ScrollRegion';
 import { useAdminRequest } from './useAdminRequest';
 
 export interface AdjustmentHistoryProps {
@@ -90,40 +90,40 @@ export default function AdjustmentHistory({ seasonId, initial, total, targets, n
   }
 
   if (rows.length === 0) {
-    return <p className="text-sm text-poke-text-muted">{t('adjust.history.empty')}</p>;
+    return <p className="text-body text-fg-muted">{t('adjust.history.empty')}</p>;
   }
 
   return (
     <div className="space-y-3" data-live-adjustment-history>
-      <ScrollRegion label={t('adjust.history.caption')}>
-        <table className="w-full min-w-[40rem] text-left text-sm">
+      <div className={TABLE_FRAME} role="region" aria-label={t('adjust.history.caption')} tabIndex={0}>
+        <table className={TABLE}>
           <caption className="sr-only">{t('adjust.history.caption')}</caption>
-          <thead className="bg-poke-muted text-xs font-heading text-poke-text-secondary">
+          <thead className={THEAD}>
             <tr>
-              <th scope="col" className="px-3 py-2">{t('adjust.history.columns.kind')}</th>
-              <th scope="col" className="px-3 py-2">{t('adjust.history.columns.what')}</th>
-              <th scope="col" className="px-3 py-2">{t('adjust.history.columns.reason')}</th>
-              <th scope="col" className="px-3 py-2">{t('adjust.history.columns.admin')}</th>
-              <th scope="col" className="px-3 py-2">{t('adjust.history.columns.when')}</th>
+              <th scope="col" className={TH}>{t('adjust.history.columns.kind')}</th>
+              <th scope="col" className={TH}>{t('adjust.history.columns.what')}</th>
+              <th scope="col" className={TH}>{t('adjust.history.columns.reason')}</th>
+              <th scope="col" className={TH}>{t('adjust.history.columns.admin')}</th>
+              <th scope="col" className={TH}>{t('adjust.history.columns.when')}</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-poke-border">
+          <tbody className={TBODY}>
             {rows.map((row) => (
-              <tr key={row.id} className="align-top">
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">{t(`adjust.kind.${row.kind}`)}</td>
-                <td className="px-3 py-2 text-poke-text-primary">{summary(row)}</td>
-                <td className="px-3 py-2 text-poke-text-secondary">{row.reason}</td>
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+              <tr key={row.id} className={ROW}>
+                <td className={NAME_CELL}>{t(`adjust.kind.${row.kind}`)}</td>
+                <td className={CELL} data-label={t('adjust.history.columns.what')}>{summary(row)}</td>
+                <td className={CELL} data-label={t('adjust.history.columns.reason')}>{row.reason}</td>
+                <td className={CELL} data-label={t('adjust.history.columns.admin')}>
                   {row.admin === null ? t('adjust.history.system') : (row.admin.name ?? t('formerPlayer'))}
                 </td>
-                <td className="whitespace-nowrap px-3 py-2 text-poke-text-secondary">
+                <td className={CELL} data-label={t('adjust.history.columns.when')}>
                   <LocalTime value={row.created_at} preset="dateTimeYear" />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
-      </ScrollRegion>
+      </div>
       {errorMessage !== null && <Alert variant="error">{errorMessage}</Alert>}
       {rows.length < total && (
         <Button variant="ghost" size="sm" className={BUTTON_TOUCH} loading={pending} onClick={() => void loadMore()}>

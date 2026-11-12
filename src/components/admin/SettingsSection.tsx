@@ -24,7 +24,7 @@ interface SettingsSectionProps {
  */
 export default function SettingsSection({ id, icon, title, subtitle, aside, tone = 'default', children }: SettingsSectionProps) {
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="scroll-mt-20 px-5 py-6 sm:px-6" data-settings-section={id}>
+    <section id={id} aria-labelledby={`${id}-title`} className="group/section scroll-mt-20 px-5 py-6 sm:px-6" data-settings-section={id}>
       <div className="flex flex-wrap items-center gap-x-2.5 gap-y-2">
         <ItemIcon item={icon} className="self-start" />
         <h2 id={`${id}-title`} className={cn('min-w-0 flex-1 font-heading text-title', tone === 'danger' ? 'text-loss' : 'text-fg')}>

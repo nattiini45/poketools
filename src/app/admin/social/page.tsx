@@ -1,4 +1,5 @@
 import SiteAdminGuard from '@/components/shared/SiteAdminGuard';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
 import PageContainer from '@/components/ui/PageContainer';
 import DiscordWebhookManager from '@/components/discord/DiscordWebhookManager';
 import SocialIntegrationManager from '@/components/social/SocialIntegrationManager';
@@ -12,29 +13,25 @@ export default async function AdminSocialPage() {
   return (
     <SiteAdminGuard>
       <PageContainer title={t('social.title')} maxWidth="lg">
-        <p className="text-sm text-poke-text-secondary mb-6">
+        <p className="mb-6 text-body text-fg-muted">
           {t('social.intro')}
         </p>
 
         <div className="space-y-10">
-          <section className="space-y-4">
+          <section aria-labelledby="social-discord-title" className="space-y-4">
             <div>
-              <h2 className="font-heading font-semibold text-lg text-poke-text-primary">
-                {t('social.discordTitle')}
-              </h2>
-              <p className="text-sm text-poke-text-secondary">
+              <AdminSectionHeading id="social-discord-title" icon="old-amber" title={t('social.discordTitle')} />
+              <p className="text-body text-fg-muted">
                 {t('social.discordIntro')}
               </p>
             </div>
             <DiscordWebhookManager />
           </section>
 
-          <section className="space-y-4">
+          <section aria-labelledby="social-others-title" className="space-y-4">
             <div>
-              <h2 className="font-heading font-semibold text-lg text-poke-text-primary">
-                {t('social.othersTitle')}
-              </h2>
-              <p className="text-sm text-poke-text-secondary">
+              <AdminSectionHeading id="social-others-title" icon="scope-lens" title={t('social.othersTitle')} />
+              <p className="text-body text-fg-muted">
                 {t('social.othersIntro')}
               </p>
             </div>

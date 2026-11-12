@@ -50,7 +50,7 @@ const BUTTON_TOUCH = 'min-h-11 sm:min-h-0';
 export function StartedNotice() {
   const t = useT(formatStudioAttachMessages);
   return (
-    <p role="note" className="rounded-poke-md border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text-secondary">
+    <p role="note" className="rounded-poke-md border border-hairline bg-elevated px-3 py-2 text-sm text-fg-muted">
       {t('panel.startedNotice')}
     </p>
   );
@@ -62,10 +62,10 @@ export function ManualPhasesNotice({ count, phasesHref }: { count: number; phase
   return (
     <div
       role="note"
-      className="space-y-1 rounded-poke-md border border-poke-yellow/40 bg-poke-yellow-light px-3 py-2 text-sm text-poke-yellow-ink"
+      className="space-y-1 rounded-poke-md border border-hairline bg-elevated px-3 py-2 text-sm text-fg"
     >
       <p>{t('blocked.manualNotice', { count })}</p>
-      <Link href={phasesHref} className={`inline-flex items-center font-medium underline ${BUTTON_TOUCH}`}>
+      <Link href={phasesHref} className={`inline-flex items-center font-[550] text-accent-ink hover:underline ${BUTTON_TOUCH}`}>
         {t('panel.openPhases')}
       </Link>
     </div>
@@ -96,17 +96,17 @@ function HashCopy({ hash }: { hash: string }) {
 
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
-      <code ref={codeRef} title={hash} className="rounded-poke-sm bg-poke-muted px-1.5 py-0.5 text-xs">
+      <code ref={codeRef} title={hash} className="rounded-poke-sm bg-sunken px-1.5 py-0.5 text-xs">
         {hash.slice(0, HASH_PREFIX_CHARS)}
       </code>
       <button
         type="button"
         onClick={copy}
-        className={`inline-flex items-center text-sm font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}
+        className={`inline-flex items-center text-sm font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}
       >
         {t('panel.copyHash')}
       </button>
-      <span role="status" className="text-xs text-poke-text-muted">
+      <span role="status" className="text-xs text-fg-muted">
         {status === 'copied' ? t('panel.copied') : status === 'failed' ? t('panel.copyFailed') : ''}
       </span>
     </span>
@@ -131,29 +131,29 @@ export function AttachedSummary({ attached, phasesHref, started, busy = false, o
   const name = resolveLText(attached.name, { viewer: locale })?.value ?? '';
   return (
     <div className="space-y-3" data-attached-summary>
-      <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('panel.attachedHeading')}</h3>
+      <h3 className="text-sm font-heading font-semibold text-fg">{t('panel.attachedHeading')}</h3>
       <dl className="grid grid-cols-1 gap-x-6 gap-y-2 text-sm sm:grid-cols-2">
         <div className="min-w-0">
-          <dt className="text-xs font-heading text-poke-text-muted">{t('panel.attachedName')}</dt>
-          <dd className="break-words text-poke-text-primary">
+          <dt className="text-xs font-heading text-fg-muted">{t('panel.attachedName')}</dt>
+          <dd className="break-words text-fg">
             {name}
             {' · '}
             {t('panel.version', { n: attached.version_no })}
           </dd>
         </div>
         <div className="min-w-0">
-          <dt className="text-xs font-heading text-poke-text-muted">{t('panel.hash')}</dt>
-          <dd className="text-poke-text-primary">
+          <dt className="text-xs font-heading text-fg-muted">{t('panel.hash')}</dt>
+          <dd className="text-fg">
             <HashCopy hash={attached.spec_hash} />
           </dd>
         </div>
       </dl>
-      <p className="text-sm text-poke-text-secondary">
+      <p className="text-sm text-fg-muted">
         {t('panel.frozenAt', { date: formatter.instant(attached.frozen_at, 'dateTimeYear') })}
       </p>
-      <p className="text-sm text-poke-text-secondary">
+      <p className="text-sm text-fg-muted">
         {t('panel.phases', { count: attached.createdPhases })}{' '}
-        <Link href={phasesHref} className="font-medium text-poke-blue hover:underline">
+        <Link href={phasesHref} className="font-medium text-accent-ink hover:underline">
           {t('panel.openPhases')}
         </Link>
       </p>
@@ -161,12 +161,12 @@ export function AttachedSummary({ attached, phasesHref, started, busy = false, o
         {attached.definition_id !== null ? (
           <Link
             href={`/admin/formats/${encodeURIComponent(attached.definition_id)}`}
-            className={`inline-flex items-center font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}
+            className={`inline-flex items-center font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}
           >
             {t('panel.openSource')}
           </Link>
         ) : (
-          <span className="text-poke-text-muted">{t('panel.sourceDeleted')}</span>
+          <span className="text-fg-muted">{t('panel.sourceDeleted')}</span>
         )}
       </p>
       {!started && (
@@ -212,7 +212,7 @@ export function AttachBlockedReason({ id, reason, rulesetCount = 0 }: AttachBloc
     }
   })();
   return (
-    <p id={id} className="text-sm text-poke-text-muted" data-attach-reason={reason}>
+    <p id={id} className="text-sm text-fg-muted" data-attach-reason={reason}>
       {text}
     </p>
   );
@@ -235,10 +235,10 @@ export function Picker({ candidates, capped, selectedId, onSelect, disabled = fa
 
   if (candidates.length === 0) {
     return (
-      <div className="space-y-1 rounded-poke-md border border-dashed border-poke-border px-3 py-4 text-sm" data-attach-empty>
-        <p className="font-medium text-poke-text-primary">{t('panel.emptyTitle')}</p>
-        <p className="text-poke-text-secondary">{t('panel.emptyBody')}</p>
-        <Link href="/admin/formats" className={`inline-flex items-center font-medium text-poke-blue hover:underline ${BUTTON_TOUCH}`}>
+      <div className="space-y-1 rounded-poke-md border border-dashed border-hairline px-3 py-4 text-sm" data-attach-empty>
+        <p className="font-medium text-fg">{t('panel.emptyTitle')}</p>
+        <p className="text-fg-muted">{t('panel.emptyBody')}</p>
+        <Link href="/admin/formats" className={`inline-flex items-center font-medium text-accent-ink hover:underline ${BUTTON_TOUCH}`}>
           {t('panel.openStudio')}
         </Link>
       </div>
@@ -275,7 +275,7 @@ export function Picker({ candidates, capped, selectedId, onSelect, disabled = fa
           </optgroup>
         ))}
       </Select>
-      {capped && <p className="text-xs text-poke-text-muted">{t('panel.capNote', { count: candidates.length })}</p>}
+      {capped && <p className="text-xs text-fg-muted">{t('panel.capNote', { count: candidates.length })}</p>}
     </div>
   );
 }
@@ -465,7 +465,7 @@ export default function FormatAttachPanel({
 
   return (
     <div id={FORMAT_ATTACH_ANCHOR} className="space-y-4" aria-busy={busy} data-format-attach-panel>
-      <p className="text-sm text-poke-text-secondary">{t('panel.intro')}</p>
+      <p className="text-sm text-fg-muted">{t('panel.intro')}</p>
 
       {started && <StartedNotice />}
 
@@ -483,11 +483,18 @@ export default function FormatAttachPanel({
       {!started && manualPhaseCount > 0 && <ManualPhasesNotice count={manualPhaseCount} phasesHref={phasesHref} />}
 
       {showPicker && (
-        <div className="space-y-3">
-          <Picker candidates={candidates} capped={capped} selectedId={selectedId} onSelect={select} disabled={busy} />
+        <div className="grid gap-x-8 gap-y-4 lg:grid-cols-[minmax(0,20rem)_minmax(0,1fr)] lg:items-start" data-attach-panes>
+          <div className="lg:col-start-1 lg:row-start-1">
+            <Picker candidates={candidates} capped={capped} selectedId={selectedId} onSelect={select} disabled={busy} />
+          </div>
 
-          <div aria-live="polite" aria-busy={preview.status === 'loading'} className="space-y-2">
-            {preview.status === 'loading' && <p className="text-sm text-poke-text-muted">{t('panel.loadingPreview')}</p>}
+          <div
+            aria-live="polite"
+            aria-busy={preview.status === 'loading'}
+            className="min-w-0 space-y-2 empty:hidden lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:border-l lg:border-hairline lg:pl-8"
+            data-attach-preview
+          >
+            {preview.status === 'loading' && <p className="text-sm text-fg-muted">{t('panel.loadingPreview')}</p>}
             {preview.status === 'failed' && (
               <Alert variant="error" className="space-y-2">
                 <p>
@@ -503,6 +510,7 @@ export default function FormatAttachPanel({
             )}
           </div>
 
+          <div className="space-y-3 lg:col-start-1 lg:row-start-2">
           <div className="flex flex-wrap items-center gap-3">
             <Button
               className={BUTTON_TOUCH}
@@ -526,14 +534,15 @@ export default function FormatAttachPanel({
               rulesetCount={previewResult && previewResult.ok ? previewResult.leagueRulesetMissing : 0}
             />
           )}
+          </div>
         </div>
       )}
 
       <div role="status" aria-live="polite" className="space-y-2">
         {outcome?.kind === 'attached' && (
           <div className="space-y-2 text-sm" data-attach-result>
-            <p className="font-medium text-poke-green">{t('panel.done', { count: outcome.stages.length })}</p>
-            <ol className="list-decimal space-y-0.5 pl-5 text-poke-text-secondary">
+            <p className="font-medium text-win">{t('panel.done', { count: outcome.stages.length })}</p>
+            <ol className="list-decimal space-y-0.5 pl-5 text-fg-muted">
               {[...outcome.stages]
                 .sort((a, b) => a.stage_order - b.stage_order)
                 .map((stage) => (
@@ -546,7 +555,7 @@ export default function FormatAttachPanel({
           </div>
         )}
         {outcome?.kind === 'detached' && (
-          <p className="text-sm font-medium text-poke-green">{t('panel.detached', { count: outcome.count })}</p>
+          <p className="text-sm font-medium text-win">{t('panel.detached', { count: outcome.count })}</p>
         )}
       </div>
 

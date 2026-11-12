@@ -29,7 +29,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return { title: t('meta.leagueTitle') };
 }
 
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline underline-offset-2 sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0';
 
 /**
  * `/admin/formats/league/[id]`: the read-only format of one league. The gate is the league admin page's
@@ -81,7 +81,7 @@ export default async function FormatLeaguePage({ params }: PageProps) {
               ? t('detail.noPhasesCustom')
               : t.rich('detail.noPhases', {
                   link: (chunks) => (
-                    <Link href={leagueAdminHref(id, 'phases')} className="text-accent-ink hover:underline underline-offset-2">
+                    <Link href={leagueAdminHref(id, 'phases')} className="text-accent-ink hover:underline">
                       {chunks}
                     </Link>
                   ),

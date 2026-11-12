@@ -1,11 +1,13 @@
 'use client';
 
 import Link from 'next/link';
+import { PanelRight } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import SkewChip from '@/components/ui/SkewChip';
 import { useFormatter } from '@/i18n/client';
 import type { StudioVisibility } from '@/lib/studio-core/access';
 import type { SaveState } from '@/lib/studio-core/editor-state';
+import { usePreviewDrawer } from './EditorLayout';
 import type { ShellText } from './text';
 
 export interface EditorToolbarProps {
@@ -56,6 +58,7 @@ export default function EditorToolbar({
   onDelete,
 }: EditorToolbarProps) {
   const format = useFormatter();
+  const drawer = usePreviewDrawer();
 
   const status = (() => {
     if (save.status === 'saving') return text('toolbar.saving');
@@ -104,6 +107,21 @@ export default function EditorToolbar({
           <Button type="button" variant="secondary" size="sm" className={BUTTON} onClick={onFork}>
             {text('toolbar.fork')}
           </Button>
+          {drawer !== null && (
+            <Button
+              id={drawer.toggleId}
+              type="button"
+              variant="secondary"
+              size="sm"
+              className={BUTTON}
+              aria-expanded={drawer.open}
+              aria-controls={drawer.drawerId}
+              onClick={drawer.toggle}
+            >
+              <PanelRight className="h-4 w-4" aria-hidden="true" />
+              {drawer.label}
+            </Button>
+          )}
           {canDelete && (
             <Button type="button" variant="danger" size="sm" className={BUTTON} onClick={onDelete}>
               {text('toolbar.delete')}

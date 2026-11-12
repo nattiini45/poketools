@@ -1,7 +1,7 @@
 'use client';
 
-import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { PanelRight, X } from 'lucide-react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { X } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
@@ -25,6 +25,22 @@ const OUTLINE_BESIDE_QUERY = '(min-width: 1024px)';
 export function revealInspector(headingId: string): void {
   if (typeof window === 'undefined' || window.matchMedia(OUTLINE_BESIDE_QUERY).matches) return;
   window.requestAnimationFrame(() => document.getElementById(headingId)?.focus());
+}
+
+/** What the toolbar needs to open the preview drawer: its label, its id and state, and the id of the toggle button, so focus can return to it. */
+interface PreviewDrawerControl {
+  label: string;
+  drawerId: string;
+  open: boolean;
+  toggle: () => void;
+  toggleId: string;
+}
+
+const PreviewDrawerContext = createContext<PreviewDrawerControl | null>(null);
+
+/** The drawer control of the surrounding `EditorLayout`, or null when the toolbar is rendered on its own. */
+export function usePreviewDrawer(): PreviewDrawerControl | null {
+  return useContext(PreviewDrawerContext);
 }
 
 interface EditorLayoutProps {
@@ -63,7 +79,7 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
   const t = useT(uiMessages);
   const [open, setOpen] = useState(false);
   const drawerId = useId();
-  const toggleRef = useRef<HTMLButtonElement>(null);
+  const toggleId = `${drawerId}-toggle`;
   const closeRef = useRef<HTMLButtonElement>(null);
   const opened = useRef(false);
 
@@ -72,9 +88,9 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
       opened.current = true;
       closeRef.current?.focus();
     } else if (opened.current) {
-      toggleRef.current?.focus();
+      document.getElementById(toggleId)?.focus();
     }
-  }, [open]);
+  }, [open, toggleId]);
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if ((event.ctrlKey || event.metaKey) && !event.altKey && event.key.toLowerCase() === 's') {
@@ -90,28 +106,13 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
   const root = { [rootAttribute]: '' };
 
   return (
+    <PreviewDrawerContext.Provider value={{ label: previewLabel, drawerId, open, toggle: () => setOpen((value) => !value), toggleId }}>
     <div className="min-w-0 space-y-4" {...root} {...unsavedMarker(dirty)} onKeyDown={onKeyDown}>
       {toolbar}
       {banners}
       <div className={wide ? 'grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)]' : 'grid min-w-0 gap-4 lg:grid-cols-[15rem_minmax(0,1fr)]'}>
         <aside className="min-w-0">{outline}</aside>
         <div className="min-w-0">{main}</div>
-      </div>
-
-      <div className="pointer-events-none sticky bottom-3 z-30 flex justify-end">
-        <Button
-          ref={toggleRef}
-          type="button"
-          variant="secondary"
-          size="sm"
-          className="pointer-events-auto min-h-11 shadow-poke-md sm:min-h-0"
-          aria-expanded={open}
-          aria-controls={drawerId}
-          onClick={() => setOpen((value) => !value)}
-        >
-          <PanelRight className="h-4 w-4" aria-hidden="true" />
-          {previewLabel}
-        </Button>
       </div>
 
       {open && <div aria-hidden="true" className="fixed inset-0 z-40 bg-scrim" onClick={() => setOpen(false)} />}
@@ -125,8 +126,7 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
           'fixed inset-x-0 bottom-0 z-50 max-h-[85dvh] min-w-0 flex-col rounded-t-poke-lg border border-hairline bg-surface shadow-poke-lg sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:max-h-none sm:w-[26rem] sm:max-w-full sm:rounded-none sm:border-y-0 sm:border-r-0 2xl:w-[30rem]',
         )}
       >
-        <div className="flex shrink-0 items-center justify-between gap-3 border-b border-hairline px-4 py-2">
-          <p className="font-heading text-title text-fg">{previewLabel}</p>
+        <div className="flex shrink-0 items-center justify-end border-b border-hairline px-4 py-1">
           <button
             ref={closeRef}
             type="button"
@@ -141,6 +141,7 @@ export default function EditorLayout({ rootAttribute, dirty, onSave, toolbar, ba
       </div>
       {children}
     </div>
+    </PreviewDrawerContext.Provider>
   );
 }
 

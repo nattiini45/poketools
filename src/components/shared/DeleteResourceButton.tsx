@@ -3,12 +3,14 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Button from '@/components/ui/Button';
+import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { uiMessages } from '@/i18n/messages/ui';
 import { errorsAdmin, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { LEAGUE_TRASH_RETENTION_DAYS } from '@/lib/league-trash/constants';
+import { DANGER_OUTLINE, TOUCH } from '@/components/admin/match-styles';
 
 interface DeleteResourceButtonProps {
   resourceType: 'season' | 'tournament';
@@ -138,7 +140,7 @@ export default function DeleteResourceButton({
   }
 
   return (
-    <Button variant="danger" size="sm" className="min-h-11 sm:min-h-0" onClick={handleDelete} loading={loading}>
+    <Button variant="secondary" size="sm" className={cn(DANGER_OUTLINE, TOUCH)} onClick={handleDelete} loading={loading}>
       {label ?? t('deleteResource.label')}
     </Button>
   );

@@ -107,7 +107,7 @@ export default function TournamentLifecycleActions({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {canComplete && (
-        <Button variant="success" size="sm" onClick={handleComplete} loading={completing}>
+        <Button variant="primary" size="sm" onClick={handleComplete} loading={completing}>
           {t('lifecycle.markCompleted')}
         </Button>
       )}

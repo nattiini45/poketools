@@ -6,7 +6,6 @@ import type { EvolutionTier, EvolutionTierFormData, PowerTier } from '@/types/ev
 import { POWER_TIERS, POWER_TIER_COLORS } from '@/types/evolution';
 import type { Player } from '@/types/player';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import Select from '@/components/ui/Select';
 import Badge from '@/components/ui/Badge';
@@ -277,7 +276,7 @@ export default function EvolutionTierEditor({
     }
   }
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('tierEditor.loading')}</p>;
+  if (loading) return <p className="text-sm text-fg-muted">{t('tierEditor.loading')}</p>;
 
   const errorText = error
     ? 'api' in error
@@ -300,7 +299,7 @@ export default function EvolutionTierEditor({
       {/* ── Tier List (grouped by power tier) ──────────────────── */}
       <div>
         <div className="flex items-center justify-between mb-3">
-          <h3 className="font-heading font-semibold text-lg text-poke-text-primary">{t('tierEditor.title')}</h3>
+          <h3 className="font-heading font-semibold text-lg text-fg">{t('tierEditor.title')}</h3>
           <Button
             variant="secondary"
             size="sm"
@@ -314,7 +313,7 @@ export default function EvolutionTierEditor({
         </div>
 
         {tiers.length === 0 && !showAddForm ? (
-          <p className="text-sm text-poke-text-muted">
+          <p className="text-sm text-fg-muted">
             {t('tierEditor.empty')}
           </p>
         ) : (
@@ -329,54 +328,54 @@ export default function EvolutionTierEditor({
                     <span className={`font-heading font-bold text-sm ${colors.text}`}>
                       {tShared('tier', { tier: pt })}
                     </span>
-                    <span className="text-xs text-poke-text-muted">
+                    <span className="text-xs text-fg-muted">
                       {tShared('pokemonCount', { count: tiersInGroup.length })}
                     </span>
                   </div>
                   <table className="w-full text-sm">
-                    <thead className="bg-poke-elevated">
+                    <thead className="bg-elevated">
                       <tr>
-                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-poke-text-secondary">{tGlossary('roster.base')}</th>
-                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-poke-text-secondary">{tGlossary('roster.stage2')}</th>
-                        <th className="px-3 py-1.5 text-center font-heading font-semibold text-poke-text-secondary">{t('tierEditor.kos')}</th>
-                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-poke-text-secondary">{tGlossary('roster.stage3')}</th>
-                        <th className="px-3 py-1.5 text-center font-heading font-semibold text-poke-text-secondary">{t('tierEditor.kos')}</th>
+                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-fg-muted">{tGlossary('roster.base')}</th>
+                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-fg-muted">{tGlossary('roster.stage2')}</th>
+                        <th className="px-3 py-1.5 text-center font-heading font-semibold text-fg-muted">{t('tierEditor.kos')}</th>
+                        <th className="px-3 py-1.5 text-left font-heading font-semibold text-fg-muted">{tGlossary('roster.stage3')}</th>
+                        <th className="px-3 py-1.5 text-center font-heading font-semibold text-fg-muted">{t('tierEditor.kos')}</th>
                         <th className="px-3 py-1.5 w-10" />
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-poke-border">
+                    <tbody className="divide-y divide-hairline">
                       {tiersInGroup.map((tier) => (
-                        <tr key={tier.id} className="hover:bg-poke-elevated transition-colors">
-                          <td className="px-3 py-2 text-poke-text-primary">
+                        <tr key={tier.id} className="hover:bg-elevated transition-colors">
+                          <td className="px-3 py-2 text-fg">
                             <span className="inline-flex items-center gap-1.5">
                               <PokemonSprite name={tier.base_pokemon} size={24} />
                               {species(tier.base_pokemon)}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-poke-text-primary">
+                          <td className="px-3 py-2 text-fg">
                             <span className="inline-flex items-center gap-1.5">
                               <PokemonSprite name={tier.stage2_pokemon} size={24} />
                               {species(tier.stage2_pokemon)}
                             </span>
                           </td>
-                          <td className="px-3 py-2 text-center font-mono text-poke-text-primary">{tier.stage2_kos}</td>
-                          <td className="px-3 py-2 text-poke-text-primary">
+                          <td className="px-3 py-2 text-center font-mono text-fg">{tier.stage2_kos}</td>
+                          <td className="px-3 py-2 text-fg">
                             {tier.stage3_pokemon ? (
                               <span className="inline-flex items-center gap-1.5">
                                 <PokemonSprite name={tier.stage3_pokemon} size={24} />
                                 {species(tier.stage3_pokemon)}
                               </span>
                             ) : (
-                              <span className="text-poke-text-muted">—</span>
+                              <span className="text-fg-muted">—</span>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-center font-mono text-poke-text-primary">
+                          <td className="px-3 py-2 text-center font-mono text-fg">
                             {tier.stage3_kos ?? '—'}
                           </td>
                           <td className="px-3 py-2">
                             <button
                               onClick={() => handleDeleteTier(tier.id)}
-                              className="text-xs text-poke-danger hover:underline"
+                              className="text-xs text-loss hover:underline"
                             >
                               {t('tierEditor.remove')}
                             </button>
@@ -393,14 +392,14 @@ export default function EvolutionTierEditor({
 
         {/* ── Add Pokémon form ─────────────────────────────────── */}
         {showAddForm && (
-          <Card variant="muted" className="mt-3">
+          <div className="mt-3 rounded-poke-md border border-hairline bg-elevated p-4">
             <form onSubmit={handleAddTier} className="space-y-4">
-              <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('tierEditor.addTitle')}</h4>
+              <h4 className="text-sm font-heading font-semibold text-fg">{t('tierEditor.addTitle')}</h4>
 
               {/* Search for base form */}
               {!selectedChain ? (
                 <div className="relative">
-                  <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                  <label className="block text-xs font-heading font-semibold text-fg mb-1">
                     {t('tierEditor.searchBase')}
                   </label>
                   <input
@@ -409,28 +408,28 @@ export default function EvolutionTierEditor({
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder={t('tierEditor.searchBasePlaceholder', { example: species(SEARCH_EXAMPLE_SPECIES) })}
-                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
+                    className="w-full border border-hairline bg-surface rounded-poke-md px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-1 transition-colors"
                   />
-                  <p className="text-xs text-poke-text-muted mt-1">
+                  <p className="text-xs text-fg-muted mt-1">
                     {t('tierEditor.threeStageOnly')}
                   </p>
 
                   {/* Search results dropdown */}
                   {(searchResults.length > 0 || searching) && (
-                    <div className="absolute z-10 left-0 right-0 mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-card max-h-60 overflow-y-auto">
+                    <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-hairline rounded-poke-md shadow-poke-card max-h-60 overflow-y-auto">
                       {searching && (
-                        <div className="px-3 py-2 text-sm text-poke-text-muted">{t('tierEditor.searching')}</div>
+                        <div className="px-3 py-2 text-sm text-fg-muted">{t('tierEditor.searching')}</div>
                       )}
                       {searchResults.map((r) => (
                         <button
                           key={r.name}
                           type="button"
                           onClick={() => selectChain(r)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-poke-elevated transition-colors text-sm"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-elevated transition-colors text-sm"
                         >
                           <PokemonSprite name={r.name} size={28} />
-                          <span className="text-poke-text-primary font-medium">{species(r.name)}</span>
-                          <span className="text-poke-text-muted text-xs">
+                          <span className="text-fg font-medium">{species(r.name)}</span>
+                          <span className="text-fg-muted text-xs">
                             → {species(r.stage2)} → {species(r.stage3)}
                           </span>
                         </button>
@@ -441,25 +440,25 @@ export default function EvolutionTierEditor({
               ) : (
                 <>
                   {/* Selected chain preview */}
-                  <div className="flex items-center gap-2 p-3 bg-poke-elevated rounded-poke-md">
+                  <div className="flex items-center gap-2 p-3 bg-elevated rounded-poke-md">
                     <div className="flex items-center gap-1.5">
                       <PokemonSprite name={selectedChain.base} size={32} />
-                      <span className="font-medium text-poke-text-primary">{species(selectedChain.base)}</span>
+                      <span className="font-medium text-fg">{species(selectedChain.base)}</span>
                     </div>
-                    <span className="text-poke-text-muted">→</span>
+                    <span className="text-fg-muted">→</span>
                     <div className="flex items-center gap-1.5">
                       <PokemonSprite name={selectedChain.stage2} size={32} />
-                      <span className="text-poke-text-primary">{species(selectedChain.stage2)}</span>
+                      <span className="text-fg">{species(selectedChain.stage2)}</span>
                     </div>
-                    <span className="text-poke-text-muted">→</span>
+                    <span className="text-fg-muted">→</span>
                     <div className="flex items-center gap-1.5">
                       <PokemonSprite name={selectedChain.stage3} size={32} />
-                      <span className="text-poke-text-primary">{species(selectedChain.stage3)}</span>
+                      <span className="text-fg">{species(selectedChain.stage3)}</span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setSelectedChain(null)}
-                      className="ml-auto text-xs text-poke-danger hover:underline"
+                      className="ml-auto text-xs text-loss hover:underline"
                     >
                       {t('tierEditor.change')}
                     </button>
@@ -468,7 +467,7 @@ export default function EvolutionTierEditor({
                   {/* KO thresholds + tier */}
                   <div className="grid grid-cols-3 gap-3">
                     <div>
-                      <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                      <label className="block text-xs font-heading font-semibold text-fg mb-1">
                         {t('tierEditor.kosForStage2')}
                       </label>
                       <input
@@ -477,11 +476,11 @@ export default function EvolutionTierEditor({
                         value={stage2Kos}
                         onChange={(e) => setStage2Kos(Number(e.target.value))}
                         required
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                        className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                      <label className="block text-xs font-heading font-semibold text-fg mb-1">
                         {t('tierEditor.kosForStage3')}
                       </label>
                       <input
@@ -490,17 +489,17 @@ export default function EvolutionTierEditor({
                         value={stage3Kos}
                         onChange={(e) => setStage3Kos(Number(e.target.value))}
                         required
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                        className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                       />
                     </div>
                     <div>
-                      <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                      <label className="block text-xs font-heading font-semibold text-fg mb-1">
                         {t('tierEditor.powerTier')}
                       </label>
                       <select
                         value={powerTier}
                         onChange={(e) => setPowerTier(e.target.value as PowerTier)}
-                        className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                        className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                       >
                         {POWER_TIERS.map((pt) => (
                           <option key={pt} value={pt}>{tShared('tier', { tier: pt })}</option>
@@ -520,7 +519,7 @@ export default function EvolutionTierEditor({
                 </>
               )}
             </form>
-          </Card>
+          </div>
         )}
       </div>
 
@@ -528,8 +527,8 @@ export default function EvolutionTierEditor({
       <div>
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="font-heading font-semibold text-lg text-poke-text-primary">{t('tierEditor.wildcardTitle')}</h3>
-            <p className="text-xs text-poke-text-muted mt-0.5">
+            <h3 className="font-heading font-semibold text-lg text-fg">{t('tierEditor.wildcardTitle')}</h3>
+            <p className="text-xs text-fg-muted mt-0.5">
               {t('tierEditor.wildcardIntro', { example: species(WILDCARD_EXAMPLE_SPECIES) })}
             </p>
           </div>
@@ -554,25 +553,25 @@ export default function EvolutionTierEditor({
                 >
                   <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="purple" size="sm">{player?.name ?? t('tierEditor.unknownPlayer')}</Badge>
-                    <span className="text-poke-text-muted">&rarr;</span>
-                    <span className="inline-flex items-center gap-1.5 text-poke-text-primary">
+                    <span className="text-fg-muted">&rarr;</span>
+                    <span className="inline-flex items-center gap-1.5 text-fg">
                       <PokemonSprite name={wc.base_pokemon} size={20} />
                       {species(wc.base_pokemon)}
                     </span>
-                    <span className="text-poke-text-muted">&rarr;</span>
-                    <span className="inline-flex items-center gap-1.5 text-poke-text-primary">
+                    <span className="text-fg-muted">&rarr;</span>
+                    <span className="inline-flex items-center gap-1.5 text-fg">
                       <PokemonSprite name={wc.stage2_pokemon} size={20} />
                       {species(wc.stage2_pokemon)}
                     </span>
-                    <span className="text-xs text-poke-text-secondary">{t('tierEditor.kosCount', { count: wc.stage2_kos })}</span>
+                    <span className="text-xs text-fg-muted">{t('tierEditor.kosCount', { count: wc.stage2_kos })}</span>
                     {wc.stage3_pokemon && (
                       <>
-                        <span className="text-poke-text-muted">&rarr;</span>
-                        <span className="inline-flex items-center gap-1.5 text-poke-text-primary">
+                        <span className="text-fg-muted">&rarr;</span>
+                        <span className="inline-flex items-center gap-1.5 text-fg">
                           <PokemonSprite name={wc.stage3_pokemon} size={20} />
                           {species(wc.stage3_pokemon)}
                         </span>
-                        <span className="text-xs text-poke-text-secondary">
+                        <span className="text-xs text-fg-muted">
                           {t('tierEditor.kosCount', { count: wc.stage3_kos ?? 0 })}
                         </span>
                       </>
@@ -580,7 +579,7 @@ export default function EvolutionTierEditor({
                   </div>
                   <button
                     onClick={() => handleDeleteTier(wc.id)}
-                    className="text-xs text-poke-danger hover:underline"
+                    className="text-xs text-loss hover:underline"
                   >
                     {t('tierEditor.remove')}
                   </button>
@@ -591,13 +590,13 @@ export default function EvolutionTierEditor({
         )}
 
         {wildcards.length === 0 && !showWildcardForm && (
-          <p className="text-sm text-poke-text-muted">{t('tierEditor.noWildcards')}</p>
+          <p className="text-sm text-fg-muted">{t('tierEditor.noWildcards')}</p>
         )}
 
         {showWildcardForm && (
-          <Card variant="outlined" className="mt-3 border-purple-700/40 bg-purple-900/10">
+          <div className="mt-3 rounded-poke-md border border-hairline bg-elevated p-4">
             <form onSubmit={handleAddWildcard} className="space-y-3">
-              <h4 className="text-sm font-heading font-semibold text-poke-text-primary">{t('tierEditor.assignWildcard')}</h4>
+              <h4 className="text-sm font-heading font-semibold text-fg">{t('tierEditor.assignWildcard')}</h4>
               <Select
                 label={t('tierEditor.player')}
                 value={wildcardPlayerId}
@@ -612,7 +611,7 @@ export default function EvolutionTierEditor({
 
               {!wildcardChain ? (
                 <div className="relative">
-                  <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">
+                  <label className="block text-xs font-heading font-semibold text-fg mb-1">
                     {t('tierEditor.searchPokemon')}
                   </label>
                   <input
@@ -620,23 +619,23 @@ export default function EvolutionTierEditor({
                     value={wildcardSearch}
                     onChange={(e) => setWildcardSearch(e.target.value)}
                     placeholder={t('tierEditor.searchPokemonPlaceholder')}
-                    className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus:border-poke-border-focus focus:ring-1 transition-colors"
+                    className="w-full border border-hairline bg-surface rounded-poke-md px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus:border-accent-ink focus:ring-1 transition-colors"
                   />
                   {(wildcardResults.length > 0 || wildcardSearching) && (
-                    <div className="absolute z-10 left-0 right-0 mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-card max-h-48 overflow-y-auto">
+                    <div className="absolute z-10 left-0 right-0 mt-1 bg-surface border border-hairline rounded-poke-md shadow-poke-card max-h-48 overflow-y-auto">
                       {wildcardSearching && (
-                        <div className="px-3 py-2 text-sm text-poke-text-muted">{t('tierEditor.searching')}</div>
+                        <div className="px-3 py-2 text-sm text-fg-muted">{t('tierEditor.searching')}</div>
                       )}
                       {wildcardResults.map((r) => (
                         <button
                           key={r.name}
                           type="button"
                           onClick={() => selectWildcardChain(r)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-poke-elevated transition-colors text-sm"
+                          className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-elevated transition-colors text-sm"
                         >
                           <PokemonSprite name={r.name} size={24} />
-                          <span className="text-poke-text-primary">{species(r.name)}</span>
-                          <span className="text-poke-text-muted text-xs">
+                          <span className="text-fg">{species(r.name)}</span>
+                          <span className="text-fg-muted text-xs">
                             → {species(r.stage2)} → {species(r.stage3)}
                           </span>
                         </button>
@@ -645,13 +644,13 @@ export default function EvolutionTierEditor({
                   )}
                 </div>
               ) : (
-                <div className="flex items-center gap-2 p-2 bg-poke-elevated rounded-poke-md text-sm">
+                <div className="flex items-center gap-2 p-2 bg-elevated rounded-poke-md text-sm">
                   <PokemonSprite name={wildcardChain.base} size={24} />
-                  <span className="text-poke-text-primary">{species(wildcardChain.base)}</span>
-                  <span className="text-poke-text-muted">
+                  <span className="text-fg">{species(wildcardChain.base)}</span>
+                  <span className="text-fg-muted">
                     → {species(wildcardChain.stage2)} → {species(wildcardChain.stage3)}
                   </span>
-                  <button type="button" onClick={() => setWildcardChain(null)} className="ml-auto text-xs text-poke-danger hover:underline">
+                  <button type="button" onClick={() => setWildcardChain(null)} className="ml-auto text-xs text-loss hover:underline">
                     {t('tierEditor.change')}
                   </button>
                 </div>
@@ -660,25 +659,25 @@ export default function EvolutionTierEditor({
               {wildcardChain && (
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">{t('tierEditor.kosForStage2')}</label>
+                    <label className="block text-xs font-heading font-semibold text-fg mb-1">{t('tierEditor.kosForStage2')}</label>
                     <input
                       type="number"
                       min={1}
                       value={wildcardStage2Kos}
                       onChange={(e) => setWildcardStage2Kos(Number(e.target.value))}
                       required
-                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                      className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-heading font-semibold text-poke-text-primary mb-1">{t('tierEditor.kosForStage3')}</label>
+                    <label className="block text-xs font-heading font-semibold text-fg mb-1">{t('tierEditor.kosForStage3')}</label>
                     <input
                       type="number"
                       min={1}
                       value={wildcardStage3Kos}
                       onChange={(e) => setWildcardStage3Kos(Number(e.target.value))}
                       required
-                      className="w-full border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1.5 text-sm text-poke-text-primary focus:border-poke-border-focus focus:ring-1 transition-colors"
+                      className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                     />
                   </div>
                 </div>
@@ -695,13 +694,13 @@ export default function EvolutionTierEditor({
                 {t('tierEditor.assignWildcard')}
               </Button>
             </form>
-          </Card>
+          </div>
         )}
       </div>
 
       {/* ── Summary ───────────────────────────────────────── */}
       {(tiers.length > 0 || wildcards.length > 0) && (
-        <Alert variant="info">
+        <p role="note" className="rounded-poke-md border border-hairline bg-elevated px-3 py-2 text-body text-fg-muted">
           {t.rich('tierEditor.summaryLines', { count: tiers.length, b: (chunks) => <strong>{chunks}</strong> })}
           {POWER_TIERS.map((pt) => {
             const count = tiersByPower[pt].length;
@@ -724,7 +723,7 @@ export default function EvolutionTierEditor({
               })}
             </>
           )}
-        </Alert>
+        </p>
       )}
     </div>
   );

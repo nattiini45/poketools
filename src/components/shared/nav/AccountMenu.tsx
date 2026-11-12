@@ -76,7 +76,7 @@ export default function AccountMenu() {
   }, []);
 
   return (
-    <div ref={wrapperRef} className={cn('relative shrink-0', !player && 'hidden lg:block')}>
+    <div ref={wrapperRef} className={cn('relative', player ? 'min-w-0 shrink' : 'shrink-0 hidden lg:block')}>
       <button
         ref={triggerRef}
         type="button"
@@ -86,7 +86,7 @@ export default function AccountMenu() {
         title={player?.name}
         onClick={() => setOpen(!open)}
         className={cn(
-          'flex h-9 cursor-pointer items-center gap-2 rounded-poke-md text-body text-fg transition-colors duration-[80ms] hover:bg-hover',
+          'flex h-9 max-w-full cursor-pointer items-center gap-2 rounded-poke-md text-body text-fg transition-colors duration-[80ms] hover:bg-hover',
           player ? 'border border-hairline bg-surface pl-1 pr-1.5' : 'w-9 justify-center text-fg-muted hover:text-fg',
           FOCUS_RING,
         )}
@@ -100,10 +100,10 @@ export default function AccountMenu() {
               size={26}
               className="shrink-0"
             />
-            <span aria-hidden="true" className="hidden max-w-[9rem] truncate font-[550] 2xl:block">
+            <span aria-hidden="true" className="hidden min-w-0 max-w-[9rem] truncate font-[550] 2xl:block">
               {player.name}
             </span>
-            <ChevronDown aria-hidden="true" className={cn('size-4 text-fg-muted transition-transform duration-[160ms]', open && 'rotate-180')} />
+            <ChevronDown aria-hidden="true" className={cn('size-4 shrink-0 text-fg-muted transition-transform duration-[160ms]', open && 'rotate-180')} />
           </>
         ) : (
           <SlidersHorizontal aria-hidden="true" className="size-5" />

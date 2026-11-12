@@ -72,7 +72,7 @@ export default function LeagueThemeControl({ seasonId, currentTheme }: LeagueThe
   }
 
   return (
-    <div className="flex max-w-xs flex-col gap-2">
+    <div className="flex max-w-xs flex-col gap-2" data-saving={saving || undefined}>
       <Select
         label={t('theme.label')}
         value={theme}
