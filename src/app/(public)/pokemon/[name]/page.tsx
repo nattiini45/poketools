@@ -18,7 +18,6 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeBadge from '@/components/shared/TypeBadge';
 import PokemonDetailClient from './PokemonDetailClient';
 import WikiAttribution from '@/components/wiki/WikiAttribution';
-import WikiUsageStats from '@/components/wiki/WikiUsageStats';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
 import WikiHeader from '@/components/wiki/WikiHeader';
 import WikiLinkList from '@/components/wiki/WikiLinkList';
@@ -197,16 +196,11 @@ export default async function PokemonDetailPage({ params }: PageProps) {
         )}
       </div>
 
-      {/* Interactive stats section */}
-      <WikiSection title={t('pokemon.subtitle')} icon="scope-lens">
-        <PokemonDetailClient pokemonName={species.name} initialStats={initialStats} />
-      </WikiSection>
-
-      {/* Pack extensions (docs/format-packs.md): nothing without a provider. */}
-      <SupplementaryPokemonKos species={species.name} />
-
-      {/* Battle Usage Stats */}
-      <WikiUsageStats pokemonName={species.name} />
+      {/* Stats section and battle-stats block share one scope picker (the client component owns it). */}
+      <PokemonDetailClient pokemonName={species.name} initialStats={initialStats}>
+        {/* Pack extensions (docs/format-packs.md): nothing without a provider. */}
+        <SupplementaryPokemonKos species={species.name} />
+      </PokemonDetailClient>
 
       <WikiNotesSection
         entityType="pokemon"
