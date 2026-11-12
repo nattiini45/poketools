@@ -131,12 +131,10 @@ describe('ReplaysPage', () => {
     expect(html).toContain('match 1');
     expect(html).not.toContain('Game 1');
     expect(html).toContain('Open replay');
-    expect(html).toContain('type="submit"');
-    expect(html).toContain('bg-poke-accent text-poke-surface');
-    expect(html).toContain('href="/replays"');
-    expect(html).toContain('bg-transparent text-poke-text-secondary');
-    expect(html).toContain('href="/tournaments/t-1/matches/m-1"');
-    expect(html).toContain('bg-poke-elevated text-poke-text-primary');
+    // The controls are the site Button: a submit button, a reset link and the two row links.
+    expect(html).toMatch(/<button[^>]*type="submit"[^>]*>(?:<[^>]+>)*Apply/);
+    expect(html).toMatch(/<a[^>]*href="\/replays"[^>]*>(?:<[^>]+>)*Reset/);
+    expect(html).toMatch(/<a[^>]*href="\/tournaments\/t-1\/matches\/m-1"[^>]*>(?:<[^>]+>)*Match page/);
     expect(html).toContain(
       'href="https://replay.example/1" target="_blank" rel="noreferrer"',
     );

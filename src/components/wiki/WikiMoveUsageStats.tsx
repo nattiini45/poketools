@@ -1,7 +1,10 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import Link from 'next/link';
+import PokemonSprite from '@/components/shared/PokemonSprite';
 import Table, { type Column } from '@/components/ui/Table';
+import { WikiEmptyState, WikiSection, WikiSelect } from '@/components/wiki/WikiParts';
 import { useDataLocale, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
@@ -198,7 +201,13 @@ export default function WikiMoveUsageStats({ moveName }: WikiMoveUsageStatsProps
       sortable: true,
       sortValue: (e) => localizeSpecies(e.pokemon_name, dl),
       render: (entry) => (
-        <span className="font-medium text-poke-text-primary">{localizeSpecies(entry.pokemon_name, dl)}</span>
+        <Link
+          href={`/pokemon/${encodeURIComponent(entry.pokemon_name)}`}
+          className="inline-flex items-center gap-3 rounded-poke-sm font-[550] text-fg hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          <PokemonSprite name={entry.pokemon_name} size={32} />
+          {localizeSpecies(entry.pokemon_name, dl)}
+        </Link>
       ),
     },
     {
@@ -208,7 +217,7 @@ export default function WikiMoveUsageStats({ moveName }: WikiMoveUsageStatsProps
       sortable: true,
       sortValue: (e) => e.count,
       render: (entry) => (
-        <span className="text-poke-text-secondary">{entry.count}</span>
+        <span className="font-mono tabular-nums text-fg">{entry.count}</span>
       ),
     },
   ], [t, dl]);
@@ -216,78 +225,53 @@ export default function WikiMoveUsageStats({ moveName }: WikiMoveUsageStatsProps
   const totalUses = filteredData.reduce((sum, e) => sum + e.count, 0);
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide">
-        {t('usage.battleUsage')}
-      </h2>
-
+    <WikiSection title={t('usage.battleUsage')} icon="scope-lens">
       {/* Filter Bar */}
-      <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-3 shadow-poke-sm">
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.scope')}</label>
-            <select
-              value={scopeType}
-              onChange={(e) => handleScopeChange(e.target.value as ScopeFilter)}
-              className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-            >
-              <option value="all_time">{t('usage.allTime')}</option>
-              <option value="league">{t('usage.league')}</option>
-              <option value="tournament">{t('usage.tournament')}</option>
-            </select>
-          </div>
+      <div className="flex flex-wrap items-end gap-3">
+        <WikiSelect
+          label={t('usage.scope')}
+          value={scopeType}
+          onChange={(e) => handleScopeChange(e.target.value as ScopeFilter)}
+        >
+          <option value="all_time">{t('usage.allTime')}</option>
+          <option value="league">{t('usage.league')}</option>
+          <option value="tournament">{t('usage.tournament')}</option>
+        </WikiSelect>
 
-          {scopeType === 'league' && scopeOptions.leagues.length > 0 && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.league')}</label>
-              <select
-                value={scopeId}
-                onChange={(e) => setScopeId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.selectLeague')}</option>
-                {scopeOptions.leagues.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {scopeType === 'league' && scopeOptions.leagues.length > 0 && (
+          <WikiSelect label={t('usage.league')} value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+            <option value="">{t('usage.selectLeague')}</option>
+            {scopeOptions.leagues.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {scopeType === 'tournament' && scopeOptions.tournaments.length > 0 && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.tournament')}</label>
-              <select
-                value={scopeId}
-                onChange={(e) => setScopeId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.selectTournament')}</option>
-                {scopeOptions.tournaments.map((tournament) => (
-                  <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {scopeType === 'tournament' && scopeOptions.tournaments.length > 0 && (
+          <WikiSelect label={t('usage.tournament')} value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+            <option value="">{t('usage.selectTournament')}</option>
+            {scopeOptions.tournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {loading && (
-            <span className="text-xs text-poke-text-muted animate-pulse pb-1.5">{t('usage.loading')}</span>
-          )}
-        </div>
+        {loading && (
+          <span role="status" className="pb-2 text-caption text-fg-muted motion-safe:animate-pulse">{t('usage.loading')}</span>
+        )}
       </div>
 
       {/* Usage Content */}
       {status === 'failed' ? (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-6 text-center shadow-poke-sm">
-          <p className="text-poke-text-muted text-sm">{t('usage.loadFailed')}</p>
-          <p className="text-xs text-poke-text-muted mt-1">
-            {t('usage.loadFailedHint')}
-          </p>
+        <div role="alert" className="rounded-poke-lg border border-hairline bg-surface px-5 py-6 text-center">
+          <p className="text-subtitle font-[550] text-fg">{t('usage.loadFailed')}</p>
+          <p className="mt-1 text-body text-fg-muted">{t('usage.loadFailedHint')}</p>
         </div>
       ) : !loading && filteredData.length > 0 ? (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-lg shadow-poke-sm overflow-hidden p-4 space-y-3">
-          <div className="text-xs text-poke-text-muted">
+        <>
+          <p className="text-caption text-fg-muted">
             {t('usage.usedAcross', { count: totalUses, pokemonCount: filteredData.length })}
-          </div>
+          </p>
           <Table
             columns={usageColumns}
             data={filteredData}
@@ -295,15 +279,10 @@ export default function WikiMoveUsageStats({ moveName }: WikiMoveUsageStatsProps
             emptyMessage={t('usage.noDataMove')}
             defaultSort={{ key: 'count', direction: 'desc' }}
           />
-        </div>
+        </>
       ) : !loading ? (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-6 text-center shadow-poke-sm">
-          <p className="text-poke-text-muted text-sm">{t('usage.noDataMove')}</p>
-          <p className="text-xs text-poke-text-muted mt-1">
-            {t('usage.noDataMoveHint')}
-          </p>
-        </div>
+        <WikiEmptyState title={t('usage.noDataMove')} hint={t('usage.noDataMoveHint')} />
       ) : null}
-    </div>
+    </WikiSection>
   );
 }

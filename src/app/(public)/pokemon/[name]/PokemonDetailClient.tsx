@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import Card from '@/components/ui/Card';
 import Table, { type Column } from '@/components/ui/Table';
+import { WikiEmptyState, WikiSelect, WikiStatStrip, WikiUsageBar } from '@/components/wiki/WikiParts';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
@@ -93,7 +93,7 @@ export default function PokemonDetailClient({
         <button
           type="button"
           onClick={() => setPlayerId(player.player_id)}
-          className="text-poke-text-primary font-medium hover:text-poke-blue transition-colors text-left"
+          className="rounded-poke-sm text-left font-[550] text-fg hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring"
         >
           {player.player_name ?? t('usage.unknownPlayer')}
         </button>
@@ -106,7 +106,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.games,
       render: (player) => (
-        <span className="text-poke-text-secondary">{player.games}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.games}</span>
       ),
     },
     {
@@ -116,7 +116,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.win_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.win_rate !== null ? formatter.percentOf(player.win_rate) : '—'}
         </span>
       ),
@@ -128,7 +128,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.kos_dealt,
       render: (player) => (
-        <span className="text-poke-text-secondary">{player.kos_dealt}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.kos_dealt}</span>
       ),
     },
     {
@@ -138,7 +138,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.koed_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.koed_rate !== null ? formatter.percentOf(player.koed_rate) : '—'}
         </span>
       ),
@@ -150,7 +150,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.bring_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.bring_rate !== null ? formatter.percentOf(player.bring_rate) : '—'}
         </span>
       ),
@@ -162,7 +162,7 @@ export default function PokemonDetailClient({
       sortable: true,
       sortValue: (p) => p.lead_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.lead_rate !== null ? formatter.percentOf(player.lead_rate) : '—'}
         </span>
       ),
@@ -170,158 +170,109 @@ export default function PokemonDetailClient({
   ], [t, formatter]);
 
   return (
-    <div className="space-y-6">
+    <div className="flex flex-col gap-4">
       {/* Filter Bar */}
-      <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-4 shadow-poke">
-        <div className="flex flex-wrap gap-3 items-end">
-          {/* Scope type */}
-          <div>
-            <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.scope')}</label>
-            <select
-              value={scopeType}
-              onChange={(e) => handleScopeChange(e.target.value as ScopeFilter)}
-              className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-            >
-              <option value="all_time">{t('usage.allTime')}</option>
-              <option value="league">{t('usage.league')}</option>
-              <option value="tournament">{t('usage.tournament')}</option>
-            </select>
-          </div>
+      <div className="flex flex-wrap items-end gap-3">
+        {/* Scope type */}
+        <WikiSelect
+          label={t('usage.scope')}
+          value={scopeType}
+          onChange={(e) => handleScopeChange(e.target.value as ScopeFilter)}
+        >
+          <option value="all_time">{t('usage.allTime')}</option>
+          <option value="league">{t('usage.league')}</option>
+          <option value="tournament">{t('usage.tournament')}</option>
+        </WikiSelect>
 
-          {/* Specific scope selector */}
-          {scopeType === 'league' && filters && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.league')}</label>
-              <select
-                value={scopeId}
-                onChange={(e) => setScopeId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.selectLeague')}</option>
-                {filters.leagues.map((l) => (
-                  <option key={l.id} value={l.id}>{l.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {/* Specific scope selector */}
+        {scopeType === 'league' && filters && (
+          <WikiSelect label={t('usage.league')} value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+            <option value="">{t('usage.selectLeague')}</option>
+            {filters.leagues.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {scopeType === 'tournament' && filters && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.tournament')}</label>
-              <select
-                value={scopeId}
-                onChange={(e) => setScopeId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.selectTournament')}</option>
-                {filters.tournaments.map((tournament) => (
-                  <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {scopeType === 'tournament' && filters && (
+          <WikiSelect label={t('usage.tournament')} value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+            <option value="">{t('usage.selectTournament')}</option>
+            {filters.tournaments.map((tournament) => (
+              <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {/* Player filter */}
-          {filters && filters.players.length > 0 && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.player')}</label>
-              <select
-                value={playerId}
-                onChange={(e) => setPlayerId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.allPlayers')}</option>
-                {filters.players.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {/* Player filter */}
+        {filters && filters.players.length > 0 && (
+          <WikiSelect label={t('usage.player')} value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+            <option value="">{t('usage.allPlayers')}</option>
+            {filters.players.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {loading && (
-            <span className="text-xs text-poke-text-muted animate-pulse pb-1.5">{t('usage.loading')}</span>
-          )}
-        </div>
+        {loading && (
+          <span role="status" className="pb-2 text-caption text-fg-muted motion-safe:animate-pulse">{t('usage.loading')}</span>
+        )}
       </div>
 
       {/* Stat Cards */}
       {hasData ? (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            <StatCard label={t('usage.usageRate')} value={formatter.percentOf(stats.usage_percent)} />
-            <StatCard label={t('usage.winRate')} value={pct(stats.win_rate)} />
-            <StatCard label={t('usage.kos')} value={formatter.number(stats.kos_dealt)} />
-            <StatCard label={t('usage.koedRate')} value={formatter.percentOf(stats.koed_rate)} />
-            <StatCard label={t('usage.bringRate')} value={pct(stats.bring_rate)} />
-            <StatCard label={t('usage.leadRate')} value={pct(stats.lead_rate)} />
-          </div>
+          <WikiStatStrip
+            className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
+            stats={[
+              { label: t('usage.usageRate'), value: formatter.percentOf(stats.usage_percent) },
+              { label: t('usage.winRate'), value: pct(stats.win_rate) },
+              { label: t('usage.kos'), value: formatter.number(stats.kos_dealt) },
+              { label: t('usage.koedRate'), value: formatter.percentOf(stats.koed_rate) },
+              { label: t('usage.bringRate'), value: pct(stats.bring_rate) },
+              { label: t('usage.leadRate'), value: pct(stats.lead_rate) },
+            ]}
+          />
 
-          <div className="text-xs text-poke-text-muted">
+          <p className="text-caption text-fg-muted">
             {t('usage.appearances', {
               count: stats.total_appearances,
               games: t('usage.gamesCount', { count: stats.total_games_in_scope }),
             })}
-          </div>
+          </p>
 
           {/* Move Usage */}
           {stats.moves.length > 0 && (
-            <Card variant="outlined" padding="md">
-              <h3 className="text-sm font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-3">
-                {t('usage.moveUsage')}
-              </h3>
-              <div className="space-y-2">
+            <div className="flex flex-col gap-2">
+              <h3 className="text-subtitle font-[550] text-fg">{t('usage.moveUsage')}</h3>
+              <ul className="flex flex-col gap-2.5 rounded-poke-lg border border-hairline bg-surface p-4">
                 {stats.moves.map((move) => (
-                  <div key={move.name} className="flex items-center gap-3">
-                    <span className="w-32 text-sm font-medium text-poke-text-primary truncate">
-                      {localizeMove(move.name, dl)}
-                    </span>
-                    <div className="flex-1 h-2 bg-poke-muted rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-poke-blue rounded-full transition-all duration-300"
-                        style={{ width: `${Math.min(move.usage_percent, 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-xs text-poke-text-muted w-16 text-right">
-                      {formatter.percentOf(move.usage_percent)} ({formatter.number(move.count)})
-                    </span>
-                  </div>
+                  <WikiUsageBar
+                    key={move.name}
+                    label={localizeMove(move.name, dl)}
+                    percent={move.usage_percent}
+                    value={`${formatter.percentOf(move.usage_percent)} (${formatter.number(move.count)})`}
+                  />
                 ))}
-              </div>
-            </Card>
+              </ul>
+            </div>
           )}
 
           {/* Player Breakdown */}
           {!playerId && stats.players.length > 0 && (
-            <Card variant="outlined" padding="md">
-              <h3 className="text-sm font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-3">
-                {t('usage.playerBreakdown')}
-              </h3>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-subtitle font-[550] text-fg">{t('usage.playerBreakdown')}</h3>
               <Table
                 columns={playerColumns}
                 data={stats.players}
                 keyExtractor={(player) => player.player_id}
                 emptyMessage={t('usage.noPlayerData')}
               />
-            </Card>
+            </div>
           )}
         </>
       ) : (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-8 text-center shadow-poke">
-          <p className="text-poke-text-muted">{t('usage.noDataPokemon')}</p>
-          <p className="text-xs text-poke-text-muted mt-1">
-            {t('usage.noDataPokemonHintFuture')}
-          </p>
-        </div>
+        <WikiEmptyState title={t('usage.noDataPokemon')} hint={t('usage.noDataPokemonHintFuture')} />
       )}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-3 text-center shadow-poke-sm">
-      <div className="text-lg font-heading font-bold text-poke-text-primary">{value}</div>
-      <div className="text-xs text-poke-text-muted font-heading">{label}</div>
     </div>
   );
 }

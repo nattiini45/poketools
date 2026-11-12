@@ -8,11 +8,15 @@
  */
 export default {
   back: {
-    wiki: '← Back to Wiki',
-    moves: '← Back to Moves',
-    items: '← Back to Items',
-    abilities: '← Back to Abilities',
-    tera: '← Back to Tera Types',
+    wiki: 'Back to Wiki',
+    moves: 'Back to Moves',
+    items: 'Back to Items',
+    abilities: 'Back to Abilities',
+    tera: 'Back to Tera Types',
+  },
+  chrome: {
+    title: 'Wiki',
+    sections: 'Wiki sections',
   },
   home: {
     title: 'Wiki / Encyclopedia',
@@ -49,6 +53,13 @@ export default {
     searchByDescription: 'Search by name or description...',
     clearFilters: 'Clear filters',
     noMatches: 'No matches',
+    noMatchesHint: 'Try another search term or clear the filters.',
+    filters: 'Filters',
+    filtersActive: { one: '{count} active filter', other: '{count} active filters' },
+    showResults: { one: 'Show {count} result', other: 'Show {count} results' },
+    sortBy: 'Sort by',
+    sortAsc: '{column}, ascending',
+    sortDesc: '{column}, descending',
     name: 'Name',
     types: 'Types',
     type: 'Type',
@@ -168,6 +179,7 @@ export default {
     reportSubmitted: 'Report submitted.',
     reportFailed: 'Failed to submit report',
     reportFailedRetry: 'Failed to submit report. Please try again.',
+    emptyTitle: 'No notes yet',
     empty: 'No community notes yet. Be the first to contribute!',
     submitted: 'Note submitted! It will appear once approved by a moderator.',
     placeholder: 'Share competitive tips, strategy notes, or usage context... (Sign in required)',

@@ -1,5 +1,5 @@
 import AdminGuard from '@/components/shared/AdminGuard';
-import PageContainer from '@/components/ui/PageContainer';
+import NewCompetitionHeader from '@/components/league/wizard/NewCompetitionHeader';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { listRulesetOptionsFor } from '@/lib/supabase/queries/rulesets';
 import TournamentCreator from './TournamentCreator';
@@ -21,9 +21,15 @@ export default async function NewTournamentPage() {
 
   return (
     <AdminGuard>
-      <PageContainer title={t('create.title')} maxWidth="md">
-        <TournamentCreator rulesets={rulesets} />
-      </PageContainer>
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+        <NewCompetitionHeader kind="tournament" />
+        <section aria-labelledby="new-tournament-heading" className="flex flex-col gap-5">
+          <h2 id="new-tournament-heading" className="font-heading text-xl text-fg">
+            {t('create.title')}
+          </h2>
+          <TournamentCreator rulesets={rulesets} />
+        </section>
+      </div>
     </AdminGuard>
   );
 }

@@ -61,24 +61,6 @@ export function cloneFormDefaults(option: CloneSourceOption): Partial<SeasonForm
   };
 }
 
-/** What the admin typed that belongs to the new league whatever it starts from ('' = unset). */
-export interface LeagueFormIdentity {
-  name: string;
-  start_date: string;
-  end_date: string;
-}
-
-/**
- * The create form's `initialData`: the source's defaults (if any) under what was typed, so picking
- * or changing the source (which remounts the form) never wipes the name and dates.
- */
-export function createFormInitialData(
-  option: CloneSourceOption | null,
-  identity: LeagueFormIdentity,
-): Partial<SeasonFormData> {
-  return { ...(option ? cloneFormDefaults(option) : {}), ...identity };
-}
-
 /**
  * The `POST /api/seasons` body. Without a source it is the form payload as
  * is; with one it gains `clone_from`. `copy_admins` is sent only by site

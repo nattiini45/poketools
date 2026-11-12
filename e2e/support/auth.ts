@@ -9,7 +9,9 @@ export async function signIn(page: Page, email: string, password: string): Promi
   await expect(page).not.toHaveURL(/\/auth\/signin/);
 }
 
+/** Signs out through the account menu of the navigation bar (the home page's hero no longer carries a sign-out button). */
 export async function signOut(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Account menu' }).click();
   await page.getByRole('button', { name: 'Sign out' }).first().click();
   await expect(page.getByRole('link', { name: 'Sign in' }).first()).toBeVisible();
 }

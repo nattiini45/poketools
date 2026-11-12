@@ -5,7 +5,10 @@
  *
  * - `LeagueTrashView` is the presentation: the notices (what a restore or a rebuild reported, kept until dismissed),
  *   the pending rebuilds with their "Run rebuild" action, and the table of trashed leagues (name, format, deleted by,
- *   deleted at, restorable until, counts, status badges, Restore). Pure props, so it renders in tests without a DOM.
+ *   deleted at, restorable until, counts, status chips, Restore). Pure props, so it renders in tests without a DOM.
+ *   The page is `CompetitionList`'s trash view (redesign A4): the table shares its frame and cell recipe
+ *   (`components/admin/competitions/table-styles.ts`) and the list's search narrows the rows and the pending rebuilds
+ *   (`useCompetitionQuery`; outside a list the text is empty and nothing is narrowed).
  * - `LeagueTrashPanel` (default export) wires it: one action at a time (`/api/admin/league-trash/[id]/restore` or
  *   `.../rebuild`), the restore asks a `ConfirmDialog` first, the page state is `leagueTrashReducer`
  *   (`src/lib/league-trash/client.ts`), and the server data is refreshed after every successful action.
@@ -18,12 +21,27 @@
 import { useReducer, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import CompetitionEmpty from '@/components/admin/competitions/CompetitionEmpty';
+import { useCompetitionQuery } from '@/components/admin/competitions/competition-query';
+import {
+  ACTION_CELL,
+  CELL,
+  NAME_CELL,
+  ROW,
+  TABLE,
+  TABLE_FRAME,
+  TBODY,
+  TH,
+  THEAD,
+  TOUCH,
+} from '@/components/admin/competitions/table-styles';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
-import Section from '@/components/ui/Section';
+import SkewChip from '@/components/ui/SkewChip';
 import { cn } from '@/lib/utils/cn';
+import { matchesQuery } from '@/lib/admin/competition-list';
+import { adminCompetitionsMessages } from '@/i18n/messages/admin-competitions';
 import { LocalTime } from '@/i18n/LocalTime';
 import type { Translator } from '@/i18n/core';
 import type { Formatter } from '@/i18n/format';
@@ -50,16 +68,7 @@ import { leagueTrashLifecycleState, leagueTrashMachine, type LeagueTrashBinState
 
 type T = Translator<typeof en>;
 
-/** A small button is a full 44px target on a phone and text-sized from `sm` up. */
-const TOUCH = 'min-h-11 sm:min-h-0';
-
 const COLUMNS = ['league', 'format', 'deletedBy', 'deletedAt', 'restorableUntil', 'contents', 'status', 'actions'] as const;
-
-/**
- * A cell of the table. Below `xl` the table is a list of cards (every table display value is switched off) and a cell
- * prints its column name in front of its value, taken from `data-label`; from `xl` it is an ordinary table cell.
- */
-const CELL = "flex items-baseline gap-3 py-0.5 before:w-24 before:shrink-0 before:text-xs before:text-poke-text-muted before:content-[attr(data-label)] xl:table-cell xl:px-3 xl:py-3 xl:before:content-none";
 
 /** Whether the superadmin can restore an entry in `state`, and why not (`leagueTrashMachine`). */
 function restoreAvailability(state: LeagueTrashBinState): { canRestore: boolean; blockedKey: 'trash.restore.blocked' | 'trash.restore.expired' | null } {
@@ -85,6 +94,8 @@ export interface LeagueTrashViewProps {
   onCancelRestore: () => void;
   onRunRebuild: (item: LeagueTrashPendingView) => void;
   onDismiss: (noticeId: number) => void;
+  /** The list's search text: rows and pending rebuilds that do not contain every word are left out. */
+  query?: string;
 }
 
 export const restoreBusyKey = (trashId: string) => `restore:${trashId}`;
@@ -199,7 +210,7 @@ function NoticeView({
 
 function CountsView({ counts, t }: { counts: LeagueTrashHeadlineCounts; t: T }) {
   const shown = COUNT_KEYS.filter((key) => counts[key] > 0);
-  if (shown.length === 0) return <span className="text-poke-text-muted">–</span>;
+  if (shown.length === 0) return <span className="text-fg-muted">–</span>;
   return (
     <ul className="flex flex-wrap gap-x-3 gap-y-0.5">
       {shown.map((key) => (
@@ -223,18 +234,23 @@ export function LeagueTrashView({
   onCancelRestore,
   onRunRebuild,
   onDismiss,
+  query = '',
 }: LeagueTrashViewProps) {
   const t = useT(leagueAdminMessages);
+  const tc = useT(adminCompetitionsMessages);
   const f = useFormatter();
   const errorText = useApiErrorText(errorsSeasons, errorsTournaments, errorsAdmin);
 
-  const visibleRows = rows
-    .filter((row) => !state.restored.includes(row.id))
+  const openRows = rows.filter((row) => !state.restored.includes(row.id));
+  const visibleRows = openRows
+    .filter((row) => matchesQuery([row.name, row.formatLabel, row.deletedByName], query))
     .map((row) => {
       const rebuildPending = row.rebuildPending && !state.rebuilt.includes(pendingKey('delete', row.id));
       return { ...row, rebuildPending, ...restoreAvailability(leagueTrashLifecycleState({ rebuildPending, purgeAfter: row.purgeAfter }, now)) };
     });
-  const visiblePending = pending.filter((item) => !state.rebuilt.includes(pendingKey(item.kind, item.trashId)));
+  const visiblePending = pending
+    .filter((item) => !state.rebuilt.includes(pendingKey(item.kind, item.trashId)))
+    .filter((item) => matchesQuery([item.name], query));
   const anySchemaChanged = visibleRows.some((row) => row.schemaChanged);
   const busyNow = busy !== null;
 
@@ -249,16 +265,22 @@ export function LeagueTrashView({
       )}
 
       {visiblePending.length > 0 && (
-        <Section title={t('trash.pending.title')} subtitle={t('trash.pending.hint')}>
-          <ul className="divide-y divide-poke-border" data-trash-pending>
+        <section className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4" aria-labelledby="trash-pending-title">
+          <div className="space-y-1">
+            <h2 id="trash-pending-title" className="font-heading text-title text-fg">
+              {t('trash.pending.title')}
+            </h2>
+            <p className="text-body text-fg-muted">{t('trash.pending.hint')}</p>
+          </div>
+          <ul className="divide-y divide-hairline" data-trash-pending>
             {visiblePending.map((item) => {
               const key = rebuildBusyKey(item.kind, item.trashId);
               return (
                 <li key={key} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
                   <div className="min-w-0 space-y-1">
-                    <p className="font-medium text-poke-text-primary">{item.name}</p>
-                    <p className="flex flex-wrap items-center gap-2 text-sm text-poke-text-muted">
-                      <Badge variant="yellow">{t(`trash.pending.kind.${item.kind}`)}</Badge>
+                    <p className="font-[550] text-fg">{item.name}</p>
+                    <p className="flex flex-wrap items-center gap-2 text-caption text-fg-muted">
+                      <SkewChip tone="accent">{t(`trash.pending.kind.${item.kind}`)}</SkewChip>
                       <LocalTime value={item.at} preset="dateTimeYear" />
                     </p>
                   </div>
@@ -277,56 +299,58 @@ export function LeagueTrashView({
               );
             })}
           </ul>
-        </Section>
+        </section>
       )}
 
-      {visibleRows.length === 0 ? (
-        <p className="text-poke-text-muted" data-trash-empty>
-          {t('trash.empty')}
-        </p>
+      {openRows.length === 0 ? (
+        <CompetitionEmpty title={t('trash.empty')} data-trash-empty />
+      ) : visibleRows.length === 0 ? (
+        visiblePending.length === 0 && (
+          <CompetitionEmpty title={tc('empty.noMatches.title', { query: query.trim() })} hint={tc('empty.noMatches.hint')} data-competition-empty="search" />
+        )
       ) : (
         <div className="space-y-2">
-          <div className="rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-card xl:overflow-x-auto">
-            <table className="block w-full border-collapse text-left text-sm xl:table xl:min-w-[64rem]" data-trash-table>
+          <div className={TABLE_FRAME}>
+            <table className={TABLE} data-trash-table>
               <caption className="sr-only">{t('trash.caption')}</caption>
-              <thead className="sr-only text-xs uppercase tracking-wide text-poke-text-muted xl:not-sr-only xl:table-header-group">
+              <thead className={THEAD}>
                 <tr>
                   {COLUMNS.map((column) => (
-                    <th key={column} scope="col" className="px-3 py-2 font-heading font-semibold">
+                    <th key={column} scope="col" className={TH}>
                       {t(`trash.columns.${column}`)}
                     </th>
                   ))}
                 </tr>
               </thead>
-              <tbody className="block divide-y divide-poke-border xl:table-row-group">
+              <tbody className={TBODY}>
                 {visibleRows.map((row) => (
-                  <tr key={row.id} className="block px-3 py-3 align-top xl:table-row xl:p-0" data-trash-row={row.id}>
-                    <th scope="row" className="block pb-2 text-base font-medium text-poke-text-primary xl:table-cell xl:px-3 xl:py-3 xl:text-sm">
+                  <tr key={row.id} className={ROW} data-trash-row={row.id}>
+                    <th scope="row" className={cn(NAME_CELL, 'font-[550] text-fg')}>
                       {row.name}
                     </th>
-                    <td data-label={t('trash.columns.format')} className={cn(CELL, 'text-poke-text-secondary')}>
+                    <td data-label={t('trash.columns.format')} className={cn(CELL, 'text-fg-muted')}>
                       {row.formatLabel}
                     </td>
-                    <td data-label={t('trash.columns.deletedBy')} className={cn(CELL, 'text-poke-text-secondary')}>
+                    <td data-label={t('trash.columns.deletedBy')} className={cn(CELL, 'text-fg-muted')}>
                       {row.deletedByName ?? t('trash.deletedByUnknown')}
                     </td>
-                    <td data-label={t('trash.columns.deletedAt')} className={cn(CELL, 'text-poke-text-secondary xl:whitespace-nowrap')}>
+                    <td data-label={t('trash.columns.deletedAt')} className={cn(CELL, 'text-fg-muted xl:whitespace-nowrap')}>
                       <LocalTime value={row.deletedAt} preset="dateTimeYear" />
                     </td>
-                    <td data-label={t('trash.columns.restorableUntil')} className={cn(CELL, 'text-poke-text-secondary xl:whitespace-nowrap')}>
+                    <td data-label={t('trash.columns.restorableUntil')} className={cn(CELL, 'text-fg-muted xl:whitespace-nowrap')}>
                       <LocalTime value={row.purgeAfter} preset="dateTimeYear" />
                     </td>
-                    <td data-label={t('trash.columns.contents')} className={cn(CELL, 'text-poke-text-secondary')}>
+                    <td data-label={t('trash.columns.contents')} className={cn(CELL, 'text-fg-muted')}>
                       <CountsView counts={row.counts} t={t} />
                     </td>
                     <td data-label={t('trash.columns.status')} className={cn(CELL, 'xl:whitespace-nowrap')}>
                       <div className="flex flex-wrap gap-1.5">
-                        {row.rebuildPending && <Badge variant="blue">{t('trash.badges.rebuildPending')}</Badge>}
-                        {row.schemaChanged && <Badge variant="yellow">{t('trash.badges.schemaChanged')}</Badge>}
-                        {row.canRestore && !row.schemaChanged && <Badge variant="green">{t('trash.badges.ready')}</Badge>}
+                        {row.rebuildPending && <SkewChip tone="accent">{t('trash.badges.rebuildPending')}</SkewChip>}
+                        {row.schemaChanged && <SkewChip tone="loss">{t('trash.badges.schemaChanged')}</SkewChip>}
+                        {row.canRestore && !row.schemaChanged && <SkewChip tone="live">{t('trash.badges.ready')}</SkewChip>}
                       </div>
                     </td>
-                    <td className="block pt-2 xl:table-cell xl:px-3 xl:py-3">
+                    <td className={ACTION_CELL}>
                       <Button
                         variant="secondary"
                         size="sm"
@@ -345,7 +369,7 @@ export function LeagueTrashView({
               </tbody>
             </table>
           </div>
-          {anySchemaChanged && <p className="text-xs text-poke-text-muted">{t('trash.schemaChangedHint')}</p>}
+          {anySchemaChanged && <p className="text-caption text-fg-muted">{t('trash.schemaChangedHint')}</p>}
         </div>
       )}
 
@@ -372,6 +396,7 @@ export interface LeagueTrashPanelProps {
 
 export default function LeagueTrashPanel({ rows, pending, now }: LeagueTrashPanelProps) {
   const router = useRouter();
+  const query = useCompetitionQuery();
   const [state, dispatch] = useReducer(leagueTrashReducer, INITIAL_LEAGUE_TRASH_STATE);
   const [busy, setBusy] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<LeagueTrashRowView | null>(null);
@@ -428,6 +453,7 @@ export default function LeagueTrashPanel({ rows, pending, now }: LeagueTrashPane
       onCancelRestore={() => setConfirming(null)}
       onRunRebuild={(item) => void rebuild(item)}
       onDismiss={(id) => dispatch({ type: 'dismiss', id })}
+      query={query}
     />
   );
 }

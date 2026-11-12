@@ -28,7 +28,7 @@ interface CloneSourcePickerProps {
 /**
  * "Start from an existing league" on the league create page: the source
  * select, what a copy takes over and what it leaves out, and the roster and
- * league-admin options. The owner (`LeagueCreator`) holds the state and
+ * league-admin options. The owner (`NewCompetitionWizard`) holds the state and
  * resets the options when the source changes.
  */
 export default function CloneSourcePicker({

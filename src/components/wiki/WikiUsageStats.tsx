@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
-import Card from '@/components/ui/Card';
 import Table, { type Column } from '@/components/ui/Table';
+import { WikiEmptyState, WikiSection, WikiSelect, WikiStatStrip, WikiUsageBar } from '@/components/wiki/WikiParts';
 import ScopeSelector from '@/components/shared/ScopeSelector';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
@@ -97,7 +97,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
         <button
           type="button"
           onClick={() => setPlayerId(player.player_id)}
-          className="text-poke-text-primary font-medium hover:text-poke-blue transition-colors text-left text-sm"
+          className="rounded-poke-sm text-left font-[550] text-fg hover:text-accent-ink hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-ring"
         >
           {player.player_name ?? t('usage.unknownPlayer')}
         </button>
@@ -110,7 +110,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.games,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">{player.games}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.games}</span>
       ),
     },
     {
@@ -120,7 +120,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.win_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.win_rate !== null ? formatter.percentOf(player.win_rate) : '—'}
         </span>
       ),
@@ -132,7 +132,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.kos_dealt,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">{player.kos_dealt}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.kos_dealt}</span>
       ),
     },
     {
@@ -142,7 +142,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.koed_rate,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">{formatter.percentOf(player.koed_rate)}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{formatter.percentOf(player.koed_rate)}</span>
       ),
     },
     {
@@ -152,7 +152,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.bring_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.bring_rate !== null ? formatter.percentOf(player.bring_rate) : '—'}
         </span>
       ),
@@ -164,7 +164,7 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
       sortable: true,
       sortValue: (p) => p.lead_rate ?? -1,
       render: (player) => (
-        <span className="text-poke-text-secondary text-sm">
+        <span className="font-mono tabular-nums text-fg-muted">
           {player.lead_rate !== null ? formatter.percentOf(player.lead_rate) : '—'}
         </span>
       ),
@@ -172,156 +172,110 @@ export default function WikiUsageStats({ pokemonName }: WikiUsageStatsProps) {
   ], [t, formatter]);
 
   return (
-    <div className="space-y-4">
-      <h2 className="font-heading text-sm font-semibold text-poke-text-secondary uppercase tracking-wide">
-        {t('usage.battleStats')}
-      </h2>
-
+    <WikiSection title={t('usage.battleStats')}>
       {/* Filter Bar */}
-      <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-3 shadow-poke-sm">
-        <div className="flex flex-wrap gap-3 items-end">
-          {filters && (
-            <ScopeSelector
-              scope={insightsScope}
-              leagues={leagueOptions}
-              tournaments={tournamentOptions}
-              onScopeChange={handleInsightsScopeChange}
-            />
-          )}
+      <div className="flex flex-wrap items-end gap-3">
+        {filters && (
+          <ScopeSelector
+            scope={insightsScope}
+            leagues={leagueOptions}
+            tournaments={tournamentOptions}
+            onScopeChange={handleInsightsScopeChange}
+          />
+        )}
 
-          {filters && filters.players.length > 0 && (
-            <div>
-              <label className="block text-xs text-poke-text-secondary mb-1">{t('usage.player')}</label>
-              <select
-                value={playerId}
-                onChange={(e) => setPlayerId(e.target.value)}
-                className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
-              >
-                <option value="">{t('usage.allPlayers')}</option>
-                {filters.players.map((p) => (
-                  <option key={p.id} value={p.id}>{p.name}</option>
-                ))}
-              </select>
-            </div>
-          )}
+        {filters && filters.players.length > 0 && (
+          <WikiSelect label={t('usage.player')} value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
+            <option value="">{t('usage.allPlayers')}</option>
+            {filters.players.map((p) => (
+              <option key={p.id} value={p.id}>{p.name}</option>
+            ))}
+          </WikiSelect>
+        )}
 
-          {loading && (
-            <span className="text-xs text-poke-text-muted animate-pulse pb-1.5">{t('usage.loading')}</span>
-          )}
-        </div>
+        {loading && (
+          <span role="status" className="pb-2 text-caption text-fg-muted motion-safe:animate-pulse">{t('usage.loading')}</span>
+        )}
       </div>
 
       {/* Stats Content */}
       {!loading && hasData && stats ? (
         <>
           {/* Stat Cards */}
-          <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-            <StatCard label={t('usage.usageRate')} value={formatter.percentOf(stats.usage_percent)} />
-            <StatCard label={t('usage.winRate')} value={pct(stats.win_rate)} />
-            <StatCard label={t('usage.kos')} value={formatter.number(stats.kos_dealt)} />
-            <StatCard label={t('usage.koedRate')} value={formatter.percentOf(stats.koed_rate)} />
-            <StatCard label={t('usage.bringRate')} value={pct(stats.bring_rate)} />
-            <StatCard label={t('usage.leadRate')} value={pct(stats.lead_rate)} />
-          </div>
+          <WikiStatStrip
+            className="grid-cols-3 sm:grid-cols-6"
+            stats={[
+              { label: t('usage.usageRate'), value: formatter.percentOf(stats.usage_percent) },
+              { label: t('usage.winRate'), value: pct(stats.win_rate) },
+              { label: t('usage.kos'), value: formatter.number(stats.kos_dealt) },
+              { label: t('usage.koedRate'), value: formatter.percentOf(stats.koed_rate) },
+              { label: t('usage.bringRate'), value: pct(stats.bring_rate) },
+              { label: t('usage.leadRate'), value: pct(stats.lead_rate) },
+            ]}
+          />
 
-          <div className="text-xs text-poke-text-muted">
+          <p className="text-caption text-fg-muted">
             {t('usage.appearances', {
               count: stats.total_appearances,
               games: t('usage.gamesCount', { count: stats.total_games_in_scope }),
             })}
-          </div>
+          </p>
 
           {/* Move Usage & Item Usage side by side */}
           {(stats.moves.length > 0 || stats.items.length > 0) && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
               {/* Move Usage */}
               {stats.moves.length > 0 && (
-                <Card variant="outlined" padding="md">
-                  <h3 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-                    {t('usage.moveUsage')}
-                  </h3>
-                  <div className="space-y-1.5">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-subtitle font-[550] text-fg">{t('usage.moveUsage')}</h3>
+                  <ul className="flex flex-col gap-2.5 rounded-poke-lg border border-hairline bg-surface p-4">
                     {stats.moves.map((move) => (
-                      <div key={move.name} className="flex items-center gap-2">
-                        <span className="w-28 text-xs font-medium text-poke-text-primary truncate">
-                          {localizeMove(move.name, dl)}
-                        </span>
-                        <div className="flex-1 h-1.5 bg-poke-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-poke-blue rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(move.usage_percent, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] text-poke-text-muted w-14 text-right">
-                          {formatter.percentOf(move.usage_percent)}
-                        </span>
-                      </div>
+                      <WikiUsageBar
+                        key={move.name}
+                        label={localizeMove(move.name, dl)}
+                        percent={move.usage_percent}
+                        value={formatter.percentOf(move.usage_percent)}
+                      />
                     ))}
-                  </div>
-                </Card>
+                  </ul>
+                </div>
               )}
 
               {/* Item Usage */}
               {stats.items.length > 0 && (
-                <Card variant="outlined" padding="md">
-                  <h3 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-                    {t('usage.itemUsage')}
-                  </h3>
-                  <div className="space-y-1.5">
+                <div className="flex flex-col gap-2">
+                  <h3 className="text-subtitle font-[550] text-fg">{t('usage.itemUsage')}</h3>
+                  <ul className="flex flex-col gap-2.5 rounded-poke-lg border border-hairline bg-surface p-4">
                     {stats.items.map((item) => (
-                      <div key={item.name} className="flex items-center gap-2">
-                        <span className="w-28 text-xs font-medium text-poke-text-primary truncate">
-                          {localizeItem(item.name, dl)}
-                        </span>
-                        <div className="flex-1 h-1.5 bg-poke-muted rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-amber-400 rounded-full transition-all duration-300"
-                            style={{ width: `${Math.min(item.usage_percent, 100)}%` }}
-                          />
-                        </div>
-                        <span className="text-[11px] text-poke-text-muted w-14 text-right">
-                          {formatter.percentOf(item.usage_percent)}
-                        </span>
-                      </div>
+                      <WikiUsageBar
+                        key={item.name}
+                        label={localizeItem(item.name, dl)}
+                        percent={item.usage_percent}
+                        value={formatter.percentOf(item.usage_percent)}
+                      />
                     ))}
-                  </div>
-                </Card>
+                  </ul>
+                </div>
               )}
             </div>
           )}
 
           {/* Player Breakdown */}
           {!playerId && stats.players.length > 0 && (
-            <Card variant="outlined" padding="md">
-              <h3 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-                {t('usage.playerBreakdown')}
-              </h3>
+            <div className="flex flex-col gap-2">
+              <h3 className="text-subtitle font-[550] text-fg">{t('usage.playerBreakdown')}</h3>
               <Table
                 columns={playerColumns}
                 data={stats.players}
                 keyExtractor={(player) => player.player_id}
                 emptyMessage={t('usage.noPlayerData')}
               />
-            </Card>
+            </div>
           )}
         </>
       ) : !loading ? (
-        <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-6 text-center shadow-poke-sm">
-          <p className="text-poke-text-muted text-sm">{t('usage.noDataPokemon')}</p>
-          <p className="text-xs text-poke-text-muted mt-1">
-            {t('usage.noDataPokemonHint')}
-          </p>
-        </div>
+        <WikiEmptyState title={t('usage.noDataPokemon')} hint={t('usage.noDataPokemonHint')} />
       ) : null}
-    </div>
-  );
-}
-
-function StatCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-lg p-2 text-center shadow-poke-sm">
-      <div className="text-base font-heading font-bold text-poke-text-primary">{value}</div>
-      <div className="text-[11px] text-poke-text-muted font-heading">{label}</div>
-    </div>
+    </WikiSection>
   );
 }

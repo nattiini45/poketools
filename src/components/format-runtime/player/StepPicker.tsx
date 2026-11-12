@@ -3,10 +3,13 @@
 import { useId, useState } from 'react';
 import Badge from '@/components/ui/Badge';
 import Input from '@/components/ui/Input';
+import SkewChip from '@/components/ui/SkewChip';
+import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { formatRuntimePlayerMessages } from '@/i18n/messages/format-runtime/player';
 import type { EntryView, StepView } from '@/lib/format-engine/runtime/view-types';
 import { entryMatchesSearch } from './entry-names';
+import { EntrySprite } from './parts';
 import SpeciesLabel from './SpeciesLabel';
 import { useLText } from './useLabels';
 
@@ -52,18 +55,18 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
   }
 
   return (
-    <fieldset className="space-y-2" disabled={disabled}>
-      <legend className="font-heading text-sm font-semibold text-poke-text-primary">
+    <fieldset className="flex min-w-0 flex-col gap-2" disabled={disabled}>
+      <legend className="float-left w-full text-body font-[550] text-fg">
         {t('step.heading', { number: step.index + 1, resource: labelOf(step.resource_label) })}
       </legend>
-      <p className="text-xs text-poke-text-secondary" data-step-counter>
-        {t('step.counter', { picked: selected.length, count: step.count })}
+      <p className="clear-both self-start" data-step-counter>
+        <SkewChip tone={full ? 'win' : 'neutral'}>{t('step.counter', { picked: selected.length, count: step.count })}</SkewChip>
       </p>
-      {step.distinct_attr !== null && <p className="text-xs text-poke-text-secondary">{t('step.distinct', { attr: step.distinct_attr })}</p>}
+      {step.distinct_attr !== null && <p className="text-caption text-fg-muted">{t('step.distinct', { attr: step.distinct_attr })}</p>}
       {!step.unlocked ? (
-        <p className="text-sm text-poke-text-muted">{t('step.locked')}</p>
+        <p className="text-body text-fg-muted">{t('step.locked')}</p>
       ) : entries.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">{t('step.noEntries')}</p>
+        <p className="text-body text-fg-muted">{t('step.noEntries')}</p>
       ) : (
         <>
           <Input
@@ -74,9 +77,9 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
             autoComplete="off"
           />
           {visible.length === 0 ? (
-            <p className="text-sm text-poke-text-muted">{t('step.noMatches')}</p>
+            <p className="text-body text-fg-muted">{t('step.noMatches')}</p>
           ) : (
-            <ul className="max-h-80 divide-y divide-poke-border overflow-y-auto rounded-poke-md border border-poke-border bg-poke-surface">
+            <ul className="max-h-80 divide-y divide-hairline overflow-y-auto rounded-poke-md border border-hairline bg-elevated">
               {visible.map((entry) => {
                 const checked = selected.includes(entry.id);
                 const reason = takenIds?.has(entry.id) ? 'taken' : blocked.get(entry.id);
@@ -85,7 +88,7 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
                 const noteId = `${inputId}-note`;
                 const attrs = entry.attrs.map(attrText).filter((text): text is string => text !== null);
                 return (
-                  <li key={entry.id} className="flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-2 sm:min-h-0">
+                  <li key={entry.id} className={cn('flex min-h-11 flex-wrap items-center gap-x-3 gap-y-1 px-3 py-1.5', checked && 'bg-accent-subtle')}>
                     <input
                       id={inputId}
                       type={single ? 'radio' : 'checkbox'}
@@ -94,19 +97,20 @@ export default function StepPicker({ step, entries, selected, onChange, takenIds
                       disabled={rowDisabled}
                       aria-describedby={attrs.length > 0 || reason !== undefined ? noteId : undefined}
                       onChange={() => toggle(entry.id)}
-                      className="h-4 w-4 cursor-pointer accent-poke-accent focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-transparent focus-visible:ring-2 focus-visible:ring-poke-border-focus"
+                      className="size-4 shrink-0 cursor-pointer accent-accent-fill disabled:cursor-not-allowed"
                     />
-                    <label htmlFor={inputId} className={`text-sm ${rowDisabled ? 'text-poke-text-muted' : 'text-poke-text-primary'}`}>
+                    <EntrySprite id={entry.id} size={32} className={rowDisabled ? 'opacity-50' : undefined} />
+                    <label htmlFor={inputId} className={cn('cursor-pointer text-body', checked && 'font-[550]', rowDisabled ? 'cursor-not-allowed text-fg-muted' : 'text-fg')}>
                       <SpeciesLabel id={entry.id} />
                     </label>
-                    <span id={noteId} className="flex flex-wrap items-center gap-1">
+                    <span id={noteId} className="flex flex-wrap items-center gap-1.5">
                       {attrs.map((text) => (
                         <Badge key={text} variant="gray" size="xs">
                           {text}
                         </Badge>
                       ))}
                       {reason !== undefined && (
-                        <span className="text-xs text-poke-text-muted">
+                        <span className="text-caption text-fg-muted">
                           {reason === 'taken' ? t('step.taken') : t('step.notEligible')}
                         </span>
                       )}

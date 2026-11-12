@@ -16,7 +16,7 @@ pack's.
 ## Format Identifier & Gating Points
 
 The stable identifier is `evolution_point_buy` (Postgres enum
-`season_format_type`, Zod `seasonFormatTypeSchema`, admin `LeagueForm`).
+`season_format_type`, Zod `seasonFormatTypeSchema`, the admin create wizard).
 Format gates:
 
 - **API routes** — `assertEpbSeason(season)` (`src/lib/season/format-utils.ts`)
@@ -68,7 +68,7 @@ by design; access goes through Next.js API routes (auth in handlers).
 
 ## League Type & Battle Ruleset
 
-`evolution_point_buy` is a **league type** (the admin `LeagueForm` labels the
+`evolution_point_buy` is a **league type** (the admin create wizard labels the
 field *League type* / *Liga-Typ*; the option text is the active pack's
 `messages.<locale>.leagueAdmin.form.leagueTypeLabel`), not a battle format.
 Point-buy battles are always **Gen 9 singles**: the form shows *Battle format:

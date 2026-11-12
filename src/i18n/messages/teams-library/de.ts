@@ -6,7 +6,7 @@ export default defineDe<typeof en>()({
     title: 'Team-Bibliothek',
     subtitle: 'Veröffentlichte Teams aus der ganzen Liga – suchen, stöbern, forken.',
     searchPlaceholder: 'Teams suchen …',
-    shinySort: '★ Shiny-Sortierung: {mode}',
+    shinySort: 'Shiny-Sortierung: {mode}',
     sortModes: {
       latest: 'Neueste zuerst',
       nameAsc: 'Name A→Z',
@@ -19,6 +19,11 @@ export default defineDe<typeof en>()({
     range: '{from}–{to} von {total}',
     untitled: 'Unbenanntes Team',
     published: 'Veröffentlicht am {date}',
+    emptyHint: 'Bau ein Team und veröffentliche es im Teambuilder, dann erscheint es hier.',
+    openTeambuilder: 'Teambuilder öffnen',
+    emptySearch: 'Kein Team passt zu deiner Suche.',
+    emptySearchHint: 'Probier einen anderen Namen oder Tag, oder lösch die Suche, um alle Teams zu sehen.',
+    clearSearch: 'Suche löschen',
   },
   entry: {
     loading: 'Wird geladen …',
@@ -46,5 +51,7 @@ export default defineDe<typeof en>()({
     tera: 'Tera:',
     nature: 'Wesen: {nature}',
     ivs: 'IVs: {spread}',
+    roster: 'Team-Aufstellung',
+    moves: 'Attacken',
   },
 });

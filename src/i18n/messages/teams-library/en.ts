@@ -8,7 +8,7 @@ export default {
     title: 'Team Library',
     subtitle: 'Published teams from across the league — search, browse, fork.',
     searchPlaceholder: 'Search teams…',
-    shinySort: '★ shiny sort: {mode}',
+    shinySort: 'Shiny sort: {mode}',
     sortModes: {
       latest: 'Latest first',
       nameAsc: 'Name A→Z',
@@ -21,6 +21,11 @@ export default {
     range: '{from}–{to} of {total}',
     untitled: 'Untitled Team',
     published: 'Published {date}',
+    emptyHint: 'Build a team and publish it from the teambuilder to see it here.',
+    openTeambuilder: 'Open the teambuilder',
+    emptySearch: 'No teams match your search.',
+    emptySearchHint: 'Try another name or tag, or clear the search to see every team.',
+    clearSearch: 'Clear search',
   },
   entry: {
     loading: 'Loading…',
@@ -48,5 +53,7 @@ export default {
     tera: 'Tera:',
     nature: '{nature} Nature',
     ivs: 'IVs: {spread}',
+    roster: 'Team roster',
+    moves: 'Moves',
   },
 } as const;

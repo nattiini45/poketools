@@ -21,11 +21,12 @@ function renderState(props: Partial<Parameters<typeof ErrorState>[0]> = {}, loca
 }
 
 describe('ErrorState', () => {
-  it('renders the title and description, with the item icon hidden from assistive tech', () => {
+  it('renders the title and description, with the MissingNo sprite hidden from assistive tech', () => {
     renderState();
     expect(screen.getByRole('heading', { name: 'Broke' })).toBeTruthy();
     expect(screen.getByText('It broke.')).toBeTruthy();
     expect(document.querySelector('img[aria-hidden="true"]')?.getAttribute('alt')).toBe('');
+    expect(document.querySelector('img[aria-hidden="true"]')?.getAttribute('src')).toBe('https://play.pokemonshowdown.com/sprites/gen5/missingno.png');
     expect(screen.queryByRole('img')).toBeNull();
   });
 

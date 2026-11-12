@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { Json, Tables } from '@/types/database';
 import type { Aggregate, AggregateScope, BattleStat, PlayerAggregate } from '@/types/game';
 
@@ -491,16 +492,21 @@ function toPlayerAggregate(row: PlayerAggregateRow): PlayerAggregate {
 export async function getAllTimePlayerAggregates(
   playerId: string
 ): Promise<PlayerAggregate[]> {
-  const { data, error } = await supabase
-    .from('player_aggregates')
-    .select('*')
-    .eq('player_id', playerId)
-    .eq('scope_type', 'all_time')
-    .is('scope_id', null)
-    .order('total_brought', { ascending: false });
-
-  if (error) throw error;
-  return data.map(toPlayerAggregate);
+  const { rows } = await readBoundedPages<PlayerAggregateRow>(
+    (from, to) =>
+      supabase
+        .from('player_aggregates')
+        .select('*')
+        .eq('player_id', playerId)
+        .eq('scope_type', 'all_time')
+        .is('scope_id', null)
+        .order('total_brought', { ascending: false })
+        // Unique tiebreaker: no row repeats or vanishes between pages.
+        .order('id', { ascending: true })
+        .range(from, to),
+    { label: 'all-time player aggregates' },
+  );
+  return rows.map(toPlayerAggregate);
 }
 
 /** One Pokémon a player brought in one league or tournament (from player_aggregates). */

@@ -10,7 +10,7 @@ import { useT } from '@/i18n/client';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
 /**
- * The field pieces the league create form (`LeagueForm`) and the league details form
+ * The field pieces the new-competition wizard (`NewCompetitionWizard`) and the league details form
  * (`LeagueSettingsForm`) share, so both render the same controls and labels.
  */
 

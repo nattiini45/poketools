@@ -645,8 +645,8 @@ src/components/world/
 
 - **`getRouteThemeOptions()`** — `src/lib/worlds/route-theme-options.ts`: Auto +
   every registered theme; shared by both admin pickers so they grow in lockstep.
-- **`LeagueForm`** (`src/components/league/LeagueForm.tsx`) — creation-time
-  theme select, submitted as `route_theme`.
+- **`NewCompetitionWizard`** (`src/components/league/wizard/NewCompetitionWizard.tsx`) —
+  creation-time theme select on the Details step, submitted as `route_theme`.
 - **`LeagueThemeControl`** (`src/components/league/LeagueThemeControl.tsx`) —
   post-create admin control; PATCHes ONLY `{ route_theme }` to
   `/api/seasons/[id]` (optimistic select, revert-on-failure). Mounted as the

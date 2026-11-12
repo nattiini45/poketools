@@ -5,6 +5,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { adminPlayerDisciplineSchema, formatZodErrors } from '@/lib/validation';
 import { suspendPlayer, banPlayer } from '@/lib/supabase/queries/players';
 import { logAuditEvent } from '@/lib/audit/log';
+import { expirePlayerVisibilityReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { Player } from '@/types/player';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -58,6 +59,8 @@ export async function POST(
         metadata: { suspended_until: parsedBody.suspended_until },
       });
     }
+
+    expirePlayerVisibilityReads(id);
 
     return NextResponse.json<ApiResult<Player>>({ success: true, data: player });
   } catch (err) {

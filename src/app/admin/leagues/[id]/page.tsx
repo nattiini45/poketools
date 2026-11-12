@@ -4,18 +4,21 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import ResourceForbidden from '@/components/shared/ResourceForbidden';
-import PageContainer from '@/components/ui/PageContainer';
-import Badge from '@/components/ui/Badge';
 import LeagueStatusControl from '@/components/league/LeagueStatusControl';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { getSeasonWithDetails } from '@/lib/supabase/queries/seasons';
 import { getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import type { SeasonStatus } from '@/types/season';
+import { leaguePrimaryAction } from '@/lib/league-admin/primary-action';
 import {
+  LEAGUE_ADMIN_DANGER_SECTION,
+  LEAGUE_ADMIN_RULES_SECTION,
   LEAGUE_ADMIN_TAB_PARAM,
   availableLeagueAdminTabs,
+  leagueAdminAliasSection,
   leagueAdminHref,
+  leagueHasRulesSection,
   parseLeagueAdminTab,
   type LeagueAdminTab,
 } from '@/lib/league-admin/tabs';
@@ -24,7 +27,10 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminSeasonPageMessages } from '@/i18n/messages/league-admin/season-page';
 import { formatStudioAttachMessages } from '@/i18n/messages/format-studio/attach';
+import AliasSectionScroll from './_components/AliasSectionScroll';
 import LeagueAdminTabs, { LEAGUE_ADMIN_PANEL_ID, leagueAdminTabId } from './_components/LeagueAdminTabs';
+import LeaguePrimaryAction from './_components/LeaguePrimaryAction';
+import LeagueWorkspaceHeader from './_components/LeagueWorkspaceHeader';
 import type { LeagueAdminPanelContext } from './_components/panels/context';
 import { overviewPanel } from './_components/panels/OverviewPanel';
 import { participantsPanel } from './_components/panels/ParticipantsPanel';
@@ -43,17 +49,49 @@ interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }
 
+/**
+ * Format and rules: the format view, then the rules editors of the formats that have them (the former Rules tab,
+ * `#league-rules`). Both read in one wave; a format without rules editors reads the format view only.
+ */
+async function formatAndRulesPanel(ctx: LeagueAdminPanelContext): Promise<ReactNode> {
+  const [format, rules] = await Promise.all([
+    formatPanel(ctx),
+    leagueHasRulesSection(ctx.league.format_type) ? rulesPanel(ctx) : null,
+  ]);
+  return (
+    <>
+      {format}
+      {rules !== null && (
+        <div id={LEAGUE_ADMIN_RULES_SECTION} className="scroll-mt-4 space-y-6">
+          {rules}
+        </div>
+      )}
+    </>
+  );
+}
+
+/** Settings: the settings sections, then the danger zone (the former Danger zone tab, `#danger-zone`), which reads nothing. */
+async function settingsAndDangerPanel(ctx: LeagueAdminPanelContext): Promise<ReactNode> {
+  const [settings, danger] = await Promise.all([settingsPanel(ctx), dangerPanel(ctx)]);
+  return (
+    <>
+      {settings}
+      <div id={LEAGUE_ADMIN_DANGER_SECTION} className="scroll-mt-4">
+        {danger}
+      </div>
+    </>
+  );
+}
+
 /** One renderer per tab; each performs only its own reads. */
 const PANELS: Record<LeagueAdminTab, (ctx: LeagueAdminPanelContext) => Promise<ReactNode>> = {
   overview: overviewPanel,
   participants: participantsPanel,
-  draft: draftPanel,
   phases: phasesPanel,
-  rules: rulesPanel,
-  format: formatPanel,
+  format: formatAndRulesPanel,
+  draft: draftPanel,
   live: formatLivePanel,
-  settings: settingsPanel,
-  danger: dangerPanel,
+  settings: settingsAndDangerPanel,
 };
 
 /** The statuses a custom league cannot take yet, with the reason; undefined once a format is attached. */
@@ -63,13 +101,15 @@ async function customBlockedStatuses(seasonId: string): Promise<Partial<Record<S
 }
 
 /**
- * `/admin/leagues/[id]?tab=` — one league's admin page, split into tabs
- * (`src/lib/league-admin/tabs.ts`): overview (default), participants, draft,
- * phases, rules, format, live (custom leagues), settings, danger. The format decides which tabs exist
- * (`getFormatCapabilities`); an unknown or unavailable `?tab=` opens the
- * overview, the former `?tab=schedule` opens phases. The server renders, and reads for, the selected tab only: every
- * tab shares the live gate and the league row, the overview needs
- * nothing else.
+ * `/admin/leagues/[id]?tab=` — one league's workspace (redesign A5): a header (name, format and ruleset, the status
+ * control, one primary action) over seven link tabs (`src/lib/league-admin/tabs.ts`): overview (default),
+ * participants, phases, format (Format and rules), draft (draft formats), live (custom leagues) and settings (with
+ * the danger zone last). The format decides which tabs exist; an unknown or unavailable `?tab=` opens the
+ * overview, and the earlier ids still open their tab: `schedule` phases, `rules` Format and rules at its rules
+ * editors, `danger` Settings at the danger zone. The server renders, and reads for, the selected tab only: every
+ * tab shares the live gate and the league row, the overview needs nothing else. The primary action is decided
+ * from that row and the league machine (`leaguePrimaryAction`) and costs no read; on a phone it sits in a sticky
+ * bar at the bottom of the page.
  *
  * A malformed `[id]` (not a uuid) is a 404 before any read. A resource admin of another
  * league gets a forbidden notice and no tab data: only site admins and this league's admins pass.
@@ -105,8 +145,9 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
 
   const tabs = availableLeagueAdminTabs(league.format_type);
   const activeTab = parseLeagueAdminTab(query[LEAGUE_ADMIN_TAB_PARAM], tabs);
-  const tabLink = (tab: LeagueAdminTab) => (chunks: ReactNode) => (
-    <Link href={leagueAdminHref(id, tab)} className="text-poke-blue hover:underline">
+  const aliasSection = leagueAdminAliasSection(query[LEAGUE_ADMIN_TAB_PARAM]);
+  const tabLink = (tab: LeagueAdminTab, section?: string) => (chunks: ReactNode) => (
+    <Link href={leagueAdminHref(id, tab, section)} className="text-poke-blue hover:underline">
       {chunks}
     </Link>
   );
@@ -135,29 +176,44 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
   const labels: Record<LeagueAdminTab, string> = {
     overview: t('tabs.overview'),
     participants: t('tabs.participants'),
-    draft: t('tabs.draft'),
     phases: t('tabs.phases'),
-    rules: t('tabs.rules'),
     format: t('tabs.format'),
+    draft: t('tabs.draft'),
     live: t('tabs.live'),
     settings: t('tabs.settings'),
-    danger: t('tabs.danger'),
   };
+  // One primary action, from the row this page already holds and the league machine's legal moves: no read.
+  const action = leaguePrimaryAction({
+    id,
+    status: league.status,
+    archived: league.archived,
+    formatType: league.format_type,
+    participantCount: league.participant_count,
+    phaseCount: league.tournament_count,
+    activateBlocked: blockedStatuses?.active !== undefined,
+  });
+  const primaryAction = (block: boolean) =>
+    action && (
+      <LeaguePrimaryAction action={action} label={t(`action.${action.id}`)} seasonId={id} currentStatus={league.status} block={block} />
+    );
 
   return (
     <AdminGuard>
-      <PageContainer title={league.name} subtitle={subtitle} maxWidth="lg">
+      <div className="flex flex-col gap-6" data-admin-league-workspace>
         <AdminCrumbName href={`/admin/leagues/${id}`} name={league.name} />
-        {/* Below the title, not in PageContainer's `action` slot: that slot does not wrap, and the
-            status control plus the badge would widen the page at phone width. */}
-        <div className="flex flex-wrap items-center gap-3" data-admin-league-header>
-          {league.is_test_season && <Badge variant="yellow">{t('header.testBadge')}</Badge>}
-          <LeagueStatusControl
-            seasonId={id}
-            currentStatus={league.status}
-            {...(blockedStatuses ? { blocked: blockedStatuses } : {})}
-          />
-        </div>
+        <LeagueWorkspaceHeader
+          name={league.name}
+          subtitle={subtitle}
+          {...(league.is_test_season ? { testLabel: t('header.testBadge') } : {})}
+          status={
+            <LeagueStatusControl
+              seasonId={id}
+              currentStatus={league.status}
+              {...(blockedStatuses ? { blocked: blockedStatuses } : {})}
+            />
+          }
+          action={primaryAction(false)}
+        />
 
         <LeagueAdminTabs
           leagueId={id}
@@ -177,7 +233,18 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
         >
           {panel}
         </div>
-      </PageContainer>
+        {aliasSection !== null && <AliasSectionScroll sectionId={aliasSection} />}
+
+        {/* Phones: the primary action stays in reach in a bar that sticks to the bottom of the viewport. */}
+        {action && (
+          <div
+            className="sticky bottom-0 z-20 -mx-4 border-t border-hairline bg-surface px-6 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:-mx-6 sm:px-8 md:hidden"
+            data-admin-league-actionbar
+          >
+            {primaryAction(true)}
+          </div>
+        )}
+      </div>
     </AdminGuard>
   );
 }

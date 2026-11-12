@@ -4,7 +4,10 @@ import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
 import FormatDetail from '@/components/format-studio/FormatDetail';
 import ForkPresetButton from '@/components/format-studio/starts/ForkPresetButton';
+import Button from '@/components/ui/Button';
 import PageContainer from '@/components/ui/PageContainer';
+import { wizardHref } from '@/lib/league-admin/wizard';
+import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { PRESETS } from '@/lib/format-kit/client';
 import { resolveLText } from '@/lib/studio-core/ltext';
@@ -42,7 +45,7 @@ export default async function FormatExamplePage({ params }: PageProps) {
   const view = presetViews().find((p) => p.id === presetId)?.view;
   if (!preset || !view) notFound();
 
-  const [t, locale] = await Promise.all([getT(formatStudioAdminMessages), getLocale()]);
+  const [t, tLeague, locale] = await Promise.all([getT(formatStudioAdminMessages), getT(leagueAdminMessages), getLocale()]);
   const title = resolveLText(preset.definition.identity.name, { viewer: locale })?.value ?? preset.id;
 
   return (
@@ -51,7 +54,12 @@ export default async function FormatExamplePage({ params }: PageProps) {
         <Link href="/admin/formats" className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0">
           {t('detail.back')}
         </Link>
-        <ForkPresetButton presetId={presetId} />
+        <div className="flex flex-wrap items-start gap-3">
+          <Button asChild variant="primary">
+            <Link href={wizardHref({ preset: presetId })}>{tLeague('wizard.fromExample')}</Link>
+          </Button>
+          <ForkPresetButton presetId={presetId} />
+        </div>
         <FormatDetail view={view} variant="page" example />
       </PageContainer>
     </AdminGuard>

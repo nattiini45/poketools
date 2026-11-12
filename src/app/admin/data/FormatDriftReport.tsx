@@ -15,7 +15,7 @@ import {
   type FormatDriftReport as FormatDriftReportData,
   type TiebreakerDriftCase,
 } from '@/lib/admin/format-drift';
-import { leagueAdminHref } from '@/lib/league-admin/tabs';
+import { LEAGUE_ADMIN_RULES_SECTION, leagueAdminHref } from '@/lib/league-admin/tabs';
 import { useFormatter, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -84,7 +84,7 @@ function TiebreakerCaseCard({ item, packChain }: { item: TiebreakerDriftCase; pa
   return (
     <li className="rounded-poke-md border border-hairline bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={leagueAdminHref(item.seasonId, 'rules')} className={ROW_LINK}>
+          <Link href={leagueAdminHref(item.seasonId, 'format', LEAGUE_ADMIN_RULES_SECTION)} className={ROW_LINK}>
             {item.seasonName}
           </Link>
           <LeagueBadges archived={item.archived} isTest={item.isTest} />

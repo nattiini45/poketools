@@ -326,6 +326,8 @@
   --color-poke-type-steel: hsl(220, 15%, 60%);
   --color-poke-type-fairy: hsl(330, 55%, 65%);
   --color-art-ball-red: #DC2626;
+  --color-art-ball-ink: #241A0C;
+  --color-art-ball-shell: #FFF8E9;
   --color-art-card-blue: #3B82F6;
   --shadow-poke-sm: 0 1px 2px rgba(26, 23, 20, 0.05);
   --shadow-poke-md: 0 4px 6px -1px rgba(26, 23, 20, 0.07), 0 2px 4px -2px rgba(26, 23, 20, 0.05);
@@ -3255,17 +3257,21 @@ html.world-route-live .world-nav-hud {
 }
 
 
-/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar is a dark umber rail in both themes: it carries
-   data-theme="dark", so the tokens inside resolve to their moonlit values, and the @fluid light-dark() pair follows.
+/* Admin shell (redesign A1, docs/admin.md "Shell"). The sidebar follows the theme: in sunlit it sits on the page's
+   own sand behind a hairline, in moonlit on the umber surface, so it reads as part of the page in both.
    The current section sits on a gold plate cut to the site skew (a clip-path, because @fluid animates the plate's
    box with inline styles); its label takes the plate ink. Unlayered on purpose: these restyle @fluid's utilities. */
 .admin-rail {
-  --lightningcss-light: ;
-  --lightningcss-dark: initial;
+  background-color: var(--page);
+  border-inline-end: 1px solid var(--hairline-strong);
+  color: var(--fg);
   /* New competition keeps the amber fill beside the gold plate of the current section. */
   --accent-fill: #CF660B;
-  /* Declared again so it takes the rail's own (moonlit) accent, not the page's. */
-  --focus-ring: var(--accent-ink);
+}
+
+[data-theme="dark"] .admin-rail {
+  background-color: var(--surface);
+  border-inline-end-color: transparent;
 }
 
 .admin-rail [data-sidebar="menu"] > .bg-active {
@@ -3323,19 +3329,24 @@ html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {
 }
 
 /* ─── League hero (redesign B2, src/components/league/hero/LeagueHero.tsx) ───
-   Direction B's versus screen: the arena sand with a hex texture, and a dark slab for the match. The slab is
-   dark in both themes (a fighting-game card, not a surface), so it carries its own ink. From lg the slab's left
-   edge leans like every skewed plate and an accent stripe runs along it. */
+   Direction B's versus screen: the arena sand with a hex texture, and a slab for the match. In sunlit the slab
+   is a deeper arena sand (no dark surface on the light theme); only moonlit makes it near-black. The slab
+   carries its own ink through the --hero-slab-* properties, so anything that borrows these classes follows.
+   From lg the slab's left edge leans like every skewed plate and an accent stripe runs along it. */
 .league-hero {
-  --hero-slab: #2b2112;
-  --hero-slab-ink: #f5eddd;
-  --hero-slab-muted: #c4b596;
+  --hero-slab: #dfcd9f;
+  --hero-slab-ink: var(--fg);
+  --hero-slab-muted: var(--fg-muted);
+  --hero-vs: var(--accent-ink);
   --hero-lean: 72px;
   background-color: var(--sunken);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23241a0c' stroke-opacity='.07'/%3E%3C/svg%3E");
 }
 html[data-theme="dark"] .league-hero {
   --hero-slab: #0e0b06;
+  --hero-slab-ink: #f5eddd;
+  --hero-slab-muted: #c4b596;
+  --hero-vs: var(--tier-1);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23f5eddd' stroke-opacity='.06'/%3E%3C/svg%3E");
 }
 .league-hero-slab {
@@ -3347,11 +3358,12 @@ html[data-theme="dark"] .league-hero {
   color: var(--hero-slab-muted);
 }
 .league-hero-vs {
-  color: var(--tier-1);
+  color: var(--hero-vs);
 }
 .league-hero-nameplate {
   background-color: var(--surface);
   color: var(--fg);
+  border: 1px solid var(--hairline-strong);
   border-radius: 3px;
 }
 @media (min-width: 1024px) {
