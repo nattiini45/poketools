@@ -1,4 +1,3 @@
-import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { getLiveAccess } from '@/lib/auth/helpers';
@@ -7,14 +6,15 @@ import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getMatchPrepTeams } from '@/lib/supabase/queries/match-prep-teams';
 import { getTournamentSubmitContext } from '@/lib/supabase/queries/tournaments';
 import { selectVisibleMatchPrepRosters } from '@/lib/team/visibility';
-import MatchStatusBadge from '@/components/match/MatchStatusBadge';
+import MatchPageBackLink from '@/components/match/MatchPageBackLink';
+import MatchVersusHeader from '@/components/match/MatchVersusHeader';
+import { PlateLink } from '@/components/match/PlateButton';
 import SubmitResultClient from './SubmitResultClient';
-import PageContainer from '@/components/ui/PageContainer';
+import Card from '@/components/ui/Card';
 import Alert from '@/components/ui/Alert';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
-import { matchMessages } from '@/i18n/messages/match';
 import { matchFormsMessages } from '@/i18n/messages/match/forms';
 import { availableMatchActions } from '@/lib/match/match-actions';
 
@@ -67,29 +67,40 @@ export default async function SubmitResultPage({ params }: PageProps) {
 
   const isAdmin = canAdminister && !isParticipant;
 
-  const [t, tForms, tEnum] = await Promise.all([getT(matchMessages), getT(matchFormsMessages), getT(enumMessages)]);
-  const strong = (chunks: React.ReactNode) => <strong>{chunks}</strong>;
+  const [tForms, tEnum] = await Promise.all([getT(matchFormsMessages), getT(enumMessages)]);
+  const strong = (chunks: React.ReactNode) => <strong className="font-[550]">{chunks}</strong>;
+  const matchHref = `/tournaments/${match.tournament_id}/matches/${mid}`;
 
   return (
     <AuthGuard>
-      <PageContainer
-        title={tForms('submitPage.title')}
-        subtitle={t('versusTitle', { p1: match.player_1_name, p2: match.player_2_name })}
-        action={<MatchStatusBadge status={match.status} />}
-        maxWidth="md"
-      >
+      <div className="mx-auto flex max-w-[1008px] flex-col gap-6">
+        <MatchVersusHeader
+          title={tForms('submitPage.title')}
+          status={match.status}
+          players={[
+            { name: match.player_1_name, avatarUrl: match.player_1_avatar_url },
+            { name: match.player_2_name, avatarUrl: match.player_2_avatar_url },
+          ]}
+          viewerSide={player.playerId === match.player_1_id ? 0 : player.playerId === match.player_2_id ? 1 : null}
+          labels={{ versus: tForms('versus.vs'), you: tForms('versus.you'), winner: tForms('versus.winner') }}
+        />
         {isAdmin && (
           <Alert variant="info">
             {tForms.rich('submitPage.adminNote', { strong })}
           </Alert>
         )}
         {!canSubmit ? (
-          <Alert variant="warning">
-            {tForms.rich('submitPage.cannotSubmit', {
-              status: enumLabel(tEnum, 'matchStatus', match.status),
-              strong,
-            })}
-          </Alert>
+          <Card padding="none" className="flex flex-col items-start gap-3 p-4 sm:p-5">
+            <p className="text-body text-fg-muted">
+              {tForms.rich('submitPage.cannotSubmit', {
+                status: enumLabel(tEnum, 'matchStatus', match.status),
+                strong: (chunks) => <strong className="font-[550] text-fg">{chunks}</strong>,
+              })}
+            </p>
+            <PlateLink href={matchHref} tone="secondary">
+              {tForms('common.openMatch')}
+            </PlateLink>
+          </Card>
         ) : (
           <SubmitResultClient
             key={mid}
@@ -100,18 +111,13 @@ export default async function SubmitResultPage({ params }: PageProps) {
             ]}
             prepTeams={prepTeams}
             generation={generation}
-            redirectTo={`/tournaments/${match.tournament_id}/matches/${mid}`}
+            redirectTo={matchHref}
             isAdmin={canAdminister}
           />
         )}
 
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1 text-sm text-poke-blue hover:underline font-heading"
-        >
-          &larr; {tForms('common.backToDashboard')}
-        </Link>
-      </PageContainer>
+        <MatchPageBackLink label={tForms('common.backToDashboard')} />
+      </div>
     </AuthGuard>
   );
 }

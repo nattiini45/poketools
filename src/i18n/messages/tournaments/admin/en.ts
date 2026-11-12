@@ -6,16 +6,10 @@
 export default {
   list: {
     title: 'Manage Tournaments',
-    viewArchived: 'View Archived',
-    newTournament: '+ New Tournament',
-    empty: 'No tournaments yet.',
     doubles: 'Doubles',
   },
   archived: {
     title: 'Archived Tournaments',
-    back: 'Back to Tournaments',
-    empty: 'No archived tournaments.',
-    badge: 'Archived',
   },
   create: {
     title: 'Create Tournament',

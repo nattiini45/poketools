@@ -110,6 +110,13 @@ export default {
       empty: 'No page or action matches.',
       pages: 'Pages',
       actions: 'Actions',
+      jumpTo: 'Jump to',
+      /** The quiet line of the Jump to group when the competition list could not be loaded. */
+      jumpFailed: 'The competitions could not be loaded.',
+      kindLeague: 'League',
+      kindTournament: 'Tournament',
+      kindLeagueArchived: 'Archived league',
+      kindTournamentArchived: 'Archived tournament',
       /** What Enter does on a page row; {page} is the page's label. */
       open: 'Open {page}',
       select: 'Select',

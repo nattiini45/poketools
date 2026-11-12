@@ -13,7 +13,7 @@ The numbers a league plays with (budget, picks, token ratio and caps, the Comeba
 
 ### Admin UI
 
-On `/admin/leagues/[id]?tab=rules` (the **Rules** tab), use **EpbImportPanel** (the **Data Import** section):
+On `/admin/leagues/[id]?tab=format#league-rules` (the rules editors of the **Format and rules** tab; the old `?tab=rules` link still opens them), use **EpbImportPanel** (the **Data Import** section):
 
 The league's workbooks are not in the repository; the league organiser supplies them privately. Their layout is described by the pack's `epb.workbook` ([Point-Buy Workbook Format](./point-buy-format.md)).
 

@@ -12,6 +12,11 @@ export default defineDe<typeof en>()({
     previous: 'Zurück',
     next: 'Weiter',
     pageOf: 'Seite {page} von {total}',
+    search: 'Suchen',
+    count: { one: 'Spieler', other: 'Spieler' },
+    ratingLabel: 'Wertung {rating} ± {rd}',
+    emptyHint: 'Probier einen anderen Namen oder geh zurück zur ganzen Liste.',
+    showAll: 'Alle Spieler anzeigen',
   },
   replays: {
     title: 'Replay-Bibliothek',
@@ -40,6 +45,11 @@ export default defineDe<typeof en>()({
     unknownPlayer: 'Unbekannt',
     unknownLeague: 'Unbekannte Liga',
     unknownRound: 'Unbekannte Runde',
+    versus: 'VS',
+    filters: 'Filter',
+    emptyTitle: 'Hier gibt es keine Replays',
+    resetFilters: 'Filter zurücksetzen',
+    browseLeagues: 'Ligen ansehen',
   },
   content: {
     title: 'Content-Creator-Dashboard',

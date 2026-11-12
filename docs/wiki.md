@@ -26,10 +26,15 @@ src/components/wiki/
 ├── WikiItemContent.tsx                        # Item entry content
 ├── WikiAbilityContent.tsx                     # Ability entry content
 ├── WikiNotesSection.tsx                       # Community notes display + submission form
+├── WikiHeader.tsx                             # Title with the Weakness Policy icon, wiki search, section tabs (skewed plates); in the /wiki layout and on /pokemon/[name]
+├── WikiIndexTable.tsx                         # Index table on the @fluid table: URL state, facets (a bottom sheet on phones), row cards below 768 px
+├── WikiParts.tsx                              # Shared layout pieces: hero panel, hairline section, stat strip, definition grid, empty state, usage bar
+├── WikiLinkList.tsx                           # Entry links on one surface with the @fluid hover highlight
 └── WikiSearchBar.tsx                          # Search input with dropdown results
 src/lib/wiki/entries.ts                        # Shared WikiMoveEntry / Item / Ability builders
 src/app/(public)/wiki/
-├── page.tsx                                   # Wiki browser: search + category cards
+├── layout.tsx                                 # WikiHeader above every wiki page, the PokeAPI credit below
+├── page.tsx                                   # Wiki home: intro + the five section tiles
 ├── pokemon/page.tsx                           # Species index (detail at /pokemon/[name])
 ├── moves/[name]/page.tsx                      # Move entry
 ├── items/[name]/page.tsx                      # Item entry

@@ -128,6 +128,8 @@ export default {
     title: 'Ready to start?',
     intro: 'What a custom league needs before the first round.',
     ready: 'All set. You can start the league.',
+    /** The count beside the title: items done of all items. */
+    progress: '{done} of {total}',
     state: {
       met: 'Done',
       unmet: 'To do',

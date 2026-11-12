@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import PageContainer from '@/components/ui/PageContainer';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import Button from '@/components/ui/Button';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { toLeagueRow } from '@/lib/admin/competition-list';
 import { listSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
-import { commonMessages } from '@/i18n/messages/common';
+import { adminCompetitionsMessages } from '@/i18n/messages/admin-competitions';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
@@ -22,59 +22,33 @@ export default async function AdminLeaguesPage() {
   const access = await getLiveAccess();
   if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
-  const [t, tEnum, tCommon] = await Promise.all([
-    getT(leagueAdminMessages),
-    getT(enumMessages),
-    getT(commonMessages),
-  ]);
+  const [t, tc, tEnum] = await Promise.all([getT(leagueAdminMessages), getT(adminCompetitionsMessages), getT(enumMessages)]);
 
   // Site admin: every active league. Resource admin: only their own, and not the archived ones.
   const leagues = access.isSiteAdmin
     ? await listSeasons({ includeTestSeasons: true })
     : await listSeasonsByIds(await getAdminSeasonIds(access.player.playerId), { archived: false });
 
+  const rows = leagues.map((league) =>
+    toLeagueRow(league, {
+      formatLabel: enumLabel(tEnum, 'formatType', league.format_type),
+      statusLabel: enumLabel(tEnum, 'seasonStatus', league.status),
+      detail: t('list.stages', { count: league.tournament_count }),
+    }),
+  );
+
   return (
     <AdminGuard>
       <PageContainer
         title={t('list.title')}
-        maxWidth="md"
+        maxWidth="xl"
         action={
-          <div className="flex flex-wrap gap-2">
-            <Link href="/admin/leagues/archived" className={getButtonClasses('ghost', 'sm')}>
-              {t('list.viewArchived')}
-            </Link>
-            {access.isSuperadmin && (
-              <Link href="/admin/leagues/trash" className={getButtonClasses('ghost', 'sm')}>
-                {t('trash.link')}
-              </Link>
-            )}
-            <Link href="/admin/leagues/new" className={getButtonClasses('secondary', 'sm')}>
-              {t('list.newLeague')}
-            </Link>
-          </div>
+          <Button asChild variant="primary" size="sm" className="min-h-11 sm:min-h-0">
+            <Link href="/admin/leagues/new">{tc('new.league')}</Link>
+          </Button>
         }
       >
-        {leagues.length === 0 ? (
-          <p className="text-poke-text-muted">{t('list.empty')}</p>
-        ) : (
-          <div className="grid gap-3">
-            {leagues.map((l) => (
-              <Link key={l.id} href={`/admin/leagues/${l.id}`}>
-                <Card hover>
-                  <h2 className="font-heading font-semibold text-poke-text-primary">{l.name}</h2>
-                  <div className="flex gap-2 mt-1 flex-wrap">
-                    <Badge>{enumLabel(tEnum, 'formatType', l.format_type)}</Badge>
-                    {l.ruleset_name && <Badge variant="gray">{l.ruleset_name}</Badge>}
-                    <Badge variant="gray">{t('list.stages', { count: l.tournament_count })}</Badge>
-                    <Badge variant="gray">{tCommon('units.players', { count: l.participant_count })}</Badge>
-                    <Badge variant="green">{enumLabel(tEnum, 'seasonStatus', l.status)}</Badge>
-                    {l.is_test_season && <Badge variant="yellow">{t('list.testBadge')}</Badge>}
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
+        <CompetitionList kind="league" view="active" rows={rows} canViewTrash={access.isSuperadmin} />
       </PageContainer>
     </AdminGuard>
   );

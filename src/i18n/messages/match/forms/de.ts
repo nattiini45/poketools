@@ -18,6 +18,13 @@ export default defineDe<typeof en>()({
     submitResult: 'Ergebnis melden',
     backToDashboard: 'Zurück zum Dashboard',
     enterReplayUrl: 'Bitte gib eine Replay-URL ein',
+    openMatch: 'Zur Spielseite',
+  },
+  versus: {
+    vs: 'VS',
+    you: 'Du',
+    winner: 'Sieger',
+    score: '{p1} {s1}, {p2} {s2}',
   },
   manual: {
     kosLabel: 'KOs:',
@@ -25,6 +32,15 @@ export default defineDe<typeof en>()({
     resultRecorded: 'Ergebnis eingetragen! Das Spiel wartet jetzt auf Bestätigung.',
     gameRecorded: 'Partie eingetragen! Es fehlen noch weitere Partien.',
     submitFailed: 'Das Ergebnis konnte nicht gemeldet werden',
+    winnerHint: 'Immer eine Partie auf einmal: Wähle, wer diese Partie gewonnen hat.',
+    kosAria: 'KOs von Pokémon {n}',
+    movesAria: 'Eingesetzte Attacken von Pokémon {n}',
+    removeAria: 'Pokémon {n} entfernen',
+    rosterCount: '{count} von 6',
+    summaryTitle: 'Prüfen, bevor du meldest',
+    summaryWinner: '{name} gewinnt diese Partie',
+    summaryNoWinner: 'Noch kein Sieger gewählt',
+    summarySide: '{name}: {count} Pokémon, {kos} KOs',
   },
   replaySubmit: {
     invalidUrl: 'Bitte gib eine gültige Replay-URL oder Replay-ID von Pokémon Showdown ein',
@@ -32,6 +48,7 @@ export default defineDe<typeof en>()({
     recordedMore: 'Partie eingetragen! Für diese Serie fehlen noch weitere Partien.',
     submitFailed: 'Das Replay konnte nicht gemeldet werden',
     urlLabel: 'Replay-URL',
+    urlHint: 'Füge den Replay-Link von Pokémon Showdown ein, immer eine Partie auf einmal. Sieger und Statistiken werden aus dem Replay gelesen.',
     nameMismatch: 'Die Showdown-Namen im Replay passen nicht zu den angemeldeten Spielern.',
     nameMismatchAsk:
       'Die Showdown-Namen im Replay passen nicht zu den angemeldeten Spielern. Frag die Turnierleitung, ob sie dieses Replay importieren kann.',
@@ -87,6 +104,7 @@ export default defineDe<typeof en>()({
     tabReplay: 'Replay-URL',
     tabManual: 'Manuelle Eingabe',
     tabReplayImport: 'Replay (manuelle Zuordnung)',
+    tabsLabel: 'So meldest du das Ergebnis',
   },
   confirm: {
     title: 'Spielergebnis bestätigen',
@@ -102,6 +120,8 @@ export default defineDe<typeof en>()({
     disputeReasonHint: 'Wird den Admins angezeigt, die die Anfechtung prüfen.',
     disputeReasonCount: '{count} / {max}',
     cannotAct: 'Du kannst bei diesem Spiel nichts tun. Nur dein Gegner kann das Ergebnis bestätigen.',
+    resultTitle: 'Gemeldetes Ergebnis',
+    noGames: 'Für dieses Spiel wurde noch keine Partie gemeldet.',
   },
   scheduling: {
     title: 'Terminplanung',

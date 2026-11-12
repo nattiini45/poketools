@@ -1,15 +1,15 @@
 import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
+import CompetitionList from '@/components/admin/competitions/CompetitionList';
 import PageContainer from '@/components/ui/PageContainer';
-import Card from '@/components/ui/Card';
-import Badge from '@/components/ui/Badge';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import Button from '@/components/ui/Button';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { toLeagueRow } from '@/lib/admin/competition-list';
 import { listArchivedSeasons, listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
 import { enumLabel } from '@/i18n/content/enum-label';
-import { commonMessages } from '@/i18n/messages/common';
+import { adminCompetitionsMessages } from '@/i18n/messages/admin-competitions';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 
@@ -23,47 +23,35 @@ export default async function ArchivedLeaguesPage() {
   if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
   // Site admin: every archived league. Resource admin: only their own archived leagues.
-  const [leagues, t, tEnum, tCommon] = await Promise.all([
+  const [leagues, t, tc, tEnum] = await Promise.all([
     access.isSiteAdmin
       ? listArchivedSeasons()
       : getAdminSeasonIds(access.player.playerId).then((ids) => listSeasonsByIds(ids, { archived: true })),
     getT(leagueAdminMessages),
+    getT(adminCompetitionsMessages),
     getT(enumMessages),
-    getT(commonMessages),
   ]);
+
+  const rows = leagues.map((league) =>
+    toLeagueRow(league, {
+      formatLabel: enumLabel(tEnum, 'formatType', league.format_type),
+      statusLabel: enumLabel(tEnum, 'seasonStatus', league.status),
+      detail: t('list.stages', { count: league.tournament_count }),
+    }),
+  );
 
   return (
     <AdminGuard>
       <PageContainer
         title={t('archived.title')}
-        maxWidth="md"
+        maxWidth="xl"
         action={
-          <Link href="/admin/leagues" className={getButtonClasses('ghost', 'sm')}>
-            {t('archived.back')}
-          </Link>
+          <Button asChild variant="primary" size="sm" className="min-h-11 sm:min-h-0">
+            <Link href="/admin/leagues/new">{tc('new.league')}</Link>
+          </Button>
         }
       >
-        {leagues.length === 0 ? (
-          <p className="text-poke-text-muted">{t('archived.empty')}</p>
-        ) : (
-          <div className="grid gap-3">
-            {leagues.map((l) => (
-              <Link key={l.id} href={`/admin/leagues/${l.id}`}>
-                <Card hover>
-                  <h2 className="font-heading font-semibold text-poke-text-primary">{l.name}</h2>
-                  <div className="flex gap-2 mt-1 flex-wrap">
-                    <Badge>{enumLabel(tEnum, 'formatType', l.format_type)}</Badge>
-                    {l.ruleset_name && <Badge variant="gray">{l.ruleset_name}</Badge>}
-                    <Badge variant="gray">{t('list.stages', { count: l.tournament_count })}</Badge>
-                    <Badge variant="gray">{tCommon('units.players', { count: l.participant_count })}</Badge>
-                    <Badge variant="yellow">{t('archived.badge')}</Badge>
-                    {l.is_test_season && <Badge variant="yellow">{t('list.testBadge')}</Badge>}
-                  </div>
-                </Card>
-              </Link>
-            ))}
-          </div>
-        )}
+        <CompetitionList kind="league" view="archived" rows={rows} canViewTrash={access.isSuperadmin} />
       </PageContainer>
     </AdminGuard>
   );

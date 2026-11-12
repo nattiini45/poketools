@@ -20,6 +20,9 @@ import PokemonDetailClient from './PokemonDetailClient';
 import WikiAttribution from '@/components/wiki/WikiAttribution';
 import WikiUsageStats from '@/components/wiki/WikiUsageStats';
 import WikiNotesSection from '@/components/wiki/WikiNotesSection';
+import WikiHeader from '@/components/wiki/WikiHeader';
+import WikiLinkList from '@/components/wiki/WikiLinkList';
+import { WikiHero, WikiSection } from '@/components/wiki/WikiParts';
 import SupplementaryPokemonKos from '@/components/supplementary/SupplementaryPokemonKos';
 import type { PokemonSpeciesInfo, PokemonDetailStats } from '@/types/game';
 
@@ -112,120 +115,98 @@ export default async function PokemonDetailPage({ params }: PageProps) {
       };
 
   return (
-    <PageContainer title={localizeSpecies(species.name, dataLocale)} subtitle={t('pokemon.subtitle')}>
-      {/* Header: Sprite + Types + Base Stats */}
-      <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-6 shadow-poke">
-        <div className="flex flex-col sm:flex-row gap-6">
-          {/* Sprite + Name + Types */}
-          <div className="flex flex-col items-center sm:items-start gap-3">
-            <div className="bg-poke-muted rounded-poke-lg p-3">
-              <PokemonSprite name={species.name} size={120} animated />
+    <PageContainer>
+      <WikiHeader />
+
+      {/* Hero: sprite, name, types and base stats on the arena sand */}
+      <WikiHero>
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,26rem)_minmax(0,1fr)] lg:items-center lg:gap-10">
+          <div className="flex flex-col items-center gap-5 sm:flex-row lg:gap-6">
+            <div className="skew-plate h-52 w-56 shrink-0">
+              <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-surface" />
+              <span aria-hidden="true" className="skew-plate-underside" />
+              <PokemonSprite name={species.name} size={176} animated />
             </div>
-            <div className="flex gap-1.5">
-              {speciesInfo.types.map((type) => (
-                <TypeBadge key={type} type={type} locale={dataLocale} />
-              ))}
-            </div>
-            {abilities.length > 0 && (
-              <div className="text-xs text-poke-text-muted">
-                {abilities.map((ability) => localizeAbility(ability, dataLocale)).join(' / ')}
+            <div className="flex min-w-0 flex-col items-center gap-3 text-center sm:items-start sm:text-left">
+              <h1 className="font-heading text-display text-fg [overflow-wrap:anywhere]">
+                {localizeSpecies(species.name, dataLocale)}
+              </h1>
+              <div className="flex flex-wrap justify-center gap-1.5 sm:justify-start">
+                {speciesInfo.types.map((type) => (
+                  <TypeBadge key={type} type={type} locale={dataLocale} />
+                ))}
               </div>
-            )}
+              {abilities.length > 0 && (
+                <p className="text-caption text-fg-muted">
+                  {abilities.map((ability) => localizeAbility(ability, dataLocale)).join(' / ')}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Base Stats */}
-          <div className="flex-1">
-            <h3 className="text-sm font-heading font-semibold text-poke-text-secondary uppercase tracking-wide mb-3">
-              {t('pokemon.baseStats')}
-            </h3>
+          <div className="min-w-0">
+            <h2 className="mb-3 font-heading text-title text-fg">{t('pokemon.baseStats')}</h2>
             <BaseStatBars stats={speciesInfo.baseStats} dataLocale={dataLocale} t={t} />
           </div>
         </div>
+      </WikiHero>
+
+      {/* Abilities & Type Matchups side by side */}
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+        {/* Abilities */}
+        <WikiSection title={t('pokemon.abilities')}>
+          <WikiLinkList
+            items={species.legalAbilities.map((a) => ({
+              key: a.name,
+              href: `/wiki/abilities/${encodeURIComponent(a.name)}`,
+              label: localizeAbility(a.name, dataLocale),
+              meta: a.slot === 'H' ? t('pokemon.hidden') : undefined,
+            }))}
+          />
+        </WikiSection>
+
+        {/* Type Matchups */}
+        {typeInfo && (
+          <WikiSection title={t('pokemon.typeMatchups')}>
+            <dl className="overflow-hidden rounded-poke-lg border border-hairline bg-surface">
+              {(
+                [
+                  ['weak', t('pokemon.weakTo'), 'text-loss', typeInfo.weaknesses],
+                  ['resists', t('pokemon.resists'), 'text-win', typeInfo.resistances],
+                  ['immune', t('pokemon.immuneTo'), 'text-fg-muted', typeInfo.immunities],
+                ] as const
+              ).map(
+                ([key, label, tone, types]) =>
+                  types.length > 0 && (
+                    <div
+                      key={key}
+                      className="grid gap-2 border-b border-hairline px-4 py-3 last:border-b-0 sm:grid-cols-[7rem_minmax(0,1fr)] sm:items-center sm:gap-4"
+                    >
+                      <dt className={`text-caption font-[550] ${tone}`}>{label}</dt>
+                      <dd className="flex flex-wrap gap-1.5">
+                        {types.map((type) => (
+                          <TypeBadge key={type} type={type} locale={dataLocale} />
+                        ))}
+                      </dd>
+                    </div>
+                  ),
+              )}
+            </dl>
+          </WikiSection>
+        )}
       </div>
 
       {/* Interactive stats section */}
-      <PokemonDetailClient
-        pokemonName={species.name}
-        initialStats={initialStats}
-      />
+      <WikiSection title={t('pokemon.subtitle')} icon="scope-lens">
+        <PokemonDetailClient pokemonName={species.name} initialStats={initialStats} />
+      </WikiSection>
 
       {/* Pack extensions (docs/format-packs.md): nothing without a provider. */}
       <SupplementaryPokemonKos species={species.name} />
 
-      {/* Abilities & Type Matchups side by side */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Abilities */}
-        <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border">
-          <h2 className="font-heading text-xs font-semibold text-poke-text-secondary uppercase tracking-wide mb-2">
-            {t('pokemon.abilities')}
-          </h2>
-          <div className="space-y-1.5">
-            {species.legalAbilities.map((a) => (
-              <div key={a.name} className="flex items-center gap-2">
-                <span className="font-body text-sm text-poke-text-primary">
-                  {localizeAbility(a.name, dataLocale)}
-                </span>
-                {a.slot === 'H' && (
-                  <span className="text-xs text-poke-text-secondary font-body">{t('pokemon.hidden')}</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Type Matchups */}
-        {typeInfo && (
-          <div className="bg-poke-surface rounded-poke-lg p-4 shadow-poke-sm border border-poke-border space-y-3">
-            <h2 className="font-heading text-xs font-semibold text-poke-text-secondary uppercase tracking-wide">
-              {t('pokemon.typeMatchups')}
-            </h2>
-
-            {typeInfo.weaknesses.length > 0 && (
-              <div>
-                <h3 className="font-heading text-[11px] font-semibold text-red-400 uppercase mb-1">
-                  {t('pokemon.weakTo')}
-                </h3>
-                <div className="flex flex-wrap gap-1">
-                  {typeInfo.weaknesses.map((type) => (
-                    <TypeBadge key={type} type={type} locale={dataLocale} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {typeInfo.resistances.length > 0 && (
-              <div>
-                <h3 className="font-heading text-[11px] font-semibold text-green-400 uppercase mb-1">
-                  {t('pokemon.resists')}
-                </h3>
-                <div className="flex flex-wrap gap-1">
-                  {typeInfo.resistances.map((type) => (
-                    <TypeBadge key={type} type={type} locale={dataLocale} />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {typeInfo.immunities.length > 0 && (
-              <div>
-                <h3 className="font-heading text-[11px] font-semibold text-poke-text-secondary uppercase mb-1">
-                  {t('pokemon.immuneTo')}
-                </h3>
-                <div className="flex flex-wrap gap-1">
-                  {typeInfo.immunities.map((type) => (
-                    <TypeBadge key={type} type={type} locale={dataLocale} />
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-
       {/* Battle Usage Stats */}
       <WikiUsageStats pokemonName={species.name} />
-
-      <hr className="border-poke-border" />
 
       <WikiNotesSection
         entityType="pokemon"
@@ -254,7 +235,7 @@ function BaseStatBars({
   const total = Object.values(stats).reduce((sum, v) => sum + v, 0);
 
   return (
-    <div className="space-y-2">
+    <div className="flex flex-col gap-2">
       {STAT_KEYS.map((key) => {
         const label = localizeStat(key, dataLocale, 'short');
         const value = stats[key];
@@ -262,21 +243,18 @@ function BaseStatBars({
         const cssWidth = Math.min((width / 180) * 100, 100);
         const { background } = getStatBarColor(value, maxStat);
         return (
-          <div key={key} className="flex items-center gap-2">
-            <span className="w-16 shrink-0 text-xs font-heading font-medium text-poke-text-muted">{label}</span>
-            <span className="w-8 text-xs font-mono text-poke-text-primary text-right">{value}</span>
-            <div className="flex-1 h-2.5 bg-poke-muted rounded-full overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-500"
-                style={{ width: `${cssWidth}%`, backgroundColor: background }}
-              />
+          <div key={key} className="grid grid-cols-[3rem_2.25rem_minmax(0,1fr)] items-center gap-2">
+            <span className="text-caption font-[550] text-fg-muted">{label}</span>
+            <span className="text-right font-mono text-body tabular-nums text-fg">{value}</span>
+            <div className="h-3 overflow-hidden rounded-full bg-surface">
+              <div className="h-full rounded-full" style={{ width: `${cssWidth}%`, backgroundColor: background }} />
             </div>
           </div>
         );
       })}
-      <div className="flex items-center gap-2 pt-1 border-t border-poke-border">
-        <span className="w-16 shrink-0 text-xs font-heading font-semibold text-poke-text-secondary">{t('pokemon.bst')}</span>
-        <span className="text-xs font-mono font-semibold text-poke-text-primary">{total}</span>
+      <div className="mt-1 grid grid-cols-[3rem_minmax(0,1fr)] items-baseline gap-2 border-t border-hairline-strong pt-2">
+        <span className="text-caption font-[550] text-fg-muted">{t('pokemon.bst')}</span>
+        <span className="font-heading text-title tabular-nums text-fg">{total}</span>
       </div>
     </div>
   );

@@ -10,6 +10,7 @@ import { useDataLocale, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
 import { itemSearchKeys, localizeItem } from '@/lib/pkmn/i18n/names/items';
 import { foldForSearch, matchRank, NO_MATCH, type SearchKeys } from '@/lib/pkmn/i18n/search';
+import ItemSprite from '@/components/shared/ItemSprite';
 import {
   WIKI_ITEM_CATEGORIES,
   WIKI_ITEM_CATEGORY_KEYS,
@@ -69,39 +70,47 @@ export default function ItemsIndexClient({ data }: { data: readonly ItemRow[] })
         key: 'name',
         primary: true,
         header: t('index.name'),
-        width: '200px',
+        width: '240px',
         sortable: true,
+        cardClassName: 'max-md:order-1 max-md:col-span-6',
         sortValue: (row) => localizeItem(row.name, dl),
         render: (row) => (
-          <span className="font-medium text-poke-text-primary">{localizeItem(row.name, dl)}</span>
+          <span className="inline-flex items-center gap-3 align-middle">
+            {/* The item sheet covers every item; Showdown's per-file icons miss Z-Crystals and most Mega Stones. */}
+            <span aria-hidden="true" className="inline-flex shrink-0">
+              <ItemSprite item={row.name} size={24} />
+            </span>
+            <span>{localizeItem(row.name, dl)}</span>
+          </span>
         ),
       },
       {
         key: 'category',
         header: t('index.category'),
-        width: '130px',
+        width: '140px',
         sortable: true,
+        cardClassName: 'max-md:order-2 max-md:col-span-4',
         sortValue: (row) => categoryLabel(row.category),
-        render: (row) => (
-          <span className="text-xs text-poke-text-secondary">{categoryLabel(row.category)}</span>
-        ),
+        render: (row) => <span className="text-caption text-fg-muted">{categoryLabel(row.category)}</span>,
       },
       {
         key: 'earliestGen',
         header: t('index.gen'),
-        width: '70px',
+        width: '72px',
         align: 'right',
         sortable: true,
+        numeric: true,
+        cardLabel: 'inline',
+        cardClassName: 'max-md:order-3 max-md:col-span-2 max-md:text-right',
         sortValue: (row) => row.earliestGen,
-        render: (row) => (
-          <span className="text-poke-text-secondary text-xs">{row.earliestGen}</span>
-        ),
+        render: (row) => <span>{row.earliestGen}</span>,
       },
       {
         key: 'desc',
         header: t('index.description'),
+        cardClassName: 'max-md:order-4 max-md:col-span-6',
         render: (row) => (
-          <span className="text-poke-text-secondary text-sm line-clamp-2">
+          <span className="line-clamp-2 text-body text-fg-muted">
             {row.desc}
             {row.descFallback && <WikiDescFallbackTag className="ml-1.5" />}
           </span>

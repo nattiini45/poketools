@@ -4,8 +4,14 @@ import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import Input from '@/components/ui/Input';
 import Select from '@/components/ui/Select';
+import { ExternalLink } from 'lucide-react';
+import Button from '@/components/ui/Button';
+import ItemIcon from '@/components/ui/ItemIcon';
+import SkewChip from '@/components/ui/SkewChip';
+import SkewPlate from '@/components/ui/SkewPlate';
 import { SortableTableHeader, TablePagination } from '@/components/ui/Table';
-import { getButtonClasses } from '@/components/ui/buttonStyles';
+import ButtonLink from '@/components/discover/ButtonLink';
+import ReplayFilters from './ReplayFilters';
 import {
   paginateArray,
   parseSortParam,
@@ -189,166 +195,226 @@ export default async function ReplaysPage({ searchParams }: PageProps) {
     100: perPageHref(100),
   };
 
+  const activeFilterCount = [
+    params.query,
+    params.league,
+    params.tournament,
+    params.round,
+    params.startDate,
+    params.endDate,
+  ].filter(Boolean).length;
+  const fieldLabel = 'text-caption font-[550] text-fg-muted';
+  const selectClass = 'h-9 border-border bg-transparent text-body shadow-none hover:bg-hover';
+  const headClass = 'max-lg:flex max-lg:min-h-11 max-lg:items-center shrink-0 whitespace-nowrap text-caption normal-case [letter-spacing:normal] text-fg-muted';
+  const cell = 'lg:table-cell lg:px-4 lg:py-3 lg:align-middle';
+
   return (
     <PageContainer
       title={t('replays.title')}
       subtitle={t('replays.subtitle')}
       maxWidth="xl"
+      icon="dubious-disc"
     >
-      <Card padding="lg">
+      <ReplayFilters label={t('replays.filters')} activeCount={activeFilterCount}>
         <form
           method="get"
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+          className="grid items-end gap-3 p-4 md:grid-cols-3 md:p-0 xl:grid-cols-[minmax(0,1.6fr)_repeat(5,minmax(0,1fr))_auto]"
         >
-          <Input
-            type="search"
-            name="q"
-            label={t('replays.search')}
-            defaultValue={params.query}
-            placeholder={t('replays.searchPlaceholder')}
-            maxLength={64}
-          />
-          <Select name="league" label={t('replays.league')} defaultValue={params.league}>
-            <option value="">{t('replays.allLeagues')}</option>
-            {leagueOptions.map((league) => (
-              <option key={league} value={league}>
-                {league}
-              </option>
-            ))}
-          </Select>
-          <Select name="tournament" label={t('replays.tournament')} defaultValue={params.tournament}>
-            <option value="">{t('replays.allTournaments')}</option>
-            {tournamentOptions.map((tournament) => (
-              <option key={tournament} value={tournament}>
-                {tournament}
-              </option>
-            ))}
-          </Select>
-          <Select name="round" label={t('replays.round')} defaultValue={params.round}>
-            <option value="">{t('replays.allRounds')}</option>
-            {roundOptions.map((round) => (
-              <option key={round} value={round}>
-                {roundLabel(round, t, locale)}
-              </option>
-            ))}
-          </Select>
-          <Input type="date" name="start" label={t('replays.startDate')} defaultValue={params.startDate} />
-          <Input type="date" name="end" label={t('replays.endDate')} defaultValue={params.endDate} />
-          <div className="flex items-end gap-3">
-            <button type="submit" className={getButtonClasses('primary', 'md')}>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.search')}</span>
+            <Input
+              type="search"
+              name="q"
+              defaultValue={params.query}
+              placeholder={t('replays.searchPlaceholder')}
+              maxLength={64}
+            />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.league')}</span>
+            <Select name="league" defaultValue={params.league} className={selectClass}>
+              <option value="">{t('replays.allLeagues')}</option>
+              {leagueOptions.map((league) => (
+                <option key={league} value={league}>
+                  {league}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.tournament')}</span>
+            <Select name="tournament" defaultValue={params.tournament} className={selectClass}>
+              <option value="">{t('replays.allTournaments')}</option>
+              {tournamentOptions.map((tournament) => (
+                <option key={tournament} value={tournament}>
+                  {tournament}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.round')}</span>
+            <Select name="round" defaultValue={params.round} className={selectClass}>
+              <option value="">{t('replays.allRounds')}</option>
+              {roundOptions.map((round) => (
+                <option key={round} value={round}>
+                  {roundLabel(round, t, locale)}
+                </option>
+              ))}
+            </Select>
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.startDate')}</span>
+            <Input type="date" name="start" defaultValue={params.startDate} />
+          </label>
+          <label className="flex flex-col gap-1.5">
+            <span className={fieldLabel}>{t('replays.endDate')}</span>
+            <Input type="date" name="end" defaultValue={params.endDate} />
+          </label>
+          <div className="flex items-center gap-2 pb-1.5 max-md:pt-2">
+            <Button type="submit" variant="primary" className="max-md:h-11 max-md:flex-1">
               {t('replays.apply')}
-            </button>
-            <a href="/replays" className={getButtonClasses('ghost', 'md')}>
+            </Button>
+            <ButtonLink href="/replays" reload variant="ghost" className="max-md:h-11">
               {t('replays.reset')}
-            </a>
+            </ButtonLink>
           </div>
         </form>
-      </Card>
+      </ReplayFilters>
 
-      <Card padding="none" className="overflow-hidden">
-        {totalItems === 0 ? (
-          <p className="px-6 py-10 text-center text-sm text-poke-text-muted">
-            {t('replays.empty')}
-          </p>
-        ) : (
-          <div className="space-y-4 p-4">
-            <TablePagination
-              page={safePage}
-              totalPages={totalPages}
-              perPage={tableParams.perPage}
-              totalItems={totalItems}
-              pageHrefs={pageHrefs}
-              perPageHrefs={perPageHrefs}
-            />
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[720px] text-sm">
-                <thead className="border-b border-poke-border bg-poke-elevated">
-                  <tr>
-                    <SortableTableHeader
-                      label={t('replays.date')}
-                      column="date"
-                      sortState={sortState}
-                      href={sortHref('date')}
-                    />
-                    <SortableTableHeader
-                      label={t('replays.players')}
-                      column="players"
-                      sortState={sortState}
-                      href={sortHref('players')}
-                    />
-                    <SortableTableHeader
-                      label={t('replays.league')}
-                      column="league"
-                      sortState={sortState}
-                      href={sortHref('league')}
-                    />
-                    <SortableTableHeader
-                      label={t('replays.round')}
-                      column="round"
-                      sortState={sortState}
-                      href={sortHref('round')}
-                    />
-                    <th className="px-4 py-3 text-left font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary">
-                      {t('replays.match')}
-                    </th>
-                    <th className="px-4 py-3 text-right font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary">
-                      {t('replays.actions')}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((row) => (
-                    <tr
-                      key={row.replayUrl}
-                      className="border-b border-poke-border last:border-b-0"
+      {totalItems === 0 ? (
+        <div className="flex flex-col items-center gap-3 rounded-poke-lg border border-hairline bg-surface px-6 py-12 text-center">
+          <ItemIcon item="poke-doll" size={72} />
+          <h2 className="font-heading text-title text-fg">{t('replays.emptyTitle')}</h2>
+          <p className="max-w-md text-body text-fg-muted">{t('replays.empty')}</p>
+          <Link href={activeFilterCount > 0 ? '/replays' : '/leagues'} className="mt-2 inline-flex min-h-11 items-center">
+            <SkewPlate variant="button">
+              {activeFilterCount > 0 ? t('replays.resetFilters') : t('replays.browseLeagues')}
+            </SkewPlate>
+          </Link>
+        </div>
+      ) : (
+        <Card padding="none" className="overflow-hidden">
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            perPage={tableParams.perPage}
+            totalItems={totalItems}
+            pageHrefs={pageHrefs}
+            perPageHrefs={perPageHrefs}
+            className="px-4 py-3"
+          />
+          <table className="block w-full text-body lg:table lg:table-fixed">
+            <thead className="block border-y border-hairline bg-elevated lg:table-header-group">
+              <tr className="flex overflow-x-auto lg:table-row">
+                <SortableTableHeader
+                  label={t('replays.date')}
+                  column="date"
+                  sortState={sortState}
+                  href={sortHref('date')}
+                  className={`${headClass} lg:w-[7.5rem]`}
+                />
+                <SortableTableHeader
+                  label={t('replays.players')}
+                  column="players"
+                  align="center"
+                  sortState={sortState}
+                  href={sortHref('players')}
+                  className={`${headClass} lg:w-[26%]`}
+                />
+                <SortableTableHeader
+                  label={t('replays.league')}
+                  column="league"
+                  sortState={sortState}
+                  href={sortHref('league')}
+                  className={headClass}
+                />
+                <SortableTableHeader
+                  label={t('replays.round')}
+                  column="round"
+                  sortState={sortState}
+                  href={sortHref('round')}
+                  className={`${headClass} lg:w-[10rem]`}
+                />
+                <th scope="col" className="hidden px-4 py-3 text-right text-caption font-[550] text-fg-muted lg:table-cell lg:w-[16.5rem]">
+                  {t('replays.actions')}
+                </th>
+              </tr>
+            </thead>
+            <tbody className="block lg:table-row-group">
+              {pageRows.map((row) => (
+                <tr
+                  key={row.replayUrl}
+                  className="flex flex-wrap items-center gap-x-2 gap-y-2 border-b border-hairline px-4 py-4 transition-colors duration-80 last:border-b-0 hover:bg-hover lg:table-row lg:p-0"
+                >
+                  <td className={`order-4 whitespace-nowrap text-caption tabular-nums text-fg-muted ${cell}`}>
+                    <LocalTime value={row.date} preset="date" />
+                  </td>
+                  <td className={`order-1 basis-full ${cell}`}>
+                    <span className="sr-only">{replayRowLabel(row, t, locale)}</span>
+                    <span
+                      aria-hidden="true"
+                      className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 text-subtitle font-[550] text-fg"
                     >
-                      <td className="px-4 py-3 text-poke-text-secondary">
-                        <LocalTime value={row.date} preset="date" />
-                      </td>
-                      <td className="px-4 py-3 font-medium text-poke-text-primary">
-                        {replayRowLabel(row, t, locale)}
-                      </td>
-                      <td className="px-4 py-3 text-poke-text-secondary">
-                        {row.league === UNKNOWN_LEAGUE ? t('replays.unknownLeague') : row.league || '—'}
-                      </td>
-                      <td className="px-4 py-3 text-poke-text-secondary">
-                        {row.round ? roundLabel(row.round, t, locale) : '—'}
-                      </td>
-                      <td className="px-4 py-3 text-poke-text-secondary">
-                        {t('replays.gameNumber', { n: row.matchNumber })}
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center justify-end gap-3">
-                          <Link href={row.matchUrl} className={getButtonClasses('secondary', 'sm')}>
-                            {t('replays.matchPage')}
-                          </Link>
-                          <a
-                            href={row.replayUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className={getButtonClasses('primary', 'sm')}
-                          >
-                            {t('replays.openReplay')}
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <TablePagination
-              page={safePage}
-              totalPages={totalPages}
-              perPage={tableParams.perPage}
-              totalItems={totalItems}
-              pageHrefs={pageHrefs}
-              perPageHrefs={perPageHrefs}
-              className="justify-end"
-            />
-          </div>
-        )}
-      </Card>
+                      <span className="truncate text-right">
+                        {row.player1Name === UNKNOWN_PLAYER ? t('replays.unknownPlayer') : row.player1Name}
+                      </span>
+                      <SkewChip tone="accent" className="font-heading text-body font-normal">
+                        {t('replays.versus')}
+                      </SkewChip>
+                      <span className="truncate">
+                        {row.player2Name === UNKNOWN_PLAYER ? t('replays.unknownPlayer') : row.player2Name}
+                      </span>
+                    </span>
+                  </td>
+                  <td className={`order-2 min-w-0 basis-full ${cell}`}>
+                    {row.league ? (
+                      <SkewChip>
+                        <span className="block max-w-[16rem] truncate lg:max-w-[9rem] xl:max-w-[18rem]">
+                          {row.league === UNKNOWN_LEAGUE ? t('replays.unknownLeague') : row.league}
+                        </span>
+                      </SkewChip>
+                    ) : (
+                      '—'
+                    )}
+                  </td>
+                  <td className={`order-3 flex-1 whitespace-nowrap text-caption text-fg-muted ${cell}`}>
+                    {row.round ? roundLabel(row.round, t, locale) : '—'}
+                    <span aria-hidden="true"> · </span>
+                    {t('replays.gameNumber', { n: row.matchNumber })}
+                  </td>
+                  <td className={`order-5 basis-full ${cell}`}>
+                    <div className="flex items-center gap-2 lg:justify-end">
+                      <ButtonLink href={row.matchUrl} variant="secondary" size="sm" className="max-lg:h-11 max-lg:flex-1">
+                        {t('replays.matchPage')}
+                      </ButtonLink>
+                      <ButtonLink
+                        href={row.replayUrl}
+                        external
+                        variant="primary"
+                        size="sm"
+                        className="max-lg:h-11 max-lg:flex-1"
+                      >
+                        {t('replays.openReplay')}
+                        <ExternalLink className="h-3.5 w-3.5" aria-hidden="true" />
+                      </ButtonLink>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <TablePagination
+            page={safePage}
+            totalPages={totalPages}
+            perPage={tableParams.perPage}
+            totalItems={totalItems}
+            pageHrefs={pageHrefs}
+            perPageHrefs={perPageHrefs}
+            className="border-t border-hairline px-4 py-3"
+          />
+        </Card>
+      )}
     </PageContainer>
   );
 }

@@ -8,8 +8,8 @@ import { pkmnMessages } from '@/i18n/messages/pkmn';
 export default async function WikiAttribution() {
   const t = await getT(pkmnMessages);
   return (
-    <footer className="mt-10 border-t border-poke-border pt-3">
-      <p className="font-body text-[11px] text-poke-text-muted">{t('attribution')}</p>
+    <footer className="mt-4 border-t border-hairline pt-3">
+      <p className="text-micro text-fg-muted">{t('attribution')}</p>
     </footer>
   );
 }

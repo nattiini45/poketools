@@ -20,7 +20,7 @@ import 'server-only';
 import { compile, mappedBracketType, PRESETS, type FormatDefinition } from '@/lib/format-kit';
 import type { Coverage } from '@/lib/format-kit/client';
 import { epbPack } from '@/lib/format-pack';
-import { availableLeagueAdminTabs, leagueAdminHref, type LeagueAdminTab } from '@/lib/league-admin/tabs';
+import { availableLeagueAdminTabs, LEAGUE_ADMIN_RULES_SECTION, leagueAdminHref, leagueHasRulesSection, type LeagueAdminTab } from '@/lib/league-admin/tabs';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getTierLimits } from '@/lib/supabase/queries/draft-tier-limits';
 import { getLeagueGroupCounts, getSeasonTypeAssignmentCounts, getStageGroupCounts } from '@/lib/supabase/queries/format-studio';
@@ -74,9 +74,10 @@ function editorLinksFor(
 ): Partial<Record<EditorAdapter, string>> {
   const tabs = availableLeagueAdminTabs(league.format_type);
   const link = (tab: LeagueAdminTab): string | undefined => (tabs.includes(tab) ? leagueAdminHref(league.id, tab) : undefined);
+  const rules = leagueHasRulesSection(league.format_type) ? leagueAdminHref(league.id, 'format', LEAGUE_ADMIN_RULES_SECTION) : undefined;
   const out: Partial<Record<EditorAdapter, string>> = {};
   for (const mod of definition?.modules ?? []) {
-    const href = mod.adapter === 'core_liga' ? link('participants') : link('rules');
+    const href = mod.adapter === 'core_liga' ? link('participants') : rules;
     if (href !== undefined) out[mod.adapter] = href;
   }
   return out;

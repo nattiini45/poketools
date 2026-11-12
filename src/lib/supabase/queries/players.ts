@@ -884,6 +884,21 @@ export async function resolvePlayerNames(
 }
 
 /**
+ * Ids of the players the public player directory hides: every account that is not
+ * active (banned or suspended) and every test account. Public rankings drop these
+ * named rows at read time, so a ban or unban needs no data rebuild. One narrow read.
+ */
+export async function getHiddenPlayerIds(): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id')
+    .or('status.neq.active,is_test_account.eq.true');
+
+  if (error) throw error;
+  return data.map((row) => row.id);
+}
+
+/**
  * Public player directory — no Discord IDs or usernames.
  */
 export async function getPublicPlayers(

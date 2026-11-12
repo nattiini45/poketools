@@ -95,6 +95,27 @@ import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerAchievements } from '@/lib/supabase/queries/achievements';
 import type { PlayerBattleStatRow } from '@/types/profile';
+import type { PlayerAggregate } from '@/types/game';
+
+function aggregateRow(pokemon_name: string, overrides: Partial<PlayerAggregate> = {}): PlayerAggregate {
+  return {
+    id: `agg-${pokemon_name}`,
+    scope_type: 'all_time',
+    scope_id: null,
+    player_id: 'player-1',
+    pokemon_name,
+    total_appearances: 1,
+    total_brought: 1,
+    total_led: 0,
+    total_kos_dealt: 0,
+    total_koed: 0,
+    total_wins: 0,
+    total_games: 1,
+    move_counts: {},
+    last_updated: '2024-01-01',
+    ...overrides,
+  };
+}
 
 describe('composePlayerProfile', () => {
   beforeEach(() => {
@@ -204,6 +225,10 @@ describe('composePlayerProfile', () => {
       { pokemon_name: 'Pikachu', kos_dealt: 1, was_koed: true, match_won: false, tournament_id: 'tourney-1' },
       { pokemon_name: 'Charizard', kos_dealt: 2, was_koed: false, match_won: true, tournament_id: 'tourney-1' },
     ] as PlayerBattleStatRow[]);
+    vi.mocked(getAllTimePlayerAggregates).mockResolvedValueOnce([
+      aggregateRow('Pikachu', { total_kos_dealt: 4, total_games: 2 }),
+      aggregateRow('Charizard', { total_kos_dealt: 2, total_games: 1 }),
+    ]);
 
     const profile = await composePlayerProfile('player-1');
     expect(profile!.headline.total_matches).toBe(2);
@@ -213,6 +238,35 @@ describe('composePlayerProfile', () => {
     expect(profile!.headline.total_kos_dealt).toBe(6); // 3+1+2
     expect(profile!.headline.unique_pokemon_used).toBe(2);
     expect(profile!.headline.tournaments_entered).toBe(1);
+  });
+
+  it('builds the headline KOs and unique Pokémon from the all-time aggregates, not the capped battle_stats read', async () => {
+    // getPlayerBattleStats caps at 500 rows: 500 Pikachu rows of 1 KO each.
+    vi.mocked(getPlayerBattleStats).mockResolvedValueOnce(
+      Array.from({ length: 500 }, () => ({
+        pokemon_name: 'Pikachu', kos_dealt: 1, was_koed: false, match_won: true, tournament_id: 'tourney-1',
+      })) as PlayerBattleStatRow[],
+    );
+    // The aggregates hold the whole history: 3 Pokémon, 1,200 KOs.
+    vi.mocked(getAllTimePlayerAggregates).mockResolvedValueOnce([
+      aggregateRow('Pikachu', { total_kos_dealt: 700, total_games: 700 }),
+      aggregateRow('Charizard', { total_kos_dealt: 400, total_games: 300 }),
+      aggregateRow('Eevee', { total_kos_dealt: 100, total_games: 50 }),
+    ]);
+
+    const profile = await composePlayerProfile('player-1');
+    expect(profile!.headline.total_kos_dealt).toBe(1200);
+    expect(profile!.headline.unique_pokemon_used).toBe(3);
+  });
+
+  it('reports zero KOs and Pokémon in the headline when the player has no aggregates', async () => {
+    vi.mocked(getPlayerBattleStats).mockResolvedValueOnce([
+      { pokemon_name: 'Pikachu', kos_dealt: 3, was_koed: false, match_won: true, tournament_id: 'tourney-1' },
+    ] as PlayerBattleStatRow[]);
+
+    const profile = await composePlayerProfile('player-1');
+    expect(profile!.headline.total_kos_dealt).toBe(0);
+    expect(profile!.headline.unique_pokemon_used).toBe(0);
   });
 
   it('computes recent form from last 5 completed matches', async () => {
