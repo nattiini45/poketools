@@ -75,7 +75,8 @@ test.describe.serial('a reported result is confirmed by the opponent', () => {
     const admin = await newPage();
     await signIn(admin, DEV_SEED_ADMIN.email, DEV_SEED_ADMIN.password);
     await admin.goto(`/admin/matches/${matchId}`);
-    await expect(admin.getByRole('heading', { level: 1, name: 'Match Override' })).toBeVisible();
+    // The page heading is the pairing (its score plates are decorative); the pairing is also the breadcrumb's last step.
+    await expect(admin.getByRole('heading', { level: 1, name: 'Seed Player 7 vs Seed Player 8' })).toBeVisible();
     await expect(admin.getByText('Seed Player 7 vs Seed Player 8').first()).toBeVisible();
     await expect(admin.getByRole('button', { name: /History/ })).toBeVisible();
 
