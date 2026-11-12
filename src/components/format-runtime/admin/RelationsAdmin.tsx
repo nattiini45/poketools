@@ -16,8 +16,8 @@ import type {
   RelationLinkView,
   UnmaskedRelationView,
 } from '@/lib/format-engine/runtime/view-types';
+import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD } from '@/components/admin/admin-table';
 import { BUTTON_TOUCH, labelText } from './admin-shared';
-import ScrollRegion from '../ScrollRegion';
 import ReasonDialog from './ReasonDialog';
 import { useAdminRequest } from './useAdminRequest';
 import { useStatusFocus } from './useStatusFocus';
@@ -208,25 +208,25 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                       : t('relations.noLinks')}
               </p>
             ) : (
-              <ScrollRegion label={t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })}>
-                <table className="w-full min-w-[20rem] text-left text-body">
+              <div className={TABLE_FRAME} role="region" aria-label={t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })} tabIndex={0}>
+                <table className={TABLE}>
                   <caption className="sr-only">{t('relations.linksCaption', { relation: labelText(relation.label, locale, relation.key) })}</caption>
-                  <thead className="bg-elevated text-caption font-[550] text-fg-muted">
+                  <thead className={THEAD}>
                     <tr>
-                      <th scope="col" className="px-3 py-2">{t('relations.from')}</th>
-                      <th scope="col" className="px-3 py-2">{t('relations.to')}</th>
+                      <th scope="col" className={TH}>{t('relations.from')}</th>
+                      <th scope="col" className={TH}>{t('relations.to')}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-hairline">
+                  <tbody className={TBODY}>
                     {links.map((link, index) => (
-                      <tr key={index}>
-                        <td className="px-3 py-2 text-fg">{refName(link.from)}</td>
-                        <td className="px-3 py-2 text-fg">{refName(link.to)}</td>
+                      <tr key={index} className={ROW}>
+                        <td className={NAME_CELL}>{refName(link.from)}</td>
+                        <td className={CELL} data-label={t('relations.to')}>{refName(link.to)}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
-              </ScrollRegion>
+              </div>
             )}
             {canReveal && relation.link_count === 0 && relation.shape !== 'manual' && (
               <Button
@@ -268,27 +268,27 @@ export default function RelationsAdmin({ seasonId, relations, actions, canReveal
                   {entry.rows.length > 0 ? t('relations.ownHiddenNote') : t('relations.noSubmissions')}
                 </p>
               ) : (
-                <ScrollRegion label={t('relations.submissionsCaption', { action: actionName(entry.action) })}>
-                  <table className="w-full min-w-[24rem] text-left text-body">
+                <div className={TABLE_FRAME} role="region" aria-label={t('relations.submissionsCaption', { action: actionName(entry.action) })} tabIndex={0}>
+                  <table className={TABLE}>
                     <caption className="sr-only">{t('relations.submissionsCaption', { action: actionName(entry.action) })}</caption>
-                    <thead className="bg-elevated text-caption font-[550] text-fg-muted">
+                    <thead className={THEAD}>
                       <tr>
-                        <th scope="col" className="px-3 py-2">{t('relations.player')}</th>
-                        <th scope="col" className="px-3 py-2">{t('relations.state')}</th>
-                        <th scope="col" className="px-3 py-2">{t('relations.target')}</th>
+                        <th scope="col" className={TH}>{t('relations.player')}</th>
+                        <th scope="col" className={TH}>{t('relations.state')}</th>
+                        <th scope="col" className={TH}>{t('relations.target')}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-hairline">
+                    <tbody className={TBODY}>
                       {rows.map((row) => (
-                        <tr key={row.player.id}>
-                          <td className="px-3 py-2 text-fg">{row.player.name ?? t('formerPlayer')}</td>
-                          <td className="px-3 py-2 text-fg-muted">{t(`relations.submission.${row.state}`)}</td>
-                          <td className="px-3 py-2 text-fg">{row.target === null ? t('relations.noTarget') : refName(row.target)}</td>
+                        <tr key={row.player.id} className={ROW}>
+                          <td className={NAME_CELL}>{row.player.name ?? t('formerPlayer')}</td>
+                          <td className={CELL} data-label={t('relations.state')}>{t(`relations.submission.${row.state}`)}</td>
+                          <td className={CELL} data-label={t('relations.target')}>{row.target === null ? t('relations.noTarget') : refName(row.target)}</td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </ScrollRegion>
+                </div>
               )}
             </div>
             );
