@@ -76,7 +76,7 @@ export default async function FormatLeaguePage({ params }: PageProps) {
           </Link>
         </div>
         {result.kind === 'no_phases' ? (
-          <p className="text-sm text-poke-text-muted">
+          <p className="text-sm text-fg-muted">
             {league.format_type === 'custom'
               ? t('detail.noPhasesCustom')
               : t.rich('detail.noPhases', {

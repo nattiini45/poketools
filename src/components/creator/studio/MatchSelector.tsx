@@ -10,6 +10,7 @@ import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { enumMessages } from '@/i18n/messages/enums';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
+import Select from '@/components/ui/Select';
 
 // ─── Lightweight list shapes (only what we need for display) ───────
 
@@ -201,20 +202,15 @@ export default function MatchSelector() {
     }
   }, [state.sessionId, dispatch]);
 
-  const selectClass = 'w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-poke-accent';
-
   return (
-    <div className="space-y-3">
-      <h3 className="font-heading text-sm font-bold text-poke-text-secondary uppercase tracking-wide">
-        {t('matchSelector.title')}
-      </h3>
+    <section className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4">
+      <h2 className="font-heading text-title text-fg">{t('matchSelector.title')}</h2>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         {/* Season */}
         <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('matchSelector.season')}</label>
-          <select
-            className={selectClass}
+          <Select
+            label={t('matchSelector.season')}
             value={selectedSeasonId}
             onChange={(e) => {
               setSelectedSeasonId(e.target.value);
@@ -226,14 +222,13 @@ export default function MatchSelector() {
             {seasons.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Tournament */}
         <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('matchSelector.tournament')}</label>
-          <select
-            className={selectClass}
+          <Select
+            label={t('matchSelector.tournament')}
             value={selectedTournamentId}
             disabled={!selectedSeasonId}
             onChange={(e) => {
@@ -245,14 +240,13 @@ export default function MatchSelector() {
             {tournaments.map((tournament) => (
               <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Round */}
         <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('matchSelector.round')}</label>
-          <select
-            className={selectClass}
+          <Select
+            label={t('matchSelector.round')}
             value={selectedRoundId}
             disabled={!selectedTournamentId}
             onChange={(e) => setSelectedRoundId(e.target.value)}
@@ -266,14 +260,13 @@ export default function MatchSelector() {
                 })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         {/* Match */}
         <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('matchSelector.match')}</label>
-          <select
-            className={selectClass}
+          <Select
+            label={t('matchSelector.match')}
             disabled={!selectedRoundId || populating || matchOptions.loading}
             onChange={(e) => {
               if (e.target.value) handleMatchSelect(e.target.value);
@@ -289,12 +282,12 @@ export default function MatchSelector() {
                 })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
       {(loading || matchOptions.loading) && (
-        <p className="text-xs text-poke-text-secondary animate-pulse">{t('matchSelector.loading')}</p>
+        <p className="text-caption text-fg-muted animate-pulse">{t('matchSelector.loading')}</p>
       )}
       {matchOptions.error && (
         <MatchesLoadError
@@ -303,9 +296,9 @@ export default function MatchSelector() {
         />
       )}
       {populating && (
-        <p className="text-xs text-poke-accent animate-pulse">{t('matchSelector.populating')}</p>
+        <p className="text-caption text-accent-ink animate-pulse">{t('matchSelector.populating')}</p>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -318,9 +311,9 @@ export function MatchesLoadError({ error, onRetry }: { error: ApiErrorLike; onRe
   const errorText = useApiErrorText(errorsTournaments);
   const message = error.error || error.code ? errorText(error) : t('matchSelector.loadFailed');
   return (
-    <p role="alert" className="text-xs text-poke-danger">
+    <p role="alert" className="text-caption text-loss">
       {t('matchSelector.loadError', { message })}{' '}
-      <button type="button" className="underline hover:no-underline" onClick={onRetry}>
+      <button type="button" className="font-[550] underline hover:no-underline" onClick={onRetry}>
         {t('matchSelector.retry')}
       </button>
     </p>

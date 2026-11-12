@@ -2,6 +2,7 @@
 
 import { useMemo } from 'react';
 import { useCastStudio } from '../CastStudioContext';
+import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 
@@ -30,36 +31,30 @@ export default function SoloGameControls() {
   };
 
   return (
-    <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-4">
-      <div className="flex items-center justify-between">
+    <div className="rounded-poke-lg border border-hairline bg-surface p-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
-          <h3 className="font-heading text-sm font-bold text-poke-text-secondary uppercase tracking-wide">
+          <h3 className="font-heading text-subtitle text-fg">
             {t('solo.game', { n: tracker.current_game.game_number })}
           </h3>
           {tracker.games_submitted.length > 0 && (
-            <p className="text-xs text-poke-text-secondary mt-0.5">
+            <p className="mt-0.5 text-caption text-fg-muted">
               {t.rich('solo.record', {
                 wins: record.wins,
                 losses: record.losses,
-                win: (chunks) => <span className="text-green-400 font-bold">{chunks}</span>,
-                loss: (chunks) => <span className="text-red-400 font-bold">{chunks}</span>,
+                win: (chunks) => <span className="font-[550] text-win">{chunks}</span>,
+                loss: (chunks) => <span className="font-[550] text-loss">{chunks}</span>,
               })}
             </p>
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => handleResult(true)}
-            className="rounded-poke-md bg-green-500/20 px-4 py-2 text-sm font-heading font-bold text-green-400 hover:bg-green-500/30 transition-colors"
-          >
+          <Button variant="success" onClick={() => handleResult(true)}>
             {t('solo.won')}
-          </button>
-          <button
-            onClick={() => handleResult(false)}
-            className="rounded-poke-md bg-red-500/20 px-4 py-2 text-sm font-heading font-bold text-red-400 hover:bg-red-500/30 transition-colors"
-          >
+          </Button>
+          <Button variant="danger" onClick={() => handleResult(false)}>
             {t('solo.lost')}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

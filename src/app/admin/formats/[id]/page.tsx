@@ -65,7 +65,7 @@ export default async function FormatPage({ params }: PageProps) {
               ? tEditor('list.state.draft')
               : tEditor('list.state.published', { n: summary.current_version.version_no })}
           </Badge>
-          {summary.owner !== null && <span className="text-sm text-poke-text-secondary">{tEditor('list.by', { name: summary.owner.name })}</span>}
+          {summary.owner !== null && <span className="text-sm text-fg-muted">{tEditor('list.by', { name: summary.owner.name })}</span>}
           <Link href="/admin/formats" className={LINK}>
             {t('detail.back')}
           </Link>
@@ -76,7 +76,7 @@ export default async function FormatPage({ params }: PageProps) {
           )}
         </div>
         <ForkStoredButton definitionId={id} />
-        {view === null ? <p className="text-sm text-poke-text-muted">{tEditor('page.noContent')}</p> : <FormatDetail view={view} variant="page" />}
+        {view === null ? <p className="text-sm text-fg-muted">{tEditor('page.noContent')}</p> : <FormatDetail view={view} variant="page" />}
       </PageContainer>
     </AdminGuard>
   );

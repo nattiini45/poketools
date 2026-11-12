@@ -8,6 +8,7 @@ import TeamPicker from '@/components/teambuilder/TeamPicker';
 import TeamImporter from '@/components/teambuilder/TeamImporter';
 import type { PokemonSet } from '@/types/team';
 import type { TeamValidationResult } from '@/types/team';
+import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { soloPlaceholderOf } from '@/lib/broadcast/solo-defaults';
@@ -42,34 +43,29 @@ export default function SoloMyTeamPanel() {
   return (
     <div className="space-y-3">
       {/* Action bar */}
-      <div className="flex items-center gap-2">
-        <button
-          onClick={() => setPickerOpen(true)}
-          className="rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
-        >
+      <div className="flex flex-wrap items-center gap-2">
+        <Button variant="secondary" size="sm" onClick={() => setPickerOpen(true)}>
           {t('solo.loadTeam')}
-        </button>
-        <button
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          aria-pressed={importerOpen}
           onClick={() => setImporterOpen(!importerOpen)}
-          className={`rounded-poke-md px-3 py-1.5 text-xs font-heading font-bold transition-colors ${
-            importerOpen
-              ? 'text-poke-accent'
-              : 'bg-poke-muted text-poke-text-secondary'
-          }`}
+          className={importerOpen ? 'bg-tier-1 text-tier-ink' : undefined}
         >
           {t('solo.import')}
-        </button>
+        </Button>
         {hasTeam && (
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
+            aria-pressed={editorOpen}
             onClick={() => setEditorOpen(!editorOpen)}
-            className={`rounded-poke-md px-3 py-1.5 text-xs font-heading font-bold transition-colors ${
-              editorOpen
-                ? 'text-poke-accent'
-                : 'bg-poke-muted text-poke-text-secondary'
-            }`}
+            className={editorOpen ? 'bg-tier-1 text-tier-ink' : undefined}
           >
             {editorOpen ? t('solo.closeEditor') : t('solo.editSets')}
-          </button>
+          </Button>
         )}
       </div>
 
@@ -86,7 +82,7 @@ export default function SoloMyTeamPanel() {
 
       {/* Inline importer (collapsible) */}
       {importerOpen && (
-        <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-4">
+        <div className="rounded-poke-lg border border-hairline bg-surface p-4">
           <TeamImporter onImport={handleImport} />
         </div>
       )}

@@ -27,7 +27,7 @@ export default async function CheatSheetPage({ params }: Props) {
     return (
       <AuthGuard>
         <PageContainer title={t('cheatSheet.title')}>
-          <p className="text-poke-text-secondary">{t('cheatSheet.creatorRequired')}</p>
+          <p className="text-body text-fg-muted">{t('cheatSheet.creatorRequired')}</p>
         </PageContainer>
       </AuthGuard>
     );
@@ -40,8 +40,8 @@ export default async function CheatSheetPage({ params }: Props) {
     return (
       <AuthGuard>
         <PageContainer title={t('cheatSheet.title')}>
-          <p className="text-poke-text-secondary">{t('cheatSheet.matchNotFound')}</p>
-          <Link href="/dashboard/broadcast" className="text-poke-accent text-sm mt-2 inline-block">
+          <p className="text-body text-fg-muted">{t('cheatSheet.matchNotFound')}</p>
+          <Link href="/dashboard/broadcast" className="mt-2 inline-block text-body font-[550] text-accent-ink underline-offset-2 hover:underline">
             {t('cheatSheet.back')}
           </Link>
         </PageContainer>

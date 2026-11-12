@@ -45,15 +45,15 @@ export default function ShowdownChallenge({ value, headingLevel = 3 }: ShowdownC
 
   return (
     <section className="space-y-2" aria-labelledby={headingId}>
-      <Heading id={headingId} className="font-heading text-sm font-semibold text-poke-text-secondary">{t('challenge.heading')}</Heading>
-      <p className="text-xs text-poke-text-muted">{t('challenge.help')}</p>
-      <p className="text-xs text-poke-text-muted">{t('challenge.limits')}</p>
+      <Heading id={headingId} className="font-heading text-sm font-semibold text-fg-muted">{t('challenge.heading')}</Heading>
+      <p className="text-xs text-fg-muted">{t('challenge.help')}</p>
+      <p className="text-xs text-fg-muted">{t('challenge.limits')}</p>
       <textarea
         ref={area}
         aria-label={t('challenge.label')}
         readOnly
         rows={5}
-        className="w-full resize-y rounded-poke-md border border-poke-border bg-poke-surface p-3 font-mono text-xs text-poke-text-primary"
+        className="w-full resize-y rounded-poke-md border border-hairline bg-surface p-3 font-mono text-xs text-fg"
         value={value}
         onFocus={(event) => event.currentTarget.select()}
       />
@@ -61,7 +61,7 @@ export default function ShowdownChallenge({ value, headingLevel = 3 }: ShowdownC
         <Button type="button" variant="secondary" size="sm" onClick={copy}>
           {t('challenge.copy')}
         </Button>
-        <span role="status" className="text-xs text-poke-text-muted">
+        <span role="status" className="text-xs text-fg-muted">
           {status === 'copied' ? t('challenge.copied') : status === 'failed' ? t('challenge.copyFailed') : ''}
         </span>
       </div>

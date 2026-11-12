@@ -9,6 +9,7 @@ import SoloMyTeamPanel from './SoloMyTeamPanel';
 import KOTracker from './KOTracker';
 import SoloGameControls from './SoloGameControls';
 import SoloMetaPanel from './SoloMetaPanel';
+import Button from '@/components/ui/Button';
 import { useLocale, useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 
@@ -53,28 +54,21 @@ export default function SoloLayout() {
       <CastToolbar />
       <SoloFormatPicker />
 
-      <div className="grid grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         {/* My Team — loadable, editable, with KO tracker */}
         <div className="space-y-4">
-          <h2 className="font-heading text-lg font-bold text-poke-text-primary">
-            {t('solo.myTeam')}
-          </h2>
+          <h2 className="font-heading text-title text-fg">{t('solo.myTeam')}</h2>
           <SoloMyTeamPanel />
           <KOTracker />
         </div>
 
         {/* Opponent Team — fully editable, resettable */}
         <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="font-heading text-lg font-bold text-poke-text-primary">
-              {t('solo.opponent')}
-            </h2>
-            <button
-              onClick={handleNewOpponent}
-              className="rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary hover:bg-red-500/20 hover:text-red-400 transition-colors"
-            >
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="font-heading text-title text-fg">{t('solo.opponent')}</h2>
+            <Button variant="secondary" size="sm" onClick={handleNewOpponent}>
               {t('solo.newOpponent')}
-            </button>
+            </Button>
           </div>
           <CastTeamEditor player={2} />
           <SoloMetaPanel />
@@ -85,30 +79,32 @@ export default function SoloLayout() {
       <SoloGameControls />
 
       {/* Overlay controls */}
-      <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-4">
-        <h3 className="font-heading text-sm font-bold text-poke-text-secondary uppercase tracking-wide mb-2">
-          {t('solo.overlayControls')}
-        </h3>
+      <div className="rounded-poke-lg border border-hairline bg-surface p-4">
+        <h3 className="mb-2 font-heading text-subtitle text-fg">{t('solo.overlayControls')}</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {OVERLAY_URLS.map(({ labelKey, path }) => (
             <div key={path} className="flex gap-1">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
+                className="flex-1"
                 onClick={() => window.open(overlayPath(path), '_blank')}
-                className="flex-1 rounded-poke-md bg-poke-muted px-3 py-1.5 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
               >
                 {t(`solo.overlays.${labelKey}`)}
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => copyUrl(path)}
-                className="rounded-poke-md bg-poke-muted px-2 py-1.5 text-xs text-poke-text-secondary transition-colors"
                 title={t('solo.copyUrlTitle')}
+                aria-label={t('solo.copyUrlTitle')}
               >
                 {copiedUrl === path ? '✓' : '⎘'}
-              </button>
+              </Button>
             </div>
           ))}
         </div>
-        <p className="text-[10px] text-poke-text-secondary mt-2">
+        <p className="mt-2 text-caption text-fg-muted">
           {t('solo.overlayHint')}
         </p>
       </div>

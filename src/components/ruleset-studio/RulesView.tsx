@@ -16,19 +16,19 @@ interface RulesViewProps {
 export default function RulesView({ rules, lang, headingLevel = 3 }: RulesViewProps) {
   const Heading = headingLevel === 2 ? 'h2' : 'h3';
   return (
-    <div lang={lang} className="space-y-4">
+    <div lang={lang} className="space-y-5">
       {rules.sections.map((section) => (
-        <section key={section.id} className="space-y-1">
-          <Heading className="font-heading text-sm font-semibold text-poke-text-secondary">{section.heading}</Heading>
+        <section key={section.id} id={`rules-${section.id}`} className="scroll-mt-24 space-y-1">
+          <Heading className="font-heading text-body font-[550] text-fg-muted">{section.heading}</Heading>
           {section.lines.map((line) => (
-            <p key={line} className="max-w-prose whitespace-pre-wrap break-words text-sm text-poke-text-primary">
+            <p key={line} className="max-w-prose whitespace-pre-wrap break-words text-sm text-fg">
               {line}
             </p>
           ))}
         </section>
       ))}
       <ShowdownChallenge value={rules.showdownChallenge} headingLevel={headingLevel} />
-      <p className="text-xs font-semibold text-poke-text-muted">{rules.coverage}</p>
+      <p className="text-xs font-semibold text-fg-muted">{rules.coverage}</p>
     </div>
   );
 }

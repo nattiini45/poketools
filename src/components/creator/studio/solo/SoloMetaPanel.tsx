@@ -74,31 +74,32 @@ export default function SoloMetaPanel() {
   if (format === 'blank') return null;
 
   return (
-    <div className="rounded-poke-lg border border-poke-border bg-poke-surface">
+    <div className="rounded-poke-lg border border-hairline bg-surface">
       <button
         onClick={() => setCollapsed(!collapsed)}
-        className="w-full flex items-center justify-between px-4 py-2 text-left"
+        aria-expanded={!collapsed}
+        className="flex min-h-11 w-full items-center justify-between px-4 py-2 text-left focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
       >
-        <span className="font-heading text-sm font-bold text-poke-text-secondary uppercase tracking-wide">
+        <span className="font-heading text-subtitle text-fg">
           {t('solo.meta.title')}
         </span>
-        <span className="text-poke-text-secondary text-xs">
+        <span aria-hidden="true" className="text-caption text-fg-muted">
           {collapsed ? '▶' : '▼'}
         </span>
       </button>
 
       {!collapsed && (
-        <div className="px-4 pb-4 border-t border-poke-border pt-3">
+        <div className="border-t border-hairline px-4 pb-4 pt-3">
           {loading && (
-            <p className="text-xs text-poke-text-secondary animate-pulse">{t('solo.meta.loading')}</p>
+            <p className="text-caption text-fg-muted animate-pulse">{t('solo.meta.loading')}</p>
           )}
           {error && (
-            <p className="text-xs text-red-400">
+            <p className="text-caption text-loss">
               {error.error || error.code ? errorText(error) : t('solo.meta.loadFailed')}
             </p>
           )}
           {!loading && pokemon.length === 0 && !error && (
-            <p className="text-xs text-poke-text-secondary">{t('solo.meta.empty')}</p>
+            <p className="text-caption text-fg-muted">{t('solo.meta.empty')}</p>
           )}
           {pokemon.length > 0 && (
             <div className="grid grid-cols-2 gap-1 max-h-[360px] overflow-y-auto">
@@ -108,7 +109,7 @@ export default function SoloMetaPanel() {
                   <button
                     key={p.pokemon_name}
                     onClick={() => handleAddToOpponent(p.pokemon_name)}
-                    className="flex items-center gap-2 rounded-poke-md px-2 py-1 text-left transition-colors group"
+                    className="group flex items-center gap-2 rounded-poke-md px-2 py-1 text-left transition-colors hover:bg-hover"
                     title={t('solo.meta.addToOpponent', { pokemon: name })}
                   >
                     <SpriteImg
@@ -117,14 +118,14 @@ export default function SoloMetaPanel() {
                       className="w-8 h-8"
                     />
                     <div className="flex-1 min-w-0">
-                      <span className="text-xs font-heading font-bold text-poke-text-primary block truncate">
+                      <span className="block truncate font-heading text-caption text-fg">
                         {name}
                       </span>
-                      <span className="text-[10px] text-poke-text-secondary">
+                      <span className="text-caption text-fg-muted">
                         {formatter.percent(p.usage_pct, 1)}
                       </span>
                     </div>
-                    <span className="text-poke-accent text-xs opacity-0 group-hover:opacity-100 transition-opacity">
+                    <span className="text-caption text-accent-ink opacity-0 group-hover:opacity-100 transition-opacity">
                       +
                     </span>
                   </button>

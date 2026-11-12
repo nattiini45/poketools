@@ -8,6 +8,7 @@ test.describe('new-competition wizard', () => {
 
     // The format gallery opens the wizard with the example picked.
     await page.goto('/admin/formats');
+    await page.getByRole('tab', { name: /Examples/ }).click();
     await page.getByRole('link', { name: 'Create a league from Wichtelcup' }).click();
     await expect(page).toHaveURL(/\/admin\/leagues\/new\?preset=wichtelcup$/);
     // The admin's page transition keeps the leaving page beside the arriving one for its exit tween: wait it out.

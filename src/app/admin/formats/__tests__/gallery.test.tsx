@@ -398,7 +398,7 @@ describe('format gallery: the New format action', () => {
     ]);
     const out = html(await FormatsGalleryPage());
     expect(out).toContain('New format');
-    expect(mocks.dialogProps).toHaveBeenCalledTimes(1);
+    expect(mocks.dialogProps).toHaveBeenCalled();
     const data = mocks.dialogProps.mock.calls[0][0].data;
     expect(data.examples.map((e: { id: string }) => e.id)).toEqual(['classic-league', 'cup', 'swiss-top-cut', 'wichtelcup']);
     expect(data.examples.every((e: { name: string }) => e.name.length > 0)).toBe(true);

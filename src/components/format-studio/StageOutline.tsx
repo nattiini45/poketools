@@ -41,13 +41,13 @@ export default function StageOutline({ stages, parentLevel }: StageOutlineProps)
       {stages.map((stage, index) => (
         <li key={stage.key} className="min-w-0">
           <Card padding="sm" className="space-y-2">
-            <Heading level={childLevel(parentLevel)} className="flex items-baseline gap-2 font-heading font-semibold text-poke-text-primary">
-              <span aria-hidden="true" className="text-sm text-poke-text-muted">
+            <Heading level={childLevel(parentLevel)} className="flex items-baseline gap-2 font-heading font-semibold text-fg">
+              <span aria-hidden="true" className="text-sm text-fg-muted">
                 {index + 1}
               </span>
               <span className="min-w-0 break-words">{stage.name}</span>
             </Heading>
-            <ul className="space-y-1 text-sm text-poke-text-secondary">
+            <ul className="space-y-1 text-sm text-fg-muted">
               {lines(stage).map((line, i) => (
                 <li key={i} className="break-words">
                   {line}
@@ -56,7 +56,7 @@ export default function StageOutline({ stages, parentLevel }: StageOutlineProps)
             </ul>
           </Card>
           {stage.outgoing.length > 0 && (
-            <ul className="my-2 ml-4 space-y-1 border-l-2 border-poke-border pl-3 text-sm text-poke-text-secondary">
+            <ul className="my-2 ml-4 space-y-1 border-l-2 border-hairline pl-3 text-sm text-fg-muted">
               {stage.outgoing.map((sentence, i) => (
                 <li key={i} className="break-words">
                   {sentence}

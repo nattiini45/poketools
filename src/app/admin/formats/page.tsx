@@ -5,6 +5,10 @@ import FormatLibraryList from '@/components/format-studio/starts/FormatLibraryLi
 import type { LibraryEntry } from '@/components/studio-shell/library/LibraryList';
 import NewFormatDialog from '@/components/format-studio/starts/NewFormatDialog';
 import Link from 'next/link';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
+import GalleryTabs, { GalleryPanel } from '@/components/studio-shell/library/GalleryTabs';
+import ForkPresetButton from '@/components/format-studio/starts/ForkPresetButton';
 import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
 import { wizardHref } from '@/lib/league-admin/wizard';
@@ -63,8 +67,9 @@ function libraryEntry(item: FormatDefinitionSummary, locale: Locale, t: EditorT,
 }
 
 /**
- * `/admin/formats`: the Format Studio home. The "New format" action, the example formats, the viewer's own
- * stored formats ("Your formats"), the ones other admins shared ("Shared with you") and "Your leagues" with the
+ * `/admin/formats`: the Format Studio home. The "New format" action, then three gallery tabs (Yours: the viewer's own stored formats; Shared:
+ * the ones other admins shared; Examples: the shipped examples, each with "Create a league from this" and "Copy to edit")
+ * and "Your leagues" with the
  * format each league's phases and settings add up to. Any admin may open it; a site admin sees every active
  * league, a resource admin only their own (tournament-only admins see the examples, their formats and an empty
  * league list). Standalone tournaments are not listed. Nothing is read before the live gate. The dialog gets
@@ -115,71 +120,93 @@ export default async function FormatsGalleryPage() {
     leagues: summaries.filter((league) => league.stageCount > 0).map((league) => ({ id: league.id, name: league.name })),
   };
 
+  const newFormat = <NewFormatDialog data={dialogData} />;
+  const heading = (id: string, text: string) => (
+    <h2 id={id} className="font-heading text-title text-fg">
+      {text}
+    </h2>
+  );
+
+  const yours = (
+    <section className="space-y-3" aria-labelledby="formats-yours">
+      {heading('formats-yours', tEditor('list.yours'))}
+      <p className="text-body text-fg-muted">{tEditor('list.yoursIntro')}</p>
+      <FormatLibraryList
+        entries={mine.items.map((item) => libraryEntry(item, locale, tEditor, true))}
+        empty={
+          <AdminEmpty title={tEditor('list.emptyTitle')} hint={tEditor('list.emptyYours')} data-formats-empty="yours">
+            {newFormat}
+          </AdminEmpty>
+        }
+      />
+      {mine.total > mine.items.length && <p className="text-caption text-fg-muted">{tEditor('list.capNote', { count: FORMAT_LIMIT })}</p>}
+    </section>
+  );
+
+  const sharedTab = (
+    <section className="space-y-3" aria-labelledby="formats-shared">
+      {heading('formats-shared', tEditor('list.shared'))}
+      <p className="text-body text-fg-muted">{tEditor('list.sharedIntro')}</p>
+      <FormatLibraryList
+        fork
+        entries={shared.items.map((item) => libraryEntry(item, locale, tEditor, false))}
+        empty={<AdminEmpty title={tEditor('list.emptyShared')} icon="poke-doll" data-formats-empty="shared" />}
+      />
+      {shared.total > shared.items.length && <p className="text-caption text-fg-muted">{tEditor('list.capNote', { count: FORMAT_LIMIT })}</p>}
+    </section>
+  );
+
+  const examplesTab = (
+    <section className="space-y-3" aria-labelledby="formats-examples">
+      {heading('formats-examples', t('gallery.heading'))}
+      <p className="text-body text-fg-muted">{t('gallery.intro')}</p>
+      <p className="text-caption text-fg-muted">{t('gallery.readOnlyNote')}</p>
+      <ul className="grid gap-3 sm:grid-cols-2">
+        {examples.map(({ id, doc }) => (
+          <li key={id} className="flex min-w-0 flex-col gap-2">
+            <div className="min-w-0 flex-1">
+              <LibraryCard
+                href={`/admin/formats/example/${id}`}
+                title={doc.title}
+                lines={[doc.summary ?? '', doc.overview, doc.coverageLine].filter((line) => line !== '')}
+                badges={<Badge variant="accent">{t('gallery.exampleBadge')}</Badge>}
+                openLabel={t('gallery.open')}
+              />
+            </div>
+            <div className="flex flex-wrap items-start gap-2">
+              <Button asChild variant="primary" size="sm" className="min-h-11 sm:min-h-0">
+                <Link href={wizardHref({ preset: id })} aria-label={tLeague('wizard.fromExampleNamed', { name: doc.title })}>
+                  {tLeague('wizard.fromExample')}
+                </Link>
+              </Button>
+              <ForkPresetButton presetId={id} hint={false} />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+
   return (
     <AdminGuard>
-      <PageContainer title={t('title')} subtitle={t('subtitle')} maxWidth="lg" action={<NewFormatDialog data={dialogData} />}>
-        <section className="space-y-3" aria-labelledby="formats-examples">
-          <h2 id="formats-examples" className="font-heading text-lg font-bold text-poke-text-primary">
-            {t('gallery.heading')}
-          </h2>
-          <p className="text-sm text-poke-text-secondary">{t('gallery.intro')}</p>
-          <p className="text-sm text-poke-text-muted">{t('gallery.readOnlyNote')}</p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            {examples.map(({ id, doc }) => (
-              <div key={id} className="flex min-w-0 flex-col gap-2">
-                <div className="min-w-0 flex-1">
-                  <LibraryCard
-                    href={`/admin/formats/example/${id}`}
-                    title={doc.title}
-                    lines={[doc.summary ?? '', doc.overview, doc.coverageLine].filter((line) => line !== '')}
-                    badges={<Badge variant="accent">{t('gallery.exampleBadge')}</Badge>}
-                    openLabel={t('gallery.open')}
-                  />
-                </div>
-                <Button asChild variant="secondary" size="sm" className="self-start">
-                  <Link href={wizardHref({ preset: id })} aria-label={tLeague('wizard.fromExampleNamed', { name: doc.title })}>
-                    {tLeague('wizard.fromExample')}
-                  </Link>
-                </Button>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        <section className="space-y-3" aria-labelledby="formats-yours">
-          <h2 id="formats-yours" className="font-heading text-lg font-bold text-poke-text-primary">
-            {tEditor('list.yours')}
-          </h2>
-          <p className="text-sm text-poke-text-secondary">{tEditor('list.yoursIntro')}</p>
-          <FormatLibraryList
-            entries={mine.items.map((item) => libraryEntry(item, locale, tEditor, true))}
-            empty={<p className="text-poke-text-muted">{tEditor('list.emptyYours')}</p>}
-          />
-          {mine.total > mine.items.length && <p className="text-sm text-poke-text-muted">{tEditor('list.capNote', { count: FORMAT_LIMIT })}</p>}
-        </section>
-
-        <section className="space-y-3" aria-labelledby="formats-shared">
-          <h2 id="formats-shared" className="font-heading text-lg font-bold text-poke-text-primary">
-            {tEditor('list.shared')}
-          </h2>
-          <p className="text-sm text-poke-text-secondary">{tEditor('list.sharedIntro')}</p>
-          <FormatLibraryList
-            fork
-            entries={shared.items.map((item) => libraryEntry(item, locale, tEditor, false))}
-            empty={<p className="text-poke-text-muted">{tEditor('list.emptyShared')}</p>}
-          />
-          {shared.total > shared.items.length && (
-            <p className="text-sm text-poke-text-muted">{tEditor('list.capNote', { count: FORMAT_LIMIT })}</p>
-          )}
-        </section>
+      <PageContainer title={t('title')} subtitle={t('subtitle')} maxWidth="lg" action={newFormat}>
+        <GalleryTabs label={t('tabs.label')} glideId="format-gallery">
+          <GalleryPanel id="yours" label={t('tabs.yours')} count={mine.total}>
+            {yours}
+          </GalleryPanel>
+          <GalleryPanel id="shared" label={t('tabs.shared')} count={shared.total}>
+            {sharedTab}
+          </GalleryPanel>
+          <GalleryPanel id="examples" label={t('tabs.examples')} count={examples.length}>
+            {examplesTab}
+          </GalleryPanel>
+        </GalleryTabs>
 
         <section className="space-y-3" aria-labelledby="formats-leagues">
-          <h2 id="formats-leagues" className="font-heading text-lg font-bold text-poke-text-primary">
-            {t('leagues.heading')}
-          </h2>
-          <p className="text-sm text-poke-text-secondary">{t('leagues.intro')}</p>
+          <AdminSectionHeading id="formats-leagues" icon="poke-ball" title={t('leagues.heading')} />
+          <p className="text-body text-fg-muted">{t('leagues.intro')}</p>
           {summaries.length === 0 ? (
-            <p className="text-poke-text-muted">{t('leagues.empty')}</p>
+            <AdminEmpty title={t('leagues.empty')} data-formats-empty="leagues" />
           ) : (
             <div className="grid gap-3 sm:grid-cols-2">
               {summaries.map((league) => {
@@ -214,7 +241,7 @@ export default async function FormatsGalleryPage() {
               })}
             </div>
           )}
-          {capped && <p className="text-sm text-poke-text-muted">{t('leagues.capNote', { count: LEAGUE_LIMIT })}</p>}
+          {capped && <p className="text-caption text-fg-muted">{t('leagues.capNote', { count: LEAGUE_LIMIT })}</p>}
         </section>
       </PageContainer>
     </AdminGuard>

@@ -20,6 +20,7 @@ export default defineDe<typeof en>()({
     versionStale: 'Katalog seither aktualisiert',
     draftNote: 'Das ist der gespeicherte Entwurf. Er ist nicht veröffentlicht.',
     back: 'Zurück zu den Regelwerken',
+    onThisPage: 'Auf dieser Seite',
     edit: 'Bearbeiten',
     rulesHeading: 'Regeln',
     catalogBadge: 'Regel-Preset',

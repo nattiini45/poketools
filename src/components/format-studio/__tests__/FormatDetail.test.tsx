@@ -228,8 +228,8 @@ describe('FormatDetail: layout', () => {
   it('names the format in the tab and leaves that to the page title on a page', () => {
     const view = presetView();
     const title = describeDefinition(view.definition!, 'en', opts(view)).title;
-    expect(render(view, 'en', { variant: 'tab' })).toContain(`<h3 class="break-words font-heading text-lg font-bold text-poke-text-primary">${esc(title)}</h3>`);
-    expect(render(view, 'en', { variant: 'page' })).not.toContain(`text-poke-text-primary">${esc(title)}</h3>`);
+    expect(render(view, 'en', { variant: 'tab' })).toContain(`<h3 class="break-words font-heading text-title text-fg">${esc(title)}</h3>`);
+    expect(render(view, 'en', { variant: 'page' })).not.toContain(`text-fg">${esc(title)}</h3>`);
   });
 });
 
@@ -272,10 +272,10 @@ describe('FormatDetail: heading levels', () => {
     const page = render(view, 'en', { variant: 'page', editorLinks: {} });
     const tab = render(view, 'en', { variant: 'tab', editorLinks: {} });
     expect(page).toMatch(new RegExp(`<h3[^>]*>(?:<span[^>]*>[^<]*</span>)*<span[^>]*>${stageName}</span></h3>`));
-    expect(page).toMatch(new RegExp(`<h3 class="font-heading font-semibold text-poke-text-primary">${moduleLabel}</h3>`));
+    expect(page).toMatch(new RegExp(`<h3 class="font-heading font-semibold text-fg">${moduleLabel}</h3>`));
     expect(page).toContain('<h3 class="font-heading font-semibold">Stages</h3>');
     expect(tab).toMatch(new RegExp(`<h4[^>]*>(?:<span[^>]*>[^<]*</span>)*<span[^>]*>${stageName}</span></h4>`));
-    expect(tab).toContain(`<h4 class="font-heading font-semibold text-poke-text-primary">${moduleLabel}</h4>`);
+    expect(tab).toContain(`<h4 class="font-heading font-semibold text-fg">${moduleLabel}</h4>`);
     expect(tab).toContain('<h4 class="font-heading font-semibold">Stages</h4>');
   });
 

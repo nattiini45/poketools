@@ -27,7 +27,7 @@ export default function DiagnosticsList({ diagnostics, definition }: Diagnostics
 
   if (diagnostics.length === 0) {
     return (
-      <p className="flex flex-wrap items-center gap-2 text-sm text-poke-text-secondary">
+      <p className="flex flex-wrap items-center gap-2 text-sm text-fg-muted">
         <Badge variant="green">{t('leagues.noProblems')}</Badge>
         <span>{t('detail.diagnosticsNone')}</span>
       </p>
@@ -41,7 +41,7 @@ export default function DiagnosticsList({ diagnostics, definition }: Diagnostics
           <Badge variant={SEVERITY_VARIANT[d.severity]} className="shrink-0">
             {renderSeverity(d.severity, locale)}
           </Badge>
-          <span className="min-w-0 break-words text-sm text-poke-text-primary">
+          <span className="min-w-0 break-words text-sm text-fg">
             {renderDiagnostic(d, locale, definition ?? undefined)}
           </span>
         </li>

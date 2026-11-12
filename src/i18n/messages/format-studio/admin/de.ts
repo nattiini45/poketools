@@ -10,6 +10,7 @@ export default defineDe<typeof en>()({
     leagueTitle: 'Liga-Format',
     exampleTitle: '{name}',
   },
+  tabs: { label: 'Formatgalerien', yours: 'Deine', shared: 'Geteilt', examples: 'Beispiele' },
   gallery: {
     heading: 'Beispiele',
     intro: 'Beispielformate zeigen, was das Studio beschreiben kann. Öffne eines, um Stages, Regeln und Prüfungen zu lesen, oder nutze es als Ausgangspunkt.',
@@ -32,6 +33,7 @@ export default defineDe<typeof en>()({
   },
   detail: {
     back: 'Zurück zu den Formaten',
+    onThisPage: 'Auf dieser Seite',
     backToLeague: 'Zurück zur Liga',
     outline: 'Stages',
     rules: 'Regeltext',

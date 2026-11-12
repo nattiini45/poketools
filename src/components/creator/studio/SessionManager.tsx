@@ -9,6 +9,10 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { errorsBroadcast } from '@/i18n/messages/errors';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { soloPlaceholderOf } from '@/lib/broadcast/solo-defaults';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
 
 /**
  * Name stored for an unnamed session (mirrors UNTITLED_CAST_SESSION_NAME in
@@ -97,7 +101,7 @@ export default function SessionManager() {
 
   if (loading) {
     return (
-      <div className="text-center py-12 text-poke-text-secondary animate-pulse">
+      <div className="py-12 text-center text-body text-fg-muted animate-pulse">
         {t('sessions.loading')}
       </div>
     );
@@ -106,43 +110,39 @@ export default function SessionManager() {
   return (
     <div className="space-y-6">
       {/* Create new session */}
-      <div>
-        <h2 className="font-heading text-xl font-bold text-poke-text-primary mb-4">
-          {t('sessions.newTitle')}
-        </h2>
+      <section aria-labelledby="studio-new">
+        <AdminSectionHeading id="studio-new" icon="poke-ball" title={t('sessions.newTitle')} />
         {error && (
-          <div className="bg-red-500/10 border border-red-500/30 rounded-poke-md px-4 py-2 text-sm text-poke-danger-tint-ink mb-4">
+          <Alert variant="error" className="mb-4 text-poke-danger-tint-ink">
             {hasApiText(error.res) ? errorText(error.res) : t(`sessions.${error.fallback}`)}
-          </div>
+          </Alert>
         )}
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           {MODE_CARDS.map(({ mode, key }) => (
             <button
               key={mode}
               onClick={() => handleCreate(mode)}
               disabled={creating}
-              className="rounded-poke-lg bg-poke-surface border border-poke-border p-4 text-left hover:border-poke-accent transition-colors disabled:opacity-50"
+              className="rounded-poke-lg border border-hairline bg-surface p-4 text-left transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] disabled:opacity-50"
             >
-              <h3 className="font-heading font-bold text-poke-text-primary">{t(`sessions.${key}.title`)}</h3>
-              <p className="text-xs text-poke-text-secondary mt-1">
+              <h3 className="font-heading text-subtitle text-fg">{t(`sessions.${key}.title`)}</h3>
+              <p className="mt-1 text-caption text-fg-muted">
                 {t(`sessions.${key}.description`)}
               </p>
             </button>
           ))}
         </div>
-      </div>
+      </section>
 
       {/* Existing sessions */}
       {sessions.length > 0 && (
-        <div>
-          <h2 className="font-heading text-xl font-bold text-poke-text-primary mb-4">
-            {t('sessions.recentTitle')}
-          </h2>
+        <section aria-labelledby="studio-recent">
+          <AdminSectionHeading id="studio-recent" icon="poke-doll" title={t('sessions.recentTitle')} />
           <div className="space-y-2">
             {sessions.map((s) => (
               <div
                 key={s.id}
-                className="flex items-center justify-between rounded-poke-md bg-poke-surface border border-poke-border px-4 py-3 transition-colors"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-poke-lg border border-hairline bg-surface px-4 py-3 transition-colors hover:bg-hover"
               >
                 <button
                   onClick={() => router.push(
@@ -150,24 +150,18 @@ export default function SessionManager() {
                       ? `/creator/studio/${s.id}/solo`
                       : `/creator/studio/${s.id}`,
                   )}
-                  className="flex-1 text-left"
+                  className="min-w-0 flex-1 basis-60 text-left focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="font-heading font-bold text-poke-text-primary">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <span className="font-heading text-subtitle text-fg">
                       {!s.name || s.name === UNTITLED_SESSION_SENTINEL ? t('sessions.untitled') : s.name}
                     </span>
-                    <span className="rounded-full bg-poke-muted px-2 py-0.5 text-xs font-heading uppercase text-poke-text-secondary">
-                      {t.dynamic(`mode.${s.mode}`, undefined, s.mode)}
-                    </span>
-                    <span className={`rounded-full px-2 py-0.5 text-xs font-heading uppercase ${
-                      s.status === 'live' ? 'bg-red-500/20 text-poke-danger-tint-ink' :
-                      s.status === 'archived' ? 'bg-poke-muted text-poke-text-secondary' :
-                      'bg-blue-500/20 text-blue-400'
-                    }`}>
+                    <SkewChip>{t.dynamic(`mode.${s.mode}`, undefined, s.mode)}</SkewChip>
+                    <SkewChip tone={s.status === 'live' ? 'live' : s.status === 'archived' ? 'neutral' : 'accent'}>
                       {t.dynamic(`status.${s.status}`, undefined, s.status)}
-                    </span>
+                    </SkewChip>
                   </div>
-                  <p className="text-xs text-poke-text-secondary mt-1">
+                  <p className="mt-1 text-caption text-fg-muted">
                     {s.player1_name && s.player2_name
                       ? t('sessions.matchup', { player1: displayName(s.player1_name), player2: displayName(s.player2_name) })
                       : t('sessions.noMatch')}
@@ -175,16 +169,13 @@ export default function SessionManager() {
                     {t('sessions.updated', { date: formatter.instant(s.updated_at, 'date') })}
                   </p>
                 </button>
-                <button
-                  onClick={() => handleDelete(s.id)}
-                  className="ml-4 text-xs text-poke-text-secondary hover:text-poke-danger-ink transition-colors"
-                >
+                <Button variant="ghost" size="sm" onClick={() => handleDelete(s.id)}>
                   {t('sessions.delete')}
-                </button>
+                </Button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

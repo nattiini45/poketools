@@ -38,7 +38,7 @@ export default async function TrackerPage({ params }: Props) {
     return (
       <AuthGuard>
         <PageContainer title={t('tracker.title')}>
-          <p className="text-poke-text-secondary">{t('tracker.notRegistered')}</p>
+          <p className="text-body text-fg-muted">{t('tracker.notRegistered')}</p>
         </PageContainer>
       </AuthGuard>
     );
@@ -49,8 +49,8 @@ export default async function TrackerPage({ params }: Props) {
     return (
       <AuthGuard>
         <PageContainer title={t('tracker.title')}>
-          <p className="text-poke-text-secondary">{t('tracker.matchNotFound')}</p>
-          <Link href="/dashboard/broadcast" className="text-poke-accent text-sm mt-2 inline-block">
+          <p className="text-body text-fg-muted">{t('tracker.matchNotFound')}</p>
+          <Link href="/dashboard/broadcast" className="mt-2 inline-block text-body font-[550] text-accent-ink underline-offset-2 hover:underline">
             {t('tracker.backToHub')}
           </Link>
         </PageContainer>
@@ -69,8 +69,8 @@ export default async function TrackerPage({ params }: Props) {
     return (
       <AuthGuard>
         <PageContainer title={t('tracker.title')}>
-          <p className="text-poke-text-secondary">{t('tracker.notAuthorized')}</p>
-          <Link href="/dashboard/broadcast" className="text-poke-accent text-sm mt-2 inline-block">
+          <p className="text-body text-fg-muted">{t('tracker.notAuthorized')}</p>
+          <Link href="/dashboard/broadcast" className="mt-2 inline-block text-body font-[550] text-accent-ink underline-offset-2 hover:underline">
             {t('tracker.backToHub')}
           </Link>
         </PageContainer>
