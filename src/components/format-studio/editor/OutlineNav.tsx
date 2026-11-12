@@ -89,12 +89,12 @@ export default function OutlineNav({ doc, selection, diagnostics, onSelect, onAd
     <button
       type="button"
       aria-current={isSelected(section, index) ? 'true' : undefined}
-      className={cn(ITEM, isSelected(section, index) ? 'border-poke-accent bg-poke-accent-light font-semibold text-poke-text-primary' : 'border-transparent hover:bg-poke-elevated')}
+      className={cn(ITEM, isSelected(section, index) ? 'border-transparent bg-tier-1 font-semibold text-tier-ink' : 'border-transparent hover:bg-elevated')}
       onClick={() => choose({ section, index })}
     >
       <span className="min-w-0 break-words">{label}</span>
       <span className="flex shrink-0 items-center gap-1.5">
-        {count !== undefined && <span className="text-xs text-poke-text-muted">{count}</span>}
+        {count !== undefined && <span className="text-xs text-fg-muted">{count}</span>}
         {issueBadge(prefix)}
       </span>
     </button>
@@ -109,13 +109,13 @@ export default function OutlineNav({ doc, selection, diagnostics, onSelect, onAd
   });
 
   const stagesFull = doc.stages.length >= MAX_STAGES;
-  const caption = 'px-1 pb-1 font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-muted';
+  const caption = 'px-1 pb-1 font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted';
 
   return (
     <div className="min-w-0">
       <button
         type="button"
-        className="flex min-h-11 w-full items-center justify-between gap-2 rounded-poke-md border border-poke-border bg-poke-elevated px-3 py-2 text-left text-sm font-semibold text-poke-text-primary lg:hidden"
+        className="flex min-h-11 w-full items-center justify-between gap-2 rounded-poke-md border border-hairline bg-elevated px-3 py-2 text-left text-sm font-semibold text-fg lg:hidden"
         aria-expanded={open}
         aria-controls={PANEL_ID}
         onClick={() => setOpen((v) => !v)}
@@ -185,7 +185,7 @@ export default function OutlineNav({ doc, selection, diagnostics, onSelect, onAd
               {t('outline.addStage')}
             </Button>
             {stagesFull && (
-              <p id="fe-limit-stages" className="text-xs text-poke-text-muted">
+              <p id="fe-limit-stages" className="text-xs text-fg-muted">
                 {t('outline.limitStages', { max: MAX_STAGES })}
               </p>
             )}

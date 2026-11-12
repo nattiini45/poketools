@@ -25,7 +25,7 @@ export default function RulesTab({ doc, result, rulesets }: RulesTabProps) {
 
   return (
     <div className="space-y-3">
-      {!result.ok && <p role="note" className="text-sm text-poke-text-muted">{t('preview.rules.incomplete')}</p>}
+      {!result.ok && <p role="note" className="text-sm text-fg-muted">{t('preview.rules.incomplete')}</p>}
       <RulesText definition={doc} plan={result.plan} order={order} rulesets={rulesets} parentLevel={2} />
     </div>
   );

@@ -38,8 +38,8 @@ export function ConflictDialogBody({ text, serverRev, dirty, step, busy, error, 
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-poke-text-secondary">{text('save.conflictBody', { rev: serverRev })}</p>
-      {confirming && <p className="text-sm font-semibold text-poke-text-primary">{text('save.reloadConfirm')}</p>}
+      <p className="text-sm text-fg-muted">{text('save.conflictBody', { rev: serverRev })}</p>
+      {confirming && <p className="text-sm font-semibold text-fg">{text('save.reloadConfirm')}</p>}
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
       <div className="flex flex-wrap justify-end gap-3">
         <Button type="button" variant="ghost" size="sm" onClick={onCancel} disabled={busy}>

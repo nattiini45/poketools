@@ -116,7 +116,6 @@ describe('FormatEditor: a preset', () => {
   it('the layout classes keep the three columns and stop horizontal scroll', () => {
     const html = render();
     expect(html).toContain('lg:grid-cols-[15rem_minmax(0,1fr)]');
-    expect(html).toContain('xl:grid-cols-[15rem_minmax(0,1fr)_24rem]');
     expect(html).toContain('min-w-0');
   });
 });

@@ -63,7 +63,7 @@ function AddButton({ label, limit, full, limitId, onClick }: { label: string; li
         {label}
       </Button>
       {full && (
-        <p id={limitId} className="text-sm text-poke-text-muted">
+        <p id={limitId} className="text-sm text-fg-muted">
           {limit}
         </p>
       )}
@@ -102,17 +102,17 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-6" data-inspector="rules">
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {part === 'text' ? t('inspector.rules.textHeading') : t('inspector.rules.honorHeading')}
         </h2>
 
         {part !== 'text' && (
           <section className="min-w-0 space-y-3" aria-labelledby="fe-honor-heading">
-            <h3 id="fe-honor-heading" className="font-heading text-base font-semibold text-poke-text-primary">
+            <h3 id="fe-honor-heading" className="font-heading text-base font-semibold text-fg">
               {t('inspector.rules.honorCards')}
             </h3>
-            <p className="text-sm text-poke-text-secondary">{t('inspector.rules.honorIntro')}</p>
-            {!cards.some((card) => card.kind === 'rule.custom') && <p className="text-sm text-poke-text-muted">{t('inspector.rules.honorNone')}</p>}
+            <p className="text-sm text-fg-muted">{t('inspector.rules.honorIntro')}</p>
+            {!cards.some((card) => card.kind === 'rule.custom') && <p className="text-sm text-fg-muted">{t('inspector.rules.honorNone')}</p>}
             <ol className="space-y-3" aria-label={t('inspector.rules.honorCards')}>
               {cards.map((card, i) => {
                 // Rules of other kinds have no editor yet; they stay in the document untouched.
@@ -120,7 +120,7 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
                 const name = preview(card.text, t('inspector.rules.cardUntitled', { position: i + 1 }));
                 const update = (fn: (c: RuleCard) => RuleCard) => onChange(updateRuleCard(doc, i, fn));
                 return (
-                  <li key={card.id} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4">
+                  <li key={card.id} className="min-w-0 space-y-3 rounded-poke-lg border border-hairline p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <Badge variant="accent">{p('level.honor')}</Badge>
                       <ReorderControls
@@ -190,8 +190,8 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
                         onChange={(value) => update((c) => ({ ...c, verify: value as RuleCard['verify'] }))}
                       />
                     </div>
-                    <details className="rounded-poke-md border border-poke-border p-3">
-                      <summary className="cursor-pointer text-sm font-semibold text-poke-text-primary">{t('inspector.rules.more')}</summary>
+                    <details className="rounded-poke-md border border-hairline p-3">
+                      <summary className="cursor-pointer text-sm font-semibold text-fg">{t('inspector.rules.more')}</summary>
                       <div className="mt-3 grid gap-3 sm:grid-cols-2">
                         <SelectField
                           pointer={ptr('rules', i, 'when')}
@@ -228,18 +228,18 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
 
         {part !== 'rules' && (
           <section className="min-w-0 space-y-3" aria-labelledby="fe-sections-heading">
-            <h3 id="fe-sections-heading" className="font-heading text-base font-semibold text-poke-text-primary">
+            <h3 id="fe-sections-heading" className="font-heading text-base font-semibold text-fg">
               {t('inspector.rules.sectionsHeading')}
             </h3>
-            <p className="text-sm text-poke-text-secondary">{t('inspector.rules.sectionsIntro')}</p>
-            {sections.length === 0 && <p className="text-sm text-poke-text-muted">{t('inspector.rules.sectionsNone')}</p>}
+            <p className="text-sm text-fg-muted">{t('inspector.rules.sectionsIntro')}</p>
+            {sections.length === 0 && <p className="text-sm text-fg-muted">{t('inspector.rules.sectionsNone')}</p>}
             <ol className="space-y-3" aria-label={t('inspector.rules.sectionsHeading')}>
               {sections.map((section, i) => {
                 const name = preview(section.title, t('inspector.rules.sectionUntitled', { position: i + 1 }));
                 return (
-                  <li key={section.id} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4">
+                  <li key={section.id} className="min-w-0 space-y-3 rounded-poke-lg border border-hairline p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <h4 className="min-w-0 break-words font-heading text-sm font-semibold text-poke-text-primary">{name}</h4>
+                      <h4 className="min-w-0 break-words font-heading text-sm font-semibold text-fg">{name}</h4>
                       <ReorderControls
                         index={i}
                         count={sections.length}
@@ -309,7 +309,7 @@ export default function RulesInspector({ doc, diagnostics, authorBase, onChange,
         <p role="status" className="sr-only">
           {announcement}
         </p>
-        <p className="break-words text-sm text-poke-text-secondary">{coverage}</p>
+        <p className="break-words text-sm text-fg-muted">{coverage}</p>
       </div>
     </FieldIssuesProvider>
   );

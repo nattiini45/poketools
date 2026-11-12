@@ -15,6 +15,7 @@ import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import { useLocale, useT } from '@/i18n/client';
+import { rulesetStudioSummaryMessages } from '@/i18n/messages/ruleset-studio/summary';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { errorsCommon } from '@/i18n/messages/errors/common';
@@ -112,7 +113,7 @@ function UnreadableDraft({ definitionId, raw, revision }: { definitionId: string
         <p className="mt-1">{t('shape.body')}</p>
       </Alert>
       {issues.length > 0 && (
-        <ul className="list-disc space-y-1 pl-5 text-sm text-poke-text-secondary">
+        <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
           {issues.map((issue) => (
             <li key={`${issue.path}:${issue.code}`} className="break-all">
               {t('shape.issue', { path: issue.path === '' ? '/' : issue.path, code: issue.code })}
@@ -125,7 +126,7 @@ function UnreadableDraft({ definitionId, raw, revision }: { definitionId: string
         <a
           href={`data:application/json;charset=utf-8,${encodeURIComponent(json)}`}
           download="ruleset-draft.json"
-          className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+          className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
         >
           {t('shape.download')}
         </a>
@@ -163,6 +164,7 @@ export default function RulesetEditor(props: RulesetEditorProps) {
 function LoadedEditor({ definitionId, summary, initial, published: initialPublished, actor: actorProps, initialPreset, initialDoc }: RulesetEditorProps & { initialDoc: DraftDocument }) {
   const text = useShellText(rulesetStudioEditorMessages);
   const t = useT(rulesetStudioSectionsMessages);
+  const tSummary = useT(rulesetStudioSummaryMessages);
   const locale = useLocale();
   const router = useRouter();
   const actor = useMemo(() => toActor(actorProps), [actorProps]);
@@ -263,6 +265,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
   return (
     <EditorLayout
       rootAttribute="data-ruleset-editor"
+      previewLabel={tSummary('heading')}
       wide
       dirty={dirty}
       onSave={() => void save()}
@@ -294,7 +297,7 @@ function LoadedEditor({ definitionId, summary, initial, published: initialPublis
       outline={<OutlineNav doc={doc} selected={section} diagnostics={model.result.diagnostics} onSelect={select} />}
       main={
         <section aria-labelledby={SECTION_HEADING_ID} className="min-w-0 space-y-4">
-          <h2 id={SECTION_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+          <h2 id={SECTION_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
             {t(`outline.${section}`)}
           </h2>
           {content}

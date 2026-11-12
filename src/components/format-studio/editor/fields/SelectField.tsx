@@ -45,7 +45,7 @@ export default function SelectField({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(state.invalid && 'border-poke-danger')}
+        className={cn(state.invalid && 'border-loss')}
         {...ariaOf(state)}
       >
         {options.map((option) => (
@@ -82,10 +82,10 @@ export function CheckboxField({ pointer, label, checked, onChange, hint, disable
           checked={checked}
           disabled={disabled}
           onChange={(event) => onChange(event.target.checked)}
-          className="h-4 w-4 shrink-0 rounded border-poke-border accent-poke-accent"
+          className="h-4 w-4 shrink-0 rounded border-hairline accent-accent-fill"
           {...ariaOf(state)}
         />
-        <label htmlFor={state.id} className="min-w-0 break-words text-sm text-poke-text-primary">
+        <label htmlFor={state.id} className="min-w-0 break-words text-sm text-fg">
           {label}
         </label>
       </div>

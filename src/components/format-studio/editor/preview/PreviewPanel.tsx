@@ -59,11 +59,11 @@ export default function PreviewPanel({ doc, previewDoc = doc, result, rows, coun
   };
 
   return (
-    <section aria-labelledby="fe-preview-heading" className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4">
-      <h2 id="fe-preview-heading" className="font-heading text-lg font-bold text-poke-text-primary">
+    <section aria-labelledby="fe-preview-heading" className="min-w-0 space-y-3 rounded-poke-lg border border-hairline p-4">
+      <h2 id="fe-preview-heading" className="font-heading text-lg font-bold text-fg">
         {t('preview.label')}
       </h2>
-      <div role="tablist" aria-label={t('preview.label')} className="flex flex-wrap gap-1 border-b border-poke-border">
+      <div role="tablist" aria-label={t('preview.label')} className="flex flex-wrap gap-1 border-b border-hairline">
         {TABS.map((id) => (
           <button
             key={id}
@@ -78,7 +78,7 @@ export default function PreviewPanel({ doc, previewDoc = doc, result, rows, coun
             tabIndex={tab === id ? 0 : -1}
             className={cn(
               '-mb-px min-h-11 rounded-t-poke-md border-b-2 px-3 py-2 text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-9',
-              tab === id ? 'border-poke-accent text-poke-text-primary' : 'border-transparent text-poke-text-secondary hover:text-poke-text-primary',
+              tab === id ? 'border-accent-ink text-fg' : 'border-transparent text-fg-muted hover:text-fg',
             )}
             onClick={() => setTab(id)}
             onKeyDown={(event) => onKeyDown(event, id)}

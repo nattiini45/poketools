@@ -92,8 +92,8 @@ interface StageInspectorProps {
 
 function Section({ pointer, legend, children }: { pointer: string; legend: string; children: ReactNode }) {
   return (
-    <fieldset id={fieldId(pointer)} tabIndex={-1} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
-      <legend className="px-1 font-heading text-base font-semibold text-poke-text-primary">{legend}</legend>
+    <fieldset id={fieldId(pointer)} tabIndex={-1} className="min-w-0 space-y-3 rounded-poke-lg border border-hairline p-4 focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+      <legend className="px-1 font-heading text-base font-semibold text-fg">{legend}</legend>
       {children}
       <PointerMessage pointer={pointer} />
     </fieldset>
@@ -129,8 +129,8 @@ function KeyEditor({ doc, index, onChange }: { doc: DraftDocument; index: number
     <div className="space-y-2">
       {draft === null ? (
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-sm font-semibold text-poke-text-primary">{p('field.key')}</span>
-          <code id={state.id} className="break-all rounded bg-poke-muted px-1.5 py-0.5 text-sm">{stage.key}</code>
+          <span className="text-sm font-semibold text-fg">{p('field.key')}</span>
+          <code id={state.id} className="break-all rounded bg-sunken px-1.5 py-0.5 text-sm">{stage.key}</code>
           <Button type="button" variant="secondary" size="sm" className="min-h-11 sm:min-h-0" onClick={() => setDraft(stage.key)}>
             {t('inspector.stage.editKey')}
           </Button>
@@ -201,7 +201,7 @@ function RankStepRow({
   const rowPointer = ptr('stages', stageIndex, 'rank', position);
   const n = position + 1;
   return (
-    <li className="min-w-0 space-y-2 rounded-poke-md border border-poke-border bg-poke-elevated p-3">
+    <li className="min-w-0 space-y-2 rounded-poke-md border border-hairline bg-elevated p-3">
       <div className="flex flex-wrap items-end gap-3">
         <SelectField
           className="min-w-0 flex-1 basis-40"
@@ -282,7 +282,7 @@ function UnsupportedScoreRow({ pointer, label, value, reason }: { pointer: strin
         aria-describedby={[reasonId, state.describedBy].filter(Boolean).join(' ')}
         aria-invalid={state.invalid ? true : undefined}
       />
-      <p id={reasonId} className="text-sm text-poke-text-muted">
+      <p id={reasonId} className="text-sm text-fg-muted">
         {reason}
       </p>
       <FieldMessage state={state} />
@@ -349,7 +349,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-4" data-inspector="stage">
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="break-words font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="break-words font-heading text-xl font-bold text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {name}
         </h2>
         <PointerMessage pointer={base} />
@@ -362,8 +362,8 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
             base={authorBase}
             onChange={(next) => next !== undefined && edit((s) => ({ ...s, name: next }))}
           />
-          <details className="rounded-poke-md border border-poke-border p-3">
-            <summary className="cursor-pointer text-sm font-semibold text-poke-text-primary">{t('inspector.stage.advanced')}</summary>
+          <details className="rounded-poke-md border border-hairline p-3">
+            <summary className="cursor-pointer text-sm font-semibold text-fg">{t('inspector.stage.advanced')}</summary>
             <div className="mt-3">
               <KeyEditor doc={doc} index={index} onChange={onChange} />
             </div>
@@ -523,11 +523,11 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
             onCommit={(value) => value !== undefined && edit((s) => setBestOf(s, value))}
           />
           <div className="space-y-2">
-            <h3 className="font-heading text-sm font-semibold text-poke-text-primary">{t('inspector.stage.exceptions')}</h3>
-            {overrides.length === 0 && <p className="text-sm text-poke-text-muted">{t('inspector.stage.exceptionsNone')}</p>}
+            <h3 className="font-heading text-sm font-semibold text-fg">{t('inspector.stage.exceptions')}</h3>
+            {overrides.length === 0 && <p className="text-sm text-fg-muted">{t('inspector.stage.exceptionsNone')}</p>}
             <ul className="space-y-2">
               {overrides.map((override, j) => (
-                <li key={j} className="flex flex-wrap items-end gap-3 rounded-poke-md border border-poke-border bg-poke-elevated p-3">
+                <li key={j} className="flex flex-wrap items-end gap-3 rounded-poke-md border border-hairline bg-elevated p-3">
                   <NumberField
                     className="min-w-0 flex-1 basis-24"
                     pointer={ptr('stages', index, 'series', 'overrides', j, 'round')}
@@ -580,7 +580,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
                 {t('inspector.stage.addException')}
               </Button>
               {overridesFull && (
-                <p id="fe-limit-overrides" className="text-sm text-poke-text-muted">
+                <p id="fe-limit-overrides" className="text-sm text-fg-muted">
                   {t('inspector.stage.limitExceptions', { max: MAX_OVERRIDES })}
                 </p>
               )}
@@ -597,7 +597,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
             onChange={chooseRuleset}
           />
           {stage.ruleset.kind === 'ruleset' && knownRuleset && (
-            <p className="text-sm text-poke-text-muted">{t('inspector.stage.rulesetHelp')}</p>
+            <p className="text-sm text-fg-muted">{t('inspector.stage.rulesetHelp')}</p>
           )}
           {stage.ruleset.kind === 'preset' && (
             <RulesetPresetField
@@ -610,7 +610,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
           )}
           <Link
             href={namedChoice !== undefined ? rulesetReadOnlyHref(namedChoice.definition_id ?? namedChoice.id) : RULESETS_HREF}
-            className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
           >
             {t('inspector.stage.openStudio')}
           </Link>
@@ -682,8 +682,8 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
         </Section>
 
         <Section pointer={ptr('stages', index, 'rank')} legend={p('field.rank')}>
-          {eliminationStage && <p className="text-sm text-poke-text-muted">{t('inspector.stage.rankIgnored')}</p>}
-          {rank.length === 0 && <p className="text-sm text-poke-text-muted">{t('inspector.stage.rankNone')}</p>}
+          {eliminationStage && <p className="text-sm text-fg-muted">{t('inspector.stage.rankIgnored')}</p>}
+          {rank.length === 0 && <p className="text-sm text-fg-muted">{t('inspector.stage.rankNone')}</p>}
           <ol className="space-y-2" aria-label={p('field.rank')}>
             {rank.map((step, j) => (
               <RankStepRow
@@ -717,7 +717,7 @@ export default function StageInspector({ doc, index, diagnostics, rulesets, auth
           <div className="flex flex-wrap items-end gap-3">
             <AddStep disabled={rankFull} onAdd={(kind) => edit((s) => addRankStep(s, kind))} pointer={ptr('stages', index, 'rank', 'add')} />
             {rankFull && (
-              <p id="fe-limit-rank" className="text-sm text-poke-text-muted">
+              <p id="fe-limit-rank" className="text-sm text-fg-muted">
                 {t('inspector.stage.limitSteps', { max: MAX_RANK_STEPS })}
               </p>
             )}

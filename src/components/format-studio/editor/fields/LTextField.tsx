@@ -45,7 +45,7 @@ export default function LTextField({ pointer, label, value, base, onChange, mult
 
   return (
     <fieldset className={cn('min-w-0 space-y-2', className)}>
-      <legend className="font-heading text-sm font-semibold text-poke-text-primary">{label}</legend>
+      <legend className="font-heading text-sm font-semibold text-fg">{label}</legend>
       <div className="grid gap-3 sm:grid-cols-2">
         {LOCALES.map((locale) => {
           const id = locale === 'en' ? fieldId(pointer) : fieldId(`${pointer}/${locale}`);
@@ -66,7 +66,7 @@ export default function LTextField({ pointer, label, value, base, onChange, mult
         })}
       </div>
       {missing.length > 0 && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {missing.map((locale) => t('fields.missingIn', { language: languageName(locale) })).join(' ')}
         </p>
       )}

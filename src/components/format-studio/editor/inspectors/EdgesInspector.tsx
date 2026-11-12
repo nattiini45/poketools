@@ -58,7 +58,7 @@ function SelectionRow({
   const n = position + 1;
 
   return (
-    <li className="flex min-w-0 flex-wrap items-end gap-3 rounded-poke-md border border-poke-border bg-poke-elevated p-3">
+    <li className="flex min-w-0 flex-wrap items-end gap-3 rounded-poke-md border border-hairline bg-elevated p-3">
       {isEditable(select) ? (
         <>
           <SelectField
@@ -94,9 +94,9 @@ function SelectionRow({
         </>
       ) : (
         <div className="min-w-0 flex-1 basis-full space-y-1">
-          <p className="text-sm font-semibold text-poke-text-primary">{p('label.advance_threshold')}</p>
-          <code className="block break-words rounded bg-poke-muted px-2 py-1 text-sm">{printExpr(select.when)}</code>
-          <p className="text-sm text-poke-text-muted">{t('inspector.edges.thresholdReadOnly')}</p>
+          <p className="text-sm font-semibold text-fg">{p('label.advance_threshold')}</p>
+          <code className="block break-words rounded bg-sunken px-2 py-1 text-sm">{printExpr(select.when)}</code>
+          <p className="text-sm text-fg-muted">{t('inspector.edges.thresholdReadOnly')}</p>
         </div>
       )}
       <Button type="button" variant="secondary" size="sm" className="min-h-11 sm:min-h-0" onClick={onRemove}>
@@ -137,7 +137,7 @@ function AddSelection({ edgeIndex, full, onAdd }: { edgeIndex: number; full: boo
         {t('inspector.edges.addSelection')}
       </Button>
       {full && (
-        <p id={limitId} className="text-sm text-poke-text-muted">
+        <p id={limitId} className="text-sm text-fg-muted">
           {t('inspector.edges.limitSelections', { max: MAX_SELECTS })}
         </p>
       )}
@@ -179,12 +179,12 @@ export default function EdgesInspector({ doc, diagnostics, onChange }: EdgesInsp
   return (
     <FieldIssuesProvider diagnostics={diagnostics} definition={doc}>
       <div className="min-w-0 space-y-4" data-inspector="edges">
-        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
+        <h2 id={INSPECTOR_HEADING_ID} tabIndex={-1} className="font-heading text-xl font-bold text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent">
           {t('inspector.edges.heading')}
         </h2>
-        <p className="text-sm text-poke-text-secondary">{t('inspector.edges.intro')}</p>
-        {!canAdd && <p className="text-sm text-poke-text-muted">{t('inspector.edges.needTwoStages')}</p>}
-        {canAdd && edges.length === 0 && <p className="text-sm text-poke-text-muted">{t('inspector.edges.none')}</p>}
+        <p className="text-sm text-fg-muted">{t('inspector.edges.intro')}</p>
+        {!canAdd && <p className="text-sm text-fg-muted">{t('inspector.edges.needTwoStages')}</p>}
+        {canAdd && edges.length === 0 && <p className="text-sm text-fg-muted">{t('inspector.edges.none')}</p>}
 
         <ol className="space-y-4" aria-label={t('inspector.edges.heading')}>
           {edges.map((edge, i) => {
@@ -192,9 +192,9 @@ export default function EdgesInspector({ doc, diagnostics, onChange }: EdgesInsp
             const update = (fn: (e: Edge) => Edge) => onChange(updateEdge(doc, i, fn));
             const title = `${stageName(edge.from)} → ${stageName(edge.to)}`;
             return (
-              <li key={edge.key} className="min-w-0 space-y-3 rounded-poke-lg border border-poke-border p-4">
+              <li key={edge.key} className="min-w-0 space-y-3 rounded-poke-lg border border-hairline p-4">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="min-w-0 break-words font-heading text-base font-semibold text-poke-text-primary">{title}</h3>
+                  <h3 className="min-w-0 break-words font-heading text-base font-semibold text-fg">{title}</h3>
                   <ReorderControls
                     index={i}
                     count={edges.length}
@@ -233,7 +233,7 @@ export default function EdgesInspector({ doc, diagnostics, onChange }: EdgesInsp
                 </div>
 
                 <div className="space-y-2">
-                  <h4 className="font-heading text-sm font-semibold text-poke-text-primary">{t('inspector.edges.selections')}</h4>
+                  <h4 className="font-heading text-sm font-semibold text-fg">{t('inspector.edges.selections')}</h4>
                   <ul className="space-y-2">
                     {edge.select.map((select, j) => (
                       <SelectionRow
@@ -289,7 +289,7 @@ export default function EdgesInspector({ doc, diagnostics, onChange }: EdgesInsp
             {t('inspector.edges.add')}
           </Button>
           {full && (
-            <p id="fe-limit-edges" className="text-sm text-poke-text-muted">
+            <p id="fe-limit-edges" className="text-sm text-fg-muted">
               {t('inspector.edges.limitEdges', { max: MAX_EDGES })}
             </p>
           )}

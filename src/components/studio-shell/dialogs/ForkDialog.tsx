@@ -24,7 +24,7 @@ export function ForkDialogBody({ text, busy, error, onConfirm, onClose }: ForkDi
   const errorText = useApiErrorText(errorsAdmin, errorsCommon);
   return (
     <div className="space-y-4">
-      <p className="text-sm text-poke-text-secondary">{text('fork.body')}</p>
+      <p className="text-sm text-fg-muted">{text('fork.body')}</p>
       {error !== null && <Alert variant="error">{errorText(error)}</Alert>}
       <div className="flex justify-end gap-3">
         <Button type="button" variant="ghost" size="sm" onClick={onClose} disabled={busy}>

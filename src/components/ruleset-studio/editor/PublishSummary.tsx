@@ -26,8 +26,8 @@ export default function PublishSummary({ result, nameOf }: PublishSummaryProps) 
   const list = (heading: string, items: typeof errors) =>
     items.length === 0 ? null : (
       <section className="space-y-1">
-        <h3 className="font-heading text-sm font-semibold text-poke-text-primary">{heading}</h3>
-        <ul className="list-disc space-y-1 pl-5 text-sm text-poke-text-secondary">
+        <h3 className="font-heading text-sm font-semibold text-fg">{heading}</h3>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
           {items.slice(0, 20).map((d, index) => (
             <li key={`${d.code}:${d.path}:${index}`} className="break-words">
               {diagnosticText(d, tDiag, nameOf)}
@@ -43,8 +43,8 @@ export default function PublishSummary({ result, nameOf }: PublishSummaryProps) 
       {list(t('publish.warnings', { count: warnings.length }), warnings)}
       {errors.length === 0 && resolved !== null && (
         <section className="space-y-1">
-          <p className="text-sm text-poke-text-secondary">{t('publish.ready')}</p>
-          <p className="text-sm font-semibold text-poke-text-primary">
+          <p className="text-sm text-fg-muted">{t('publish.ready')}</p>
+          <p className="text-sm font-semibold text-fg">
             {t('publish.line', {
               gen: resolved.gen,
               game: t(resolved.doubles ? 'game.doubles' : 'game.singles'),
