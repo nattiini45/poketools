@@ -146,6 +146,7 @@ export default defineDe<typeof en>()({
     poolHint:
       'Jedes Typ-Trio ist eine mögliche Core-Liga-Zuteilung. Manuelle und zufällige Zuteilung ziehen nur aus dieser Liste. Keine zwei Teilnehmer bekommen dasselbe Trio.',
     remove: 'Entfernen',
+    slotAria: 'Typ {slot} von Trio {triple}',
     addTriple: '+ Trio hinzufügen',
     savePool: 'Pool speichern',
     bulkHeading: 'Zufällig zuteilen',

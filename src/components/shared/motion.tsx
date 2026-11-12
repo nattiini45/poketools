@@ -15,6 +15,7 @@ export {
   MotionConfig,
   useAnimation,
   useInView,
+  useIsPresent,
   useMotionValue,
   useReducedMotion,
   useTransform,

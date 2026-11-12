@@ -22,6 +22,7 @@ export default defineDe<typeof en>()({
     settings: 'Einstellungen',
     settingsHint:
       'Name, Regelwerk, Best-of, Doppel, Turniermodus und Sichtbarkeit. Turniermodus, Regelwerk und Doppel sind gesperrt, sobald das Turnier gestartet ist.',
+    sectionsNav: 'Abschnitte dieses Turniers',
   },
   lifecycle: {
     markCompleted: 'Als abgeschlossen markieren',

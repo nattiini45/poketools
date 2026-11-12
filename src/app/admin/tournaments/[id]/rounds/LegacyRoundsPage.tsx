@@ -1,4 +1,5 @@
 import AdminGuard from '@/components/shared/AdminGuard';
+import SectionAnchorNav from '@/components/admin/SectionAnchorNav';
 import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
 import { getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
@@ -58,6 +59,7 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
   return (
     <AdminGuard>
       <PageContainer
+        icon="poke-ball"
         title={tournament.name}
         subtitle={subtitle}
         action={
@@ -71,7 +73,18 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
           />
         }
       >
-        <Section title={t('legacy.settings')} subtitle={t('legacy.settingsHint')} collapsible={false}>
+        <SectionAnchorNav
+          label={t('legacy.sectionsNav')}
+          sections={[
+            { id: 'tournament-settings', label: t('legacy.settings'), icon: 'everstone' },
+            { id: 'tournament-description', label: t('legacy.description'), icon: 'weakness-policy' },
+            { id: 'tournament-participants', label: t('legacy.participants'), icon: 'lucky-egg' },
+            { id: 'tournament-rounds', label: t('legacy.rounds'), icon: 'vs-seeker' },
+            ...(isSiteAdmin ? [{ id: 'tournament-admins', label: t('legacy.admins'), icon: 'ability-shield' as const }] : []),
+          ]}
+        />
+
+        <Section id="tournament-settings" icon="everstone" title={t('legacy.settings')} subtitle={t('legacy.settingsHint')} collapsible={false}>
           <TournamentSettingsEditor
             tournament={{
               id: tournament.id,
@@ -99,7 +112,14 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
           )}
         </Section>
 
-        <Section title={t('legacy.description')} subtitle={t('legacy.descriptionHint')} collapsible defaultCollapsed>
+        <Section
+          id="tournament-description"
+          icon="weakness-policy"
+          title={t('legacy.description')}
+          subtitle={t('legacy.descriptionHint')}
+          collapsible
+          defaultCollapsed
+        >
           <EditableDescription
             resourceType="tournament"
             resourceId={id}
@@ -110,6 +130,7 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
         {/* Open while the tournament has too few participants to pair: the start-up checklist sends the admin here. */}
         <Section
           id="tournament-participants"
+          icon="lucky-egg"
           title={t('legacy.participants')}
           collapsible
           defaultCollapsed={tournament.participant_count >= 2}
@@ -117,7 +138,7 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
           <ParticipantManager tournamentId={id} />
         </Section>
 
-        <Section id="tournament-rounds" title={t('legacy.rounds')} collapsible>
+        <Section id="tournament-rounds" icon="vs-seeker" title={t('legacy.rounds')} collapsible>
           <RoundManager
             tournament={tournament}
             initialRounds={rounds}
@@ -128,7 +149,7 @@ export default async function LegacyRoundsPage({ id, playerId, isSiteAdmin }: Le
         </Section>
 
         {isSiteAdmin && (
-          <Section title={t('legacy.admins')} collapsible>
+          <Section id="tournament-admins" icon="ability-shield" title={t('legacy.admins')} collapsible>
             <ResourceAdminManager resourceType="tournament" resourceId={id} />
           </Section>
         )}

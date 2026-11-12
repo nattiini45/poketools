@@ -175,7 +175,7 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
     }
   }
 
-  if (loading) return <p className="text-sm text-poke-text-muted">{t('participants.loading')}</p>;
+  if (loading) return <p className="text-body text-fg-muted">{t('participants.loading')}</p>;
 
   // A started phase of the league's format is the format's to keep: the controls stay usable, and the server's
   // 409 `format_phase_owned` offers the audited force (a phase of a custom league is created by its format).
@@ -206,7 +206,7 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
 
       {editable && (
         <div className="space-y-1">
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary">{t('seeding.addPlayer')}</h3>
+          <h3 className="text-subtitle font-[550] text-fg">{t('seeding.addPlayer')}</h3>
           <Combobox
             mode="async"
             value=""
@@ -225,18 +225,18 @@ export default function ParticipantManager({ tournamentId }: ParticipantManagerP
             renderOption={(option) => (
               <span
                 className={
-                  option.meta?.enrolled ? 'flex items-center gap-2 text-poke-text-muted opacity-60' : 'flex items-center gap-2'
+                  option.meta?.enrolled ? 'flex items-center gap-2 text-fg-muted opacity-60' : 'flex items-center gap-2'
                 }
               >
                 <span>{option.label}</span>
                 {option.meta?.is_guest ? <GuestBadge /> : null}
-                {option.meta?.enrolled ? <span className="text-xs">{t('participants.alreadyEnrolled')}</span> : null}
+                {option.meta?.enrolled ? <span className="text-caption">{t('participants.alreadyEnrolled')}</span> : null}
               </span>
             )}
           />
           {searchError && <Alert variant="error">{errorText(searchError)}</Alert>}
           {searchMore && (
-            <p className="text-xs text-poke-text-muted">
+            <p className="text-caption text-fg-muted">
               {t('participants.searchTruncated', { shown: searchMore.shown, total: searchMore.total })}
             </p>
           )}

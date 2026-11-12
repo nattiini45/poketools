@@ -15,7 +15,7 @@ export async function participantsPanel({ id, league, caps, t }: LeagueAdminPane
   const tGroups = await getT(leagueAdminGroupsMessages);
   return (
     <>
-      <Section title={t('participants.title')}>
+      <Section icon="lucky-egg" title={t('participants.title')}>
         <LeagueRosterManager
           seasonId={id}
           showTypeSelector={caps.participantTypeAssignment}
@@ -23,12 +23,12 @@ export async function participantsPanel({ id, league, caps, t }: LeagueAdminPane
         />
       </Section>
 
-      <Section title={tGroups('editor.title')} subtitle={tGroups('editor.subtitle')}>
+      <Section icon="exp-share" title={tGroups('editor.title')} subtitle={tGroups('editor.subtitle')}>
         <LeagueGroupsEditor seasonId={id} />
       </Section>
 
       {caps.typeCores && (
-        <Section title={t('typeCores.title')} subtitle={t('typeCores.subtitle')} collapsible defaultCollapsed>
+        <Section icon="dubious-disc" title={t('typeCores.title')} subtitle={t('typeCores.subtitle')} collapsible defaultCollapsed>
           <CoreLigaManager seasonId={id} />
         </Section>
       )}

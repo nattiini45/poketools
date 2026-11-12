@@ -412,7 +412,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
 
       {syncStatus && (
-        <p className="text-xs text-poke-text-secondary">
+        <p className="text-caption text-fg-muted">
           {syncStatus}
           {sourcePhaseName ? ` · ${t('seeding.source', { name: sourcePhaseName })}` : ''}
           {enrollmentSource?.synced_at ? (
@@ -427,17 +427,17 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       )}
 
       {!editable && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-caption text-fg-muted">
           {t('seeding.locked')}
         </p>
       )}
 
       {editable && startedFormatPhase && (
-        <p className="text-xs text-poke-text-muted">{t('seeding.startedFormatPhase')}</p>
+        <p className="text-caption text-fg-muted">{t('seeding.startedFormatPhase')}</p>
       )}
 
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <h3 className="text-sm font-heading font-semibold text-poke-text-primary">
+        <h3 className="text-subtitle font-[550] text-fg">
           {t('seeding.heading', { count: orderedParticipants.length })}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
@@ -481,20 +481,20 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
       </div>
 
       {/* A live region that is always rendered, so the screen reader announces the text when it appears. */}
-      <p role="status" className="text-xs text-poke-green">
+      <p role="status" className="text-caption text-win">
         {seedsSaved && !seedsDirty ? t('seeding.saved') : null}
       </p>
 
       {orderTouched && seedsDirty && editable && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-caption text-fg-muted">
           {t('seeding.orderHint', { count: orderedParticipants.length })}
         </p>
       )}
 
       {orderedParticipants.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">{t('seeding.empty')}</p>
+        <p className="text-body text-fg-muted">{t('seeding.empty')}</p>
       ) : (
-        <ul className="space-y-1">
+        <ul className="divide-y divide-hairline overflow-hidden rounded-poke-md border border-hairline">
           {orderedParticipants.map((p, index) => (
             <li
               key={p.id}
@@ -505,14 +505,14 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                 if (editable && dragIndex.current !== null) reorder(dragIndex.current, index);
                 dragIndex.current = null;
               }}
-              className="flex items-center justify-between p-2 bg-poke-elevated rounded-poke-md text-sm text-poke-text-primary gap-2"
+              className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 bg-surface px-3 py-2 text-body text-fg motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover"
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className="text-poke-text-muted cursor-grab select-none" aria-hidden="true">⋮⋮</span>
+                <span className="cursor-grab select-none text-fg-muted" aria-hidden="true">⋮⋮</span>
                 <div className="flex flex-col gap-0.5">
                   <button
                     type="button"
-                    className="text-[10px] text-poke-text-muted hover:text-poke-text-primary"
+                    className="inline-flex h-5 w-7 items-center justify-center rounded-poke-sm text-caption leading-none text-fg-muted hover:text-fg disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                     onClick={() => reorder(index, index - 1)}
                     disabled={!editable || index === 0}
                     aria-label={t('seeding.moveUp')}
@@ -521,7 +521,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                   </button>
                   <button
                     type="button"
-                    className="text-[10px] text-poke-text-muted hover:text-poke-text-primary"
+                    className="inline-flex h-5 w-7 items-center justify-center rounded-poke-sm text-caption leading-none text-fg-muted hover:text-fg disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                     onClick={() => reorder(index, index + 1)}
                     disabled={!editable || index === orderedParticipants.length - 1}
                     aria-label={t('seeding.moveDown')}
@@ -540,7 +540,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                     if (e.key === 'Enter') commitSeedEdits();
                   }}
                   disabled={!editable}
-                  className="w-12 px-1.5 py-0.5 text-center text-xs border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary disabled:opacity-60"
+                  className="h-8 w-14 rounded-poke-md border border-hairline-strong bg-surface px-1 text-center font-mono text-caption tabular-nums text-fg disabled:opacity-60 max-sm:h-11 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 />
                 <PlayerAvatar avatarUrl={p.avatar_url} name={p.name} size={20} />
                 <span className="truncate">{p.name}</span>
@@ -549,12 +549,12 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                   <Badge variant="purple" size="xs">{t('seeding.losersBadge')}</Badge>
                 )}
                 {ratings[p.id] != null && (
-                  <span className="text-xs text-poke-text-muted">{ratings[p.id]}</span>
+                  <span className="font-mono text-caption tabular-nums text-fg-muted">{ratings[p.id]}</span>
                 )}
               </div>
               <div className="flex items-center gap-2 shrink-0">
                 {showLbToggle && (
-                  <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
+                  <label className="flex items-center gap-1.5 text-caption text-fg-muted">
                     <input
                       type="checkbox"
                       checked={startingBracketOf(p.id, p.starting_bracket) === 'losers'}
@@ -567,7 +567,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                   type="button"
                   onClick={() => onRemovePlayer(p.id)}
                   disabled={!editable}
-                  className="text-xs text-poke-danger hover:underline disabled:opacity-50 disabled:no-underline"
+                  className="inline-flex min-h-11 items-center rounded-poke-sm px-1 text-caption font-[550] text-loss hover:underline disabled:opacity-50 disabled:no-underline sm:min-h-0 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   {t('seeding.remove')}
                 </button>
@@ -579,7 +579,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
 
       {editable && availablePlayers.length > 0 && (
         <div>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">{t('seeding.addPlayer')}</h3>
+          <h3 className="mb-2 text-subtitle font-[550] text-fg">{t('seeding.addPlayer')}</h3>
           <div className="flex gap-2 flex-wrap">
             {availablePlayers.map((p) => (
               <Button
@@ -587,7 +587,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                 variant="ghost"
                 size="sm"
                 onClick={() => onAddPlayer(p.id)}
-                className="border border-poke-border"
+                className="border border-hairline"
               >
                 + {p.name}
               </Button>
