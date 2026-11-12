@@ -80,7 +80,7 @@ export default async function DashboardPage() {
     listSeasonsByIds(leagueIds.filter((id) => !knownLeagueIds.has(id))),
     listTournamentsByIds(tournamentIds.filter((id) => !knownTournamentIds.has(id))),
     listPlayerTeamSlots(playerId, [...new Set(upcomingMatches.map((m) => m.tournament_id))]),
-    getPlayerFormatFacts(playerId, runningCustomLeagues.map((l) => l.id), new Date()),
+    getPlayerFormatFacts(playerId, runningCustomLeagues.map((l) => l.id)),
   ]);
 
   const teamsUsed = buildTeamsUsed(

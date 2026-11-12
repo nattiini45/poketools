@@ -95,7 +95,7 @@ const NO_FORMAT_FACTS: PlayerFormatFacts = { formats: [], flags: [], submissions
  * number of leagues, and no request at all for an empty list. Only leagues on the `kit` engine are returned in
  * `formats`; rows of the other reads are the player's own.
  */
-export async function getPlayerFormatFacts(playerId: string, seasonIds: readonly string[], now: Date): Promise<PlayerFormatFacts> {
+export async function getPlayerFormatFacts(playerId: string, seasonIds: readonly string[], now: Date = new Date()): Promise<PlayerFormatFacts> {
   if (seasonIds.length === 0) return NO_FORMAT_FACTS;
   const ids = [...seasonIds];
   const [formats, flags, submissions, links, challenges] = await Promise.all([
