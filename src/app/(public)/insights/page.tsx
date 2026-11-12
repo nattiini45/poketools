@@ -257,7 +257,12 @@ async function InsightsPageContent({ searchParams }: PageProps) {
 
   // The public list includes test leagues; the stats scope picker never offers one.
   const leagueOptions = insightsLeagueOptions(leagues);
-  const tournamentOptions = tournaments.map((t) => ({ id: t.id, name: t.name }));
+  const listedTournaments = tournaments.map((t) => ({ id: t.id, name: t.name }));
+  // A league stage is not in the public tournament list; while it is the scope, the picker still names it.
+  const tournamentOptions =
+    scope.type === 'tournament' && scopeData.title && !listedTournaments.some((option) => option.id === scope.id)
+      ? [{ id: scope.id, name: scopeData.title }, ...listedTournaments]
+      : listedTournaments;
 
   return (
     <PageContainer title={scopeData.title ?? t('page.globalTitle')} icon="scope-lens" subtitle={t('page.subtitle')} maxWidth="xl">

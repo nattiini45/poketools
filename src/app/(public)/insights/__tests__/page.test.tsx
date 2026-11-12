@@ -40,6 +40,7 @@ vi.mock('@/components/insights/InsightsTabs', () => ({ default: () => null }));
 
 import InsightsPage from '../page';
 import InsightsTabs from '@/components/insights/InsightsTabs';
+import ScopeSelector from '@/components/shared/ScopeSelector';
 
 interface StandingsRowView {
   player_id: string;
@@ -47,8 +48,8 @@ interface StandingsRowView {
   losses: number;
 }
 
-/** Renders the page for a scope and returns the standings rows handed to the client tabs. */
-async function renderStandings(searchParams: Record<string, string>): Promise<StandingsRowView[]> {
+/** Renders the page for a scope and returns its children (the scope selector and the client tabs). */
+async function renderPage(searchParams: Record<string, string>): Promise<ReactElement[]> {
   const suspense = (await InsightsPage({ searchParams: Promise.resolve(searchParams) })) as ReactElement<{
     children: ReactElement;
   }>;
@@ -56,10 +57,23 @@ async function renderStandings(searchParams: Record<string, string>): Promise<St
     type: (props: Record<string, unknown>) => Promise<ReactElement<{ children: ReactElement[] }>>;
   };
   const page = await content.type(content.props);
-  const tabs = page.props.children.find((child) => child.type === InsightsTabs) as ReactElement<{
+  return page.props.children;
+}
+
+/** Renders the page for a scope and returns the standings rows handed to the client tabs. */
+async function renderStandings(searchParams: Record<string, string>): Promise<StandingsRowView[]> {
+  const tabs = (await renderPage(searchParams)).find((child) => child.type === InsightsTabs) as ReactElement<{
     standings: StandingsRowView[];
   }>;
   return tabs.props.standings;
+}
+
+/** The tournament options handed to the scope selector. */
+async function renderTournamentOptions(searchParams: Record<string, string>): Promise<{ id: string; name: string }[]> {
+  const selector = (await renderPage(searchParams)).find((child) => child.type === ScopeSelector) as ReactElement<{
+    tournaments: { id: string; name: string }[];
+  }>;
+  return selector.props.tournaments;
 }
 
 const players = ['a', 'b', 'e'].map((id) => ({ id, name: id, avatar_url: null, gym_type: null }));
@@ -259,5 +273,24 @@ describe('Insights standings of an Evolution Point Buy league', () => {
 
     expect(h.publicReads.seasonFormatRules).not.toHaveBeenCalled();
     expect(h.publicReads.seasonEvolutionPoints).not.toHaveBeenCalled();
+  });
+});
+
+describe('the tournament picker of a league stage', () => {
+  const listed = [{ id: 'open-1', name: 'Open Cup' }];
+
+  it('names a stage that the public tournament list does not hold, ahead of the listed ones', async () => {
+    h.publicReads.tournamentList.mockResolvedValue(listed);
+    expect(await renderTournamentOptions({ scope: 'tournament', id: 'swiss-1' })).toEqual([
+      { id: 'swiss-1', name: 'Swiss' },
+      { id: 'open-1', name: 'Open Cup' },
+    ]);
+  });
+
+  it('adds nothing when the scope is a listed tournament or not a tournament', async () => {
+    h.publicReads.tournamentList.mockResolvedValue([{ id: 'swiss-1', name: 'Swiss' }, ...listed]);
+    expect(await renderTournamentOptions({ scope: 'tournament', id: 'swiss-1' })).toHaveLength(2);
+    h.publicReads.tournamentList.mockResolvedValue(listed);
+    expect(await renderTournamentOptions({ scope: 'league', id: 'season-1' })).toEqual(listed);
   });
 });
