@@ -159,7 +159,10 @@ const auditActions = {
 export default {
   versus: '{player1} vs {player2}',
   dashboard: {
-    title: 'Admin',
+    title: 'Overview',
+    subtitle: 'The matches that wait for an admin, the totals, and what changed last.',
+    loading: 'Loading the overview…',
+    newCompetition: 'New competition',
     loadFailed: 'Failed to load dashboard',
     networkError: 'Network error',
     retry: 'Retry',
@@ -169,6 +172,8 @@ export default {
       activeMatches: 'Active Matches',
       leagues: 'Leagues',
       games: 'Games',
+      /** Names the totals strip for assistive technology. */
+      label: 'Totals',
     },
     attention: {
       title: 'Attention Required',
@@ -176,6 +181,14 @@ export default {
       countOfTotal: '{count} of {total} matches',
       leaguePhase: '{league} · {phase}',
       empty: 'No matches need attention. All caught up!',
+      emptyTitle: 'Nothing needs you',
+      caption: 'Matches that wait for an admin, the longest wait first',
+      columns: {
+        match: 'Match',
+        competition: 'Competition',
+        status: 'Status',
+        open: 'Open',
+      },
       needsConfirm: 'Needs Confirm',
       disputed: 'Disputed',
       waiting: 'Waiting · {when}',

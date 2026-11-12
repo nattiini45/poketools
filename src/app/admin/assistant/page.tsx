@@ -17,7 +17,7 @@ export default async function AdminAssistantPage() {
   const t = await getT(adminAssistantMessages);
   return (
     <AdminGuard>
-      <PageContainer title={t('page.title')} subtitle={t('page.intro')} maxWidth="lg">
+      <PageContainer title={t('page.title')} icon="dubious-disc" subtitle={t('page.intro')} maxWidth="lg">
         <AssistantHome />
       </PageContainer>
     </AdminGuard>

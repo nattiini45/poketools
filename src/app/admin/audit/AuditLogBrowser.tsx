@@ -2,10 +2,15 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
+import Alert from '@/components/ui/Alert';
 import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
-import Badge from '@/components/ui/Badge';
+import Skeleton from '@/components/ui/Skeleton';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminEmpty from '@/components/admin/AdminEmpty';
+import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
+import { CELL, NAME_CELL, TABLE, TABLE_FRAME, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
+import { cn } from '@/lib/utils/cn';
 import type { ApiError, ApiResult } from '@/types/api';
 import type { Json } from '@/types/database';
 import { isValidUuid } from '@/lib/utils/uuid';
@@ -157,10 +162,13 @@ export default function AuditLogBrowser({
   const pageEnd = Math.min(offset + PAGE_SIZE, total);
   const errorText = error === null ? null : 'local' in error ? t(error.local) : apiErrorText(error.api);
 
+  const filtered = Object.values(appliedFilters).some((value) => value.trim() !== '');
+  const firstLoad = loading && data === null;
+
   return (
-    <div className="space-y-6">
-      <Section title={t('audit.filters.title')}>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="flex flex-col gap-8">
+      <Section icon="scope-lens" title={t('audit.filters.title')}>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           <Input
             label={t('audit.filters.action')}
             value={filters.action}
@@ -191,84 +199,148 @@ export default function AuditLogBrowser({
           <Input label={t('audit.filters.from')} type="date" value={filters.from} onChange={(event) => updateFilter('from', event.target.value)} />
           <Input label={t('audit.filters.to')} type="date" value={filters.to} onChange={(event) => updateFilter('to', event.target.value)} />
         </div>
-        <div className="flex flex-wrap gap-3 mt-4">
+        <div className="mt-4 flex flex-wrap gap-3 border-t border-hairline pt-4">
           <Button onClick={applyFilters} loading={loading} disabled={resourceIdInvalid}>{t('audit.filters.apply')}</Button>
           <Button variant="secondary" onClick={clearFilters} disabled={loading}>{t('audit.filters.clear')}</Button>
         </div>
       </Section>
 
-      <Section
-        title={t('audit.events.title')}
-        subtitle={
-          loading
-            ? t('audit.events.loading')
-            : t('audit.events.range', { start: pageStart, end: pageEnd, total })
-        }
-      >
+      <section aria-labelledby="audit-events-title" aria-busy={loading}>
+        <AdminSectionHeading
+          id="audit-events-title"
+          icon="old-amber"
+          title={t('audit.events.title')}
+          aside={
+            <SkewChip>
+              {loading
+                ? t('audit.events.loading')
+                : t('audit.events.range', { start: pageStart, end: pageEnd, total })}
+            </SkewChip>
+          }
+        />
+
         {errorText && (
-          <div className="mb-4 text-sm text-poke-danger">{errorText}</div>
+          <Alert variant="error" className="mb-3">
+            {errorText}
+          </Alert>
+        )}
+
+        {firstLoad && (
+          <div className={cn(TABLE_FRAME, 'divide-y divide-hairline')}>
+            {[...Array(6)].map((_, i) => (
+              <div key={i} className="flex items-center gap-4 px-3 py-3">
+                <div className="min-w-0 flex-1 space-y-2">
+                  <Skeleton className="w-2/5 max-w-56" height="0.875rem" rounded="sm" />
+                  <Skeleton className="w-1/4 max-w-40" height="0.75rem" rounded="sm" />
+                </div>
+                <Skeleton className="hidden sm:block" width="9rem" height="0.875rem" rounded="sm" />
+              </div>
+            ))}
+          </div>
         )}
 
         {!loading && entries.length === 0 && !error && (
-          <p className="text-sm text-poke-text-muted">{t('audit.events.empty')}</p>
+          <AdminEmpty title={t('audit.events.empty')} icon="old-amber" hint={filtered ? t('audit.events.emptyFiltered') : undefined}>
+            {filtered && (
+              <Button variant="secondary" size="sm" className={TOUCH} onClick={clearFilters}>
+                {t('audit.filters.clear')}
+              </Button>
+            )}
+          </AdminEmpty>
         )}
 
-        <div className="space-y-3">
-          {entries.map((entry) => {
-            const changes = jsonPreview(entry.changes);
-            const metadata = jsonPreview(entry.metadata);
-            return (
-              <Card key={entry.id} variant="outlined" padding="md">
-                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="blue">{entry.action}</Badge>
-                      <span className="text-sm font-heading font-semibold text-poke-text-primary">
-                        {auditActionLabel(tCore, entry.action, extensionActionLabels)}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-poke-text-secondary">
-                      {entry.resource_name
-                        ? t('audit.events.actorOnNamed', {
-                            actor: entry.actor_name,
-                            resourceType: entry.resource_type,
-                            resourceName: entry.resource_name,
-                          })
-                        : t('audit.events.actorOn', { actor: entry.actor_name, resourceType: entry.resource_type })}
-                    </p>
-                    <p className="mt-1 text-xs text-poke-text-muted break-all">
-                      {entry.resource_id ?? t('audit.events.noResourceId')}
-                    </p>
-                  </div>
-                  <LocalTime
-                    value={entry.created_at}
-                    preset="dateTimeYear"
-                    className="text-xs text-poke-text-muted shrink-0"
-                  />
-                </div>
-
-                {(changes || metadata) && (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-4">
-                    {changes && (
-                      <pre className="max-h-48 overflow-auto rounded-poke-md bg-poke-surface-alt p-3 text-xs text-poke-text-secondary whitespace-pre-wrap">
-                        {changes}
-                      </pre>
+        {entries.length > 0 && (
+          <div className={TABLE_FRAME}>
+            <table className={TABLE} data-audit-table>
+              <caption className="sr-only">{t('audit.events.title')}</caption>
+              <thead className={THEAD}>
+                <tr>
+                  <th scope="col" className={TH}>
+                    {t('audit.filters.action')}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t('audit.filters.actor')}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t('audit.columns.resource')}
+                  </th>
+                  <th scope="col" className={TH}>
+                    {t('audit.columns.when')}
+                  </th>
+                </tr>
+              </thead>
+              {entries.map((entry) => {
+                const changes = jsonPreview(entry.changes);
+                const metadata = jsonPreview(entry.metadata);
+                return (
+                  <tbody key={entry.id} className="block border-t border-hairline first-of-type:border-t-0 xl:table-row-group xl:hover:bg-hover">
+                    <tr className="grid grid-cols-1 px-3 py-3 xl:table-row xl:p-0">
+                      <th scope="row" className={NAME_CELL}>
+                        <span className="block break-words text-subtitle text-fg xl:text-body xl:font-[550]">
+                          {auditActionLabel(tCore, entry.action, extensionActionLabels)}
+                        </span>
+                        <code className="mt-0.5 block break-all font-mono text-caption font-normal text-fg-muted">{entry.action}</code>
+                      </th>
+                      <td data-label={t('audit.filters.actor')} className={CELL}>
+                        <span className="min-w-0 break-words text-fg">{entry.actor_name}</span>
+                      </td>
+                      <td data-label={t('audit.columns.resource')} className={CELL}>
+                        <span className="min-w-0">
+                          <span className="block break-words text-fg">
+                            {entry.resource_name
+                              ? t('audit.events.resourceNamed', { resourceType: entry.resource_type, resourceName: entry.resource_name })
+                              : entry.resource_type}
+                          </span>
+                          <span className="block break-all font-mono text-caption text-fg-muted">
+                            {entry.resource_id ?? t('audit.events.noResourceId')}
+                          </span>
+                        </span>
+                      </td>
+                      <td data-label={t('audit.columns.when')} className={cn(CELL, 'xl:whitespace-nowrap')}>
+                        <LocalTime value={entry.created_at} preset="dateTimeYear" className="text-fg-muted" />
+                      </td>
+                    </tr>
+                    {(changes || metadata) && (
+                      <tr className="block xl:table-row">
+                        <td colSpan={4} className="block px-3 pb-3 xl:table-cell">
+                          <details className="group">
+                            <summary className="inline-flex min-h-11 cursor-pointer items-center rounded-poke-sm text-caption font-[550] text-accent-ink underline-offset-2 hover:underline focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)] sm:min-h-0">
+                              {t('audit.events.details')}
+                            </summary>
+                            <div className="mt-2 grid grid-cols-1 gap-3 lg:grid-cols-2">
+                              {changes && (
+                                <div className="min-w-0">
+                                  <p className="mb-1 text-caption font-[550] text-fg-muted">{t('audit.events.changes')}</p>
+                                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-poke-md border border-hairline bg-sunken p-3 font-mono text-caption text-fg">
+                                    {changes}
+                                  </pre>
+                                </div>
+                              )}
+                              {metadata && (
+                                <div className="min-w-0">
+                                  <p className="mb-1 text-caption font-[550] text-fg-muted">{t('audit.events.metadata')}</p>
+                                  <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-poke-md border border-hairline bg-sunken p-3 font-mono text-caption text-fg">
+                                    {metadata}
+                                  </pre>
+                                </div>
+                              )}
+                            </div>
+                          </details>
+                        </td>
+                      </tr>
                     )}
-                    {metadata && (
-                      <pre className="max-h-48 overflow-auto rounded-poke-md bg-poke-surface-alt p-3 text-xs text-poke-text-secondary whitespace-pre-wrap">
-                        {metadata}
-                      </pre>
-                    )}
-                  </div>
-                )}
-              </Card>
-            );
-          })}
-        </div>
+                  </tbody>
+                );
+              })}
+            </table>
+          </div>
+        )}
 
-        <div className="flex items-center justify-between gap-3 mt-4">
+        {total > 0 && (
+        <div className="mt-4 flex items-center justify-between gap-3">
           <Button
             variant="secondary"
+            className={TOUCH}
             disabled={loading || offset === 0}
             onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
           >
@@ -276,13 +348,15 @@ export default function AuditLogBrowser({
           </Button>
           <Button
             variant="secondary"
+            className={TOUCH}
             disabled={loading || offset + PAGE_SIZE >= total}
             onClick={() => setOffset(offset + PAGE_SIZE)}
           >
             {tc('actions.next')}
           </Button>
         </div>
-      </Section>
+        )}
+      </section>
     </div>
   );
 }

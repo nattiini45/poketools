@@ -28,6 +28,7 @@ export default async function AdminAssistantConversationPage({ params }: { param
     <AdminGuard>
       <PageContainer
         title={t('page.title')}
+        icon="dubious-disc"
         maxWidth="xl"
         action={
           <Link href="/admin/assistant">

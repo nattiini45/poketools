@@ -6,6 +6,9 @@ import Button from '@/components/ui/Button';
 import Input from '@/components/ui/Input';
 import Section from '@/components/ui/Section';
 import Select from '@/components/ui/Select';
+import Textarea from '@/components/ui/Textarea';
+import TaskResultPanel from '@/components/admin/TaskResultPanel';
+import { cn } from '@/lib/utils/cn';
 import type { ApiError, ApiResult } from '@/types/api';
 import type { AggregateJobStats } from '@/lib/match/aggregate-queue';
 import type { AggregateScope } from '@/types/game';
@@ -106,14 +109,27 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url);
 }
 
-function StatBox({ label, value }: { label: string; value: ReactNode }) {
+/** One figure of a task: its name, and the value in the pixel face. `alert` marks a figure that needs a look. */
+function StatBox({ label, value, alert = false, className }: { label: string; value: ReactNode; alert?: boolean; className?: string }) {
   return (
-    <div className="rounded-poke-md border border-poke-border px-3 py-2">
-      <div className="text-poke-text-muted">{label}</div>
-      <div className="font-heading font-semibold text-poke-text-primary">{value}</div>
+    <div className={cn('min-w-0 px-3 py-2 shadow-[1px_0_0_0_var(--hairline),0_1px_0_0_var(--hairline)]', className)}>
+      <div className="text-caption text-fg-muted">{label}</div>
+      <div className={cn('mt-0.5 break-words font-heading text-title tabular-nums', alert ? 'text-loss' : 'text-fg')}>{value}</div>
     </div>
   );
 }
+
+/**
+ * The frame a set of `StatBox` figures sits in: one hairline grid, like the totals strip of the overview. Each box
+ * draws its own right and bottom line and the frame clips the outer ones, so an unfilled last row stays plain.
+ */
+const STAT_GRID = 'grid overflow-hidden rounded-poke-md border border-hairline bg-surface';
+
+/** The prose under a task card's title: one readable measure, muted. */
+const INTRO = 'max-w-[75ch] text-body text-fg-muted';
+
+/** The controls of a task, below its figures or its prose. */
+const CONTROLS = 'mt-4 border-t border-hairline pt-4';
 
 /**
  * Whether the report's rating history needs attention: gaps, never-rated
@@ -156,16 +172,20 @@ export function SingleSeasonReconcileView({ report }: { report: ReconcileReport 
 
   if (report.summary.totalMismatches === 0 && !report.summary.repaired && !hasRatingIntegrityFindings(report)) {
     return (
-      <Alert variant="success" className="mt-4">
+      <Alert variant="success">
         {t('data.reconcile.allConsistent')}
       </Alert>
     );
   }
 
   return (
-    <div className="mt-4 space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-        <StatBox label={t('data.reconcile.stats.totalMismatches')} value={num(report.summary.totalMismatches)} />
+    <div className="flex flex-col gap-3">
+      <div className={cn(STAT_GRID, 'grid-cols-2 md:grid-cols-4')}>
+        <StatBox
+          label={t('data.reconcile.stats.totalMismatches')}
+          value={num(report.summary.totalMismatches)}
+          alert={report.summary.totalMismatches > 0}
+        />
         <StatBox
           label={t('data.reconcile.stats.repaired')}
           value={report.summary.repaired ? tc('actions.yes') : tc('actions.no')}
@@ -204,7 +224,7 @@ export function SingleSeasonReconcileView({ report }: { report: ReconcileReport 
       <RatingIntegrityNotice report={report} />
 
       {report.summary.repaired && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm border-t border-poke-border pt-4">
+        <div className={cn(STAT_GRID, 'grid-cols-1 md:grid-cols-2')}>
           {report.evolution.repaired && (
             <StatBox
               label={t('data.reconcile.stats.evolutionRepaired')}
@@ -239,25 +259,25 @@ export function AllSeasonsReconcileView({ reports }: { reports: ReconcileReport[
 
   if (totalMismatches === 0 && !anyRepaired && !reports.some(hasRatingIntegrityFindings)) {
     return (
-      <Alert variant="success" className="mt-4">
+      <Alert variant="success">
         {t('data.reconcile.allConsistentSeasons', { count: reports.length })}
       </Alert>
     );
   }
 
   return (
-    <div className="mt-4 space-y-2">
-      <div className="text-sm font-heading font-semibold text-poke-text-primary">
+    <div className="flex flex-col gap-2">
+      <div className="text-subtitle text-fg">
         {t('data.reconcile.seasonsSummary', {
           seasons: t('data.reconcile.seasonCount', { count: reports.length }),
           mismatches: t('data.reconcile.totalMismatchCount', { count: totalMismatches }),
         })}
       </div>
-      <div className="border border-poke-border rounded-poke-md divide-y divide-poke-border text-sm">
+      <div className="divide-y divide-hairline rounded-poke-md border border-hairline bg-surface text-body">
         {reports.map((r) => (
-          <div key={r.seasonId} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
-            <span className="font-mono text-poke-text-secondary">{r.seasonId}</span>
-            <span className="font-heading font-semibold text-poke-text-primary">
+          <div key={r.seasonId} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2">
+            <span className="min-w-0 break-all font-mono text-caption text-fg-muted">{r.seasonId}</span>
+            <span className={cn('font-[550]', r.summary.totalMismatches > 0 ? 'text-loss' : 'text-fg')}>
               {t('data.reconcile.mismatchCount', { count: r.summary.totalMismatches })}
               {r.ratings.integrity.gaps.length > 0
                 ? ` · ${t('data.reconcile.gapCount', { count: r.ratings.integrity.gaps.length })}`
@@ -500,41 +520,55 @@ export default function AdminDataTools() {
   const num = (n: number) => formatter.number(n);
 
   return (
-    <div className="space-y-6">
-      <Section title={t('data.jobs.title')}>
-        <p className="text-sm text-poke-text-muted mb-4">{t('data.jobs.intro')}</p>
-        {jobStatsLoading && (
-          <p className="text-sm text-poke-text-muted">{t('data.jobs.loadingStats')}</p>
-        )}
-        {jobStatsError && <Alert variant="error">{errorText(jobStatsError)}</Alert>}
-        {jobStats && (
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4 text-sm">
-            {JOB_STATUSES.map((status) => (
-              <StatBox key={status} label={t(`data.jobs.status.${status}`)} value={num(jobStats[status])} />
-            ))}
+    <div className="flex flex-col gap-6">
+      <Section id="data-jobs" icon="metronome" title={t('data.jobs.title')}>
+        <p className={INTRO}>{t('data.jobs.intro')}</p>
+        <div className="mt-4 flex flex-col gap-3">
+          {jobStatsLoading && (
+            <p className="text-caption text-fg-muted" role="status">
+              {t('data.jobs.loadingStats')}
+            </p>
+          )}
+          {jobStatsError && <Alert variant="error">{errorText(jobStatsError)}</Alert>}
+          {jobStats && (
+            <div className={cn(STAT_GRID, 'grid-cols-2 sm:grid-cols-5')}>
+              {JOB_STATUSES.map((status) => (
+                <StatBox
+                  key={status}
+                  label={t(`data.jobs.status.${status}`)}
+                  value={num(jobStats[status])}
+                  alert={status === 'failed' && jobStats[status] > 0}
+                  className="max-sm:last:col-span-2"
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={() => void loadJobStats()} variant="secondary" disabled={jobStatsLoading}>
+              {t('data.jobs.refreshStats')}
+            </Button>
+            <Button onClick={handleDrainJobs} loading={draining}>
+              {t('data.jobs.drain')}
+            </Button>
           </div>
-        )}
-        <div className="flex flex-wrap gap-3 mb-4">
-          <Button onClick={() => void loadJobStats()} variant="secondary" disabled={jobStatsLoading}>
-            {t('data.jobs.refreshStats')}
-          </Button>
-          <Button onClick={handleDrainJobs} loading={draining}>
-            {t('data.jobs.drain')}
-          </Button>
         </div>
-        {drainError && <Alert variant="error" className="mb-4">{errorText(drainError)}</Alert>}
-        {drainResult && (
-          <Alert variant="success" className="mb-4">
-            {t('data.jobs.drainResult', {
-              count: drainResult.rounds,
-              processed: drainResult.processed,
-              failed: drainResult.failed,
-              reclaimed: drainResult.reclaimed,
-              pending: drainResult.statsAfter.pending,
-            })}
-          </Alert>
+        {(drainError || drainResult) && (
+          <TaskResultPanel>
+            {drainError && <Alert variant="error">{errorText(drainError)}</Alert>}
+            {drainResult && (
+              <Alert variant="success">
+                {t('data.jobs.drainResult', {
+                  count: drainResult.rounds,
+                  processed: drainResult.processed,
+                  failed: drainResult.failed,
+                  reclaimed: drainResult.reclaimed,
+                  pending: drainResult.statsAfter.pending,
+                })}
+              </Alert>
+            )}
+          </TaskResultPanel>
         )}
-        <div className="grid grid-cols-1 md:grid-cols-[180px_1fr_auto] gap-4 items-end border-t border-poke-border pt-4">
+        <div className={cn(CONTROLS, 'grid grid-cols-1 items-end gap-4 md:grid-cols-[minmax(0,12rem)_minmax(0,1fr)_auto]')}>
           <Select
             label={t('data.jobs.rebuildScope')}
             value={rebuildScope}
@@ -557,23 +591,32 @@ export default function AdminDataTools() {
             {t('data.jobs.rebuild')}
           </Button>
         </div>
-        {rebuildError && <Alert variant="error" className="mt-4">{errorText(rebuildError)}</Alert>}
-        {rebuildResult && (
-          <Alert variant="success" className="mt-4">
-            {t('data.jobs.rebuiltGames', { count: rebuildResult.gamesProcessed })}{' '}
-            {t('data.jobs.cleared', {
-              aggregateRows: t('data.jobs.aggregateRows', { count: rebuildResult.aggregatesDeleted }),
-              playerAggregateRows: t('data.jobs.playerAggregateRows', {
-                count: rebuildResult.playerAggregatesDeleted,
-              }),
-            })}
-          </Alert>
+        {(rebuildError || rebuildResult) && (
+          <TaskResultPanel>
+            {rebuildError && <Alert variant="error">{errorText(rebuildError)}</Alert>}
+            {rebuildResult && (
+              <Alert variant="success">
+                {t('data.jobs.rebuiltGames', { count: rebuildResult.gamesProcessed })}{' '}
+                {t('data.jobs.cleared', {
+                  aggregateRows: t('data.jobs.aggregateRows', { count: rebuildResult.aggregatesDeleted }),
+                  playerAggregateRows: t('data.jobs.playerAggregateRows', {
+                    count: rebuildResult.playerAggregatesDeleted,
+                  }),
+                })}
+              </Alert>
+            )}
+          </TaskResultPanel>
         )}
       </Section>
 
-      <Section title={t('data.reconcile.title')}>
-        <p className="text-sm text-poke-text-muted mb-4">{t('data.reconcile.intro')}</p>
-        <div className="grid grid-cols-1 md:grid-cols-[160px_1fr_160px_auto] gap-4 items-end border-t border-poke-border pt-4">
+      <Section id="data-reconcile" icon="scope-lens" title={t('data.reconcile.title')}>
+        <p className={INTRO}>{t('data.reconcile.intro')}</p>
+        <div
+          className={cn(
+            CONTROLS,
+            'grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,10rem)_minmax(0,1fr)_minmax(0,12rem)_auto]',
+          )}
+        >
           <Select
             label={t('data.reconcile.scope')}
             value={reconcileScope}
@@ -602,38 +645,49 @@ export default function AdminDataTools() {
           <Button
             onClick={handleReconcile}
             loading={reconciling}
-            variant="secondary"
+            variant={reconcileRepair ? 'danger' : 'secondary'}
             disabled={reconcileScope === 'season' && !reconcileSeasonId.trim()}
           >
             {reconcileRepair ? t('data.reconcile.repairButton') : t('data.reconcile.verifyButton')}
           </Button>
         </div>
-        {reconcileError && <Alert variant="error" className="mt-4">{errorText(reconcileError)}</Alert>}
+        {reconcileError && (
+          <TaskResultPanel>
+            <Alert variant="error">{errorText(reconcileError)}</Alert>
+          </TaskResultPanel>
+        )}
         {reconcileResult && !Array.isArray(reconcileResult) && (
-          <SingleSeasonReconcileView report={reconcileResult} />
+          <TaskResultPanel
+            chip={reconcileResult.dryRun ? t('data.dryRun') : t('data.repairRun')}
+            tone={reconcileResult.dryRun ? 'accent' : 'tier-1'}
+          >
+            <SingleSeasonReconcileView report={reconcileResult} />
+          </TaskResultPanel>
         )}
         {reconcileResult && Array.isArray(reconcileResult) && (
-          <AllSeasonsReconcileView reports={reconcileResult} />
+          <TaskResultPanel
+            chip={reconcileResult.every((r) => r.dryRun) ? t('data.dryRun') : t('data.repairRun')}
+            tone={reconcileResult.every((r) => r.dryRun) ? 'accent' : 'tier-1'}
+          >
+            <AllSeasonsReconcileView reports={reconcileResult} />
+          </TaskResultPanel>
         )}
       </Section>
 
-      <Section title={t('data.import.title')}>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_180px] gap-4">
-          <div>
-            <label htmlFor="player-import-csv" className="block text-sm font-heading font-semibold text-poke-text-primary mb-1.5">
-              {t('data.import.csv')}
-            </label>
-            <textarea
-              id="player-import-csv"
-              value={csv}
-              onChange={(event) => setCsv(event.target.value)}
-              rows={10}
-              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
-              // i18n-ignore: CSV column header names, read by the importer verbatim
-              placeholder="name,discord_id,ps_username,champions_username"
-            />
-          </div>
-          <div className="space-y-4">
+      <Section id="data-import" icon="lucky-egg" title={t('data.import.title')}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,12rem)]">
+          <Textarea
+            id="player-import-csv"
+            label={t('data.import.csv')}
+            value={csv}
+            onChange={(event) => setCsv(event.target.value)}
+            rows={8}
+            spellCheck={false}
+            className="font-mono"
+            // i18n-ignore: CSV column header names, read by the importer verbatim
+            placeholder="name,discord_id,ps_username,champions_username"
+          />
+          <div className="flex flex-col gap-4">
             <Select
               label={t('data.import.mode')}
               value={mode}
@@ -648,20 +702,24 @@ export default function AdminDataTools() {
             </Button>
           </div>
         </div>
-        {importError && <Alert variant="error" className="mt-4">{errorText(importError)}</Alert>}
-        {importResult && (
-          <Alert variant="success" className="mt-4">
-            {t('data.import.result', {
-              imported: importResult.imported,
-              updated: importResult.updated,
-              skipped: importResult.skipped,
-            })}
-          </Alert>
+        {(importError || importResult) && (
+          <TaskResultPanel>
+            {importError && <Alert variant="error">{errorText(importError)}</Alert>}
+            {importResult && (
+              <Alert variant="success">
+                {t('data.import.result', {
+                  imported: importResult.imported,
+                  updated: importResult.updated,
+                  skipped: importResult.skipped,
+                })}
+              </Alert>
+            )}
+          </TaskResultPanel>
         )}
       </Section>
 
-      <Section title={t('data.export.title')}>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_160px_160px_auto] gap-4 items-end">
+      <Section id="data-export" icon="exp-share" title={t('data.export.title')}>
+        <div className="grid grid-cols-1 items-end gap-4 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_minmax(0,10rem)_auto]">
           <Select
             label={t('data.export.resource')}
             value={resource}
@@ -687,25 +745,29 @@ export default function AdminDataTools() {
           />
           <Button onClick={handleExport} loading={exporting}>{t('data.export.button')}</Button>
         </div>
-        {exportError && <Alert variant="error" className="mt-4">{errorText(exportError)}</Alert>}
-        {exportRemaining !== undefined && (
-          <Alert variant="success" className="mt-4">
-            {exportRemaining === null
-              ? t('data.export.ready')
-              : t('data.export.remaining', { count: exportRemaining })}
-          </Alert>
-        )}
-        {exportSummary && (
-          <Alert variant={exportSummary.limited ? 'warning' : 'info'} className="mt-4">
-            {t(
-              !exportSummary.limited
-                ? 'data.export.summary'
-                : exportSummary.maxed
-                  ? 'data.export.summaryMaxed'
-                  : 'data.export.summaryLimited',
-              { count: exportSummary.count, total: exportSummary.total },
+        {(exportError || exportRemaining !== undefined || exportSummary) && (
+          <TaskResultPanel>
+            {exportError && <Alert variant="error">{errorText(exportError)}</Alert>}
+            {exportRemaining !== undefined && (
+              <Alert variant="success">
+                {exportRemaining === null
+                  ? t('data.export.ready')
+                  : t('data.export.remaining', { count: exportRemaining })}
+              </Alert>
             )}
-          </Alert>
+            {exportSummary && (
+              <Alert variant={exportSummary.limited ? 'warning' : 'info'}>
+                {t(
+                  !exportSummary.limited
+                    ? 'data.export.summary'
+                    : exportSummary.maxed
+                      ? 'data.export.summaryMaxed'
+                      : 'data.export.summaryLimited',
+                  { count: exportSummary.count, total: exportSummary.total },
+                )}
+              </Alert>
+            )}
+          </TaskResultPanel>
         )}
       </Section>
     </div>

@@ -3,10 +3,11 @@
 import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import Card from '@/components/ui/Card';
 import Section from '@/components/ui/Section';
+import SkewChip from '@/components/ui/SkewChip';
+import { ROW_LINK } from '@/components/admin/admin-table';
+import TaskResultPanel from '@/components/admin/TaskResultPanel';
 import {
   FORMAT_DRIFT_MAX_ROWS,
   type AdvancementDriftCase,
@@ -58,8 +59,8 @@ function TiebreakerChain({ label, steps }: { label: string; steps: readonly Tieb
   };
   return (
     <div className="min-w-0">
-      <p className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted">{label}</p>
-      <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-sm text-poke-text-primary">
+      <p className="text-caption font-[550] text-fg-muted">{label}</p>
+      <ol className="mt-1 list-decimal space-y-0.5 pl-5 text-body text-fg marker:font-heading marker:text-fg-muted">
         {steps.map((step) => (
           <li key={step}>{stepLabel(step)}</li>
         ))}
@@ -72,8 +73,8 @@ function LeagueBadges({ archived, isTest }: { archived: boolean; isTest: boolean
   const t = useT(adminToolsMessages);
   return (
     <>
-      {archived && <Badge variant="gray" size="xs">{t('data.formatDrift.archivedBadge')}</Badge>}
-      {isTest && <Badge variant="yellow" size="xs">{t('data.formatDrift.testBadge')}</Badge>}
+      {archived && <SkewChip>{t('data.formatDrift.archivedBadge')}</SkewChip>}
+      {isTest && <SkewChip tone="tier-1">{t('data.formatDrift.testBadge')}</SkewChip>}
     </>
   );
 }
@@ -81,10 +82,9 @@ function LeagueBadges({ archived, isTest }: { archived: boolean; isTest: boolean
 function TiebreakerCaseCard({ item, packChain }: { item: TiebreakerDriftCase; packChain: readonly TiebreakerStep[] }) {
   const t = useT(adminToolsMessages);
   return (
-    <li>
-      <Card variant="muted" padding="sm">
+    <li className="rounded-poke-md border border-hairline bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={leagueAdminHref(item.seasonId, 'format', LEAGUE_ADMIN_RULES_SECTION)} className="text-sm font-medium text-poke-blue hover:underline">
+          <Link href={leagueAdminHref(item.seasonId, 'format', LEAGUE_ADMIN_RULES_SECTION)} className={ROW_LINK}>
             {item.seasonName}
           </Link>
           <LeagueBadges archived={item.archived} isTest={item.isTest} />
@@ -94,9 +94,8 @@ function TiebreakerCaseCard({ item, packChain }: { item: TiebreakerDriftCase; pa
           <TiebreakerChain label={t('data.formatDrift.tiebreaker.pack')} steps={packChain} />
         </div>
         {!item.usable && (
-          <p className="mt-2 text-sm text-poke-text-secondary">{t('data.formatDrift.tiebreaker.unusable')}</p>
+          <p className="mt-2 max-w-[75ch] text-body text-fg-muted">{t('data.formatDrift.tiebreaker.unusable')}</p>
         )}
-      </Card>
     </li>
   );
 }
@@ -116,13 +115,13 @@ function RuleText({ rule }: { rule: DriftPhaseRef['rule'] }) {
 
 function PhaseLine({ seasonId, label, phase }: { seasonId: string; label: string; phase: DriftPhaseRef }) {
   return (
-    <div className="min-w-0 text-sm">
-      <p className="text-xs font-heading font-semibold uppercase tracking-wide text-poke-text-muted">{label}</p>
-      <p className="text-poke-text-primary">
-        <Link href={`/admin/leagues/${seasonId}/phases/${phase.id}`} className="font-medium text-poke-blue hover:underline">
+    <div className="min-w-0 text-body">
+      <p className="text-caption font-[550] text-fg-muted">{label}</p>
+      <p className="text-fg">
+        <Link href={`/admin/leagues/${seasonId}/phases/${phase.id}`} className={ROW_LINK}>
           {phase.stageOrder + 1}. {phase.name}
         </Link>
-        <span className="text-poke-text-secondary">
+        <span className="text-fg-muted">
           {' · '}
           <RuleText rule={phase.rule} />
         </span>
@@ -134,16 +133,15 @@ function PhaseLine({ seasonId, label, phase }: { seasonId: string; label: string
 function AdvancementCaseCard({ item }: { item: AdvancementDriftCase }) {
   const t = useT(adminToolsMessages);
   return (
-    <li>
-      <Card variant="muted" padding="sm">
+    <li className="rounded-poke-md border border-hairline bg-surface p-3">
         <div className="flex flex-wrap items-center gap-2">
-          <Link href={leagueAdminHref(item.seasonId, 'phases')} className="text-sm font-medium text-poke-blue hover:underline">
+          <Link href={leagueAdminHref(item.seasonId, 'phases')} className={ROW_LINK}>
             {item.seasonName}
           </Link>
           <LeagueBadges archived={item.archived} isTest={item.isTest} />
-          <Badge variant="accent" size="xs">{t(`data.formatDrift.advancement.kindLabel.${item.kind}`)}</Badge>
+          <SkewChip tone="accent">{t(`data.formatDrift.advancement.kindLabel.${item.kind}`)}</SkewChip>
         </div>
-        <p className="mt-1 text-sm text-poke-text-secondary">{t(`data.formatDrift.advancement.kind.${item.kind}`)}</p>
+        <p className="mt-1 max-w-[75ch] text-body text-fg-muted">{t(`data.formatDrift.advancement.kind.${item.kind}`)}</p>
         <div className="mt-2 grid gap-3 sm:grid-cols-2">
           {item.source && (
             <PhaseLine
@@ -160,14 +158,13 @@ function AdvancementCaseCard({ item }: { item: AdvancementDriftCase }) {
             />
           )}
         </div>
-      </Card>
     </li>
   );
 }
 
 function SummaryItem({ children }: { children: string }) {
   return (
-    <li className="rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary">
+    <li className="px-3 py-2 text-body text-fg shadow-[1px_0_0_0_var(--hairline),0_1px_0_0_var(--hairline)]">
       {children}
     </li>
   );
@@ -180,10 +177,11 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
   const pairsMismatching = advancement.pairsChecked - advancement.consistentPairs;
 
   return (
-    <div className="mt-4 space-y-5">
-      <p className="text-xs text-poke-text-muted">
-        {t('data.formatDrift.generatedAt', { time: formatter.instant(report.generatedAt, 'dateTimeYear') })}
-      </p>
+    <TaskResultPanel
+      chip={t('data.readOnly')}
+      tone="accent"
+      aside={t('data.formatDrift.generatedAt', { time: formatter.instant(report.generatedAt, 'dateTimeYear') })}
+    >
       <Alert variant="info">{t('data.formatDrift.readOnlyNote')}</Alert>
       {(report.truncated.formatRules || report.truncated.phases) && (
         <Alert variant="warning">
@@ -191,7 +189,7 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
         </Alert>
       )}
 
-      <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="grid overflow-hidden rounded-poke-md border border-hairline bg-surface sm:grid-cols-2 lg:grid-cols-3">
         <SummaryItem>{t('data.formatDrift.summary.leaguesChecked', { count: tiebreaker.checked })}</SummaryItem>
         <SummaryItem>{t('data.formatDrift.summary.tiebreakerMismatches', { count: tiebreaker.cases.length })}</SummaryItem>
         <SummaryItem>{t('data.formatDrift.summary.pairsChecked', { count: advancement.pairsChecked })}</SummaryItem>
@@ -200,12 +198,12 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
       </ul>
 
       <section aria-labelledby="format-drift-tiebreaker" className="space-y-2">
-        <h3 id="format-drift-tiebreaker" className="font-heading text-base font-semibold text-poke-text-primary">
+        <h3 id="format-drift-tiebreaker" className="text-subtitle text-fg">
           {t('data.formatDrift.tiebreaker.title')}
         </h3>
-        <p className="text-sm text-poke-text-muted">{t('data.formatDrift.tiebreaker.intro')}</p>
+        <p className="max-w-[75ch] text-body text-fg-muted">{t('data.formatDrift.tiebreaker.intro')}</p>
         {tiebreaker.cases.length === 0 ? (
-          <p className="text-sm text-poke-text-secondary">{t('data.formatDrift.tiebreaker.empty')}</p>
+          <p className="text-body text-fg">{t('data.formatDrift.tiebreaker.empty')}</p>
         ) : (
           <ul className="space-y-2">
             {tiebreaker.cases.map((item) => (
@@ -216,12 +214,12 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
       </section>
 
       <section aria-labelledby="format-drift-advancement" className="space-y-2">
-        <h3 id="format-drift-advancement" className="font-heading text-base font-semibold text-poke-text-primary">
+        <h3 id="format-drift-advancement" className="text-subtitle text-fg">
           {t('data.formatDrift.advancement.title')}
         </h3>
-        <p className="text-sm text-poke-text-muted">{t('data.formatDrift.advancement.intro')}</p>
+        <p className="max-w-[75ch] text-body text-fg-muted">{t('data.formatDrift.advancement.intro')}</p>
         {advancement.cases.length === 0 ? (
-          <p className="text-sm text-poke-text-secondary">{t('data.formatDrift.advancement.empty')}</p>
+          <p className="text-body text-fg">{t('data.formatDrift.advancement.empty')}</p>
         ) : (
           <ul className="space-y-2">
             {advancement.cases.map((item) => (
@@ -230,7 +228,7 @@ function LoadedReport({ report }: { report: FormatDriftReportData }) {
           </ul>
         )}
       </section>
-    </div>
+    </TaskResultPanel>
   );
 }
 
@@ -241,12 +239,11 @@ export function FormatDriftReportView({ state, report, onRun }: FormatDriftRepor
   const running = state.status === 'loading';
 
   return (
-    <Section title={t('data.formatDrift.title')} subtitle={t('data.formatDrift.subtitle')}>
+    <Section id="data-drift" icon="up-grade" title={t('data.formatDrift.title')} subtitle={t('data.formatDrift.subtitle')}>
       <div className="flex flex-wrap items-center gap-3">
         <Button
           type="button"
           variant={state.status === 'failed' ? 'secondary' : 'primary'}
-          size="sm"
           onClick={onRun}
           disabled={running}
         >

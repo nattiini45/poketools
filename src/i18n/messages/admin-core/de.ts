@@ -7,7 +7,10 @@ const P = formatPack.messages.de.adminCore;
 export default defineDe<typeof en>()({
   versus: '{player1} vs. {player2}',
   dashboard: {
-    title: 'Admin',
+    title: 'Übersicht',
+    subtitle: 'Die Spiele, die auf einen Admin warten, die Gesamtzahlen und die letzten Änderungen.',
+    loading: 'Übersicht wird geladen …',
+    newCompetition: 'Neuer Wettbewerb',
     loadFailed: 'Dashboard konnte nicht geladen werden',
     networkError: 'Netzwerkfehler',
     retry: 'Erneut versuchen',
@@ -17,6 +20,7 @@ export default defineDe<typeof en>()({
       activeMatches: 'Laufende Spiele',
       leagues: 'Ligen',
       games: 'Partien',
+      label: 'Gesamtzahlen',
     },
     attention: {
       title: 'Handlungsbedarf',
@@ -24,6 +28,14 @@ export default defineDe<typeof en>()({
       countOfTotal: '{count} von {total} Spielen',
       leaguePhase: '{league} · {phase}',
       empty: 'Gerade braucht kein Spiel deine Aufmerksamkeit. Alles erledigt!',
+      emptyTitle: 'Gerade braucht dich nichts',
+      caption: 'Spiele, die auf einen Admin warten, die längste Wartezeit zuerst',
+      columns: {
+        match: 'Spiel',
+        competition: 'Wettbewerb',
+        status: 'Status',
+        open: 'Öffnen',
+      },
       needsConfirm: 'Bestätigung fehlt',
       disputed: 'Strittig',
       waiting: 'Wartet · {when}',

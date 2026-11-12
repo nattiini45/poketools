@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Alert from '@/components/ui/Alert';
 import Button from '@/components/ui/Button';
 import Section from '@/components/ui/Section';
+import Skeleton from '@/components/ui/Skeleton';
+import SkewChip from '@/components/ui/SkewChip';
+import TaskResultPanel from '@/components/admin/TaskResultPanel';
 import Table, { type Column } from '@/components/ui/Table';
 import type { ApiError, ApiResult } from '@/types/api';
 import { useFormatter, useRequestTime, useT } from '@/i18n/client';
@@ -146,7 +149,7 @@ export default function MetaDataConsole() {
         header: t('metaData.columns.format'),
         sortable: true,
         sortValue: (f) => f.format,
-        render: (f) => <span className="font-mono text-poke-text-primary">{f.format}</span>,
+        render: (f) => <span className="break-all font-mono text-fg">{f.format}</span>,
       },
       {
         key: 'rows',
@@ -155,8 +158,8 @@ export default function MetaDataConsole() {
         sortable: true,
         sortValue: (f) => f.rows,
         render: (f) => (
-          <span className="tabular-nums text-poke-text-secondary">
-            {f.rows > 0 ? formatter.number(f.rows) : <span className="text-poke-text-muted">—</span>}
+          <span className="font-heading tabular-nums text-fg">
+            {f.rows > 0 ? formatter.number(f.rows) : <span className="text-fg-muted">—</span>}
           </span>
         ),
       },
@@ -167,11 +170,12 @@ export default function MetaDataConsole() {
         sortValue: (f) => f.last_imported ?? '',
         render: (f) =>
           f.last_imported ? (
-            <span className={stale(f.last_imported) ? 'text-yellow-500' : 'text-poke-text-secondary'}>
+            <span className="inline-flex flex-wrap items-center gap-2 text-fg">
               {formatter.instant(f.last_imported, 'date')}
+              {stale(f.last_imported) && <SkewChip tone="tier-1">{t('metaData.stale')}</SkewChip>}
             </span>
           ) : (
-            <span className="text-poke-text-muted">{t('metaData.never')}</span>
+            <span className="text-fg-muted">{t('metaData.never')}</span>
           ),
       },
       {
@@ -179,18 +183,13 @@ export default function MetaDataConsole() {
         header: '',
         align: 'right',
         render: (f) => (
-          <button
-            type="button"
-            onClick={() => runImport([f.format])}
-            disabled={importing !== null}
-            className="text-xs text-poke-blue hover:text-poke-blue/80 disabled:opacity-50 transition-colors"
-          >
+          <Button type="button" variant="secondary" size="sm" onClick={() => runImport([f.format])} disabled={importing !== null}>
             {importing === f.format
               ? t('metaData.importing')
               : f.rows > 0
                 ? t('metaData.refresh')
                 : t('metaData.import')}
-          </button>
+          </Button>
         ),
       },
     ];
@@ -221,12 +220,14 @@ export default function MetaDataConsole() {
             }),
           });
 
-  return (
-    <div className="space-y-6">
-      {errorText && <Alert variant="error">{errorText}</Alert>}
-      {noticeText && <Alert variant="success">{noticeText}</Alert>}
+  // Which task card a message belongs to: the sample-set refresh, or everything about the usage statistics.
+  const setsError = error !== null && ('local' in error ? error.local : error.fallback) === 'metaData.setsFailed';
+  const setsNotice = notice?.kind === 'setsRefreshed';
 
+  return (
+    <div className="flex flex-col gap-6">
       <Section
+        icon="scope-lens"
         title={t('metaData.usageTitle')}
         subtitle={
           coverage
@@ -234,39 +235,55 @@ export default function MetaDataConsole() {
             : t('metaData.loadingCoverage')
         }
       >
-        <div className="flex gap-2 mb-4">
-          <Button
-            onClick={() => runImport()}
-            disabled={importing !== null}
-            size="sm"
-          >
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={() => runImport()} disabled={importing !== null}>
             {importing === 'all' ? t('metaData.importing') : t('metaData.importAll')}
           </Button>
-          <Button
-            onClick={runSetsImport}
-            disabled={importing !== null}
-            variant="secondary"
-            size="sm"
-          >
+        </div>
+        {((errorText && !setsError) || (noticeText && !setsNotice)) && (
+          <TaskResultPanel>
+            {errorText && !setsError && <Alert variant="error">{errorText}</Alert>}
+            {noticeText && !setsNotice && <Alert variant="success">{noticeText}</Alert>}
+          </TaskResultPanel>
+        )}
+
+        <div className="mt-4">
+          {loading ? (
+            <div className="flex flex-col gap-2" aria-busy="true">
+              <p className="text-caption text-fg-muted" role="status">
+                {t('metaData.loadingCoverage')}
+              </p>
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} height="2.25rem" rounded="sm" />
+              ))}
+            </div>
+          ) : coverage ? (
+            <Table
+              columns={formatColumns}
+              data={coverage.formats}
+              keyExtractor={(f) => f.format}
+              emptyMessage={t('metaData.noFormats')}
+            />
+          ) : null}
+        </div>
+      </Section>
+
+      <Section icon="choice-scarf" title={t('metaData.setsTitle')} subtitle={t('metaData.setsIntro')}>
+        <div className="flex flex-wrap gap-3">
+          <Button onClick={runSetsImport} disabled={importing !== null} variant="secondary">
             {importing === 'sets' ? t('metaData.importing') : t('metaData.refreshSets')}
           </Button>
         </div>
-
-        {loading ? (
-          <p className="text-sm text-poke-text-muted">{t('metaData.loadingCoverage')}</p>
-        ) : coverage ? (
-          <Table
-            columns={formatColumns}
-            data={coverage.formats}
-            keyExtractor={(f) => f.format}
-            emptyMessage={t('metaData.noFormats')}
-          />
-        ) : null}
+        {((errorText && setsError) || (noticeText && setsNotice)) && (
+          <TaskResultPanel>
+            {errorText && setsError && <Alert variant="error">{errorText}</Alert>}
+            {noticeText && setsNotice && <Alert variant="success">{noticeText}</Alert>}
+          </TaskResultPanel>
+        )}
+        <p className="mt-4 max-w-[75ch] border-t border-hairline pt-4 text-caption text-fg-muted">
+          {t.rich('metaData.cronNote', { path: CRON_PATH, code: (chunks) => <code>{chunks}</code> })}
+        </p>
       </Section>
-
-      <p className="text-xs text-poke-text-muted">
-        {t.rich('metaData.cronNote', { path: CRON_PATH, code: (chunks) => <code>{chunks}</code> })}
-      </p>
     </div>
   );
 }

@@ -1078,6 +1078,45 @@
       "needs": []
     },
     {
+      "id": "admin-meta-data",
+      "url": "/admin/meta-data",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-kale",
+      "url": "/admin/kale",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
+      "id": "admin-assistant",
+      "url": "/admin/assistant",
+      "fullPage": true,
+      "matrix": {
+        "lang": [
+          "en",
+          "de"
+        ]
+      },
+      "signIn": "admin",
+      "needs": []
+    },
+    {
       "id": "creator-studio",
       "url": "/creator/studio",
       "fullPage": true,

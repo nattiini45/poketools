@@ -1,7 +1,8 @@
 /**
  * Namespace `admin-tools` (owner T09, i18n-core §11.3): `/admin/{data,
- * meta-data,audit,achievements,wiki,rulesets,social}/**`. Kale stays English
- * and does not use it (design decision).
+ * meta-data,audit,achievements,wiki,rulesets,social}/**`, and the page chrome
+ * of `/admin/kale` (`kale.*`). The Kale console itself stays English and does
+ * not use it (design decision).
  *
  * English values are the pre-i18n literals verbatim, except that the
  * "(s)" / "(es)" pseudo-plurals became plural objects and sentences that
@@ -15,6 +16,13 @@ export default {
   data: {
     title: 'Data Tools',
     subtitle: 'Import players and export operational data',
+    /** Names the list of links to the task cards of the page. */
+    tasks: 'Tasks',
+    /** The header of a task card's result panel, and the plates that say what kind of run it was. */
+    result: 'Result',
+    dryRun: 'Dry run: nothing was changed',
+    repairRun: 'Repair run',
+    readOnly: 'Read only',
     jobs: {
       title: 'Aggregate Jobs',
       intro:
@@ -211,6 +219,10 @@ export default {
     importing: 'Importing…',
     importAll: 'Import all available',
     refreshSets: 'Refresh sample sets',
+    setsTitle: 'Sample sets',
+    setsIntro: 'Fetch the Smogon sample sets of every generation again.',
+    /** The plate on a format whose usage stats are older than 45 days. */
+    stale: 'Stale',
     noFormats: 'No formats available',
     columns: {
       format: 'Format',
@@ -222,6 +234,15 @@ export default {
     import: 'Import',
     cronNote:
       'A Vercel cron refreshes all usage stats and gen 8–9 sample sets on the 3rd of every month (<code>{path}</code>). Use the buttons above when a meta updates mid-month.',
+  },
+
+  /** The page around the soft-deprecated Kale console; the console itself is English only. */
+  kale: {
+    title: 'Kale Cabbage 2.0',
+    subtitle: 'Soft-deprecated tournament report generator',
+    legacy: 'Legacy',
+    notice:
+      'Kale is disabled by default and retained for legacy report testing only. New report work should use the standard AI module paths unless the feature flag is explicitly enabled.',
   },
 
   audit: {
@@ -247,9 +268,16 @@ export default {
       range: '{start}-{end} of {total}',
       empty: 'No audit events found.',
       loadFailed: 'Failed to load audit log',
-      actorOn: '{actor} on {resourceType}',
-      actorOnNamed: '{actor} on {resourceType}: {resourceName}',
+      emptyFiltered: 'No event matches these filters.',
+      resourceNamed: '{resourceType}: {resourceName}',
       noResourceId: 'no resource id',
+      details: 'Changes and metadata',
+      changes: 'Changes',
+      metadata: 'Metadata',
+    },
+    columns: {
+      resource: 'Resource',
+      when: 'When',
     },
   },
 

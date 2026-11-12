@@ -4,10 +4,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { MessageSquarePlus } from 'lucide-react';
 import Alert from '@/components/ui/Alert';
-import Badge from '@/components/ui/Badge';
 import Button from '@/components/ui/Button';
-import { PANEL, PANEL_HOVER } from '@/components/ui/panel';
 import Skeleton from '@/components/ui/Skeleton';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminEmpty from '@/components/admin/AdminEmpty';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useFormatter, useRequestTime, useT } from '@/i18n/client';
 import { adminAssistantMessages } from '@/i18n/messages/admin-assistant';
@@ -68,14 +68,15 @@ export default function ConversationBrowser({ hrefFor, onOpen, onCreated, seed }
     const inner = (
       <>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-heading text-sm font-semibold text-poke-text-primary">{item.title ?? t('page.untitled')}</span>
-          <span className="block text-xs text-poke-text-muted">{t('list.updated', { time: f.relative(item.lastMessageAt, now) })}</span>
+          <span className="block truncate text-subtitle text-fg">{item.title ?? t('page.untitled')}</span>
+          <span className="block text-caption text-fg-muted">{t('list.updated', { time: f.relative(item.lastMessageAt, now) })}</span>
         </span>
-        {item.busy && <Badge variant="blue" size="xs">{t('transcript.working')}</Badge>}
-        {item.readOnly && <Badge variant="gray" size="xs">{t('list.readOnly')}</Badge>}
+        {item.busy && <SkewChip tone="accent">{t('transcript.working')}</SkewChip>}
+        {item.readOnly && <SkewChip>{t('list.readOnly')}</SkewChip>}
       </>
     );
-    const className = `${PANEL} ${PANEL_HOVER} flex w-full items-center gap-2 p-3 text-left`;
+    const className =
+      'flex min-h-11 w-full items-center gap-2 px-3 py-2.5 text-left transition-[background-color] duration-80 ease-out hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:-outline-offset-2 focus-visible:outline-[var(--focus-ring)]';
     return (
       <li key={item.id}>
         {hrefFor !== undefined ? (
@@ -92,9 +93,9 @@ export default function ConversationBrowser({ hrefFor, onOpen, onCreated, seed }
   };
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between gap-2">
-        <h2 className="font-heading text-base font-bold text-poke-text-primary">{t('page.conversations')}</h2>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h2 className="font-heading text-title text-fg">{t('page.conversations')}</h2>
         <Button size="sm" onClick={() => void create()} loading={creating}>
           <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
           {t('page.newConversation')}
@@ -110,13 +111,15 @@ export default function ConversationBrowser({ hrefFor, onOpen, onCreated, seed }
       )}
       {items === null && error === null && (
         <div className="space-y-2" aria-busy="true">
-          <p className="text-sm text-poke-text-muted">{t('states.loading')}</p>
+          <p className="text-caption text-fg-muted">{t('states.loading')}</p>
           <Skeleton height="3.5rem" />
           <Skeleton height="3.5rem" />
         </div>
       )}
-      {items !== null && items.length === 0 && <p className="rounded-poke-md border border-dashed border-poke-border p-4 text-sm text-poke-text-secondary">{t('page.emptyList')}</p>}
-      {items !== null && items.length > 0 && <ul className="space-y-2">{items.map(row)}</ul>}
+      {items !== null && items.length === 0 && <AdminEmpty icon="dubious-disc" title={t('page.emptyList')} />}
+      {items !== null && items.length > 0 && (
+        <ul className="divide-y divide-hairline overflow-hidden rounded-poke-lg border border-hairline bg-surface">{items.map(row)}</ul>
+      )}
     </div>
   );
 }
