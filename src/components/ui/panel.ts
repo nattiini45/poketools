@@ -32,7 +32,7 @@ export const PANEL_HOVER =
 /** Focus ring used by every interactive element. */
 export const FOCUS_RING =
   'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 ' +
-  'focus-visible:outline-poke-focus';
+  'focus-visible:outline-accent-ink';
 
 /** Table header row treatment. */
 export const TABLE_HEAD =

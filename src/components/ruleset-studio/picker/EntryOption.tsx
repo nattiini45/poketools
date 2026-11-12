@@ -94,7 +94,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
   const actionLabel = allowlist ? (legal ? t('action.disallowShort') : t('action.allowShort')) : legal ? t('action.banShort') : t('action.unbanShort');
   const actionName = allowlist ? (legal ? t('action.disallow', { name }) : t('action.allow', { name })) : legal ? t('action.ban', { name }) : t('action.unban', { name });
 
-  const outline = active && listFocused ? 'outline-solid outline-2 outline-offset-1 outline-poke-focus' : '';
+  const outline = active && listFocused ? 'outline-solid outline-2 outline-offset-1 outline-accent-ink' : '';
   const frame = cn(
     'group/option relative flex h-full w-full min-w-0 cursor-pointer select-none overflow-hidden rounded-poke-md border text-left transition-colors duration-150',
     style.card,

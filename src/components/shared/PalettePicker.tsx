@@ -35,7 +35,7 @@ const ROW =
   'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-fg ' +
   'hover:bg-elevated has-[:checked]:bg-accent-subtle ' +
   'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
-  'has-[:focus-visible]:outline-poke-focus';
+  'has-[:focus-visible]:outline-accent-ink';
 
 export function PaletteOptions({
   value,

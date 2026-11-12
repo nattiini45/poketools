@@ -16,7 +16,7 @@ import NavMenuLink from './NavMenuLink';
 
 const TAB =
   'relative flex min-w-0 cursor-pointer flex-col items-center justify-center gap-0.5 px-1 text-micro ' +
-  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus';
+  'focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink';
 
 /** The gold tick over the current tab; it glides between tabs. */
 function Tick() {

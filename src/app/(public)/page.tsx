@@ -33,7 +33,7 @@ export const metadata: Metadata = {
 const STATUS_TONE: Record<string, SkewChipTone> = { active: 'live', upcoming: 'accent', completed: 'neutral' };
 const STATUS_EDGE: Record<string, string> = { active: 'bg-live', upcoming: 'bg-accent-fill', completed: 'bg-hairline-strong' };
 
-const FOCUS = 'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus';
+const FOCUS = 'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink';
 /** A link that holds a button plate: 44 px target, 80 ms lift. */
 const PLATE_LINK =
   'inline-flex min-h-11 items-center rounded-[3px] text-body transition-transform duration-[80ms] ease-out hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transform-none';

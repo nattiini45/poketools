@@ -81,7 +81,7 @@ export default function EntryListEditor({ category, label, value, onChange, gen 
                   type="button"
                   aria-label={t('entryList.remove', { name })}
                   onClick={() => onChange(applyListAction(value, 'reset', [id]))}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-muted hover:bg-sunken hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-muted hover:bg-sunken hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
