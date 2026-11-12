@@ -57,7 +57,7 @@ export function PointBuyListManagerView({
   const apiErrorText = useApiErrorText(errorsDraftLegacy, errorsSeasons, errorsDraft);
 
   if (loadState === 'loading') {
-    return <p className="text-sm text-poke-text-secondary">{t('listManager.loading')}</p>;
+    return <p className="text-sm text-fg-muted">{t('listManager.loading')}</p>;
   }
 
   const failed = loadState === 'failed';
@@ -66,10 +66,14 @@ export function PointBuyListManagerView({
   return (
     <div className="space-y-4">
       {errorText && <Alert variant="error">{errorText}</Alert>}
-      {saved && <Alert variant="success">{t('listManager.bound')}</Alert>}
+      {saved && (
+        <p role="status" className="text-body font-[550] text-win">
+          {t('listManager.bound')}
+        </p>
+      )}
       {failed && (
         <div className="flex items-center justify-between gap-3">
-          <p className="text-sm text-poke-text-secondary">{t('listManager.blocked')}</p>
+          <p className="text-sm text-fg-muted">{t('listManager.blocked')}</p>
           <Button variant="secondary" size="sm" onClick={onRetry}>
             {t('listManager.retry')}
           </Button>
@@ -78,14 +82,14 @@ export function PointBuyListManagerView({
 
       <div className="flex items-end gap-3">
         <div className="flex-1">
-          <label className="mb-1 block text-sm font-medium text-poke-text-secondary">
+          <label className="mb-1 block text-sm font-medium text-fg-muted">
             {t('listManager.versionLabel')}
           </label>
           <select
             value={selectedId}
             onChange={(e) => onSelect(e.target.value)}
             disabled={failed}
-            className="w-full rounded-lg border border-poke-border bg-poke-elevated px-3 py-2 text-sm text-poke-text focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent disabled:opacity-50"
+            className="w-full rounded-lg border border-hairline bg-elevated px-3 py-2 text-sm text-fg focus:border-accent-ink focus:outline-2 focus:outline-offset-2 focus:outline-transparent disabled:opacity-50"
           >
             <option value="">{t('listManager.selectList')}</option>
             {versions.map((v) => (
@@ -104,11 +108,11 @@ export function PointBuyListManagerView({
       </div>
 
       {!failed && versions.length === 0 && (
-        <p className="text-sm text-poke-text-secondary">{t('listManager.empty')}</p>
+        <p className="text-sm text-fg-muted">{t('listManager.empty')}</p>
       )}
 
       {currentListId && (
-        <p className="text-xs text-poke-text-secondary">
+        <p className="text-xs text-fg-muted">
           {t('listManager.currentlyBound', {
             name: versions.find((v) => v.id === currentListId)?.name ?? currentListId,
           })}

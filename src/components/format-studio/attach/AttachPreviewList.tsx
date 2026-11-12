@@ -26,10 +26,10 @@ export function EngineGapList({ gaps, stageNames, headingLevel = 4 }: EngineGapL
   if (gaps.length === 0) return null;
   return (
     <div className="space-y-1.5" data-engine-gaps>
-      <Heading level={headingLevel} className="text-sm font-heading font-semibold text-poke-text-primary">
+      <Heading level={headingLevel} className="text-sm font-heading font-semibold text-fg">
         {t('preview.gapsHeading')}
       </Heading>
-      <ul className="list-disc space-y-1 pl-5 text-sm text-poke-text-secondary">
+      <ul className="list-disc space-y-1 pl-5 text-sm text-fg-muted">
         {gaps.map((gap, index) => {
           const kind = typeof gap.params.kind === 'string' ? gap.params.kind : '';
           const stage = gap.stage === undefined ? '' : (stageNames[gap.stage] ?? gap.stage);
@@ -71,11 +71,11 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
   if (!preview.ok) {
     return (
       <div className="space-y-2" data-attach-preview="invalid">
-        <p className="text-sm text-poke-text-secondary">{t('preview.invalid')}</p>
+        <p className="text-sm text-fg-muted">{t('preview.invalid')}</p>
         {formatHref !== null && (
           <Link
             href={formatHref}
-            className="inline-flex min-h-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0"
           >
             {t('preview.openFormat')}
           </Link>
@@ -89,21 +89,21 @@ export default function AttachPreviewList({ preview, formatHref = null, headingL
 
   return (
     <div className="space-y-3" data-attach-preview="ok">
-      <Heading level={headingLevel} className="text-sm font-heading font-semibold text-poke-text-primary">
+      <Heading level={headingLevel} className="text-sm font-heading font-semibold text-fg">
         {t('preview.heading')}
       </Heading>
       <ol className="space-y-2">
         {preview.stages.map((stage) => (
           <li
             key={`${stage.key}:${stage.name}`}
-            className="min-w-0 rounded-poke-md border border-poke-border px-3 py-2"
+            className="min-w-0 rounded-poke-md border border-hairline px-3 py-2"
             data-attach-stage={stage.key}
           >
-            <p className="break-words text-sm font-medium text-poke-text-primary">
-              <span className="text-poke-text-muted">{t('preview.phase', { order: stage.order })}: </span>
+            <p className="break-words text-sm font-medium text-fg">
+              <span className="text-fg-muted">{t('preview.phase', { order: stage.order })}: </span>
               {stage.name}
             </p>
-            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-poke-text-secondary">
+            <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-fg-muted">
               <span>{tWords.dynamic(`label.pairing_${stage.bracketType}`, undefined, stage.bracketType)}</span>
               <span aria-hidden="true">·</span>
               <span>{t('preview.bestOf', { n: stage.bestOf })}</span>

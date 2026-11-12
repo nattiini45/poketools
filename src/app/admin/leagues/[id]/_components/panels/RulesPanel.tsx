@@ -1,4 +1,4 @@
-import Section from '@/components/ui/Section';
+import AccordionSection from '@/components/admin/AccordionSection';
 import EvolutionTierEditor from '@/components/league/EvolutionTierEditor';
 import DraftTierLimitsEditor from '@/components/league/DraftTierLimitsEditor';
 import PointBuyListManager from '@/components/league/PointBuyListManager';
@@ -32,36 +32,38 @@ export async function rulesPanel({ id, league, caps, t }: LeagueAdminPanelContex
   return (
     <>
       {caps.evolutionTiers && (
-        <Section title={t('evolutionTiers.title')} subtitle={t('evolutionTiers.subtitle')}>
+        <AccordionSection id="rules-tiers" icon="kings-rock" title={t('evolutionTiers.title')} subtitle={t('evolutionTiers.subtitle')} defaultOpen>
           <EvolutionTierEditor seasonId={id} participants={playerRefs} />
-        </Section>
+        </AccordionSection>
       )}
 
       {caps.tierLimits && (
-        <Section title={t('draftSettings.title')} subtitle={t('draftSettings.subtitle')}>
+        <AccordionSection id="rules-tier-limits" icon="everstone" title={t('draftSettings.title')} subtitle={t('draftSettings.subtitle')}>
           <DraftTierLimitsEditor seasonId={id} />
-        </Section>
+        </AccordionSection>
       )}
 
       {caps.pointBuyList && (
-        <Section title={t('pointBuyList.title')} subtitle={t('pointBuyList.subtitle')}>
+        <AccordionSection id="rules-point-buy" icon="poke-flute" title={t('pointBuyList.title')} subtitle={t('pointBuyList.subtitle')}>
           <PointBuyListManager seasonId={id} currentListId={league.point_buy_list_id} />
-        </Section>
+        </AccordionSection>
       )}
 
       {tGlossary && (
-        <Section
+        <AccordionSection
+          id="rules-format"
+          icon="dubious-disc"
           title={t('formatRules.title')}
           subtitle={t('formatRules.subtitle', { token: tGlossary('token.draftKill') })}
         >
           <FormatRulesEditor seasonId={id} seasonStarted={seasonStarted} />
-        </Section>
+        </AccordionSection>
       )}
 
       {caps.pointBuyList && (
-        <Section title={t('dataImport.title')} subtitle={t('dataImport.subtitle')} collapsible defaultCollapsed>
+        <AccordionSection id="rules-import" icon="town-map" title={t('dataImport.title')} subtitle={t('dataImport.subtitle')}>
           <EpbImportPanel seasonId={id} seasonName={league.name} />
-        </Section>
+        </AccordionSection>
       )}
     </>
   );

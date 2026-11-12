@@ -122,6 +122,7 @@ import Link from 'next/link';
 import AdminGuard from '@/components/shared/AdminGuard';
 import Section from '@/components/ui/Section';
 import WorkspaceCard from '@/components/admin/WorkspaceCard';
+import AccordionSection from '@/components/admin/AccordionSection';
 import SettingsSection from '@/components/admin/SettingsSection';
 import DraftPoolManager from '@/components/draft/DraftPoolManager';
 import TokenAdminSummary from '@/components/draft-admin/TokenAdminSummary';
@@ -183,7 +184,7 @@ function findByType(node: ReactNode, type: unknown): El[] {
  * What draws a titled section of a panel: `Section`, the workspace cards of the overview, and on the Settings tab
  * the sheet's sections and the details form, which renders the first one itself.
  */
-const SECTION_TYPES: unknown[] = [Section, WorkspaceCard, SettingsSection, LeagueSettingsForm];
+const SECTION_TYPES: unknown[] = [Section, WorkspaceCard, AccordionSection, SettingsSection, LeagueSettingsForm];
 
 /** The titles of the panel's sections in reading order. */
 function sectionTitles(node: ReactNode): string[] {

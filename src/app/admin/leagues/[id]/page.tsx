@@ -141,7 +141,7 @@ export default async function AdminLeagueDetailPage({ params, searchParams }: Pa
   const activeTab = parseLeagueAdminTab(query[LEAGUE_ADMIN_TAB_PARAM], tabs);
   const aliasSection = leagueAdminAliasSection(query[LEAGUE_ADMIN_TAB_PARAM]);
   const tabLink = (tab: LeagueAdminTab, section?: string) => (chunks: ReactNode) => (
-    <Link href={leagueAdminHref(id, tab, section)} className="text-accent-ink hover:underline">
+    <Link href={leagueAdminHref(id, tab, section)} className="font-[550] text-accent-ink hover:underline">
       {chunks}
     </Link>
   );

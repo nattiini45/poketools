@@ -63,7 +63,7 @@ export function DraftTierLimitsEditorView({
   const tShared = useT(draftLegacyLeagueAdminMessages);
   const apiErrorText = useApiErrorText(errorsDraftLegacy, errorsSeasons, errorsDraft);
 
-  if (loadState === 'loading') return <p className="text-sm text-poke-text-muted">{t('tierLimits.loading')}</p>;
+  if (loadState === 'loading') return <p className="text-sm text-fg-muted">{t('tierLimits.loading')}</p>;
 
   const errorText = error ? ('api' in error ? apiErrorText(error.api) : t(`tierLimits.errors.${error.key}`)) : null;
 
@@ -71,7 +71,7 @@ export function DraftTierLimitsEditorView({
     return (
       <div className="space-y-3">
         {errorText && <Alert variant="error">{errorText}</Alert>}
-        <p className="text-xs text-poke-text-muted">{t('tierLimits.blocked')}</p>
+        <p className="text-xs text-fg-muted">{t('tierLimits.blocked')}</p>
         <Button variant="secondary" size="sm" onClick={onRetry}>
           {t('tierLimits.retry')}
         </Button>
@@ -81,10 +81,14 @@ export function DraftTierLimitsEditorView({
 
   return (
     <div className="space-y-3" {...unsavedMarker(dirty)}>
-      <p className="text-xs text-poke-text-muted">{t('tierLimits.intro')}</p>
+      <p className="text-xs text-fg-muted">{t('tierLimits.intro')}</p>
 
       {errorText && <Alert variant="error">{errorText}</Alert>}
-      {saved && <Alert variant="success">{t('tierLimits.saved')}</Alert>}
+      {saved && (
+        <p role="status" className="text-body font-[550] text-win">
+          {t('tierLimits.saved')}
+        </p>
+      )}
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {POWER_TIERS.map((pt) => {
@@ -100,9 +104,9 @@ export function DraftTierLimitsEditorView({
                   min={0}
                   value={limits[pt]}
                   onChange={(e) => onChange(pt, Number(e.target.value))}
-                  className="w-16 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary text-center focus:border-poke-border-focus focus:ring-1 transition-colors"
+                  className="w-16 border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg text-center focus:border-accent-ink focus:ring-1 transition-colors"
                 />
-                <span className="text-xs text-poke-text-muted">
+                <span className="text-xs text-fg-muted">
                   {limits[pt] === 0 ? t('tierLimits.unlimited') : t('tierLimits.max', { count: limits[pt] })}
                 </span>
               </div>

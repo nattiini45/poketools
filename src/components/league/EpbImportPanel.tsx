@@ -146,8 +146,8 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
   return (
     <div className="space-y-8">
       <div className="space-y-3">
-        <h4 className="text-sm font-semibold text-poke-text-primary">{t('import.pointBuyTitle')}</h4>
-        <p className="text-xs text-poke-text-secondary">
+        <h4 className="text-sm font-semibold text-fg">{t('import.pointBuyTitle')}</h4>
+        <p className="text-xs text-fg-muted">
           {pbBindSeason
             ? t.rich('import.pointBuyIntroBind', {
                 sheet: POINT_BUY_SHEET,
@@ -173,7 +173,7 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
             <input
               value={pbName}
               onChange={(e) => setPbName(e.target.value)}
-              className="ml-2 rounded border border-poke-border bg-poke-elevated px-2 py-1 text-sm"
+              className="ml-2 rounded border border-hairline bg-elevated px-2 py-1 text-sm"
             />
           </label>
           <label className="text-sm">
@@ -181,7 +181,7 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
             <input
               value={pbVersion}
               onChange={(e) => setPbVersion(e.target.value)}
-              className="ml-2 w-16 rounded border border-poke-border bg-poke-elevated px-2 py-1 text-sm"
+              className="ml-2 w-16 rounded border border-hairline bg-elevated px-2 py-1 text-sm"
             />
           </label>
           <label className="flex items-center gap-1 text-sm">
@@ -206,9 +206,9 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
         {pbReport && <ImportReportView report={pbReport} />}
       </div>
 
-      <div className="space-y-3 border-t border-poke-border pt-6">
-        <h4 className="text-sm font-semibold text-poke-text-primary">{t('import.rolesTitle')}</h4>
-        <p className="text-xs text-poke-text-secondary">
+      <div className="space-y-3 border-t border-hairline pt-6">
+        <h4 className="text-sm font-semibold text-fg">{t('import.rolesTitle')}</h4>
+        <p className="text-xs text-fg-muted">
           {t.rich('import.rolesIntro', { sheet1: MATCHUP_SHEETS[0], sheet2: MATCHUP_SHEETS[1], b: bold })}
         </p>
 
@@ -234,7 +234,7 @@ export default function EpbImportPanel({ seasonId, seasonName }: EpbImportPanelP
           <>
             <ImportReportView report={rolesReport} />
             {rolesImported > 0 && (
-              <p className="text-sm text-green-400">{t('import.rolesImported', { count: rolesImported })}</p>
+              <p className="text-sm text-win">{t('import.rolesImported', { count: rolesImported })}</p>
             )}
           </>
         )}
@@ -250,7 +250,7 @@ export function ImportReportView({ report }: { report: ImportReport }) {
   const errors = report.errors ?? [];
   const info = report.info ?? [];
   return (
-    <div className="rounded-lg border border-poke-border bg-poke-elevated p-3 text-xs">
+    <div className="rounded-lg border border-hairline bg-elevated p-3 text-xs">
       {report.total_lines != null && (
         <p>
           {t('import.report.lines', {
@@ -265,23 +265,23 @@ export function ImportReportView({ report }: { report: ImportReport }) {
       )}
       {report.version_id && <p>{t('import.report.versionId', { id: report.version_id })}</p>}
       {report.by_category && (
-        <pre className="mt-1 overflow-x-auto text-poke-text-secondary">
+        <pre className="mt-1 overflow-x-auto text-fg-muted">
           {JSON.stringify(report.by_category, null, 2)}
         </pre>
       )}
       {warnings.length > 0 && (
-        <div className="mt-2 max-h-40 overflow-y-auto text-yellow-400">
+        <div className="mt-2 max-h-40 overflow-y-auto text-fg">
           {warnings.slice(0, 30).map((w) => <p key={w}>! {w}</p>)}
           {warnings.length > 30 && <p>{t('import.report.more', { count: warnings.length - 30 })}</p>}
         </div>
       )}
       {errors.length > 0 && (
-        <div className="mt-2 text-red-400">
+        <div className="mt-2 text-loss">
           {errors.map((e) => <p key={e}>× {e}</p>)}
         </div>
       )}
       {info.length > 0 && (
-        <details className="mt-2 text-poke-text-secondary">
+        <details className="mt-2 text-fg-muted">
           <summary className="cursor-pointer">
             {t('import.report.notes')} ({info.length})
           </summary>
@@ -312,9 +312,9 @@ function ReconciliationView({ report }: { report: ReconciliationReport }) {
   const reasons = [...new Set(report.overrides_applied.map((o) => o.reason_en))];
 
   return (
-    <div className="mt-3 space-y-3 border-t border-poke-border pt-3">
+    <div className="mt-3 space-y-3 border-t border-hairline pt-3">
       <div>
-        <h5 className="text-sm font-semibold text-poke-text-primary">{t('reconciliation.title')}</h5>
+        <h5 className="text-sm font-semibold text-fg">{t('reconciliation.title')}</h5>
         <p>{t('reconciliation.generated', { date: format.instant(report.generated_at, 'dateTimeYear') })}</p>
         <p>{t('reconciliation.source', { source: report.list_source ?? '—' })}</p>
         <p>{t('reconciliation.lineCount', { count: report.line_count })}</p>
@@ -466,14 +466,14 @@ function ReconciliationView({ report }: { report: ReconciliationReport }) {
 
       {report.errors.length > 0 && (
         <ReportSection title={t('reconciliation.errors')}>
-          <ul className="list-disc pl-4 text-red-400">
+          <ul className="list-disc pl-4 text-loss">
             {report.errors.map((e) => <li key={e}>{e}</li>)}
           </ul>
         </ReportSection>
       )}
       {report.warnings.length > 0 && (
         <ReportSection title={t('reconciliation.warnings')}>
-          <ul className="list-disc pl-4 text-yellow-400">
+          <ul className="list-disc pl-4 text-fg">
             {report.warnings.map((w) => <li key={w}>{w}</li>)}
           </ul>
         </ReportSection>
@@ -485,7 +485,7 @@ function ReconciliationView({ report }: { report: ReconciliationReport }) {
 function ReportSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section>
-      <h6 className="mb-1 font-semibold text-poke-text-primary">{title}</h6>
+      <h6 className="mb-1 font-semibold text-fg">{title}</h6>
       {children}
     </section>
   );
@@ -494,14 +494,14 @@ function ReportSection({ title, children }: { title: string; children: ReactNode
 type Cell = string | number | null | undefined;
 
 function ReportTable({ headers, rows, empty }: { headers: string[]; rows: Cell[][]; empty: string }) {
-  if (rows.length === 0) return <p className="italic text-poke-text-secondary">{empty}</p>;
+  if (rows.length === 0) return <p className="italic text-fg-muted">{empty}</p>;
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full text-left">
         <thead>
           <tr>
             {headers.map((h) => (
-              <th key={h} className="pr-3 font-medium text-poke-text-secondary">
+              <th key={h} className="pr-3 font-medium text-fg-muted">
                 {h}
               </th>
             ))}
