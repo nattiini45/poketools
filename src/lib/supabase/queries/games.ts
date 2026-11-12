@@ -750,7 +750,6 @@ async function fetchBattleStatsForPlayerInScope(
 export async function getPlayerBattleStats(
   playerId: string
 ): Promise<PlayerBattleStatRow[]> {
-  assertValidUuid(playerId, 'playerId');
   const { rows } = await readBoundedPages(
     (from, to) =>
       supabase

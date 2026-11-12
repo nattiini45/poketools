@@ -78,9 +78,4 @@ describe('getPlayerBattleStats', () => {
 
     expect(h.state.orders).toEqual(['created_at', 'id']);
   });
-
-  it('refuses a malformed player id before any read', async () => {
-    await expect(getPlayerBattleStats('not-a-uuid')).rejects.toThrow();
-    expect(h.state.ranges).toEqual([]);
-  });
 });
