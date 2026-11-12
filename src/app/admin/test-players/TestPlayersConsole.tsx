@@ -6,7 +6,9 @@ import Button from '@/components/ui/Button';
 import SkewChip from '@/components/ui/SkewChip';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
 import AdminEmpty from '@/components/admin/AdminEmpty';
-import { SortHeadButton, ariaSort, useColumnSort } from '@/components/admin/SortIcon';
+import { SortHeadButton, ariaSort } from '@/components/admin/SortIcon';
+import { TablePagination } from '@/components/ui/Table';
+import { useClientTable } from '@/lib/ui/use-client-table';
 import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
 import { cn } from '@/lib/utils/cn';
 import Input from '@/components/ui/Input';
@@ -160,14 +162,15 @@ export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRe
     () => buildPlayerColumns({ t, busyAction, seasonId, onPlayerAction: onAction, onRemoveFromSeason }),
     [t, busyAction, seasonId, onAction, onRemoveFromSeason],
   );
-  const { sorted, sort, toggle } = useColumnSort(
-    players,
-    {
-      name: (player) => player.name.toLowerCase(),
-      ps_username: (player) => player.ps_username?.toLowerCase() ?? '',
-    },
-    { key: 'name', direction: 'asc' },
+  const sortConfigs = useMemo(
+    () =>
+      playerColumns
+        .filter((column) => column.sortable)
+        .map((column) => ({ key: column.key, accessor: (row: Player) => column.sortValue?.(row) })),
+    [playerColumns],
   );
+  const table = useClientTable(players, sortConfigs, { key: 'name', direction: 'asc' });
+  const { sort } = table;
 
   if (players.length === 0) return <AdminEmpty title={t('standard.tableEmpty')} />;
 
@@ -187,9 +190,9 @@ export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRe
                 {column.sortable ? (
                   <SortHeadButton
                     label={column.header}
-                    active={sort.key === column.key}
-                    direction={sort.key === column.key ? sort.direction : null}
-                    onClick={() => toggle(column.key)}
+                    active={sort?.key === column.key}
+                    direction={sort?.key === column.key ? sort.direction : null}
+                    onClick={() => table.handleSort(column.key)}
                   />
                 ) : (
                   column.header
@@ -199,7 +202,7 @@ export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRe
           </tr>
         </thead>
         <tbody className={TBODY}>
-          {sorted.map((player, index) => (
+          {table.pageRows.map((player, index) => (
             <tr key={player.id} className={ROW}>
               {playerColumns.map((column) => {
                 const cell = column.render?.(player, index);
@@ -220,6 +223,15 @@ export function TestPlayersTable({ players, busyAction, seasonId, onAction, onRe
           ))}
         </tbody>
       </table>
+      <TablePagination
+        className="border-t border-hairline px-3 py-3"
+        page={table.page}
+        totalPages={table.totalPages}
+        perPage={table.perPage}
+        totalItems={table.totalItems}
+        onPageChange={table.setPage}
+        onPerPageChange={table.handlePerPageChange}
+      />
     </div>
   );
 }
@@ -433,7 +445,7 @@ export default function TestPlayersConsole() {
 
         {loading && <p className="text-body text-fg-muted">{t('standard.loading')}</p>}
         {listError && <Alert variant="error">{errorText(t, apiErrorText, listError)}</Alert>}
-        {!loading && players.length === 0 && !listError && (
+        {!loading && players.length === 0 && (
           <AdminEmpty title={t('standard.tableEmpty')}>
             <p className="max-w-prose text-body text-fg-muted">
               {t.rich('standard.empty', { strong: (chunks) => <strong>{chunks}</strong> })}

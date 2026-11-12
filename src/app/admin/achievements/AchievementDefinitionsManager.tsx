@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ApiResult } from '@/types/api';
 import type {
   AchievementCategory,
@@ -18,7 +18,9 @@ import Textarea from '@/components/ui/Textarea';
 import AdminDialog from '@/components/admin/AdminDialog';
 import AdminEmpty from '@/components/admin/AdminEmpty';
 import AdminSectionHeading from '@/components/admin/AdminSectionHeading';
-import { SortHeadButton, ariaSort, useColumnSort } from '@/components/admin/SortIcon';
+import { SortHeadButton, ariaSort } from '@/components/admin/SortIcon';
+import { TablePagination } from '@/components/ui/Table';
+import { useClientTable } from '@/lib/ui/use-client-table';
 import { CELL, NAME_CELL, ROW, TABLE, TABLE_FRAME, TBODY, TH, THEAD, TOUCH } from '@/components/admin/admin-table';
 import { cn } from '@/lib/utils/cn';
 import { useLocale, useT } from '@/i18n/client';
@@ -382,16 +384,17 @@ export default function AchievementDefinitionsManager() {
     [locale],
   );
 
-  const { sorted, sort, toggle } = useColumnSort(
-    definitions,
-    {
-      key: (d) => d.key,
-      name: (d) => d.name,
-      tier: (d) => d.tier,
-      category: (d) => d.category,
-    },
-    { key: 'key', direction: 'asc' },
+  const sortConfigs = useMemo(
+    () => [
+      { key: 'key', accessor: (d: AchievementDefinition) => d.key },
+      { key: 'name', accessor: (d: AchievementDefinition) => d.name },
+      { key: 'tier', accessor: (d: AchievementDefinition) => d.tier },
+      { key: 'category', accessor: (d: AchievementDefinition) => d.category },
+    ],
+    [],
   );
+  const table = useClientTable(definitions, sortConfigs, { key: 'key', direction: 'asc' });
+  const { sort } = table;
   const sortableColumns: { key: string; header: string }[] = [
     { key: 'key', header: t('achievements.list.columns.key') },
     { key: 'name', header: t('achievements.list.columns.name') },
@@ -447,9 +450,9 @@ export default function AchievementDefinitionsManager() {
                     <th key={column.key} scope="col" className={TH} aria-sort={ariaSort(sort, column.key)}>
                       <SortHeadButton
                         label={column.header}
-                        active={sort.key === column.key}
-                        direction={sort.key === column.key ? sort.direction : null}
-                        onClick={() => toggle(column.key)}
+                        active={sort?.key === column.key}
+                        direction={sort?.key === column.key ? sort.direction : null}
+                        onClick={() => table.handleSort(column.key)}
                       />
                     </th>
                   ))}
@@ -458,7 +461,7 @@ export default function AchievementDefinitionsManager() {
                 </tr>
               </thead>
               <tbody className={TBODY}>
-                {sorted.map((definition) => {
+                {table.pageRows.map((definition) => {
                   const hint = catalogName(definition);
                   return (
                     <tr key={definition.id} className={ROW}>
@@ -499,6 +502,15 @@ export default function AchievementDefinitionsManager() {
                 })}
               </tbody>
             </table>
+            <TablePagination
+              className="border-t border-hairline px-3 py-3"
+              page={table.page}
+              totalPages={table.totalPages}
+              perPage={table.perPage}
+              totalItems={table.totalItems}
+              onPageChange={table.setPage}
+              onPerPageChange={table.handlePerPageChange}
+            />
           </div>
         )}
       </section>

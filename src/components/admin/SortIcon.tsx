@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, ArrowUpDown } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import type { ColumnSortState } from '@/lib/ui/table-params';
 import { cn } from '@/lib/utils/cn';
 import { FOCUS } from '@/components/admin/match-styles';
 
@@ -29,25 +29,8 @@ export function SortHeadButton({
   );
 }
 
-export type ColumnSort = { key: string; direction: 'asc' | 'desc' };
-
-/** `aria-sort` of a header for the current client-side sort. */
-export function ariaSort(sort: ColumnSort, key: string): 'ascending' | 'descending' | 'none' {
-  if (sort.key !== key) return 'none';
+/** `aria-sort` of a header for the current client-side sort (`useClientTable`'s state, null = the default order). */
+export function ariaSort(sort: ColumnSortState | null, key: string): 'ascending' | 'descending' | 'none' {
+  if (sort?.key !== key) return 'none';
   return sort.direction === 'asc' ? 'ascending' : 'descending';
-}
-
-/** Client-side ordering of a short list: the rows sorted by one column's value, a header click flips or switches it. */
-export function useColumnSort<T>(rows: T[], values: Record<string, (row: T) => string>, initial: ColumnSort) {
-  const [sort, setSort] = useState<ColumnSort>(initial);
-  const sorted = useMemo(() => {
-    const value = values[sort.key];
-    if (!value) return rows;
-    const sign = sort.direction === 'asc' ? 1 : -1;
-    return [...rows].sort((a, b) => sign * value(a).localeCompare(value(b)));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, sort]);
-  const toggle = (key: string) =>
-    setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
-  return { sorted, sort, toggle };
 }
