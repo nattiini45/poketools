@@ -1214,7 +1214,7 @@ export default function RoundManager({
                       return (
                         <>
                           <Button
-                            variant="success"
+                            variant="primary"
                             size="sm"
                             disabled={blocked}
                             aria-describedby={blocked ? blockedId : undefined}
