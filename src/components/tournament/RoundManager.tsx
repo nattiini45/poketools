@@ -34,6 +34,7 @@ import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import { cn } from '@/lib/utils/cn';
+import { DANGER_OUTLINE, INFO_CALLOUT } from '@/components/admin/match-styles';
 import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { buildStartupChecklist, nextRoundToStart } from '@/lib/tournament/startup-checklist';
 import { apiFailure, type UiError } from './ui-error';
@@ -1007,7 +1008,8 @@ export default function RoundManager({
         {isStructureElim && rounds.length > 0 && (
           <>
             <Button
-              variant="danger"
+              variant="secondary"
+              className={DANGER_OUTLINE}
               size="sm"
               onClick={() => {
                 setRegenNeedsCascade(false);
@@ -1115,7 +1117,7 @@ export default function RoundManager({
       )}
 
       {nextToStart && (
-        <Alert variant="info" role="status" className="flex flex-wrap items-center justify-between gap-3">
+        <Alert variant="info" role="status" className={cn(INFO_CALLOUT, 'flex flex-wrap items-center justify-between gap-3')}>
           <div>
             <p className="font-semibold">
               {t('rounds.pending.title', { round: translateEngineLabel('round', nextToStart.name, locale) })}
@@ -1243,7 +1245,8 @@ export default function RoundManager({
                     })()}
                     {canRoundEvent(round.status, 'reset', 'admin') && (
                       <Button
-                        variant="danger"
+                        variant="secondary"
+                        className={DANGER_OUTLINE}
                         size="sm"
                         onClick={() => {
                           setResetNeedsCascade(false);
