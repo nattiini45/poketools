@@ -14,7 +14,7 @@ export async function phasesPanel({ id, league, caps, playerId, isSiteAdmin, t }
   const rulesets = await listRulesetOptionsFor({ actor: { playerId, isAdmin: isSiteAdmin }, seasonId: id, keep: [league.ruleset_id] });
   return (
     <>
-      <Section title={t('phases.title')}>
+      <Section icon="metronome" title={t('phases.title')}>
         <PhaseTimeline
           seasonId={id}
           rulesets={rulesets}
@@ -25,7 +25,7 @@ export async function phasesPanel({ id, league, caps, playerId, isSiteAdmin, t }
       </Section>
 
       {caps.evolutionPoints && (
-        <Section title={t('evolutionPoints.title')} subtitle={t('evolutionPoints.subtitle')}>
+        <Section icon="rare-candy" title={t('evolutionPoints.title')} subtitle={t('evolutionPoints.subtitle')}>
           <EvolutionPointRecalcButton seasonId={id} />
         </Section>
       )}

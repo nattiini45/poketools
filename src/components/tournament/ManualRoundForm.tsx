@@ -7,6 +7,8 @@ import type { ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Alert from '@/components/ui/Alert';
 import ConfirmDialog from '@/components/ui/ConfirmDialog';
+import Input from '@/components/ui/Input';
+import Select from '@/components/ui/Select';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { commonMessages } from '@/i18n/messages/common';
@@ -158,55 +160,49 @@ export default function ManualRoundForm({
     }
   }
 
-  if (loading) return <p className="text-xs text-poke-text-muted">{t('manualRound.loading')}</p>;
+  if (loading) return <p className="text-caption text-fg-muted">{t('manualRound.loading')}</p>;
 
   if (participants.length < 2) {
-    return <p className="text-xs text-poke-text-muted">{t('manualRound.tooFew')}</p>;
+    return <p className="text-caption text-fg-muted">{t('manualRound.tooFew')}</p>;
   }
 
   return (
-    <div className="border border-poke-border rounded-poke-md p-4 space-y-4 bg-poke-surface">
+    <div className="flex flex-col gap-4 rounded-poke-lg border border-hairline-strong bg-surface p-4">
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
 
-      <div className="flex items-center gap-4">
-        <div className="flex-1">
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('manualRound.roundName')}</label>
-          <input
+      <div className="flex flex-wrap items-end gap-4">
+        <div className="min-w-48 flex-1">
+          <Input
+            label={t('manualRound.roundName')}
             type="text"
             value={roundName}
             onChange={(e) => setRoundName(e.target.value)}
             placeholder={t('manualRound.roundNamePlaceholder')}
-            className="w-full px-2 py-1.5 text-sm border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
           />
         </div>
-        <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('manualRound.bestOf')}</label>
-          <select
-            value={bestOf}
-            onChange={(e) => setBestOf(Number(e.target.value))}
-            className="px-2 py-1.5 text-sm border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
-          >
+        <div className="w-36 shrink-0">
+          <Select label={t('manualRound.bestOf')} value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))}>
             {bestOfChoices(bestOfDefault).map((bo) => (
               <option key={bo} value={bo}>
                 {tCommon('bestOf', { count: bo })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h4 className="text-xs font-heading font-semibold text-poke-text-primary">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-subtitle font-[550] text-fg">
             {t('manualRound.matchups')}
           </h4>
           {unpairedCount > 1 && (
-            <span className="text-xs text-poke-warning">
+            <span className="text-caption text-poke-yellow-ink">
               {t('manualRound.unpaired', { count: unpairedCount })}
             </span>
           )}
           {unpairedCount === 1 && (
-            <span className="text-xs text-poke-text-muted">
+            <span className="text-caption text-fg-muted">
               {t('manualRound.bye')}
             </span>
           )}
@@ -214,11 +210,12 @@ export default function ManualRoundForm({
 
         <div className="space-y-2">
           {slots.map((slot, i) => (
-            <div key={i} className="flex items-center gap-2">
-              <select
+            <div key={i} className="flex flex-wrap items-center gap-2">
+              <div className="min-w-40 flex-1">
+              <Select
                 value={slot.player_1_id}
                 onChange={(e) => updateSlot(i, 'player_1_id', e.target.value)}
-                className="flex-1 px-2 py-1.5 text-sm border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
+                className="h-11 py-1.5 sm:h-10"
               >
                 <option value="">{t('manualRound.selectPlayer')}</option>
                 {getAvailablePlayers(i, 'player_1_id').map((p) => (
@@ -226,14 +223,16 @@ export default function ManualRoundForm({
                     {p.seed ? `[${p.seed}] ` : ''}{p.name}
                   </option>
                 ))}
-              </select>
+              </Select>
+              </div>
 
-              <span className="text-xs text-poke-text-muted font-medium">{t('manualRound.versus')}</span>
+              <span className="text-caption font-medium text-fg-muted">{t('manualRound.versus')}</span>
 
-              <select
+              <div className="min-w-40 flex-1">
+              <Select
                 value={slot.player_2_id}
                 onChange={(e) => updateSlot(i, 'player_2_id', e.target.value)}
-                className="flex-1 px-2 py-1.5 text-sm border border-poke-border rounded-poke-md bg-poke-surface text-poke-text-primary"
+                className="h-11 py-1.5 sm:h-10"
               >
                 <option value="">{t('manualRound.selectPlayer')}</option>
                 {getAvailablePlayers(i, 'player_2_id').map((p) => (
@@ -241,13 +240,14 @@ export default function ManualRoundForm({
                     {p.seed ? `[${p.seed}] ` : ''}{p.name}
                   </option>
                 ))}
-              </select>
+              </Select>
+              </div>
 
               {slots.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeSlot(i)}
-                  className="text-xs text-poke-danger hover:underline shrink-0"
+                  className="inline-flex min-h-11 shrink-0 items-center rounded-poke-sm px-1 text-caption font-[550] text-loss hover:underline sm:min-h-0 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   {t('manualRound.remove')}
                 </button>
@@ -263,7 +263,7 @@ export default function ManualRoundForm({
         )}
       </div>
 
-      <div className="flex items-center gap-2 pt-2 border-t border-poke-border">
+      <div className="flex items-center gap-2 border-t border-hairline pt-4">
         <Button
           variant="secondary"
           size="sm"
