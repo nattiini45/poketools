@@ -89,24 +89,24 @@ function Body({ target, doc, fromPreset, loadPreset, onApply, onClose }: Omit<Re
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-poke-text-secondary">{t('rebase.intro')}</p>
-      {loaded.status === 'loading' && <p role="status" className="text-sm text-poke-text-secondary">{t('rebase.loading')}</p>}
+      <p className="text-sm text-fg-muted">{t('rebase.intro')}</p>
+      {loaded.status === 'loading' && <p role="status" className="text-sm text-fg-muted">{t('rebase.loading')}</p>}
       {loaded.status === 'error' && <Alert variant="error">{t('rebase.failed')}</Alert>}
       {plan !== null && (
         <>
-          <label className="flex items-start gap-3 rounded-poke-md border border-poke-border p-3">
-            <input type="checkbox" className="mt-1 h-4 w-4 accent-poke-accent" checked={keepRules} onChange={(event) => setKeepRules(event.target.checked)} />
+          <label className="flex items-start gap-3 rounded-poke-md border border-hairline p-3">
+            <input type="checkbox" className="mt-1 h-4 w-4 accent-accent-fill" checked={keepRules} onChange={(event) => setKeepRules(event.target.checked)} />
             <span>
-              <span className="block text-sm font-semibold text-poke-text-primary">{t('rebase.keepRules')}</span>
-              <span className="block text-xs text-poke-text-secondary">{t('rebase.keepRulesHelp')}</span>
+              <span className="block text-sm font-semibold text-fg">{t('rebase.keepRules')}</span>
+              <span className="block text-xs text-fg-muted">{t('rebase.keepRulesHelp')}</span>
             </span>
           </label>
           <div className="space-y-1.5">
-            <h3 className="text-sm font-semibold text-poke-text-primary">{t('rebase.changes')}</h3>
+            <h3 className="text-sm font-semibold text-fg">{t('rebase.changes')}</h3>
             {lines.length === 0 ? (
-              <p className="text-sm text-poke-text-secondary">{t('rebase.nothing')}</p>
+              <p className="text-sm text-fg-muted">{t('rebase.nothing')}</p>
             ) : (
-              <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">
+              <ul className="list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
                 {lines.map((line) => (
                   <li key={line}>{line}</li>
                 ))}

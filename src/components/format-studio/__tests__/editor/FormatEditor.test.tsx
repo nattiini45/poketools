@@ -113,7 +113,7 @@ describe('FormatEditor: a preset', () => {
     expect(html).toContain('aria-current="true"');
   });
 
-  it('the layout classes keep the three columns and stop horizontal scroll', () => {
+  it('the layout puts the outline beside the inspector and stops horizontal scroll', () => {
     const html = render();
     expect(html).toContain('lg:grid-cols-[15rem_minmax(0,1fr)]');
     expect(html).toContain('min-w-0');

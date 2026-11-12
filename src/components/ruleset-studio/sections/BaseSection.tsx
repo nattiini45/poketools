@@ -103,24 +103,24 @@ export default function BaseSection({ doc, preset, presetStatus, onRetryPreset, 
         />
       </div>
 
-      <section className="space-y-3 rounded-poke-lg border border-poke-border bg-poke-surface p-4" aria-labelledby="rf-base-preset">
-        <h3 id="rf-base-preset" className="font-heading text-base font-bold text-poke-text-primary">
+      <section className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4" aria-labelledby="rf-base-preset">
+        <h3 id="rf-base-preset" className="font-heading text-base font-bold text-fg">
           {base.kind === 'preset' ? t('base.presetHeading') : t('base.blankHeading')}
         </h3>
-        <p className="text-sm text-poke-text-secondary">{t('base.intro')}</p>
+        <p className="text-sm text-fg-muted">{t('base.intro')}</p>
 
         {base.kind === 'preset' ? (
           <div className="space-y-3">
             <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-              <span className="font-heading text-lg font-bold text-poke-text-primary">{entry?.name ?? base.preset}</span>
+              <span className="font-heading text-lg font-bold text-fg">{entry?.name ?? base.preset}</span>
               {entry !== undefined && (
-                <span className="text-sm text-poke-text-secondary">
+                <span className="text-sm text-fg-muted">
                   {entry.genLabel} · {entry.tierLabel}
                 </span>
               )}
             </div>
 
-            {presetStatus === 'loading' && <p role="status" className="text-sm text-poke-text-secondary">{t('base.presetLoading')}</p>}
+            {presetStatus === 'loading' && <p role="status" className="text-sm text-fg-muted">{t('base.presetLoading')}</p>}
             {presetStatus === 'error' && (
               <Alert variant="error" className="flex flex-wrap items-center justify-between gap-2">
                 <span>{t('base.presetFailed')}</span>
@@ -131,14 +131,14 @@ export default function BaseSection({ doc, preset, presetStatus, onRetryPreset, 
             )}
             {preset !== null && (
               <>
-                <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-poke-text-secondary">
+                <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted">
                   {RULESET_CATEGORIES.map((category) => (
                     <li key={category}>{t(`base.bansInPreset.${category}`, { count: preset[category].ids.length })}</li>
                   ))}
                 </ul>
-                {RULESET_CATEGORIES.some((category) => preset[category].mode === 'allow') && <p className="text-sm text-poke-text-secondary">{t('base.rosterNote')}</p>}
+                {RULESET_CATEGORIES.some((category) => preset[category].mode === 'allow') && <p className="text-sm text-fg-muted">{t('base.rosterNote')}</p>}
                 {unmodelled.length > 0 && (
-                  <p className="text-sm text-poke-text-secondary">
+                  <p className="text-sm text-fg-muted">
                     {t('base.unmodelled', { list: unmodelled.map((kind) => t(`base.unmodelledKind.${kind}`)).join(', ') })}
                   </p>
                 )}
@@ -153,17 +153,17 @@ export default function BaseSection({ doc, preset, presetStatus, onRetryPreset, 
                 {t('base.toBlank')}
               </Button>
             </div>
-            <p className="text-xs text-poke-text-muted">{t('base.toBlankHelp')}</p>
+            <p className="text-xs text-fg-muted">{t('base.toBlankHelp')}</p>
 
             {catalogPreset?.tourOverlay === true && (
-              <div className="space-y-2 rounded-poke-md border border-poke-border bg-poke-base p-3">
-                <h4 className="text-sm font-semibold text-poke-text-primary">{t('base.tourHeading')}</h4>
-                <p className="text-xs text-poke-text-secondary">{t('base.tourHelp')}</p>
+              <div className="space-y-2 rounded-poke-md border border-hairline bg-page p-3">
+                <h4 className="text-sm font-semibold text-fg">{t('base.tourHeading')}</h4>
+                <p className="text-xs text-fg-muted">{t('base.tourHelp')}</p>
                 <Button type="button" variant="secondary" size="sm" className="min-h-11 sm:min-h-0" loading={tourBusy} disabled={preset === null} onClick={() => void addTour()}>
                   {t('base.tourAdd')}
                 </Button>
                 {tourMessage !== null && (
-                  <p role="status" className="text-sm text-poke-text-secondary">
+                  <p role="status" className="text-sm text-fg-muted">
                     {tourMessage.kind === 'applied' ? t('base.tourApplied', { clauses: tourMessage.clauses, bans: tourMessage.bans }) : tourMessage.kind === 'nothing' ? t('base.tourNothing') : t('base.tourFailed')}
                   </p>
                 )}
@@ -172,7 +172,7 @@ export default function BaseSection({ doc, preset, presetStatus, onRetryPreset, 
           </div>
         ) : (
           <div className="space-y-3">
-            <p className="text-sm text-poke-text-secondary">{t('base.blankIntro')}</p>
+            <p className="text-sm text-fg-muted">{t('base.blankIntro')}</p>
             <div className="grid gap-4 sm:grid-cols-3">
               <Select
                 id={fieldId('/base/gen')}

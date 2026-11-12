@@ -91,7 +91,7 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
   if (levels === null) {
     return (
       <div className="space-y-4">
-        <p className="max-w-prose text-sm text-poke-text-secondary">{t('levels.intro')}</p>
+        <p className="max-w-prose text-sm text-fg-muted">{t('levels.intro')}</p>
         <Button
           ref={enableRef}
           type="button"
@@ -119,13 +119,13 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
   };
   return (
     <div className="space-y-6">
-      <p className="max-w-prose text-sm text-poke-text-secondary">{t('levels.intro')}</p>
+      <p className="max-w-prose text-sm text-fg-muted">{t('levels.intro')}</p>
       <div className="grid gap-4 sm:grid-cols-2">
-        <label className="space-y-1 text-sm font-medium text-poke-text-primary">
+        <label className="space-y-1 text-sm font-medium text-fg">
           <span>{t('levels.policy')}</span>
           <select
             id={fieldId('/levels/policy')}
-            className="min-h-11 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3"
+            className="min-h-11 w-full rounded-poke-md border border-hairline bg-surface px-3"
             value={levels.policy}
             onChange={(event) => onChange({ ...doc, levels: { ...levels, policy: event.target.value === 'exact' ? 'exact' : 'max' } })}
           >
@@ -145,12 +145,12 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
           onCommit={(text) => onChange({ ...doc, levels: { ...levels, default: Number(text) } })}
         />
       </div>
-      <p className="text-xs text-poke-text-muted">{t('levels.defaultHelp')}</p>
+      <p className="text-xs text-fg-muted">{t('levels.defaultHelp')}</p>
       <div className="space-y-3">
-        <h3 className="font-heading text-base font-bold text-poke-text-primary">{t('levels.entries')}</h3>
-        {levels.entries.length === 0 && <p className="text-sm text-poke-text-muted">{t('levels.empty')}</p>}
+        <h3 className="font-heading text-base font-bold text-fg">{t('levels.entries')}</h3>
+        {levels.entries.length === 0 && <p className="text-sm text-fg-muted">{t('levels.empty')}</p>}
         {levels.entries.map((entry, index) => (
-          <div key={index} className="grid items-end gap-3 rounded-poke-md border border-poke-border p-3 sm:grid-cols-[minmax(0,1fr)_7rem_11rem_auto]">
+          <div key={index} className="grid items-end gap-3 rounded-poke-md border border-hairline p-3 sm:grid-cols-[minmax(0,1fr)_7rem_11rem_auto]">
             <DraftInput
               id={fieldId(`/levels/entries/${index}/id`)}
               label={t('levels.species')}
@@ -170,11 +170,11 @@ export default function LevelsSection({ doc, onChange }: LevelsSectionProps) {
               settle={settleLevel}
               onCommit={(text) => update(index, { level: Number(text) })}
             />
-            <label className="space-y-1 text-sm font-medium text-poke-text-primary">
+            <label className="space-y-1 text-sm font-medium text-fg">
               <span>{t('levels.status')}</span>
               <select
                 id={fieldId(`/levels/entries/${index}/status`)}
-                className="min-h-11 w-full rounded-poke-md border border-poke-border bg-poke-surface px-3"
+                className="min-h-11 w-full rounded-poke-md border border-hairline bg-surface px-3"
                 value={entry.status}
                 onChange={(event) => update(index, { status: event.target.value === 'approved' ? 'approved' : 'experimental' })}
               >

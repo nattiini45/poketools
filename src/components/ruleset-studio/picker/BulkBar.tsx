@@ -36,9 +36,9 @@ export default function BulkBar({ selectedCount, hiddenCount, filteredCount, nar
     <section aria-label={t('bulk.heading')} className="space-y-2 rounded-poke-md border p-3">
       {hasSelection && (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="mr-1 text-sm font-semibold text-poke-text-primary" role="status">
+          <p className="mr-1 text-sm font-semibold text-fg" role="status">
             {t('bulk.selected', { count: selectedCount })}
-            {hiddenCount > 0 && <span className="ml-2 font-normal text-poke-text-secondary">{t('bulk.hidden', { count: hiddenCount })}</span>}
+            {hiddenCount > 0 && <span className="ml-2 font-normal text-fg-muted">{t('bulk.hidden', { count: hiddenCount })}</span>}
           </p>
           {allowlist ? (
             <>
@@ -75,7 +75,7 @@ export default function BulkBar({ selectedCount, hiddenCount, filteredCount, nar
       )}
       {hasFiltered && (
         <div className="flex flex-wrap items-center gap-2">
-          <p className="mr-1 text-sm font-semibold text-poke-text-primary">{t('bulk.filtered', { count: filteredCount })}</p>
+          <p className="mr-1 text-sm font-semibold text-fg">{t('bulk.filtered', { count: filteredCount })}</p>
           {allowlist ? (
             <>
               <Button type="button" variant="secondary" size="sm" className={BUTTON} onClick={() => onAct('allow', 'filtered')}>

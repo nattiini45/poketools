@@ -41,8 +41,8 @@ function AllowlistStart({ category, model, onDone }: AllowlistStartProps) {
   const lookup = stateLookup(model.state.doc[category], model.baseList(category));
   const legalIds = state.status === 'ready' ? state.index.entries.filter((entry) => isLegalState(lookup.stateOf(entry.id))).map((entry) => entry.id) : null;
   return (
-    <div role="group" aria-label={t('lists.startWith')} className="space-y-2 rounded-poke-md border border-poke-border bg-poke-surface p-3">
-      <p className="text-sm font-semibold text-poke-text-primary">{t('lists.startWith')}</p>
+    <div role="group" aria-label={t('lists.startWith')} className="space-y-2 rounded-poke-md border border-hairline bg-surface p-3">
+      <p className="text-sm font-semibold text-fg">{t('lists.startWith')}</p>
       <div className="flex flex-wrap gap-2">
         <Button
           type="button"
@@ -114,10 +114,10 @@ export default function ListSection({ category, model }: ListSectionProps) {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-poke-text-secondary">{t(`lists.${category}.intro`)}</p>
+      <p className="text-sm text-fg-muted">{t(`lists.${category}.intro`)}</p>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <div role="radiogroup" aria-label={t('lists.mode')} className="inline-flex overflow-hidden rounded-poke-md border border-poke-border">
+        <div role="radiogroup" aria-label={t('lists.mode')} className="inline-flex overflow-hidden rounded-poke-md border border-hairline">
           {MODES.map((mode) => {
             const checked = (mode === 'allow') === allowlist;
             return (
@@ -132,7 +132,7 @@ export default function ListSection({ category, model }: ListSectionProps) {
                 onKeyDown={onModeKey}
                 className={cn(
                   'min-h-11 px-4 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
-                  checked ? 'bg-poke-accent text-poke-surface' : 'bg-poke-surface text-poke-text-secondary hover:bg-poke-muted',
+                  checked ? 'bg-accent-fill text-tier-ink' : 'bg-surface text-fg-muted hover:bg-sunken',
                 )}
               >
                 {mode === 'block' ? t('lists.block') : t('lists.allow')}
@@ -141,7 +141,7 @@ export default function ListSection({ category, model }: ListSectionProps) {
           })}
         </div>
 
-        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-poke-text-secondary">
+        <ul className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-fg-muted">
           {allowlist ? (
             <li>{t('lists.counts.allowed', { count: counts.allowed ?? 0 })}</li>
           ) : (

@@ -36,7 +36,7 @@ export default function LTextPair({ pointer, label, value, base, required = fals
 
   return (
     <fieldset className="min-w-0 space-y-2">
-      <legend className="font-heading text-sm font-semibold text-poke-text-primary">{label}</legend>
+      <legend className="font-heading text-sm font-semibold text-fg">{label}</legend>
       <div className="grid gap-3 sm:grid-cols-2">
         {LOCALES.map((locale) => {
           const id = locale === 'en' ? fieldId(pointer) : fieldId(`${pointer}/${locale}`);
@@ -53,7 +53,7 @@ export default function LTextPair({ pointer, label, value, base, required = fals
           );
         })}
       </div>
-      {missing.length > 0 && <p className="text-xs text-poke-text-muted">{missing.map((locale) => t('fields.missingIn', { language: languageName(locale) })).join(' ')}</p>}
+      {missing.length > 0 && <p className="text-xs text-fg-muted">{missing.map((locale) => t('fields.missingIn', { language: languageName(locale) })).join(' ')}</p>}
     </fieldset>
   );
 }
