@@ -55,7 +55,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
   if (conv.status === 'loading' || (detail === null && conv.status !== 'error')) {
     return (
       <div className="space-y-3 p-1" aria-busy="true">
-        <p className="text-sm text-poke-text-muted">{t('states.loading')}</p>
+        <p className="text-caption text-fg-muted">{t('states.loading')}</p>
         <Skeleton height="3rem" />
         <Skeleton height="5rem" />
       </div>
@@ -80,7 +80,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
 
   const header = (
     <header className="flex flex-wrap items-center gap-2">
-      <h2 className="min-w-0 flex-1 truncate font-heading text-base font-bold text-poke-text-primary">{conversation.title ?? t('page.untitled')}</h2>
+      <h2 className="min-w-0 flex-1 truncate font-heading text-title text-fg">{conversation.title ?? t('page.untitled')}</h2>
       {conversation.readOnly && <Badge variant="gray">{t('list.readOnly')}</Badge>}
       {variant === 'drawer' && (
         <>
@@ -91,7 +91,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
           )}
           <Link
             href={`/admin/assistant/${conversation.id}`}
-            className="inline-flex items-center gap-1 text-xs font-heading font-semibold text-poke-focus underline-offset-2 hover:underline"
+            className="inline-flex items-center gap-1 text-caption font-[550] text-accent-ink underline-offset-2 hover:underline"
           >
             {t('drawer.openFullView')}
             <ExternalLink className="h-3 w-3" aria-hidden="true" />
@@ -104,10 +104,10 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
   const body = (
     <div className="relative min-h-0 flex-1">
       <div ref={scroller} onScroll={onScroll} className="h-full space-y-3 overflow-y-auto pr-1" role="log" aria-live="polite" aria-relevant="additions text" aria-label={t('page.transcript')}>
-        <p className="text-xs text-poke-text-muted">{t('transcript.notice')}</p>
-        {!detail.capabilities.approve && <p className="text-xs text-poke-text-muted">{t('states.phaseOnly')}</p>}
+        <p className="text-caption text-fg-muted">{t('transcript.notice')}</p>
+        {!detail.capabilities.approve && <p className="text-caption text-fg-muted">{t('states.phaseOnly')}</p>}
         {detail.items.length === 0 && conv.live === null && conv.pendingText === null && detail.proposals.length === 0 && (
-          <p className="rounded-poke-md border border-dashed border-poke-border p-3 text-sm text-poke-text-secondary">{t('page.intro')}</p>
+          <p className="rounded-poke-md border border-dashed border-hairline-strong p-3 text-body text-fg-muted">{t('page.intro')}</p>
         )}
         <Transcript
           items={detail.items}
@@ -121,7 +121,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
           onUndo={composerDisabled || conv.sending ? undefined : (proposalId) => void conv.requestUndo(proposalId)}
         />
         {busyElsewhere && (
-          <p className="text-xs text-poke-text-muted" role="status">
+          <p className="text-caption text-fg-muted" role="status">
             {t('transcript.working')}
           </p>
         )}
@@ -153,7 +153,7 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
       {conv.usage?.warn === true && spent !== null && (
         <Alert variant="warning">{t('states.budgetWarning', { spent: money(spent), cap: money(detail.limits.conversationCapMicro) })}</Alert>
       )}
-      {detail.proposals.some((proposal) => proposal.effectiveStatus === 'proposed') && <p className="text-xs text-poke-text-muted">{t('states.waitingForConfirm')}</p>}
+      {detail.proposals.some((proposal) => proposal.effectiveStatus === 'proposed') && <p className="text-caption text-fg-muted">{t('states.waitingForConfirm')}</p>}
       <Composer
         disabled={composerDisabled}
         sending={conv.sending}
@@ -168,8 +168,8 @@ export default function AssistantWorkspace({ conversationId, variant }: Assistan
 
   if (variant === 'page') {
     return (
-      <div className="grid min-h-0 gap-4 lg:grid-cols-12">
-        <section className="flex min-h-[28rem] flex-col gap-3 lg:col-span-7" aria-label={t('page.transcript')}>
+      <div className="grid min-h-0 gap-6 lg:grid-cols-12">
+        <section className="flex min-h-[28rem] flex-col gap-3 rounded-poke-lg border border-hairline bg-surface p-4 lg:col-span-7" aria-label={t('page.transcript')}>
           {header}
           <div className="flex h-[60vh] min-h-0 flex-col gap-3">
             {body}

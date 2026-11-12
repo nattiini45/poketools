@@ -11,7 +11,7 @@ export default async function AdminPage() {
   const [t, extensionActionLabels] = await Promise.all([getT(adminCoreMessages), extensionAuditActionLabels()]);
   return (
     <AdminGuard>
-      <PageContainer title={t('dashboard.title')} maxWidth="xl">
+      <PageContainer title={t('dashboard.title')} icon="town-map" subtitle={t('dashboard.subtitle')} maxWidth="xl">
         {/* Live dashboard */}
         <AdminDashboardContent extensionActionLabels={extensionActionLabels} />
 

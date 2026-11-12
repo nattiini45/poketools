@@ -8,6 +8,11 @@ export default defineDe<typeof en>()({
   data: {
     title: 'Datenwerkzeuge',
     subtitle: 'Spieler importieren und Betriebsdaten exportieren',
+    tasks: 'Aufgaben',
+    result: 'Ergebnis',
+    dryRun: 'Probelauf: nichts wurde geändert',
+    repairRun: 'Reparaturlauf',
+    readOnly: 'Nur lesend',
     jobs: {
       title: 'Aggregat-Jobs',
       intro:
@@ -199,6 +204,9 @@ export default defineDe<typeof en>()({
     importing: 'Wird importiert …',
     importAll: 'Alle verfügbaren importieren',
     refreshSets: 'Beispiel-Sets aktualisieren',
+    setsTitle: 'Beispiel-Sets',
+    setsIntro: 'Hole die Smogon-Beispiel-Sets aller Generationen neu.',
+    stale: 'Veraltet',
     noFormats: 'Keine Formate verfügbar',
     columns: {
       format: 'Format',
@@ -210,6 +218,14 @@ export default defineDe<typeof en>()({
     import: 'Importieren',
     cronNote:
       'Ein Vercel-Cronjob aktualisiert am 3. jedes Monats alle Nutzungsstatistiken und die Beispiel-Sets für Gen 8–9 (<code>{path}</code>). Nutze die Buttons oben, wenn sich ein Meta mitten im Monat ändert.',
+  },
+
+  kale: {
+    title: 'Kale Cabbage 2.0',
+    subtitle: 'Auslaufender Generator für Turnierberichte',
+    legacy: 'Altbestand',
+    notice:
+      'Kale ist standardmäßig aus und bleibt nur für Tests alter Berichte erhalten. Neue Berichte nutzen die üblichen KI-Module, solange das Feature-Flag nicht ausdrücklich an ist.',
   },
 
   audit: {
@@ -235,9 +251,16 @@ export default defineDe<typeof en>()({
       range: '{start}–{end} von {total}',
       empty: 'Keine Protokolleinträge gefunden.',
       loadFailed: 'Das Protokoll konnte nicht geladen werden',
-      actorOn: '{actor} bei {resourceType}',
-      actorOnNamed: '{actor} bei {resourceType}: {resourceName}',
+      emptyFiltered: 'Kein Eintrag passt zu diesen Filtern.',
+      resourceNamed: '{resourceType}: {resourceName}',
       noResourceId: 'keine Ressourcen-ID',
+      details: 'Änderungen und Metadaten',
+      changes: 'Änderungen',
+      metadata: 'Metadaten',
+    },
+    columns: {
+      resource: 'Ressource',
+      when: 'Zeitpunkt',
     },
   },
 
