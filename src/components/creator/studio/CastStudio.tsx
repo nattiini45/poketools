@@ -16,6 +16,8 @@ import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { errorsMatches } from '@/i18n/messages/errors';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { soloPlaceholderOf } from '@/lib/broadcast/solo-defaults';
+import Alert from '@/components/ui/Alert';
+import Button from '@/components/ui/Button';
 
 /** A failure to show: the API's error when it sent one, else the local message key. */
 interface StudioError {
@@ -97,29 +99,30 @@ export default function CastStudio() {
 
       {/* Match info bar (when a match is selected) */}
       {state.matchId && state.matchId !== '' && (
-        <div className="flex items-center justify-between rounded-poke-md bg-poke-surface border border-poke-border px-4 py-2">
-          <div className="flex items-center gap-3">
-            <span className="font-heading font-bold text-poke-text-primary">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-poke-lg border border-hairline bg-surface px-4 py-2">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="font-heading text-subtitle text-fg">
               {displayName(tracker.current_game.player1.player_name, 1)}
             </span>
-            <span className="text-poke-text-secondary text-sm">{t('studio.versus')}</span>
-            <span className="font-heading font-bold text-poke-text-primary">
+            <span className="text-body text-fg-muted">{t('studio.versus')}</span>
+            <span className="font-heading text-subtitle text-fg">
               {displayName(tracker.current_game.player2.player_name, 2)}
             </span>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => dispatch({ type: 'set_match', matchId: '', tournamentId: state.tournamentId, seasonId: state.seasonId })}
-            className="text-xs text-poke-accent hover:underline"
           >
             {t('studio.changeMatch')}
-          </button>
+          </Button>
         </div>
       )}
 
       {error && (
-        <div className="rounded-poke-md border border-red-500/30 bg-red-500/10 px-4 py-2 text-sm text-poke-danger-tint-ink">
+        <Alert variant="error" className="text-poke-danger-tint-ink">
           {error.res && (error.res.error || error.res.code) ? errorText(error.res) : t(`studio.${error.fallback}`)}
-        </div>
+        </Alert>
       )}
 
       {/* Score bar */}
@@ -144,7 +147,7 @@ export default function CastStudio() {
 
       {/* Facing indicator (when enabled) */}
       {showFacing && facing.player1Slot !== null && facing.player2Slot !== null && (
-        <div className="text-center text-xs text-poke-accent font-heading">
+        <div className="text-center font-heading text-caption text-accent-ink">
           {t('studio.facingSlots', { slot1: facing.player1Slot + 1, slot2: facing.player2Slot + 1 })}
         </div>
       )}

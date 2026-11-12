@@ -23,13 +23,11 @@ export default async function CastStudioToolsPage({ params }: Props) {
   const t = await getT(creatorMessages);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6">
-      <h1 className="font-heading text-2xl font-bold text-poke-text-primary mb-4">
-        {t('toolsPage.title')}
-      </h1>
-      <p className="text-sm text-poke-text-secondary mb-6">
-        {t('toolsPage.intro', { name: session.name })}
-      </p>
+    <div className="mx-auto flex max-w-3xl flex-col gap-6">
+      <header>
+        <h1 className="font-heading text-display text-fg">{t('toolsPage.title')}</h1>
+        <p className="mt-1 text-body text-fg-muted">{t('toolsPage.intro', { name: session.name })}</p>
+      </header>
       <ToolsLayout sessionId={sessionId} realtimeKey={session.realtime_key} generation={session.generation} />
     </div>
   );

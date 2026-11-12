@@ -9,6 +9,8 @@ import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import { localizeNature } from '@/lib/pkmn/i18n/names/misc';
 import { formatKo } from '@/lib/pkmn/i18n/calc-text';
+import Button from '@/components/ui/Button';
+import SkewPlate from '@/components/ui/SkewPlate';
 
 type ToolTab = 'speed' | 'damage' | 'field';
 
@@ -130,59 +132,53 @@ export default function ToolsTabs({ pokemon1, pokemon2, generation }: ToolsTabsP
           ? [t('tools.damage.failed')]
           : [];
 
-  const tabClass = (tab: ToolTab) => `
-    px-4 py-2 text-sm font-heading font-bold transition-colors rounded-t-poke-md
-    ${activeTab === tab
-      ? 'bg-poke-surface text-poke-accent border-b-2 border-poke-accent'
-      : 'text-poke-text-secondary hover:text-poke-text-primary'
-    }
-  `;
-
   const species1 = pokemon1?.species ? localizeSpecies(pokemon1.species, dataLocale) : '';
   const species2 = pokemon2?.species ? localizeSpecies(pokemon2.species, dataLocale) : '';
 
   return (
     <div>
       {/* Tab bar */}
-      <div className="flex gap-1 border-b border-poke-border">
-        <button onClick={() => setActiveTab('speed')} className={tabClass('speed')}>
-          {t('tools.tabs.speed')}
-        </button>
-        <button onClick={() => setActiveTab('damage')} className={tabClass('damage')}>
-          {t('tools.tabs.damage')}
-        </button>
-        <button onClick={() => setActiveTab('field')} className={tabClass('field')}>
-          {t('tools.tabs.field')}
-        </button>
+      <div role="tablist" className="-mx-1 mb-3 flex items-center gap-3 overflow-x-auto border-b border-hairline px-2 py-1">
+        {(['speed', 'damage', 'field'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            role="tab"
+            aria-selected={activeTab === tab}
+            onClick={() => setActiveTab(tab)}
+            className="inline-flex min-h-11 shrink-0 items-center text-body"
+          >
+            <SkewPlate variant="tab" active={activeTab === tab} glideId="studio-tools">
+              {t(`tools.tabs.${tab}`)}
+            </SkewPlate>
+          </button>
+        ))}
       </div>
 
       {/* Tab content */}
-      <div className="rounded-b-poke-lg border border-t-0 border-poke-border bg-poke-surface p-4">
+      <div className="rounded-poke-lg border border-hairline bg-surface p-4">
         {activeTab === 'speed' && (
           <div className="space-y-3">
-            <h3 className="font-heading font-bold text-poke-text-primary">{t('tools.speed.title')}</h3>
+            <h3 className="font-heading text-title text-fg">{t('tools.speed.title')}</h3>
             {pokemon1?.species && pokemon2?.species ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-poke-text-primary">{species1}</span>
-                  <span className="text-sm font-mono text-poke-text-secondary">
+                  <span className="text-sm text-fg">{species1}</span>
+                  <span className="text-sm font-mono text-fg-muted">
                     {t('tools.speed.evsNature', { evs: pokemon1.evs.spe, nature: localizeNature(pokemon1.nature, dataLocale) })}
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm text-poke-text-primary">{species2}</span>
-                  <span className="text-sm font-mono text-poke-text-secondary">
+                  <span className="text-sm text-fg">{species2}</span>
+                  <span className="text-sm font-mono text-fg-muted">
                     {t('tools.speed.evsNature', { evs: pokemon2.evs.spe, nature: localizeNature(pokemon2.nature, dataLocale) })}
                   </span>
                 </div>
-                <button
-                  onClick={calcSpeed}
-                  className="w-full rounded-poke-md bg-poke-accent text-poke-surface py-1.5 text-sm font-heading font-bold hover:opacity-90 transition-opacity"
-                >
+                <Button onClick={calcSpeed} className="w-full">
                   {t('tools.speed.compare')}
-                </button>
+                </Button>
                 {speedResults.p1 !== null && (
-                  <p className="text-xs text-poke-text-secondary">
+                  <p className="text-xs text-fg-muted">
                     {t('tools.speed.result', {
                       pokemon1: species1,
                       evs1: speedResults.p1,
@@ -193,30 +189,26 @@ export default function ToolsTabs({ pokemon1, pokemon2, generation }: ToolsTabsP
                 )}
               </div>
             ) : (
-              <p className="text-sm text-poke-text-secondary">{t('tools.speed.empty')}</p>
+              <p className="text-sm text-fg-muted">{t('tools.speed.empty')}</p>
             )}
           </div>
         )}
 
         {activeTab === 'damage' && (
           <div className="space-y-3">
-            <h3 className="font-heading font-bold text-poke-text-primary">{t('tools.damage.title')}</h3>
+            <h3 className="font-heading text-title text-fg">{t('tools.damage.title')}</h3>
             {pokemon1?.species && pokemon2?.species ? (
               <div className="space-y-2">
-                <p className="text-xs text-poke-text-secondary">
+                <p className="text-xs text-fg-muted">
                   {t('tools.damage.attacking', { attacker: species1, defender: species2 })}
                 </p>
-                <button
-                  onClick={calcDamage}
-                  disabled={calcLoading}
-                  className="w-full rounded-poke-md bg-poke-accent text-poke-surface py-1.5 text-sm font-heading font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
-                >
+                <Button onClick={calcDamage} disabled={calcLoading} className="w-full">
                   {calcLoading ? t('tools.damage.calculating') : t('tools.damage.calculateAll')}
-                </button>
+                </Button>
                 {damageLines.length > 0 && (
                   <div className="space-y-1">
                     {damageLines.map((line, i) => (
-                      <div key={i} className="text-sm text-poke-text-primary font-mono bg-poke-muted rounded px-2 py-1">
+                      <div key={i} className="text-sm text-fg font-mono bg-sunken rounded px-2 py-1">
                         {line}
                       </div>
                     ))}
@@ -224,15 +216,15 @@ export default function ToolsTabs({ pokemon1, pokemon2, generation }: ToolsTabsP
                 )}
               </div>
             ) : (
-              <p className="text-sm text-poke-text-secondary">{t('tools.damage.empty')}</p>
+              <p className="text-sm text-fg-muted">{t('tools.damage.empty')}</p>
             )}
           </div>
         )}
 
         {activeTab === 'field' && (
           <div className="space-y-3">
-            <h3 className="font-heading font-bold text-poke-text-primary">{t('tools.field.title')}</h3>
-            <p className="text-sm text-poke-text-secondary">
+            <h3 className="font-heading text-title text-fg">{t('tools.field.title')}</h3>
+            <p className="text-sm text-fg-muted">
               {t('tools.field.comingSoon')}
             </p>
           </div>

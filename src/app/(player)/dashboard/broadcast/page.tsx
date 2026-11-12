@@ -1,5 +1,7 @@
 import AuthGuard from '@/components/shared/AuthGuard';
 import PageContainer from '@/components/ui/PageContainer';
+import SkewChip from '@/components/ui/SkewChip';
+import AdminEmpty from '@/components/admin/AdminEmpty';
 import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
 import Link from 'next/link';
@@ -20,7 +22,7 @@ export default async function BroadcastHubPage() {
     return (
       <AuthGuard>
         <PageContainer title={t('broadcastHub.title')}>
-          <p className="text-poke-text-secondary">{t('broadcastHub.notRegistered')}</p>
+          <p className="text-body text-fg-muted">{t('broadcastHub.notRegistered')}</p>
         </PageContainer>
       </AuthGuard>
     );
@@ -40,73 +42,51 @@ export default async function BroadcastHubPage() {
   return (
     <AuthGuard>
       <PageContainer title={t('broadcastHub.title')}>
-        <p className="text-sm text-poke-text-secondary mb-6">
-          {t('broadcastHub.intro')}
-        </p>
+        <p className="-mt-3 text-body text-fg-muted">{t('broadcastHub.intro')}</p>
 
         {/* Active matches */}
         {activeMatches.length > 0 ? (
-          <div className="flex flex-col gap-3 mb-8">
-            <h3 className="text-sm font-semibold text-poke-text-secondary uppercase tracking-wider">
-              {t('broadcastHub.activeMatches')}
-            </h3>
+          <section className="flex flex-col gap-3">
+            <h2 className="font-heading text-title text-fg">{t('broadcastHub.activeMatches')}</h2>
             {activeMatches.map((match) => (
               <Link
                 key={match.id}
                 href={`/dashboard/broadcast/${match.id}`}
-                className="flex items-center justify-between px-4 py-3 rounded-xl bg-poke-surface border border-poke-border hover:border-poke-accent transition-colors"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-poke-lg border border-hairline bg-surface px-4 py-3 transition-colors hover:bg-hover focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm font-semibold text-poke-text">
-                    {match.player_1_name}
-                  </span>
-                  <span className="text-xs text-poke-text-secondary">{t('broadcastHub.versus')}</span>
-                  <span className="text-sm font-semibold text-poke-text">
-                    {match.player_2_name}
-                  </span>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-body font-[550] text-fg">{match.player_1_name}</span>
+                  <span className="text-caption text-fg-muted">{t('broadcastHub.versus')}</span>
+                  <span className="text-body font-[550] text-fg">{match.player_2_name}</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      match.status === 'in_progress'
-                        ? 'bg-yellow-500/20 text-yellow-400'
-                        : 'bg-blue-500/20 text-blue-400'
-                    }`}
-                  >
+                <div className="flex items-center gap-3">
+                  <SkewChip tone={match.status === 'in_progress' ? 'live' : 'neutral'}>
                     {enumLabel(tEnum, 'matchStatus', match.status)}
-                  </span>
-                  <span className="text-poke-accent text-sm">{t('broadcastHub.track')}</span>
+                  </SkewChip>
+                  <span className="text-body font-[550] text-accent-ink">{t('broadcastHub.track')}</span>
                 </div>
               </Link>
             ))}
-          </div>
+          </section>
         ) : (
-          <div className="text-center py-8 text-poke-text-secondary text-sm">
-            {t('broadcastHub.noActive')}
-          </div>
+          <AdminEmpty title={t('broadcastHub.noActive')} />
         )}
 
         {/* Recently completed */}
         {recentCompleted.length > 0 && (
-          <div className="flex flex-col gap-3">
-            <h3 className="text-sm font-semibold text-poke-text-secondary uppercase tracking-wider">
-              {t('broadcastHub.recentlyCompleted')}
-            </h3>
+          <section className="flex flex-col gap-3">
+            <h2 className="font-heading text-title text-fg">{t('broadcastHub.recentlyCompleted')}</h2>
             {recentCompleted.map((match) => (
               <div
                 key={match.id}
-                className="flex items-center justify-between px-4 py-3 rounded-xl border"
+                className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 rounded-poke-lg border border-hairline bg-surface px-4 py-3"
               >
-                <div className="flex items-center gap-3">
-                  <span className="text-sm text-poke-text">
-                    {match.player_1_name}
-                  </span>
-                  <span className="text-xs text-poke-text-secondary">{t('broadcastHub.versus')}</span>
-                  <span className="text-sm text-poke-text">
-                    {match.player_2_name}
-                  </span>
+                <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
+                  <span className="text-body text-fg">{match.player_1_name}</span>
+                  <span className="text-caption text-fg-muted">{t('broadcastHub.versus')}</span>
+                  <span className="text-body text-fg">{match.player_2_name}</span>
                 </div>
-                <span className="text-xs text-emerald-400 font-semibold">
+                <span className="text-caption font-[550] text-win">
                   {/* No winner name (e.g. a draw or a deleted player): show the neutral status label. */}
                   {match.winner_name
                     ? t('broadcastHub.winnerWon', { name: match.winner_name })
@@ -114,7 +94,7 @@ export default async function BroadcastHubPage() {
                 </span>
               </div>
             ))}
-          </div>
+          </section>
         )}
       </PageContainer>
     </AuthGuard>

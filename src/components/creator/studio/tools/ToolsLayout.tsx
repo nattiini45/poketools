@@ -59,8 +59,8 @@ export default function ToolsLayout({ sessionId, realtimeKey, generation }: Tool
     <div className="space-y-6">
       {/* Connection status */}
       <div className="flex items-center gap-2">
-        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500' : 'bg-yellow-500 animate-pulse'}`} />
-        <span className="text-xs text-poke-text-secondary">
+        <div className={`w-2 h-2 rounded-full ${connected ? 'bg-win' : 'bg-accent-fill animate-pulse'}`} />
+        <span className="text-caption text-fg-muted">
           {connected ? t('tools.connected') : t('tools.waiting')}
         </span>
       </div>

@@ -21,7 +21,7 @@ export default async function CastStudioSessionPage({ params }: Props) {
   if (session.mode === 'solo') redirect(`/creator/studio/${sessionId}/solo`);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div>
       <CastStudioProvider session={session}>
         <CastStudio />
       </CastStudioProvider>

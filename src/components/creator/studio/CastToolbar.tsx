@@ -5,6 +5,8 @@ import { useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsBroadcast } from '@/i18n/messages/errors';
+import Button from '@/components/ui/Button';
+import SkewChip from '@/components/ui/SkewChip';
 
 export default function CastToolbar() {
   const { state, dispatch } = useCastStudio();
@@ -16,66 +18,62 @@ export default function CastToolbar() {
       ? t('toolbar.sync.localOnly')
       : t('toolbar.sync.syncing');
   const syncClass = state.syncStatus === 'connected'
-    ? 'bg-green-500'
+    ? 'bg-win'
     : state.syncStatus === 'error'
-      ? 'bg-red-500'
-      : 'bg-yellow-500';
+      ? 'bg-loss'
+      : 'bg-accent-fill';
 
   return (
-    <div className="flex items-center gap-4 rounded-poke-md bg-poke-surface border border-poke-border px-4 py-2">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-poke-lg border border-hairline bg-surface px-4 py-2">
       {/* Session name (editable) */}
       <input
         type="text"
         value={state.sessionName}
         onChange={(e) => dispatch({ type: 'set_session_name', name: e.target.value })}
-        className="bg-transparent border-none text-poke-text-primary font-heading font-bold text-lg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-0 min-w-0 flex-1"
+        className="min-w-0 flex-1 basis-48 rounded-poke-md border-none bg-transparent font-heading text-title text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-0 focus-visible:outline-solid focus-visible:outline-[var(--focus-ring)]"
         placeholder={t('toolbar.sessionNamePlaceholder')}
       />
 
       {/* Mode badge */}
-      <span className="rounded-full bg-poke-muted px-2.5 py-0.5 text-xs font-heading font-bold uppercase tracking-wide text-poke-text-secondary">
-        {t.dynamic(`mode.${state.mode}`, undefined, state.mode)}
-      </span>
+      <SkewChip>{t.dynamic(`mode.${state.mode}`, undefined, state.mode)}</SkewChip>
 
       {/* Format badge */}
-      <span className="rounded-full bg-poke-muted px-2.5 py-0.5 text-xs font-mono text-poke-text-secondary">
-        {state.format}
-      </span>
+      <SkewChip className="font-mono">{state.format}</SkewChip>
 
       {/* Show Facing toggle */}
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
+        aria-pressed={state.showFacing}
         onClick={() => dispatch({ type: 'toggle_show_facing' })}
-        className={`rounded-poke-md px-3 py-1 text-xs font-heading font-bold transition-colors ${
-          state.showFacing
-            ? 'bg-poke-accent text-poke-surface'
-            : 'bg-poke-muted text-poke-text-secondary'
-        }`}
+        className={state.showFacing ? 'bg-tier-1 text-tier-ink' : undefined}
       >
         {t('toolbar.facing')}
-      </button>
+      </Button>
 
       {/* Open tools in new tab */}
-      <button
+      <Button
+        variant="secondary"
+        size="sm"
         onClick={() => window.open(`/creator/studio/${state.sessionId}/tools`, '_blank')}
-        className="rounded-poke-md bg-poke-muted px-3 py-1 text-xs font-heading font-bold text-poke-text-secondary transition-colors"
       >
         {t('toolbar.openTools')}
-      </button>
+      </Button>
 
       {/* Save indicator */}
-      <div className="flex items-center gap-1.5 text-xs text-poke-text-secondary">
+      <div className="flex items-center gap-1.5 text-caption text-fg-muted">
         {state.save.status === 'saving' ? (
           <span className="animate-pulse">{t('toolbar.saving')}</span>
         ) : state.save.status === 'dirty' ? (
-          <span className="text-yellow-500">{t('toolbar.unsaved')}</span>
+          <span className="text-accent-ink">{t('toolbar.unsaved')}</span>
         ) : state.save.status === 'error' ? (
-          <span className="text-red-500" title={errorText(state.save.error)}>{t('toolbar.saveFailed')}</span>
+          <span className="text-loss" title={errorText(state.save.error)}>{t('toolbar.saveFailed')}</span>
         ) : (
-          <span className="text-green-500">{t('toolbar.saved')}</span>
+          <span className="text-win">{t('toolbar.saved')}</span>
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 text-xs text-poke-text-secondary">
+      <div className="flex items-center gap-1.5 text-caption text-fg-muted">
         <span className={`h-2 w-2 rounded-full ${syncClass}`} />
         <span>{syncLabel}</span>
       </div>
