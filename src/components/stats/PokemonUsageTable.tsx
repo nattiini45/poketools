@@ -151,6 +151,7 @@ export default function PokemonUsageTable({
       columns={columns}
       data={data}
       keyExtractor={(row) => row.pokemon_name}
+      stickyColumn="pokemon_name"
       emptyMessage={labels.empty}
       labels={labels.pagination}
       animated

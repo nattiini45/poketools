@@ -162,6 +162,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
           columns={columns}
           data={rows}
           keyExtractor={(row) => row.player_id}
+          stickyColumn="player_name"
           emptyMessage={t('leaderboard.empty')}
           defaultSort={{ key: 'rating', direction: 'desc' }}
         />

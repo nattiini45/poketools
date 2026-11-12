@@ -57,6 +57,8 @@ export default defineDe<typeof en>()({
     global: 'Global (gesamte Zeit)',
     league: 'Liga',
     tournament: 'Turnier',
+    leagueSearch: 'Ligen durchsuchen',
+    tournamentSearch: 'Turniere durchsuchen',
   },
   resourceAdmins: {
     loading: 'Admins werden geladen …',

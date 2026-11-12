@@ -9,6 +9,8 @@ export default {
     scopeNotFound: 'Scope not found.',
     loading: 'Loading insights…',
     subtitle: 'Insights & statistics',
+    /** Names the tab strip for assistive technology. */
+    tabsLabel: 'Insights sections',
   },
   tabs: {
     ratings: 'Ratings',

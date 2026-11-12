@@ -3,6 +3,9 @@
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { InsightsScope } from '@/lib/insights/scope';
 import { scopeToQueryString } from '@/lib/insights/scope';
+import Combobox from '@/components/ui/Combobox';
+import Select from '@/components/ui/Select';
+import { cn } from '@/lib/utils/cn';
 import { useT } from '@/i18n/client';
 import { uiMessages } from '@/i18n/messages/ui';
 
@@ -57,11 +60,26 @@ export default function ScopeSelector({
   const scopeType =
     scope.type === 'global' ? 'global' : scope.type === 'league' ? 'league' : 'tournament';
 
+  // The combobox's own label is smaller than the select's, so both fields get the select's label here.
+  const picker = (kind: 'league' | 'tournament', options: ScopeOption[], selectedId: string) => (
+    <label className="block min-w-0 flex-1 basis-56 space-y-1.5 sm:max-w-sm">
+      <span className="block text-sm font-body font-medium text-poke-text-primary">{t(`scope.${kind}`)}</span>
+      <Combobox
+        mode="static"
+        placeholder={t(`scope.${kind}Search`)}
+        value={options.find((option) => option.id === selectedId)?.name ?? ''}
+        staticOptions={options.map((option) => ({ value: option.id, label: option.name }))}
+        // Clearing the field leaves the scope as it is: the page always shows one league or tournament.
+        onChange={(id) => id && pushScope({ type: kind, id })}
+      />
+    </label>
+  );
+
   return (
-    <div className={`flex flex-wrap gap-3 items-end ${className}`}>
-      <div>
-        <label className="block text-xs text-poke-text-secondary mb-1">{t('scope.label')}</label>
-        <select
+    <div className={cn('flex flex-wrap items-start gap-3', className)}>
+      <div className="min-w-0 flex-1 basis-56 sm:max-w-60">
+        <Select
+          label={t('scope.label')}
           value={globalOnly ? 'global' : scopeType}
           disabled={globalOnly}
           onChange={(e) => {
@@ -72,48 +90,16 @@ export default function ScopeSelector({
               pushScope({ type: 'tournament', id: tournaments[0].id });
             }
           }}
-          className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary disabled:opacity-60"
           title={globalOnly ? t('scope.globalOnly') : undefined}
         >
           <option value="global">{t('scope.global')}</option>
           {!globalOnly && <option value="league">{t('scope.league')}</option>}
           {!globalOnly && <option value="tournament">{t('scope.tournament')}</option>}
-        </select>
+        </Select>
       </div>
 
-      {!globalOnly && scope.type === 'league' && (
-        <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('scope.league')}</label>
-          <select
-            value={scope.id}
-            onChange={(e) => pushScope({ type: 'league', id: e.target.value })}
-            className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary min-w-[160px]"
-          >
-            {leagues.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
-
-      {!globalOnly && scope.type === 'tournament' && (
-        <div>
-          <label className="block text-xs text-poke-text-secondary mb-1">{t('scope.tournament')}</label>
-          <select
-            value={scope.id}
-            onChange={(e) => pushScope({ type: 'tournament', id: e.target.value })}
-            className="px-2 py-1.5 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary min-w-[160px]"
-          >
-            {tournaments.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      )}
+      {!globalOnly && scope.type === 'league' && picker('league', leagues, scope.id)}
+      {!globalOnly && scope.type === 'tournament' && picker('tournament', tournaments, scope.id)}
     </div>
   );
 }

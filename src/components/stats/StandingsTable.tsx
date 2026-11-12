@@ -108,6 +108,7 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
       columns={columns}
       data={rankedStandings}
       keyExtractor={(row) => row.player_id}
+      stickyColumn="player_name"
       emptyMessage={t('standings.empty')}
       animated
     />

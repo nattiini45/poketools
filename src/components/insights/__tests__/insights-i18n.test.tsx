@@ -41,9 +41,8 @@ describe('ScopedInsightsView', () => {
 
 describe('InsightsTabs', () => {
   const props = {
-    initialTab: 'streaks' as const,
+    activeTab: 'streaks' as const,
     scope: { type: 'global' as const },
-    title: 'Global Insights',
     usageRows: [],
     isDoubles: false,
     standings: [],
@@ -66,20 +65,32 @@ describe('InsightsTabs', () => {
 
   it('renders English tab names and the streak line', () => {
     const html = renderWithI18n(<InsightsTabs {...props} />);
-    expect(html).toContain('Insights &amp; statistics');
+    expect(html).toContain('aria-label="Insights sections"');
     expect(html).toContain('Ratings');
     expect(html).toContain('Win streak: 3 (best 6)');
   });
 
   it('renders German tab names and the streak line', () => {
     const html = renderWithI18n(<InsightsTabs {...props} />, { locale: 'de' });
-    expect(html).toContain('Insights &amp; Statistiken');
+    expect(html).toContain('aria-label="Insights-Bereiche"');
     expect(html).toContain('Wertungen');
     expect(html).toContain('Siegesserie: 3 (Rekord 6)');
   });
 
+  it('every tab is a link that keeps the scope, and the current one is marked', () => {
+    const html = renderWithI18n(<InsightsTabs {...props} scope={{ type: 'league', id: 's 1' }} />);
+    expect(html).toContain('href="/insights?scope=league&amp;id=s%201&amp;tab=usage"');
+    expect(html).toMatch(/href="\/insights\?scope=league&amp;id=s%201&amp;tab=streaks"[^>]*aria-current="page"/);
+  });
+
+  it('a tab the scope does not have falls back to usage', () => {
+    const html = renderWithI18n(<InsightsTabs {...props} activeTab="h2h" />);
+    expect(html).toMatch(/tab=usage"[^>]*aria-current="page"/);
+    expect(html).not.toContain('tab=h2h');
+  });
+
   it('the ratings tab renders the leaderboard in German', () => {
-    const html = renderWithI18n(<InsightsTabs {...props} initialTab="ratings" />, { locale: 'de' });
+    const html = renderWithI18n(<InsightsTabs {...props} activeTab="ratings" />, { locale: 'de' });
     expect(html).toContain('Globale Wertungen');
     expect(html).toContain('Min. Spiele');
   });
