@@ -2,6 +2,7 @@
 
 import { useCastStudio } from '../CastStudioContext';
 import KOStatCard from './KOStatCard';
+import Button from '@/components/ui/Button';
 import { useT } from '@/i18n/client';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 
@@ -21,8 +22,8 @@ export default function KOTracker() {
 
   if (filledSlots.length === 0) {
     return (
-      <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-6 text-center">
-        <p className="text-sm text-poke-text-secondary">
+      <div className="rounded-poke-lg border border-hairline bg-surface p-6 text-center">
+        <p className="text-body text-fg-muted">
           {t('solo.koEmpty')}
         </p>
       </div>
@@ -32,15 +33,10 @@ export default function KOTracker() {
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="font-heading text-sm font-bold text-poke-text-secondary uppercase tracking-wide">
-          {t('solo.koTracker')}
-        </h3>
-        <button
-          onClick={() => dispatchTracker({ type: 'reset_game' })}
-          className="text-xs text-poke-text-secondary hover:text-poke-accent transition-colors"
-        >
+        <h3 className="font-heading text-subtitle text-fg">{t('solo.koTracker')}</h3>
+        <Button variant="ghost" size="sm" onClick={() => dispatchTracker({ type: 'reset_game' })}>
           {t('solo.resetGame')}
-        </button>
+        </Button>
       </div>
       <div className="grid grid-cols-1 gap-2">
         {filledSlots.map(({ slot, index }) => (

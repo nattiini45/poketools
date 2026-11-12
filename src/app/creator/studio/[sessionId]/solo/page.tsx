@@ -20,7 +20,7 @@ export default async function SoloStreamerPage({ params }: Props) {
   if (session.owner_id !== playerId) redirect('/creator/studio');
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6">
+    <div>
       <CastStudioProvider session={session}>
         <SoloLayout />
       </CastStudioProvider>

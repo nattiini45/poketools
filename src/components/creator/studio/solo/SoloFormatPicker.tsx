@@ -19,7 +19,7 @@ export default function SoloFormatPicker() {
   };
 
   return (
-    <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-4">
+    <div className="rounded-poke-lg border border-hairline bg-surface p-4">
       <FormatSelector value={state.format} onChange={handleFormatChange} />
     </div>
   );
