@@ -115,6 +115,15 @@ export default function ClockBar({
         <div className="flex min-w-0 flex-col gap-1">
           <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             {t('clock.roundOf', { round: progress.round, rounds: progress.roundsTotal, pick: progress.pickInRound, picks: progress.picksInRound })}
+            {vm.viewer.budgetRemaining !== null ? (
+              <span
+                className={styles.digits}
+                title={t('clock.pointsLeftTitle', { n: vm.viewer.budgetRemaining, count: Math.max(0, vm.viewer.slotsTotal - vm.viewer.picksMade) })}
+              >
+                {'· '}
+                {t('clock.pointsLeft', { n: vm.viewer.budgetRemaining })}
+              </span>
+            ) : null}
             {progress.makeupForRound !== null ? (
               <span className={styles.makeupBadge}>↻ {t('clock.makeupFor', { round: progress.makeupForRound })}</span>
             ) : null}
@@ -140,14 +149,6 @@ export default function ClockBar({
             <span className={`${styles.digits} text-xs font-medium text-[var(--draft-ink-2)]`}>
               {t('clock.overall', { pick: progress.overallPick, total: progress.overallTotal })}
             </span>
-            {vm.viewer.budgetRemaining !== null ? (
-              <span
-                className={`${styles.pointsChip} ${styles.digits}`}
-                title={t('clock.pointsLeftTitle', { n: vm.viewer.budgetRemaining, count: Math.max(0, vm.viewer.slotsTotal - vm.viewer.picksMade) })}
-              >
-                {t('clock.pointsLeft', { n: vm.viewer.budgetRemaining })}
-              </span>
-            ) : null}
           </span>
         </div>
       ) : null}
