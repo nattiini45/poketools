@@ -84,7 +84,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
           <span className="text-xs text-fg-muted">
             {entry.genLabel} · {entry.tierLabel}
           </span>
-          {entry.source === 'smogon-draft' && <span className="rounded-full border border-hairline-strong bg-tier-3-soft px-2 text-[11px] font-semibold text-accent-ink">{t('presets.draftTag')}</span>}
+          {entry.source === 'smogon-draft' && <span className="rounded-full border border-hairline-strong bg-tier-3 px-2 text-[11px] font-semibold text-tier-ink">{t('presets.draftTag')}</span>}
           {current && (
             <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-fg">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />

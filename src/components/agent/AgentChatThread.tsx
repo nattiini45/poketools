@@ -62,7 +62,7 @@ export default function AgentChatThread({
           <div
             className={
               m.role === 'user'
-                ? 'max-w-[85%] rounded-poke-md bg-tier-3-soft px-3 py-2 text-sm text-fg whitespace-pre-wrap'
+                ? 'max-w-[85%] rounded-poke-md bg-tier-3 px-3 py-2 text-sm text-tier-ink whitespace-pre-wrap'
                 : 'max-w-[85%] rounded-poke-md bg-surface border border-hairline px-3 py-2 text-sm text-fg-muted leading-relaxed'
             }
           >
