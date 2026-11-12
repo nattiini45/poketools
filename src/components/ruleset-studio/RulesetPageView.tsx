@@ -4,6 +4,7 @@ import RulesView from '@/components/ruleset-studio/RulesView';
 import ForkStoredButton from '@/components/ruleset-studio/starts/ForkStoredButton';
 import { describeChange } from '@/components/ruleset/pin-change-text';
 import UsagePanel from '@/components/ruleset/UsagePanel';
+import ReadingLayout, { type ReadingOutlineItem } from '@/components/studio-shell/ReadingLayout';
 import Badge from '@/components/ui/Badge';
 import { LocalTime } from '@/i18n/LocalTime';
 import type { Locale } from '@/i18n/config';
@@ -18,7 +19,7 @@ import type { PinChangeSummary } from '@/lib/ruleset-studio/pin-info';
 import { isCatalogStale } from '@/lib/ruleset-studio/staleness';
 import { resolveLText } from '@/lib/studio-core/ltext';
 
-const LINK = 'inline-flex min-h-11 min-w-11 items-center text-sm font-medium text-poke-blue hover:underline sm:min-h-0 sm:min-w-0';
+const LINK = 'inline-flex min-h-11 min-w-11 items-center text-sm font-medium text-accent-ink hover:underline underline-offset-2 sm:min-h-0 sm:min-w-0';
 
 export interface RulesetPageViewProps {
   id: string;
@@ -69,6 +70,12 @@ export default function RulesetPageView({
   tEditor,
   tRuleset,
 }: RulesetPageViewProps) {
+  const outline: ReadingOutlineItem[] = [
+    ...(described?.sections.map((section) => ({ id: `rules-${section.id}`, label: section.heading })) ?? []),
+    ...(usage !== null ? [{ id: 'ruleset-usage', label: tRuleset('usage.heading') }] : []),
+    ...(versions.length > 0 ? [{ id: 'ruleset-versions-section', label: t('page.versions') }] : []),
+  ];
+
   return (
     <>
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
@@ -76,7 +83,7 @@ export default function RulesetPageView({
         <Badge variant={summary.current_version === null ? 'gray' : 'green'}>
           {summary.current_version === null ? tList('list.state.draft') : tList('list.state.published', { n: summary.current_version.version_no })}
         </Badge>
-        {summary.owner !== null && <span className="text-sm text-poke-text-secondary">{tList('list.by', { name: summary.owner.name })}</span>}
+        {summary.owner !== null && <span className="text-sm text-fg-muted">{tList('list.by', { name: summary.owner.name })}</span>}
         <Link href={RULESETS_HREF} className={LINK}>
           {t('page.back')}
         </Link>
@@ -88,50 +95,52 @@ export default function RulesetPageView({
       </div>
       <ForkStoredButton definitionId={id} />
 
-      {described === null ? (
-        <p className="text-sm text-poke-text-muted">{t('page.noContent')}</p>
-      ) : (
-        <section className="space-y-3" aria-labelledby="ruleset-rules">
-          <h2 id="ruleset-rules" className="font-heading text-lg font-bold text-poke-text-primary">
-            {t('page.rulesHeading')}
-          </h2>
-          {isDraft && <p className="text-sm text-poke-text-muted">{t('page.draftNote')}</p>}
-          <RulesView rules={described} lang={locale} />
-        </section>
-      )}
+      <ReadingLayout outlineLabel={t('page.onThisPage')} outline={outline}>
+        {described === null ? (
+          <p className="text-sm text-fg-muted">{t('page.noContent')}</p>
+        ) : (
+          <section className="space-y-3" aria-labelledby="ruleset-rules">
+            <h2 id="ruleset-rules" className="font-heading text-title text-fg">
+              {t('page.rulesHeading')}
+            </h2>
+            {isDraft && <p className="text-sm text-fg-muted">{t('page.draftNote')}</p>}
+            <RulesView rules={described} lang={locale} />
+          </section>
+        )}
 
-      {usage !== null && <UsagePanel definitionId={id} usage={usage} latestVersionNo={latestVersionNo} />}
+        {usage !== null && <UsagePanel definitionId={id} usage={usage} latestVersionNo={latestVersionNo} />}
 
-      {versions.length > 0 && (
-        <section className="space-y-2" aria-labelledby="ruleset-versions">
-          <h2 id="ruleset-versions" className="font-heading text-lg font-bold text-poke-text-primary">
-            {t('page.versions')}
-          </h2>
-          <ul className="space-y-3 text-sm text-poke-text-secondary">
-            {versions.map((version) => {
-              const change = changes.get(version.version_no);
-              const previous = version.version_no - 1;
-              const changeText = change ? describeChange(change, tRuleset) : null;
-              return (
-                <li key={version.id} className="space-y-0.5">
-                  <div>
-                    <span className="font-semibold text-poke-text-primary">{t('page.versionRow', { n: version.version_no })}</span>{' '}
-                    <LocalTime value={version.created_at} preset="date" />
-                    {version.changelog !== null && ` · ${resolveLText(version.changelog, { viewer: locale })?.value ?? ''}`}{' '}
-                    {isCatalogStale(version, catalogVersion) && <Badge variant="yellow">{t('page.versionStale')}</Badge>}
-                  </div>
-                  {change === null && <p className="text-poke-text-muted">{t('page.versionFirst')}</p>}
-                  {change !== undefined && change !== null && (
-                    <p className="text-poke-text-muted">
-                      {changeText === null ? t('page.versionSame', { from: previous }) : t('page.versionChanges', { from: previous, changes: changeText })}
-                    </p>
-                  )}
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
+        {versions.length > 0 && (
+          <section id="ruleset-versions-section" className="scroll-mt-24 space-y-2" aria-labelledby="ruleset-versions">
+            <h2 id="ruleset-versions" className="font-heading text-title text-fg">
+              {t('page.versions')}
+            </h2>
+            <ul className="space-y-3 text-sm text-fg-muted">
+              {versions.map((version) => {
+                const change = changes.get(version.version_no);
+                const previous = version.version_no - 1;
+                const changeText = change ? describeChange(change, tRuleset) : null;
+                return (
+                  <li key={version.id} className="space-y-0.5">
+                    <div>
+                      <span className="font-semibold text-fg">{t('page.versionRow', { n: version.version_no })}</span>{' '}
+                      <LocalTime value={version.created_at} preset="date" />
+                      {version.changelog !== null && ` · ${resolveLText(version.changelog, { viewer: locale })?.value ?? ''}`}{' '}
+                      {isCatalogStale(version, catalogVersion) && <Badge variant="yellow">{t('page.versionStale')}</Badge>}
+                    </div>
+                    {change === null && <p className="text-fg-muted">{t('page.versionFirst')}</p>}
+                    {change !== undefined && change !== null && (
+                      <p className="text-fg-muted">
+                        {changeText === null ? t('page.versionSame', { from: previous }) : t('page.versionChanges', { from: previous, changes: changeText })}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        )}
+      </ReadingLayout>
     </>
   );
 }

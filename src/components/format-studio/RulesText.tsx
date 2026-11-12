@@ -63,7 +63,7 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
         {chosen === null ? '' : chosen === 'en' ? t('detail.rulesShownEn') : t('detail.rulesShownDe')}
       </p>
 
-      <Card padding="md" lang={locale} className="space-y-4 break-words text-sm text-poke-text-primary">
+      <Card padding="md" lang={locale} className="space-y-4 break-words text-sm text-fg">
         <p>{doc.overview}</p>
 
         {doc.stages.length > 0 && (
@@ -72,7 +72,7 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
             {doc.stages.map((stage) => (
               <div key={stage.key} className="space-y-1">
                 <p className="font-medium">{stage.name}</p>
-                <p className="text-poke-text-secondary">
+                <p className="text-fg-muted">
                   {[
                     stage.summary,
                     stage.participants,
@@ -96,7 +96,7 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
         {doc.advancement.length > 0 && (
           <section className="space-y-2">
             <Heading level={sectionLevel} className="font-heading font-semibold">{heading('heading.advancement')}</Heading>
-            <ul className="list-disc space-y-1 pl-5 text-poke-text-secondary">
+            <ul className="list-disc space-y-1 pl-5 text-fg-muted">
               {doc.advancement.map((line, i) => (
                 <li key={i}>{line}</li>
               ))}
@@ -107,7 +107,7 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
         {doc.views.length > 0 && (
           <section className="space-y-2">
             <Heading level={sectionLevel} className="font-heading font-semibold">{heading('heading.views')}</Heading>
-            <ul className="list-disc space-y-1 pl-5 text-poke-text-secondary">
+            <ul className="list-disc space-y-1 pl-5 text-fg-muted">
               {doc.views.map((line, i) => (
                 <li key={i}>{line}</li>
               ))}
@@ -122,7 +122,7 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
               {doc.rules.map((rule) => (
                 <li key={rule.id} className="space-y-0.5">
                   <p>{rule.text}</p>
-                  <p className="text-poke-text-secondary">
+                  <p className="text-fg-muted">
                     {rule.verify} {rule.when}
                     {!rule.visibleToPlayers && <> {heading('rule.visible_no')}</>}
                   </p>
@@ -135,10 +135,10 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
         {doc.modules.length > 0 && (
           <section className="space-y-2">
             <Heading level={sectionLevel} className="font-heading font-semibold">{heading('heading.modules')}</Heading>
-            <ul className="list-disc space-y-1 pl-5 text-poke-text-secondary">
+            <ul className="list-disc space-y-1 pl-5 text-fg-muted">
               {doc.modules.map((mod) => (
                 <li key={mod.adapter}>
-                  <span className="font-medium text-poke-text-primary">{mod.label}</span> {mod.summary}
+                  <span className="font-medium text-fg">{mod.label}</span> {mod.summary}
                 </li>
               ))}
             </ul>
@@ -151,13 +151,13 @@ export default function RulesText({ definition, plan, order, rulesets, parentLev
             {doc.sections.map((section) => (
               <div key={section.id} className="space-y-0.5">
                 <p className="font-medium">{section.title}</p>
-                <p className="whitespace-pre-line text-poke-text-secondary">{section.body}</p>
+                <p className="whitespace-pre-line text-fg-muted">{section.body}</p>
               </div>
             ))}
           </section>
         )}
 
-        <p className="text-poke-text-secondary">{doc.coverageLine}</p>
+        <p className="text-fg-muted">{doc.coverageLine}</p>
       </Card>
     </div>
   );

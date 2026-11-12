@@ -21,14 +21,14 @@ export default function LibraryCard({ href, title, lines, badges, openLabel }: L
   return (
     <Link href={href} className="block min-w-0">
       <Card hover className="h-full space-y-2">
-        <h3 className="break-words font-heading font-semibold text-poke-text-primary">{title}</h3>
+        <h3 className="break-words font-heading font-semibold text-fg">{title}</h3>
         {badges !== undefined && <div className="flex flex-wrap items-center gap-2">{badges}</div>}
         {lines.map((line, i) => (
-          <p key={i} className="break-words text-sm text-poke-text-secondary">
+          <p key={i} className="break-words text-sm text-fg-muted">
             {line}
           </p>
         ))}
-        <p className="text-sm font-medium text-poke-blue">{openLabel}</p>
+        <p className="text-sm font-medium text-accent-ink">{openLabel}</p>
       </Card>
     </Link>
   );

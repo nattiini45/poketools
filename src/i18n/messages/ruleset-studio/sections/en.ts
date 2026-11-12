@@ -21,6 +21,7 @@ export default {
     versionStale: 'Catalog updated since',
     draftNote: 'This is the saved draft. It is not published.',
     back: 'Back to rulesets',
+    onThisPage: 'On this page',
     edit: 'Edit',
     rulesHeading: 'Rules',
     catalogBadge: 'Rule preset',

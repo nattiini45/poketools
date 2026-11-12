@@ -16,6 +16,7 @@ export default {
     leagueTitle: 'League format',
     exampleTitle: '{name}',
   },
+  tabs: { label: 'Format galleries', yours: 'Yours', shared: 'Shared', examples: 'Examples' },
   gallery: {
     heading: 'Examples',
     intro: 'Example formats show what the Studio can describe. Open one to read its stages, rules and checks, or use it as a starting point.',
@@ -38,6 +39,7 @@ export default {
   },
   detail: {
     back: 'Back to formats',
+    onThisPage: 'On this page',
     backToLeague: 'Back to the league',
     outline: 'Stages',
     rules: 'Rules text',

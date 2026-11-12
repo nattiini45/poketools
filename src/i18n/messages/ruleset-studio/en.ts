@@ -21,7 +21,9 @@ export default {
     siteIntro: 'The standard rulesets of the site, one per generation and tier. Open one to read it, or fork it to change it.',
     emptySite: 'The site catalog is empty.',
   },
+  tabs: { label: 'Ruleset galleries', yours: 'Yours', shared: 'Shared', examples: 'Examples' },
   list: {
+    emptyTitle: 'No rulesets yet',
     yours: 'Your rulesets',
     yoursIntro: 'Private drafts and the rulesets you published or shared.',
     shared: 'Shared with you',
