@@ -12,7 +12,10 @@ interface GalleryPanelProps {
   children: ReactNode;
 }
 
-/** One panel of a `GalleryTabs` strip: its props name the tab, its children are the panel the server page rendered. */
+/**
+ * One panel of a `GalleryTabs` strip (a server page imports it as a client reference, so the strip finds its panels by their
+ * props, never by comparing element types): its props name the tab, its children are the panel the server page rendered.
+ */
 export function GalleryPanel({ children }: GalleryPanelProps) {
   return <>{children}</>;
 }
@@ -33,7 +36,7 @@ interface GalleryTabsProps {
  */
 export default function GalleryTabs({ children, label, glideId }: GalleryTabsProps) {
   const base = useId();
-  const tabs = Children.toArray(children).filter((child): child is ReactElement<GalleryPanelProps> => isValidElement(child) && child.type === GalleryPanel);
+  const tabs = Children.toArray(children).filter((child): child is ReactElement<GalleryPanelProps> => isValidElement(child));
   const [active, setActive] = useState(tabs[0]?.props.id ?? '');
   const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
 
