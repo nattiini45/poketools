@@ -108,7 +108,7 @@ export default function TournamentReportCard({
 
   if (report.status === 'failed') {
     return (
-      <div className="border border-loss/30 rounded-poke-lg p-4">
+      <div className="border border-loss rounded-poke-lg p-4">
         <div className="flex items-center gap-3">
           <KalePortrait />
           <span className="text-sm text-poke-text-muted">

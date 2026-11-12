@@ -13,7 +13,7 @@ import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { LineId } from '@/types/draft-queue';
 import { useLineText } from '@/components/draft-tokens/use-line-text';
-import { FIELD, LABEL } from './admin-ui';
+import { LABEL } from './admin-ui';
 
 export interface LineSelectProps {
   catalog: DraftLineCatalog;

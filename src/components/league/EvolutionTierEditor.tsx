@@ -1,6 +1,5 @@
 'use client';
 
-import Select from '@/components/ui/Select';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import type { EvolutionTier, EvolutionTierFormData, PowerTier } from '@/types/evolution';

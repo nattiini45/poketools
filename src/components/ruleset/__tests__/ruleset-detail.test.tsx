@@ -26,7 +26,7 @@ describe('RulesetDetail: the studio additions', () => {
   it('marks a clause the team check does not enforce as informational (dashed, and read out), the enforced one plain', () => {
     const html = renderToStaticMarkup(<RulesetDetail ruleset={makeRuleset({ clauses: ['Species Clause', 'Sleep Clause Mod'] })} />);
     expect(html).toMatch(/border-dashed[^>]*>Sleep Clause Mod<span class="sr-only"> \(informational\)<\/span>/);
-    expect(html).toMatch(/bg-blue-100[^>]*>Species Clause<\/span>/);
+    expect(html).toMatch(/bg-tier-3-soft[^>]*>Species Clause<\/span>/);
     expect(html).toContain('Clauses marked as informational apply in the battle. The team check does not enforce them.');
   });
 

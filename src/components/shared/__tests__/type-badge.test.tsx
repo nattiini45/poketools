@@ -28,7 +28,7 @@ describe('<TypeBadge>', () => {
     expect(compact).not.toContain('min-w-[81px]');
     const normal = renderToStaticMarkup(<TypeBadge type="Fire" />);
     expect(normal).toContain('min-w-[81px]');
-    expect(normal).toContain('tracking-wide');
+    expect(normal).not.toContain('tracking');
   });
 
   it('renders English without a provider', () => {
