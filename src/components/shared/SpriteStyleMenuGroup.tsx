@@ -26,7 +26,7 @@ export function SpriteStyleMenuGroup({ name, legendClassName }: { name: string; 
         onChange={(next) => void change(next)}
       />
       {failed && (
-        <p role="alert" className="px-2 pt-2 text-xs text-poke-danger-ink">
+        <p role="alert" className="px-2 pt-2 text-xs text-loss">
           {failed.code ? errorText(failed) : t('saveFailed')}
         </p>
       )}

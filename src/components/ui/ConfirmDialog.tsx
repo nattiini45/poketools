@@ -32,7 +32,7 @@ export default function ConfirmDialog({
   const t = useT(uiMessages);
   return (
     <Modal open={open} onClose={onClose} title={title} size="sm" onCloseAutoFocus={onCloseAutoFocus}>
-      <p className="text-sm text-poke-text-secondary mb-6">{message}</p>
+      <p className="text-sm text-fg-muted mb-6">{message}</p>
       <div className="flex justify-end gap-3">
         <Button variant="ghost" size="sm" onClick={onClose} disabled={loading}>
           {t('confirmDialog.cancel')}

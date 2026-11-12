@@ -49,7 +49,7 @@ function SpeciesPicker({ onSelect, onCancel }: { onSelect: (species: string) => 
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder={t('setEditor.searchSpecies')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-hairline bg-surface px-3 py-1.5 text-sm text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-accent-ink"
       />
       {results.length > 0 && (
         <div className="max-h-48 overflow-y-auto space-y-0.5">
@@ -57,7 +57,7 @@ function SpeciesPicker({ onSelect, onCancel }: { onSelect: (species: string) => 
             <button
               key={r.name}
               onClick={() => onSelect(r.name)}
-              className="flex items-center gap-2 w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
+              className="flex items-center gap-2 w-full px-2 py-1 text-left text-sm text-fg rounded"
             >
               <SpriteImg name={r.name} alt="" className="w-6 h-6" />
               {localizeSpecies(r.name, dataLocale)}
@@ -65,7 +65,7 @@ function SpeciesPicker({ onSelect, onCancel }: { onSelect: (species: string) => 
           ))}
         </div>
       )}
-      <button onClick={onCancel} className="text-xs text-poke-text-secondary hover:text-poke-accent">
+      <button onClick={onCancel} className="text-xs text-fg-muted hover:text-accent-ink">
         {t('setEditor.cancel')}
       </button>
     </div>
@@ -111,24 +111,24 @@ function MoveSearchPicker({ species, generation, onSelect, onCancel }: {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder={t('setEditor.searchMoves')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-hairline bg-surface px-3 py-1.5 text-sm text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-accent-ink"
       />
       <div className="max-h-48 overflow-y-auto space-y-0.5">
         {moves.map((m) => (
           <button
             key={m.name}
             onClick={() => onSelect(m.name)}
-            className="flex items-center justify-between w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
+            className="flex items-center justify-between w-full px-2 py-1 text-left text-sm text-fg rounded"
           >
             <span>{localizeMove(m.name, dataLocale)}</span>
-            <span className="text-xs text-poke-text-secondary">
+            <span className="text-xs text-fg-muted">
               {isMoveCategory(m.category) ? localizeMoveCategory(m.category, dataLocale) : m.category}{' '}
               {m.basePower > 0 ? m.basePower : ''}
             </span>
           </button>
         ))}
       </div>
-      <button onClick={onCancel} className="text-xs text-poke-text-secondary hover:text-poke-accent">
+      <button onClick={onCancel} className="text-xs text-fg-muted hover:text-accent-ink">
         {t('setEditor.cancel')}
       </button>
     </div>
@@ -184,20 +184,20 @@ function GenericPicker({ type, species, generation, onSelect, onCancel }: {
         value={query}
         onChange={(e) => handleSearch(e.target.value)}
         placeholder={type === 'item' ? t('setEditor.searchItems') : t('setEditor.searchAbilities')}
-        className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-3 py-1.5 text-sm text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-poke-accent"
+        className="w-full rounded-poke-md border border-hairline bg-surface px-3 py-1.5 text-sm text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-1 focus:ring-accent-ink"
       />
       <div className="max-h-48 overflow-y-auto space-y-0.5">
         {results.map((r) => (
           <button
             key={r.name}
             onClick={() => onSelect(r.name)}
-            className="w-full px-2 py-1 text-left text-sm text-poke-text-primary rounded"
+            className="w-full px-2 py-1 text-left text-sm text-fg rounded"
           >
             {display(r.name, dataLocale)}
           </button>
         ))}
       </div>
-      <button onClick={onCancel} className="text-xs text-poke-text-secondary hover:text-poke-accent">
+      <button onClick={onCancel} className="text-xs text-fg-muted hover:text-accent-ink">
         {t('setEditor.cancel')}
       </button>
     </div>
@@ -273,18 +273,18 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
   const speciesLabel = set.species ? localizeSpecies(set.species, dataLocale) : '';
 
   return (
-    <div className="rounded-poke-lg border border-poke-border bg-poke-surface p-4 space-y-3">
+    <div className="rounded-poke-lg border border-hairline bg-surface p-4 space-y-3">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           {set.species && (
             <SpriteImg name={set.species} alt={speciesLabel} className="w-10 h-10" />
           )}
-          <span className="font-heading font-bold text-poke-text-primary">
+          <span className="font-heading font-bold text-fg">
             {t('setEditor.slotTitle', { n: slotIndex + 1, species: speciesLabel || t('setEditor.empty') })}
           </span>
         </div>
-        <button onClick={onClose} className="text-xs text-poke-text-secondary hover:text-poke-accent">
+        <button onClick={onClose} className="text-xs text-fg-muted hover:text-accent-ink">
           {t('setEditor.close')}
         </button>
       </div>
@@ -312,7 +312,7 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
       {!editing && set.species && (
         <div className="space-y-2">
           {/* Species */}
-          <button onClick={() => setEditing('species')} className="text-xs text-poke-accent hover:underline">
+          <button onClick={() => setEditing('species')} className="text-xs text-accent-ink hover:underline">
             {t('setEditor.changeSpecies')}
           </button>
 
@@ -320,16 +320,16 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
           <div className="grid grid-cols-2 gap-2">
             <button
               onClick={() => setEditing('item')}
-              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary"
+              className="rounded-poke-md border border-hairline px-2 py-1.5 text-left text-sm text-fg"
             >
-              <span className="text-xs text-poke-text-secondary block">{t('setEditor.item')}</span>
+              <span className="text-xs text-fg-muted block">{t('setEditor.item')}</span>
               {set.item ? localizeItem(set.item, dataLocale) : t('setEditor.none')}
             </button>
             <button
               onClick={() => setEditing('ability')}
-              className="rounded-poke-md border border-poke-border px-2 py-1.5 text-left text-sm text-poke-text-primary"
+              className="rounded-poke-md border border-hairline px-2 py-1.5 text-left text-sm text-fg"
             >
-              <span className="text-xs text-poke-text-secondary block">{t('setEditor.ability')}</span>
+              <span className="text-xs text-fg-muted block">{t('setEditor.ability')}</span>
               {set.ability ? localizeAbility(set.ability, dataLocale) : t('setEditor.none')}
             </button>
           </div>
@@ -340,9 +340,9 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
               <button
                 key={i}
                 onClick={() => setEditing(`move${i}` as EditingField)}
-                className="rounded-poke-md border border-poke-border px-2 py-1 text-left text-sm text-poke-text-primary"
+                className="rounded-poke-md border border-hairline px-2 py-1 text-left text-sm text-fg"
               >
-                <span className="text-xs text-poke-text-secondary">{t('setEditor.move', { n: i + 1 })}</span>{' '}
+                <span className="text-xs text-fg-muted">{t('setEditor.move', { n: i + 1 })}</span>{' '}
                 {set.moves[i] ? localizeMove(set.moves[i], dataLocale) : '—'}
               </button>
             ))}
@@ -350,11 +350,11 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
 
           {/* Nature */}
           <div>
-            <label className="text-xs text-poke-text-secondary block mb-1">{t('setEditor.nature')}</label>
+            <label className="text-xs text-fg-muted block mb-1">{t('setEditor.nature')}</label>
             <select
               value={set.nature}
               onChange={(e) => onUpdate({ nature: e.target.value })}
-              className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-sm text-poke-text-primary"
+              className="w-full rounded-poke-md border border-hairline bg-surface px-2 py-1 text-sm text-fg"
             >
               {natureOptions.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
             </select>
@@ -363,11 +363,11 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
           {/* Tera Type */}
           {generation >= 9 && (
             <div>
-              <label className="text-xs text-poke-text-secondary block mb-1">{t('setEditor.teraType')}</label>
+              <label className="text-xs text-fg-muted block mb-1">{t('setEditor.teraType')}</label>
               <select
                 value={set.tera_type ?? ''}
                 onChange={(e) => onUpdate({ tera_type: e.target.value || undefined })}
-                className="w-full rounded-poke-md border border-poke-border bg-poke-surface px-2 py-1 text-sm text-poke-text-primary"
+                className="w-full rounded-poke-md border border-hairline bg-surface px-2 py-1 text-sm text-fg"
               >
                 <option value="">{t('setEditor.none')}</option>
                 {teraOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -378,15 +378,15 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
           {/* EVs (compact sliders) */}
           <div>
             <div className="flex items-center justify-between mb-1">
-              <label className="text-xs text-poke-text-secondary">{t('setEditor.evs')}</label>
-              <span className="text-xs text-poke-text-secondary">
+              <label className="text-xs text-fg-muted">{t('setEditor.evs')}</label>
+              <span className="text-xs text-fg-muted">
                 {Object.values(set.evs).reduce((s, v) => s + v, 0)} / 510
               </span>
             </div>
             <div className="grid grid-cols-3 gap-x-3 gap-y-1">
               {STAT_KEYS.map((stat) => (
                 <div key={stat} className="flex items-center gap-1">
-                  <span className="text-xs text-poke-text-secondary min-w-[1.5rem]">{localizeStat(stat, dataLocale, 'short')}</span>
+                  <span className="text-xs text-fg-muted min-w-[1.5rem]">{localizeStat(stat, dataLocale, 'short')}</span>
                   <input
                     type="number"
                     min={0}
@@ -394,7 +394,7 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
                     step={4}
                     value={set.evs[stat]}
                     onChange={(e) => handleEvChange(stat, parseInt(e.target.value) || 0)}
-                    className="w-14 rounded border border-poke-border bg-poke-surface px-1 py-0.5 text-xs text-poke-text-primary text-center"
+                    className="w-14 rounded border border-hairline bg-surface px-1 py-0.5 text-xs text-fg text-center"
                   />
                 </div>
               ))}

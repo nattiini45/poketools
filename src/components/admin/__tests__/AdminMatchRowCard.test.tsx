@@ -297,7 +297,7 @@ describe('AdminMatchRowCard selection checkbox', () => {
     expect(checkboxes(select(false))[0]).not.toContain('checked=""');
     expect(checkboxes(select(true))[0]).toContain('checked=""');
     const selected = select(true);
-    expect(selected).toContain('border-poke-border-focus ring-1 ring-poke-border-focus');
+    expect(selected).toContain('border-accent-ink ring-1 ring-accent-ink');
     expect(rowClasses(select(false))).not.toContain('ring-1');
     expect(selected).not.toMatch(/bg-(black|slate|gray|zinc|neutral)-/);
   });

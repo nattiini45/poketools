@@ -42,14 +42,14 @@ function ImportReportView({ report }: { report: ImportReport }) {
   const t = useT(rulesetStudioMessages);
   if (report.issues.length === 0) {
     return (
-      <p role="status" className="rounded-poke-md border border-poke-border bg-poke-elevated p-3 text-sm text-poke-text-secondary">
+      <p role="status" className="rounded-poke-md border border-hairline bg-elevated p-3 text-sm text-fg-muted">
         {t('new.reportOk')}
       </p>
     );
   }
   return (
-    <div role="status" className="space-y-2 rounded-poke-md border border-poke-border bg-poke-elevated p-3 text-sm text-poke-text-secondary">
-      <p id="re-import-issues" className="font-semibold text-poke-text-primary">
+    <div role="status" className="space-y-2 rounded-poke-md border border-hairline bg-elevated p-3 text-sm text-fg-muted">
+      <p id="re-import-issues" className="font-semibold text-fg">
         {t('new.reportIssues', { count: report.issues.length })}
       </p>
       <ul aria-labelledby="re-import-issues" className="list-disc pl-5">
@@ -166,12 +166,12 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
 
   return (
     <form onSubmit={(event) => void submit(event)} aria-busy={busy} className="space-y-5" noValidate>
-      <p className="text-sm text-poke-text-secondary">{t('new.intro')}</p>
+      <p className="text-sm text-fg-muted">{t('new.intro')}</p>
 
       <fieldset className="space-y-2">
-        <legend className="mb-1 font-heading text-sm font-semibold text-poke-text-primary">{t('new.startLegend')}</legend>
+        <legend className="mb-1 font-heading text-sm font-semibold text-fg">{t('new.startLegend')}</legend>
         {START_KINDS.map((kind) => (
-          <div key={kind} className="flex items-start gap-3 rounded-poke-md border border-poke-border p-3">
+          <div key={kind} className="flex items-start gap-3 rounded-poke-md border border-hairline p-3">
             <input
               id={`re-start-${kind}`}
               type="radio"
@@ -183,13 +183,13 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                 setStart(kind);
                 setError(null);
               }}
-              className="mt-1 h-4 w-4 shrink-0 accent-poke-accent"
+              className="mt-1 h-4 w-4 shrink-0 accent-accent-fill"
             />
             <div className="min-w-0">
-              <label htmlFor={`re-start-${kind}`} className="block text-sm font-semibold text-poke-text-primary">
+              <label htmlFor={`re-start-${kind}`} className="block text-sm font-semibold text-fg">
                 {t(`new.start.${kind}`)}
               </label>
-              <p id={`re-start-${kind}-help`} className="text-sm text-poke-text-muted">
+              <p id={`re-start-${kind}-help`} className="text-sm text-fg-muted">
                 {t(`new.start.${kind}Help`)}
               </p>
             </div>
@@ -209,7 +209,7 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                   onChange={setPreset}
                   describedBy="re-new-preset-help"
                 />
-                <p id="re-new-preset-help" className="text-sm text-poke-text-muted">
+                <p id="re-new-preset-help" className="text-sm text-fg-muted">
                   {t('new.presetHelp')}
                 </p>
               </div>
@@ -224,13 +224,13 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                     disabled={!hasTourOverlay}
                     aria-describedby="re-new-tour-help"
                     onChange={(event) => setTourOverlay(event.target.checked)}
-                    className="h-4 w-4 shrink-0 accent-poke-accent"
+                    className="h-4 w-4 shrink-0 accent-accent-fill"
                   />
-                  <label htmlFor="re-new-tour" className="text-sm font-semibold text-poke-text-primary">
+                  <label htmlFor="re-new-tour" className="text-sm font-semibold text-fg">
                     {t('new.tourOverlay')}
                   </label>
                 </div>
-                <p id="re-new-tour-help" className="text-sm text-poke-text-muted">
+                <p id="re-new-tour-help" className="text-sm text-fg-muted">
                   {hasTourOverlay ? t('new.tourOverlayHelp') : t('new.tourOverlayNone')}
                 </p>
               </div>
@@ -248,12 +248,12 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                 onBlur={() => setTouched(true)}
               />
               {nameError !== null ? (
-                <p id="re-new-name-err" className="text-sm text-poke-danger">
+                <p id="re-new-name-err" className="text-sm text-loss">
                   {nameError}
                 </p>
               ) : (
                 start === 'preset' && (
-                  <p id="re-new-name-help" className="text-sm text-poke-text-muted">
+                  <p id="re-new-name-help" className="text-sm text-fg-muted">
                     {t('new.namePresetHelp')}
                   </p>
                 )
@@ -271,7 +271,7 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
 
         {start === 'fork' &&
           (data.shared.length === 0 ? (
-            <p className="text-sm text-poke-text-muted">{t('new.forkNone')}</p>
+            <p className="text-sm text-fg-muted">{t('new.forkNone')}</p>
           ) : (
             <>
               <Select id="re-new-fork" label={t('new.forkLabel')} value={forkId} onChange={(event) => setForkId(event.target.value)}>
@@ -281,14 +281,14 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                   </option>
                 ))}
               </Select>
-              <p className="text-sm text-poke-text-muted">{t('new.forkHelp')}</p>
+              <p className="text-sm text-fg-muted">{t('new.forkHelp')}</p>
             </>
           ))}
 
         {start === 'import' && (
           <>
             <div className="space-y-1.5">
-              <label htmlFor="re-new-file" className="block font-heading text-sm font-semibold text-poke-text-primary">
+              <label htmlFor="re-new-file" className="block font-heading text-sm font-semibold text-fg">
                 {t('new.file')}
               </label>
               <input
@@ -298,14 +298,14 @@ export function NewRulesetForm({ data, onCancel }: NewRulesetFormProps) {
                 aria-describedby={importFailure !== null ? 're-new-file-err' : 're-new-file-help'}
                 aria-invalid={importFailure !== null ? true : undefined}
                 onChange={(event) => void chooseFile(event.target.files?.[0])}
-                className="block w-full text-sm text-poke-text-primary file:mr-3 file:min-h-11 file:rounded-poke-md file:border file:border-poke-border file:bg-poke-elevated file:px-3 file:py-2 file:text-sm sm:file:min-h-0"
+                className="block w-full text-sm text-fg file:mr-3 file:min-h-11 file:rounded-poke-md file:border file:border-hairline file:bg-elevated file:px-3 file:py-2 file:text-sm sm:file:min-h-0"
               />
               {importFailure !== null ? (
-                <p id="re-new-file-err" className="text-sm text-poke-danger">
+                <p id="re-new-file-err" className="text-sm text-loss">
                   {t(`new.failure.${importFailure}`)}
                 </p>
               ) : (
-                <p id="re-new-file-help" className="text-sm text-poke-text-muted">
+                <p id="re-new-file-help" className="text-sm text-fg-muted">
                   {t('new.fileHelp')}
                 </p>
               )}

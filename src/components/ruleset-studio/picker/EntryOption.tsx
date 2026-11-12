@@ -98,7 +98,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
   const frame = cn(
     'group/option relative flex h-full w-full min-w-0 cursor-pointer select-none overflow-hidden rounded-poke-md border text-left transition-colors duration-150',
     style.card,
-    selected && 'ring-2 ring-poke-accent',
+    selected && 'ring-2 ring-accent-ink',
     active && !listFocused && 'border-hairline-strong',
     'hover:border-hairline-strong',
     outline,
@@ -129,8 +129,8 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
         HIT_BAR,
         'inline-flex h-7 shrink-0 items-center gap-1 rounded-poke-md border px-2 text-xs font-semibold transition-colors',
         legal
-          ? 'border-hairline bg-surface text-fg-muted hover:border-loss hover:bg-poke-danger-light hover:text-loss'
-          : 'border-hairline bg-surface text-fg-muted hover:border-poke-green/50 hover:bg-poke-green-light hover:text-poke-green',
+          ? 'border-hairline bg-surface text-fg-muted hover:border-loss hover:bg-loss-bg hover:text-loss'
+          : 'border-hairline bg-surface text-fg-muted hover:border-win hover:bg-win-bg hover:text-win',
       )}
     >
       <ActionIcon className="h-3.5 w-3.5" aria-hidden="true" />

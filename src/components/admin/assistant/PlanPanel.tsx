@@ -90,7 +90,7 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
   return (
     <aside className={`${PANEL} space-y-3 p-3 ${className ?? ''}`} aria-label={t('page.planPanel')}>
       <header className="flex flex-wrap items-center gap-2">
-        <h2 className="font-heading text-base font-bold text-poke-text-primary">{t('plan.longTitle')}</h2>
+        <h2 className="font-heading text-base font-bold text-fg">{t('plan.longTitle')}</h2>
         {plan !== null && <Badge variant={plan.status === 'built' ? 'green' : plan.status === 'abandoned' ? 'gray' : 'default'}>{t(`plan.status.${plan.status}`)}</Badge>}
       </header>
 
@@ -98,18 +98,18 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
         unreadable ? (
           <Alert variant="warning">{t('plan.unreadable')}</Alert>
         ) : (
-          <p className="text-sm text-poke-text-muted">{t('plan.empty')}</p>
+          <p className="text-sm text-fg-muted">{t('plan.empty')}</p>
         )
       ) : (
         <>
           <p className="text-sm">
             <span className="font-heading font-semibold">{plan.title}</span>
-            <span className="block text-xs text-poke-text-muted">
+            <span className="block text-xs text-fg-muted">
               {t('plan.revision', { number: plan.revision })} · {t('plan.code', { code: plan.code })}
             </span>
           </p>
 
-          {plan.sections.length === 0 && <p className="text-sm text-poke-text-muted">{t('plan.empty')}</p>}
+          {plan.sections.length === 0 && <p className="text-sm text-fg-muted">{t('plan.empty')}</p>}
           <ul className="space-y-2">
             {plan.sections.map((section) => (
               <li key={section.section} className={`${PANEL_INSET} p-2`} data-section={section.section} data-state={section.state}>
@@ -123,8 +123,8 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
                   <dl className="mt-1 grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
                     {section.rows.map((row) => (
                       <div key={row.label} className="contents">
-                        <dt className="text-poke-text-muted">{t.dynamic(`plan.rows.${row.label}`, undefined, row.label)}</dt>
-                        <dd className="break-words text-poke-text-primary">{rowValue(row.value)}</dd>
+                        <dt className="text-fg-muted">{t.dynamic(`plan.rows.${row.label}`, undefined, row.label)}</dt>
+                        <dd className="break-words text-fg">{rowValue(row.value)}</dd>
                       </div>
                     ))}
                   </dl>
@@ -151,7 +151,7 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
                   <li key={assumption.key}>
                     <code>{assumption.key}</code>
                     {assumption.value !== null && `: ${rowValue(assumption.value)}`}
-                    <span className="text-poke-text-muted">
+                    <span className="text-fg-muted">
                       {' '}
                       · {assumption.source === 'admin' ? t('plan.why.adminSaid') : assumption.source === 'default' ? t('plan.why.default') : t('plan.why.inferred')} ·{' '}
                       {assumption.confirmed ? t('plan.confirmed') : t('plan.unconfirmed')}
@@ -164,20 +164,20 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
 
           <section aria-label={t('plan.blockersHeading')}>
             {plan.blockers.length === 0 ? (
-              <p className="text-sm text-poke-text-secondary">{t('plan.noBlockers')}</p>
+              <p className="text-sm text-fg-muted">{t('plan.noBlockers')}</p>
             ) : (
               <>
                 <h3 className="font-heading text-sm font-semibold">{t('plan.blockersHeading')}</h3>
                 <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs">
                   {plan.blockers.map((blocker, index) => (
                     <li key={`${blocker.code}-${blocker.path}-${index}`}>
-                      <span className="text-poke-text-muted">{sectionTitle(blocker.section)}: </span>
+                      <span className="text-fg-muted">{sectionTitle(blocker.section)}: </span>
                       {blockerText(blocker)}
                       {onAsk !== undefined && (
                         <button
                           type="button"
                           disabled={!canAsk}
-                          className="ml-2 text-poke-focus underline underline-offset-2 hover:no-underline disabled:cursor-not-allowed disabled:opacity-60"
+                          className="ml-2 text-accent-ink underline underline-offset-2 hover:no-underline disabled:cursor-not-allowed disabled:opacity-60"
                           onClick={() => onAsk(t('plan.fixPrompt', { problem: blockerText(blocker) }))}
                         >
                           {t('plan.fix')}
@@ -189,7 +189,7 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
               </>
             )}
             {plan.warnings.length > 0 && (
-              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-poke-yellow-ink">
+              <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-accent-ink">
                 {plan.warnings.map((warning, index) => (
                   <li key={`${warning.code}-${index}`}>{blockerText(warning)}</li>
                 ))}
@@ -197,19 +197,19 @@ export default function PlanPanel({ plan, unreadable = false, className, onAsk, 
             )}
           </section>
 
-          <p className="text-xs text-poke-text-muted">
+          <p className="text-xs text-fg-muted">
             {t('plan.readOnlyNote')} {t('plan.factsNote')}
           </p>
 
           {onAsk !== undefined && (
             <div
-              className="sticky bottom-0 z-10 -mx-3 -mb-3 flex flex-wrap items-center gap-2 border-t border-poke-border bg-poke-surface p-3 lg:static lg:m-0 lg:border-0 lg:p-0"
+              className="sticky bottom-0 z-10 -mx-3 -mb-3 flex flex-wrap items-center gap-2 border-t border-hairline bg-surface p-3 lg:static lg:m-0 lg:border-0 lg:p-0"
               data-plan-footer
             >
               <Button size="sm" disabled={!plan.ready || !canAsk || !plan.buildable} onClick={() => onAsk(t('plan.buildPrompt'))}>
                 {t('plan.build')}
               </Button>
-              {!plan.ready && <p className="min-w-0 flex-1 text-xs text-poke-text-muted">{t('plan.buildBlocked')}</p>}
+              {!plan.ready && <p className="min-w-0 flex-1 text-xs text-fg-muted">{t('plan.buildBlocked')}</p>}
             </div>
           )}
         </>

@@ -58,8 +58,8 @@ export default function EntryListEditor({ category, label, value, onChange, gen 
   return (
     <div className="space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="font-heading text-sm font-semibold text-poke-text-primary">
-          {label} <span className="font-normal text-poke-text-muted">({t('entryList.count', { count: value.length })})</span>
+        <p className="font-heading text-sm font-semibold text-fg">
+          {label} <span className="font-normal text-fg-muted">({t('entryList.count', { count: value.length })})</span>
         </p>
         <Button type="button" variant="secondary" size="sm" className="min-h-11 sm:min-h-0" onClick={() => setOpen(true)}>
           <Pencil className="h-4 w-4" aria-hidden="true" />
@@ -68,27 +68,27 @@ export default function EntryListEditor({ category, label, value, onChange, gen 
       </div>
 
       {value.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">{t('entryList.empty')}</p>
+        <p className="text-sm text-fg-muted">{t('entryList.empty')}</p>
       ) : (
         <ul className="flex flex-wrap gap-1.5" aria-label={label}>
           {shown.map((id) => {
             const known = index === null || index.byId.has(id);
             const name = nameOf(id);
             return (
-              <li key={id} className={`inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-1 text-xs font-semibold ${known ? 'border-poke-border bg-poke-surface text-poke-text-primary' : 'border-dashed border-poke-border-strong bg-poke-muted text-poke-text-secondary'}`}>
+              <li key={id} className={`inline-flex items-center gap-1 rounded-full border py-0.5 pl-2.5 pr-1 text-xs font-semibold ${known ? 'border-hairline bg-surface text-fg' : 'border-dashed border-hairline-strong bg-sunken text-fg-muted'}`}>
                 <span title={known ? undefined : t('entryList.unknown', { name })}>{name}</span>
                 <button
                   type="button"
                   aria-label={t('entryList.remove', { name })}
                   onClick={() => onChange(applyListAction(value, 'reset', [id]))}
-                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-poke-text-muted hover:bg-poke-muted hover:text-poke-text-primary focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+                  className="inline-flex h-6 w-6 items-center justify-center rounded-full text-fg-muted hover:bg-sunken hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
                 >
                   <X className="h-3.5 w-3.5" aria-hidden="true" />
                 </button>
               </li>
             );
           })}
-          {value.length > shown.length && <li className="self-center text-xs text-poke-text-muted">{t('entryList.more', { count: value.length - shown.length })}</li>}
+          {value.length > shown.length && <li className="self-center text-xs text-fg-muted">{t('entryList.more', { count: value.length - shown.length })}</li>}
         </ul>
       )}
 

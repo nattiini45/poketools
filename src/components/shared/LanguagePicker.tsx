@@ -31,8 +31,8 @@ export interface LanguageChange {
 }
 
 const ROW =
-  'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary ' +
-  'hover:bg-poke-elevated has-[:checked]:bg-poke-accent-light ' +
+  'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-fg ' +
+  'hover:bg-elevated has-[:checked]:bg-accent-subtle ' +
   'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
   'has-[:focus-visible]:outline-poke-focus';
 
@@ -40,7 +40,7 @@ function CheckMark({ checked }: { checked: boolean }) {
   return (
     <svg
       aria-hidden="true"
-      className={checked ? 'h-4 w-4 shrink-0 text-poke-accent-strong' : 'h-4 w-4 shrink-0 invisible'}
+      className={checked ? 'h-4 w-4 shrink-0 text-accent-ink' : 'h-4 w-4 shrink-0 invisible'}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -92,17 +92,17 @@ export function LanguageOptions({
         })}
       </div>
       {value === 'de' && (
-        <label className="mt-2 flex items-start gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary hover:bg-poke-elevated">
+        <label className="mt-2 flex items-start gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-fg hover:bg-elevated">
           <input
             type="checkbox"
-            className="mt-0.5 h-4 w-4 shrink-0 accent-poke-accent focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+            className="mt-0.5 h-4 w-4 shrink-0 accent-accent-fill focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
             checked={pkmnTerms === 'en'}
             aria-describedby={hintId}
             onChange={(event) => onChange({ pkmnTerms: event.target.checked ? 'en' : 'follow' })}
           />
           <span className="flex min-w-0 flex-col">
             <span className="font-[550] leading-tight">{t('keepPkmnEnglish')}</span>
-            <span id={hintId} className="text-xs leading-tight text-poke-text-secondary">
+            <span id={hintId} className="text-xs leading-tight text-fg-muted">
               {t('keepPkmnEnglishHint')}
             </span>
           </span>
@@ -148,7 +148,7 @@ function SaveFailed({ error }: { error: ApiErrorLike | null }) {
   const errorText = useApiErrorText();
   if (!error) return null;
   return (
-    <p role="alert" className="px-2 pt-2 text-xs text-poke-danger-ink">
+    <p role="alert" className="px-2 pt-2 text-xs text-loss">
       {error.code ? errorText(error) : t('saveFailed')}
     </p>
   );

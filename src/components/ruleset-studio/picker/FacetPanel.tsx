@@ -154,7 +154,7 @@ export default function FacetPanel({ kind, filters, onChange, states, tiers, gen
           <Group legend={t('filters.type')}>
             {TYPES.map((type) => (
               <Chip key={type} pressed={filters.types.includes(type)} onClick={() => set({ types: toggle(filters.types, type) })} className="p-0.5 pr-0.5">
-                <TypeBadge type={type} className={filters.types.includes(type) ? 'ring-2 ring-poke-accent' : 'opacity-80'} />
+                <TypeBadge type={type} className={filters.types.includes(type) ? 'ring-2 ring-accent-ink' : 'opacity-80'} />
               </Chip>
             ))}
           </Group>

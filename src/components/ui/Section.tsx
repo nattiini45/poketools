@@ -53,13 +53,13 @@ export default function Section({
     <section
       id={id}
       className={cn(
-        "self-start w-full bg-poke-surface border border-poke-border rounded-poke-lg shadow-poke-card overflow-hidden",
+        "self-start w-full bg-surface border border-hairline rounded-poke-lg shadow-poke-card overflow-hidden",
         id && "scroll-mt-4",
         className
       )}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-hairline">
           <div>
             {title && (
               <div className="flex items-center gap-3">

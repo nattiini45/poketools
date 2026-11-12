@@ -27,7 +27,7 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
 
   return (
     <div>
-      <h4 className="text-xs font-heading font-bold text-poke-text-secondary uppercase tracking-wide mb-1.5">
+      <h4 className="text-xs font-heading font-bold text-fg-muted uppercase tracking-wide mb-1.5">
         {label}
       </h4>
       <div className="flex gap-1.5">
@@ -43,8 +43,8 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
                 relative flex flex-col items-center justify-center
                 w-16 h-16 rounded-poke-md border transition-all
                 ${isActive
-                  ? 'border-poke-accent shadow-poke-sm'
-                  : 'border-poke-border bg-poke-surface'
+                  ? 'border-accent-ink shadow-poke-sm'
+                  : 'border-hairline bg-surface'
                 }
                 ${isFacing ? 'ring-2 ring-yellow-400/60' : ''}
               `}
@@ -56,12 +56,12 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
                     alt={localizeSpecies(set.species, dataLocale)}
                     className="w-10 h-10"
                   />
-                  <span className="text-[9px] text-poke-text-secondary truncate w-full text-center px-0.5">
+                  <span className="text-[9px] text-fg-muted truncate w-full text-center px-0.5">
                     {localizeSpecies(set.species, dataLocale)}
                   </span>
                 </>
               ) : (
-                <span className="text-xs text-poke-text-secondary">+</span>
+                <span className="text-xs text-fg-muted">+</span>
               )}
             </button>
           );

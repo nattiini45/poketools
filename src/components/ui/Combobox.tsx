@@ -341,7 +341,7 @@ export default function Combobox(props: ComboboxProps) {
     return (
       <>
         {parts.before}
-        <span className="font-bold text-poke-blue">{parts.match}</span>
+        <span className="font-bold text-accent-ink">{parts.match}</span>
         {parts.after}
       </>
     );
@@ -351,7 +351,7 @@ export default function Combobox(props: ComboboxProps) {
 
   function defaultRenderOption(opt: ComboboxOption, highlighted: boolean) {
     return (
-      <span className={`block truncate ${highlighted ? 'text-poke-text-primary' : 'text-poke-text-secondary'}`}>
+      <span className={`block truncate ${highlighted ? 'text-fg' : 'text-fg-muted'}`}>
         {highlightMatch(opt.label)}
       </span>
     );
@@ -362,7 +362,7 @@ export default function Combobox(props: ComboboxProps) {
   return (
     <div ref={wrapperRef} className={cn('relative', className)}>
       {label && (
-        <label htmlFor={inputId} className="block text-xs font-body font-medium text-poke-text-secondary mb-1">
+        <label htmlFor={inputId} className="block text-xs font-body font-medium text-fg-muted mb-1">
           {label}
         </label>
       )}
@@ -374,8 +374,8 @@ export default function Combobox(props: ComboboxProps) {
             onClick={() => { inputRef.current?.focus(); }}
             className={cn(
               'flex items-center gap-2 w-full p-2 pr-8 cursor-text',
-              'border border-poke-border bg-poke-surface rounded-poke-md',
-              'text-sm text-poke-text-primary transition-colors',
+              'border border-hairline bg-surface rounded-poke-md',
+              'text-sm text-fg transition-colors',
             )}
           >
             <span className="font-medium truncate">{value}</span>
@@ -404,9 +404,9 @@ export default function Combobox(props: ComboboxProps) {
           onKeyDown={handleKeyDown}
           className={`
             w-full p-2 pr-8
-            border border-poke-border bg-poke-surface rounded-poke-md
-            text-sm text-poke-text-primary placeholder:text-poke-text-muted
-            focus:border-poke-border-focus focus:ring-2
+            border border-hairline bg-surface rounded-poke-md
+            text-sm text-fg placeholder:text-fg-muted
+            focus:border-accent-ink focus:ring-2
             transition-colors disabled:opacity-50
             ${renderInlineTags && value && !open ? 'sr-only' : ''}
           `}
@@ -417,7 +417,7 @@ export default function Combobox(props: ComboboxProps) {
           <button
             type="button"
             onClick={handleClear}
-            className="absolute right-2 top-1/2 -translate-y-1/2 text-poke-text-muted hover:text-poke-text-primary transition-colors"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-fg-muted hover:text-fg transition-colors"
             aria-label={t('combobox.clear')}
             tabIndex={-1}
           >
@@ -434,11 +434,11 @@ export default function Combobox(props: ComboboxProps) {
           ref={listRef}
           id={listId}
           role="listbox"
-          className="absolute z-20 w-full mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-lg max-h-56 overflow-y-auto"
+          className="absolute z-20 w-full mt-1 bg-surface border border-hairline rounded-poke-md shadow-poke-lg max-h-56 overflow-y-auto"
         >
           {loading && (
-            <li className="px-3 py-2 text-sm text-poke-text-muted flex items-center gap-2">
-              <span className="inline-block w-3.5 h-3.5 border-2 border-poke-text-muted border-t-transparent rounded-full animate-spin" />
+            <li className="px-3 py-2 text-sm text-fg-muted flex items-center gap-2">
+              <span className="inline-block w-3.5 h-3.5 border-2 border-fg-muted border-t-transparent rounded-full animate-spin" />
               {t('combobox.searching')}
             </li>
           )}
@@ -460,7 +460,7 @@ export default function Combobox(props: ComboboxProps) {
                 className={`
                   px-3 py-1.5 text-sm transition-colors
                   ${opt.disabled ? 'cursor-not-allowed' : 'cursor-pointer'}
-                  ${i === highlightIdx ? 'bg-poke-elevated text-poke-text-primary' : ''}
+                  ${i === highlightIdx ? 'bg-elevated text-fg' : ''}
                 `}
               >
                 {(renderOption ?? defaultRenderOption)(opt, i === highlightIdx)}
@@ -471,7 +471,7 @@ export default function Combobox(props: ComboboxProps) {
 
       {/* No results hint for open + empty */}
       {open && !loading && options.length === 0 && searchedQuery.length >= minQueryLength && mode === 'async' && (
-        <div className="absolute z-20 w-full mt-1 bg-poke-surface border border-poke-border rounded-poke-md shadow-poke-lg px-3 py-2 text-sm text-poke-text-muted">
+        <div className="absolute z-20 w-full mt-1 bg-surface border border-hairline rounded-poke-md shadow-poke-lg px-3 py-2 text-sm text-fg-muted">
           {t('combobox.noResultsFor', { query: searchedQuery })}
         </div>
       )}

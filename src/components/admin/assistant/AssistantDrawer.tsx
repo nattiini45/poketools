@@ -145,7 +145,7 @@ export default function AssistantDrawer() {
           aria-label={t('drawer.title')}
           tabIndex={-1}
           style={{ ['--assistant-w' as string]: `${width}px` }}
-          className="fixed inset-0 z-40 flex w-full flex-col border-l border-poke-border bg-poke-base shadow-poke-lg outline-2 outline-offset-2 outline-transparent sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[var(--assistant-w)]"
+          className="fixed inset-0 z-40 flex w-full flex-col border-l border-hairline bg-page shadow-poke-lg outline-2 outline-offset-2 outline-transparent sm:inset-y-0 sm:left-auto sm:right-0 sm:w-[var(--assistant-w)]"
         >
           <div
             role="separator"
@@ -162,13 +162,13 @@ export default function AssistantDrawer() {
             className={`absolute inset-y-0 left-0 hidden w-1.5 cursor-col-resize sm:block ${FOCUS_RING}`}
           />
 
-          <header className="flex items-center gap-2 border-b border-poke-border px-3 py-2">
+          <header className="flex items-center gap-2 border-b border-hairline px-3 py-2">
             {conversationId !== null && (
               <Button size="sm" variant="ghost" onClick={() => show(null)} aria-label={t('page.back')}>
                 <ArrowLeft className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
-            <h1 className="font-heading text-base font-bold text-poke-text-primary">{t('drawer.title')}</h1>
+            <h1 className="font-heading text-base font-bold text-fg">{t('drawer.title')}</h1>
             <Badge variant="accent" size="xs">
               {t('badge')}
             </Badge>

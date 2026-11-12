@@ -229,7 +229,7 @@ describe('AdminMatchBulkDialog note', () => {
 
     const over = body({ kind: 'note', rows, note: 'x'.repeat(2001) });
     expect(over).toContain('2,001 / 2,000');
-    expect(over).toContain('text-poke-danger');
+    expect(over).toContain('text-loss');
     expect(submitDisabled(over)).toBe(true);
   });
 
@@ -320,17 +320,17 @@ describe('BulkResultsPanel', () => {
     const html = render();
 
     const [failedClass, failedText] = listAfter(html, 'Not done');
-    expect(failedClass).toContain('text-poke-danger');
+    expect(failedClass).toContain('text-loss');
     expect(failedText).toContain('Mara3 vs Joel3: The match changed while the action ran');
     expect(failedText).toContain('Mara5 vs Joel5: The action failed for this match.');
 
     const [warningClass, warningText] = listAfter(html, 'Done, but a follow-up step failed');
-    expect(warningClass).toContain('text-poke-yellow-ink');
+    expect(warningClass).toContain('text-accent-ink');
     expect(warningText).toContain('Mara2 vs Joel2: The result was confirmed, but 2 follow-up steps failed.');
 
     const [skippedClass, skippedText] = listAfter(html, '>Skipped<');
-    expect(skippedClass).toContain('text-poke-text-muted');
-    expect(skippedClass).not.toContain('text-poke-danger');
+    expect(skippedClass).toContain('text-fg-muted');
+    expect(skippedClass).not.toContain('text-loss');
     expect(skippedText).toContain('Mara4 vs Joel4: Only matches awaiting confirmation can be confirmed in bulk.');
 
     expect(buttonLabelled(html, 'Close')).toBeDefined();

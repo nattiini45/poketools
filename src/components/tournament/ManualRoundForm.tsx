@@ -197,7 +197,7 @@ export default function ManualRoundForm({
             {t('manualRound.matchups')}
           </h4>
           {unpairedCount > 1 && (
-            <span className="text-caption text-poke-yellow-ink">
+            <span className="text-caption text-accent-ink">
               {t('manualRound.unpaired', { count: unpairedCount })}
             </span>
           )}

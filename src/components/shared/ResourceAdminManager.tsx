@@ -210,7 +210,7 @@ export default function ResourceAdminManager({
           onFetchError={() => setSearchError(PLAYER_SEARCH_NETWORK_ERROR)}
           minQueryLength={PLAYER_SEARCH_MIN_QUERY}
           renderOption={(option) => (
-            <span className={option.meta?.alreadyAdmin ? 'flex items-center gap-2 text-poke-text-muted opacity-60' : 'flex items-center gap-2'}>
+            <span className={option.meta?.alreadyAdmin ? 'flex items-center gap-2 text-fg-muted opacity-60' : 'flex items-center gap-2'}>
               <span>{option.label}</span>
               {option.meta?.alreadyAdmin ? <span className="text-xs">{t('resourceAdmins.alreadyAdmin')}</span> : null}
             </span>

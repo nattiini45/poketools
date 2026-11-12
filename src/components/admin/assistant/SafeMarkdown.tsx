@@ -88,7 +88,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
     const [whole, code, bang, label, target, bold, italicStar, italicUnderscore] = match;
     if (code !== undefined) {
       out.push(
-        <code key={key} className="rounded bg-poke-muted px-1 py-0.5 text-[0.85em]">
+        <code key={key} className="rounded bg-sunken px-1 py-0.5 text-[0.85em]">
           {code.slice(1, -1)}
         </code>,
       );
@@ -98,7 +98,7 @@ function renderInline(text: string, keyPrefix: string): ReactNode[] {
         out.push(label);
       } else if (isSitePath(target)) {
         out.push(
-          <Link key={key} href={target} className="underline text-poke-focus">
+          <Link key={key} href={target} className="underline text-accent-ink">
             {label}
           </Link>,
         );
@@ -128,7 +128,7 @@ export default function SafeMarkdown({ text, className }: { text: string; classN
         const key = `b${i}`;
         if (block.type === 'code') {
           return (
-            <pre key={key} className="overflow-x-auto rounded-poke-md border border-poke-border bg-poke-muted p-2 text-xs">
+            <pre key={key} className="overflow-x-auto rounded-poke-md border border-hairline bg-sunken p-2 text-xs">
               <code>{block.text}</code>
             </pre>
           );

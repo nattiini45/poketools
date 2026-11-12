@@ -28,7 +28,7 @@ export default async function SuperadminGuard({ children }: SuperadminGuardProps
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">{t('guards.accessDenied')}</h1>
-          <p className="text-poke-text-secondary">{t('guards.superadminOnly')}</p>
+          <p className="text-fg-muted">{t('guards.superadminOnly')}</p>
         </div>
       </div>
     );

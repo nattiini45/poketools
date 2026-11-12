@@ -19,17 +19,17 @@ export default async function SupplementaryPokemonKos({ species }: { species: st
 
   const t = await getT(supplementaryRecordsMessages);
   return (
-    <div className="bg-poke-surface rounded-poke-lg px-4 py-3 shadow-poke-sm border border-poke-border">
+    <div className="bg-surface rounded-poke-lg px-4 py-3 shadow-poke-sm border border-hairline">
       {result.state === 'failed' ? (
-        <p role="status" className="text-sm text-poke-text-tertiary">
+        <p role="status" className="text-sm text-fg-muted">
           {t('loadFailed')}
         </p>
       ) : (
         <>
-          <p className="text-sm font-heading font-semibold text-poke-text-primary">
+          <p className="text-sm font-heading font-semibold text-fg">
             {t('pokemon.kos', { count: result.value?.kos ?? 0 })}
           </p>
-          <p className="text-xs text-poke-text-tertiary">{t('note')}</p>
+          <p className="text-xs text-fg-muted">{t('note')}</p>
         </>
       )}
     </div>

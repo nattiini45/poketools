@@ -32,8 +32,8 @@ import { uiMessages } from '@/i18n/messages/ui';
 const SWATCH_ROLES: readonly SitePaletteCoreRole[] = ['ground', 'surface', 'accent'];
 
 const ROW =
-  'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary ' +
-  'hover:bg-poke-elevated has-[:checked]:bg-poke-accent-light ' +
+  'flex items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-fg ' +
+  'hover:bg-elevated has-[:checked]:bg-accent-subtle ' +
   'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
   'has-[:focus-visible]:outline-poke-focus';
 
@@ -70,7 +70,7 @@ export function PaletteOptions({
               />
               <span
                 aria-hidden="true"
-                className="inline-flex h-6 w-6 shrink-0 overflow-hidden rounded-full ring-1 ring-poke-border-strong"
+                className="inline-flex h-6 w-6 shrink-0 overflow-hidden rounded-full ring-1 ring-hairline-strong"
               >
                 {SWATCH_ROLES.map((role) => (
                   <span key={role} className="flex-1" style={{ background: sitePaletteSwatchVar(meta.id, role) }} />
@@ -78,11 +78,11 @@ export function PaletteOptions({
               </span>
               <span className="flex min-w-0 flex-1 flex-col">
                 <span className="font-[550] leading-tight">{words.label}</span>
-                <span className="text-xs leading-tight text-poke-text-secondary">{words.description}</span>
+                <span className="text-xs leading-tight text-fg-muted">{words.description}</span>
               </span>
               <svg
                 aria-hidden="true"
-                className={checked ? 'h-4 w-4 shrink-0 text-poke-accent-strong' : 'h-4 w-4 shrink-0 invisible'}
+                className={checked ? 'h-4 w-4 shrink-0 text-accent-ink' : 'h-4 w-4 shrink-0 invisible'}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"

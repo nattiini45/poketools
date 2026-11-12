@@ -3,7 +3,7 @@ import { SpriteStyleProvider } from '@/components/shared/SpriteStyleProvider';
 import { NOINDEX } from '@/lib/seo/robots';
 
 /**
- * The root layout paints `bg-poke-base` on <body> (and the site palette script
+ * The root layout paints `bg-page` on <body> (and the site palette script
  * may set a colour on <html>), so an overlay is only see-through if both are
  * overridden. It is a server-rendered <style> rather than a `:has()` rule or a
  * client effect: OBS browser sources older than Chromium 105 have no `:has()`,

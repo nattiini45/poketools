@@ -66,7 +66,7 @@ export default function ItemSprite({ item, size = 24, className = '' }: ItemSpri
   if (!item || (loaded && !coords)) {
     return (
       <span
-        className={`inline-block rounded-sm bg-poke-elevated ${className}`}
+        className={`inline-block rounded-sm bg-elevated ${className}`}
         style={{ width: size, height: size }}
         aria-hidden
       />

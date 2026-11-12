@@ -55,7 +55,7 @@ describe('SafeMarkdown', () => {
     const out = html('# Plan\n\nA **bold** and *soft* word with `code`.\n\n- one\n- two\n\n1. first\n2. second\n\n```\nlet x = <b>1</b>;\n```');
     expect(out).toContain('<strong>bold</strong>');
     expect(out).toContain('<em>soft</em>');
-    expect(out).toContain('<code class="rounded bg-poke-muted px-1 py-0.5 text-[0.85em]">code</code>');
+    expect(out).toContain('<code class="rounded bg-sunken px-1 py-0.5 text-[0.85em]">code</code>');
     expect(out).toMatch(/<ul[^>]*><li>one<\/li><li>two<\/li><\/ul>/);
     expect(out).toMatch(/<ol[^>]*><li>first<\/li><li>second<\/li><\/ol>/);
     expect(out).toContain('&lt;b&gt;1&lt;/b&gt;');

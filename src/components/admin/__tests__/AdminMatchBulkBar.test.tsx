@@ -46,7 +46,7 @@ describe('AdminMatchBulkBar', () => {
   it('sticks to the bottom above the content, wraps, and uses 44px targets and theme tokens', () => {
     const html = render(2);
     const bar = /<div role="region"[^>]*class="([^"]*)"/.exec(html)?.[1] ?? /<div class="([^"]*)"[^>]*role="region"/.exec(html)?.[1] ?? '';
-    expect(bar.split(/\s+/)).toEqual(expect.arrayContaining(['sticky', 'bottom-3', 'z-30', 'flex-wrap', 'mb-3', 'bg-poke-surface']));
+    expect(bar.split(/\s+/)).toEqual(expect.arrayContaining(['sticky', 'bottom-3', 'z-30', 'flex-wrap', 'mb-3', 'bg-surface']));
     expect(bar).not.toMatch(/bg-(black|slate|gray|zinc|neutral)-/);
     const buttons = html.match(/<button [^>]*>/g) ?? [];
     expect(buttons).toHaveLength(4);

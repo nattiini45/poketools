@@ -10,14 +10,14 @@
  */
 
 /** Primary panel: the main content surface in a section. */
-export const PANEL = 'rounded-poke-lg border border-poke-border bg-poke-surface';
+export const PANEL = 'rounded-poke-lg border border-hairline bg-surface';
 
 /** Inset panel: a raised block sitting inside a primary panel, or a chip row. */
-export const PANEL_INSET = 'rounded-poke-md border border-poke-border bg-poke-elevated';
+export const PANEL_INSET = 'rounded-poke-md border border-hairline bg-elevated';
 
 /** Empty-state / notice panel. Same surface, roomier padding, quieter ink. */
 export const PANEL_NOTICE =
-  'rounded-poke-lg border border-poke-border bg-poke-elevated p-6 text-sm text-poke-text-secondary';
+  'rounded-poke-lg border border-hairline bg-elevated p-6 text-sm text-fg-muted';
 
 /**
  * Interactive lift for a panel that is itself a link or button target.
@@ -26,7 +26,7 @@ export const PANEL_NOTICE =
  */
 export const PANEL_HOVER =
   'transition-[transform,box-shadow,border-color] duration-150 ease-out ' +
-  'hover:-translate-y-0.5 hover:border-poke-accent hover:shadow-poke-card-hover ' +
+  'hover:-translate-y-0.5 hover:border-accent-ink hover:shadow-poke-card-hover ' +
   'motion-reduce:transform-none motion-reduce:transition-none';
 
 /** Focus ring used by every interactive element. */
@@ -36,4 +36,4 @@ export const FOCUS_RING =
 
 /** Table header row treatment. */
 export const TABLE_HEAD =
-  'border-b border-poke-border bg-poke-elevated text-xs uppercase tracking-wide text-poke-text-secondary';
+  'border-b border-hairline bg-elevated text-xs uppercase tracking-wide text-fg-muted';

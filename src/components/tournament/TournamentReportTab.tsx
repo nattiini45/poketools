@@ -53,9 +53,9 @@ export default function TournamentReportTab({
           unoptimized
         />
         <div>
-          <p className="text-poke-text-muted text-sm">{t('report.empty')}</p>
-          <p className="text-poke-text-muted text-xs mt-1">{t('report.emptyAuto')}</p>
-          <p className="text-poke-text-muted text-xs mt-0.5">{t('report.emptyManual')}</p>
+          <p className="text-fg-muted text-sm">{t('report.empty')}</p>
+          <p className="text-fg-muted text-xs mt-1">{t('report.emptyAuto')}</p>
+          <p className="text-fg-muted text-xs mt-0.5">{t('report.emptyManual')}</p>
         </div>
       </div>
     );
@@ -68,7 +68,7 @@ export default function TournamentReportTab({
 
         return (
           <div key={round.id}>
-            <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+            <h3 className="text-sm font-heading font-semibold text-fg mb-2">
               {round.name}
             </h3>
 
