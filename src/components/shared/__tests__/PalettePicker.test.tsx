@@ -31,7 +31,7 @@ describe('PaletteOptions', () => {
       }
     }
     // Every swatch wrapper (the ringed disc) is aria-hidden.
-    const swatches = html.match(/<span[^>]*ring-hairline-strong[^>]*>/g) ?? [];
+    const swatches = html.match(/<span[^>]*ring-poke-border-strong[^>]*>/g) ?? [];
     expect(swatches).toHaveLength(4);
     for (const swatch of swatches) expect(swatch).toContain('aria-hidden="true"');
     expect(html).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
@@ -66,7 +66,7 @@ describe('PaletteOptions', () => {
 
   it('describes each option in text-secondary, never text-muted (contrast on the checked row)', () => {
     const html = renderToStaticMarkup(<PaletteOptions value="plaza" onSelect={noop} name="p" />);
-    expect(html).toMatch(/<span class="[^"]*text-fg-muted[^"]*">Warm sand · default<\/span>/);
+    expect(html).toMatch(/<span class="[^"]*text-poke-text-secondary[^"]*">Warm sand · default<\/span>/);
     expect(html).not.toContain('text-poke-text-muted');
   });
 });

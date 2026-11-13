@@ -73,7 +73,7 @@ export default function BottomSheet({
             openerRef.current = null;
             if (opener?.isConnected) opener.focus();
           }}
-          className={`fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-hairline rounded-t-2xl shadow-poke-lg flex flex-col overflow-hidden ${SHEET_ANIMATION}`}
+          className={`fixed bottom-0 left-0 right-0 z-50 bg-poke-surface border-t border-poke-border rounded-t-2xl shadow-poke-lg flex flex-col overflow-hidden ${SHEET_ANIMATION}`}
           style={{ maxHeight: HEIGHT_MAP[height], height: height === 'auto' ? undefined : HEIGHT_MAP[height] }}
         >
           {/* Drag handle: touch and mouse only; the close button below is the keyboard way out. */}
@@ -85,17 +85,17 @@ export default function BottomSheet({
             onMouseDown={handleDragStart}
             onMouseUp={handleDragEnd}
           >
-            <div className="w-10 h-1 rounded-full bg-hairline" />
+            <div className="w-10 h-1 rounded-full bg-poke-border" />
           </div>
 
-          <div className="flex shrink-0 items-center justify-between gap-4 px-4 pb-2 border-b border-hairline">
+          <div className="flex shrink-0 items-center justify-between gap-4 px-4 pb-2 border-b border-poke-border">
             <Dialog.Title
-              className={title ? 'font-heading font-semibold text-fg text-sm' : 'sr-only'}
+              className={title ? 'font-heading font-semibold text-poke-text-primary text-sm' : 'sr-only'}
             >
               {title ?? t('modal.untitled')}
             </Dialog.Title>
             <Dialog.Close
-              className="ml-auto shrink-0 rounded-poke-sm p-1 text-fg-muted transition-colors hover:text-fg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring"
+              className="ml-auto shrink-0 rounded-poke-sm p-1 text-poke-text-muted transition-colors hover:text-poke-text-primary focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring"
               aria-label={t('modal.close')}
             >
               <X className="h-4 w-4" />

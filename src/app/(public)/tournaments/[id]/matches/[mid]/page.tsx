@@ -331,7 +331,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
           </SkewChip>
           <Link
             href={`/tournaments/${id}`}
-            className="inline-flex min-h-6 items-center gap-1 rounded-[3px] text-body font-[550] text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink max-sm:min-h-11"
+            className="inline-flex min-h-6 items-center gap-1 rounded-[3px] text-body font-[550] text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus max-sm:min-h-11"
           >
             <span aria-hidden="true">←</span> {t('detail.backToTournament')}
           </Link>

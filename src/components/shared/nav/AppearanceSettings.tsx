@@ -17,7 +17,7 @@ const THEME_OPTION =
   'flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-poke-md border border-hairline px-3 text-body text-fg ' +
   'transition-colors duration-[80ms] hover:bg-hover has-[:checked]:border-hairline-strong has-[:checked]:bg-accent-subtle ' +
   'has-[:checked]:font-[550] has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
-  'has-[:focus-visible]:outline-accent-ink lg:min-h-9';
+  'has-[:focus-visible]:outline-poke-focus lg:min-h-9';
 
 /**
  * Appearance in the account menu and the signed-out drawer: sunlit or moonlit, the site palette and the sprite

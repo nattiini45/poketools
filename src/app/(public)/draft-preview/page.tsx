@@ -165,8 +165,8 @@ const SCENARIO_KEY: Record<PreviewScenarioId, keyof DraftScreenEn['preview']['sc
 };
 
 const CHIP =
-  'inline-flex min-h-11 items-center rounded-lg border border-hairline px-2.5 py-1 text-sm motion-safe:transition-colors hover:bg-elevated sm:min-h-0';
-const CHIP_ACTIVE = 'border-fg-muted bg-elevated font-semibold';
+  'inline-flex min-h-11 items-center rounded-lg border border-poke-border px-2.5 py-1 text-sm motion-safe:transition-colors hover:bg-poke-elevated sm:min-h-0';
+const CHIP_ACTIVE = 'border-poke-text-secondary bg-poke-elevated font-semibold';
 
 export default async function DraftPreviewPage({ searchParams }: DraftPreviewPageProps) {
   // Public: no auth required — dev-only, and 404s in production.
@@ -219,15 +219,15 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
   const groups = Object.entries(SCENARIO_GROUPS) as [ScenarioGroup, readonly PreviewScenarioId[]][];
   const content = (
     <div className="flex flex-col gap-4">
-      <header className="space-y-3 rounded-xl border border-hairline p-3">
+      <header className="space-y-3 rounded-xl border border-poke-border p-3">
         <div>
           <h1 className="text-lg font-bold">{t('preview.title')}</h1>
-          <p className="text-sm text-fg-muted">{t('preview.intro')}</p>
+          <p className="text-sm text-poke-text-secondary">{t('preview.intro')}</p>
         </div>
         <nav aria-label={t('preview.title')} className="space-y-2">
           {groups.map(([group, ids]) => (
             <div key={group} className="flex flex-wrap items-center gap-1.5">
-              <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-fg-muted">{t(`preview.groups.${group}`)}</span>
+              <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-poke-text-secondary">{t(`preview.groups.${group}`)}</span>
               {ids.map((id) => (
                 <Link
                   key={id}
@@ -242,7 +242,7 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
             </div>
           ))}
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-fg-muted">{t('preview.world')}</span>
+            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-poke-text-secondary">{t('preview.world')}</span>
             {PREVIEW_WORLDS.map((w) => (
               <Link key={w} href={previewHref(state, { world: w })} className={`${CHIP} ${w === state.world ? CHIP_ACTIVE : ''}`}>
                 <code>{w}</code>
@@ -250,13 +250,13 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-fg-muted">{t('preview.language')}</span>
+            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-poke-text-secondary">{t('preview.language')}</span>
             {([null, 'en', 'de'] as const).map((l) => (
               <Link key={l ?? 'site'} href={previewHref(state, { lang: l })} className={`${CHIP} ${l === state.lang ? CHIP_ACTIVE : ''}`}>
                 {l === null ? t('preview.siteSetting') : <code>{l}</code>}
               </Link>
             ))}
-            <span className="ml-3 text-xs font-semibold uppercase text-fg-muted">{t('preview.pkmnLanguage')}</span>
+            <span className="ml-3 text-xs font-semibold uppercase text-poke-text-secondary">{t('preview.pkmnLanguage')}</span>
             {([null, 'en', 'de'] as const).map((l) => (
               <Link key={l ?? 'site'} href={previewHref(state, { pkmn: l })} className={`${CHIP} ${l === state.pkmn ? CHIP_ACTIVE : ''}`}>
                 {l === null ? t('preview.siteSetting') : <code>{l}</code>}
@@ -264,7 +264,7 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-fg-muted">{tGroups('preview.toggle')}</span>
+            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-poke-text-secondary">{tGroups('preview.toggle')}</span>
             {([false, true] as const).map((on) => (
               <Link
                 key={String(on)}
@@ -276,7 +276,7 @@ export default async function DraftPreviewPage({ searchParams }: DraftPreviewPag
             ))}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-fg-muted">{tSprites('menuLegend')}</span>
+            <span className="min-w-[6rem] shrink-0 text-xs font-semibold uppercase text-poke-text-secondary">{tSprites('menuLegend')}</span>
             <Link href={previewHref(state, { sprites: null })} className={`${CHIP} ${state.sprites === null ? CHIP_ACTIVE : ''}`}>
               {t('preview.siteSetting')}
             </Link>

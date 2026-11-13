@@ -70,7 +70,7 @@ export default function PwaInstallPrompt({ className = '' }: PwaInstallPromptPro
     return (
       <button
         onClick={() => void onInstallClick()}
-        className={`w-full rounded-poke-lg bg-accent-ink px-4 py-2 text-sm font-heading font-semibold text-surface transition-opacity hover:opacity-90 ${className}`}
+        className={`w-full rounded-poke-lg bg-poke-accent px-4 py-2 text-sm font-heading font-semibold text-poke-surface transition-opacity hover:opacity-90 ${className}`}
       >
         {t('pwa.install')}
       </button>
@@ -79,7 +79,7 @@ export default function PwaInstallPrompt({ className = '' }: PwaInstallPromptPro
 
   if (showIosGuide) {
     return (
-      <p className={`text-xs text-fg-muted ${className}`}>
+      <p className={`text-xs text-poke-text-muted ${className}`}>
         {t('pwa.iosHint')}
       </p>
     );

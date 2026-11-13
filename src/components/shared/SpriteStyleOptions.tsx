@@ -101,7 +101,7 @@ export default function SpriteStyleOptions({
                 onChange={() => onChange(option)}
               />
               <span
-                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-poke-md bg-elevated"
+                className="flex h-14 w-14 shrink-0 items-center justify-center rounded-poke-md bg-poke-elevated"
                 role="img"
                 aria-label={t('previewAlt', { style: label, species })}
               >
@@ -113,8 +113,8 @@ export default function SpriteStyleOptions({
                 />
               </span>
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="font-heading font-semibold leading-tight text-fg">{label}</span>
-                <span id={helpId} className="text-xs leading-snug text-fg-muted">
+                <span className="font-heading font-semibold leading-tight text-poke-text-primary">{label}</span>
+                <span id={helpId} className="text-xs leading-snug text-poke-text-secondary">
                   {helpFor(option)}
                 </span>
               </span>
@@ -129,16 +129,16 @@ export default function SpriteStyleOptions({
 
 const FOCUS_WITHIN =
   'has-[:focus-visible]:outline-solid has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ' +
-  'has-[:focus-visible]:outline-accent-ink';
+  'has-[:focus-visible]:outline-poke-focus';
 
 const COMPACT_ROW =
-  'flex min-h-11 items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-fg ' +
-  'hover:bg-elevated has-[:checked]:bg-accent-subtle motion-safe:transition-colors ' +
+  'flex min-h-11 items-center gap-3 rounded-poke-md px-2 py-2 cursor-pointer text-sm text-poke-text-primary ' +
+  'hover:bg-poke-elevated has-[:checked]:bg-poke-accent-light motion-safe:transition-colors ' +
   FOCUS_WITHIN;
 
 const CARD =
-  'flex min-h-11 items-center gap-3 rounded-poke-md border border-hairline bg-surface px-3 py-2 ' +
-  'cursor-pointer text-sm hover:bg-elevated has-[:checked]:border-accent-ink has-[:checked]:bg-accent-subtle ' +
+  'flex min-h-11 items-center gap-3 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 ' +
+  'cursor-pointer text-sm hover:bg-poke-elevated has-[:checked]:border-poke-accent has-[:checked]:bg-poke-accent-light ' +
   'motion-safe:transition-colors ' +
   FOCUS_WITHIN;
 
@@ -146,7 +146,7 @@ function CheckMark({ checked }: { checked: boolean }) {
   return (
     <svg
       aria-hidden="true"
-      className={checked ? 'h-4 w-4 shrink-0 text-accent-ink' : 'h-4 w-4 shrink-0 invisible'}
+      className={checked ? 'h-4 w-4 shrink-0 text-poke-accent-strong' : 'h-4 w-4 shrink-0 invisible'}
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"

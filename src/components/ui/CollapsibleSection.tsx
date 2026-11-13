@@ -50,13 +50,13 @@ export default function CollapsibleSection({
     <section
       id={id}
       className={cn(
-        "self-start w-full bg-surface border border-hairline rounded-poke-lg shadow-poke-card overflow-hidden",
+        "self-start w-full bg-poke-surface border border-poke-border rounded-poke-lg shadow-poke-card overflow-hidden",
         id && "scroll-mt-4",
         className
       )}
     >
       {(title || action) && (
-        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-hairline">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-poke-border">
           <button
             type="button"
             className="flex items-center gap-2 text-left min-w-0 cursor-pointer"
@@ -65,9 +65,9 @@ export default function CollapsibleSection({
             aria-controls={contentId}
           >
             {isOpen ? (
-              <ChevronUp className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
+              <ChevronUp className="h-4 w-4 shrink-0 text-poke-text-muted" aria-hidden="true" />
             ) : (
-              <ChevronDown className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
+              <ChevronDown className="h-4 w-4 shrink-0 text-poke-text-muted" aria-hidden="true" />
             )}
             <div className="min-w-0">
               {title && (

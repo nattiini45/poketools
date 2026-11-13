@@ -13,7 +13,7 @@ export default function SkipToContent() {
   return (
     <a
       href={`#${MAIN_CONTENT_ID}`}
-      className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[10000] focus:rounded-poke-md focus:bg-surface focus:px-4 focus:py-2 focus:text-sm focus:font-heading focus:font-semibold focus:text-fg focus:shadow-poke-lg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring"
+      className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[10000] focus:rounded-poke-md focus:bg-poke-surface focus:px-4 focus:py-2 focus:text-sm focus:font-heading focus:font-semibold focus:text-poke-text-primary focus:shadow-poke-lg focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:ring-ring"
     >
       {t('skipToContent')}
     </a>
