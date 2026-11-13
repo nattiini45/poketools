@@ -46,10 +46,10 @@ describe('NavBar link row', () => {
     expect(html).not.toContain('data-stub="bell"');
   });
 
-  it('shows a player Home and Teams as well, the bell and the account menu, and no hamburger', () => {
+  it('shows a player Home and Replays as well, the bell and the account menu, and no hamburger', () => {
     session.current = { user: { image: null }, player: PLAYER };
     const html = renderWithI18n(<NavBar />);
-    expect(rowLinks(html)).toEqual(['/dashboard', '/leagues', '/tournaments', '/teambuilder', '/insights', '/wiki']);
+    expect(rowLinks(html)).toEqual(['/dashboard', '/leagues', '/tournaments', '/replays', '/insights', '/wiki']);
     expect(html).toContain('data-stub="bell"');
     expect(html).toContain('aria-label="Account menu"');
     expect(html).not.toContain('aria-controls="navbar-drawer"');
@@ -75,7 +75,7 @@ describe('NavBar link row', () => {
   it('keeps the closed menus out of the markup: More, the account menu and the drawer render on demand', () => {
     session.current = { user: { image: null }, player: PLAYER };
     const html = renderWithI18n(<NavBar extraLinks={HISTORY} />);
-    expect(html).not.toContain('href="/replays"');
+    expect(html).not.toContain('href="/teambuilder"');
     expect(html).not.toContain('href="/history"');
     expect(html).not.toContain('type="radio"');
     expect(html).not.toContain('role="dialog"');
@@ -117,10 +117,10 @@ describe('BottomTabBar', () => {
     expect(renderWithI18n(<BottomTabBar />)).toBe('');
   });
 
-  it('gives a player Home, Leagues, Teams, Wiki and More, with the current tab marked', () => {
+  it('gives a player Home, Leagues, Replays, Wiki and More, with the current tab marked', () => {
     session.current = { user: { image: null }, player: PLAYER };
     const html = renderWithI18n(<BottomTabBar extraLinks={HISTORY} />);
-    expect([...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1])).toEqual(['/dashboard', '/leagues', '/teambuilder', '/wiki']);
+    expect([...html.matchAll(/<a [^>]*href="([^"]+)"/g)].map((match) => match[1])).toEqual(['/dashboard', '/leagues', '/replays', '/wiki']);
     expect(html).toMatch(/<a [^>]*href="\/leagues"[^>]*aria-current="page"/);
     expect(html).toMatch(/<button[^>]*aria-haspopup="dialog"[^>]*aria-expanded="false"/);
     expect(html).toContain('aria-label="Quick navigation"');
@@ -139,6 +139,6 @@ describe('BottomTabBar', () => {
   it('speaks German', () => {
     session.current = { user: { image: null }, player: PLAYER };
     const html = renderWithI18n(<BottomTabBar />, { locale: 'de' });
-    for (const label of ['Start', 'Ligen', 'Teams', 'Wiki', 'Mehr']) expect(html).toContain(`>${label}</span>`);
+    for (const label of ['Start', 'Ligen', 'Replays', 'Wiki', 'Mehr']) expect(html).toContain(`>${label}</span>`);
   });
 });

@@ -12,7 +12,7 @@ import { MORE_NAV_LINKS, extensionLinkIcon, isNavPathActive } from './links';
 import NavMenuLink from './NavMenuLink';
 import { useNavDisclosure } from './use-nav-disclosure';
 
-/** "More" in the desktop link row: Replays, Players and the pack's extension pages (History), inside `#site-nav`. */
+/** "More" in the desktop link row: Teams, Players and the pack's extension pages (History), inside `#site-nav`. */
 export default function MoreMenu({
   extraLinks,
   iconClassName,

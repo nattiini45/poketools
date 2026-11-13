@@ -22,19 +22,19 @@ const WIKI: SiteNavLink = { href: '/wiki', labelKey: 'wiki', icon: 'weakness-pol
 const REPLAYS: SiteNavLink = { href: '/replays', labelKey: 'replays', icon: 'dubious-disc' };
 const PLAYERS: SiteNavLink = { href: '/players', labelKey: 'players', icon: 'lucky-egg' };
 
-/** The desktop link row (plan §3.1): a player gets Home first and Teams. */
+/** The desktop link row (plan §3.1): a player gets Home first and Replays. */
 export function primaryNavLinks(signedIn: boolean): readonly SiteNavLink[] {
-  return signedIn ? [HOME, LEAGUES, TOURNAMENTS, TEAMS, INSIGHTS, WIKI] : [LEAGUES, TOURNAMENTS, INSIGHTS, WIKI];
+  return signedIn ? [HOME, LEAGUES, TOURNAMENTS, REPLAYS, INSIGHTS, WIKI] : [LEAGUES, TOURNAMENTS, INSIGHTS, WIKI];
 }
 
 /** Under More, ahead of the pack's extension links (History, when the pack provides it). */
-export const MORE_NAV_LINKS: readonly SiteNavLink[] = [REPLAYS, PLAYERS];
+export const MORE_NAV_LINKS: readonly SiteNavLink[] = [TEAMS, PLAYERS];
 
 /** The four tabs of the phone bottom bar; More is its fifth. */
-export const BOTTOM_BAR_LINKS: readonly SiteNavLink[] = [HOME, LEAGUES, TEAMS, WIKI];
+export const BOTTOM_BAR_LINKS: readonly SiteNavLink[] = [HOME, LEAGUES, REPLAYS, WIKI];
 
 /** The bottom bar's More sheet, ahead of the extension links. */
-export const BOTTOM_SHEET_LINKS: readonly SiteNavLink[] = [TOURNAMENTS, INSIGHTS, REPLAYS, PLAYERS];
+export const BOTTOM_SHEET_LINKS: readonly SiteNavLink[] = [TOURNAMENTS, INSIGHTS, TEAMS, PLAYERS];
 
 /** Every built-in destination, for the search dialog's page list. */
 export const ALL_NAV_LINKS: readonly SiteNavLink[] = [HOME, LEAGUES, TOURNAMENTS, TEAMS, INSIGHTS, WIKI, REPLAYS, PLAYERS];
