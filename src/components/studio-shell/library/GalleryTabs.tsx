@@ -1,6 +1,7 @@
 'use client';
 
-import { Children, isValidElement, useId, useRef, useState, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { Children, isValidElement, useId, useRef, type KeyboardEvent, type ReactElement, type ReactNode } from 'react';
+import { usePathname, useSearchParams } from 'next/navigation';
 import SkewPlate from '@/components/ui/SkewPlate';
 
 interface GalleryPanelProps {
@@ -32,12 +33,26 @@ interface GalleryTabsProps {
 /**
  * The tabs of a studio gallery (Yours, Shared, Examples; redesign A10a). Every panel is rendered by the server page and
  * the inactive ones are hidden, so switching reads and fetches nothing. The strip scrolls sideways on a phone instead of
- * wrapping; arrow keys, Home and End move between the tabs.
+ * wrapping; arrow keys, Home and End move between the tabs. The selected tab lives in `?tab=` (the first tab is the
+ * default and leaves the URL clean; an unknown value falls back to it): a link opens that tab and back steps between
+ * tabs. The URL moves through `history.pushState`, which Next folds into `useSearchParams` without a server round trip.
  */
 export default function GalleryTabs({ children, label, glideId }: GalleryTabsProps) {
   const base = useId();
   const tabs = Children.toArray(children).filter((child): child is ReactElement<GalleryPanelProps> => isValidElement(child));
-  const [active, setActive] = useState(tabs[0]?.props.id ?? '');
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const requested = searchParams.get('tab');
+  const fallback = tabs[0]?.props.id ?? '';
+  const active = tabs.some((tab) => tab.props.id === requested) ? (requested as string) : fallback;
+  const setActive = (id: string) => {
+    if (id === active) return;
+    const params = new URLSearchParams(searchParams.toString());
+    if (id === fallback) params.delete('tab');
+    else params.set('tab', id);
+    const query = params.toString();
+    window.history.pushState(null, '', query ? `${pathname}?${query}` : pathname);
+  };
   const buttons = useRef<Record<string, HTMLButtonElement | null>>({});
 
   const move = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {

@@ -40,6 +40,8 @@ vi.mock('next/link', () => ({
 }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/rulesets',
   notFound: () => {
     throw new Error('NEXT_NOT_FOUND');
   },
