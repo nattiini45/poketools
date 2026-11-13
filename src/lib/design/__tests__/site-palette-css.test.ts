@@ -125,8 +125,27 @@ function whereList(selector: string): string[] {
   });
 }
 
+/** The legacy ground and text names a site palette no longer declares: Direction B aliases them onto
+ *  the new tokens on <html> (`--poke-base: var(--page)` and so on), so a palette sets the new token. */
+const GROUND_ALIASES: Readonly<Record<string, string>> = {
+  '--background': '--page',
+  '--foreground': '--fg',
+  '--poke-base': '--page',
+  '--poke-surface': '--surface',
+  '--poke-elevated': '--elevated',
+  '--poke-text-primary': '--fg',
+  '--poke-text-secondary': '--fg-muted',
+};
+
 function paletteBlock(id: Exclude<SitePaletteId, 'plaza'>, mode: SitePaletteMode): CssRule {
-  return onlyRule(mode === 'light' ? `html[data-palette="${id}"]` : `html[data-palette="${id}"][data-theme="dark"]`);
+  const rule = onlyRule(mode === 'light' ? `html[data-palette="${id}"]` : `html[data-palette="${id}"][data-theme="dark"]`);
+  for (const [legacy, token] of Object.entries(GROUND_ALIASES)) {
+    expect(rule.decls.has(legacy), `${id} ${mode} no legacy ${legacy}`).toBe(false);
+    expect(rule.decls.has(token), `${id} ${mode} ${token}`).toBe(true);
+  }
+  const decls = new Map(rule.decls);
+  for (const [legacy, token] of Object.entries(GROUND_ALIASES)) decls.set(legacy, rule.decls.get(token) as string);
+  return { ...rule, decls };
 }
 
 /** Today's world render (globals.css@1eecc4eb): 4 themed worlds x 2 modes x

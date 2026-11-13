@@ -923,15 +923,13 @@ html:has([data-frozen="draft-room"]) body {
    Contrast: every text pair >= 4.5:1, every UI pair >= 3:1 (computed, see
    docs/design.md § Site palettes). */
 html[data-palette="sakura"] {
-  --background: var(--palette-sakura-ground);
-  --foreground: var(--palette-sakura-ink);
-  --poke-base: var(--palette-sakura-ground);
-  --poke-surface: var(--palette-sakura-surface);
-  --poke-elevated: var(--palette-sakura-elevated);
+  --page: var(--palette-sakura-ground);
+  --fg: var(--palette-sakura-ink);
+  --surface: var(--palette-sakura-surface);
+  --elevated: var(--palette-sakura-elevated);
   --poke-muted: #f7e8eb;
   --poke-inverse: var(--palette-sakura-ink);
-  --poke-text-primary: var(--palette-sakura-ink);
-  --poke-text-secondary: var(--palette-sakura-ink-secondary);
+  --fg-muted: var(--palette-sakura-ink-secondary);
   --poke-text-muted: #74586a;
   --poke-text-tertiary: #795e6f;
   --poke-border: var(--palette-sakura-border);
@@ -969,15 +967,13 @@ html[data-palette="sakura"] {
 }
 
 html[data-palette="sakura"][data-theme="dark"] {
-  --background: var(--palette-sakura-ground);
-  --foreground: var(--palette-sakura-ink);
-  --poke-base: var(--palette-sakura-ground);
-  --poke-surface: var(--palette-sakura-surface);
-  --poke-elevated: var(--palette-sakura-elevated);
+  --page: var(--palette-sakura-ground);
+  --fg: var(--palette-sakura-ink);
+  --surface: var(--palette-sakura-surface);
+  --elevated: var(--palette-sakura-elevated);
   --poke-muted: #30253a;
   --poke-inverse: var(--palette-sakura-ink);
-  --poke-text-primary: var(--palette-sakura-ink);
-  --poke-text-secondary: var(--palette-sakura-ink-secondary);
+  --fg-muted: var(--palette-sakura-ink-secondary);
   --poke-text-muted: #b49fae;
   --poke-text-tertiary: #a8929f;
   --poke-border: var(--palette-sakura-border);
@@ -1018,15 +1014,13 @@ html[data-palette="sakura"][data-theme="dark"] {
 }
 
 html[data-palette="mountain"] {
-  --background: var(--palette-mountain-ground);
-  --foreground: var(--palette-mountain-ink);
-  --poke-base: var(--palette-mountain-ground);
-  --poke-surface: var(--palette-mountain-surface);
-  --poke-elevated: var(--palette-mountain-elevated);
+  --page: var(--palette-mountain-ground);
+  --fg: var(--palette-mountain-ink);
+  --surface: var(--palette-mountain-surface);
+  --elevated: var(--palette-mountain-elevated);
   --poke-muted: #e8ebdc;
   --poke-inverse: var(--palette-mountain-ink);
-  --poke-text-primary: var(--palette-mountain-ink);
-  --poke-text-secondary: var(--palette-mountain-ink-secondary);
+  --fg-muted: var(--palette-mountain-ink-secondary);
   --poke-text-muted: #5a655d;
   --poke-text-tertiary: #5d6860;
   --poke-border: var(--palette-mountain-border);
@@ -1064,15 +1058,13 @@ html[data-palette="mountain"] {
 }
 
 html[data-palette="mountain"][data-theme="dark"] {
-  --background: var(--palette-mountain-ground);
-  --foreground: var(--palette-mountain-ink);
-  --poke-base: var(--palette-mountain-ground);
-  --poke-surface: var(--palette-mountain-surface);
-  --poke-elevated: var(--palette-mountain-elevated);
+  --page: var(--palette-mountain-ground);
+  --fg: var(--palette-mountain-ink);
+  --surface: var(--palette-mountain-surface);
+  --elevated: var(--palette-mountain-elevated);
   --poke-muted: #2c3447;
   --poke-inverse: var(--palette-mountain-ink);
-  --poke-text-primary: var(--palette-mountain-ink);
-  --poke-text-secondary: var(--palette-mountain-ink-secondary);
+  --fg-muted: var(--palette-mountain-ink-secondary);
   --poke-text-muted: #a6b1c2;
   --poke-text-tertiary: #9ba6b7;
   --poke-border: var(--palette-mountain-border);
@@ -1113,15 +1105,13 @@ html[data-palette="mountain"][data-theme="dark"] {
 }
 
 html[data-palette="clouds"] {
-  --background: var(--palette-clouds-ground);
-  --foreground: var(--palette-clouds-ink);
-  --poke-base: var(--palette-clouds-ground);
-  --poke-surface: var(--palette-clouds-surface);
-  --poke-elevated: var(--palette-clouds-elevated);
+  --page: var(--palette-clouds-ground);
+  --fg: var(--palette-clouds-ink);
+  --surface: var(--palette-clouds-surface);
+  --elevated: var(--palette-clouds-elevated);
   --poke-muted: #eaf0f6;
   --poke-inverse: var(--palette-clouds-ink);
-  --poke-text-primary: var(--palette-clouds-ink);
-  --poke-text-secondary: var(--palette-clouds-ink-secondary);
+  --fg-muted: var(--palette-clouds-ink-secondary);
   --poke-text-muted: #56677c;
   --poke-text-tertiary: #5b6b80;
   --poke-border: var(--palette-clouds-border);
@@ -1159,15 +1149,13 @@ html[data-palette="clouds"] {
 }
 
 html[data-palette="clouds"][data-theme="dark"] {
-  --background: var(--palette-clouds-ground);
-  --foreground: var(--palette-clouds-ink);
-  --poke-base: var(--palette-clouds-ground);
-  --poke-surface: var(--palette-clouds-surface);
-  --poke-elevated: var(--palette-clouds-elevated);
+  --page: var(--palette-clouds-ground);
+  --fg: var(--palette-clouds-ink);
+  --surface: var(--palette-clouds-surface);
+  --elevated: var(--palette-clouds-elevated);
   --poke-muted: #1b2b41;
   --poke-inverse: var(--palette-clouds-ink);
-  --poke-text-primary: var(--palette-clouds-ink);
-  --poke-text-secondary: var(--palette-clouds-ink-secondary);
+  --fg-muted: var(--palette-clouds-ink-secondary);
   --poke-text-muted: #9fb0c6;
   --poke-text-tertiary: #93a5bc;
   --poke-border: var(--palette-clouds-border);
