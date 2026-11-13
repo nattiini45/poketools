@@ -20,18 +20,18 @@ describe('site nav link groups (plan §3.1)', () => {
     expect(hrefs(primaryNavLinks(false))).toEqual(['/leagues', '/tournaments', '/insights', '/wiki']);
   });
 
-  it('gives a player Home first and Teams', () => {
-    expect(hrefs(primaryNavLinks(true))).toEqual(['/dashboard', '/leagues', '/tournaments', '/teambuilder', '/insights', '/wiki']);
+  it('gives a player Home first and Replays', () => {
+    expect(hrefs(primaryNavLinks(true))).toEqual(['/dashboard', '/leagues', '/tournaments', '/replays', '/insights', '/wiki']);
   });
 
-  it('keeps Replays and Players reachable under More', () => {
-    expect(MORE_NAV_LINKS).toContainEqual({ href: '/replays', labelKey: 'replays', icon: 'dubious-disc' });
-    expect(hrefs(MORE_NAV_LINKS)).toEqual(['/replays', '/players']);
+  it('keeps Teams and Players reachable under More', () => {
+    expect(MORE_NAV_LINKS).toContainEqual({ href: '/teambuilder', labelKey: 'teams', icon: 'choice-scarf', also: ['/teams'] });
+    expect(hrefs(MORE_NAV_LINKS)).toEqual(['/teambuilder', '/players']);
   });
 
   it('splits every destination between the bottom bar and its sheet, with no admin or creator link', () => {
-    expect(hrefs(BOTTOM_BAR_LINKS)).toEqual(['/dashboard', '/leagues', '/teambuilder', '/wiki']);
-    expect(hrefs(BOTTOM_SHEET_LINKS)).toEqual(['/tournaments', '/insights', '/replays', '/players']);
+    expect(hrefs(BOTTOM_BAR_LINKS)).toEqual(['/dashboard', '/leagues', '/replays', '/wiki']);
+    expect(hrefs(BOTTOM_SHEET_LINKS)).toEqual(['/tournaments', '/insights', '/teambuilder', '/players']);
     expect([...hrefs(BOTTOM_BAR_LINKS), ...hrefs(BOTTOM_SHEET_LINKS)].sort()).toEqual(hrefs(ALL_NAV_LINKS).sort());
     for (const href of hrefs(ALL_NAV_LINKS)) expect(href).not.toMatch(/^\/(admin|creator)/);
   });
@@ -41,7 +41,7 @@ describe('site nav link groups (plan §3.1)', () => {
       'Home',
       'Leagues',
       'Tournaments',
-      'Teams',
+      'Replays',
       'Insights',
       'Wiki',
     ]);
@@ -74,8 +74,9 @@ describe('isNavPathActive', () => {
     expect(isNavPathActive(null, '/leagues')).toBe(false);
   });
 
-  it('lights Wiki on a Pokémon page and Teams on the team library', () => {
-    const [, , , teams, , wiki] = primaryNavLinks(true);
+  it('lights Wiki on a Pokémon page and Teams under More on the team library', () => {
+    const [, , , , , wiki] = primaryNavLinks(true);
+    const teams = MORE_NAV_LINKS[0];
     expect(isNavPathActive('/pokemon/garchomp', wiki.href, wiki.also)).toBe(true);
     expect(isNavPathActive('/teams/library', teams.href, teams.also)).toBe(true);
   });

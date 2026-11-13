@@ -31,8 +31,8 @@ function Tick() {
 }
 
 /**
- * The phone bottom tab bar of a signed-in player (plan §3.1, D7-c): Home, Leagues, Teams, Wiki and More (a
- * sheet with Tournaments, Insights, Replays, Players and the pack's extension pages). Below `lg` only; the
+ * The phone bottom tab bar of a signed-in player (plan §3.1, D7-c): Home, Leagues, Replays, Wiki and More (a
+ * sheet with Tournaments, Insights, Teams, Players and the pack's extension pages). Below `lg` only; the
  * desktop link row takes over there.
  *
  * Mounted by the (public), (player) and creator layouts, so never on a broadcast, auth or admin page.
