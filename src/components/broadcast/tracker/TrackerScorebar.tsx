@@ -36,7 +36,7 @@ export default function TrackerScorebar({
           <span className="text-2xl font-bold text-fg">{p1Wins}</span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-xs text-fg-muted uppercase tracking-wider">{t('tracker.game', { game: current_game.game_number })}</span>
+          <span className="text-xs text-fg-muted">{t('tracker.game', { game: current_game.game_number })}</span>
           <span className="text-lg font-bold text-fg">VS</span>
         </div>
         <div className="text-left">
@@ -78,10 +78,10 @@ export default function TrackerScorebar({
             return (
               <div
                 key={g.id}
-                className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                className={`w-5 h-5 rounded-full flex items-center justify-center text-micro font-bold ${
                   isP1Win
-                    ? 'bg-[rgb(59_130_246/0.3)] text-blue-300'
-                    : 'bg-[rgb(239_68_68/0.3)] text-red-300'
+                    ? 'bg-[rgb(59_130_246/0.3)] text-accent-ink'
+                    : 'bg-[rgb(239_68_68/0.3)] text-loss'
                 }`}
                 title={t('tracker.gameWonBy', {
                   game: i + 1,

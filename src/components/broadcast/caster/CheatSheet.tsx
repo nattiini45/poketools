@@ -60,7 +60,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
           </span>
         )}
         {player.streak.type && player.streak.count >= 2 && (
-          <span className={`text-xs font-medium ${player.streak.type === 'win' ? 'text-emerald-400' : 'text-red-400'}`}>
+          <span className={`text-xs font-medium ${player.streak.type === 'win' ? 'text-win' : 'text-loss'}`}>
             {player.streak.type === 'win'
               ? t("cheatSheet.winStreak", { count: player.streak.count })
               : t("cheatSheet.lossStreak", { count: player.streak.count })}
@@ -93,11 +93,11 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
               <div className="text-xs font-semibold text-fg truncate">{species(p.species)}</div>
               <div className="flex items-center gap-0.5 mt-0.5">
                 {p.types.map((type) => (
-                  <TypeBadge key={type} type={type} className="text-[8px] px-0.5 py-0" />
+                  <TypeBadge key={type} type={type} className="text-micro px-0.5 py-0" />
                 ))}
               </div>
             </div>
-            <div className="text-right text-[10px] text-fg-muted">
+            <div className="text-right text-micro text-fg-muted">
               {p.ability && <div>{localizeAbility(p.ability, dataLocale)}</div>}
               {p.item && <div className="text-fg-muted">{localizeItem(p.item, dataLocale)}</div>}
             </div>
@@ -107,10 +107,10 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
 
       {/* Speed Top-5 */}
       <div>
-        <h4 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-1">
+        <h4 className="text-micro font-semibold text-fg-muted mb-1">
           {t("cheatSheet.speedTiersMax")}
         </h4>
-        <div className="flex gap-2 text-[10px]">
+        <div className="flex gap-2 text-micro">
           {topSpeeds.map((p) => (
             <span
               key={p.species}
@@ -128,7 +128,7 @@ function PlayerSection({ player, color }: { player: CasterPlayerInfo; color: str
       {/* Off-meta */}
       {offMeta.length > 0 && (
         <div className="text-xs">
-          <span className="text-amber-400 font-medium">{t("cheatSheet.offMeta")}</span>
+          <span className="text-accent-ink font-medium">{t("cheatSheet.offMeta")}</span>
           {offMeta.map((p) => species(p.species)).join(", ")}
         </div>
       )}
@@ -163,10 +163,10 @@ export default function CheatSheet({ data }: CheatSheetProps) {
       {/* Player sections */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card className="p-4">
-          <PlayerSection player={data.player1} color="text-blue-400" />
+          <PlayerSection player={data.player1} color="text-accent-ink" />
         </Card>
         <Card className="p-4">
-          <PlayerSection player={data.player2} color="text-red-400" />
+          <PlayerSection player={data.player2} color="text-loss" />
         </Card>
       </div>
 

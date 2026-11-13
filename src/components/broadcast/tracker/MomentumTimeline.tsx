@@ -20,7 +20,7 @@ export default function MomentumTimeline({ gamesSubmitted }: MomentumTimelinePro
 
   return (
     <div className="flex items-center gap-2">
-      <span className="text-[9px] text-blue-400 font-medium w-12 text-right truncate">
+      <span className="text-micro text-accent-ink font-medium w-12 text-right truncate">
         {data.player1.name}
       </span>
       <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
@@ -70,7 +70,7 @@ export default function MomentumTimeline({ gamesSubmitted }: MomentumTimelinePro
           );
         })}
       </svg>
-      <span className="text-[9px] text-red-400 font-medium w-12 truncate">
+      <span className="text-micro text-loss font-medium w-12 truncate">
         {data.player2.name}
       </span>
     </div>

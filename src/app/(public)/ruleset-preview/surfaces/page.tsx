@@ -158,7 +158,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
           {PIN_CARDS.map((card) => (
             <div key={card.key} className="space-y-1">
               {/* i18n-ignore: dev-only fixture page, English only */}
-              <p className="text-xs font-semibold uppercase text-fg-muted">{card.key}</p>
+              <p className="text-xs font-semibold text-fg-muted">{card.key}</p>
               <RulesetPinCard kind={card.kind} target={card.target} pin={card.pin} />
             </div>
           ))}

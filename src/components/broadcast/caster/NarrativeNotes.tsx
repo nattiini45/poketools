@@ -58,18 +58,18 @@ export default function NarrativeNotes({
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h4 className="text-xs font-semibold text-fg-muted uppercase tracking-wider">
+        <h4 className="text-xs font-semibold text-fg-muted">
           {t("notes.title")}
         </h4>
         {saving && (
-          <span className="text-[10px] text-fg-muted animate-pulse">
+          <span className="text-micro text-fg-muted animate-pulse">
             {t("notes.saving")}
           </span>
         )}
       </div>
 
       <div>
-        <label className="text-[10px] text-blue-400 font-medium block mb-1">
+        <label className="text-micro text-accent-ink font-medium block mb-1">
           {t("notes.playerNotes", { name: data?.player1.name ?? t("common.player1") })}
         </label>
         <textarea
@@ -82,7 +82,7 @@ export default function NarrativeNotes({
       </div>
 
       <div>
-        <label className="text-[10px] text-red-400 font-medium block mb-1">
+        <label className="text-micro text-loss font-medium block mb-1">
           {t("notes.playerNotes", { name: data?.player2.name ?? t("common.player2") })}
         </label>
         <textarea
@@ -95,7 +95,7 @@ export default function NarrativeNotes({
       </div>
 
       <div>
-        <label className="text-[10px] text-fg-muted font-medium block mb-1">
+        <label className="text-micro text-fg-muted font-medium block mb-1">
           {t("notes.matchNotes")}
         </label>
         <textarea

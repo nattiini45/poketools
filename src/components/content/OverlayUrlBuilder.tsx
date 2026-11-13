@@ -286,7 +286,7 @@ export default function OverlayUrlBuilder({
         {/* Step 3: Configure Overlay */}
         {typeDef && entityId && (
           <div className="border-t border-hairline pt-4 space-y-4">
-            <h4 className="text-sm font-heading font-semibold text-fg-muted uppercase tracking-wider">
+            <h4 className="text-sm font-heading font-semibold text-fg-muted">
               {t('builder.configuration')}
             </h4>
 
@@ -460,7 +460,7 @@ export default function OverlayUrlBuilder({
         {/* Output */}
         {generatedUrl && (
           <div className="border-t border-hairline pt-4 space-y-3">
-            <h4 className="text-sm font-heading font-semibold text-fg-muted uppercase tracking-wider">
+            <h4 className="text-sm font-heading font-semibold text-fg-muted">
               {t('builder.generatedUrl')}
             </h4>
             <div className="flex items-stretch gap-2">

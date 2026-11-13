@@ -59,7 +59,7 @@ export default function StatDisplay({ set, baseStats, compact = false, className
         if (compact) {
           return (
             <div key={stat} className="flex items-center gap-1">
-              <span className={`${wideLabels ? 'w-12 whitespace-nowrap' : 'w-7'} text-[10px] font-semibold ${textColor || 'text-fg-muted'}`}>
+              <span className={`${wideLabels ? 'w-12 whitespace-nowrap' : 'w-7'} text-micro font-semibold ${textColor || 'text-fg-muted'}`}>
                 {localizeStat(stat, dataLocale, 'short')}
               </span>
               <div className="flex-1 h-1.5 bg-sunken rounded-full overflow-hidden">
@@ -68,7 +68,7 @@ export default function StatDisplay({ set, baseStats, compact = false, className
                   style={{ width: `${cssWidth}%`, backgroundColor: background }}
                 />
               </div>
-              <span className={`w-7 text-[10px] text-right font-mono ${textColor || 'text-fg-muted'}`}>
+              <span className={`w-7 text-micro text-right font-mono ${textColor || 'text-fg-muted'}`}>
                 {final}
               </span>
             </div>
@@ -91,7 +91,7 @@ export default function StatDisplay({ set, baseStats, compact = false, className
               {final}
             </span>
             {(isBoost || isReduce) && (
-              <span className={`text-[10px] ${textColor}`}>
+              <span className={`text-micro ${textColor}`}>
                 {isBoost ? <ArrowUp aria-hidden="true" className="size-3" /> : <ArrowDown aria-hidden="true" className="size-3" />}
               </span>
             )}

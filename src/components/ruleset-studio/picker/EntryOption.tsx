@@ -140,7 +140,7 @@ function EntryOptionView({ entry, state, density, room, selected, active, listFo
 
   const flags =
     entry.kind === 'species' && entry.future ? (
-      <span className="shrink-0 rounded border border-hairline px-1 text-[10px] text-fg-muted">{t('card.future')}</span>
+      <span className="shrink-0 rounded border border-hairline px-1 text-micro text-fg-muted">{t('card.future')}</span>
     ) : null;
 
   const shared = {

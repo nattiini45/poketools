@@ -125,7 +125,7 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
             format: currentFormat.name,
             name: (chunks) => <span className="text-fg font-medium">{chunks}</span>,
           })}
-          {currentFormat.is_doubles && <span className="ml-1 text-purple-600">{t('format.doubles')}</span>}
+          {currentFormat.is_doubles && <span className="ml-1 text-fg">{t('format.doubles')}</span>}
         </p>
       )}
       {value === 'blank' && (

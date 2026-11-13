@@ -84,7 +84,7 @@ export default function TrackerControls({
     <div className="flex flex-col gap-4">
       {/* Winner selection */}
       <div className="flex flex-col gap-2">
-        <label className="text-xs text-fg-muted uppercase tracking-wider font-semibold">
+        <label className="text-xs text-fg-muted font-semibold">
           {t('controls.gameWinner')}
         </label>
         <div className="flex gap-2">
@@ -94,7 +94,7 @@ export default function TrackerControls({
             className={`
               flex-1 py-3 rounded-xl font-semibold text-sm transition-all
               ${winnerId === player1.player_id
-                ? 'bg-blue-500 text-white ring-2 ring-blue-400'
+                ? 'bg-sunken text-white ring-2 ring-hairline-strong'
                 : 'bg-elevated text-fg hover:bg-hairline'}
             `}
           >
@@ -106,7 +106,7 @@ export default function TrackerControls({
             className={`
               flex-1 py-3 rounded-xl font-semibold text-sm transition-all
               ${winnerId === player2.player_id
-                ? 'bg-red-500 text-white ring-2 ring-red-400'
+                ? 'bg-loss-bg text-white ring-2 ring-loss'
                 : 'bg-elevated text-fg hover:bg-hairline'}
             `}
           >
@@ -152,7 +152,7 @@ export default function TrackerControls({
       {/* Producer Mode: Moment markers */}
       {producerMode && (
         <div className="flex flex-col gap-2 pt-2 border-t">
-          <label className="text-xs text-fg-muted uppercase tracking-wider font-semibold">
+          <label className="text-xs text-fg-muted font-semibold">
             {t('controls.markMoment')}
           </label>
           <input

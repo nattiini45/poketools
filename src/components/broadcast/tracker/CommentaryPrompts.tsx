@@ -13,14 +13,14 @@ interface CommentaryPromptsProps {
 }
 
 const TYPE_COLORS: Record<CommentaryPrompt["type"], string> = {
-  series: "bg-[rgb(168_85_247/0.15)] border-[rgb(168_85_247/0.3)] text-purple-300",
-  milestone: "bg-[rgb(249_115_22/0.15)] border-[rgb(249_115_22/0.3)] text-orange-300",
-  advantage: "bg-[rgb(16_185_129/0.15)] border-[rgb(16_185_129/0.3)] text-emerald-300",
-  streak: "bg-[rgb(59_130_246/0.15)] border-[rgb(59_130_246/0.3)] text-blue-300",
-  h2h: "bg-[rgb(6_182_212/0.15)] border-[rgb(6_182_212/0.3)] text-cyan-300",
-  off_meta: "bg-[rgb(245_158_11/0.15)] border-[rgb(245_158_11/0.3)] text-amber-300",
-  signature: "bg-[rgb(236_72_153/0.15)] border-[rgb(236_72_153/0.3)] text-pink-300",
-  first_meeting: "bg-[rgb(99_102_241/0.15)] border-[rgb(99_102_241/0.3)] text-indigo-300",
+  series: "bg-[rgb(168_85_247/0.15)] border-[rgb(168_85_247/0.3)] text-fg",
+  milestone: "bg-[rgb(249_115_22/0.15)] border-[rgb(249_115_22/0.3)] text-accent-ink",
+  advantage: "bg-[rgb(16_185_129/0.15)] border-[rgb(16_185_129/0.3)] text-win",
+  streak: "bg-[rgb(59_130_246/0.15)] border-[rgb(59_130_246/0.3)] text-accent-ink",
+  h2h: "bg-[rgb(6_182_212/0.15)] border-[rgb(6_182_212/0.3)] text-accent-ink",
+  off_meta: "bg-[rgb(245_158_11/0.15)] border-[rgb(245_158_11/0.3)] text-accent-ink",
+  signature: "bg-[rgb(236_72_153/0.15)] border-[rgb(236_72_153/0.3)] text-fg",
+  first_meeting: "bg-[rgb(99_102_241/0.15)] border-[rgb(99_102_241/0.3)] text-accent-ink",
 };
 
 export default function CommentaryPrompts({ state, seriesScore }: CommentaryPromptsProps) {
@@ -49,7 +49,7 @@ export default function CommentaryPrompts({ state, seriesScore }: CommentaryProm
 
   return (
     <div className="space-y-1.5">
-      <h4 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider px-1">
+      <h4 className="text-micro font-semibold text-fg-muted px-1">
         {t("tracker.talkingPoints")}
       </h4>
       {prompts.slice(0, 5).map((prompt, i) => (

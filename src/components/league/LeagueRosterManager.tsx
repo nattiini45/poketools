@@ -564,7 +564,7 @@ export default function LeagueRosterManager({
                   <span className="min-w-0 truncate">{p.name}</span>
                   {p.is_guest && <GuestBadge />}
                   {p.is_test_account && (
-                    <span className="inline-flex items-center rounded-poke-sm bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent-ink">
+                    <span className="inline-flex items-center rounded-poke-sm bg-tier-1-soft px-1.5 py-0.5 text-micro font-semibold text-accent-ink">
                       {t('roster.testBadge')}
                     </span>
                   )}

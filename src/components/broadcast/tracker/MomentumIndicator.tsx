@@ -42,13 +42,13 @@ export default function MomentumIndicator({ state }: MomentumIndicatorProps) {
 
   return (
     <div className="px-2">
-      <div className="h-2 rounded-full bg-linear-to-r/srgb from-blue-500 via-poke-surface to-red-500 relative overflow-hidden">
+      <div className="h-2 rounded-full bg-linear-to-r/srgb from-accent-ink via-poke-surface to-loss relative overflow-hidden">
         <div
           className="absolute top-0 w-1 h-full bg-white rounded-full shadow-xs transition-all duration-500"
           style={{ left: `${leftPct}%` }}
         />
       </div>
-      <div className="flex justify-between text-[9px] text-fg-muted mt-0.5">
+      <div className="flex justify-between text-micro text-fg-muted mt-0.5">
         <span>{data?.player1.name}</span>
         <span className="text-fg-muted">{momentum.label}</span>
         <span>{data?.player2.name}</span>

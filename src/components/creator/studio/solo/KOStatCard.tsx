@@ -52,13 +52,13 @@ export default function KOStatCard({
               <button
                 onClick={onDecrementKO}
                 disabled={kosDealt === 0}
-                className="text-xs font-mono bg-green-500/10 text-green-400 rounded-l px-1.5 py-0.5 hover:bg-green-500/20 transition-colors disabled:opacity-30"
+                className="text-xs font-mono bg-win-bg text-win rounded-l px-1.5 py-0.5 hover:bg-win-bg transition-colors disabled:opacity-30"
               >
                 &minus;
               </button>
               <button
                 onClick={onIncrementKO}
-                className="text-xs font-mono bg-green-500/20 text-green-400 rounded-r px-2 py-0.5 hover:bg-green-500/30 transition-colors"
+                className="text-xs font-mono bg-win-bg text-win rounded-r px-2 py-0.5 hover:bg-win-bg transition-colors"
               >
                 {t('solo.kos', { count: kosDealt })}
               </button>
@@ -67,8 +67,8 @@ export default function KOStatCard({
               onClick={onToggleKoed}
               className={`text-xs font-mono rounded px-2 py-0.5 transition-colors ${
                 wasKoed
-                  ? 'bg-red-500/30 text-red-300 hover:bg-red-500/20'
-                  : 'bg-sunken text-fg-muted hover:bg-red-500/20 hover:text-red-400'
+                  ? 'bg-loss-bg text-loss hover:bg-loss-bg'
+                  : 'bg-sunken text-fg-muted hover:bg-loss-bg hover:text-loss'
               }`}
             >
               {wasKoed ? t('solo.koed') : t('solo.alive')}

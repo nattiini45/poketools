@@ -54,7 +54,7 @@ export default function GroupStandingsTable({
           </Link>
           {showEvolutionColumns && isEvolutionStanding(row) && row.needs_decision_match && (
             <span
-              className="rounded bg-amber-900/40 px-1.5 py-0.5 text-[10px] font-medium text-amber-400"
+              className="rounded bg-tier-1-soft px-1.5 py-0.5 text-micro font-medium text-accent-ink"
               title={t('standings.tieTitle')}
             >
               {t('standings.tie')}
@@ -112,7 +112,7 @@ export default function GroupStandingsTable({
           sortValue: (row: Standing) => (isEvolutionStanding(row) ? row.evolution_points : 0),
           render: (row: Standing) => {
             const ep = isEvolutionStanding(row) ? row.evolution_points : 0;
-            return <span className="font-medium text-cyan-400">{ep}</span>;
+            return <span className="font-medium text-accent-ink">{ep}</span>;
           },
         } satisfies Column<Standing>]
       : []),
