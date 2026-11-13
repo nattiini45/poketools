@@ -177,13 +177,11 @@ The root is 16 px (`html { font-size: 100% }`), except on draft-room pages
   the sand palette.
 
 ### Panel recipes & headings
-- `src/components/ui/panel.ts` exports three class strings, `PANEL`, `PANEL_INSET`
-  and `FOCUS_RING`, which the nav, the assistant drawer and the league hub use
-  (the hub keeps its own table head and notice in `hub-style.ts` and
-  `HubBits.tsx`). `src/components/world/panel.ts` is the world twin with the
-  `arena-*` tokens (`PANEL`, `PANEL_INSET`, `PANEL_NOTICE`, `PANEL_HOVER`,
-  `FOCUS_RING`, `TABLE_HEAD`). The notice, hover-lift and table-head recipes
-  of the `ui` file were removed once nothing used them.
+- `src/components/ui/panel.ts` exports the app-wide surface class strings
+  (`PANEL`, `PANEL_INSET`, `PANEL_NOTICE`, `PANEL_HOVER`, `FOCUS_RING`,
+  `TABLE_HEAD`) — the poke-token twin of the world contract in
+  `src/components/world/panel.ts`. Compose panels from these instead of
+  re-deriving radius/border/fill per page.
 - Page and section headings are set in the pixel face without the former plaza
   accent bar: `PageContainer` renders its title in the display role, `Section`
   and `CollapsibleSection` in the title role. All three take an optional
