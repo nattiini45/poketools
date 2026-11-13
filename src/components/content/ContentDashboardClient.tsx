@@ -104,10 +104,10 @@ export default function ContentDashboardClient({
       <Card>
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-heading font-bold text-poke-text-primary">
+            <h3 className="text-lg font-heading font-bold text-fg">
               {t('dashboard.trackerTitle')}
             </h3>
-            <p className="text-sm text-poke-text-secondary mt-1">
+            <p className="text-sm text-fg-muted mt-1">
               {activeMatches.length > 0
                 ? t('dashboard.activeMatches', { count: activeMatches.length })
                 : t('dashboard.noActiveMatches')}
@@ -115,7 +115,7 @@ export default function ContentDashboardClient({
           </div>
           <Link
             href="/dashboard/broadcast"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-poke-md bg-poke-accent text-poke-surface font-heading font-semibold text-sm transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-poke-md bg-accent-fill text-tier-ink font-heading font-semibold text-sm transition-colors"
           >
             {t('dashboard.openTracker')}
           </Link>

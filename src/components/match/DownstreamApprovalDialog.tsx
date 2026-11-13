@@ -43,11 +43,11 @@ export default function DownstreamApprovalDialog({
       size="md"
     >
       {approval && (
-        <div className="space-y-3 text-sm text-poke-text-secondary">
+        <div className="space-y-3 text-sm text-fg-muted">
           <p>{t('gameChange.downstream.intro', { count: approval.count })}</p>
           {approval.matches.length > 0 && (
             <div>
-              <p className="font-semibold text-poke-text-primary">{t('gameChange.downstream.listHeading')}</p>
+              <p className="font-semibold text-fg">{t('gameChange.downstream.listHeading')}</p>
               <ul className="mt-1 list-disc pl-5">
                 {approval.matches.map((match) => (
                   <li key={match.id}>

@@ -307,7 +307,7 @@ export default function GameDetailEditForm({
 
       {/* Winner selector */}
       <div>
-        <label className="block text-[11px] font-heading text-poke-text-muted mb-1.5">
+        <label className="block text-[11px] font-heading text-fg-muted mb-1.5">
           {t('common.winner')}
         </label>
         <div className="flex gap-2">
@@ -320,8 +320,8 @@ export default function GameDetailEditForm({
                 onClick={() => setWinnerId(p.id)}
                 className={`px-3 py-1.5 rounded-poke-md text-xs border transition-colors font-heading font-semibold ${
                   active
-                    ? 'bg-poke-blue text-poke-on-blue border-poke-blue shadow-poke-sm'
-                    : 'bg-poke-surface text-poke-text-secondary border-poke-border hover:border-poke-blue'
+                    ? 'bg-tier-1 text-tier-ink border-tier-1 shadow-poke-sm'
+                    : 'bg-surface text-fg-muted border-hairline hover:border-accent-ink'
                 }`}
               >
                 {p.name}
@@ -336,9 +336,9 @@ export default function GameDetailEditForm({
         {players.map((player, pIdx) => (
           <fieldset
             key={player.id}
-            className="flex-1 min-w-0 rounded-poke-md border border-poke-border p-3"
+            className="flex-1 min-w-0 rounded-poke-md border border-hairline p-3"
           >
-            <legend className="px-1 text-xs font-heading font-semibold text-poke-text-secondary">
+            <legend className="px-1 text-xs font-heading font-semibold text-fg-muted">
               {player.name}
             </legend>
             <div className="space-y-3">
@@ -354,7 +354,7 @@ export default function GameDetailEditForm({
                   {/* Sub-row 1: Pokémon picker + remove button */}
                   <div className="grid grid-cols-12 gap-1.5 items-end">
                     <div className="col-span-10">
-                      <label className="text-[10px] text-poke-text-muted">{t('editor.pokemon')}</label>
+                      <label className="text-[10px] text-fg-muted">{t('editor.pokemon')}</label>
                       <InlinePokemonPicker
                         value={row.pokemon_name}
                         onChange={(name) => {
@@ -371,7 +371,7 @@ export default function GameDetailEditForm({
                         type="button"
                         onClick={() => removeRow(pIdx, rIdx)}
                         aria-label={t('editor.removePokemon')}
-                        className="text-poke-accent text-base leading-none hover:opacity-80 px-1"
+                        className="text-accent-ink text-base leading-none hover:opacity-80 px-1"
                       >
                         ×
                       </button>
@@ -381,7 +381,7 @@ export default function GameDetailEditForm({
                   {/* Sub-row 2: KOs / Turns / Moves / Lead·KO'd·Brought */}
                   <div className="grid grid-cols-12 gap-1.5 items-end">
                     <div className="col-span-3 sm:col-span-2">
-                      <label className="text-[10px] text-poke-text-muted">{t('common.kos')}</label>
+                      <label className="text-[10px] text-fg-muted">{t('common.kos')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -395,11 +395,11 @@ export default function GameDetailEditForm({
                             Number.parseInt(e.target.value, 10) || 0,
                           )
                         }
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
+                        className="w-full px-2 py-1.5 border border-hairline bg-surface text-fg rounded-poke-md text-sm"
                       />
                     </div>
                     <div className="col-span-3 sm:col-span-2">
-                      <label className="text-[10px] text-poke-text-muted">{t('common.turns')}</label>
+                      <label className="text-[10px] text-fg-muted">{t('common.turns')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -413,11 +413,11 @@ export default function GameDetailEditForm({
                             Number.parseInt(e.target.value, 10) || 0,
                           )
                         }
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
+                        className="w-full px-2 py-1.5 border border-hairline bg-surface text-fg rounded-poke-md text-sm"
                       />
                     </div>
                     <div className="col-span-6 sm:col-span-5">
-                      <label className="text-[10px] text-poke-text-muted">{t('editor.moves')}</label>
+                      <label className="text-[10px] text-fg-muted">{t('editor.moves')}</label>
                       <input
                         type="text"
                         value={row.moves_used}
@@ -425,11 +425,11 @@ export default function GameDetailEditForm({
                           updateRow(pIdx, rIdx, 'moves_used', e.target.value)
                         }
                         placeholder={t('editor.commaSeparated')}
-                        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm"
+                        className="w-full px-2 py-1.5 border border-hairline bg-surface text-fg rounded-poke-md text-sm"
                       />
                     </div>
                     <div className="col-span-12 sm:col-span-3 flex flex-wrap gap-x-2 gap-y-1 items-center pb-1.5">
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
+                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_lead}
@@ -439,7 +439,7 @@ export default function GameDetailEditForm({
                         />
                         {t('common.lead')}
                       </label>
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
+                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_koed}
@@ -449,7 +449,7 @@ export default function GameDetailEditForm({
                         />
                         {t('common.koed')}
                       </label>
-                      <label className="flex items-center gap-1 text-[10px] text-poke-text-muted">
+                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_brought}
@@ -463,7 +463,7 @@ export default function GameDetailEditForm({
                   </div>
 
                   {!row.pokemon_valid && row.pokemon_name.trim().length > 0 && (
-                    <p className="text-[10px] text-poke-accent">
+                    <p className="text-[10px] text-accent-ink">
                       {t('editor.pickSuggestion', { name: localizeSpecies(row.pokemon_name, dataLocale) })}
                     </p>
                   )}
@@ -472,7 +472,7 @@ export default function GameDetailEditForm({
               <button
                 type="button"
                 onClick={() => addRow(pIdx)}
-                className="text-[11px] text-poke-blue hover:underline font-heading"
+                className="text-[11px] text-accent-ink hover:underline font-heading"
               >
                 {t('common.addPokemon')}
               </button>

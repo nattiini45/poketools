@@ -33,14 +33,14 @@ export default function BracketMatchCard({
   return (
     <Link
       href={`/tournaments/${tournamentId}/matches/${match.id}`}
-      className="block rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-card p-2 hover:shadow-poke-card-hover hover:-translate-y-0.5 transition-all duration-200 text-sm"
+      className="block rounded-poke-lg border border-hairline bg-surface shadow-poke-card p-2 hover:shadow-poke-card-hover hover:-translate-y-0.5 transition-all duration-200 text-sm"
     >
       <div className="flex items-center justify-between mb-1">
         <MatchStatusBadge status={match.status} label={statusLabels?.[match.status]} />
       </div>
       <div
         className={`flex justify-between py-0.5 ${
-          isP1Winner ? 'font-semibold text-poke-text-primary' : match.winner_id ? 'text-poke-text-muted' : ''
+          isP1Winner ? 'font-semibold text-fg' : match.winner_id ? 'text-fg-muted' : ''
         }`}
       >
         <span className="flex items-center gap-1.5 truncate max-w-[140px]">
@@ -51,7 +51,7 @@ export default function BracketMatchCard({
       </div>
       <div
         className={`flex justify-between py-0.5 ${
-          isP2Winner ? 'font-semibold text-poke-text-primary' : match.winner_id ? 'text-poke-text-muted' : ''
+          isP2Winner ? 'font-semibold text-fg' : match.winner_id ? 'text-fg-muted' : ''
         }`}
       >
         <span className="flex items-center gap-1.5 truncate max-w-[140px]">
@@ -100,7 +100,7 @@ function Score({
       <span
         data-entry-losses={losses}
         title={meaning}
-        className="rounded-poke-sm border border-poke-border px-1 text-[10px] font-normal leading-4 text-poke-text-muted"
+        className="rounded-poke-sm border border-hairline px-1 text-[10px] font-normal leading-4 text-fg-muted"
       >
         <span aria-hidden="true">
           {losses} {labels.lossesShort}

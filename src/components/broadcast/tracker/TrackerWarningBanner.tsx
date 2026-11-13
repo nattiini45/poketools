@@ -23,13 +23,13 @@ export function TrackerWarningBannerView({ text, dismissLabel, onDismiss }: Trac
   return (
     <div
       role="status"
-      className="px-4 py-2 rounded-lg bg-[rgb(245_158_11/0.15)] border border-[rgb(245_158_11/0.3)] text-sm text-poke-amber-ink"
+      className="px-4 py-2 rounded-lg bg-accent-subtle border border-hairline-strong text-sm text-accent-ink"
     >
       {text}
       <button
         type="button"
         onClick={onDismiss}
-        className="ml-2 text-poke-amber-ink hover:opacity-80"
+        className="ml-2 text-accent-ink hover:opacity-80"
         aria-label={dismissLabel}
       >
         <X aria-hidden="true" className="size-4" />

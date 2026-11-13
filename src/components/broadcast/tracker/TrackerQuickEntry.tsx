@@ -82,7 +82,7 @@ export default function TrackerQuickEntry({
   );
 
   return (
-    <div className="absolute inset-0 z-10 flex flex-col bg-poke-surface rounded-xl border border-poke-border shadow-poke-lg overflow-hidden">
+    <div className="absolute inset-0 z-10 flex flex-col bg-surface rounded-xl border border-hairline shadow-poke-lg overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-2 border-b">
         <input
           ref={inputRef}
@@ -90,7 +90,7 @@ export default function TrackerQuickEntry({
           value={query}
           onChange={handleInput}
           placeholder={t('quickEntry.searchPlaceholder')}
-          className="flex-1 bg-transparent text-sm text-poke-text placeholder:text-poke-text-muted outline-2 outline-offset-2 outline-transparent"
+          className="flex-1 bg-transparent text-sm text-fg placeholder:text-fg-muted outline-2 outline-offset-2 outline-transparent"
           onKeyDown={(e) => {
             if (e.key === 'Escape') onClose();
             if (e.key === 'Enter' && results.length > 0) {
@@ -101,7 +101,7 @@ export default function TrackerQuickEntry({
         <button
           type="button"
           onClick={onClose}
-          className="text-poke-text-secondary hover:text-poke-text text-sm"
+          className="text-fg-muted hover:text-fg text-sm"
           aria-label={t('quickEntry.close')}
         >
           <X aria-hidden="true" className="size-4" />
@@ -109,21 +109,21 @@ export default function TrackerQuickEntry({
       </div>
       <div className="flex-1 overflow-y-auto max-h-[240px]">
         {loading && (
-          <div className="px-3 py-2 text-xs text-poke-text-secondary">{t('quickEntry.searching')}</div>
+          <div className="px-3 py-2 text-xs text-fg-muted">{t('quickEntry.searching')}</div>
         )}
         {results.map((r) => (
           <button
             key={r.name}
             type="button"
             onClick={() => handleSelect(r.name)}
-            className="flex items-center gap-2 w-full px-3 py-2 hover:bg-poke-elevated transition-colors text-left"
+            className="flex items-center gap-2 w-full px-3 py-2 hover:bg-elevated transition-colors text-left"
           >
             <PokemonSprite name={r.name} size={28} />
-            <span className="text-sm text-poke-text">{localizeSpecies(r.name, dataLocale)}</span>
+            <span className="text-sm text-fg">{localizeSpecies(r.name, dataLocale)}</span>
           </button>
         ))}
         {query.length >= 2 && !loading && results.length === 0 && (
-          <div className="px-3 py-2 text-xs text-poke-text-muted">{t('quickEntry.noResults')}</div>
+          <div className="px-3 py-2 text-xs text-fg-muted">{t('quickEntry.noResults')}</div>
         )}
       </div>
     </div>

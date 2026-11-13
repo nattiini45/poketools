@@ -100,7 +100,7 @@ function BracketSection({
 
           return (
             <div key={round.id} className="flex flex-col gap-4 min-w-[220px]">
-              <h4 className="text-xs font-heading font-medium text-poke-text-secondary text-center border-b border-poke-border pb-1">
+              <h4 className="text-xs font-heading font-medium text-fg-muted text-center border-b border-hairline pb-1">
                 {translateEngineLabel('round', round.name, locale)}
               </h4>
               <div className="flex flex-col justify-around flex-1 gap-4">
@@ -174,7 +174,7 @@ export default function DoubleElimBracket({
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number);
 
   if (sortedRounds.length === 0) {
-    return <p className="text-poke-text-muted text-sm">{labels.noRounds}</p>;
+    return <p className="text-fg-muted text-sm">{labels.noRounds}</p>;
   }
 
   let winnersRounds: Round[];
@@ -215,7 +215,7 @@ export default function DoubleElimBracket({
     <div className="space-y-6">
       {winnersRounds.length > 0 && (
         <div>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+          <h3 className="text-sm font-heading font-semibold text-fg mb-2">
             {labels.winnersBracket}
           </h3>
           <BracketSection
@@ -235,7 +235,7 @@ export default function DoubleElimBracket({
 
       {losersRounds.length > 0 && (
         <div>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+          <h3 className="text-sm font-heading font-semibold text-fg mb-2">
             {labels.losersBracket}
           </h3>
           <BracketSection
@@ -255,7 +255,7 @@ export default function DoubleElimBracket({
 
       {gfRounds.length > 0 && (
         <div>
-          <h3 className="text-sm font-heading font-semibold text-poke-text-primary mb-2">
+          <h3 className="text-sm font-heading font-semibold text-fg mb-2">
             {labels.grandFinals}
           </h3>
           <BracketSection

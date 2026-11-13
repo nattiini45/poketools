@@ -30,7 +30,7 @@ export default function PresetManager({ presets, onLoad, onDelete, deleting }: P
   if (presets.length === 0) {
     return (
       <Card variant="muted">
-        <p className="text-sm text-poke-text-secondary">
+        <p className="text-sm text-fg-muted">
           {t('presets.empty')}
         </p>
       </Card>
@@ -47,19 +47,19 @@ export default function PresetManager({ presets, onLoad, onDelete, deleting }: P
 
   return (
     <Card>
-      <h3 className="text-lg font-heading font-bold text-poke-text-primary mb-4">{t('presets.title')}</h3>
+      <h3 className="text-lg font-heading font-bold text-fg mb-4">{t('presets.title')}</h3>
 
       <div className="space-y-4">
         {Object.entries(grouped).map(([type, typePresets]) => (
           <div key={type}>
-            <h4 className="text-xs font-heading font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-2">
               {t.dynamic(`presetType.${type}`, undefined, type)}
             </h4>
             <div className="space-y-2">
               {typePresets.map((preset) => (
                 <div
                   key={preset.id}
-                  className="flex items-center justify-between px-3 py-2 rounded-poke-md bg-poke-muted border border-poke-border"
+                  className="flex items-center justify-between px-3 py-2 rounded-poke-md bg-sunken border border-hairline"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     {/* Color swatches */}
@@ -73,11 +73,11 @@ export default function PresetManager({ presets, onLoad, onDelete, deleting }: P
                         style={{ backgroundColor: preset.config.accent2 ?? '#3B82F6' }}
                       />
                     </div>
-                    <span className="text-sm font-semibold text-poke-text-primary truncate">
+                    <span className="text-sm font-semibold text-fg truncate">
                       {preset.name}
                     </span>
                     {preset.config.theme && (
-                      <span className="text-xs text-poke-text-muted shrink-0">
+                      <span className="text-xs text-fg-muted shrink-0">
                         {t.dynamic(`theme.${preset.config.theme}`, undefined, preset.config.theme)}
                       </span>
                     )}
@@ -118,7 +118,7 @@ export default function PresetManager({ presets, onLoad, onDelete, deleting }: P
                         variant="ghost"
                         size="sm"
                         onClick={() => setConfirmDelete(preset.id)}
-                        className="text-poke-danger hover:text-poke-danger"
+                        className="text-loss hover:text-loss"
                       >
                         {t('presets.delete')}
                       </Button>

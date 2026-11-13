@@ -246,16 +246,16 @@ export default function InlinePokemonPicker({
         aria-controls={listboxId}
         aria-activedescendant={open && results[highlight] ? `${listboxId}-${highlight}` : undefined}
         data-testid={testId}
-        className="w-full px-2 py-1.5 border border-poke-border bg-poke-surface text-poke-text-primary rounded-poke-md text-sm focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2"
+        className="w-full px-2 py-1.5 border border-hairline bg-surface text-fg rounded-poke-md text-sm focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2"
       />
       {open && (results.length > 0 || loading) && (
         <ul
           id={listboxId}
           role="listbox"
-          className="absolute z-50 mt-1 left-0 right-0 max-h-56 overflow-y-auto rounded-poke-md border border-poke-border bg-poke-surface shadow-poke-md"
+          className="absolute z-50 mt-1 left-0 right-0 max-h-56 overflow-y-auto rounded-poke-md border border-hairline bg-surface shadow-poke-md"
         >
           {loading && results.length === 0 && (
-            <li className="px-2.5 py-1.5 text-xs text-poke-text-muted">{t('picker.searching')}</li>
+            <li className="px-2.5 py-1.5 text-xs text-fg-muted">{t('picker.searching')}</li>
           )}
           {results.map((r, i) => (
             <li
@@ -270,8 +270,8 @@ export default function InlinePokemonPicker({
               onMouseEnter={() => setHighlight(i)}
               className={`px-2.5 py-1.5 text-sm cursor-pointer ${
                 i === highlight
-                  ? 'bg-poke-blue/10 text-poke-text-primary'
-                  : 'text-poke-text-secondary hover:bg-poke-muted'
+                  ? 'bg-accent-subtle text-fg'
+                  : 'text-fg-muted hover:bg-sunken'
               }`}
             >
               {localizeSpecies(r.name, dataLocale)}

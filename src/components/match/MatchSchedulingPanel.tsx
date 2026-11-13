@@ -193,21 +193,21 @@ export default function MatchSchedulingPanel({
               proposal.responder_id === currentPlayerId &&
               matchProposalMachine.nextStates(effectiveProposalStatus(proposal, requestTime), 'responder').length > 0;
             return (
-              <div key={proposal.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-poke-md border border-poke-border bg-poke-elevated p-3">
+              <div key={proposal.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-poke-md border border-hairline bg-elevated p-3">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-heading font-semibold text-poke-text-primary truncate">
+                    <p className="text-sm font-heading font-semibold text-fg truncate">
                       {dateTime(proposal.proposed_at)}
                     </p>
                     <Badge variant={proposalStatusVariant(proposal.status)} size="sm">
                       {enumLabel(tEnum, 'matchProposalStatus', proposal.status)}
                     </Badge>
                   </div>
-                  <p className="text-xs text-poke-text-muted mt-1">
+                  <p className="text-xs text-fg-muted mt-1">
                     {proposal.proposer_name ?? tMatch('shared.unknownPlayer')} &rarr;{' '}
                     {proposal.responder_name ?? tMatch('shared.unknownPlayer')}
                   </p>
-                  {proposal.message && <p className="text-sm text-poke-text-secondary mt-2 break-words">{proposal.message}</p>}
+                  {proposal.message && <p className="text-sm text-fg-muted mt-2 break-words">{proposal.message}</p>}
                 </div>
                 {canRespond && (
                   <div className="flex gap-2 shrink-0">
@@ -244,7 +244,7 @@ export default function MatchSchedulingPanel({
             onChange={(event) => setProposedAt(event.target.value)}
           />
           <div>
-            <label htmlFor="schedule-message" className="block text-sm font-heading font-semibold text-poke-text-primary mb-1.5">
+            <label htmlFor="schedule-message" className="block text-sm font-heading font-semibold text-fg mb-1.5">
               {t('scheduling.message')}
             </label>
             <textarea
@@ -253,7 +253,7 @@ export default function MatchSchedulingPanel({
               value={message}
               onChange={(event) => setMessage(event.target.value)}
               maxLength={1000}
-              className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md text-sm placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2"
+              className="w-full px-3 py-2 bg-surface text-fg border border-hairline rounded-poke-md text-sm placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2"
             />
           </div>
           <Button onClick={handleCreateProposal} loading={loading === 'create'} disabled={!proposedAt}>

@@ -221,7 +221,7 @@ export default function PhotoTransformPanel({
     <div className="flex flex-col lg:flex-row gap-6">
       {/* ── Preview Panel ──────────────────────────────────── */}
       <div className="flex flex-col items-center gap-4 lg:sticky lg:top-24 lg:self-start">
-        <div className="bg-poke-elevated rounded-poke-xl p-4 shadow-poke-card w-[224px] h-[224px] flex items-center justify-center">
+        <div className="bg-elevated rounded-poke-xl p-4 shadow-poke-card w-[224px] h-[224px] flex items-center justify-center">
           {resultImage ? (
             <Image
               src={resultImage}
@@ -232,8 +232,8 @@ export default function PhotoTransformPanel({
               unoptimized
             />
           ) : transforming ? (
-            <div className="flex flex-col items-center gap-3 text-poke-text-muted">
-              <div className="w-10 h-10 border-poke-accent border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center gap-3 text-fg-muted">
+              <div className="w-10 h-10 border-accent-ink border-t-transparent rounded-full animate-spin" />
               <span className="text-xs font-heading text-center px-2">
                 {t(`transform.loading.${PHOTO_TRANSFORM_LOADING_MESSAGE_KEYS[loadingIndex] ?? PHOTO_TRANSFORM_LOADING_MESSAGE_KEYS[0]}`)}
               </span>
@@ -248,7 +248,7 @@ export default function PhotoTransformPanel({
               unoptimized
             />
           ) : (
-            <div className="text-center text-poke-text-muted">
+            <div className="text-center text-fg-muted">
               <p className="text-sm font-heading">{t('transform.uploadPrompt')}</p>
               <p className="text-xs mt-1">{t('transform.uploadPromptSub')}</p>
             </div>
@@ -262,7 +262,7 @@ export default function PhotoTransformPanel({
               onClick={transform}
               disabled={!canTransform}
               className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                       bg-poke-accent text-poke-surface
+                       bg-accent-fill text-tier-ink
                        transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {transforming ? t('transform.transforming') : t('transform.transform')}
@@ -273,7 +273,7 @@ export default function PhotoTransformPanel({
                 onClick={saveAsAvatar}
                 disabled={saving || transforming}
                 className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                         bg-poke-green text-poke-on-green hover:bg-poke-green/90
+                         bg-win text-surface hover:opacity-90
                          transition-colors disabled:opacity-50"
               >
                 {saving ? t('transform.saving') : t('transform.useAsAvatar')}
@@ -282,7 +282,7 @@ export default function PhotoTransformPanel({
                 onClick={reset}
                 disabled={saving}
                 className="px-4 py-2 text-sm font-heading font-semibold rounded-poke-md
-                         bg-poke-elevated text-poke-text-secondary hover:bg-poke-border
+                         bg-elevated text-fg-muted hover:bg-hairline
                          transition-colors disabled:opacity-50"
               >
                 {t('transform.tryAgain')}
@@ -292,14 +292,14 @@ export default function PhotoTransformPanel({
         </div>
 
         {/* Remaining counter */}
-        <p className="text-xs text-poke-text-muted font-heading">
+        <p className="text-xs text-fg-muted font-heading">
           {remaining !== null
             ? t('transform.remainingToday', { remaining, limit: AI_AVATAR_DAILY_LIMIT })
             : t('transform.perDay', { limit: AI_AVATAR_DAILY_LIMIT })}
         </p>
 
         {error && (
-          <p className="text-sm text-poke-danger-ink text-center max-w-[220px]">{errorText(error)}</p>
+          <p className="text-sm text-loss text-center max-w-[220px]">{errorText(error)}</p>
         )}
       </div>
 
@@ -307,16 +307,16 @@ export default function PhotoTransformPanel({
       <div className="flex-1 min-w-0 space-y-6">
         {/* Drop zone / file picker */}
         <section>
-          <h3 className="text-sm font-heading font-bold text-poke-text-primary mb-2">
+          <h3 className="text-sm font-heading font-bold text-fg mb-2">
             {t('transform.uploadHeading')}
           </h3>
           <div
             onDrop={handleDrop}
             onDragOver={handleDragOver}
             onClick={() => fileInputRef.current?.click()}
-            className="border-2 border-dashed border-poke-border rounded-poke-lg p-8
+            className="border-2 border-dashed border-hairline rounded-poke-lg p-8
                      flex flex-col items-center justify-center gap-3
-                     cursor-pointer hover:border-poke-accent
+                     cursor-pointer hover:border-accent-ink
                      transition-colors"
           >
             {photoPreview ? (
@@ -330,10 +330,10 @@ export default function PhotoTransformPanel({
                   unoptimized
                 />
                 <div>
-                  <p className="text-sm font-heading text-poke-text-primary">
+                  <p className="text-sm font-heading text-fg">
                     {t('transform.selected')}
                   </p>
-                  <p className="text-xs text-poke-text-muted">
+                  <p className="text-xs text-fg-muted">
                     {t('transform.change')}
                   </p>
                 </div>
@@ -341,7 +341,7 @@ export default function PhotoTransformPanel({
             ) : (
               <>
                 <svg
-                  className="w-10 h-10 text-poke-text-muted"
+                  className="w-10 h-10 text-fg-muted"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -354,10 +354,10 @@ export default function PhotoTransformPanel({
                   />
                 </svg>
                 <div className="text-center">
-                  <p className="text-sm font-heading text-poke-text-secondary">
+                  <p className="text-sm font-heading text-fg-muted">
                     {t('transform.dropHint')}
                   </p>
-                  <p className="text-xs text-poke-text-muted mt-1">
+                  <p className="text-xs text-fg-muted mt-1">
                     {t('transform.formats')}
                   </p>
                 </div>
@@ -375,16 +375,16 @@ export default function PhotoTransformPanel({
 
         {/* Consent checkbox */}
         {photoPreview && !resultImage && (
-          <section className="border border-poke-border rounded-poke-lg p-4">
+          <section className="border border-hairline rounded-poke-lg p-4">
             <label className="flex items-start gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={consentChecked}
                 onChange={() => setConsentChecked((prev) => !prev)}
-                className="mt-0.5 w-4 h-4 rounded border-poke-border text-poke-accent
-                         focus:ring-poke-accent focus:ring-offset-0 cursor-pointer"
+                className="mt-0.5 w-4 h-4 rounded border-hairline text-accent-ink
+                         focus:ring-accent-ink focus:ring-offset-0 cursor-pointer"
               />
-              <span className="text-xs text-poke-text-secondary leading-relaxed">
+              <span className="text-xs text-fg-muted leading-relaxed">
                 {t('transform.consent')}
               </span>
             </label>
@@ -394,30 +394,30 @@ export default function PhotoTransformPanel({
         {/* How it works */}
         {!resultImage && (
           <section>
-            <h3 className="text-sm font-heading font-bold text-poke-text-primary mb-2">
+            <h3 className="text-sm font-heading font-bold text-fg mb-2">
               {t('transform.howItWorks')}
             </h3>
-            <ol className="space-y-2 text-xs text-poke-text-muted">
+            <ol className="space-y-2 text-xs text-fg-muted">
               <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-poke-elevated flex items-center justify-center text-poke-text-secondary font-heading font-bold">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-elevated flex items-center justify-center text-fg-muted font-heading font-bold">
                   1
                 </span>
                 <span>{t('transform.steps.upload')}</span>
               </li>
               <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-poke-elevated flex items-center justify-center text-poke-text-secondary font-heading font-bold">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-elevated flex items-center justify-center text-fg-muted font-heading font-bold">
                   2
                 </span>
                 <span>{t('transform.steps.memory')}</span>
               </li>
               <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-poke-elevated flex items-center justify-center text-poke-text-secondary font-heading font-bold">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-elevated flex items-center justify-center text-fg-muted font-heading font-bold">
                   3
                 </span>
                 <span>{t('transform.steps.ai')}</span>
               </li>
               <li className="flex gap-2">
-                <span className="shrink-0 w-5 h-5 rounded-full bg-poke-elevated flex items-center justify-center text-poke-text-secondary font-heading font-bold">
+                <span className="shrink-0 w-5 h-5 rounded-full bg-elevated flex items-center justify-center text-fg-muted font-heading font-bold">
                   4
                 </span>
                 <span>{t('transform.steps.preview')}</span>

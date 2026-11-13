@@ -35,7 +35,7 @@ export default function GroupStandingsTable({
       header: '#',
       width: 'calc(var(--spacing) * 10)',
       render: (_row: Standing, i: number) => (
-        <span className="text-poke-text-muted">{i + 1}</span>
+        <span className="text-fg-muted">{i + 1}</span>
       ),
     },
     {
@@ -47,7 +47,7 @@ export default function GroupStandingsTable({
         <div className="flex items-center gap-2">
           <Link
             href={`/players/${row.player_id}`}
-            className="flex items-center gap-2 font-medium hover:text-poke-blue transition-colors"
+            className="flex items-center gap-2 font-medium hover:text-accent-ink transition-colors"
           >
             <PlayerAvatar avatarUrl={row.player_avatar_url} name={row.player_name} size={20} />
             <GymTypedName name={row.player_name} gymType={row.gym_type} />
@@ -70,7 +70,7 @@ export default function GroupStandingsTable({
       sortable: true,
       sortValue: (row) => row.games_played,
       render: (row: Standing) => (
-        <span className="text-poke-text-secondary">{row.games_played}</span>
+        <span className="text-fg-muted">{row.games_played}</span>
       ),
     },
     {
@@ -80,7 +80,7 @@ export default function GroupStandingsTable({
       sortable: true,
       sortValue: (row) => row.wins,
       render: (row: Standing) => (
-        <span className="text-poke-green font-medium">{row.wins}</span>
+        <span className="text-win font-medium">{row.wins}</span>
       ),
     },
     {
@@ -90,7 +90,7 @@ export default function GroupStandingsTable({
       sortable: true,
       sortValue: (row) => row.losses,
       render: (row: Standing) => (
-        <span className="text-poke-danger font-medium">{row.losses}</span>
+        <span className="text-loss font-medium">{row.losses}</span>
       ),
     },
     {
@@ -124,7 +124,7 @@ export default function GroupStandingsTable({
       sortValue: (row) => row.kill_differential,
       render: (row: Standing) => {
         const val = row.kill_differential;
-        const color = val > 0 ? 'text-poke-green' : val < 0 ? 'text-poke-danger' : 'text-poke-text-muted';
+        const color = val > 0 ? 'text-win' : val < 0 ? 'text-loss' : 'text-fg-muted';
         const prefix = val > 0 ? '+' : '';
         return <span className={`font-medium ${color}`}>{prefix}{val}</span>;
       },

@@ -119,8 +119,8 @@ export default function TokenAdminSummary({
       <p className={HINT}>{t('tokens.intro')}</p>
 
       {!hasRedraft ? (
-        <div className="space-y-1 rounded-poke-md border border-poke-border p-3">
-          <label htmlFor={switchId} className="flex items-center gap-2 text-sm font-semibold text-poke-text-primary">
+        <div className="space-y-1 rounded-poke-md border border-hairline p-3">
+          <label htmlFor={switchId} className="flex items-center gap-2 text-sm font-semibold text-fg">
             <input
               id={switchId}
               type="checkbox"
@@ -156,7 +156,7 @@ export default function TokenAdminSummary({
               const row: TokenRow = rows[p.id] ?? { kind: 'loading' };
               const expanded = openPlayer === p.id;
               return (
-                <tr key={p.id} className="border-t border-poke-border">
+                <tr key={p.id} className="border-t border-hairline">
                   <td className={TD}>{p.name}</td>
                   <TokenRowCells row={row} />
                   {catalog ? (
@@ -179,7 +179,7 @@ export default function TokenAdminSummary({
       </div>
 
       {openPlayer && catalog ? (
-        <div className="rounded-poke-md border border-poke-border p-3">
+        <div className="rounded-poke-md border border-hairline p-3">
           <TokenCenter
             key={openPlayer}
             seasonId={seasonId}
@@ -212,14 +212,14 @@ export function TokenRowCells({ row }: { row: TokenRow }) {
   if (row.kind === 'empty') {
     return (
       <>
-        <td className={`${TD} text-poke-text-secondary`}>{t('tokens.none')}</td>
-        <td className={`${TD} text-poke-text-secondary`}>{t('tokens.none')}</td>
-        <td className={`${TD} text-poke-text-secondary`}>{t('tokens.none')}</td>
+        <td className={`${TD} text-fg-muted`}>{t('tokens.none')}</td>
+        <td className={`${TD} text-fg-muted`}>{t('tokens.none')}</td>
+        <td className={`${TD} text-fg-muted`}>{t('tokens.none')}</td>
       </>
     );
   }
   return (
-    <td className={`${TD} text-poke-text-secondary`} colSpan={3}>
+    <td className={`${TD} text-fg-muted`} colSpan={3}>
       {row.kind === 'loading' ? t('tokens.loading') : t('tokens.loadFailed')}
     </td>
   );

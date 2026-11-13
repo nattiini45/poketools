@@ -36,7 +36,7 @@ export default function ExportCardButton({ targetId, filename }: ExportCardButto
     <button
       onClick={handleExport}
       disabled={exporting}
-      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-poke-md text-xs font-heading text-poke-text-muted hover:text-poke-text-secondary hover:bg-poke-muted transition-colors disabled:opacity-50"
+      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-poke-md text-xs font-heading text-fg-muted hover:text-fg-muted hover:bg-sunken transition-colors disabled:opacity-50"
       title={t('exportCard.title')}
     >
       {exporting ? (

@@ -44,7 +44,7 @@ export default function SpeedTierPanel() {
 
   if (!data) {
     return (
-      <div className="text-xs text-poke-text-secondary text-center py-4">
+      <div className="text-xs text-fg-muted text-center py-4">
         {t("speedTiers.noData")}
       </div>
     );
@@ -63,8 +63,8 @@ export default function SpeedTierPanel() {
             onClick={() => setMode(m)}
             className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-colors ${
               mode === m
-                ? "bg-poke-accent text-poke-surface"
-                : "bg-poke-elevated text-poke-text-secondary hover:text-poke-text"
+                ? "bg-accent-fill text-tier-ink"
+                : "bg-elevated text-fg-muted hover:text-fg"
             }`}
           >
             {t(`speedTiers.mode.${m}`)}
@@ -91,7 +91,7 @@ export default function SpeedTierPanel() {
               >
                 {localizeSpecies(entry.species, dataLocale)}
               </span>
-              <div className="flex-1 h-4 bg-poke-surface rounded overflow-hidden relative">
+              <div className="flex-1 h-4 bg-surface rounded overflow-hidden relative">
                 <div
                   className={`h-full ${color} rounded transition-all duration-300 ${
                     isTied ? "opacity-70 border-r-2 border-yellow-400" : ""
@@ -101,7 +101,7 @@ export default function SpeedTierPanel() {
               </div>
               <span
                 className={`w-10 text-xs font-mono text-right ${
-                  isTied ? "text-yellow-400 font-bold" : "text-poke-text-secondary"
+                  isTied ? "text-yellow-400 font-bold" : "text-fg-muted"
                 }`}
               >
                 {entry.speed}

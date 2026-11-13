@@ -32,7 +32,7 @@ export default function RatingChangePreview() {
   return (
     <div className="flex items-center justify-center gap-6 py-2 text-xs">
       <div className="text-center">
-        <div className="text-poke-text-secondary">{t("rating.wins", { name: data?.player1.name ?? "" })}</div>
+        <div className="text-fg-muted">{t("rating.wins", { name: data?.player1.name ?? "" })}</div>
         <div className="flex gap-3 mt-0.5">
           <span className="text-emerald-400 font-mono font-bold">
             +{previews.p1Win.player1Delta}
@@ -44,7 +44,7 @@ export default function RatingChangePreview() {
       </div>
       <div className="w-px h-8" />
       <div className="text-center">
-        <div className="text-poke-text-secondary">{t("rating.wins", { name: data?.player2.name ?? "" })}</div>
+        <div className="text-fg-muted">{t("rating.wins", { name: data?.player2.name ?? "" })}</div>
         <div className="flex gap-3 mt-0.5">
           <span className="text-red-400 font-mono font-bold">
             {previews.p2Win.player1Delta}

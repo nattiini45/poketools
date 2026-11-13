@@ -88,7 +88,7 @@ export default function MomentsBrowser({ matches }: MomentsBrowserProps) {
 
   return (
     <Card>
-      <h3 className="text-lg font-heading font-bold text-poke-text-primary mb-4">
+      <h3 className="text-lg font-heading font-bold text-fg mb-4">
         {t('moments.title')}
       </h3>
 
@@ -116,17 +116,17 @@ export default function MomentsBrowser({ matches }: MomentsBrowserProps) {
         </div>
 
         {loading && (
-          <p className="text-sm text-poke-text-muted">{t('moments.loading')}</p>
+          <p className="text-sm text-fg-muted">{t('moments.loading')}</p>
         )}
 
         {error && (
-          <p className="text-sm text-poke-danger">
+          <p className="text-sm text-loss">
             {error.res && (error.res.error || error.res.code) ? errorText(error.res) : t(`moments.${error.fallback}`)}
           </p>
         )}
 
         {!loading && !error && matchId && filteredMoments.length === 0 && (
-          <p className="text-sm text-poke-text-muted">{t('moments.empty')}</p>
+          <p className="text-sm text-fg-muted">{t('moments.empty')}</p>
         )}
 
         {filteredMoments.length > 0 && (
@@ -134,7 +134,7 @@ export default function MomentsBrowser({ matches }: MomentsBrowserProps) {
             {filteredMoments.map((moment) => (
               <div
                 key={moment.id}
-                className="flex items-start gap-3 px-3 py-2 rounded-poke-md bg-poke-muted border border-poke-border"
+                className="flex items-start gap-3 px-3 py-2 rounded-poke-md bg-sunken border border-hairline"
               >
                 <span
                   className={`px-2 py-0.5 rounded-full text-xs font-semibold shrink-0 mt-0.5 ${MOMENT_TYPE_COLORS[moment.moment_type]}`}
@@ -143,9 +143,9 @@ export default function MomentsBrowser({ matches }: MomentsBrowserProps) {
                 </span>
                 <div className="min-w-0 flex-1">
                   {moment.description && (
-                    <p className="text-sm text-poke-text-primary">{moment.description}</p>
+                    <p className="text-sm text-fg">{moment.description}</p>
                   )}
-                  <div className="flex items-center gap-2 text-xs text-poke-text-muted mt-0.5">
+                  <div className="flex items-center gap-2 text-xs text-fg-muted mt-0.5">
                     {moment.pokemon_name && <span>{localizeSpecies(moment.pokemon_name, dataLocale)}</span>}
                     {moment.turn_number !== null && <span>{t('moments.turn', { n: moment.turn_number })}</span>}
                     <span>{formatter.instant(moment.timestamp, 'dateTimeYear')}</span>

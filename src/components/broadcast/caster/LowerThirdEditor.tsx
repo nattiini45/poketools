@@ -46,7 +46,7 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-sm font-bold text-poke-text">{t("lowerThird.title")}</h3>
+      <h3 className="text-sm font-bold text-fg">{t("lowerThird.title")}</h3>
 
       {/* Text inputs */}
       <input
@@ -54,14 +54,14 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
         value={text}
         onChange={(e) => setText(e.target.value)}
         placeholder={t("lowerThird.textPlaceholder")}
-        className="w-full px-3 py-1.5 text-sm rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+        className="w-full px-3 py-1.5 text-sm rounded-lg bg-surface border text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       />
       <input
         type="text"
         value={subtext}
         onChange={(e) => setSubtext(e.target.value)}
         placeholder={t("lowerThird.subtextPlaceholder")}
-        className="w-full px-3 py-1.5 text-xs rounded-lg bg-poke-surface border text-poke-text placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+        className="w-full px-3 py-1.5 text-xs rounded-lg bg-surface border text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       />
 
       {/* Presets */}
@@ -71,7 +71,7 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
             key={p}
             type="button"
             onClick={() => applyPreset(p)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-poke-elevated text-poke-text-secondary hover:text-poke-text border transition-colors"
+            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-elevated text-fg-muted hover:text-fg border transition-colors"
           >
             {presetText(p)}
           </button>
@@ -80,10 +80,10 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
 
       {/* Preview */}
       {text && (
-        <div className="rounded-lg bg-linear-to-r/srgb from-poke-surface to-poke-elevated border px-4 py-2.5">
-          <div className="text-sm font-bold text-poke-text">{text}</div>
+        <div className="rounded-lg bg-linear-to-r/srgb from-surface to-elevated border px-4 py-2.5">
+          <div className="text-sm font-bold text-fg">{text}</div>
           {subtext && (
-            <div className="text-xs text-poke-text-secondary mt-0.5">{subtext}</div>
+            <div className="text-xs text-fg-muted mt-0.5">{subtext}</div>
           )}
         </div>
       )}
@@ -94,14 +94,14 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
           type="button"
           onClick={() => broadcast(true)}
           disabled={!text}
-          className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-poke-accent text-poke-surface disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+          className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent-fill text-tier-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
         >
           {t("lowerThird.show")}
         </button>
         <button
           type="button"
           onClick={() => broadcast(false)}
-          className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-poke-elevated text-poke-text-secondary hover:text-poke-text transition-colors"
+          className="flex-1 px-3 py-1.5 rounded-lg text-xs font-medium bg-elevated text-fg-muted hover:text-fg transition-colors"
         >
           {t("lowerThird.hide")}
         </button>

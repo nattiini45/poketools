@@ -135,15 +135,15 @@ export default function BattleTracker({
     <div className="flex flex-col gap-4 max-w-4xl mx-auto">
       {/* Mode toggle */}
       <div className="flex items-center justify-between px-2">
-        <h2 className="text-lg font-bold text-poke-text">
+        <h2 className="text-lg font-bold text-fg">
           {t('tracker.title')}
         </h2>
-        <label className="flex items-center gap-2 text-xs text-poke-text-secondary cursor-pointer">
+        <label className="flex items-center gap-2 text-xs text-fg-muted cursor-pointer">
           <input
             type="checkbox"
             checked={producerMode}
             onChange={(e) => setProducerMode(e.target.checked)}
-            className="rounded border-poke-border"
+            className="rounded border-hairline"
           />
           {t('tracker.producerMode')}
         </label>
@@ -184,7 +184,7 @@ export default function BattleTracker({
         <div className="space-y-3">
           <div className="px-4 py-3 rounded-xl bg-[rgb(16_185_129/0.1)] border border-[rgb(16_185_129/0.3)] text-center">
             <div className="text-lg font-bold text-emerald-400">{t('tracker.matchComplete')}</div>
-            <div className="text-sm text-poke-text-secondary mt-1">
+            <div className="text-sm text-fg-muted mt-1">
               {t('tracker.matchWinner', {
                 name:
                   displayName(

@@ -16,14 +16,14 @@ export default function BracketSkeletonCard({
 }: BracketSkeletonCardProps) {
   return (
     <div
-      className="rounded-poke-lg border border-dashed border-poke-border p-2 text-sm"
+      className="rounded-poke-lg border border-dashed border-hairline p-2 text-sm"
       aria-label={matchNumber ? `${labels.match} ${matchNumber} ${labels.tbd}` : labels.tbdMatch}
     >
       {matchNumber !== undefined && (
-        <p className="text-[10px] text-poke-text-muted mb-1">M{matchNumber}</p>
+        <p className="text-[10px] text-fg-muted mb-1">M{matchNumber}</p>
       )}
-      <p className="text-poke-text-muted truncate">{label1}</p>
-      <p className="text-poke-text-muted truncate">{label2}</p>
+      <p className="text-fg-muted truncate">{label1}</p>
+      <p className="text-fg-muted truncate">{label2}</p>
     </div>
   );
 }
