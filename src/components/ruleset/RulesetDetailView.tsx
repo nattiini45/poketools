@@ -145,11 +145,11 @@ export default function RulesetDetailView({ content, blockTag: Block, text: over
 
   const formatChips = (
     <div className="flex flex-wrap gap-3 text-sm">
-      <span className="px-2 py-0.5 bg-tier-3-soft text-fg rounded">
+      <span className="px-2 py-0.5 bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-400 rounded">
         {content.formatName}
       </span>
       {content.isDoubles && (
-        <span className="px-2 py-0.5 bg-tier-2-soft text-fg rounded">{text.doubles}</span>
+        <span className="px-2 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400 rounded">{text.doubles}</span>
       )}
       {content.version !== null && (
         <span className="px-2 py-0.5 bg-poke-muted text-poke-text-secondary rounded">{t('detail.version', { version: content.version })}</span>
@@ -173,7 +173,7 @@ export default function RulesetDetailView({ content, blockTag: Block, text: over
                 className={
                   clause.informational
                     ? 'px-2 py-0.5 border border-dashed border-poke-border-strong text-poke-text-secondary rounded text-xs'
-                    : 'px-2 py-0.5 bg-tier-3-soft text-fg rounded text-xs'
+                    : 'px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400 rounded text-xs'
                 }
               >
                 {clause.name}
@@ -219,12 +219,12 @@ export default function RulesetDetailView({ content, blockTag: Block, text: over
           <h3 className="font-semibold text-sm mb-2">{content.minSharedTypePct > 0 && teamRules.length === 0 ? text.sharedType : t('detail.teamRules')}</h3>
           <div className="flex flex-wrap gap-1">
             {content.minSharedTypePct > 0 && (
-              <span className="px-2 py-0.5 bg-tier-1-soft text-fg rounded text-xs">
+              <span className="px-2 py-0.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded text-xs">
                 {text.sharedTypeRule}
               </span>
             )}
             {teamRules.map((line) => (
-              <span key={line} className="px-2 py-0.5 bg-tier-1-soft text-fg rounded text-xs">
+              <span key={line} className="px-2 py-0.5 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400 rounded text-xs">
                 {line}
               </span>
             ))}

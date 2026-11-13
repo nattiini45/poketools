@@ -180,7 +180,7 @@ export function SortableTableHeader({
     <th
       scope="col"
       className={cn(
-        "px-4 py-3 font-heading text-xs font-semibold text-poke-text-secondary",
+        "px-4 py-3 font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary",
         alignClass[align],
         className
       )}
@@ -512,7 +512,7 @@ export default function Table<T extends object>({
                   <th
                     key={col.key}
                     className={cn(
-                      "px-4 py-3 font-heading text-xs font-semibold text-poke-text-secondary",
+                      "px-4 py-3 font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-secondary",
                       alignClass[align],
                       col.key === stickyColumn && STICKY_HEAD
                     )}

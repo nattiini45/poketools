@@ -108,7 +108,7 @@ export default function TournamentReportCard({
 
   if (report.status === 'failed') {
     return (
-      <div className="border border-loss rounded-poke-lg p-4">
+      <div className="border border-red-500/30 rounded-poke-lg p-4">
         <div className="flex items-center gap-3">
           <KalePortrait />
           <span className="text-sm text-poke-text-muted">
@@ -135,8 +135,8 @@ export default function TournamentReportCard({
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-heading font-semibold text-poke-text-secondary">{t('report.kale')}</span>
-              <span className={`text-micro px-1.5 py-0.5 rounded-full font-medium ${
-                isRecap ? 'bg-tier-2-soft text-fg' : 'bg-tier-3-soft text-fg'
+              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                isRecap ? 'bg-purple-500/15 text-purple-400' : 'bg-blue-500/15 text-blue-400'
               }`}>
                 {isRecap ? t('report.recap') : t('report.preview')}
               </span>
@@ -312,7 +312,7 @@ function RecapContent({ content, tournamentId }: { content: RoundRecapContent; t
       {/* Match Result Cards */}
       {matchData.length > 0 && (
         <div>
-          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-3">
+          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-3 uppercase tracking-wider">
             {t('report.matchResults')}
           </h4>
           <div className="space-y-3">
@@ -337,7 +337,7 @@ function RecapContent({ content, tournamentId }: { content: RoundRecapContent; t
       {/* Fallback for legacy reports without match_data */}
       {matchData.length === 0 && content.match_summaries.length > 0 && (
         <div>
-          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2">
+          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2 uppercase tracking-wider">
             {t('report.matchResults')}
           </h4>
           <div className="space-y-1">
@@ -361,7 +361,7 @@ function RecapContent({ content, tournamentId }: { content: RoundRecapContent; t
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {content.player_spotlight.player_name && (
           <div className="bg-poke-elevated rounded-poke-md p-3">
-            <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2">
+            <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2 uppercase tracking-wider">
               {t('report.playerSpotlight')}
             </h4>
             <div className="flex items-center gap-2 mb-1.5">
@@ -379,7 +379,7 @@ function RecapContent({ content, tournamentId }: { content: RoundRecapContent; t
 
         {content.spicy_pick && (
           <div className="bg-poke-elevated rounded-poke-md p-3">
-            <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2">
+            <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2 uppercase tracking-wider">
               {t('report.spicyPick')}
             </h4>
             <div className="flex items-center gap-2 mb-1.5">
@@ -470,7 +470,7 @@ function MatchResultCard({
               playerId={matchData.player_1_id}
               className={`text-sm ${isP1Winner ? '' : 'opacity-60'}`}
             />
-            <p className="text-micro text-poke-text-muted">
+            <p className="text-[10px] text-poke-text-muted">
               {t('report.kos', { count: matchData.p1_total_kos })}
             </p>
           </div>
@@ -495,7 +495,7 @@ function MatchResultCard({
               playerId={matchData.player_2_id}
               className={`text-sm ${!isP1Winner ? '' : 'opacity-60'}`}
             />
-            <p className="text-micro text-poke-text-muted text-right">
+            <p className="text-[10px] text-poke-text-muted text-right">
               {t('report.kos', { count: matchData.p2_total_kos })}
             </p>
           </div>
@@ -521,12 +521,12 @@ function MatchResultCard({
                 className="rounded-full object-cover shrink-0"
                 unoptimized
               />
-              <span className="text-micro font-heading font-bold text-poke-yellow-ink">
+              <span className="text-[10px] font-heading font-bold text-poke-yellow-ink uppercase tracking-wide">
                 {t('report.lindenMvp')}
               </span>
             </div>
             <div className="flex items-start gap-2.5">
-              <div className="shrink-0 ring-2 ring-tier-1 shadow-poke-sm rounded-full p-0.5">
+              <div className="shrink-0 ring-2 ring-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.4)] rounded-full p-0.5">
                 <PokemonSprite name={mvpName} size={36} animated />
               </div>
               <div className="min-w-0">
@@ -540,7 +540,7 @@ function MatchResultCard({
                     ))}
                   </PokemonLink>
                   {matchData.mvp_kos > 0 && (
-                    <span className="text-micro text-poke-text-muted">
+                    <span className="text-[10px] text-poke-text-muted">
                       {t('report.kos', { count: matchData.mvp_kos })}
                     </span>
                   )}
@@ -571,7 +571,7 @@ function ForecastContent({ content }: { content: RoundForecastContent }) {
 
       {content.matchup_previews.length > 0 && (
         <div>
-          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2">
+          <h4 className="text-xs font-heading font-semibold text-poke-text-primary mb-2 uppercase tracking-wider">
             {t('report.matchupPreviews')}
           </h4>
           <div className="space-y-3">
@@ -592,7 +592,7 @@ function ForecastContent({ content }: { content: RoundForecastContent }) {
 
       {content.bold_prediction && (
         <div className="bg-poke-elevated rounded-poke-md p-3 border-l-2 border-poke-accent">
-          <h4 className="text-xs font-heading font-semibold text-poke-accent mb-1">
+          <h4 className="text-xs font-heading font-semibold text-poke-accent mb-1 uppercase tracking-wider">
             {t('report.boldPrediction')}
           </h4>
           <p className="text-sm text-poke-text-secondary">{content.bold_prediction}</p>

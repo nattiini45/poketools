@@ -1,6 +1,5 @@
 'use client';
 
-import Select from '@/components/ui/Select';
 import { useState } from 'react';
 import PokemonUsageTable, {
   DEFAULT_POKEMON_USAGE_LABELS,
@@ -133,9 +132,10 @@ export default function ScopedInsightsView({
           <div className="flex gap-3 items-end flex-wrap">
             <div>
               <label className="block text-xs text-poke-text-secondary mb-1">{t('h2h.player1')}</label>
-              <Select
+              <select
                 value={h2hPlayer1}
                 onChange={(e) => setH2hPlayer1(e.target.value)}
+                className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
               >
                 <option value="">{t('h2h.selectPlayer')}</option>
                 {participants.map((p) => (
@@ -143,14 +143,15 @@ export default function ScopedInsightsView({
                     {p.name}
                   </option>
                 ))}
-              </Select>
+              </select>
             </div>
             <span className="text-poke-text-muted text-sm pb-1">{t('h2h.versus')}</span>
             <div>
               <label className="block text-xs text-poke-text-secondary mb-1">{t('h2h.player2')}</label>
-              <Select
+              <select
                 value={h2hPlayer2}
                 onChange={(e) => setH2hPlayer2(e.target.value)}
+                className="px-2 py-1 border border-poke-border rounded-poke-sm text-sm bg-poke-surface text-poke-text-primary"
               >
                 <option value="">{t('h2h.selectPlayer')}</option>
                 {participants
@@ -160,7 +161,7 @@ export default function ScopedInsightsView({
                       {p.name}
                     </option>
                   ))}
-              </Select>
+              </select>
             </div>
           </div>
           {h2hPlayer1 && h2hPlayer2 ? (

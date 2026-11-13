@@ -6,7 +6,6 @@
  * select bounded by the pool's ladder (`0..ladder.length − 1`) and a
  * required reason.
  */
-import Select from '@/components/ui/Select';
 import { useState } from 'react';
 import Button from '@/components/ui/frozen/Button';
 import { useT } from '@/i18n/client';
@@ -73,17 +72,18 @@ function PenaltyRow({
       <td className={TD}>{tScreen('players.timeouts', { count: participant.timeout_count })}</td>
       <td className={TD}>
         <div className="flex min-w-56 flex-col gap-1">
-          <Select
+          <select
             aria-label={t('penalties.col.change')}
             value={stage}
             onChange={(e) => setStage(Number(e.target.value))}
+            className={FIELD}
           >
             {penaltyStages(ladder).map((s) => (
               <option key={s} value={s}>
                 {t('penalties.stageOption', { stage: s + 1, duration: durationOf(s) })}
               </option>
             ))}
-          </Select>
+          </select>
           <input
             aria-label={t('penalties.reason')}
             placeholder={t('penalties.reason')}

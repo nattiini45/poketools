@@ -606,6 +606,9 @@
 
   /* ShadCN semantic tokens (mapped to poke palette) */
   --card: var(--poke-surface);
+  --card-foreground: var(--poke-text-primary);
+  --popover: var(--poke-surface);
+  --popover-foreground: var(--poke-text-primary);
   --primary: var(--poke-accent);
   --primary-foreground: var(--poke-surface);
   --secondary: var(--poke-blue);
@@ -613,9 +616,11 @@
   --muted: var(--poke-muted);
   --muted-foreground: var(--poke-text-muted);
   --accent: var(--poke-elevated);
+  --accent-foreground: var(--poke-text-primary);
   --destructive: var(--poke-danger);
   --destructive-foreground: var(--poke-on-danger);
   --border: var(--poke-border);
+  --input: var(--poke-border);
   --ring: var(--poke-focus);
   --radius: 0.5rem;
 
@@ -751,6 +756,9 @@
   --foreground: var(--palette-plaza-ink);
 
   --card: var(--poke-surface);
+  --card-foreground: var(--poke-text-primary);
+  --popover: var(--poke-surface);
+  --popover-foreground: var(--poke-text-primary);
   --primary: var(--poke-accent);
   --primary-foreground: #171208;
   --secondary: var(--poke-blue);
@@ -758,9 +766,11 @@
   --muted: var(--poke-muted);
   --muted-foreground: var(--poke-text-muted);
   --accent: var(--poke-elevated);
+  --accent-foreground: var(--poke-text-primary);
   --destructive: var(--poke-danger);
   --destructive-foreground: var(--poke-on-danger);
   --border: var(--poke-border);
+  --input: var(--poke-border);
   --ring: var(--poke-focus);
 
   --poke-base: var(--palette-plaza-ground);
