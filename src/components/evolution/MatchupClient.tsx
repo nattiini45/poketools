@@ -15,6 +15,7 @@ import type { MatchupDexPayload } from '@/lib/evolution/matchup-types';
 import MatchupRosterPanel from '@/components/evolution/MatchupRosterPanel';
 import MatchupStabMatrix from '@/components/evolution/MatchupStabMatrix';
 import MatchupPokemonDetail from '@/components/evolution/MatchupPokemonDetail';
+import Select from '@/components/ui/Select';
 
 interface MatchupClientProps {
   seasonId: string;
@@ -231,16 +232,15 @@ function PlayerSelect({
   return (
     <div>
       <label className="mb-1 block text-xs font-medium text-fg-muted">{label}</label>
-      <select
+      <Select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-hairline bg-elevated px-3 py-2 text-sm text-fg focus:border-blue-500 focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
       >
         <option value="">{t('matchup.select')}</option>
         {participants.map((p) => (
           <option key={p.id} value={p.id}>{p.name}</option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }
@@ -304,7 +304,7 @@ function RoleComparison({
             <p className="text-xs font-medium text-fg-muted">{tLegacy(`teamRole.${cat}`)}</p>
             <div className="mt-1 grid grid-cols-2 gap-2 text-xs">
               <div>
-                <span className="text-blue-400">{p1Name.split(' ')[0]}</span>
+                <span className="text-accent-ink">{p1Name.split(' ')[0]}</span>
                 {p1Roles.length === 0 ? (
                   <p className="text-fg-muted italic">{t('matchup.none')}</p>
                 ) : (
@@ -314,7 +314,7 @@ function RoleComparison({
                 )}
               </div>
               <div>
-                <span className="text-red-400">{p2Name.split(' ')[0]}</span>
+                <span className="text-loss">{p2Name.split(' ')[0]}</span>
                 {p2Roles.length === 0 ? (
                   <p className="text-fg-muted italic">{t('matchup.none')}</p>
                 ) : (

@@ -115,7 +115,7 @@ export default function MatchEvolutionSummary({
       {suspensions.length > 0 && (
         <div className="mt-2 space-y-1">
           {suspensions.map((s) => (
-            <p key={`susp-${s.id}`} className="text-xs text-red-400">
+            <p key={`susp-${s.id}`} className="text-xs text-loss">
               {t('summary.suspensionDetail', { name: localizeSpecies(s.species_at_match, dataLocale) })}
             </p>
           ))}

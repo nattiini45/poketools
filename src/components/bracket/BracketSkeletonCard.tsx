@@ -20,7 +20,7 @@ export default function BracketSkeletonCard({
       aria-label={matchNumber ? `${labels.match} ${matchNumber} ${labels.tbd}` : labels.tbdMatch}
     >
       {matchNumber !== undefined && (
-        <p className="text-[10px] text-fg-muted mb-1">M{matchNumber}</p>
+        <p className="text-micro text-fg-muted mb-1">M{matchNumber}</p>
       )}
       <p className="text-fg-muted truncate">{label1}</p>
       <p className="text-fg-muted truncate">{label2}</p>

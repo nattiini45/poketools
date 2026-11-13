@@ -81,9 +81,9 @@ export default function MatchupPokemonDetail({
       )}
 
       <div className="grid gap-2 text-xs sm:grid-cols-3">
-        <TypeList label={t('detail.weakTo')} items={typeList(detail.weaknesses)} className="text-red-400" />
-        <TypeList label={t('detail.resists')} items={typeList(detail.resistances)} className="text-orange-400" />
-        <TypeList label={t('detail.immune')} items={typeList(detail.immunities)} className="text-gray-400" />
+        <TypeList label={t('detail.weakTo')} items={typeList(detail.weaknesses)} className="text-loss" />
+        <TypeList label={t('detail.resists')} items={typeList(detail.resistances)} className="text-accent-ink" />
+        <TypeList label={t('detail.immune')} items={typeList(detail.immunities)} className="text-fg-muted" />
       </div>
 
       {roles.length > 0 && (

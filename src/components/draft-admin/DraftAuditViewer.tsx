@@ -25,8 +25,9 @@ import {
 } from '@/types/draft-queue';
 import { useLineText } from '@/components/draft-tokens/use-line-text';
 import { adminCall, auditQueryString, isAuditPage, type AuditPage } from './admin-actions';
-import { FIELD, HINT, InlineError, LABEL, TABLE, TD, TH } from './admin-ui';
+import { HINT, InlineError, LABEL, TABLE, TD, TH } from './admin-ui';
 import { auditChanges, poolTabs } from './admin-view';
+import Select from '@/components/ui/Select';
 
 export interface DraftAuditViewerProps {
   seasonId: string;
@@ -175,11 +176,10 @@ export default function DraftAuditViewer({
           <label htmlFor={poolId} className={LABEL}>
             {t('audit.filters.pool')}
           </label>
-          <select
+          <Select
             id={poolId}
             value={filters.poolId}
             onChange={(e) => update({ poolId: e.target.value })}
-            className={FIELD}
           >
             {tabs.map((tab) => (
               <option key={tab.id} value={tab.id}>
@@ -194,7 +194,7 @@ export default function DraftAuditViewer({
                     : t('panel.tabRedraft', { n: tab.redraftNo })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
 
         <div className="space-y-1">
@@ -225,11 +225,10 @@ export default function DraftAuditViewer({
           <label htmlFor={playerId} className={LABEL}>
             {t('audit.filters.player')}
           </label>
-          <select
+          <Select
             id={playerId}
             value={filters.player ?? ''}
             onChange={(e) => update({ player: e.target.value || null })}
-            className={FIELD}
           >
             <option value="">{t('audit.filters.allPlayers')}</option>
             {participants.map((p) => (
@@ -237,7 +236,7 @@ export default function DraftAuditViewer({
                 {p.name}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       </div>
       {filters.actions.length > 0 || filters.player ? (

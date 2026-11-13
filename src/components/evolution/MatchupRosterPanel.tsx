@@ -90,12 +90,12 @@ export default function MatchupRosterPanel({
                       <span className="text-xs text-fg-muted">{tLegacy('pts', { n: price })}</span>
                     )}
                     {tera !== 'none' && (
-                      <span className={`rounded px-1.5 py-0.5 text-xs ${tera === 'any' ? 'bg-[rgb(20_83_45/0.3)] text-green-400' : 'bg-[rgb(113_63_18/0.3)] text-yellow-400'}`}>
+                      <span className={`rounded px-1.5 py-0.5 text-xs ${tera === 'any' ? 'bg-win-bg text-win' : 'bg-accent-subtle text-accent-ink'}`}>
                         {tLegacy(`tera.${tera}`)}
                       </span>
                     )}
                     {isSuspended && (
-                      <span className="rounded bg-[rgb(127_29_29/0.3)] px-1.5 py-0.5 text-xs text-red-400">{tLegacy('suspended')}</span>
+                      <span className="rounded bg-loss-bg px-1.5 py-0.5 text-xs text-loss">{tLegacy('suspended')}</span>
                     )}
                   </div>
                   {/* Total progress, then the self-earned KOs (`real_kills`) and one chip per other source (§8.3). */}
@@ -104,7 +104,7 @@ export default function MatchupRosterPanel({
                     <ProgressSourceChips sources={sources} compact labels={chipLabels} />
                   </div>
                   {monRoles.length > 0 && (
-                    <p className="mt-1 truncate text-[10px] text-fg-muted">
+                    <p className="mt-1 truncate text-micro text-fg-muted">
                       {t('roster.roles', {
                         list: monRoles.map((r) => localizeMove(r.move_name, dataLocale)).join(', '),
                       })}

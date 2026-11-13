@@ -2111,10 +2111,10 @@ describe('rules panel', () => {
     const chip = (text: string) =>
       findOne(rendered.panel, (el) => el.tag === 'span' && squash(el).startsWith(text), `chip ${text}`);
     const expected: [string, string][] = [
-      [getFormatName('gen9ou'), 'indigo'],
-      ['Doubles', 'purple'],
-      ['Species Clause', 'blue'],
-      ['50% of team', 'yellow'],
+      [getFormatName('gen9ou'), 'tier-3'],
+      ['Doubles', 'tier-2'],
+      ['Species Clause', 'tier-3'],
+      ['50% of team', 'tier-1'],
     ];
     // The name lists are rows, not chips: a banned list carries the loss edge, an added one the win edge.
     const list = (text: string) => findOne(rendered.panel, (el) => el.tag === 'ul' && squash(el).includes(text), `list ${text}`);
@@ -2122,12 +2122,7 @@ describe('rules panel', () => {
     expect(classList(list('Pikachu'))).toContain('border-win');
     for (const [text, colour] of expected) {
       expect(classList(chip(text))).toEqual(
-        expect.arrayContaining([
-          `bg-${colour}-100`,
-          `text-${colour}-800`,
-          `dark:bg-${colour}-900/30`,
-          `dark:text-${colour}-400`,
-        ]),
+        expect.arrayContaining([`bg-${colour}`, 'text-tier-ink']),
       );
     }
     expectNoSection(rendered);

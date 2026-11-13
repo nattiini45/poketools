@@ -19,6 +19,7 @@ import type { DraftViewModel, ParticipantVM } from '@/lib/draft-ui/snapshot-adap
 import { FIELD, HINT, InlineError, InlineNotice, TABLE, TD, TH, usePrimaryButton } from './admin-ui';
 import { penaltyStages, REASON_MAX, reasonValid } from './admin-view';
 import { useAdminCall, type AdminResult } from './use-admin-call';
+import Select from '@/components/ui/Select';
 
 export interface PenaltyStageEditorProps {
   vm: DraftViewModel;
@@ -72,18 +73,17 @@ function PenaltyRow({
       <td className={TD}>{tScreen('players.timeouts', { count: participant.timeout_count })}</td>
       <td className={TD}>
         <div className="flex min-w-56 flex-col gap-1">
-          <select
+          <Select
             aria-label={t('penalties.col.change')}
             value={stage}
             onChange={(e) => setStage(Number(e.target.value))}
-            className={FIELD}
           >
             {penaltyStages(ladder).map((s) => (
               <option key={s} value={s}>
                 {t('penalties.stageOption', { stage: s + 1, duration: durationOf(s) })}
               </option>
             ))}
-          </select>
+          </Select>
           <input
             aria-label={t('penalties.reason')}
             placeholder={t('penalties.reason')}

@@ -36,6 +36,7 @@ import {
   type ConfigFormState,
 } from './admin-view';
 import { useAdminCall, type AdminResult } from './use-admin-call';
+import Select from '@/components/ui/Select';
 
 export interface InstanceConfigFormProps {
   vm: DraftViewModel;
@@ -165,15 +166,14 @@ export default function InstanceConfigForm({ vm, dto, onSaveConfig, onPatchRedra
 
       <fieldset disabled={disabled} className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
         <Field id={ids.mode} label={t('config.mode')}>
-          <select
+          <Select
             id={ids.mode}
             value={form.mode}
             onChange={(e) => setMode(e.target.value === 'slow' ? 'slow' : 'live')}
-            className={FIELD}
           >
             <option value="live">{tGlossary('draft.liveDraft')}</option>
             <option value="slow">{tGlossary('draft.slowDraft')}</option>
-          </select>
+          </Select>
         </Field>
         <Field id={ids.roster} label={t('config.rosterSize')}>
           <input

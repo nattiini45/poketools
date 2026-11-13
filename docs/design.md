@@ -177,8 +177,7 @@ The root is 16 px (`html { font-size: 100% }`), except on draft-room pages
 
 ### Panel recipes & headings
 - `src/components/ui/panel.ts` exports the app-wide surface class strings
-  (`PANEL`, `PANEL_INSET`, `PANEL_NOTICE`, `PANEL_HOVER`, `FOCUS_RING`,
-  `TABLE_HEAD`) — the poke-token twin of the world contract in
+  (`PANEL`, `PANEL_INSET`, `FOCUS_RING`) — the poke-token twin of the world contract in
   `src/components/world/panel.ts`. Compose panels from these instead of
   re-deriving radius/border/fill per page.
 - Page and section headings are set in the pixel face without the former plaza
@@ -293,11 +292,11 @@ they are.
 Some files are not frozen themselves but are rendered by a frozen surface, a layout or a
 page the frozen compare captures (found by walking the import graph from the frozen
 sources and from the root and public layouts, draft preview, route preview, the league
-tree, draft rooms, the match page and the broadcast tree). Changing their classes would
-move frozen pixels, so they are listed in `scripts/design/guard-exceptions.json`, one
-entry per file with the reason. The guard skips them and prints how many it skipped.
-Convert a file and delete its entry when the surface that renders it is re-baselined;
-never add an entry for new code.
+tree, draft rooms, the match page and the broadcast tree). Changing their classes moves
+frozen pixels, so such a file may be listed in `scripts/design/guard-exceptions.json`, one
+entry per file with the reason; the guard skips listed files and prints how many it
+skipped. The list is empty since the Z2 re-baseline (the files were converted and the
+frozen captures re-baselined). Never add an entry for new code.
 
 ## Direction B primitives (redesign F4)
 

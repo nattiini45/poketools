@@ -100,7 +100,7 @@ function Score({
       <span
         data-entry-losses={losses}
         title={meaning}
-        className="rounded-poke-sm border border-hairline px-1 text-[10px] font-normal leading-4 text-fg-muted"
+        className="rounded-poke-sm border border-hairline px-1 text-micro font-normal leading-4 text-fg-muted"
       >
         <span aria-hidden="true">
           {losses} {labels.lossesShort}

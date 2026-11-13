@@ -12,7 +12,8 @@ import { draftAdminMessages } from '@/i18n/messages/draft/admin';
 import type { DraftLineCatalog } from '@/lib/draft-finder/line-catalog';
 import type { LineId } from '@/types/draft-queue';
 import { useLineText } from '@/components/draft-tokens/use-line-text';
-import { FIELD, LABEL } from './admin-ui';
+import { LABEL } from './admin-ui';
+import Select from '@/components/ui/Select';
 
 export interface LineSelectProps {
   catalog: DraftLineCatalog;
@@ -35,7 +36,7 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
       <label htmlFor={id} className={LABEL}>
         {label}
       </label>
-      <select
+      <Select
         id={id}
         value={value}
         disabled={disabled}
@@ -43,7 +44,6 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
           const next = e.target.value;
           onChange(allowed.has(next) ? (next as LineId) : '');
         }}
-        className={FIELD}
       >
         <option value="">{t('lineSelect.chooseLine')}</option>
         {lineIds.map((lineId) => (
@@ -54,7 +54,7 @@ export default function LineSelect({ catalog, lineIds, value, onChange, label, d
             })}
           </option>
         ))}
-      </select>
+      </Select>
     </div>
   );
 }

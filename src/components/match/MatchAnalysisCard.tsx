@@ -373,7 +373,7 @@ export default function MatchAnalysisCard({
           {/* Turning Point */}
           {content.turning_point && (
             <div>
-              <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-1">
+              <h4 className="text-xs font-heading font-semibold text-fg-muted mb-1">
                 {t('analysis.turningPoint')}
               </h4>
               <p lang={contentLocale} className="text-sm text-fg-muted leading-relaxed">
@@ -418,7 +418,7 @@ export default function MatchAnalysisCard({
           {/* Meta Observations */}
           {content.meta_observations && (
             <div className="border-t border-hairline pt-3">
-              <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-1">
+              <h4 className="text-xs font-heading font-semibold text-fg-muted mb-1">
                 {t('analysis.metaObservations')}
               </h4>
               <p lang={contentLocale} className="text-sm text-fg-muted leading-relaxed">
@@ -430,7 +430,7 @@ export default function MatchAnalysisCard({
           {/* League / Type Constraint Matchup (gym typing or assigned core) */}
           {(content.league_constraint_analysis ?? content.gym_type_analysis) && (
             <div className="border-t border-hairline pt-3">
-              <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-1">
+              <h4 className="text-xs font-heading font-semibold text-fg-muted mb-1">
                 {t('analysis.leagueMatchup')}
               </h4>
               <p lang={contentLocale} className="text-sm text-fg-muted leading-relaxed">
@@ -442,7 +442,7 @@ export default function MatchAnalysisCard({
           {/* What If — Professor's Hindsight */}
           {content.what_if && (
             <div className="border-t border-hairline pt-3">
-              <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-1">
+              <h4 className="text-xs font-heading font-semibold text-fg-muted mb-1">
                 {t('analysis.hindsight')}
               </h4>
               <p lang={contentLocale} className="text-sm text-fg-muted leading-relaxed italic">
@@ -453,14 +453,14 @@ export default function MatchAnalysisCard({
 
           {/* Footer */}
           <div className="flex items-center justify-between border-t border-hairline pt-2">
-            <span className="text-[10px] text-fg-muted italic">
+            <span className="text-micro text-fg-muted italic">
               {t('analysis.disclaimer')}
             </span>
             {isAdmin && (
               <button
                 onClick={() => handleGenerate(analysis.match_id, true)}
                 disabled={generating}
-                className="text-[10px] text-fg-muted hover:text-accent-ink transition-colors"
+                className="text-micro text-fg-muted hover:text-accent-ink transition-colors"
               >
                 {generating ? t('analysis.consulting') : t('analysis.askAgain')}
               </button>
