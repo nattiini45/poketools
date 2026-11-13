@@ -371,6 +371,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -378,9 +381,11 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-input: var(--input);
   --color-ring: var(--ring);
   --color-arena-ground: var(--world-ground);
   --color-arena-surface: var(--world-surface);
@@ -391,6 +396,7 @@
   --color-arena-accent-strong: var(--world-accent-strong);
   --color-arena-focus: var(--world-focus);
   --color-arena-live: var(--world-live);
+  --color-arena-glow: var(--world-glow);
   --color-arena-border: var(--world-border);
   --color-poke-base: var(--poke-base);
   --color-poke-surface: var(--poke-surface);
@@ -407,6 +413,8 @@
   --color-poke-accent-strong: var(--poke-accent-strong);
   --color-poke-accent-light: var(--poke-accent-light);
   --color-poke-focus: var(--poke-focus);
+  --color-poke-live: var(--poke-live);
+  --color-poke-glow: var(--poke-glow);
   --color-poke-blue: var(--poke-blue);
   --color-poke-blue-hover: var(--poke-blue-hover);
   --color-poke-blue-light: var(--poke-blue-light);
@@ -2764,6 +2772,7 @@ html.world-route-live .world-nav-hud {
    would reach the frozen surfaces. docs/design.md, "Fluid primitives". */
 @theme inline {
   --color-active: var(--active);
+  --color-destructive-light: var(--destructive-light);
   --color-surface-1: var(--surface-1);
   --color-surface-2: var(--surface-2);
   --color-surface-3: var(--surface-3);
@@ -2780,6 +2789,21 @@ html.world-route-live .world-nav-hud {
   --shadow-surface-6: var(--shadow-6);
   --shadow-surface-7: var(--shadow-7);
   --shadow-surface-8: var(--shadow-8);
+  --color-dm-drop: var(--dm-drop);
+  --color-dm-ring-high: var(--dm-ring-high);
+  --color-dm-ring-mid: var(--dm-ring-mid);
+  --color-dm-ring-base: var(--dm-ring-base);
+  --color-dm-hi-peak: var(--dm-hi-peak);
+  --color-dm-hi-high: var(--dm-hi-high);
+  --color-dm-hi-mid: var(--dm-hi-mid);
+  --color-dm-hi-base: var(--dm-hi-base);
+  --color-warning: var(--warning);
+  --color-success: var(--success);
+  --color-info: var(--info);
+  --color-shadow-color: var(--shadow-color);
+  --color-tint-hover: var(--tint-hover);
+  --color-tint: var(--tint);
+  --color-fluid-accent: var(--fluid-accent);
   --z-tooltip: var(--z-tooltip);
   --z-popover: var(--z-popover);
   --z-modal: var(--z-modal);
@@ -2878,6 +2902,7 @@ html.world-route-live .world-nav-hud {
 
 :root {
   --active: #F0E8DA;
+  --destructive-light: var(--loss-bg);
   --overlay: 36 26 12;
   --fluid-accent: var(--accent-ink);
   --focus-ring: var(--accent-ink);

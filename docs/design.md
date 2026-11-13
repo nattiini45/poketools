@@ -74,12 +74,7 @@ Declared in `globals.css` (" Direction B tokens") and mapped to Tailwind in
 | `--skew` | `-10deg` | same | Every skewed plate (F4) |
 
 The legacy names alias onto the set: `poke-base` → `page`, `poke-surface` → `surface`, `poke-elevated` → `elevated`, `poke-text-primary` → `fg`, `poke-text-secondary` → `fg-muted`, `poke-border(-strong)` → `hairline(-strong)`, `poke-accent` → `accent-ink`, `poke-accent-light` → `accent-subtle`, `poke-live` → `live`, and shadcn's
-`--background` / `--foreground`. Z1 deleted the aliases that no class or `var()` reads
-(shadcn's `popover`, `popover-foreground`, `input`, `card-foreground` and
-`accent-foreground`, and `destructive-light`)
-and the colour mappings no class uses (`dm-*`, `warning`, `success`, `info`,
-`tint`, `shadow-color`, `fluid-accent`, `poke-live`, `poke-glow`, `arena-glow`);
-variables that code reads with `var()` stay. A site palette (`html[data-palette]`) still
+`--background` / `--foreground`. A site palette (`html[data-palette]`) still
 overrides these aliases; reducing it to the accent alone (D6) is a later step.
 The tables below describe the legacy names as they stand for themed worlds and
 site palettes.
@@ -143,10 +138,9 @@ half), `art-ball-ink` (`#241A0C`, its outline, band and button ring),
 (`#3B82F6`). `shared/Pokeball.tsx` draws from these three ball inks only, so
 the ball is the same in both themes and every palette.
 
-`src/lib/design/tokens.ts` holds one thing: `typeColors`, the Pokémon type colours
-as TS constants for charts and inline styles. It no longer mirrors the site
-palette; read colours through the CSS-variable-backed Tailwind classes, which
-swap with the theme.
+`src/lib/design/tokens.ts` mirrors the sunlit values as TS constants for
+charts and inline styles; prefer the CSS-variable-backed Tailwind classes
+wherever possible (they swap with the theme, the constants cannot).
 
 ### Typography
 
