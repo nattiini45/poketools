@@ -117,8 +117,8 @@ export default async function RootLayout({
             Static constant built from module constants — no user content. */}
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SITE_PALETTE_PREPAINT_SCRIPT }} />
       </head>
+      {/* The body stays on the palette-aware classes until the site palettes define --page and --fg. */}
       <body
-        // The body stays on the palette-aware classes until the site palettes define --page and --fg.
         className={`${nunito.variable} ${dmSans.variable} ${geistPixel.variable} ${geist.variable} ${geistMono.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
       >
         <I18nProvider {...i18n}>
