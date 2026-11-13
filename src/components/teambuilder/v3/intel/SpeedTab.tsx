@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { X } from 'lucide-react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import { useDataLocale, useT } from '@/i18n/client';
 import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
@@ -291,7 +292,7 @@ export default function SpeedTab() {
               className="text-caption text-fg-muted hover:text-fg transition-colors"
               aria-label={t('speed.clearTarget')}
             >
-              ✕
+              <X aria-hidden="true" className="size-3.5" />
             </button>
           </div>
           <p className="text-caption text-fg-muted mb-1.5">{targetLabel}</p>

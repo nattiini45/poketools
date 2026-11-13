@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { ChevronDown, ChevronRight, Star, X } from 'lucide-react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeBadge from '@/components/shared/TypeBadge';
 import { Popover } from '@/components/ui';
@@ -116,12 +117,12 @@ export default function TrackerPokemonSlot({
         {/* Status badges */}
         {slot.was_lead && (
           <span className="absolute -top-1 -left-1 text-yellow-400 text-sm" title={t('tracker.lead')}>
-            ★
+            <Star aria-hidden="true" className="size-3.5 fill-current" />
           </span>
         )}
         {slot.was_koed && (
           <span className="absolute -bottom-1 -right-1 text-red-400 text-sm" title={t('tracker.koed')}>
-            ✕
+            <X aria-hidden="true" className="size-3.5" />
           </span>
         )}
       </div>
@@ -215,7 +216,7 @@ export default function TrackerPokemonSlot({
             onClick={() => setMovesExpanded(!movesExpanded)}
             className="text-xs text-poke-text-secondary hover:text-poke-text transition-colors px-2"
           >
-            {movesExpanded ? '▾' : '▸'} {t('tracker.moves')}{' '}
+            {movesExpanded ? <ChevronDown aria-hidden="true" className="inline size-3" /> : <ChevronRight aria-hidden="true" className="inline size-3" />} {t('tracker.moves')}{' '}
             {slot.moves_used.length > 0 && `(${slot.moves_used.length})`}
           </button>
           {movesExpanded && (
