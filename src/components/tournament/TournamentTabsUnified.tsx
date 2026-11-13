@@ -348,7 +348,7 @@ export default function TournamentTabsUnified({
                           <Link
                             key={m.id}
                             href={`/tournaments/${tournamentId}/matches/${m.id}`}
-                            className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-poke-md border border-hairline px-3 py-2 text-body transition-colors hover:bg-elevated focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+                            className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-poke-md border border-hairline px-3 py-2 text-body transition-colors hover:bg-elevated focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
                           >
                             <span
                               className={cn('min-w-0 truncate text-right', m.winner_id === m.player_1_id ? 'font-[650] text-fg' : m.winner_id ? 'text-fg-muted' : 'text-fg')}

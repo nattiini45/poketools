@@ -59,11 +59,11 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
 
   return (
     <div className="space-y-3">
-      <label className="block text-sm font-heading font-semibold text-poke-text-primary">{t('format.baseFormat')}</label>
+      <label className="block text-sm font-heading font-semibold text-fg">{t('format.baseFormat')}</label>
 
       {/* Generation picker */}
       <div>
-        <label className="block text-xs text-poke-text-muted mb-1">{t('format.generation')}</label>
+        <label className="block text-xs text-fg-muted mb-1">{t('format.generation')}</label>
         <div className="flex flex-wrap gap-1.5">
           {GENERATIONS.map(g => (
             <button
@@ -72,8 +72,8 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
               onClick={() => handleGenChange(g.num)}
               className={`px-3 py-1.5 rounded-poke-md text-sm font-medium transition-colors ${
                 selectedGen === g.num
-                  ? 'bg-poke-accent text-poke-surface shadow-poke-sm'
-                  : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-elevated'
+                  ? 'bg-accent-ink text-surface shadow-poke-sm'
+                  : 'bg-sunken text-fg-muted hover:bg-elevated'
               }`}
               title={g.label}
             >
@@ -86,8 +86,8 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
             onClick={() => handleGenChange(0)}
             className={`px-3 py-1.5 rounded-poke-md text-sm font-medium transition-colors ${
               selectedGen === 0
-                ? 'bg-poke-accent text-poke-surface shadow-poke-sm'
-                : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-elevated'
+                ? 'bg-accent-ink text-surface shadow-poke-sm'
+                : 'bg-sunken text-fg-muted hover:bg-elevated'
             }`}
           >
             {t('format.custom')}
@@ -98,7 +98,7 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
       {/* Tier picker — only shown when a generation is selected */}
       {selectedGen > 0 && tiers.length > 0 && (
         <div>
-          <label className="block text-xs text-poke-text-muted mb-1">{t('format.tier')}</label>
+          <label className="block text-xs text-fg-muted mb-1">{t('format.tier')}</label>
           <div className="flex flex-wrap gap-1.5">
             {tiers.map(tier => (
               <button
@@ -107,8 +107,8 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
                 onClick={() => handleTierChange(tier.formatId)}
                 className={`px-3 py-1.5 rounded-poke-md text-sm font-medium transition-colors ${
                   value === tier.formatId
-                    ? 'bg-poke-accent text-poke-surface shadow-poke-sm'
-                    : 'bg-poke-muted text-poke-text-secondary hover:bg-poke-elevated'
+                    ? 'bg-accent-ink text-surface shadow-poke-sm'
+                    : 'bg-sunken text-fg-muted hover:bg-elevated'
                 }`}
               >
                 {tier.label}
@@ -120,16 +120,16 @@ export default function FormatSelector({ value, onChange }: FormatSelectorProps)
 
       {/* Current selection summary */}
       {currentFormat && value !== 'blank' && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {t.rich('format.selected', {
             format: currentFormat.name,
-            name: (chunks) => <span className="text-poke-text-primary font-medium">{chunks}</span>,
+            name: (chunks) => <span className="text-fg font-medium">{chunks}</span>,
           })}
           {currentFormat.is_doubles && <span className="ml-1 text-purple-600">{t('format.doubles')}</span>}
         </p>
       )}
       {value === 'blank' && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {t('format.customHint')}
         </p>
       )}

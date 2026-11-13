@@ -21,17 +21,17 @@ function ToolLine({ name, status, code }: { name: string; status: LineStatus; co
   const what = t.dynamic(`tools.what.${toolGroup(name)}`, undefined, t('tools.what.lookup'));
   const pending = status === 'pending' || status === 'running';
   return (
-    <li className="flex items-start gap-1.5 pl-2 text-xs text-poke-text-muted" data-tool-status={status}>
+    <li className="flex items-start gap-1.5 pl-2 text-xs text-fg-muted" data-tool-status={status}>
       {pending ? (
         <Loader2 className="mt-0.5 h-3.5 w-3.5 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden="true" />
       ) : status === 'ok' ? (
-        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-poke-green" aria-hidden="true" />
+        <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0 text-win" aria-hidden="true" />
       ) : (
-        <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-poke-danger-ink" aria-hidden="true" />
+        <CircleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-loss" aria-hidden="true" />
       )}
       <span>
         {t(pending ? 'tools.pending' : status === 'ok' ? 'tools.ok' : 'tools.failed', { what })}
-        {status === 'failed' && code !== null && <span className="text-poke-danger-ink"> ({errorText({ code })})</span>}
+        {status === 'failed' && code !== null && <span className="text-loss"> ({errorText({ code })})</span>}
       </span>
     </li>
   );
@@ -42,12 +42,12 @@ function Bubble({ role, children }: { role: 'user' | 'assistant'; children: Reac
   const user = role === 'user';
   return (
     <li className={`flex flex-col ${user ? 'items-end' : 'items-start'}`} data-role={role}>
-      <span className="mb-0.5 px-1 text-[11px] font-heading font-semibold uppercase tracking-wide text-poke-text-muted">
+      <span className="mb-0.5 px-1 text-[11px] font-heading font-semibold uppercase tracking-wide text-fg-muted">
         {user ? t('transcript.you') : t('transcript.assistant')}
       </span>
       <div
-        className={`max-w-full rounded-poke-lg border px-3 py-2 text-poke-text-primary ${
-          user ? 'bg-poke-accent-light' : 'border-poke-border bg-poke-surface'
+        className={`max-w-full rounded-poke-lg border px-3 py-2 text-fg ${
+          user ? 'bg-accent-subtle' : 'border-hairline bg-surface'
         }`}
       >
         {children}
@@ -91,7 +91,7 @@ export default function Transcript({ items, proposals, live, pendingText, trunca
 
   return (
     <ol className="space-y-3" aria-label={t('page.transcript')}>
-      {truncated && <li className="text-center text-xs text-poke-text-muted">{t('transcript.earlier')}</li>}
+      {truncated && <li className="text-center text-xs text-fg-muted">{t('transcript.earlier')}</li>}
       {items.map((item, index) => {
         const key = `${item.type}-${item.seq}-${item.type === 'tool' ? item.id : ''}`;
         switch (item.type) {
@@ -104,7 +104,7 @@ export default function Transcript({ items, proposals, live, pendingText, trunca
           case 'assistant':
             return (
               <Bubble key={key} role="assistant">
-                {item.text === null ? <p className="text-sm text-poke-text-muted">{t('transcript.purged')}</p> : <SafeMarkdown text={item.text} />}
+                {item.text === null ? <p className="text-sm text-fg-muted">{t('transcript.purged')}</p> : <SafeMarkdown text={item.text} />}
               </Bubble>
             );
           case 'tool':
@@ -121,7 +121,7 @@ export default function Transcript({ items, proposals, live, pendingText, trunca
             );
           case 'event':
             return (
-              <li key={key} className="text-center text-xs text-poke-text-muted" data-event={item.event}>
+              <li key={key} className="text-center text-xs text-fg-muted" data-event={item.event}>
                 {t.dynamic(`events.${item.event}`, undefined, t('events.generic'))}
               </li>
             );
@@ -144,7 +144,7 @@ export default function Transcript({ items, proposals, live, pendingText, trunca
         ),
       )}
       {live !== null && live.blocks.length === 0 && live.done === null && (
-        <li className="flex items-center gap-2 pl-2 text-xs text-poke-text-muted" role="status">
+        <li className="flex items-center gap-2 pl-2 text-xs text-fg-muted" role="status">
           <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
           {t('transcript.working')}
         </li>

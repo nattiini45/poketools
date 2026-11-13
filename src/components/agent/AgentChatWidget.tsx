@@ -49,14 +49,14 @@ function ProfHeader() {
       />
       <div>
         <div className="flex items-center gap-2">
-          <span className="text-sm font-heading font-semibold text-poke-text-primary">
+          <span className="text-sm font-heading font-semibold text-fg">
             {t('name')}
           </span>
           <Badge variant="accent" size="sm">
             {t('badge')}
           </Badge>
         </div>
-        <p className="text-xs text-poke-text-muted mt-0.5">
+        <p className="text-xs text-fg-muted mt-0.5">
           {t('tagline')}
         </p>
       </div>
@@ -161,20 +161,20 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
   }
 
   return (
-    <Card variant="outlined" padding="lg" className="border-poke-blue/30">
+    <Card variant="outlined" padding="lg" className="border-hairline-strong">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <ProfHeader />
         {!authed && mounted && <DiscordLoginButton />}
       </div>
 
-      <p className="text-sm text-poke-text-secondary mt-3 max-w-xl">
+      <p className="text-sm text-fg-muted mt-3 max-w-xl">
         {t('intro')}
       </p>
 
       {/* Conversation thread (appears once a turn exists) */}
       {expanded && (
         <div
-          className="mt-4 max-h-80 overflow-y-auto space-y-3 rounded-poke-md p-3 border border-poke-border"
+          className="mt-4 max-h-80 overflow-y-auto space-y-3 rounded-poke-md p-3 border border-hairline"
           aria-live="polite"
         >
           <AgentChatThread
@@ -187,7 +187,7 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
       )}
 
       {error && (
-        <p className="mt-3 text-sm text-poke-danger" role="alert">
+        <p className="mt-3 text-sm text-loss" role="alert">
           {error.kind === 'key' ? t(`errors.${error.key}`) : error.text}
         </p>
       )}
@@ -203,10 +203,10 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
             rows={2}
             disabled={streaming}
             placeholder={t('placeholder', { pokemon: localizeSpecies(PLACEHOLDER_SPECIES, dataLocale) })}
-            className="w-full resize-none px-3 py-2 text-sm bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-2 disabled:opacity-60"
+            className="w-full resize-none px-3 py-2 text-sm bg-surface text-fg border border-hairline rounded-poke-md placeholder:text-fg-muted transition-colors duration-200 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2 disabled:opacity-60"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-[10px] text-poke-text-muted italic">
+            <span className="text-[10px] text-fg-muted italic">
               {t('disclaimer')}
             </span>
             {streaming ? (
@@ -231,11 +231,11 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
             rows={2}
             disabled
             placeholder={t('signedOutPlaceholder')}
-            className="w-full resize-none px-3 py-2 text-sm bg-poke-muted text-poke-text-muted border border-poke-border rounded-poke-md placeholder:text-poke-text-muted cursor-not-allowed"
+            className="w-full resize-none px-3 py-2 text-sm bg-sunken text-fg-muted border border-hairline rounded-poke-md placeholder:text-fg-muted cursor-not-allowed"
           />
           <div className="mt-2 flex flex-wrap items-center gap-3">
             <DiscordLoginButton />
-            <span className="text-xs text-poke-text-muted">
+            <span className="text-xs text-fg-muted">
               {t('signInHint')}
             </span>
           </div>

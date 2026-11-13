@@ -20,7 +20,7 @@ export default async function ResourceForbidden({ children, title }: ResourceFor
   return (
     <div className="p-8 text-center">
       <h1 className="mb-2 text-2xl font-bold">{title ?? t('guards.accessDenied')}</h1>
-      <p className="text-poke-text-secondary">{message}</p>
+      <p className="text-fg-muted">{message}</p>
     </div>
   );
 }

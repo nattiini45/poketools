@@ -47,7 +47,7 @@ export const NATIVE_SECONDARY = `${NATIVE_BASE} rounded-poke-md border border-ha
 export const NATIVE_GHOST = `${NATIVE_BASE} rounded-poke-md px-3 text-fg-muted hover:bg-hover hover:text-fg motion-safe:transition-colors motion-safe:duration-80 ${FOCUS}`;
 
 /** A destructive lifecycle action (delete, reset): an outline in the danger colour, never a solid red fill. */
-export const DANGER_OUTLINE = 'border-poke-danger bg-transparent text-poke-danger-ink shadow-none hover:bg-poke-danger-light';
+export const DANGER_OUTLINE = 'border-loss bg-transparent text-loss shadow-none hover:bg-loss-bg';
 
 /** An informational callout in the warm family, replacing the legacy blue `Alert` info tint. */
 export const INFO_CALLOUT = 'border-hairline bg-elevated text-fg';

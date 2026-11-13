@@ -264,7 +264,7 @@ describe('duplicate phase name error', () => {
 
     expect(input).toContain('aria-invalid="true"');
     expect(describedBy).toBeTruthy();
-    expect(html).toContain(`<p id="${describedBy}" class="text-sm text-poke-danger">Another phase of this league already has this name.</p>`);
+    expect(html).toContain(`<p id="${describedBy}" class="text-sm text-loss">Another phase of this league already has this name.</p>`);
   });
 
   it('leaves the name input plain while the name is fine', () => {
@@ -272,7 +272,7 @@ describe('duplicate phase name error', () => {
 
     expect(html).not.toMatch(/\saria-invalid="/);
     expect(html).not.toContain('aria-describedby');
-    expect(html).not.toContain('text-poke-danger');
+    expect(html).not.toContain('text-loss');
   });
 });
 

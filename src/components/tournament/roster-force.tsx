@@ -51,7 +51,7 @@ export function RosterForceDialog({ open, busy, onCancel, onConfirm }: RosterFor
           if (reason.trim()) onConfirm(reason.trim());
         }}
       >
-        <p className="text-sm text-poke-text-secondary">{t('rosterForce.message')}</p>
+        <p className="text-sm text-fg-muted">{t('rosterForce.message')}</p>
         <Textarea
           id={`${fieldId}-reason`}
           label={t('rosterForce.reasonLabel')}

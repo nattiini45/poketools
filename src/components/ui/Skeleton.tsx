@@ -23,7 +23,7 @@ export default function Skeleton({
   return (
     <div
       className={cn(
-        "bg-linear-to-r/srgb from-poke-muted via-poke-elevated to-poke-muted bg-[length:200%_100%] animate-shimmer",
+        "bg-linear-to-r/srgb from-sunken via-elevated to-sunken bg-[length:200%_100%] animate-shimmer",
         roundedStyles[rounded],
         className
       )}

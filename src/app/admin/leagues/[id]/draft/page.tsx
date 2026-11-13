@@ -21,8 +21,8 @@ interface PageProps {
   searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-const BACK = 'inline-flex min-h-11 items-center gap-1 text-sm text-poke-text-secondary hover:text-poke-text-primary mb-2 sm:min-h-0';
-const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-poke-text-link hover:underline sm:min-h-0';
+const BACK = 'inline-flex min-h-11 items-center gap-1 text-sm text-fg-muted hover:text-fg mb-2 sm:min-h-0';
+const LINK = 'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0';
 
 type AdminT = Translator<typeof draftAdminMessages.en>;
 
@@ -48,17 +48,17 @@ function phaseLabel(t: AdminT, phase: AdminPoolSummary['phase']): string {
  */
 function legacyPoolsSection(seasonId: string, pools: readonly AdminPoolSummary[], t: AdminT) {
   return (
-    <section className="mb-4 rounded-lg border border-poke-border p-3" aria-labelledby="legacy-drafts">
+    <section className="mb-4 rounded-lg border border-hairline p-3" aria-labelledby="legacy-drafts">
       <h2 id="legacy-drafts" className="text-sm font-semibold">
         {t('page.legacyTitle')}
       </h2>
-      <p className="mt-1 text-xs text-poke-text-muted">{t('page.legacyNote')}</p>
+      <p className="mt-1 text-xs text-fg-muted">{t('page.legacyNote')}</p>
       <ul className="mt-2 space-y-1">
         {pools.map((pool) => (
           <li key={pool.id} className="text-sm">
             {pool.kind === 'redraft' ? t('page.legacyRedraft') : t('page.legacyInitial')}
             {' · '}
-            <span className="text-poke-text-secondary">{phaseLabel(t, pool.phase)}</span>
+            <span className="text-fg-muted">{phaseLabel(t, pool.phase)}</span>
           </li>
         ))}
       </ul>
@@ -104,7 +104,7 @@ export default async function AdminDraftPage({ params, searchParams }: PageProps
     return (
       <AdminGuard>
         <PageContainer title={t('page.title', { league: data.leagueName })} maxWidth="xl">
-          <p className="text-poke-text-secondary">{data.kind === 'notEpb' ? t('page.notEpb') : t('page.noList')}</p>
+          <p className="text-fg-muted">{data.kind === 'notEpb' ? t('page.notEpb') : t('page.noList')}</p>
         </PageContainer>
       </AdminGuard>
     );
@@ -137,7 +137,7 @@ export default async function AdminDraftPage({ params, searchParams }: PageProps
         </Link>
         {data.legacyPools.length > 0 ? legacyPoolsSection(id, data.legacyPools, t) : null}
         {data.pools.length === 0 ? (
-          <p className="text-poke-text-secondary">
+          <p className="text-fg-muted">
             {data.legacyPools.length > 0 ? t('page.noQueuePools') : t('page.noPools')}
           </p>
         ) : (

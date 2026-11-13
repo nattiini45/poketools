@@ -293,7 +293,7 @@ function BulkNoteFields({
         onChange={(event) => onChange(event.target.value)}
         disabled={disabled}
       />
-      <p className={`text-right text-caption tabular-nums ${over ? 'text-poke-danger' : 'text-poke-text-muted'}`}>
+      <p className={`text-right text-caption tabular-nums ${over ? 'text-loss' : 'text-fg-muted'}`}>
         {t('admin.matches.bulk.note.counter', { used: f.number(used), max: f.number(ADMIN_MATCH_NOTE_MAX_LENGTH) })}
       </p>
     </div>
@@ -352,8 +352,8 @@ export function BulkResultsPanel({
       </p>
       {failed.length > 0 && (
         <section>
-          <h3 className="text-body font-[550] text-poke-danger">{t('admin.matches.bulk.result.failedHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-poke-danger">
+          <h3 className="text-body font-[550] text-loss">{t('admin.matches.bulk.result.failedHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-loss">
             {failed.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}
@@ -362,8 +362,8 @@ export function BulkResultsPanel({
       )}
       {warnings.length > 0 && (
         <section>
-          <h3 className="text-body font-[550] text-poke-yellow-ink">{t('admin.matches.bulk.result.warningHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-poke-yellow-ink">
+          <h3 className="text-body font-[550] text-accent-ink">{t('admin.matches.bulk.result.warningHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-body text-accent-ink">
             {warnings.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}
@@ -372,8 +372,8 @@ export function BulkResultsPanel({
       )}
       {skipped.length > 0 && (
         <section>
-          <h3 className="text-body font-[550] text-poke-text-muted">{t('admin.matches.bulk.result.skippedHeading')}</h3>
-          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-caption text-poke-text-muted">
+          <h3 className="text-body font-[550] text-fg-muted">{t('admin.matches.bulk.result.skippedHeading')}</h3>
+          <ul className="mt-1 max-h-48 space-y-0.5 overflow-y-auto text-caption text-fg-muted">
             {skipped.map((item) => (
               <li key={item.id}>{line(item)}</li>
             ))}

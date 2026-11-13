@@ -63,7 +63,7 @@ export default function ScopeSelector({
   // The combobox's own label is smaller than the select's, so both fields get the select's label here.
   const picker = (kind: 'league' | 'tournament', options: ScopeOption[], selectedId: string) => (
     <label className="block min-w-0 flex-1 basis-56 space-y-1.5 sm:max-w-sm">
-      <span className="block text-sm font-body font-medium text-poke-text-primary">{t(`scope.${kind}`)}</span>
+      <span className="block text-sm font-body font-medium text-fg">{t(`scope.${kind}`)}</span>
       <Combobox
         mode="static"
         placeholder={t(`scope.${kind}Search`)}

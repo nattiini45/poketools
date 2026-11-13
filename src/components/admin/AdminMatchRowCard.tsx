@@ -82,7 +82,7 @@ export function MatchListRow({
   return (
     <div
       className={`group relative border border-transparent px-3 py-2.5 motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover focus-within:bg-hover ${
-        selection?.checked ? 'border-poke-border-focus ring-1 ring-poke-border-focus bg-selected ring-inset' : ''
+        selection?.checked ? 'border-accent-ink ring-1 ring-accent-ink bg-selected ring-inset' : ''
       }`}
       data-admin-match-row={row.id}
     >

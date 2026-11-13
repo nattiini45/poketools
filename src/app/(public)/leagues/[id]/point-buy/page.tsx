@@ -16,7 +16,7 @@ export default async function PointBuyListPage({ params }: PageProps) {
     const t = await getT(draftLegacyPagesMessages);
     return (
       <div className="p-8 text-center">
-        <p className="text-poke-text-secondary">
+        <p className="text-fg-muted">
           {t('pointBuy.notEpb')}
         </p>
       </div>

@@ -29,9 +29,6 @@ const STATIC_INK = /(?<![:\w-])(?:hover:)?text-(red-500|red-400|amber-600|yellow
 
 const MIGRATED: Record<string, string> = {
   'components/wiki/WikiNotesSection.tsx': 'text-poke-danger-ink',
-  'components/creator/studio/CastStudio.tsx': 'text-poke-danger-tint-ink',
-  'components/creator/studio/SessionManager.tsx': 'text-poke-danger-tint-ink',
-  'components/league/LeagueRosterManager.tsx': 'text-poke-amber-ink',
   'components/match/MatchHighlightCard.tsx': 'text-poke-yellow-ink',
   'components/tournament/TournamentReportCard.tsx': 'text-poke-yellow-ink',
   'components/ui/Alert.tsx': 'text-poke-yellow-ink',
@@ -49,6 +46,9 @@ const REDESIGNED = [
   'components/discord/DiscordWebhookManager.tsx',
   'components/social/SocialIntegrationManager.tsx',
   'app/admin/test-players/TestPlayersConsole.tsx',
+  'components/creator/studio/CastStudio.tsx',
+  'components/creator/studio/SessionManager.tsx',
+  'components/league/LeagueRosterManager.tsx',
 ];
 
 describe('component inks', () => {

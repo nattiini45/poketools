@@ -25,7 +25,7 @@ export default async function MatchupPage({ params }: PageProps) {
   if (!caps.matchupRoles) {
     return (
       <div className="mx-auto max-w-6xl px-4 py-8 text-center">
-        <p className="text-poke-text-secondary">
+        <p className="text-fg-muted">
           {t('matchup.notAvailable')}
         </p>
       </div>
@@ -63,7 +63,7 @@ export default async function MatchupPage({ params }: PageProps) {
     <div className="mx-auto max-w-6xl px-4 py-8">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t('matchup.title', { league: league.name })}</h1>
-        <p className="mt-1 text-sm text-poke-text-secondary">
+        <p className="mt-1 text-sm text-fg-muted">
           {isEpb ? t('matchup.introEpb') : t('matchup.intro')}
         </p>
       </div>
@@ -80,7 +80,7 @@ export default async function MatchupPage({ params }: PageProps) {
           dexPayload={dexPayload}
         />
       ) : (
-        <div className="rounded-lg border border-poke-border p-8 text-center text-sm text-poke-text-secondary">
+        <div className="rounded-lg border border-hairline p-8 text-center text-sm text-fg-muted">
           {t('matchup.unsupported', { count: teamRoles.length })}
         </div>
       )}

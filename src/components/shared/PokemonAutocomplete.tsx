@@ -162,17 +162,17 @@ export default function PokemonAutocomplete({
         onBlur={handleBlur}
         onKeyDown={handleKeyDown}
         disabled={disabled}
-        className="w-full px-2 py-1 border border-poke-border rounded-poke-md text-sm bg-poke-surface text-poke-text-primary placeholder:text-poke-text-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-poke-border-focus focus:ring-1"
+        className="w-full px-2 py-1 border border-hairline rounded-poke-md text-sm bg-surface text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-1"
       />
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-poke-elevated border border-poke-border rounded-poke-md shadow-lg max-h-[300px] overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-elevated border border-hairline rounded-poke-md shadow-lg max-h-[300px] overflow-y-auto">
           {loading ? (
-            <div className="px-3 py-2 text-xs text-poke-text-muted flex items-center gap-2">
-              <span className="inline-block w-3 h-3 border-2 border-poke-border border-t-poke-blue rounded-full animate-spin" />
+            <div className="px-3 py-2 text-xs text-fg-muted flex items-center gap-2">
+              <span className="inline-block w-3 h-3 border-2 border-hairline border-t-poke-blue rounded-full animate-spin" />
               {t('pokemonAutocomplete.searching')}
             </div>
           ) : results.length === 0 ? (
-            <div className="px-3 py-2 text-xs text-poke-text-muted">{t('pokemonAutocomplete.noResults')}</div>
+            <div className="px-3 py-2 text-xs text-fg-muted">{t('pokemonAutocomplete.noResults')}</div>
           ) : (
             results.map((species, idx) => (
               <button
@@ -184,7 +184,7 @@ export default function PokemonAutocomplete({
                 className="w-full flex items-center gap-2 px-2 py-1.5 text-left text-sm transition-colors"
               >
                 <PokemonSprite name={species.name} size={24} />
-                <span className="text-poke-text-primary truncate flex-1">
+                <span className="text-fg truncate flex-1">
                   {localizeSpecies(species.name, dataLocale)}
                 </span>
                 <div className="flex gap-0.5 shrink-0">

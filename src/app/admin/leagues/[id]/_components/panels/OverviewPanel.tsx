@@ -131,7 +131,7 @@ export async function overviewPanel({ id, league, t }: LeagueAdminPanelContext) 
               <Link
                 href={count.href}
                 aria-label={count.label}
-                className="absolute inset-0 rounded-poke-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+                className="absolute inset-0 rounded-poke-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
               />
             </div>
           ))}

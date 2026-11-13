@@ -120,7 +120,7 @@ export default function CastStudio() {
       )}
 
       {error && (
-        <Alert variant="error" className="text-poke-danger-tint-ink">
+        <Alert variant="error" className="text-loss">
           {error.res && (error.res.error || error.res.code) ? errorText(error.res) : t(`studio.${error.fallback}`)}
         </Alert>
       )}

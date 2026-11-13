@@ -59,7 +59,7 @@ export default function ClausesSection({ doc, preset, generation, onToggle }: Cl
                     {origin !== null && <span className="rounded-full border border-hairline bg-surface px-2 text-[11px] font-semibold text-fg-muted">{origin}</span>}
                   </span>
                   <span className="flex items-center gap-1 text-xs text-fg-muted">
-                    {validator ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-poke-green" aria-hidden="true" /> : <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
+                    {validator ? <ShieldCheck className="h-3.5 w-3.5 shrink-0 text-win" aria-hidden="true" /> : <Info className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />}
                     {validator ? t('clauses.validator') : t('clauses.informational')}
                   </span>
                   {wrongGen && clause.gen !== undefined && <span className="block text-xs text-fg-muted">{t('clauses.onlyGen', { gen: clause.gen })}</span>}

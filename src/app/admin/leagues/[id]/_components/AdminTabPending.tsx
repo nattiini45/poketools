@@ -16,7 +16,7 @@ export default function AdminTabPending() {
     <span
       aria-hidden="true"
       data-pending={pending ? 'true' : undefined}
-      className={`ml-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-poke-accent motion-safe:transition-opacity motion-safe:duration-150 ${
+      className={`ml-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-accent-ink motion-safe:transition-opacity motion-safe:duration-150 ${
         pending ? 'opacity-100 motion-safe:animate-pulse' : 'opacity-0'
       }`}
     />

@@ -35,7 +35,7 @@ export default function KOStatCard({
   return (
     <div className={`
       rounded-poke-lg border p-3 transition-colors
-      ${isActive ? 'border-poke-accent' : 'border-poke-border bg-poke-surface'}
+      ${isActive ? 'border-accent-ink' : 'border-hairline bg-surface'}
     `}>
       <div className="flex items-center gap-3">
         <SpriteImg
@@ -44,7 +44,7 @@ export default function KOStatCard({
           className={`w-12 h-12 ${wasKoed ? 'grayscale opacity-60' : ''}`}
         />
         <div className="flex-1">
-          <span className="font-heading font-bold text-sm text-poke-text-primary block">
+          <span className="font-heading font-bold text-sm text-fg block">
             {speciesLabel}
           </span>
           <div className="flex items-center gap-2 mt-1">
@@ -68,7 +68,7 @@ export default function KOStatCard({
               className={`text-xs font-mono rounded px-2 py-0.5 transition-colors ${
                 wasKoed
                   ? 'bg-red-500/30 text-red-300 hover:bg-red-500/20'
-                  : 'bg-poke-muted text-poke-text-secondary hover:bg-red-500/20 hover:text-red-400'
+                  : 'bg-sunken text-fg-muted hover:bg-red-500/20 hover:text-red-400'
               }`}
             >
               {wasKoed ? t('solo.koed') : t('solo.alive')}

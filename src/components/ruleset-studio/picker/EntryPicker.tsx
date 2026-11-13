@@ -297,7 +297,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
     <div aria-hidden="true" className="flex h-full items-end gap-2 px-1 pb-1 text-xs font-semibold text-fg-muted">
       <span>{headerLabel(header)}</span>
       <span className="tabular-nums text-fg-muted">{header.count}</span>
-      <span className="mb-1.5 h-px flex-1 bg-poke-border" />
+      <span className="mb-1.5 h-px flex-1 bg-hairline" />
     </div>
   );
 
@@ -365,7 +365,7 @@ export default function EntryPicker({ category, rules, base, gen, scope, doubles
           <button
             type="button"
             onClick={() => updateFilters(EMPTY_FILTERS)}
-            className="min-h-9 rounded-poke-md px-2 font-semibold text-accent-ink hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+            className="min-h-9 rounded-poke-md px-2 font-semibold text-accent-ink hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink"
           >
             {t('filters.clear')}
           </button>

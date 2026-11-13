@@ -39,7 +39,7 @@ const VISIBILITY_OPTIONS = ['hidden_until_match', 'always_public'] as const sati
 
 function LockedHint({ id, children }: { id: string; children: React.ReactNode }) {
   return (
-    <p id={id} className="-mt-2 text-xs text-poke-text-muted">
+    <p id={id} className="-mt-2 text-xs text-fg-muted">
       {children}
     </p>
   );
@@ -129,7 +129,7 @@ export default function TournamentForm({
         <div className="space-y-1.5">
           <label
             htmlFor="description"
-            className="block text-sm font-heading font-semibold text-poke-text-primary"
+            className="block text-sm font-heading font-semibold text-fg"
           >
             {t('form.description')}
           </label>
@@ -139,7 +139,7 @@ export default function TournamentForm({
             onChange={(e) => setDescription(e.target.value)}
             placeholder={t('form.descriptionPlaceholder')}
             rows={2}
-            className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted transition-colors duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-2 outline-offset-2 outline-transparent text-sm resize-y"
+            className="w-full px-3 py-2 bg-surface text-fg border border-hairline rounded-poke-md placeholder:text-fg-muted transition-colors duration-200 focus:border-accent-ink focus:ring-1 focus:ring-accent-ink outline-2 outline-offset-2 outline-transparent text-sm resize-y"
           />
         </div>
       )}
@@ -190,9 +190,9 @@ export default function TournamentForm({
           onChange={(e) => setIsDoubles(e.target.checked)}
           disabled={lockedFields?.doubles}
           aria-describedby={lockedFields?.doubles ? 'doubles-locked' : undefined}
-          className="rounded accent-poke-accent"
+          className="rounded accent-accent-fill"
         />
-        <label htmlFor="isDoubles" className="text-sm text-poke-text-primary">
+        <label htmlFor="isDoubles" className="text-sm text-fg">
           {t('form.doubles')}
         </label>
       </div>
@@ -205,9 +205,9 @@ export default function TournamentForm({
             id="bracketReset"
             checked={bracketResetEnabled}
             onChange={(e) => setBracketResetEnabled(e.target.checked)}
-            className="rounded accent-poke-accent"
+            className="rounded accent-accent-fill"
           />
-          <label htmlFor="bracketReset" className="text-sm text-poke-text-primary">
+          <label htmlFor="bracketReset" className="text-sm text-fg">
             {t('form.bracketReset')}
           </label>
         </div>
@@ -220,9 +220,9 @@ export default function TournamentForm({
             id="thirdPlace"
             checked={thirdPlaceEnabled}
             onChange={(e) => setThirdPlaceEnabled(e.target.checked)}
-            className="rounded accent-poke-accent"
+            className="rounded accent-accent-fill"
           />
-          <label htmlFor="thirdPlace" className="text-sm text-poke-text-primary">
+          <label htmlFor="thirdPlace" className="text-sm text-fg">
             {t('form.thirdPlace')}
           </label>
         </div>

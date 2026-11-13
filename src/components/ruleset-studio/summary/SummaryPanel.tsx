@@ -32,7 +32,7 @@ const MAX_CHANGES = 100;
 
 /** A summary line that jumps to its section: text-sized on a desktop, a full 44px row on a phone. */
 const JUMP =
-  'inline-flex min-h-11 items-center text-left hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus sm:min-h-0';
+  'inline-flex min-h-11 items-center text-left hover:underline focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink sm:min-h-0';
 
 /**
  * The live summary column: what the ruleset does compared with its base (counts, a diff line), the change list with a
@@ -130,7 +130,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
               onClick={() => setTab(id)}
               onKeyDown={onTabKey}
               className={cn(
-                'inline-flex min-h-11 items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
+                'inline-flex min-h-11 items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink sm:min-h-9',
                 selected ? 'border-accent-ink text-fg' : 'border-transparent text-fg-muted hover:text-fg',
               )}
             >
@@ -142,7 +142,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
         })}
       </div>
 
-      <div role="tabpanel" id={`${baseId}-panel-${tab}`} aria-labelledby={`${baseId}-tab-${tab}`} tabIndex={0} className="min-w-0 space-y-3 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus">
+      <div role="tabpanel" id={`${baseId}-panel-${tab}`} aria-labelledby={`${baseId}-tab-${tab}`} tabIndex={0} className="min-w-0 space-y-3 focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink">
         {tab === 'summary' && (
           <div className="space-y-3">
             <p className="text-sm text-fg-muted">{catalogPreset === undefined ? t('vsBlank') : t('vs', { preset: catalogPreset.name })}</p>
@@ -289,7 +289,7 @@ export default function SummaryPanel({ model, onSelectSection, onApplyFix }: Sum
                   aria-pressed={rulesLocale === locale}
                   onClick={() => setRulesLocale(locale)}
                   className={cn(
-                    'min-h-11 px-3 text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
+                    'min-h-11 px-3 text-sm font-semibold focus-visible:outline-solid focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent-ink sm:min-h-9',
                     rulesLocale === locale ? 'bg-accent-fill text-tier-ink' : 'bg-surface text-fg-muted hover:bg-sunken',
                   )}
                 >
