@@ -113,7 +113,7 @@ export default function SessionManager() {
       <section aria-labelledby="studio-new">
         <AdminSectionHeading id="studio-new" icon="poke-ball" title={t('sessions.newTitle')} />
         {error && (
-          <Alert variant="error" className="mb-4 text-poke-danger-tint-ink">
+          <Alert variant="error" className="mb-4 text-loss">
             {hasApiText(error.res) ? errorText(error.res) : t(`sessions.${error.fallback}`)}
           </Alert>
         )}

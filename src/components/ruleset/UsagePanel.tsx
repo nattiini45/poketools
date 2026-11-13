@@ -67,18 +67,18 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
 
   return (
     <section className="space-y-3" aria-labelledby="ruleset-usage">
-      <h2 id="ruleset-usage" className="font-heading text-lg font-bold text-poke-text-primary">
+      <h2 id="ruleset-usage" className="font-heading text-lg font-bold text-fg">
         {t('usage.heading')}
       </h2>
-      <p className="max-w-prose text-sm text-poke-text-secondary">{t('usage.intro')}</p>
+      <p className="max-w-prose text-sm text-fg-muted">{t('usage.intro')}</p>
 
       {usage.counts.length === 0 ? (
-        <p className="text-sm text-poke-text-muted">{t('usage.none')}</p>
+        <p className="text-sm text-fg-muted">{t('usage.none')}</p>
       ) : (
-        <ul className="space-y-1 text-sm text-poke-text-secondary">
+        <ul className="space-y-1 text-sm text-fg-muted">
           {usage.counts.map((row) => (
             <li key={row.version_no}>
-              <span className="font-semibold text-poke-text-primary">{t('usage.version', { version: row.version_no })}</span>
+              <span className="font-semibold text-fg">{t('usage.version', { version: row.version_no })}</span>
               {': '}
               {[
                 row.seasons > 0 ? t('usage.seasons', { count: row.seasons }) : null,
@@ -91,11 +91,11 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
         </ul>
       )}
 
-      {usage.targets === null && usage.counts.length > 0 && <p className="text-sm text-poke-text-muted">{t('usage.countsOnly')}</p>}
+      {usage.targets === null && usage.counts.length > 0 && <p className="text-sm text-fg-muted">{t('usage.countsOnly')}</p>}
 
       {targets.length > 0 && (
         <fieldset className="space-y-2">
-          <legend className="text-sm font-semibold text-poke-text-primary">{t('usage.targetsLegend')}</legend>
+          <legend className="text-sm font-semibold text-fg">{t('usage.targetsLegend')}</legend>
           <ul className="space-y-1">
             {targets.map((target) => {
               const id = `usage-${target.kind}-${target.id}`;
@@ -112,9 +112,9 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
                       disabled={!movable(target) || busy}
                       onChange={(event) => toggle(target, event.target.checked)}
                     />
-                    <span className="min-w-0 break-words text-poke-text-primary">
+                    <span className="min-w-0 break-words text-fg">
                       <span className="font-semibold">{name}</span>{' '}
-                      <span className="text-poke-text-muted">
+                      <span className="text-fg-muted">
                         ({t(target.kind === 'season' ? 'usage.season' : 'usage.tournament')}, {t('usage.onVersion', { version: target.version_no })}
                         {pinTargetCompleted(target.status)
                           ? `, ${t('usage.finished')}`
@@ -142,7 +142,7 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
               >
                 {t('usage.updateSelected', { version: latestVersionNo })}
               </Button>
-              <span className="text-sm text-poke-text-muted">
+              <span className="text-sm text-fg-muted">
                 {chosen.length === 0 && canUpdate ? t('usage.nothingSelected') : !canUpdate ? t('usage.upToDate') : ''}
               </span>
             </div>
@@ -151,7 +151,7 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
       )}
 
       <div role="status" aria-live="polite">
-        {moved !== null && <p className="text-sm text-poke-green">{t('usage.moved', { count: moved })}</p>}
+        {moved !== null && <p className="text-sm text-win">{t('usage.moved', { count: moved })}</p>}
       </div>
       {error !== null && (
         <Alert variant="error" role="alert">
@@ -171,7 +171,7 @@ export default function UsagePanel({ definitionId, usage, latestVersionNo }: Usa
           onConfirm={() => void move()}
           onCancel={pinMove.close}
         >
-          <p className="text-sm text-poke-text-secondary">{t('usage.confirm.body', { names: running.map((target) => target.name ?? '').join(', ') })}</p>
+          <p className="text-sm text-fg-muted">{t('usage.confirm.body', { names: running.map((target) => target.name ?? '').join(', ') })}</p>
         </PinConfirmDialog>
       )}
     </section>

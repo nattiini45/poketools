@@ -234,7 +234,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
   }
   if (card === null || detail === null) {
     return (
-      <section className={`${PANEL} p-3 text-sm text-poke-text-muted`} aria-busy="true">
+      <section className={`${PANEL} p-3 text-sm text-fg-muted`} aria-busy="true">
         {t('states.loading')}
       </section>
     );
@@ -300,8 +300,8 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
         {groups.map(([group, notes]) =>
           notes.length === 0 ? null : (
             <div key={group}>
-              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-muted">{cards.dynamic(`undo.${group}`, undefined, '')}</h4>
-              <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">
+              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">{cards.dynamic(`undo.${group}`, undefined, '')}</h4>
+              <ul className="list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
                 {notes.map((note, index) => (
                   <li key={`${note.op}-${note.id ?? 'x'}-${index}`}>
                     <span className="font-semibold">{cards.dynamic(`undo.ops.${note.op}`, undefined, cards('undo.ops.generic'))}</span>
@@ -314,7 +314,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
             </div>
           ),
         )}
-        {undo.truncated && <p className="text-xs text-poke-text-muted">{cards('undo.truncated')}</p>}
+        {undo.truncated && <p className="text-xs text-fg-muted">{cards('undo.truncated')}</p>}
       </div>
     );
   };
@@ -340,13 +340,13 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
             {cards(`status.${chip}`)}
           </Badge>
         </div>
-        {note !== null && <p className={`mt-1 text-xs ${progress?.status === 'unknown' ? 'text-poke-text-secondary' : 'text-poke-danger-ink'}`}>{note}</p>}
+        {note !== null && <p className={`mt-1 text-xs ${progress?.status === 'unknown' ? 'text-fg-muted' : 'text-loss'}`}>{note}</p>}
         {counts !== null && counts.present > 0 && counts.present < counts.expected && (
-          <p className="mt-1 text-xs text-poke-text-secondary">{cards('result.step.rosterPartial', { present: counts.present, count: counts.expected })}</p>
+          <p className="mt-1 text-xs text-fg-muted">{cards('result.step.rosterPartial', { present: counts.present, count: counts.expected })}</p>
         )}
         {link !== null && (
           <p className="mt-1 text-xs">
-            <Link href={link.href} className="font-semibold text-poke-focus underline-offset-2 hover:underline">
+            <Link href={link.href} className="font-semibold text-accent-ink underline-offset-2 hover:underline">
               {cards(`result.links.${link.key}`)}
             </Link>
           </p>
@@ -427,11 +427,11 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
     <section className={`${PANEL} space-y-3 p-3`} aria-labelledby={headingId} data-proposal-id={card.id} data-status={card.effectiveStatus}>
       <header className="flex flex-wrap items-center gap-2">
         <Badge variant={stored.class === 'G' ? 'accent' : 'default'}>{stored.class === 'G' ? cards('classes.goLive') : cards('classes.change')}</Badge>
-        <h3 id={headingId} className="font-heading text-sm font-bold text-poke-text-primary">
+        <h3 id={headingId} className="font-heading text-sm font-bold text-fg">
           {stored.kind === 'go_live' ? cards('titles.goLive') : stored.kind === 'undo' ? cards('titles.undo') : cards('titles.build')}
         </h3>
         <Badge variant={STATUS_VARIANT[status]}>{cards(`status.${status}`)}</Badge>
-        <span className="ml-auto text-xs text-poke-text-muted">
+        <span className="ml-auto text-xs text-fg-muted">
           {cards('details.planCode')} <code>{stored.planCode}</code>
         </span>
       </header>
@@ -449,8 +449,8 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
       {resultStatus !== null && (
         <div className="space-y-2" data-result={resultStatus} aria-busy={resultStatus === 'executing' && busy !== null}>
           <div>
-            <h4 className="font-heading text-sm font-semibold text-poke-text-primary">{cards.dynamic(`result.headline.${resultStatus}`, undefined, '')}</h4>
-            <p className="text-xs text-poke-text-secondary">{cards.dynamic(`result.explain.${resultStatus}`, undefined, '')}</p>
+            <h4 className="font-heading text-sm font-semibold text-fg">{cards.dynamic(`result.headline.${resultStatus}`, undefined, '')}</h4>
+            <p className="text-xs text-fg-muted">{cards.dynamic(`result.explain.${resultStatus}`, undefined, '')}</p>
           </div>
           <ol className="space-y-2" aria-label={cards('result.heading')}>
             {stored.steps.map(resultStep)}
@@ -458,17 +458,17 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
           {card.resume !== null &&
             (card.resume.eligible ? (
               <div className="space-y-1">
-                <p className="text-xs text-poke-text-secondary">{cards('result.resume.explain', { time: formatter.instant(card.resume.deadline, 'time') })}</p>
+                <p className="text-xs text-fg-muted">{cards('result.resume.explain', { time: formatter.instant(card.resume.deadline, 'time') })}</p>
                 <Button variant="primary" size="sm" disabled={!approveEnabled || busy !== null} loading={busy === 'resume'} onClick={() => void resume()}>
                   {cards('actions.resume')}
                 </Button>
               </div>
             ) : (
-              <p className="text-xs text-poke-text-secondary">{cards('result.resume.over')}</p>
+              <p className="text-xs text-fg-muted">{cards('result.resume.over')}</p>
             ))}
           {card.undoable && onUndo !== undefined && (
             <div className="space-y-1">
-              <p className="text-xs text-poke-text-secondary">{cards('result.undoHint')}</p>
+              <p className="text-xs text-fg-muted">{cards('result.undoHint')}</p>
               <Button variant="secondary" size="sm" disabled={busy !== null} onClick={() => onUndo(card.id)}>
                 {cards('actions.undo')}
               </Button>
@@ -484,12 +484,12 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
       ) : (
         <>
           {stored.plan !== null && (
-            <p className="text-sm text-poke-text-secondary">
+            <p className="text-sm text-fg-muted">
               <span className="font-semibold">{cards('card.planTitle')}:</span> {stored.plan.title.text}{' '}
-              <span className="text-xs text-poke-text-muted">({cards('card.assistantWritten')})</span>
+              <span className="text-xs text-fg-muted">({cards('card.assistantWritten')})</span>
             </p>
           )}
-          <p className="text-xs text-poke-text-muted">
+          <p className="text-xs text-fg-muted">
             {cards('build.steps', { count: stored.summary.steps })}
             {stored.summary.creates > 0 && ` · ${cards('build.creates', { count: stored.summary.creates })}`}
           </p>
@@ -503,13 +503,13 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
                     {targetName(step.target)}
                   </div>
                   {step.items.length > 0 && (
-                    <ul className="mt-1 list-disc pl-5 text-xs text-poke-text-secondary" aria-label={cards('card.items')}>
+                    <ul className="mt-1 list-disc pl-5 text-xs text-fg-muted" aria-label={cards('card.items')}>
                       {step.items.map((item, index) => (
                         <li key={`${item.entity}-${item.id ?? index}`}>{targetName(item)}</li>
                       ))}
                     </ul>
                   )}
-                  {step.lines.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-poke-text-secondary">{step.lines.map(lineView)}</ul>}
+                  {step.lines.length > 0 && <ul className="mt-1 list-disc space-y-0.5 pl-5 text-xs text-fg-muted">{step.lines.map(lineView)}</ul>}
                 </li>
               );
             })}
@@ -517,7 +517,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
 
           {stored.undo !== undefined && undoNotes(stored.undo)}
 
-          {stored.lines.length > 0 && <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">{stored.lines.map(lineView)}</ul>}
+          {stored.lines.length > 0 && <ul className="list-disc space-y-0.5 pl-5 text-sm text-fg-muted">{stored.lines.map(lineView)}</ul>}
           {stored.warnings.length > 0 && (
             <Alert variant="warning">
               <ul className="list-disc space-y-0.5 pl-4">{stored.warnings.map(lineView)}</ul>
@@ -527,14 +527,14 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
 
           {stored.outwardEffects.length > 0 && (
             <div className="space-y-1">
-              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-poke-text-muted">{cards('effects.heading')}</h4>
+              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">{cards('effects.heading')}</h4>
               <ul className="space-y-1 text-sm">
                 {stored.outwardEffects.map((effect) => (
                   <li key={effect.key}>
                     {cards.dynamic(`effects.keys.${effect.key}`, undefined, cards('effects.generic'))}
-                    {effect.channels.kind === 'unknown' && <span className="block text-xs text-poke-text-muted">{cards('effects.channelsUnknown')}</span>}
+                    {effect.channels.kind === 'unknown' && <span className="block text-xs text-fg-muted">{cards('effects.channelsUnknown')}</span>}
                     {effect.channels.kind === 'counted' && (
-                      <span className="block text-xs text-poke-text-muted">
+                      <span className="block text-xs text-fg-muted">
                         {cards('effects.channels', { count: effect.channels.discord + effect.channels.social })}
                         {effect.channels.names.length > 0 && `: ${effect.channels.names.map((name) => name.text).join(', ')}`}
                       </span>
@@ -545,14 +545,14 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
             </div>
           )}
 
-          <p className="text-xs text-poke-text-secondary">
+          <p className="text-xs text-fg-muted">
             {stored.reversibility.kind === 'undoable'
               ? cards('reversibility.undoAvailable')
               : cards('reversibility.irreversible', { reversal: cards(`reversibility.reasons.${stored.reversibility.reason}`) })}
           </p>
 
           {live && acks.length > 0 && (
-            <fieldset className="space-y-2 rounded-poke-md border border-poke-border p-2">
+            <fieldset className="space-y-2 rounded-poke-md border border-hairline p-2">
               <legend className="px-1 font-heading text-xs font-semibold">{cards('ack.heading')}</legend>
               {acks.map((ack) =>
                 ack.kind === 'checkbox' ? (
@@ -584,13 +584,13 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
                   />
                 ),
               )}
-              {!acksSatisfied && <p className="text-xs text-poke-text-muted">{cards('ack.required')}</p>}
+              {!acksSatisfied && <p className="text-xs text-fg-muted">{cards('ack.required')}</p>}
             </fieldset>
           )}
 
-          {live && <p className="text-xs text-poke-text-muted">{cards('expiry.expiresIn', { time: formatter.clock(secondsLeft) })}</p>}
-          {actionable && secondsLeft === 0 && <p className="text-xs text-poke-text-muted">{cards('expiry.expired')}</p>}
-          {live && !approveEnabled && <p className="text-xs text-poke-text-muted">{t('states.phaseOnly')}</p>}
+          {live && <p className="text-xs text-fg-muted">{cards('expiry.expiresIn', { time: formatter.clock(secondsLeft) })}</p>}
+          {actionable && secondsLeft === 0 && <p className="text-xs text-fg-muted">{cards('expiry.expired')}</p>}
+          {live && !approveEnabled && <p className="text-xs text-fg-muted">{t('states.phaseOnly')}</p>}
           {live && (
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" size="sm" disabled={!canApprove} loading={busy === 'approve'} onClick={() => void approve()}>
@@ -603,7 +603,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
           )}
 
           <details className="text-xs">
-            <summary className="cursor-pointer font-heading font-semibold text-poke-text-secondary">{cards('details.toggle')}</summary>
+            <summary className="cursor-pointer font-heading font-semibold text-fg-muted">{cards('details.toggle')}</summary>
             <div className="mt-2 space-y-2">
               {card.details.map((step) => (
                 <div key={step.key} className={`${PANEL_INSET} p-2`}>

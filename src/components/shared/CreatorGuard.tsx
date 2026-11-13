@@ -24,8 +24,8 @@ export default async function CreatorGuard({ children }: CreatorGuardProps) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <h1 className="text-2xl font-heading font-bold text-poke-text-primary mb-2">{t('guards.accessDenied')}</h1>
-          <p className="text-poke-text-muted">{t('guards.creatorOnly')}</p>
+          <h1 className="text-2xl font-heading font-bold text-fg mb-2">{t('guards.accessDenied')}</h1>
+          <p className="text-fg-muted">{t('guards.creatorOnly')}</p>
         </div>
       </div>
     );

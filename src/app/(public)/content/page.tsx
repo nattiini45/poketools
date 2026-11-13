@@ -22,7 +22,7 @@ export default async function ContentPage() {
     return (
       <CreatorGuard>
         <PageContainer title={t('content.title')}>
-          <p className="text-poke-text-secondary">{t('content.notPlayer')}</p>
+          <p className="text-fg-muted">{t('content.notPlayer')}</p>
         </PageContainer>
       </CreatorGuard>
     );

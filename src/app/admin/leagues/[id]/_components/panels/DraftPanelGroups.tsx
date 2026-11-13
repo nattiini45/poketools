@@ -32,10 +32,10 @@ const MIN_DRAFT_SEATS = DRAFT_CONFIG_LIMITS.participant_order.min;
 const MAX_DRAFT_SEATS = DRAFT_CONFIG_LIMITS.participant_order.max;
 
 const LINK =
-  'inline-flex min-h-11 items-center text-sm font-medium text-poke-text-link hover:underline sm:min-h-0';
-const NOTE = 'text-sm text-poke-text-muted';
+  'inline-flex min-h-11 items-center text-sm font-medium text-accent-ink hover:underline sm:min-h-0';
+const NOTE = 'text-sm text-fg-muted';
 /** Amber, never red (red means "drafted"): a warning the admin acts on. */
-const WARNING = 'rounded-poke-md border border-poke-amber-ink px-3 py-2 text-sm text-poke-amber-ink';
+const WARNING = 'rounded-poke-md border border-accent-ink px-3 py-2 text-sm text-accent-ink';
 
 /**
  * Draft tab of a league WITH groups (the league groups design: one draft per group). Leagues without groups keep
@@ -131,17 +131,17 @@ export async function groupedDraftPanel(
     const refusedAt = refusals[pool.id];
     return (
       <li key={pool.id} className="space-y-1">
-        <p className="text-sm text-poke-text-primary">
+        <p className="text-sm text-fg">
           <span className="font-heading font-semibold">{label}</span>
           {' · '}
-          <span className="text-poke-text-secondary">{tGroups('draft.poolPhase', { phase: phaseText(pool.phase) })}</span>
+          <span className="text-fg-muted">{tGroups('draft.poolPhase', { phase: phaseText(pool.phase) })}</span>
         </p>
         {refusedAt ? (
           <div className={WARNING}>
             <p className="font-semibold">
               {tAdmin('redraft.publishRefusedAt')} <LocalTime value={refusedAt} preset="weekdayDateTime" zone="both" />
             </p>
-            <p className="text-poke-text-secondary">{tAdmin('redraft.publishRefusedHint')}</p>
+            <p className="text-fg-muted">{tAdmin('redraft.publishRefusedHint')}</p>
           </div>
         ) : null}
         <div className="flex flex-wrap gap-x-4 gap-y-1">
@@ -200,7 +200,7 @@ export async function groupedDraftPanel(
     return (
       <Card key={group.id} variant="outlined" padding="sm" aria-labelledby={headingId} role="group">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-          <h3 id={headingId} className="font-heading text-base font-semibold text-poke-text-primary break-words">
+          <h3 id={headingId} className="font-heading text-base font-semibold text-fg break-words">
             {groupName(group.name)}
           </h3>
           <Badge variant="default">{tGroups('draft.members', { count: group.player_ids.length })}</Badge>

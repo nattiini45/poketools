@@ -74,7 +74,7 @@ export default function ClarificationCard({ clarification, answered, onAnswer }:
         </div>
       )}
 
-      {!answered && !canPick && <p className="text-xs text-poke-text-muted">{hint}</p>}
+      {!answered && !canPick && <p className="text-xs text-fg-muted">{hint}</p>}
     </section>
   );
 }

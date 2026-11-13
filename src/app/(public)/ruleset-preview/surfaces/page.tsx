@@ -65,8 +65,8 @@ function href(surface: SurfaceId, lang: Locale | null): string {
   return `/ruleset-preview/surfaces?${query.toString()}`;
 }
 
-const CHIP = 'inline-flex min-h-11 items-center rounded-lg border border-poke-border px-2.5 py-1 text-sm hover:bg-poke-elevated sm:min-h-0';
-const CHIP_ACTIVE = 'border-poke-text-secondary bg-poke-elevated font-semibold';
+const CHIP = 'inline-flex min-h-11 items-center rounded-lg border border-hairline px-2.5 py-1 text-sm hover:bg-elevated sm:min-h-0';
+const CHIP_ACTIVE = 'border-fg-muted bg-elevated font-semibold';
 
 export default async function RulesetSurfacesPreviewPage({ searchParams }: PageProps) {
   // Public: no auth required — dev-only, and 404s in production.
@@ -91,7 +91,7 @@ export default async function RulesetSurfacesPreviewPage({ searchParams }: PageP
               {id}
             </Link>
           ))}
-          <span className="mx-2 text-poke-text-muted" aria-hidden="true">
+          <span className="mx-2 text-fg-muted" aria-hidden="true">
             |
           </span>
           {([null, ...PREVIEW_LOCALES] as const).map((option) => (
@@ -158,7 +158,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
           {PIN_CARDS.map((card) => (
             <div key={card.key} className="space-y-1">
               {/* i18n-ignore: dev-only fixture page, English only */}
-              <p className="text-xs font-semibold uppercase text-poke-text-muted">{card.key}</p>
+              <p className="text-xs font-semibold uppercase text-fg-muted">{card.key}</p>
               <RulesetPinCard kind={card.kind} target={card.target} pin={card.pin} />
             </div>
           ))}
@@ -168,7 +168,7 @@ async function renderSurface(surface: SurfaceId, locale: Locale) {
       return (
         <div className="mx-auto max-w-5xl space-y-3">
           {/* i18n-ignore: dev-only fixture page, English only */}
-          <p className="text-sm text-poke-text-secondary">Each button opens the pin confirmation with one answer of the impact count.</p>
+          <p className="text-sm text-fg-muted">Each button opens the pin confirmation with one answer of the impact count.</p>
           <DialogGallery />
         </div>
       );

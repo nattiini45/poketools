@@ -92,14 +92,14 @@ export default function RatingBadge({
     return (
       <span
         title={title}
-        className={`inline-flex items-center font-heading font-bold text-poke-text-primary ${TIER_SIZE_CLASSES[size]}`}
+        className={`inline-flex items-center font-heading font-bold text-fg ${TIER_SIZE_CLASSES[size]}`}
       >
         <PokeballIcon ball={tier} size={ICON_SIZE[size]} />
         {/* The tier names are Poké Ball item names: localized by the pkmn layer. */}
         <span>{localizeItem(meta.label, dl)}</span>
         {provisional && (
           <span
-            className={`ml-1 italic font-normal text-poke-text-muted ${PROVISIONAL_CHIP_SIZE[size]}`}
+            className={`ml-1 italic font-normal text-fg-muted ${PROVISIONAL_CHIP_SIZE[size]}`}
             aria-label={t('rating.provisionalAria')}
           >
             {t('rating.provisional')}

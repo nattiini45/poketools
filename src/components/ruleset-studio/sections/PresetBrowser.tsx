@@ -22,7 +22,7 @@ interface PresetBrowserProps {
 
 type GameFilter = 'all' | 'singles' | 'doubles';
 
-const CHIP = 'inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-7';
+const CHIP = 'inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink sm:min-h-7';
 
 function Chip({ pressed, onClick, children }: { pressed: boolean; onClick: () => void; children: string }) {
   return (
@@ -76,7 +76,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
           onClick={() => onChoose(entry.id)}
           disabled={current}
           className={cn(
-            'flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-poke-md border px-3 py-2 text-left transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-9',
+            'flex min-h-11 w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-poke-md border px-3 py-2 text-left transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink sm:min-h-9',
             current ? 'border-accent-ink bg-accent-subtle' : 'border-hairline bg-surface hover:border-hairline-strong hover:bg-sunken',
           )}
         >
@@ -84,7 +84,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
           <span className="text-xs text-fg-muted">
             {entry.genLabel} · {entry.tierLabel}
           </span>
-          {entry.source === 'smogon-draft' && <span className="rounded-full border border-poke-blue/30 bg-poke-blue-light px-2 text-[11px] font-semibold text-accent-ink">{t('presets.draftTag')}</span>}
+          {entry.source === 'smogon-draft' && <span className="rounded-full border border-hairline-strong bg-tier-3 px-2 text-[11px] font-semibold text-tier-ink">{t('presets.draftTag')}</span>}
           {current && (
             <span className="ml-auto inline-flex items-center gap-1 text-xs font-semibold text-fg">
               <Check className="h-3.5 w-3.5" aria-hidden="true" />
@@ -110,7 +110,7 @@ export default function PresetBrowser({ open, onClose, currentId, onChoose }: Pr
             placeholder={t('presets.searchPlaceholder')}
             autoComplete="off"
             onChange={(event) => setQuery(event.target.value)}
-            className="h-10 w-full rounded-poke-md border border-hairline bg-surface px-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus"
+            className="h-10 w-full rounded-poke-md border border-hairline bg-surface px-3 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink"
           />
         </div>
 

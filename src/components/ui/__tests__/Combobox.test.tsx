@@ -204,7 +204,7 @@ describe('splitHighlight', () => {
 });
 
 describe('Combobox highlight', () => {
-  const HIGHLIGHT = '<span class="font-bold text-poke-blue">Ash</span>';
+  const HIGHLIGHT = '<span class="font-bold text-accent-ink">Ash</span>';
 
   beforeEach(() => {
     seed.options = [{ label: 'Ash', value: 'a' }];

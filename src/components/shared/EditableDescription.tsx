@@ -116,9 +116,9 @@ export default function EditableDescription({
         {restorable && (
           <div
             role="status"
-            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-md border border-poke-border bg-poke-elevated px-3 py-2"
+            className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-md border border-hairline bg-elevated px-3 py-2"
           >
-            <p className="min-w-0 flex-1 text-xs text-poke-text-secondary">{t('description.draftFound')}</p>
+            <p className="min-w-0 flex-1 text-xs text-fg-muted">{t('description.draftFound')}</p>
             <Button
               variant="secondary"
               size="sm"
@@ -133,9 +133,9 @@ export default function EditableDescription({
           </div>
         )}
         {saved ? (
-          <p className="text-sm text-poke-text-muted whitespace-pre-wrap">{saved}</p>
+          <p className="text-sm text-fg-muted whitespace-pre-wrap">{saved}</p>
         ) : (
-          <p className="text-sm text-poke-text-muted italic">
+          <p className="text-sm text-fg-muted italic">
             {t('description.empty')}
           </p>
         )}
@@ -143,7 +143,7 @@ export default function EditableDescription({
           type="button"
           // An offered draft opens with its text: the first keystroke must not overwrite it.
           onClick={() => { setValue(descriptionEditSeed(storedDraft, saved)); setError(null); setEditing(true); }}
-          className={`${touch} inline-flex items-center text-xs text-poke-blue hover:underline font-heading`}
+          className={`${touch} inline-flex items-center text-xs text-accent-ink hover:underline font-heading`}
         >
           {saved ? t('description.edit') : t('description.add')}
         </button>
@@ -158,16 +158,16 @@ export default function EditableDescription({
         onChange={(e) => handleInput(e.target.value)}
         placeholder={t('description.placeholder')}
         rows={4}
-        className="w-full px-3 py-2 bg-poke-surface text-poke-text-primary border border-poke-border rounded-poke-md placeholder:text-poke-text-muted motion-safe:transition-colors motion-safe:duration-200 focus:border-poke-focus focus:ring-1 focus:ring-poke-focus outline-2 outline-offset-2 outline-transparent text-sm resize-y"
+        className="w-full px-3 py-2 bg-surface text-fg border border-hairline rounded-poke-md placeholder:text-fg-muted motion-safe:transition-colors motion-safe:duration-200 focus:border-accent-ink focus:ring-1 focus:ring-accent-ink outline-2 outline-offset-2 outline-transparent text-sm resize-y"
         autoFocus
       />
       {draftNotKept && (
-        <p role="status" className="text-xs text-poke-text-secondary">
+        <p role="status" className="text-xs text-fg-muted">
           {t('description.draftNotKept')}
         </p>
       )}
       {error && (
-        <p className="text-xs text-poke-danger">
+        <p className="text-xs text-loss">
           {error.kind === 'api' ? errorText(error.error) : t('description.failed')}
         </p>
       )}

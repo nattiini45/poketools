@@ -70,8 +70,8 @@ export function DialogGallery() {
         onConfirm={close}
         onCancel={close}
       >
-        <p className="text-sm text-poke-text-secondary">{t('pin.confirm.body', { name: 'Spring League 2026' })}</p>
-        <p className="text-sm text-poke-text-secondary">{t('pin.changeJoin', { changes: '3 more banned, 1 no longer banned, 1 clause added' })}</p>
+        <p className="text-sm text-fg-muted">{t('pin.confirm.body', { name: 'Spring League 2026' })}</p>
+        <p className="text-sm text-fg-muted">{t('pin.changeJoin', { changes: '3 more banned, 1 no longer banned, 1 clause added' })}</p>
       </PinConfirmDialog>
     </div>
   );

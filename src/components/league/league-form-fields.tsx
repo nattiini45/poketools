@@ -39,7 +39,7 @@ export function LeagueTypeField({ id, label, value, options, onChange, disabled,
         aria-describedby={note?.id}
       />
       {note && (
-        <p id={note.id} className="text-xs text-poke-text-muted">
+        <p id={note.id} className="text-xs text-fg-muted">
           {note.text}
         </p>
       )}
@@ -66,10 +66,10 @@ export function LeagueRulesetField({ isPointBuy, rulesets, value, onChange, hint
   if (isPointBuy) {
     return (
       <div className="space-y-1.5" data-testid="league-auto-ruleset">
-        <p className="text-sm font-heading font-semibold text-poke-text-primary">
+        <p className="text-sm font-heading font-semibold text-fg">
           {t('form.autoRuleset', { ruleset: t('form.autoRulesetName') })}
         </p>
-        <p className="text-xs text-poke-text-muted">{t('form.autoRulesetHint')}</p>
+        <p className="text-xs text-fg-muted">{t('form.autoRulesetHint')}</p>
       </div>
     );
   }
@@ -91,7 +91,7 @@ export function LeagueRulesetField({ isPointBuy, rulesets, value, onChange, hint
   return (
     <div className="space-y-1.5">
       {select}
-      <p id={hint.id} className="text-xs text-poke-text-muted">
+      <p id={hint.id} className="text-xs text-fg-muted">
         {hint.text}
       </p>
     </div>

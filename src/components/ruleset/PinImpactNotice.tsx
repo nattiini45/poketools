@@ -27,7 +27,7 @@ export default function PinImpactNotice({ state, version }: PinImpactNoticeProps
 
   return (
     <div role="status" aria-live="polite" className="space-y-1">
-      {state.status === 'loading' && <p className="text-sm text-poke-text-muted">{t('pin.impact.loading', { version })}</p>}
+      {state.status === 'loading' && <p className="text-sm text-fg-muted">{t('pin.impact.loading', { version })}</p>}
 
       {state.status === 'failed' && (
         <Alert variant="warning" role="status">
@@ -47,16 +47,16 @@ function ReadyNotice({ impact, version }: { impact: Extract<PinImpactState, { st
   return (
     <>
       {impact.checked === 0 ? (
-        <p className="text-sm text-poke-text-secondary">{t('pin.impact.none')}</p>
+        <p className="text-sm text-fg-muted">{t('pin.impact.none')}</p>
       ) : impact.would_break === 0 ? (
-        <p className="text-sm text-poke-green">{t('pin.impact.allValid', { count: impact.checked, version })}</p>
+        <p className="text-sm text-win">{t('pin.impact.allValid', { count: impact.checked, version })}</p>
       ) : (
         <Alert variant="warning" role="status">
           {t('pin.impact.someInvalid', { count: impact.would_break, total: impact.checked, version })}
         </Alert>
       )}
       {named.length > 1 && (
-        <ul className="list-disc space-y-0.5 pl-5 text-sm text-poke-text-secondary">
+        <ul className="list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
           {named.map((target) => (
             <li key={`${target.kind}:${target.id}`}>{t('pin.impact.target', { name: target.name, broken: target.would_break, total: target.checked })}</li>
           ))}
@@ -67,7 +67,7 @@ function ReadyNotice({ impact, version }: { impact: Extract<PinImpactState, { st
           {t('pin.impact.malformed', { count: impact.malformed ?? 0 })}
         </Alert>
       )}
-      {impact.truncated && <p className="text-sm text-poke-text-muted">{t('pin.impact.truncated', { checked: impact.checked })}</p>}
+      {impact.truncated && <p className="text-sm text-fg-muted">{t('pin.impact.truncated', { checked: impact.checked })}</p>}
     </>
   );
 }

@@ -82,7 +82,7 @@ export default function RulesetPresetSelect({
         aria-describedby={helpId}
         onChange={(event) => setQuery(event.target.value)}
       />
-      <p id={helpId} className="text-sm text-poke-text-muted">
+      <p id={helpId} className="text-sm text-fg-muted">
         {noMatch ? t('presetSelect.noMatch', { query: query.trim() }) : t('presetSelect.searchHelp')}
       </p>
       <Select
@@ -91,7 +91,7 @@ export default function RulesetPresetSelect({
         value={value}
         disabled={disabled}
         onChange={(event) => onChange(event.target.value)}
-        className={cn(invalid && 'border-poke-danger')}
+        className={cn(invalid && 'border-loss')}
         aria-invalid={invalid ? true : undefined}
         aria-describedby={describedBy}
       >

@@ -26,7 +26,7 @@ export default async function SiteAdminGuard({ children }: SiteAdminGuardProps) 
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
           <h1 className="text-2xl font-bold mb-2">{t('guards.accessDenied')}</h1>
-          <p className="text-poke-text-secondary">{t('guards.siteAdminOnly')}</p>
+          <p className="text-fg-muted">{t('guards.siteAdminOnly')}</p>
         </div>
       </div>
     );

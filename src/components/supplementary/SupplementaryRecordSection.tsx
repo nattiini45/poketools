@@ -25,7 +25,7 @@ export default async function SupplementaryRecordSection({ playerId }: { playerI
   if (record === undefined) {
     return (
       <ProfileSection title={t('title')} defaultCollapsed>
-        <p role="status" className="text-sm text-poke-text-tertiary">
+        <p role="status" className="text-sm text-fg-muted">
           {t('loadFailed')}
         </p>
       </ProfileSection>
@@ -37,16 +37,16 @@ export default async function SupplementaryRecordSection({ playerId }: { playerI
       <div className="space-y-2">
         {/* A record of honors only (no played matches known) shows no W / D / L line. */}
         {record.played > 0 && (
-          <p className="text-lg font-heading font-semibold text-poke-text-primary">
+          <p className="text-lg font-heading font-semibold text-fg">
             {t('profile.record', { wins: record.wins, draws: record.draws, losses: record.losses })}
           </p>
         )}
-        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-poke-text-secondary">
+        <ul className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-fg-muted">
           {record.played > 0 && <li>{t('profile.played', { count: record.played })}</li>}
           {record.titles > 0 && <li>{t('profile.titles', { count: record.titles })}</li>}
           {record.runnerUps > 0 && <li>{t('profile.runnerUps', { count: record.runnerUps })}</li>}
         </ul>
-        <p className="text-xs text-poke-text-tertiary">{t('note')}</p>
+        <p className="text-xs text-fg-muted">{t('note')}</p>
       </div>
     </ProfileSection>
   );

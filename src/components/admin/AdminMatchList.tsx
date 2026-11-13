@@ -222,7 +222,7 @@ export function MatchListSelectionHeader({
                 : t('admin.matches.export.done', { count: exportState.info.count, number: f.number(exportState.info.count) })}
             </p>
             {exportState.info.searchTruncated && (
-              <p className="text-poke-yellow-ink">
+              <p className="text-accent-ink">
                 {t('admin.matches.export.searchTruncated', { count: ADMIN_MATCH_SEARCH_PLAYER_CAP })}
               </p>
             )}
