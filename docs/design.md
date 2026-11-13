@@ -74,8 +74,7 @@ Declared in `globals.css` (" Direction B tokens") and mapped to Tailwind in
 | `--skew` | `-10deg` | same | Every skewed plate (F4) |
 
 The legacy names alias onto the set: `poke-base` → `page`, `poke-surface` → `surface`, `poke-elevated` → `elevated`, `poke-text-primary` → `fg`, `poke-text-secondary` → `fg-muted`, `poke-border(-strong)` → `hairline(-strong)`, `poke-accent` → `accent-ink`, `poke-accent-light` → `accent-subtle`, `poke-live` → `live`, and shadcn's
-`--background` / `--foreground`. A site palette (`html[data-palette]`) still
-overrides these aliases; reducing it to the accent alone (D6) is a later step.
+`--background` / `--foreground`. A site palette (`html[data-palette]`) sets the new ground and text tokens (`--page`, `--surface`, `--elevated`, `--fg`, `--fg-muted`) from its cores and no longer declares the legacy names for them, so the aliases above carry the palette; it still declares the other legacy `--poke-*` tokens (reducing it to the accent alone, D6, is a later step).
 The tables below describe the legacy names as they stand for themed worlds and
 site palettes.
 
