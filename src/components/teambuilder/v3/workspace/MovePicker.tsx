@@ -2,6 +2,7 @@
 
 import Select from '@/components/ui/Select';
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowDown, ArrowUp, Check } from 'lucide-react';
 import TypeSprite from '@/components/shared/TypeSprite';
 import CategoryIcon from '@/components/shared/CategoryIcon';
 import { useDataLocale, useLocale, useT } from '@/i18n/client';
@@ -123,7 +124,7 @@ export default function MovePicker({
 
   const sortArrow = (field: SortField) => {
     if (sortField !== field) return '';
-    return sortDir === 'asc' ? ' ↑' : ' ↓';
+    return sortDir === 'asc' ? <ArrowUp aria-hidden="true" className="ml-0.5 inline size-3" /> : <ArrowDown aria-hidden="true" className="ml-0.5 inline size-3" />;
   };
 
   return (
@@ -273,7 +274,7 @@ export default function MovePicker({
                 )}
                 <span className="text-xs text-fg shrink-0">
                   {displayName}
-                  {isUsed && <span className="ml-1 text-accent-ink text-caption">✓</span>}
+                  {isUsed && <Check aria-hidden="true" className="ml-1 inline size-3.5 text-accent-ink" />}
                 </span>
                 {move.shortDesc ? (
                   <span className="text-caption text-fg-muted flex-1 truncate ml-1 hidden sm:inline">

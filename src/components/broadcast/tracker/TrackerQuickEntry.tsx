@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, useRef, useEffect } from 'react';
+import { X } from 'lucide-react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import type { TrackerDispatchAction } from '@/lib/broadcast/tracker-reducer';
 import { useDataLocale, useT } from '@/i18n/client';
@@ -103,7 +104,7 @@ export default function TrackerQuickEntry({
           className="text-poke-text-secondary hover:text-poke-text text-sm"
           aria-label={t('quickEntry.close')}
         >
-          ✕
+          <X aria-hidden="true" className="size-4" />
         </button>
       </div>
       <div className="flex-1 overflow-y-auto max-h-[240px]">

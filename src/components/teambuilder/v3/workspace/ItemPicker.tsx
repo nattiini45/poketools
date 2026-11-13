@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { ArrowDown, ArrowUp, Check } from 'lucide-react';
 import ItemSprite from '@/components/shared/ItemSprite';
 import { useDataLocale, useLocale, useT } from '@/i18n/client';
 import type { Locale } from '@/i18n/config';
@@ -137,7 +138,7 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
 
   const sortArrow = (field: SortField) => {
     if (sortField !== field) return '';
-    return sortDir === 'asc' ? ' ↑' : ' ↓';
+    return sortDir === 'asc' ? <ArrowUp aria-hidden="true" className="ml-0.5 inline size-3" /> : <ArrowDown aria-hidden="true" className="ml-0.5 inline size-3" />;
   };
 
   return (
@@ -236,7 +237,7 @@ export default function ItemPicker({ species, currentItem, onSelect, onClose }: 
                 <ItemSprite item={item.name} size={20} className="shrink-0" />
                 <span className="text-xs text-fg shrink-0">
                   {displayName}
-                  {isCurrent && <span className="ml-1 text-accent-ink text-caption">✓</span>}
+                  {isCurrent && <Check aria-hidden="true" className="ml-1 inline size-3.5 text-accent-ink" />}
                 </span>
                 {item.desc ? (
                   <span className="text-caption text-fg-muted flex-1 truncate ml-1 hidden sm:inline">
