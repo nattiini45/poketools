@@ -209,7 +209,7 @@ export function matchesShortcut(
     return false;
   }
   if (e.altKey !== parsed.alt) return false;
-  // Shift is implied by a capital letter or a shifted symbol, so it is
+  // Shift is implied by an uppercase letter or a shifted symbol, so it is
   // only checked when the combo names it.
   if (parsed.shift && !e.shiftKey) return false;
   return true;

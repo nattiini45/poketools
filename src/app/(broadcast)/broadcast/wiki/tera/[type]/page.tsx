@@ -48,6 +48,8 @@ export default async function WikiTeraOverlay({ params, searchParams }: PageProp
           style={{
             fontSize: '18px',
             fontWeight: 600,
+            textTransform: 'uppercase',
+            letterSpacing: '0.1em',
             color: 'var(--broadcast-text-muted)',
           }}
         >

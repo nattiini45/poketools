@@ -107,6 +107,8 @@ function StatPill({ label, value }: { label: string; value: string }) {
         style={{
           fontSize: '12px',
           fontWeight: 600,
+          textTransform: 'uppercase',
+          letterSpacing: '0.05em',
           color: 'var(--broadcast-text-muted)',
         }}
       >

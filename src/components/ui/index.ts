@@ -11,4 +11,11 @@ export { default as Section } from "./Section";
 export { default as Tooltip } from "./Tooltip";
 export { default as Popover } from "./Popover";
 export { default as Textarea } from "./Textarea";
-export { PANEL, PANEL_INSET, FOCUS_RING } from "./panel";
+export {
+  PANEL,
+  PANEL_INSET,
+  PANEL_NOTICE,
+  PANEL_HOVER,
+  FOCUS_RING,
+  TABLE_HEAD,
+} from "./panel";

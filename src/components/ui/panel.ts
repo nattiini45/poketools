@@ -15,7 +15,25 @@ export const PANEL = 'rounded-poke-lg border border-poke-border bg-poke-surface'
 /** Inset panel: a raised block sitting inside a primary panel, or a chip row. */
 export const PANEL_INSET = 'rounded-poke-md border border-poke-border bg-poke-elevated';
 
+/** Empty-state / notice panel. Same surface, roomier padding, quieter ink. */
+export const PANEL_NOTICE =
+  'rounded-poke-lg border border-poke-border bg-poke-elevated p-6 text-sm text-poke-text-secondary';
+
+/**
+ * Interactive lift for a panel that is itself a link or button target.
+ * Transform is suppressed under reduced motion; the border and shadow change
+ * remain so the affordance never disappears.
+ */
+export const PANEL_HOVER =
+  'transition-[transform,box-shadow,border-color] duration-150 ease-out ' +
+  'hover:-translate-y-0.5 hover:border-poke-accent hover:shadow-poke-card-hover ' +
+  'motion-reduce:transform-none motion-reduce:transition-none';
+
 /** Focus ring used by every interactive element. */
 export const FOCUS_RING =
   'focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 ' +
   'focus-visible:outline-poke-focus';
+
+/** Table header row treatment. */
+export const TABLE_HEAD =
+  'border-b border-poke-border bg-poke-elevated text-xs uppercase tracking-wide text-poke-text-secondary';
