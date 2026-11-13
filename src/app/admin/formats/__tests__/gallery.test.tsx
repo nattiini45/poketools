@@ -39,7 +39,11 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => new URLSearchParams(),
+  usePathname: () => '/admin/formats',
+}));
 vi.mock('@/i18n/server', async () => {
   const { createTranslator } = await import('@/i18n/core');
   return {
