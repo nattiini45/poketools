@@ -42,14 +42,14 @@ export default function DecisionMatchPanel({
         <span className="text-sm font-semibold text-amber-400">
           {t('decision.title')}
         </span>
-        <span className="text-xs text-poke-text-muted">{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</span>
+        <span className="text-xs text-fg-muted">{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</span>
       </button>
       {expanded && (
-        <div className="mt-2 space-y-2 text-sm text-poke-text-secondary">
+        <div className="mt-2 space-y-2 text-sm text-fg-muted">
           <p>
             {t.rich('decision.tied', {
               names: names.join(', '),
-              b: (chunks) => <strong className="text-poke-text">{chunks}</strong>,
+              b: (chunks) => <strong className="text-fg">{chunks}</strong>,
             })}
           </p>
           <p className="text-xs">
@@ -66,7 +66,7 @@ export default function DecisionMatchPanel({
               {seasonId && (
                 <Link
                   href={leagueAdminHref(seasonId, 'phases')}
-                  className="rounded-lg border border-poke-border px-3 py-1.5 text-xs text-poke-text-secondary hover:bg-poke-elevated"
+                  className="rounded-lg border border-hairline px-3 py-1.5 text-xs text-fg-muted hover:bg-elevated"
                 >
                   {t('decision.leagueAdmin')}
                 </Link>

@@ -283,7 +283,7 @@ export default function AvatarBuilder({ playerId, initialConfig, onSaved }: Avat
             )}
 
             {error && (
-              <p role="alert" className="max-w-[220px] text-center text-body text-poke-danger-ink">{errorText(error)}</p>
+              <p role="alert" className="max-w-[220px] text-center text-body text-loss">{errorText(error)}</p>
             )}
           </div>
 

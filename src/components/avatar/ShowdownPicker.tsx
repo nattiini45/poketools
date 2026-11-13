@@ -125,12 +125,12 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
           placeholder={t('showdown.searchPlaceholder')}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="w-full px-4 py-2 pl-10 text-sm bg-poke-elevated border border-poke-border
-                     rounded-poke-lg text-poke-text-primary placeholder:text-poke-text-muted
-                     focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:border-poke-accent"
+          className="w-full px-4 py-2 pl-10 text-sm bg-elevated border border-hairline
+                     rounded-poke-lg text-fg placeholder:text-fg-muted
+                     focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:ring-2 focus:border-accent-ink"
         />
         <svg
-          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-poke-text-muted"
+          className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-fg-muted"
           fill="none"
           stroke="currentColor"
           viewBox="0 0 24 24"
@@ -149,8 +149,8 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
               className={`
                 px-2.5 py-1 text-xs font-heading font-semibold rounded-poke-md transition-colors
                 ${activeCategory === cat.category
-                  ? 'bg-poke-accent text-poke-surface'
-                  : 'bg-poke-elevated text-poke-text-secondary hover:bg-poke-border'
+                  ? 'bg-accent-fill text-tier-ink'
+                  : 'bg-elevated text-fg-muted hover:bg-hairline'
                 }
               `}
             >
@@ -163,14 +163,14 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
 
       {/* Search result count */}
       {search.trim() && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {t('showdown.results', { count: allSprites.length, query: search })}
         </p>
       )}
 
       {/* Sprite count */}
       {!search.trim() && allSprites.length > SPRITES_PER_PAGE && (
-        <p className="text-xs text-poke-text-muted">
+        <p className="text-xs text-fg-muted">
           {t('showdown.showing', { shown: Math.min(visibleCount, allSprites.length), total: allSprites.length })}
         </p>
       )}
@@ -187,11 +187,11 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
             title={sprite.label}
             className={`
               rounded-poke-md border-2 transition-all duration-150
-              overflow-hidden flex items-center justify-center bg-poke-surface
+              overflow-hidden flex items-center justify-center bg-surface
               w-full h-[72px]
               ${selected === sprite.id
-                ? 'border-poke-accent shadow-poke-sm scale-105 z-10'
-                : 'border-transparent hover:border-poke-border'
+                ? 'border-accent-ink shadow-poke-sm scale-105 z-10'
+                : 'border-transparent hover:border-hairline'
               }
             `}
           >
@@ -213,8 +213,8 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
         <button
           onClick={() => setVisibleCount((c) => c + SPRITES_PER_PAGE)}
           className="mx-auto px-6 py-2 text-sm font-heading font-semibold rounded-poke-md
-                   bg-poke-elevated text-poke-text-secondary border border-poke-border
-                   hover:bg-poke-border transition-colors"
+                   bg-elevated text-fg-muted border border-hairline
+                   hover:bg-hairline transition-colors"
         >
           {t('showdown.showMore', { count: allSprites.length - visibleCount })}
         </button>
@@ -222,8 +222,8 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
 
       {/* Selected preview + save */}
       {selected && (
-        <div className="flex items-center gap-4 p-3 bg-poke-elevated rounded-poke-lg border border-poke-border">
-          <div className="bg-poke-surface rounded-poke-md p-2 shrink-0">
+        <div className="flex items-center gap-4 p-3 bg-elevated rounded-poke-lg border border-hairline">
+          <div className="bg-surface rounded-poke-md p-2 shrink-0">
             <Image
               src={`${SHOWDOWN_CDN}/${selected}.png`}
               alt={t('showdown.selectedAlt')}
@@ -234,16 +234,16 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
             />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-heading font-bold text-poke-text-primary truncate">
+            <p className="text-sm font-heading font-bold text-fg truncate">
               {catalog.flatMap((c) => c.sprites).find((s) => s.id === selected)?.label ?? selected}
             </p>
-            <p className="text-xs text-poke-text-muted">{`${selected}.png`}</p>
+            <p className="text-xs text-fg-muted">{`${selected}.png`}</p>
           </div>
           <button
             onClick={save}
             disabled={saving}
             className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md shrink-0
-                     bg-poke-accent text-poke-surface
+                     bg-accent-fill text-tier-ink
                      transition-colors disabled:opacity-50"
           >
             {saving ? t('showdown.saving') : t('showdown.useThis')}
@@ -252,7 +252,7 @@ export default function ShowdownPicker({ playerId, onSaved, onBusyChange }: Show
       )}
 
       {error && (
-        <p className="text-sm text-poke-danger-ink">{errorText(error)}</p>
+        <p className="text-sm text-loss">{errorText(error)}</p>
       )}
     </div>
   );

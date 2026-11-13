@@ -62,7 +62,7 @@ export default function MomentumTimeline({ gamesSubmitted }: MomentumTimelinePro
                 textAnchor="middle"
                 dominantBaseline="middle"
                 fontSize={7}
-                className="fill-poke-text-muted"
+                className="fill-fg-muted"
               >
                 {t("tracker.timelineGame", { game: game.game_number })}
               </text>

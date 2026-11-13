@@ -55,8 +55,8 @@ export default function GameRecapPanel({
 
   return (
     <div className="px-4 py-3 rounded-xl border text-center">
-      <div className="text-xs text-poke-text-secondary mb-1">{t("recapPanel.title", { game: gameNumber })}</div>
-      <div className="text-sm text-poke-text">
+      <div className="text-xs text-fg-muted mb-1">{t("recapPanel.title", { game: gameNumber })}</div>
+      <div className="text-sm text-fg">
         {t.rich("recapPanel.summary", {
           name: winnerName,
           game: gameNumber,

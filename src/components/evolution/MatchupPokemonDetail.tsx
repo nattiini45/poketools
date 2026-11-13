@@ -56,7 +56,7 @@ export default function MatchupPokemonDetail({
         <button
           type="button"
           onClick={onClose}
-          className="text-poke-text-secondary hover:text-poke-text"
+          className="text-fg-muted hover:text-fg"
           aria-label={tCommon('actions.close')}
         >
           <X aria-hidden="true" className="size-4" />
@@ -66,8 +66,8 @@ export default function MatchupPokemonDetail({
       {baseStats && (
         <div className="mb-3 grid grid-cols-3 gap-2 text-xs sm:grid-cols-6">
           {(['hp', 'atk', 'def', 'spa', 'spd', 'spe'] as const).map((stat) => (
-            <div key={stat} className="rounded bg-poke-elevated px-2 py-1 text-center">
-              <span className="text-poke-text-muted">{localizeStat(stat, dataLocale, 'short')}</span>
+            <div key={stat} className="rounded bg-elevated px-2 py-1 text-center">
+              <span className="text-fg-muted">{localizeStat(stat, dataLocale, 'short')}</span>
               <p className="font-mono font-medium">{baseStats[stat]}</p>
             </div>
           ))}
@@ -75,7 +75,7 @@ export default function MatchupPokemonDetail({
       )}
 
       {abilities && abilities.length > 0 && (
-        <p className="mb-2 text-xs text-poke-text-secondary">
+        <p className="mb-2 text-xs text-fg-muted">
           {t('detail.abilities', { list: abilities.map((a) => localizeAbility(a, dataLocale)).join(', ') })}
         </p>
       )}
@@ -88,7 +88,7 @@ export default function MatchupPokemonDetail({
 
       {roles.length > 0 && (
         <div className="mt-3">
-          <h4 className="text-xs font-semibold text-poke-text-secondary">{t('detail.teamRoles')}</h4>
+          <h4 className="text-xs font-semibold text-fg-muted">{t('detail.teamRoles')}</h4>
           <ul className="mt-1 space-y-0.5 text-xs">
             {roles.map((r) => (
               <li key={r.id}>
@@ -105,7 +105,7 @@ export default function MatchupPokemonDetail({
 function TypeList({ label, items, className }: { label: string; items: string[]; className: string }) {
   return (
     <div>
-      <span className="text-poke-text-muted">{label}</span>
+      <span className="text-fg-muted">{label}</span>
       <p className={className}>{items.length > 0 ? items.join(', ') : '—'}</p>
     </div>
   );

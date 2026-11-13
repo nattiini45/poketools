@@ -209,10 +209,10 @@ export default function CreateSocialImageButton({
         disabled={isWorking}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-poke-md text-xs font-heading transition-colors disabled:opacity-50 ${
           status === 'done'
-            ? 'text-poke-green bg-poke-green/10'
+            ? 'text-win bg-win-bg'
             : status === 'error'
-              ? 'text-poke-accent'
-              : 'text-poke-text-muted hover:text-poke-text-secondary hover:bg-poke-muted'
+              ? 'text-accent-ink'
+              : 'text-fg-muted hover:text-fg-muted hover:bg-sunken'
         }`}
         title={existingUrl ? t('socialImage.titleUpdate') : t('socialImage.titleCreate')}
       >

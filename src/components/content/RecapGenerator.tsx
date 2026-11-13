@@ -122,7 +122,7 @@ export default function RecapGenerator({ seasons }: RecapGeneratorProps) {
 
   return (
     <Card>
-      <h3 className="text-lg font-heading font-bold text-poke-text-primary mb-4">
+      <h3 className="text-lg font-heading font-bold text-fg mb-4">
         {t('recap.title')}
       </h3>
 
@@ -205,7 +205,7 @@ export default function RecapGenerator({ seasons }: RecapGeneratorProps) {
               href={recapUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-sm text-poke-accent hover:underline"
+              className="text-sm text-accent-ink hover:underline"
             >
               {t('common.openPreview')}
             </a>

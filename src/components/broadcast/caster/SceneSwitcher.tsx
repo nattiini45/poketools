@@ -42,10 +42,10 @@ export default function SceneSwitcher({ matchId, seasonId }: SceneSwitcherProps)
 
   return (
     <div className="space-y-4">
-      <h3 className="text-sm font-bold text-poke-text">{t("sceneSwitcher.title")}</h3>
+      <h3 className="text-sm font-bold text-fg">{t("sceneSwitcher.title")}</h3>
       {usableCategories.map((cat) => (
         <div key={cat.category}>
-          <h4 className="text-[10px] font-semibold text-poke-text-secondary uppercase tracking-wider mb-2">
+          <h4 className="text-[10px] font-semibold text-fg-muted uppercase tracking-wider mb-2">
             {t("sceneSwitcher.categoryOverlays", { category: categoryLabel(cat.category) })}
           </h4>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -59,7 +59,7 @@ export default function SceneSwitcher({ matchId, seasonId }: SceneSwitcherProps)
                   className={`px-3 py-2 rounded-lg text-xs font-medium text-left transition-colors border ${
                     copiedKey === overlay.key
                       ? "bg-[rgb(16_185_129/0.15)] border-[rgb(16_185_129/0.3)] text-emerald-400"
-                      : "bg-poke-surface text-poke-text"
+                      : "bg-surface text-fg"
                   }`}
                 >
                   <div>{overlayLabel(overlay)}</div>

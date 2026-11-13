@@ -44,7 +44,7 @@ export default function SingleElimBracket({
   const sortedRounds = [...rounds].sort((a, b) => a.round_number - b.round_number);
 
   if (sortedRounds.length === 0) {
-    return <p className="text-poke-text-muted text-sm">{labels.noRounds}</p>;
+    return <p className="text-fg-muted text-sm">{labels.noRounds}</p>;
   }
 
   return (
@@ -59,7 +59,7 @@ export default function SingleElimBracket({
 
           return (
             <div key={round.id} className="flex flex-col gap-4 min-w-[220px]">
-              <h3 className="text-sm font-heading font-semibold text-poke-text-secondary text-center border-b border-poke-border pb-1">
+              <h3 className="text-sm font-heading font-semibold text-fg-muted text-center border-b border-hairline pb-1">
                 {translateEngineLabel('round', round.name, locale)}
               </h3>
               <div className="flex flex-col justify-around flex-1 gap-4">
@@ -88,7 +88,7 @@ export default function SingleElimBracket({
                       if (!slotDef.isThirdPlace) return card;
                       return (
                         <div key={slotDef.slotKey} className="flex flex-col gap-1">
-                          <h4 className="text-xs font-heading font-semibold text-poke-text-muted text-center">
+                          <h4 className="text-xs font-heading font-semibold text-fg-muted text-center">
                             {labels.thirdPlace}
                           </h4>
                           {card}
@@ -104,7 +104,7 @@ export default function SingleElimBracket({
                       />
                     ))}
                 {matches.length === 0 && roundSlots.length === 0 && (
-                  <p className="text-xs text-poke-text-muted text-center">{labels.tbd}</p>
+                  <p className="text-xs text-fg-muted text-center">{labels.tbd}</p>
                 )}
               </div>
             </div>

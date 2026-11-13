@@ -289,7 +289,7 @@ export default function AiAvatarGenerator({
     <div className="flex flex-col lg:flex-row gap-6">
       {/* ── Preview Panel ────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-4 lg:sticky lg:top-24 lg:self-start">
-        <div className="bg-poke-elevated rounded-poke-xl p-4 shadow-poke-card w-[224px] h-[224px] flex items-center justify-center">
+        <div className="bg-elevated rounded-poke-xl p-4 shadow-poke-card w-[224px] h-[224px] flex items-center justify-center">
           {generatedImage ? (
             <Image
               src={generatedImage}
@@ -300,12 +300,12 @@ export default function AiAvatarGenerator({
               unoptimized
             />
           ) : generating ? (
-            <div className="flex flex-col items-center gap-3 text-poke-text-muted">
-              <div className="w-10 h-10 border-poke-accent border-t-transparent rounded-full animate-spin" />
+            <div className="flex flex-col items-center gap-3 text-fg-muted">
+              <div className="w-10 h-10 border-accent-ink border-t-transparent rounded-full animate-spin" />
               <span className="text-xs font-heading">{t('ai.generating')}</span>
             </div>
           ) : (
-            <div className="text-center text-poke-text-muted">
+            <div className="text-center text-fg-muted">
               <p className="text-sm font-heading">{t('ai.pickChoices')}</p>
               <p className="text-xs mt-1">{t('ai.thenGenerate')}</p>
             </div>
@@ -317,7 +317,7 @@ export default function AiAvatarGenerator({
             onClick={generate}
             disabled={generating || saving}
             className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                     bg-poke-accent text-poke-surface
+                     bg-accent-fill text-tier-ink
                      transition-colors disabled:opacity-50"
           >
             {generating ? t('ai.generating') : generatedImage ? t('ai.regenerate') : t('ai.generate')}
@@ -327,7 +327,7 @@ export default function AiAvatarGenerator({
               onClick={saveAsAvatar}
               disabled={saving || generating}
               className="px-5 py-2 text-sm font-heading font-bold rounded-poke-md
-                       bg-poke-green text-poke-on-green hover:bg-poke-green/90
+                       bg-win text-surface hover:opacity-90
                        transition-colors disabled:opacity-50"
             >
               {saving ? t('ai.saving') : t('ai.useThis')}
@@ -336,14 +336,14 @@ export default function AiAvatarGenerator({
         </div>
 
         {/* Remaining counter */}
-        <p className="text-xs text-poke-text-muted font-heading">
+        <p className="text-xs text-fg-muted font-heading">
           {remaining !== null
             ? t('ai.remainingToday', { remaining, limit: AI_AVATAR_DAILY_LIMIT })
             : t('ai.perDay', { limit: AI_AVATAR_DAILY_LIMIT })}
         </p>
 
         {error && (
-          <p className="text-sm text-poke-danger-ink text-center max-w-[200px]">{errorText(error)}</p>
+          <p className="text-sm text-loss text-center max-w-[200px]">{errorText(error)}</p>
         )}
       </div>
 
@@ -353,7 +353,7 @@ export default function AiAvatarGenerator({
         {/* ── Your Gallery ──────────────────────────────────── */}
         {personalGallery.length > 0 && (
           <section>
-            <h3 className="text-sm font-heading font-bold text-poke-text-primary mb-2">
+            <h3 className="text-sm font-heading font-bold text-fg mb-2">
               {t('ai.previousHeading')}
             </h3>
             <div className="flex gap-2 overflow-x-auto pb-2 -mb-2">
@@ -364,7 +364,7 @@ export default function AiAvatarGenerator({
                     disabled={saving}
                     title={t('ai.useAsAvatarHint')}
                     className="w-16 h-16 rounded-poke-md border-2 border-transparent
-                             hover:border-poke-accent overflow-hidden bg-poke-surface
+                             hover:border-accent-ink overflow-hidden bg-surface
                              transition-all hover:scale-105 disabled:opacity-50"
                   >
                     <GalleryThumb
@@ -376,7 +376,7 @@ export default function AiAvatarGenerator({
                   <button
                     onClick={() => removeGalleryItem(item)}
                     disabled={deletingId === item.id}
-                    className="text-[10px] font-heading text-poke-text-muted hover:text-poke-accent transition-colors disabled:opacity-50"
+                    className="text-[10px] font-heading text-fg-muted hover:text-accent-ink transition-colors disabled:opacity-50"
                   >
                     {deletingId === item.id ? t('ai.deleting') : t('ai.delete')}
                   </button>
@@ -387,12 +387,12 @@ export default function AiAvatarGenerator({
         )}
 
         {galleryLoading && personalGallery.length === 0 && (
-          <p className="text-xs text-poke-text-muted">{t('ai.loadingGallery')}</p>
+          <p className="text-xs text-fg-muted">{t('ai.loadingGallery')}</p>
         )}
 
         {/* ── Art Style Selector (prominent, outside accordion) ── */}
         <section>
-          <h3 className="text-sm font-heading font-bold text-poke-text-primary mb-2">
+          <h3 className="text-sm font-heading font-bold text-fg mb-2">
             {categoryLabel(artStyleCategory.id, artStyleCategory.label)}
           </h3>
           <div className="flex gap-2">
@@ -406,8 +406,8 @@ export default function AiAvatarGenerator({
                     flex-1 px-4 py-2.5 text-sm font-heading font-semibold rounded-poke-md
                     border-2 transition-all duration-150
                     ${isSelected
-                      ? 'border-poke-accent bg-poke-accent-light text-poke-accent shadow-poke-sm'
-                      : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-text-muted'
+                      ? 'border-accent-ink bg-accent-subtle text-accent-ink shadow-poke-sm'
+                      : 'border-hairline bg-surface text-fg-muted hover:border-hairline-strong'
                     }
                   `}
                 >
@@ -427,23 +427,23 @@ export default function AiAvatarGenerator({
             return (
               <div
                 key={cat.id}
-                className="border border-poke-border rounded-poke-md overflow-hidden"
+                className="border border-hairline rounded-poke-md overflow-hidden"
               >
                 {/* Accordion header */}
                 <button
                   onClick={() => toggleCategory(cat.id)}
                   className="w-full flex items-center justify-between px-3 py-2.5
-                           bg-poke-surface hover:bg-poke-elevated transition-colors"
+                           bg-surface hover:bg-elevated transition-colors"
                 >
-                  <span className="text-sm font-heading font-semibold text-poke-text-primary">
+                  <span className="text-sm font-heading font-semibold text-fg">
                     {categoryLabel(cat.id, cat.label)}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-heading text-poke-accent font-medium">
+                    <span className="text-xs font-heading text-accent-ink font-medium">
                       {selectedLabel}
                     </span>
                     <svg
-                      className={`w-4 h-4 text-poke-text-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
+                      className={`w-4 h-4 text-fg-muted transition-transform ${isOpen ? 'rotate-180' : ''}`}
                       fill="none"
                       stroke="currentColor"
                       viewBox="0 0 24 24"
@@ -455,7 +455,7 @@ export default function AiAvatarGenerator({
 
                 {/* Accordion body */}
                 {isOpen && (
-                  <div className="px-3 py-3 border-t border-poke-border">
+                  <div className="px-3 py-3 border-t border-hairline">
                     <div className="flex flex-wrap gap-1.5">
                       {cat.options.map((opt) => {
                         const isSelected = choices[cat.id] === opt.id;
@@ -466,8 +466,8 @@ export default function AiAvatarGenerator({
                             className={`
                               px-3 py-1.5 text-xs font-heading rounded-poke-md border-2 transition-all duration-150
                               ${isSelected
-                                ? 'border-poke-accent bg-poke-accent-light text-poke-accent font-bold shadow-poke-sm'
-                                : 'border-poke-border bg-poke-surface text-poke-text-secondary hover:border-poke-text-muted'
+                                ? 'border-accent-ink bg-accent-subtle text-accent-ink font-bold shadow-poke-sm'
+                                : 'border-hairline bg-surface text-fg-muted hover:border-hairline-strong'
                               }
                             `}
                           >
@@ -486,10 +486,10 @@ export default function AiAvatarGenerator({
         {/* ── Community Showcase ─────────────────────────────── */}
         {communityAvatars.length > 0 && (
           <section>
-            <h3 className="text-sm font-heading font-bold text-poke-text-primary mb-1">
+            <h3 className="text-sm font-heading font-bold text-fg mb-1">
               {t('ai.communityHeading')}
             </h3>
-            <p className="text-xs text-poke-text-muted mb-3">
+            <p className="text-xs text-fg-muted mb-3">
               {t('ai.communityHint')}
             </p>
             <div className="grid grid-cols-4 sm:grid-cols-6 md:grid-cols-8 gap-2">
@@ -498,7 +498,7 @@ export default function AiAvatarGenerator({
                   key={item.id}
                   className="flex flex-col items-center gap-1"
                 >
-                  <div className="w-14 h-14 rounded-poke-md overflow-hidden bg-poke-surface border border-poke-border">
+                  <div className="w-14 h-14 rounded-poke-md overflow-hidden bg-surface border border-hairline">
                     <GalleryThumb
                       imageUrl={item.image_url}
                       alt={item.player_name ? t('ai.playerAvatarAlt', { name: item.player_name }) : t('ai.communityAlt')}
@@ -506,7 +506,7 @@ export default function AiAvatarGenerator({
                     />
                   </div>
                   {item.player_name && (
-                    <span className="text-[10px] text-poke-text-muted truncate max-w-[56px]">
+                    <span className="text-[10px] text-fg-muted truncate max-w-[56px]">
                       {item.player_name}
                     </span>
                   )}

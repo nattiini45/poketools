@@ -20,7 +20,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       header: '#',
       width: 'calc(var(--spacing) * 10)',
       render: (_row: Standing, i: number) => (
-        <span className="text-poke-text-muted">{i + 1}</span>
+        <span className="text-fg-muted">{i + 1}</span>
       ),
     },
     {
@@ -31,7 +31,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       render: (row: Standing) => (
         <Link
           href={`/players/${row.player_id}`}
-          className="flex items-center gap-2 font-medium hover:text-poke-blue transition-colors"
+          className="flex items-center gap-2 font-medium hover:text-accent-ink transition-colors"
         >
           <PlayerAvatar avatarUrl={row.player_avatar_url} name={row.player_name} size={20} />
           <GymTypedName name={row.player_name} gymType={row.gym_type} />
@@ -45,7 +45,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       sortable: true,
       sortValue: (row) => row.wins,
       render: (row: Standing) => (
-        <span className="text-poke-green">{row.wins}</span>
+        <span className="text-win">{row.wins}</span>
       ),
     },
     {
@@ -55,7 +55,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       sortable: true,
       sortValue: (row) => row.losses,
       render: (row: Standing) => (
-        <span className="text-poke-danger">{row.losses}</span>
+        <span className="text-loss">{row.losses}</span>
       ),
     },
     {
@@ -65,7 +65,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       sortable: true,
       sortValue: (row) => row.draws,
       render: (row: Standing) => (
-        <span className="text-poke-text-muted">{row.draws}</span>
+        <span className="text-fg-muted">{row.draws}</span>
       ),
     },
     {
@@ -85,7 +85,7 @@ export default function SwissStandings({ standings }: SwissStandingsProps) {
       sortable: true,
       sortValue: (row) => row.buchholz,
       render: (row: Standing) => (
-        <span className="text-poke-text-secondary">{row.buchholz}</span>
+        <span className="text-fg-muted">{row.buchholz}</span>
       ),
     },
   ];

@@ -53,22 +53,22 @@ export default function StatDisplay({ set, baseStats, compact = false, className
 
         // Nature indicator: color the stat label + value
         let textColor = '';
-        if (isBoost) textColor = 'text-poke-type-fire';
-        if (isReduce) textColor = 'text-poke-type-water';
+        if (isBoost) textColor = 'text-win';
+        if (isReduce) textColor = 'text-loss';
 
         if (compact) {
           return (
             <div key={stat} className="flex items-center gap-1">
-              <span className={`${wideLabels ? 'w-12 whitespace-nowrap' : 'w-7'} text-[10px] font-semibold ${textColor || 'text-poke-text-muted'}`}>
+              <span className={`${wideLabels ? 'w-12 whitespace-nowrap' : 'w-7'} text-[10px] font-semibold ${textColor || 'text-fg-muted'}`}>
                 {localizeStat(stat, dataLocale, 'short')}
               </span>
-              <div className="flex-1 h-1.5 bg-poke-muted rounded-full overflow-hidden">
+              <div className="flex-1 h-1.5 bg-sunken rounded-full overflow-hidden">
                 <div
                   className="h-full rounded-full"
                   style={{ width: `${cssWidth}%`, backgroundColor: background }}
                 />
               </div>
-              <span className={`w-7 text-[10px] text-right font-mono ${textColor || 'text-poke-text-muted'}`}>
+              <span className={`w-7 text-[10px] text-right font-mono ${textColor || 'text-fg-muted'}`}>
                 {final}
               </span>
             </div>
@@ -77,17 +77,17 @@ export default function StatDisplay({ set, baseStats, compact = false, className
 
         return (
           <div key={stat} className="flex items-center gap-2">
-            <span className={`${wideLabels ? 'w-16 whitespace-nowrap' : 'w-8'} text-xs font-semibold ${textColor || 'text-poke-text-secondary'}`}>
+            <span className={`${wideLabels ? 'w-16 whitespace-nowrap' : 'w-8'} text-xs font-semibold ${textColor || 'text-fg-muted'}`}>
               {localizeStat(stat, dataLocale, 'short')}
             </span>
-            <span className="w-8 text-xs text-poke-text-muted text-right font-mono">{base}</span>
-            <div className="flex-1 h-3 bg-poke-muted rounded-full overflow-hidden">
+            <span className="w-8 text-xs text-fg-muted text-right font-mono">{base}</span>
+            <div className="flex-1 h-3 bg-sunken rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-300"
                 style={{ width: `${cssWidth}%`, backgroundColor: background }}
               />
             </div>
-            <span className={`w-8 text-xs text-right font-mono font-semibold ${textColor || 'text-poke-text-primary'}`}>
+            <span className={`w-8 text-xs text-right font-mono font-semibold ${textColor || 'text-fg'}`}>
               {final}
             </span>
             {(isBoost || isReduce) && (

@@ -33,14 +33,14 @@ export default function TrackerScorebar({
       {/* Series score */}
       <div className="flex items-center gap-4">
         <div className="text-right">
-          <span className="text-2xl font-bold text-poke-text">{p1Wins}</span>
+          <span className="text-2xl font-bold text-fg">{p1Wins}</span>
         </div>
         <div className="flex flex-col items-center">
-          <span className="text-xs text-poke-text-secondary uppercase tracking-wider">{t('tracker.game', { game: current_game.game_number })}</span>
-          <span className="text-lg font-bold text-poke-text">VS</span>
+          <span className="text-xs text-fg-muted uppercase tracking-wider">{t('tracker.game', { game: current_game.game_number })}</span>
+          <span className="text-lg font-bold text-fg">VS</span>
         </div>
         <div className="text-left">
-          <span className="text-2xl font-bold text-poke-text">{p2Wins}</span>
+          <span className="text-2xl font-bold text-fg">{p2Wins}</span>
         </div>
       </div>
 
@@ -52,18 +52,18 @@ export default function TrackerScorebar({
             onClick={() => dispatch({ type: 'decrement_turn' })}
             disabled={current_game.turn === 0}
             aria-label={t('tracker.previousTurn')}
-            className="w-7 h-7 rounded-lg bg-poke-elevated text-poke-text-secondary hover:text-poke-text hover:bg-poke-border transition-colors disabled:opacity-30 text-sm font-bold"
+            className="w-7 h-7 rounded-lg bg-elevated text-fg-muted hover:text-fg hover:bg-hairline transition-colors disabled:opacity-30 text-sm font-bold"
           >
             −
           </button>
-          <span className="text-xs text-poke-text-secondary min-w-[60px] text-center">
+          <span className="text-xs text-fg-muted min-w-[60px] text-center">
             {t('tracker.turn', { turn: current_game.turn })}
           </span>
           <button
             type="button"
             onClick={() => dispatch({ type: 'increment_turn' })}
             aria-label={t('tracker.nextTurn')}
-            className="w-7 h-7 rounded-lg bg-poke-elevated text-poke-text-secondary hover:text-poke-text hover:bg-poke-border transition-colors text-sm font-bold"
+            className="w-7 h-7 rounded-lg bg-elevated text-fg-muted hover:text-fg hover:bg-hairline transition-colors text-sm font-bold"
           >
             +
           </button>

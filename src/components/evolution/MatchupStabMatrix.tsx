@@ -32,9 +32,9 @@ export default function MatchupStabMatrix({
       <table className="text-xs">
         <thead>
           <tr>
-            <th className="p-1.5 text-left text-poke-text-secondary">{t('stab.corner')}</th>
+            <th className="p-1.5 text-left text-fg-muted">{t('stab.corner')}</th>
             {defenders.map((def) => (
-              <th key={def.id} className="max-w-20 truncate p-1.5 text-poke-text-secondary" title={species(def.current_form)}>
+              <th key={def.id} className="max-w-20 truncate p-1.5 text-fg-muted" title={species(def.current_form)}>
                 {species(def.current_form)}
               </th>
             ))}
@@ -51,7 +51,7 @@ export default function MatchupStabMatrix({
                 const atkInfo = typeInfo[atk.current_form];
                 const defInfo = typeInfo[def.current_form];
                 if (mult === undefined || !atkInfo || !defInfo) {
-                  return <td key={def.id} className="p-1.5 text-center text-poke-text-secondary">—</td>;
+                  return <td key={def.id} className="p-1.5 text-center text-fg-muted">—</td>;
                 }
                 const label = multiplierLabel(mult) as StabMultiplierLabel;
                 return (

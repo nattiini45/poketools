@@ -41,8 +41,8 @@ export default function TrackerToolsPanel({ sessionId }: TrackerToolsPanelProps)
             onClick={() => setActiveTab(tab.id)}
             className={`flex-1 px-3 py-2 text-xs font-medium transition-colors ${
               activeTab === tab.id
-                ? "text-poke-accent border-b-2 border-poke-accent"
-                : "text-poke-text-secondary hover:text-poke-text"
+                ? "text-accent-ink border-b-2 border-accent-ink"
+                : "text-fg-muted hover:text-fg"
             }`}
           >
             {t(`tools.${tab.id}`)}

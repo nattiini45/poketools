@@ -39,10 +39,10 @@ export default function TrackerTeamColumn({
           size={36}
         />
         <div className="flex-1 min-w-0">
-          <div className="text-sm font-bold text-poke-text truncate">
+          <div className="text-sm font-bold text-fg truncate">
             {playerName}
           </div>
-          <div className="flex items-center gap-2 text-xs text-poke-text-secondary">
+          <div className="flex items-center gap-2 text-xs text-fg-muted">
             <span>{t('tracker.broughtOfSix', { count: broughtCount })}</span>
             <span className="text-orange-400">{t('tracker.kosDealt', { count: totalKoDealt })}</span>
             <span className="text-red-400">{t('tracker.koedCount', { count: koedCount })}</span>

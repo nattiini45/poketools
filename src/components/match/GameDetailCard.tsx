@@ -55,7 +55,7 @@ function PokemonRow({ stat, index }: { stat: BattleStat; index: number }) {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-1.5 flex-wrap">
           <PokemonLink name={stat.pokemon_name}>
-            <span className={`font-medium text-sm ${notBrought ? 'text-poke-text-muted' : 'text-poke-text-primary'}`}>
+            <span className={`font-medium text-sm ${notBrought ? 'text-fg-muted' : 'text-fg'}`}>
               {localizeSpecies(stat.pokemon_name, dataLocale)}
             </span>
           </PokemonLink>
@@ -71,17 +71,17 @@ function PokemonRow({ stat, index }: { stat: BattleStat; index: number }) {
             <Badge variant="red" size="sm">{t('shared.koed')}</Badge>
           )}
           {notBrought && (
-            <span className="text-[10px] text-poke-text-muted italic">{t('gameCard.notBrought')}</span>
+            <span className="text-[10px] text-fg-muted italic">{t('gameCard.notBrought')}</span>
           )}
         </div>
         {stat.moves_used.length > 0 && (
           <MovesOverflowList
             moves={stat.moves_used}
-            className="text-xs text-poke-text-muted mt-0.5"
+            className="text-xs text-fg-muted mt-0.5"
           />
         )}
         {stat.turns_active > 0 && (
-          <p className="text-[10px] text-poke-text-muted mt-0.5">
+          <p className="text-[10px] text-fg-muted mt-0.5">
             {t('gameCard.turnsActive', { count: stat.turns_active })}
           </p>
         )}
