@@ -354,7 +354,7 @@ export default function GameDetailEditForm({
                   {/* Sub-row 1: Pokémon picker + remove button */}
                   <div className="grid grid-cols-12 gap-1.5 items-end">
                     <div className="col-span-10">
-                      <label className="text-[10px] text-fg-muted">{t('editor.pokemon')}</label>
+                      <label className="text-micro text-fg-muted">{t('editor.pokemon')}</label>
                       <InlinePokemonPicker
                         value={row.pokemon_name}
                         onChange={(name) => {
@@ -381,7 +381,7 @@ export default function GameDetailEditForm({
                   {/* Sub-row 2: KOs / Turns / Moves / Lead·KO'd·Brought */}
                   <div className="grid grid-cols-12 gap-1.5 items-end">
                     <div className="col-span-3 sm:col-span-2">
-                      <label className="text-[10px] text-fg-muted">{t('common.kos')}</label>
+                      <label className="text-micro text-fg-muted">{t('common.kos')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -399,7 +399,7 @@ export default function GameDetailEditForm({
                       />
                     </div>
                     <div className="col-span-3 sm:col-span-2">
-                      <label className="text-[10px] text-fg-muted">{t('common.turns')}</label>
+                      <label className="text-micro text-fg-muted">{t('common.turns')}</label>
                       <input
                         type="number"
                         inputMode="numeric"
@@ -417,7 +417,7 @@ export default function GameDetailEditForm({
                       />
                     </div>
                     <div className="col-span-6 sm:col-span-5">
-                      <label className="text-[10px] text-fg-muted">{t('editor.moves')}</label>
+                      <label className="text-micro text-fg-muted">{t('editor.moves')}</label>
                       <input
                         type="text"
                         value={row.moves_used}
@@ -429,7 +429,7 @@ export default function GameDetailEditForm({
                       />
                     </div>
                     <div className="col-span-12 sm:col-span-3 flex flex-wrap gap-x-2 gap-y-1 items-center pb-1.5">
-                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
+                      <label className="flex items-center gap-1 text-micro text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_lead}
@@ -439,7 +439,7 @@ export default function GameDetailEditForm({
                         />
                         {t('common.lead')}
                       </label>
-                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
+                      <label className="flex items-center gap-1 text-micro text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_koed}
@@ -449,7 +449,7 @@ export default function GameDetailEditForm({
                         />
                         {t('common.koed')}
                       </label>
-                      <label className="flex items-center gap-1 text-[10px] text-fg-muted">
+                      <label className="flex items-center gap-1 text-micro text-fg-muted">
                         <input
                           type="checkbox"
                           checked={row.was_brought}
@@ -463,7 +463,7 @@ export default function GameDetailEditForm({
                   </div>
 
                   {!row.pokemon_valid && row.pokemon_name.trim().length > 0 && (
-                    <p className="text-[10px] text-accent-ink">
+                    <p className="text-micro text-accent-ink">
                       {t('editor.pickSuggestion', { name: localizeSpecies(row.pokemon_name, dataLocale) })}
                     </p>
                   )}

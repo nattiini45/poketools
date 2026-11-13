@@ -73,7 +73,7 @@ export default function RoundRobinTable({
       <table className="text-xs">
         <thead>
           <tr>
-            <th className="px-4 py-3 text-left font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">
+            <th className="px-4 py-3 text-left font-heading text-xs font-semibold text-fg-muted">
               {labels.player}
             </th>
             {participants.map((p) => (

@@ -60,11 +60,11 @@ export default function EpbPokemonRow({
               {speciesLabel}
             </span>
           </PokemonLink>
-          <span className="rounded bg-surface px-1.5 py-0.5 text-[10px] font-medium text-fg-muted">
+          <span className="rounded bg-surface px-1.5 py-0.5 text-micro font-medium text-fg-muted">
             {tLegacy('stageShort', { n: snapshot.stage_at_match })}
           </span>
           {price !== null && (
-            <span className="text-[10px] text-fg-muted">{tLegacy('pts', { n: price })}</span>
+            <span className="text-micro text-fg-muted">{tLegacy('pts', { n: price })}</span>
           )}
           {snapshot.evolution_triggered && (
             <Badge variant="yellow" size="xs">
@@ -99,12 +99,12 @@ export default function EpbPokemonRow({
                   style={{ width: `${progressPercent}%` }}
                 />
               </div>
-              <span className="text-[10px] font-mono text-fg-muted whitespace-nowrap">
+              <span className="text-micro font-mono text-fg-muted whitespace-nowrap">
                 {snapshot.progress_before}/{nextStageRequirement} → {snapshot.progress_after}/{nextStageRequirement}
               </span>
             </div>
             {nextForm && (
-              <p className="mt-0.5 text-[10px] text-fg-muted">
+              <p className="mt-0.5 text-micro text-fg-muted">
                 {snapshot.evolution_triggered
                   ? t('row.evolvedInto', { form: localizeSpecies(nextForm, dataLocale) })
                   : nextStageRequirement - snapshot.progress_after > 0
@@ -119,27 +119,27 @@ export default function EpbPokemonRow({
         )}
 
         {isFullyEvolved && (
-          <p className="mt-0.5 text-[10px] text-win">{t('row.fullyEvolved')}</p>
+          <p className="mt-0.5 text-micro text-win">{t('row.fullyEvolved')}</p>
         )}
 
         {/* Per-match progress source breakdown (compact), with the spec's token names */}
         {(snapshot.draft_tokens_delta > 0 || snapshot.kill_tokens_delta > 0 || snapshot.cosmo_points_delta > 0) && (
-          <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] text-fg-muted">
+          <div className="mt-1 flex flex-wrap gap-1.5 text-micro text-fg-muted">
             {snapshot.draft_tokens_delta > 0 && (
               <span className="flex items-center gap-0.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-green-500" />
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-win" />
                 {tShared('progress.draftKillChip', { count: snapshot.draft_tokens_delta })}
               </span>
             )}
             {snapshot.kill_tokens_delta > 0 && (
               <span className="flex items-center gap-0.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-red-500" />
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-loss" />
                 {tShared('progress.comebackChip', { n: snapshot.kill_tokens_delta })}
               </span>
             )}
             {snapshot.cosmo_points_delta > 0 && (
               <span className="flex items-center gap-0.5">
-                <span className="inline-block h-1.5 w-1.5 rounded-full bg-purple-500" />
+                <span className="inline-block h-1.5 w-1.5 rounded-full bg-tier-3" />
                 {tShared('progress.cosmoChip', { n: snapshot.cosmo_points_delta })}
               </span>
             )}

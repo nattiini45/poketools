@@ -60,7 +60,7 @@ function PokemonRow({ stat, index }: { stat: BattleStat; index: number }) {
             </span>
           </PokemonLink>
           {stat.was_lead && (
-            <Badge variant="blue" size="sm" className="uppercase">{t('shared.lead')}</Badge>
+            <Badge variant="blue" size="sm">{t('shared.lead')}</Badge>
           )}
           {stat.kos_dealt > 0 && (
             <Badge variant="green" size="sm">
@@ -71,7 +71,7 @@ function PokemonRow({ stat, index }: { stat: BattleStat; index: number }) {
             <Badge variant="red" size="sm">{t('shared.koed')}</Badge>
           )}
           {notBrought && (
-            <span className="text-[10px] text-fg-muted italic">{t('gameCard.notBrought')}</span>
+            <span className="text-micro text-fg-muted italic">{t('gameCard.notBrought')}</span>
           )}
         </div>
         {stat.moves_used.length > 0 && (
@@ -81,7 +81,7 @@ function PokemonRow({ stat, index }: { stat: BattleStat; index: number }) {
           />
         )}
         {stat.turns_active > 0 && (
-          <p className="text-[10px] text-fg-muted mt-0.5">
+          <p className="text-micro text-fg-muted mt-0.5">
             {t('gameCard.turnsActive', { count: stat.turns_active })}
           </p>
         )}

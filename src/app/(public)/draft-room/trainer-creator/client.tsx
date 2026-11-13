@@ -185,7 +185,7 @@ export default function TrainerCreatorClient({ playerId }: Props) {
             {saving ? t('saving') : t('save')}
           </button>
           {saved && (
-            <span className="text-sm text-green-400">{t('saved')}</span>
+            <span className="text-sm text-win">{t('saved')}</span>
           )}
         </div>
       </div>

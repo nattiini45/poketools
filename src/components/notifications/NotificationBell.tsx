@@ -250,7 +250,7 @@ export default function NotificationBell() {
         {unread > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -right-0.5 -top-0.5 min-w-[1.125rem] rounded-full bg-poke-danger px-1 text-center text-[10px] font-bold leading-[1.125rem] text-poke-on-danger"
+            className="absolute -right-0.5 -top-0.5 min-w-[1.125rem] rounded-full bg-poke-danger px-1 text-center text-micro font-bold leading-[1.125rem] text-poke-on-danger"
           >
             {badge}
           </span>

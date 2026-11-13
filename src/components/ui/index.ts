@@ -14,8 +14,5 @@ export { default as Textarea } from "./Textarea";
 export {
   PANEL,
   PANEL_INSET,
-  PANEL_NOTICE,
-  PANEL_HOVER,
   FOCUS_RING,
-  TABLE_HEAD,
 } from "./panel";

@@ -68,8 +68,8 @@ function EvolutionEventBannerInner({
           key={`${event.player_id}-${event.base_pokemon}-${i}`}
           className={`flex items-center gap-3 p-3 rounded-poke-lg border-2 text-sm ${
             event.is_devolution
-              ? 'bg-poke-yellow-light border-yellow-600'
-              : 'bg-linear-to-r/srgb from-poke-yellow-light to-orange-50 border-poke-yellow'
+              ? 'bg-poke-yellow-light border-accent-fill'
+              : 'bg-linear-to-r/srgb from-poke-yellow-light to-accent-subtle border-poke-yellow'
           }`}
         >
           {/* Arrow visual: old form → new form */}

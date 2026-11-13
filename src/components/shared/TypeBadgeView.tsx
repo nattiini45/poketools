@@ -25,8 +25,8 @@ const TYPE_STYLES: Record<string, string> = {
 
 // Box metrics per size: `compact` is the narrow pill of dense layouts (the team weakness table's column heads).
 const SIZE_CLASSES = {
-  default: 'min-w-[81px] px-2.5 py-0.5 text-xs tracking-wide',
-  compact: 'min-w-0 px-0.5 py-1.5 text-[11.25px] leading-[1.1] tracking-normal',
+  default: 'min-w-[81px] px-2.5 py-0.5 text-xs',
+  compact: 'min-w-0 px-0.5 py-1.5 text-[11.25px] leading-[1.1]',
 } as const;
 
 export type TypeBadgeSize = keyof typeof SIZE_CLASSES;
@@ -48,7 +48,7 @@ export default function TypeBadgeView({ type, label, className = '', size = 'def
       className={`
         relative overflow-hidden group
         inline-block rounded-full
-        font-heading font-bold uppercase text-center
+        font-heading font-bold text-center
         shadow-poke-sm
         ${SIZE_CLASSES[size]} ${styles} ${className}
       `}

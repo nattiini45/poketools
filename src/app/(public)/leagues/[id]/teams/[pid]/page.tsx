@@ -62,7 +62,7 @@ export default async function PlayerTeamPage({ params }: PageProps) {
       </div>
 
       {!visible ? (
-        <div className="p-4 bg-yellow-900/30 border border-yellow-700 rounded text-sm text-yellow-400 mb-4">
+        <div className="p-4 bg-accent-subtle border border-hairline-strong rounded text-sm text-accent-ink mb-4">
           {t('team.hidden')}
         </div>
       ) : null}
@@ -71,7 +71,7 @@ export default async function PlayerTeamPage({ params }: PageProps) {
 
       <Link
         href={`/leagues/${seasonId}/teams`}
-        className="inline-block mt-6 text-sm text-blue-600 hover:underline"
+        className="inline-block mt-6 text-sm text-accent-ink hover:underline"
       >
         <span aria-hidden="true">&larr; </span>
         {t('team.backToTeams')}

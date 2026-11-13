@@ -6,37 +6,6 @@
  * which these constants cannot.
  */
 
-export const colors = {
-  bg: {
-    base: "#E8D9B5",
-    surface: "#FFF8E9",
-    elevated: "#FAEED6",
-    muted: "#F1E4C8",
-    inverse: "#241A0C",
-  },
-  text: {
-    primary: "#241A0C",
-    secondary: "#5C4E37",
-    muted: "#675940",
-    inverse: "#FFF8E9",
-    link: "#954506",
-  },
-  accent: {
-    accent: "#9A4806",
-    accentStrong: "#843C05",
-    blue: "#1E4BC8",
-    blueHover: "#1A3FA6",
-    green: "#166534",
-    yellow: "#EAB308",
-    danger: "#A91B1B",
-  },
-  border: {
-    default: "#E3D2AC",
-    strong: "#C9B183",
-    focus: "#954506",
-  },
-} as const;
-
 export const typeColors: Record<string, { bg: string; text: string }> = {
   Normal: { bg: "hsl(60, 5%, 65%)", text: "#FFFFFF" },
   Fire: { bg: "hsl(10, 80%, 55%)", text: "#FFFFFF" },
@@ -57,11 +26,3 @@ export const typeColors: Record<string, { bg: string; text: string }> = {
   Steel: { bg: "hsl(220, 15%, 60%)", text: "#FFFFFF" },
   Fairy: { bg: "hsl(330, 55%, 65%)", text: "#1A1714" },
 };
-
-export const shadows = {
-  sm: "0 1px 2px rgba(26, 23, 20, 0.05)",
-  md: "0 4px 6px -1px rgba(26, 23, 20, 0.07), 0 2px 4px -2px rgba(26, 23, 20, 0.05)",
-  lg: "0 10px 15px -3px rgba(26, 23, 20, 0.08), 0 4px 6px -4px rgba(26, 23, 20, 0.04)",
-  card: "0 2px 8px rgba(26, 23, 20, 0.06)",
-  cardHover: "0 8px 20px rgba(26, 23, 20, 0.10), 0 2px 6px rgba(26, 23, 20, 0.06)",
-} as const;
