@@ -109,35 +109,35 @@ export function HeadToHeadCard({ player1Name, player2Name, summary }: HeadToHead
   const t = useT(statsMessages);
   return (
     <Card padding="md">
-      <h4 className="font-heading font-semibold text-sm text-fg mb-3">
+      <h4 className="font-heading font-semibold text-sm text-poke-text-primary mb-3">
         {t('h2h.title', { player1: player1Name, player2: player2Name })}
       </h4>
 
       <div className="grid grid-cols-3 gap-4 text-center text-sm">
         <div>
-          <div className="text-2xl font-bold text-win">{summary.p1Wins}</div>
-          <div className="text-fg-muted">{player1Name}</div>
+          <div className="text-2xl font-bold text-poke-green">{summary.p1Wins}</div>
+          <div className="text-poke-text-muted">{player1Name}</div>
         </div>
         <div>
-          <div className="text-lg text-fg-muted pt-1">
+          <div className="text-lg text-poke-text-muted pt-1">
             {t('h2h.matches', { count: summary.matches })}
           </div>
-          <div className="text-xs text-fg-muted">{t('h2h.games', { count: summary.totalGames })}</div>
+          <div className="text-xs text-poke-text-muted">{t('h2h.games', { count: summary.totalGames })}</div>
         </div>
         <div>
-          <div className="text-2xl font-bold text-accent-ink">{summary.p2Wins}</div>
-          <div className="text-fg-muted">{player2Name}</div>
+          <div className="text-2xl font-bold text-poke-blue">{summary.p2Wins}</div>
+          <div className="text-poke-text-muted">{player2Name}</div>
         </div>
       </div>
 
       {summary.totalGames > 0 && (
-        <div className="mt-3 text-xs text-center text-fg-muted">
+        <div className="mt-3 text-xs text-center text-poke-text-muted">
           {t('h2h.gameRecord', { wins: summary.p1GameWins, losses: summary.p2GameWins })}
         </div>
       )}
 
       {summary.matches === 0 && (
-        <div className="text-center text-fg-muted text-sm mt-2">
+        <div className="text-center text-poke-text-muted text-sm mt-2">
           {t('h2h.noMatches')}
         </div>
       )}
@@ -154,14 +154,14 @@ export function HeadToHeadSupplementLine({ supplement }: { supplement: HeadToHea
   if (!supplement || supplement.state === 'excluded') return null;
   if (supplement.state === 'failed') {
     return (
-      <p role="status" className="text-xs text-center text-fg-muted">
+      <p role="status" className="text-xs text-center text-poke-text-tertiary">
         {t('loadFailed')}
       </p>
     );
   }
   if (!supplement.record) return null;
   return (
-    <p className="text-xs text-center text-fg-muted">
+    <p className="text-xs text-center text-poke-text-tertiary">
       {t('headToHead.record', {
         wins: supplement.record.wins,
         draws: supplement.record.draws,
@@ -218,7 +218,7 @@ export default function HeadToHeadMatrix({
 
   const state = loaded?.key === requestKey ? loaded.result : null;
   if (!state) {
-    return <div className="py-4 text-center text-fg-muted">{t('h2h.loading')}</div>;
+    return <div className="py-4 text-center text-poke-text-muted">{t('h2h.loading')}</div>;
   }
   if (!state.ok) {
     const message = state.error ? errorText(state.error) : t('h2h.loadFailed');

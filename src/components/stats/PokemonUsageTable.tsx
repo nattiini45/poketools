@@ -59,7 +59,7 @@ export default function PokemonUsageTable({
       key: 'rank',
       header: '#',
       width: '2.5rem',
-      render: (_row, i) => <span className="text-fg-muted">{i + 1}</span>,
+      render: (_row, i) => <span className="text-poke-text-muted">{i + 1}</span>,
     },
     {
       key: 'pokemon_name',
@@ -90,7 +90,7 @@ export default function PokemonUsageTable({
       sortable: true,
       sortValue: (row) => row.total_appearances,
       render: (row) => (
-        <span className="text-fg-muted">{row.total_appearances}</span>
+        <span className="text-poke-text-secondary">{row.total_appearances}</span>
       ),
     },
     {
@@ -164,9 +164,9 @@ function UsageBar({ value, label }: { value: number; label: string }) {
   const clamped = Math.min(100, Math.max(0, value));
   return (
     <div className="flex items-center gap-2">
-      <div className="w-16 h-2 bg-sunken rounded-full overflow-hidden">
+      <div className="w-16 h-2 bg-poke-muted rounded-full overflow-hidden">
         <div
-          className="h-full bg-accent-fill rounded-full"
+          className="h-full bg-poke-blue rounded-full"
           style={{ width: `${clamped}%` }}
         />
       </div>

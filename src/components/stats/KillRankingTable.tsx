@@ -51,7 +51,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       key: 'rank',
       header: '#',
       width: '2.5rem',
-      render: (_row, i) => <span className="text-fg-muted">{i + 1}</span>,
+      render: (_row, i) => <span className="text-poke-text-muted">{i + 1}</span>,
     },
     {
       key: 'pokemon_name',
@@ -74,7 +74,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       sortable: true,
       sortValue: (row) => row.kos_dealt,
       render: (row) => (
-        <span className="text-win font-medium">{row.kos_dealt}</span>
+        <span className="text-poke-green font-medium">{row.kos_dealt}</span>
       ),
     },
     {
@@ -84,7 +84,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       sortable: true,
       sortValue: (row) => row.times_koed,
       render: (row) => (
-        <span className="text-loss font-medium">{row.times_koed}</span>
+        <span className="text-poke-danger font-medium">{row.times_koed}</span>
       ),
     },
     {
@@ -96,7 +96,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       render: (row) => {
         const val = row.kill_differential;
         const color =
-          val > 0 ? 'text-win' : val < 0 ? 'text-loss' : 'text-fg-muted';
+          val > 0 ? 'text-poke-green' : val < 0 ? 'text-poke-danger' : 'text-poke-text-muted';
         const prefix = val > 0 ? '+' : '';
         return (
           <span className={`font-semibold ${color}`}>
@@ -113,7 +113,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       sortable: true,
       sortValue: (row) => row.times_in_team,
       render: (row) => (
-        <span className="text-fg-muted">{row.times_in_team}</span>
+        <span className="text-poke-text-secondary">{row.times_in_team}</span>
       ),
     },
     {
@@ -123,7 +123,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       sortable: true,
       sortValue: (row) => row.participations,
       render: (row) => (
-        <span className="text-fg-muted">{row.participations}</span>
+        <span className="text-poke-text-secondary">{row.participations}</span>
       ),
     },
     {
@@ -133,7 +133,7 @@ export default function KillRankingTable({ data, labels: labelsOverride }: KillR
       sortable: true,
       sortValue: (row) => row.efficiency,
       render: (row) => (
-        <span className="text-fg-muted font-medium">
+        <span className="text-poke-text-secondary font-medium">
           {fixedNumber(f, row.efficiency, 2)}
         </span>
       ),
