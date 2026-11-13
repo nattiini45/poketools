@@ -1,6 +1,7 @@
 'use client';
 
 import Badge from '@/components/ui/Badge';
+import { Star } from 'lucide-react';
 import { useDataLocale, useT } from '@/i18n/client';
 import { draftLegacyEvolutionMessages } from '@/i18n/messages/draft/legacy/evolution';
 import { draftSharedMessages } from '@/i18n/messages/draft/shared';
@@ -52,7 +53,7 @@ export default function MatchEvolutionSummary({
         <span className="text-sm font-heading font-semibold text-fg">
           {playerName}
         </span>
-        {isWinner && <span className="text-xs text-win">★</span>}
+        {isWinner && <Star aria-hidden="true" className="size-3.5 fill-current text-win" />}
       </div>
 
       <div className="flex flex-wrap gap-2">

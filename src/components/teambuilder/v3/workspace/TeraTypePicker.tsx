@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { Star } from 'lucide-react';
 import TypeBadge from '@/components/shared/TypeBadge';
 import { useDataLocale, useLocale, useT } from '@/i18n/client';
 import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
@@ -60,7 +61,8 @@ export default function TeraTypePicker({ value, species, onChange, disabled }: T
   const renderBadge = (type: string) =>
     type === 'Stellar' ? (
       <span className="inline-flex items-center justify-center rounded-full border border-hairline-strong px-1.5 text-caption font-[550] text-fg">
-        ★ {localizeType(type, dl)}
+        <Star aria-hidden="true" className="mr-1 size-3 fill-current" />
+        {localizeType(type, dl)}
       </span>
     ) : (
       <TypeBadge type={type} size="compact" className="px-1.5! py-0.5!" />

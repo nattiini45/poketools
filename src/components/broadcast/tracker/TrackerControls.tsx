@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { CircleX, RefreshCw, Sparkles, Target, Zap, type LucideIcon } from 'lucide-react';
 import Button from '@/components/ui/Button';
 import type { TrackerState, BroadcastMomentType } from '@/types/broadcast';
 import type { TrackerDispatchAction } from '@/lib/broadcast/tracker-reducer';
@@ -22,12 +23,12 @@ interface TrackerControlsProps {
   producerMode?: boolean;
 }
 
-const MOMENT_TYPES: { value: BroadcastMomentType; emoji: string }[] = [
-  { value: 'big_ko', emoji: '💥' },
-  { value: 'turning_point', emoji: '🔄' },
-  { value: 'clutch', emoji: '🎯' },
-  { value: 'misplay', emoji: '❌' },
-  { value: 'highlight', emoji: '✨' },
+const MOMENT_TYPES: { value: BroadcastMomentType; Icon: LucideIcon }[] = [
+  { value: 'big_ko', Icon: Zap },
+  { value: 'turning_point', Icon: RefreshCw },
+  { value: 'clutch', Icon: Target },
+  { value: 'misplay', Icon: CircleX },
+  { value: 'highlight', Icon: Sparkles },
 ];
 
 export default function TrackerControls({
@@ -169,9 +170,9 @@ export default function TrackerControls({
                 type="button"
                 onClick={() => handleMoment(mt.value)}
                 disabled={momentLimitReached}
-                className="px-3 py-1.5 rounded-lg bg-elevated text-xs font-semibold text-fg hover:bg-hairline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-elevated text-xs font-semibold text-fg hover:bg-hairline transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {mt.emoji} {t(`controls.momentType.${mt.value}`)}
+                <mt.Icon aria-hidden="true" className="size-3.5" /> {t(`controls.momentType.${mt.value}`)}
               </button>
             ))}
           </div>

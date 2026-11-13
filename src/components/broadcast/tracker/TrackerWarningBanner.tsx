@@ -1,6 +1,7 @@
 'use client';
 
 import type { ApiErrorLike } from '@/i18n/api-errors';
+import { X } from 'lucide-react';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { broadcastCasterMessages } from '@/i18n/messages/broadcast-caster';
@@ -31,7 +32,7 @@ export function TrackerWarningBannerView({ text, dismissLabel, onDismiss }: Trac
         className="ml-2 text-accent-ink hover:opacity-80"
         aria-label={dismissLabel}
       >
-        ✕
+        <X aria-hidden="true" className="size-4" />
       </button>
     </div>
   );

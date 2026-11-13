@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCasterPlayerPokemon } from "./CasterDataContext";
 import { useDataLocale, useFormatter, useT } from "@/i18n/client";
 import { broadcastCasterMessages } from "@/i18n/messages/broadcast-caster";
@@ -28,7 +29,7 @@ export default function BringLeadStats({ player }: BringLeadStatsProps) {
         onClick={() => setCollapsed(!collapsed)}
         className="text-[10px] text-fg-muted hover:text-fg transition-colors px-1"
       >
-        {collapsed ? "▸" : "▾"} {t("bringLead.title")}
+        {collapsed ? <ChevronRight aria-hidden="true" className="inline size-3" /> : <ChevronDown aria-hidden="true" className="inline size-3" />} {t("bringLead.title")}
       </button>
       {!collapsed && (
         <div className="mt-1 space-y-1 px-1">

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { useCastStudio } from '../CastStudioContext';
 import SpriteImg from '@/components/shared/SpriteImg';
 import type { UsageListItem } from '@/types/usage';
@@ -84,7 +85,7 @@ export default function SoloMetaPanel() {
           {t('solo.meta.title')}
         </span>
         <span aria-hidden="true" className="text-caption text-fg-muted">
-          {collapsed ? '▶' : '▼'}
+          {collapsed ? <ChevronRight className="size-4" /> : <ChevronDown className="size-4" />}
         </span>
       </button>
 

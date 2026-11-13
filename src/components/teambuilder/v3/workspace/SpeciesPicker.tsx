@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo, useRef } from 'react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import TypeSprite from '@/components/shared/TypeSprite';
 import BudgetMeter from '../browser/BudgetMeter';
@@ -305,7 +306,7 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
     return (
       <span className="ml-0.5 text-accent-ink">
         {prefix}
-        {dir === 'desc' ? '▾' : '▴'}
+        {dir === 'desc' ? <ChevronDown aria-hidden="true" className="inline size-3" /> : <ChevronUp aria-hidden="true" className="inline size-3" />}
       </span>
     );
   };

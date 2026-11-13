@@ -1,6 +1,7 @@
 'use client';
 
 import PokemonSprite from '@/components/shared/PokemonSprite';
+import { X } from 'lucide-react';
 import TypeBadge from '@/components/shared/TypeBadge';
 import { useDataLocale, useT } from '@/i18n/client';
 import { commonMessages } from '@/i18n/messages/common';
@@ -58,7 +59,7 @@ export default function MatchupPokemonDetail({
           className="text-fg-muted hover:text-fg"
           aria-label={tCommon('actions.close')}
         >
-          ✕
+          <X aria-hidden="true" className="size-4" />
         </button>
       </div>
 
