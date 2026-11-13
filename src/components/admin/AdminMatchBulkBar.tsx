@@ -27,7 +27,7 @@ export default function AdminMatchBulkBar({
     <div
       role="region"
       aria-label={t('admin.matches.bulk.barLabel')}
-      className="sticky bottom-3 z-30 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-lg border border-accent-ink bg-poke-surface p-2 shadow-poke-lg"
+      className="sticky bottom-3 z-30 mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-lg border border-accent-ink bg-surface p-2 shadow-poke-lg"
     >
       <div className="flex min-w-0 flex-1 basis-40 items-center gap-3 px-1">
         <SkewChip tone="tier-1" className="shrink-0 px-2.5 font-heading text-title font-normal">

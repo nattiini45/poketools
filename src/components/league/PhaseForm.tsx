@@ -95,10 +95,10 @@ export function PhaseNameField({
         placeholder={t('form.namePlaceholder')}
         aria-invalid={errorText ? true : undefined}
         aria-describedby={errorText ? errorId : undefined}
-        className={errorText ? 'border-poke-danger' : undefined}
+        className={errorText ? 'border-loss' : undefined}
       />
       {errorText && (
-        <p id={errorId} className="text-sm text-poke-danger">
+        <p id={errorId} className="text-sm text-loss">
           {errorText}
         </p>
       )}
@@ -299,7 +299,7 @@ export default function PhaseForm({
                 setDoublesChoice(e.target.checked);
                 setDoublesPinned(true);
               }}
-              className="rounded accent-poke-accent"
+              className="rounded accent-accent-fill"
             />
             {t('form.isDoubles')}
           </label>
@@ -334,7 +334,7 @@ export default function PhaseForm({
                 type="checkbox"
                 checked={advPerGroup}
                 onChange={(e) => setAdvPerGroup(e.target.checked)}
-                className="rounded accent-poke-accent"
+                className="rounded accent-accent-fill"
               />
               {t('form.perGroup')}
             </label>

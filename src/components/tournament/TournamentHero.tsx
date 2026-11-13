@@ -55,7 +55,7 @@ export default function TournamentHero({ tournament, league, roundCount, view, l
           <Link
             href={`/leagues/${league.id}#schedule`}
             aria-label={t('detail.backToLeagueLabel', { name: league.name })}
-            className="mb-4 inline-flex min-h-6 items-center gap-1 rounded-[3px] text-body font-[550] text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus"
+            className="mb-4 inline-flex min-h-6 items-center gap-1 rounded-[3px] text-body font-[550] text-fg-muted hover:text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
           >
             <span aria-hidden="true">←</span> {t('detail.backToLeague', { name: league.name })}
           </Link>

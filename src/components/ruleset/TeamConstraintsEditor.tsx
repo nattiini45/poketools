@@ -44,32 +44,32 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
 
   return (
     <div className="space-y-6">
-      <label className="flex items-start gap-3 p-3 border border-poke-border rounded-poke-md">
+      <label className="flex items-start gap-3 p-3 border border-hairline rounded-poke-md">
         <input
           type="checkbox"
           checked={enabled}
           onChange={(e) => onChange(e.target.checked ? {} : null)}
-          className="mt-1 accent-poke-accent"
+          className="mt-1 accent-accent-fill"
         />
         <div>
-          <div className="text-sm font-heading font-semibold text-poke-text-primary">
+          <div className="text-sm font-heading font-semibold text-fg">
             {t('constraints.enable')}
           </div>
-          <p className="text-xs text-poke-text-muted">
+          <p className="text-xs text-fg-muted">
             {t('constraints.enableHint', { item: eviolite })}
           </p>
         </div>
       </label>
 
       {enabled && isEmptyTeamConstraints(value) && (
-        <p className="text-xs text-poke-text-muted">{t('constraints.emptyHint')}</p>
+        <p className="text-xs text-fg-muted">{t('constraints.emptyHint')}</p>
       )}
 
       {enabled && value && (
         <>
           {/* ── Type quotas ─────────────────────────────────────────── */}
-          <fieldset className="border border-poke-border rounded-poke-md p-3 space-y-3">
-            <legend className="px-1 text-sm font-heading font-semibold text-poke-text-primary">
+          <fieldset className="border border-hairline rounded-poke-md p-3 space-y-3">
+            <legend className="px-1 text-sm font-heading font-semibold text-fg">
               {t('constraints.typeQuotas')}
             </legend>
 
@@ -88,15 +88,15 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                       : undefined,
                   })
                 }
-                className="accent-poke-accent"
+                className="accent-accent-fill"
               />
-              <span className="text-sm text-poke-text-primary">{t('constraints.requirePerType')}</span>
+              <span className="text-sm text-fg">{t('constraints.requirePerType')}</span>
             </label>
 
             {value.type_quotas && (
               <div className="ml-6 space-y-2">
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-poke-text-secondary w-32">{t('constraints.typeSource')}</label>
+                  <label className="text-sm text-fg-muted w-32">{t('constraints.typeSource')}</label>
                   <select
                     value={value.type_quotas.source}
                     onChange={(e) =>
@@ -107,7 +107,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+                    className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   >
                     <option value="player_core">{t('constraints.source.player_core')}</option>
                     <option value="fixed">{t('constraints.source.fixed')}</option>
@@ -116,7 +116,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
 
                 {value.type_quotas.source === 'fixed' && (
                   <div>
-                    <label className="text-sm text-poke-text-secondary">{t('constraints.fixedTypes')}</label>
+                    <label className="text-sm text-fg-muted">{t('constraints.fixedTypes')}</label>
                     <div className="mt-1 flex flex-wrap gap-1">
                       {POKEMON_TYPES.map((type) => {
                         const list = value.type_quotas?.fixed_types ?? [];
@@ -136,8 +136,8 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                             }
                             className={`px-2 py-0.5 rounded-poke-md text-xs font-heading font-semibold ${
                               on
-                                ? 'bg-poke-accent text-poke-surface'
-                                : 'bg-poke-muted text-poke-text-muted hover:bg-poke-elevated'
+                                ? 'bg-accent-ink text-surface'
+                                : 'bg-sunken text-fg-muted hover:bg-elevated'
                             }`}
                           >
                             {localizeType(type, dl)}
@@ -149,7 +149,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                 )}
 
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-poke-text-secondary w-32">{t('constraints.minPerType')}</label>
+                  <label className="text-sm text-fg-muted w-32">{t('constraints.minPerType')}</label>
                   <input
                     type="number"
                     min={0}
@@ -163,7 +163,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+                    className="w-20 border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   />
                 </div>
 
@@ -179,9 +179,9 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="accent-poke-accent"
+                    className="accent-accent-fill"
                   />
-                  <span className="text-sm text-poke-text-primary">
+                  <span className="text-sm text-fg">
                     {t('constraints.multiCount', {
                       pokemon: localizeSpecies('Volcanion', dl),
                       type1: localizeType('Fire', dl),
@@ -194,8 +194,8 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
           </fieldset>
 
           {/* ── Tera match ──────────────────────────────────────────── */}
-          <fieldset className="border border-poke-border rounded-poke-md p-3 space-y-2">
-            <legend className="px-1 text-sm font-heading font-semibold text-poke-text-primary">
+          <fieldset className="border border-hairline rounded-poke-md p-3 space-y-2">
+            <legend className="px-1 text-sm font-heading font-semibold text-fg">
               {t('constraints.teraRestriction')}
             </legend>
             <select
@@ -205,7 +205,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                   tera_match: e.target.value as TeamConstraints['tera_match'],
                 })
               }
-              className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+              className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
             >
               <option value="none">{t('constraints.teraMatch.none')}</option>
               <option value="player_core">{t('constraints.teraMatch.player_core')}</option>
@@ -214,13 +214,13 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
           </fieldset>
 
           {/* ── Evolution stage ─────────────────────────────────────── */}
-          <fieldset className="border border-poke-border rounded-poke-md p-3 space-y-2">
-            <legend className="px-1 text-sm font-heading font-semibold text-poke-text-primary">
+          <fieldset className="border border-hairline rounded-poke-md p-3 space-y-2">
+            <legend className="px-1 text-sm font-heading font-semibold text-fg">
               {t('constraints.evolutionStage')}
             </legend>
 
             <div className="flex items-center gap-3">
-              <label className="text-sm text-poke-text-secondary w-32">{t('constraints.mode')}</label>
+              <label className="text-sm text-fg-muted w-32">{t('constraints.mode')}</label>
               <select
                 value={value.evolution_stage?.mode ?? 'unrestricted'}
                 onChange={(e) =>
@@ -231,7 +231,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                     },
                   })
                 }
-                className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+                className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
               >
                 <option value="unrestricted">{t('constraints.modes.unrestricted')}</option>
                 <option value="nfe_only_plus_n_fe">{t('constraints.modes.nfe_only_plus_n_fe')}</option>
@@ -241,7 +241,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
             {value.evolution_stage?.mode === 'nfe_only_plus_n_fe' && (
               <>
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-poke-text-secondary w-32">{t('constraints.feCap')}</label>
+                  <label className="text-sm text-fg-muted w-32">{t('constraints.feCap')}</label>
                   <input
                     type="number"
                     min={0}
@@ -256,12 +256,12 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="w-20 border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+                    className="w-20 border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   />
                 </div>
 
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-poke-text-secondary w-32">{t('constraints.feTierMax')}</label>
+                  <label className="text-sm text-fg-muted w-32">{t('constraints.feTierMax')}</label>
                   <select
                     value={value.evolution_stage.fully_evolved_tier_max ?? ''}
                     onChange={(e) =>
@@ -273,7 +273,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+                    className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   >
                     <option value="">{t('constraints.noCap')}</option>
                     {TIER_OPTIONS.map((tier) => (
@@ -297,18 +297,18 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                     },
                   })
                 }
-                className="accent-poke-accent"
+                className="accent-accent-fill"
               />
-              <span className="text-sm text-poke-text-primary">{t('constraints.legendariesAllowed')}</span>
+              <span className="text-sm text-fg">{t('constraints.legendariesAllowed')}</span>
             </label>
           </fieldset>
 
           {/* ── Eviolite cap ────────────────────────────────────────── */}
-          <fieldset className="border border-poke-border rounded-poke-md p-3 space-y-2">
-            <legend className="px-1 text-sm font-heading font-semibold text-poke-text-primary">
+          <fieldset className="border border-hairline rounded-poke-md p-3 space-y-2">
+            <legend className="px-1 text-sm font-heading font-semibold text-fg">
               {t('constraints.evioliteCap', { item: eviolite })}
             </legend>
-            <p className="text-xs text-poke-text-muted">
+            <p className="text-xs text-fg-muted">
               {t('constraints.evioliteHint', { item: eviolite })}
             </p>
             <select
@@ -316,7 +316,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
               onChange={(e) =>
                 update({ eviolite_tier_cap: (e.target.value || undefined) as TierKey | undefined })
               }
-              className="border border-poke-border bg-poke-surface rounded-poke-md px-2 py-1 text-sm text-poke-text-primary"
+              className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
             >
               <option value="">{t('constraints.noCap')}</option>
               {TIER_OPTIONS.map((tier) => (

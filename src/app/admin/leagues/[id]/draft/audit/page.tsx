@@ -16,7 +16,7 @@ interface PageProps {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 }
 
-const BACK = 'inline-flex items-center gap-1 text-sm text-poke-text-secondary hover:text-poke-text-primary mb-2';
+const BACK = 'inline-flex items-center gap-1 text-sm text-fg-muted hover:text-fg mb-2';
 
 function listOf(v: string | string[] | undefined): string[] {
   if (v === undefined) return [];
@@ -53,7 +53,7 @@ export default async function AdminDraftAuditPage({ params, searchParams }: Page
     return (
       <AdminGuard>
         <PageContainer title={t('page.auditTitle', { league: data.leagueName })} maxWidth="xl">
-          <p className="text-poke-text-secondary">{data.kind === 'notEpb' ? t('page.notEpb') : t('page.noList')}</p>
+          <p className="text-fg-muted">{data.kind === 'notEpb' ? t('page.notEpb') : t('page.noList')}</p>
         </PageContainer>
       </AdminGuard>
     );
@@ -90,7 +90,7 @@ export default async function AdminDraftAuditPage({ params, searchParams }: Page
             initialPlayer={initialPlayer}
           />
         ) : (
-          <p className="text-poke-text-secondary">{t('page.noPools')}</p>
+          <p className="text-fg-muted">{t('page.noPools')}</p>
         )}
       </PageContainer>
     </AdminGuard>

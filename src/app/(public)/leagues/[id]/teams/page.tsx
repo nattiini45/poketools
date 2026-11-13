@@ -68,13 +68,13 @@ export default async function LeagueTeamsPage({ params }: PageProps) {
       subtitle={t('teams.registered', { count: teamsWithVisibility.length })}
     >
       {teamsWithVisibility.length === 0 ? (
-        <p className="text-poke-text-muted">{t('teams.empty')}</p>
+        <p className="text-fg-muted">{t('teams.empty')}</p>
       ) : (
         <div className="grid gap-4">
           {teamsWithVisibility.map((team) => (
             <Link key={team.id} href={`/leagues/${id}/teams/${team.player_id}`}>
               <Card hover padding="md">
-                <h2 className="font-heading font-semibold text-sm text-poke-text-primary mb-2">{team.player_name}</h2>
+                <h2 className="font-heading font-semibold text-sm text-fg mb-2">{team.player_name}</h2>
                 <div className="flex gap-2">
                   {team.visible ? (
                     team.pokemon.slice(0, 6).map((poke, i) => (
@@ -85,7 +85,7 @@ export default async function LeagueTeamsPage({ params }: PageProps) {
                       <div
                         key={i}
                         title={t('teams.hiddenSlot')}
-                        className="w-10 h-10 bg-poke-muted rounded-poke-md flex items-center justify-center text-poke-text-muted text-xs"
+                        className="w-10 h-10 bg-sunken rounded-poke-md flex items-center justify-center text-fg-muted text-xs"
                       >
                         ?
                       </div>
@@ -100,7 +100,7 @@ export default async function LeagueTeamsPage({ params }: PageProps) {
 
       <Link
         href={`/leagues/${id}`}
-        className="inline-block text-sm text-poke-blue hover:underline"
+        className="inline-block text-sm text-accent-ink hover:underline"
       >
         <span aria-hidden="true">&larr; </span>
         {t('teams.backToLeague')}

@@ -494,7 +494,7 @@ export default function CoreLigaManager({ seasonId }: CoreLigaManagerProps) {
             type="checkbox"
             checked={forceReroll}
             onChange={(e) => setForceReroll(e.target.checked)}
-            className="accent-poke-accent"
+            className="accent-accent-fill"
           />
           <span className="text-body text-fg">{t('cores.forceReroll')}</span>
         </label>

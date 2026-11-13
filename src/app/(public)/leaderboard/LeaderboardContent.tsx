@@ -67,7 +67,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
       header: '#',
       width: '3rem',
       render: (_row, index) => (
-        <span className="font-heading font-bold text-poke-text-primary">{index + 1}</span>
+        <span className="font-heading font-bold text-fg">{index + 1}</span>
       ),
     },
     {
@@ -81,7 +81,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
           className="inline-flex items-center gap-2 hover:opacity-80"
         >
           <PlayerAvatar avatarUrl={row.player_avatar_url} name={row.player_name} size={30} />
-          <span className="font-semibold text-poke-text-primary">{row.player_name}</span>
+          <span className="font-semibold text-fg">{row.player_name}</span>
         </Link>
       ),
     },
@@ -99,7 +99,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
       sortable: true,
       sortValue: (row) => row.peak_rating,
       render: (row) => (
-        <span className="text-poke-text-secondary">{Math.round(row.peak_rating)}</span>
+        <span className="text-fg-muted">{Math.round(row.peak_rating)}</span>
       ),
     },
     {
@@ -109,7 +109,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
       sortable: true,
       sortValue: (row) => row.wins,
       render: (row) => (
-        <span className="text-poke-text-secondary">
+        <span className="text-fg-muted">
           {t('leaderboard.recordValue', { wins: row.wins, losses: row.losses, draws: row.draws })}
         </span>
       ),
@@ -136,15 +136,15 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
   ];
 
   return (
-    <div className="bg-poke-surface border border-poke-border rounded-poke-xl p-4 sm:p-6 shadow-poke">
+    <div className="bg-surface border border-hairline rounded-poke-xl p-4 sm:p-6 shadow-poke">
       <div className="flex items-center justify-between flex-wrap gap-3 mb-4">
-        <p className="text-sm text-poke-text-secondary">{t('leaderboard.title')}</p>
-        <label className="inline-flex items-center gap-2 text-sm text-poke-text-secondary">
+        <p className="text-sm text-fg-muted">{t('leaderboard.title')}</p>
+        <label className="inline-flex items-center gap-2 text-sm text-fg-muted">
           {t('leaderboard.minGames')}
           <select
             value={minGames}
             onChange={(event) => setMinGames(Number(event.target.value))}
-            className="bg-poke-elevated border border-poke-border rounded-poke-md px-2 py-1 text-poke-text-primary"
+            className="bg-elevated border border-hairline rounded-poke-md px-2 py-1 text-fg"
           >
             {MIN_GAMES_OPTIONS.map((option) => (
               <option key={option} value={option}>
@@ -156,7 +156,7 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
       </div>
 
       {loading ? (
-        <p className="text-sm text-poke-text-tertiary py-6 text-center">{t('leaderboard.loading')}</p>
+        <p className="text-sm text-fg-muted py-6 text-center">{t('leaderboard.loading')}</p>
       ) : (
         <Table
           columns={columns}

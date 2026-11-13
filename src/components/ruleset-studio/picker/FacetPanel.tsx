@@ -28,7 +28,7 @@ interface FacetPanelProps {
   itemCategories: readonly string[];
 }
 
-const CHIP = 'inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus sm:min-h-7';
+const CHIP = 'inline-flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink sm:min-h-7';
 
 function Chip({ pressed, onClick, children, className }: { pressed: boolean; onClick: () => void; children: ReactNode; className?: string }) {
   return (
@@ -76,7 +76,7 @@ function RangeFields({ legend, range, onChange, idPrefix }: { legend: string; ra
     }
     onChange([Math.max(0, low ?? 0), Math.min(RANGE_LIMIT, high ?? RANGE_LIMIT)]);
   };
-  const box = 'h-9 w-20 rounded-poke-md border border-hairline bg-surface px-2 text-sm text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-poke-focus';
+  const box = 'h-9 w-20 rounded-poke-md border border-hairline bg-surface px-2 text-sm text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink';
   return (
     <fieldset className="min-w-0 space-y-1.5">
       <legend className="mb-1 text-xs font-semibold text-fg-muted">{legend}</legend>
@@ -154,7 +154,7 @@ export default function FacetPanel({ kind, filters, onChange, states, tiers, gen
           <Group legend={t('filters.type')}>
             {TYPES.map((type) => (
               <Chip key={type} pressed={filters.types.includes(type)} onClick={() => set({ types: toggle(filters.types, type) })} className="p-0.5 pr-0.5">
-                <TypeBadge type={type} className={filters.types.includes(type) ? 'ring-2 ring-poke-accent' : 'opacity-80'} />
+                <TypeBadge type={type} className={filters.types.includes(type) ? 'ring-2 ring-accent-ink' : 'opacity-80'} />
               </Chip>
             ))}
           </Group>

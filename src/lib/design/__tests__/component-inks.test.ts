@@ -33,9 +33,6 @@ const MIGRATED: Record<string, string> = {
   'components/avatar/PhotoTransformPanel.tsx': 'text-poke-danger-ink',
   'components/avatar/ShowdownPicker.tsx': 'text-poke-danger-ink',
   'components/wiki/WikiNotesSection.tsx': 'text-poke-danger-ink',
-  'components/creator/studio/CastStudio.tsx': 'text-poke-danger-tint-ink',
-  'components/creator/studio/SessionManager.tsx': 'text-poke-danger-tint-ink',
-  'components/league/LeagueRosterManager.tsx': 'text-poke-amber-ink',
   'components/teambuilder/LegalityBadge.tsx': 'text-poke-yellow-ink',
   'components/bracket/RoundRobinTable.tsx': 'text-poke-yellow-ink',
   'components/match/MatchHighlightCard.tsx': 'text-poke-yellow-ink',
@@ -49,6 +46,9 @@ const REDESIGNED = [
   'components/discord/DiscordWebhookManager.tsx',
   'components/social/SocialIntegrationManager.tsx',
   'app/admin/test-players/TestPlayersConsole.tsx',
+  'components/creator/studio/CastStudio.tsx',
+  'components/creator/studio/SessionManager.tsx',
+  'components/league/LeagueRosterManager.tsx',
 ];
 
 describe('component inks', () => {

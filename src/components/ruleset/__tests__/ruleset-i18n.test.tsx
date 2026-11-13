@@ -111,7 +111,7 @@ describe('RulesetDetail', () => {
 describe('ruleset editors', () => {
   it('shows the selected format in a rich sentence', () => {
     const html = renderWithI18n(<FormatSelector value="gen9ou" onChange={() => {}} />, { locale: 'de' });
-    expect(html).toMatch(/Ausgewählt: <span class="text-poke-text-primary font-medium">[^<]+<\/span>/);
+    expect(html).toMatch(/Ausgewählt: <span class="text-fg font-medium">[^<]+<\/span>/);
   });
 
   it('translates the team constraints with Pokémon-data names from the pkmn layer', () => {
@@ -166,7 +166,7 @@ describe('FormatSelector selection', () => {
 
   it('derives the highlighted generation and tier from value (gen9vgc keeps Gen 9 and VGC)', () => {
     const html = renderToStaticMarkup(<FormatSelector value="gen9vgc" onChange={() => {}} />);
-    const selected = /<button[^>]*class="[^"]*bg-poke-accent[^"]*"[^>]*>(.*?)<\/button>/g;
+    const selected = /<button[^>]*class="[^"]*bg-accent-ink[^"]*"[^>]*>(.*?)<\/button>/g;
     const labels = [...html.matchAll(selected)].map((m) => textOf(m[1]));
     expect(labels).toHaveLength(2);
     expect(labels[0].startsWith('9')).toBe(true);
@@ -175,7 +175,7 @@ describe('FormatSelector selection', () => {
 
   it('highlights Custom for the blank format', () => {
     const html = renderWithI18n(<FormatSelector value="blank" onChange={() => {}} />, { locale: 'de' });
-    const selected = [...html.matchAll(/<button[^>]*class="[^"]*bg-poke-accent[^"]*"[^>]*>(.*?)<\/button>/g)];
+    const selected = [...html.matchAll(/<button[^>]*class="[^"]*bg-accent-ink[^"]*"[^>]*>(.*?)<\/button>/g)];
     expect(selected).toHaveLength(1);
     expect(textOf(selected[0][1])).toBe('Eigenes');
   });

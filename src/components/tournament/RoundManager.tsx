@@ -1080,7 +1080,7 @@ export default function RoundManager({
               checked={bracketResetEnabled}
               disabled={savingResetToggle || isBusy}
               onChange={(e) => handleToggleBracketReset(e.target.checked)}
-              className="rounded accent-poke-accent"
+              className="rounded accent-accent-fill"
             />
             {tContent('slot.ifNecessary', { label: t('rounds.grandFinalsReset') })}
           </label>
@@ -1096,7 +1096,7 @@ export default function RoundManager({
               disabled={isBusy}
               onChange={(e) => setStartNow(e.target.checked)}
               aria-describedby={startNowHintId}
-              className="rounded accent-poke-accent"
+              className="rounded accent-accent-fill"
             />
             {t('rounds.startNow.label')}
           </label>

@@ -20,8 +20,8 @@ export default function PhaseGate({ active, pendingMessage, children }: PhaseGat
   }
 
   return (
-    <div className="rounded-poke-lg border border-dashed border-poke-border p-4 text-center">
-      <p className="text-sm text-poke-text-muted">{pendingMessage}</p>
+    <div className="rounded-poke-lg border border-dashed border-hairline p-4 text-center">
+      <p className="text-sm text-fg-muted">{pendingMessage}</p>
     </div>
   );
 }

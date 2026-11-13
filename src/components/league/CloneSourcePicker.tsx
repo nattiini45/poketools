@@ -87,8 +87,8 @@ export default function CloneSourcePicker({
 
       {selected && (
         <div className="space-y-3">
-          <div className="space-y-1 rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-xs text-poke-text-secondary">
-            <p className="font-heading font-semibold text-poke-text-primary">{t('picker.copiedTitle')}</p>
+          <div className="space-y-1 rounded-poke-md border border-hairline bg-surface px-3 py-2 text-xs text-fg-muted">
+            <p className="font-heading font-semibold text-fg">{t('picker.copiedTitle')}</p>
             <p>{t('picker.copied', { count: selected.phase_count })}</p>
             <p>{t('picker.notCopied')}</p>
             <p>{t('picker.datesHint')}</p>
@@ -98,7 +98,7 @@ export default function CloneSourcePicker({
             {isEvolutionPointBuy(selected.format_type) && <p>{t('picker.pointBuyNote')}</p>}
           </div>
 
-          <label className="flex items-start gap-2 text-sm text-poke-text-primary">
+          <label className="flex items-start gap-2 text-sm text-fg">
             <input
               id="clone-copy-roster"
               type="checkbox"
@@ -111,7 +111,7 @@ export default function CloneSourcePicker({
 
           {isSiteAdmin && (
             <div className="space-y-1">
-              <label className="flex items-start gap-2 text-sm text-poke-text-primary">
+              <label className="flex items-start gap-2 text-sm text-fg">
                 <input
                   id="clone-copy-admins"
                   type="checkbox"
@@ -122,7 +122,7 @@ export default function CloneSourcePicker({
                 />
                 <span>{t('picker.copyAdmins')}</span>
               </label>
-              <p id="clone-copy-admins-hint" className="pl-6 text-xs text-poke-text-muted">
+              <p id="clone-copy-admins-hint" className="pl-6 text-xs text-fg-muted">
                 {t('picker.copyAdminsHint')}
               </p>
             </div>

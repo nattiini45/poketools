@@ -107,7 +107,7 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
       {label}
     </Link>
   );
-  const note = (text: ReactNode) => <p className="text-sm text-poke-text-muted">{text}</p>;
+  const note = (text: ReactNode) => <p className="text-sm text-fg-muted">{text}</p>;
 
   let roomBody: ReactNode;
   if (poolLabels) {
@@ -155,9 +155,9 @@ async function ungroupedDraftPanel({ id, league, caps, t, tabLink }: LeagueAdmin
         <div className="space-y-3">
           {roomBody}
           {isPointBuy && draftPool && (
-            <div className="border-t border-poke-border pt-3 space-y-1">
+            <div className="border-t border-hairline pt-3 space-y-1">
               {panelLink(t('draftRoom.openPanel'))}
-              <p className="text-xs text-poke-text-muted">{t('draftRoom.openPanelHint')}</p>
+              <p className="text-xs text-fg-muted">{t('draftRoom.openPanelHint')}</p>
             </div>
           )}
         </div>

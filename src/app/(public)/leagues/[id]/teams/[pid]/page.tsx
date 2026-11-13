@@ -58,7 +58,7 @@ export default async function PlayerTeamPage({ params }: PageProps) {
     <div className="max-w-4xl mx-auto">
       <div className="mb-6">
         <h1 className="text-2xl font-bold">{t('team.title', { name: teamOwner.name })}</h1>
-        <p className="text-sm text-poke-text-secondary">{season.name}</p>
+        <p className="text-sm text-fg-muted">{season.name}</p>
       </div>
 
       {!visible ? (

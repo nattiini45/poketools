@@ -59,7 +59,7 @@ export default function LeagueStatusControl({ seasonId, currentStatus, blocked }
               aria-describedby={reasonFor(status) !== null ? reasonId(status) : undefined}
               // 44 px touch target on phones.
               className={cn(
-                'inline-flex min-h-11 items-center rounded-poke-sm px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed motion-safe:transition-colors motion-safe:duration-80 sm:min-h-8',
+                'inline-flex min-h-11 items-center rounded-poke-sm px-3 text-caption focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink disabled:cursor-not-allowed motion-safe:transition-colors motion-safe:duration-80 sm:min-h-8',
                 current
                   ? 'bg-tier-1 font-[550] text-tier-ink'
                   : 'cursor-pointer text-fg-muted hover:bg-hover hover:text-fg disabled:opacity-50 disabled:hover:bg-transparent disabled:hover:text-fg-muted',

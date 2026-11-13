@@ -24,7 +24,7 @@ import type { LeagueRosterT } from './LeagueRosterManager';
 const EN_ROSTER_T: LeagueRosterT = createTranslator(leagueRosterMessages, 'en');
 
 /** Rich-text renderer for the `<b>` tags of the dialog's sentences. */
-const bold = (chunks: ReactNode) => <strong className="text-poke-text-primary">{chunks}</strong>;
+const bold = (chunks: ReactNode) => <strong className="text-fg">{chunks}</strong>;
 
 interface SubstituteDialogProps {
   seasonId: string;
@@ -336,16 +336,16 @@ export function SubstitutePreviewView({ preview }: { preview: SubstituteSummary 
   const strong = (chunks: ReactNode) => <strong>{chunks}</strong>;
   return (
     <div className="space-y-3 text-sm">
-      <p className="text-poke-text-secondary">
+      <p className="text-fg-muted">
         {t.rich('preview.rosterSwap', {
           answer: preview.roster_swapped ? t('preview.yes') : t('preview.no'),
           b: strong,
         })}
       </p>
-      <p className="text-poke-text-secondary">
+      <p className="text-fg-muted">
         {t.rich('preview.phaseEnrollments', { count: preview.phases.length, b: strong })}
         {preview.phases.length > 0 && (
-          <span className="text-poke-text-muted">
+          <span className="text-fg-muted">
             {' '}
             ({preview.phases
               .map((p) =>
@@ -357,11 +357,11 @@ export function SubstitutePreviewView({ preview }: { preview: SubstituteSummary 
       </p>
 
       {preview.format?.moved === true && (
-        <p className="text-poke-text-secondary">
+        <p className="text-fg-muted">
           {preview.format.total > 0 ? (
             <>
               {t.rich('preview.formatMoves', { count: preview.format.total, b: strong })}
-              <span className="block text-xs text-poke-text-muted">
+              <span className="block text-xs text-fg-muted">
                 {t('preview.formatRows', {
                   links: preview.format.rows.relation_links,
                   items: preview.format.rows.resource_items,
@@ -380,16 +380,16 @@ export function SubstitutePreviewView({ preview }: { preview: SubstituteSummary 
       <SubstituteWarnings warnings={preview.warnings} />
 
       {preview.affected_matches.length === 0 ? (
-        <p className="text-poke-text-muted">{t('preview.noMatches')}</p>
+        <p className="text-fg-muted">{t('preview.noMatches')}</p>
       ) : (
         <div>
-          <p className="font-heading font-semibold text-poke-text-primary mb-2">
+          <p className="font-heading font-semibold text-fg mb-2">
             {t('preview.matchesHeading', { count: preview.affected_matches.length })}
           </p>
-          <ul className="max-h-40 overflow-y-auto space-y-1 rounded-poke-md border border-poke-border bg-poke-elevated p-2">
+          <ul className="max-h-40 overflow-y-auto space-y-1 rounded-poke-md border border-hairline bg-elevated p-2">
             {preview.affected_matches.map((match) => (
-              <li key={match.match_id} className="text-poke-text-secondary">
-                <span className="text-poke-text-muted">{match.tournament_name}:</span>{' '}
+              <li key={match.match_id} className="text-fg-muted">
+                <span className="text-fg-muted">{match.tournament_name}:</span>{' '}
                 {t('preview.match', { player1: match.player_1_name, player2: match.player_2_name })}
               </li>
             ))}
@@ -559,7 +559,7 @@ export default function SubstituteDialog({
     return (
       <Modal open={open} onClose={handleClose} title={t('dialog.doneTitle')}>
         <div className="space-y-4">
-          <p className="text-sm text-poke-text-secondary">
+          <p className="text-sm text-fg-muted">
             {t.rich('dialog.replaced', { inName: inPlayerName, outName: outPlayerName, b: bold })}
           </p>
           <SubstituteSkippedMatches matches={skipped} />
@@ -577,7 +577,7 @@ export default function SubstituteDialog({
   return (
     <Modal open={open} onClose={handleClose} title={t('dialog.confirmTitle')}>
       <div className="space-y-4">
-        <p className="text-sm text-poke-text-secondary">
+        <p className="text-sm text-fg-muted">
           {t.rich(scope === 'league' ? 'dialog.replaceLeague' : 'dialog.replacePhase', {
             outName: outPlayerName,
             inName: inPlayerName,
@@ -599,7 +599,7 @@ export default function SubstituteDialog({
         />
 
         {loading && (
-          <p className="text-sm text-poke-text-muted">{t('dialog.loadingMatches')}</p>
+          <p className="text-sm text-fg-muted">{t('dialog.loadingMatches')}</p>
         )}
 
         {preview && !loading && <SubstitutePreviewView preview={preview} />}

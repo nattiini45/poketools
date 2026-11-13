@@ -22,7 +22,7 @@ export function AssistantText({ text }: { text: string }) {
         <span key={i} className="block min-h-[1.2em]">
           {splitBoldSegments(line).map((seg, j) =>
             seg.bold ? (
-              <strong key={j} className="font-semibold text-poke-text-primary">
+              <strong key={j} className="font-semibold text-fg">
                 {seg.text}
               </strong>
             ) : (
@@ -62,8 +62,8 @@ export default function AgentChatThread({
           <div
             className={
               m.role === 'user'
-                ? 'max-w-[85%] rounded-poke-md bg-poke-blue/15 px-3 py-2 text-sm text-poke-text-primary whitespace-pre-wrap'
-                : 'max-w-[85%] rounded-poke-md bg-poke-surface border border-poke-border px-3 py-2 text-sm text-poke-text-secondary leading-relaxed'
+                ? 'max-w-[85%] rounded-poke-md bg-tier-3 px-3 py-2 text-sm text-tier-ink whitespace-pre-wrap'
+                : 'max-w-[85%] rounded-poke-md bg-surface border border-hairline px-3 py-2 text-sm text-fg-muted leading-relaxed'
             }
           >
             {m.role === 'assistant' ? <AssistantText text={m.content} /> : m.content}
@@ -74,12 +74,12 @@ export default function AgentChatThread({
 
       {streaming && (
         <div className="flex justify-start">
-          <div className="max-w-[85%] rounded-poke-md bg-poke-surface border border-poke-border px-3 py-2 text-sm text-poke-text-secondary leading-relaxed">
+          <div className="max-w-[85%] rounded-poke-md bg-surface border border-hairline px-3 py-2 text-sm text-fg-muted leading-relaxed">
             {streamingText ? (
               <AssistantText text={streamingText} />
             ) : (
-              <span className="inline-flex items-center gap-2 text-poke-text-muted">
-                <span className="w-3 h-3 rounded-full border-2 border-poke-blue border-t-transparent animate-spin" />
+              <span className="inline-flex items-center gap-2 text-fg-muted">
+                <span className="w-3 h-3 rounded-full border-2 border-accent-ink border-t-transparent animate-spin" />
                 {thinkingLabel}
               </span>
             )}

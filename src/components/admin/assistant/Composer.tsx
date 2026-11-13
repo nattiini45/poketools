@@ -81,11 +81,11 @@ export default function Composer({ disabled, sending, maxChars, canContinue, onS
         placeholder={t('composer.placeholder')}
         onChange={(event) => setText(event.target.value)}
         onKeyDown={onKeyDown}
-        className="block w-full resize-y rounded-poke-md border border-poke-border bg-poke-surface px-3 py-2 text-sm text-poke-text-primary placeholder:text-poke-text-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-poke-focus disabled:cursor-not-allowed disabled:opacity-60"
+        className="block w-full resize-y rounded-poke-md border border-hairline bg-surface px-3 py-2 text-sm text-fg placeholder:text-fg-muted focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink disabled:cursor-not-allowed disabled:opacity-60"
       />
       <div className="flex flex-wrap items-center gap-2">
-        <p id={`${id}-hint`} className="min-w-0 flex-1 text-xs text-poke-text-muted">
-          {tooLong ? <span className="text-poke-danger-ink">{t('composer.tooLong', { max: maxChars })}</span> : left <= COUNTER_FROM ? t('composer.charsLeft', { count: left }) : t('composer.hint')}
+        <p id={`${id}-hint`} className="min-w-0 flex-1 text-xs text-fg-muted">
+          {tooLong ? <span className="text-loss">{t('composer.tooLong', { max: maxChars })}</span> : left <= COUNTER_FROM ? t('composer.charsLeft', { count: left }) : t('composer.hint')}
         </p>
         {canContinue && (
           <Button type="button" variant="secondary" size="sm" disabled={blocked} onClick={onContinue}>

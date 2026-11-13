@@ -47,8 +47,8 @@ function href(scenario: PreviewScenarioId, lang: Locale | null): string {
   return `/ruleset-preview?${query.toString()}`;
 }
 
-const CHIP = 'inline-flex min-h-11 items-center rounded-lg border border-poke-border px-2.5 py-1 text-sm hover:bg-poke-elevated sm:min-h-0';
-const CHIP_ACTIVE = 'border-poke-text-secondary bg-poke-elevated font-semibold';
+const CHIP = 'inline-flex min-h-11 items-center rounded-lg border border-hairline px-2.5 py-1 text-sm hover:bg-elevated sm:min-h-0';
+const CHIP_ACTIVE = 'border-fg-muted bg-elevated font-semibold';
 
 export default async function RulesetPreviewPage({ searchParams }: PageProps) {
   // Public: no auth required — dev-only, and 404s in production.
@@ -108,7 +108,7 @@ export default async function RulesetPreviewPage({ searchParams }: PageProps) {
               {scenarioId}
             </Link>
           ))}
-          <span className="mx-2 text-poke-text-muted" aria-hidden="true">
+          <span className="mx-2 text-fg-muted" aria-hidden="true">
             |
           </span>
           {([null, ...PREVIEW_LOCALES] as const).map((option) => (
@@ -117,7 +117,7 @@ export default async function RulesetPreviewPage({ searchParams }: PageProps) {
               {option ?? 'site'}
             </Link>
           ))}
-          <span className="mx-2 text-poke-text-muted" aria-hidden="true">
+          <span className="mx-2 text-fg-muted" aria-hidden="true">
             |
           </span>
           <Link href="/ruleset-preview/surfaces" className={CHIP}>

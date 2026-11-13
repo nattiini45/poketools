@@ -117,7 +117,7 @@ export default function Popover({
             sideOffset={8}
             style={{ maxWidth }}
             className={cn(
-              "z-[9998] rounded-poke-lg border border-poke-border bg-poke-surface shadow-poke-lg overflow-hidden outline-2 outline-offset-2 outline-transparent animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
+              "z-[9998] rounded-poke-lg border border-hairline bg-surface shadow-poke-lg overflow-hidden outline-2 outline-offset-2 outline-transparent animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95",
               contentClassName
             )}
           >
@@ -201,7 +201,7 @@ function HoverPopover({
                 exit={{ opacity: 0, scale: 0.96, y: 4 }}
                 transition={SPRING.moderate}
                 className={cn(
-                  "fixed z-[9998] rounded-poke-lg bg-poke-surface border border-poke-border shadow-poke-lg overflow-hidden",
+                  "fixed z-[9998] rounded-poke-lg bg-surface border border-hairline shadow-poke-lg overflow-hidden",
                   contentClassName
                 )}
                 style={{

@@ -34,7 +34,7 @@ export default function SupplementaryKillRanking({
 
   if (failed) {
     return (
-      <p role="status" className="text-sm text-poke-text-tertiary">
+      <p role="status" className="text-sm text-fg-muted">
         {t('loadFailed')}
       </p>
     );
@@ -45,7 +45,7 @@ export default function SupplementaryKillRanking({
       key: 'rank',
       header: '#',
       width: '2.5rem',
-      render: (_row, i) => <span className="text-poke-text-muted">{i + 1}</span>,
+      render: (_row, i) => <span className="text-fg-muted">{i + 1}</span>,
     },
     {
       key: 'pokemonName',
@@ -67,14 +67,14 @@ export default function SupplementaryKillRanking({
       align: 'center',
       sortable: true,
       sortValue: (row) => row.kos,
-      render: (row) => <span className="text-poke-green font-medium">{row.kos}</span>,
+      render: (row) => <span className="text-win font-medium">{row.kos}</span>,
     },
   ];
 
   return (
     <div className="space-y-2">
-      <h2 className="text-lg font-heading font-semibold text-poke-text-primary">{t('title')}</h2>
-      <p className="text-xs text-poke-text-tertiary">{t('note')}</p>
+      <h2 className="text-lg font-heading font-semibold text-fg">{t('title')}</h2>
+      <p className="text-xs text-fg-muted">{t('note')}</p>
       <Table
         columns={columns}
         data={[...rows]}
