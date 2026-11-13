@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import type { TeamConstraints, TierKey } from '@/types/ruleset';
 import { POKEMON_TYPES } from '@/types/season';
 import { formatPack } from '@/lib/format-pack';
@@ -97,7 +98,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
               <div className="ml-6 space-y-2">
                 <div className="flex items-center gap-3">
                   <label className="text-sm text-fg-muted w-32">{t('constraints.typeSource')}</label>
-                  <select
+                  <Select
                     value={value.type_quotas.source}
                     onChange={(e) =>
                       update({
@@ -107,11 +108,10 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   >
                     <option value="player_core">{t('constraints.source.player_core')}</option>
                     <option value="fixed">{t('constraints.source.fixed')}</option>
-                  </select>
+                  </Select>
                 </div>
 
                 {value.type_quotas.source === 'fixed' && (
@@ -198,19 +198,18 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
             <legend className="px-1 text-sm font-heading font-semibold text-fg">
               {t('constraints.teraRestriction')}
             </legend>
-            <select
+            <Select
               value={value.tera_match ?? 'none'}
               onChange={(e) =>
                 update({
                   tera_match: e.target.value as TeamConstraints['tera_match'],
                 })
               }
-              className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
             >
               <option value="none">{t('constraints.teraMatch.none')}</option>
               <option value="player_core">{t('constraints.teraMatch.player_core')}</option>
               <option value="team_types">{t('constraints.teraMatch.team_types')}</option>
-            </select>
+            </Select>
           </fieldset>
 
           {/* ── Evolution stage ─────────────────────────────────────── */}
@@ -221,7 +220,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
 
             <div className="flex items-center gap-3">
               <label className="text-sm text-fg-muted w-32">{t('constraints.mode')}</label>
-              <select
+              <Select
                 value={value.evolution_stage?.mode ?? 'unrestricted'}
                 onChange={(e) =>
                   update({
@@ -231,11 +230,10 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                     },
                   })
                 }
-                className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
               >
                 <option value="unrestricted">{t('constraints.modes.unrestricted')}</option>
                 <option value="nfe_only_plus_n_fe">{t('constraints.modes.nfe_only_plus_n_fe')}</option>
-              </select>
+              </Select>
             </div>
 
             {value.evolution_stage?.mode === 'nfe_only_plus_n_fe' && (
@@ -262,7 +260,7 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
 
                 <div className="flex items-center gap-3">
                   <label className="text-sm text-fg-muted w-32">{t('constraints.feTierMax')}</label>
-                  <select
+                  <Select
                     value={value.evolution_stage.fully_evolved_tier_max ?? ''}
                     onChange={(e) =>
                       update({
@@ -273,13 +271,12 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
                         },
                       })
                     }
-                    className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
                   >
                     <option value="">{t('constraints.noCap')}</option>
                     {TIER_OPTIONS.map((tier) => (
                       <option key={tier} value={tier}>{tier}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
               </>
             )}
@@ -311,18 +308,17 @@ export default function TeamConstraintsEditor({ value, onChange }: TeamConstrain
             <p className="text-xs text-fg-muted">
               {t('constraints.evioliteHint', { item: eviolite })}
             </p>
-            <select
+            <Select
               value={value.eviolite_tier_cap ?? ''}
               onChange={(e) =>
                 update({ eviolite_tier_cap: (e.target.value || undefined) as TierKey | undefined })
               }
-              className="border border-hairline bg-surface rounded-poke-md px-2 py-1 text-sm text-fg"
             >
               <option value="">{t('constraints.noCap')}</option>
               {TIER_OPTIONS.map((tier) => (
                 <option key={tier} value={tier}>{tier}</option>
               ))}
-            </select>
+            </Select>
           </fieldset>
         </>
       )}

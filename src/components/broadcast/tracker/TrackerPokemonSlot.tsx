@@ -116,12 +116,12 @@ export default function TrackerPokemonSlot({
         <PokemonSprite name={slot.pokemon_name} size={48} animated />
         {/* Status badges */}
         {slot.was_lead && (
-          <span className="absolute -top-1 -left-1 text-yellow-400 text-sm" title={t('tracker.lead')}>
+          <span className="absolute -top-1 -left-1 text-accent-ink text-sm" title={t('tracker.lead')}>
             <Star aria-hidden="true" className="size-3.5 fill-current" />
           </span>
         )}
         {slot.was_koed && (
-          <span className="absolute -bottom-1 -right-1 text-red-400 text-sm" title={t('tracker.koed')}>
+          <span className="absolute -bottom-1 -right-1 text-loss text-sm" title={t('tracker.koed')}>
             <X aria-hidden="true" className="size-3.5" />
           </span>
         )}
@@ -137,16 +137,16 @@ export default function TrackerPokemonSlot({
         {pokemonInfo?.types && pokemonInfo.types.length > 0 && (
           <div className="flex items-center gap-0.5 mt-0.5">
             {pokemonInfo.types.map((type) => (
-              <TypeBadge key={type} type={type} className="text-[9px] px-1 py-0" />
+              <TypeBadge key={type} type={type} className="text-micro px-1 py-0" />
             ))}
             {/* Usage badges (F8) */}
             {pokemonInfo.usagePct !== null && pokemonInfo.usagePct < 1 && (
-              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-[rgb(168_85_247/0.2)] text-purple-300 border border-[rgb(168_85_247/0.3)]">
+              <span className="ml-1 px-1 py-0 rounded text-micro font-bold bg-[rgb(168_85_247/0.2)] text-fg border border-[rgb(168_85_247/0.3)]">
                 {t('tracker.ultraRare')}
               </span>
             )}
             {pokemonInfo.usagePct !== null && pokemonInfo.usagePct >= 1 && pokemonInfo.usagePct < 5 && (
-              <span className="ml-1 px-1 py-0 rounded text-[8px] font-bold uppercase bg-[rgb(245_158_11/0.2)] text-amber-300 border border-[rgb(245_158_11/0.3)]">
+              <span className="ml-1 px-1 py-0 rounded text-micro font-bold bg-[rgb(245_158_11/0.2)] text-accent-ink border border-[rgb(245_158_11/0.3)]">
                 {t('tracker.spicy')}
               </span>
             )}
@@ -155,10 +155,10 @@ export default function TrackerPokemonSlot({
 
         <div className="flex items-center gap-2 text-xs text-fg-muted mt-0.5">
           {slot.was_brought && (
-            <span className="text-emerald-400">{t('tracker.brought')}</span>
+            <span className="text-win">{t('tracker.brought')}</span>
           )}
           {slot.kos_dealt > 0 && (
-            <span className="text-orange-400">{t('tracker.kos', { count: slot.kos_dealt })}</span>
+            <span className="text-accent-ink">{t('tracker.kos', { count: slot.kos_dealt })}</span>
           )}
           {slot.moves_used.length > 0 && (
             <span>{t('tracker.moveCount', { count: slot.moves_used.length })}</span>
@@ -174,8 +174,8 @@ export default function TrackerPokemonSlot({
           className={`
             px-2 py-1 rounded-lg text-xs font-bold transition-colors
             ${slot.was_koed
-              ? 'bg-red-500 text-white'
-              : 'bg-elevated text-fg-muted hover:bg-[rgb(239_68_68/0.2)] hover:text-red-400'}
+              ? 'bg-loss-bg text-white'
+              : 'bg-elevated text-fg-muted hover:bg-[rgb(239_68_68/0.2)] hover:text-loss'}
           `}
           title={slot.was_koed ? t('tracker.undoKo') : t('tracker.markKoed')}
         >
@@ -184,7 +184,7 @@ export default function TrackerPokemonSlot({
         <button
           type="button"
           onClick={handleKoDeal}
-          className="px-2 py-1 rounded-lg text-xs font-bold bg-elevated text-fg-muted hover:bg-[rgb(249_115_22/0.2)] hover:text-orange-400 transition-colors"
+          className="px-2 py-1 rounded-lg text-xs font-bold bg-elevated text-fg-muted hover:bg-[rgb(249_115_22/0.2)] hover:text-accent-ink transition-colors"
           title={t('tracker.recordKoDealt')}
         >
           +KO

@@ -206,7 +206,7 @@ export default function AgentChatWidget({ isAuthenticated }: AgentChatWidgetProp
             className="w-full resize-none px-3 py-2 text-sm bg-surface text-fg border border-hairline rounded-poke-md placeholder:text-fg-muted transition-colors duration-200 focus:outline-2 focus:outline-offset-2 focus:outline-transparent focus:border-accent-ink focus:ring-2 disabled:opacity-60"
           />
           <div className="mt-2 flex items-center justify-between gap-2">
-            <span className="text-[10px] text-fg-muted italic">
+            <span className="text-micro text-fg-muted italic">
               {t('disclaimer')}
             </span>
             {streaming ? (

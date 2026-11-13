@@ -18,7 +18,7 @@ export default function NextMatchTeaser() {
     <div className="flex gap-4 text-xs text-fg-muted">
       {p1Next && (
         <div className="flex-1 px-3 py-2 rounded-lg border">
-          <span className="text-[10px] text-fg-muted">{t("nextMatch.nextFor", { name: data.player1.name })}</span>
+          <span className="text-micro text-fg-muted">{t("nextMatch.nextFor", { name: data.player1.name })}</span>
           <div className="text-fg font-medium mt-0.5">
             {t("common.versus", { name: p1Next.opponentName })}
           </div>
@@ -26,7 +26,7 @@ export default function NextMatchTeaser() {
       )}
       {p2Next && (
         <div className="flex-1 px-3 py-2 rounded-lg border">
-          <span className="text-[10px] text-fg-muted">{t("nextMatch.nextFor", { name: data.player2.name })}</span>
+          <span className="text-micro text-fg-muted">{t("nextMatch.nextFor", { name: data.player2.name })}</span>
           <div className="text-fg font-medium mt-0.5">
             {t("common.versus", { name: p2Next.opponentName })}
           </div>

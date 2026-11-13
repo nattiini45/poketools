@@ -29,11 +29,11 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
         <div className="flex items-center gap-1.5">
           <span className="text-sm font-bold text-fg">{localizeSpecies(info.species, dataLocale)}</span>
           {info.types.map((type) => (
-            <TypeBadge key={type} type={type} className="text-[9px] px-1 py-0" />
+            <TypeBadge key={type} type={type} className="text-micro px-1 py-0" />
           ))}
         </div>
         {info.usagePct !== null && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-elevated text-fg-muted font-mono">
+          <span className="text-micro px-1.5 py-0.5 rounded-full bg-elevated text-fg-muted font-mono">
             {formatter.percentOf(info.usagePct)}
           </span>
         )}
@@ -63,7 +63,7 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
           )}
 
           {/* Speed tiers */}
-          <div className="text-[10px] text-fg-muted space-y-0.5">
+          <div className="text-micro text-fg-muted space-y-0.5">
             <div className="flex justify-between">
               <span>{t("infoCard.minSpeed", { stat: speedLabel })}</span>
               <span className="font-mono text-fg">{info.speedTiers.min.raw}</span>
@@ -83,12 +83,12 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
       {/* Moves */}
       {info.moves.length > 0 && (
         <div>
-          <div className="text-[10px] text-fg-muted mb-1">{t("infoCard.moves")}</div>
+          <div className="text-micro text-fg-muted mb-1">{t("infoCard.moves")}</div>
           <div className="flex flex-wrap gap-1">
             {info.moves.slice(0, 4).map((move) => (
               <span
                 key={move}
-                className="px-1.5 py-0.5 rounded bg-elevated text-[10px] text-fg font-medium"
+                className="px-1.5 py-0.5 rounded bg-elevated text-micro text-fg font-medium"
               >
                 {localizeMove(move, dataLocale)}
               </span>
@@ -99,7 +99,7 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
 
       {/* Player-specific stats */}
       {(info.koDealt > 0 || info.koReceived > 0 || info.bringPct !== null) && (
-        <div className="flex gap-3 text-[10px] pt-1 border-t">
+        <div className="flex gap-3 text-micro pt-1 border-t">
           {playerName && (
             <span className="text-fg-muted">{playerName}:</span>
           )}
@@ -116,10 +116,10 @@ export default function PokemonInfoCard({ info, playerName }: PokemonInfoCardPro
             </span>
           )}
           {info.koDealt > 0 && (
-            <span className="text-orange-400">{t("infoCard.kosDealt", { count: info.koDealt })}</span>
+            <span className="text-accent-ink">{t("infoCard.kosDealt", { count: info.koDealt })}</span>
           )}
           {info.koReceived > 0 && (
-            <span className="text-red-400">{t("infoCard.koedCount", { count: info.koReceived })}</span>
+            <span className="text-loss">{t("infoCard.koedCount", { count: info.koReceived })}</span>
           )}
         </div>
       )}

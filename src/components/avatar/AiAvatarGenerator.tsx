@@ -376,7 +376,7 @@ export default function AiAvatarGenerator({
                   <button
                     onClick={() => removeGalleryItem(item)}
                     disabled={deletingId === item.id}
-                    className="text-[10px] font-heading text-fg-muted hover:text-accent-ink transition-colors disabled:opacity-50"
+                    className="text-micro font-heading text-fg-muted hover:text-accent-ink transition-colors disabled:opacity-50"
                   >
                     {deletingId === item.id ? t('ai.deleting') : t('ai.delete')}
                   </button>
@@ -506,7 +506,7 @@ export default function AiAvatarGenerator({
                     />
                   </div>
                   {item.player_name && (
-                    <span className="text-[10px] text-fg-muted truncate max-w-[56px]">
+                    <span className="text-micro text-fg-muted truncate max-w-[56px]">
                       {item.player_name}
                     </span>
                   )}

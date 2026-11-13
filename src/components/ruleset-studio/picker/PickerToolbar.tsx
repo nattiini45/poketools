@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useId, type KeyboardEvent, type RefObject } from 'react';
 import { ArrowDown, ArrowUp, LayoutGrid, Redo2, Rows3, Search, SlidersHorizontal, Table2, Undo2, X } from 'lucide-react';
 import { useT } from '@/i18n/client';
@@ -149,19 +150,18 @@ export default function PickerToolbar({
           <label htmlFor={sortId} className="text-xs font-semibold text-fg-muted">
             {t('sort.label')}
           </label>
-          <select
+          <Select
             id={sortId}
             value={sort.key}
             disabled={queryDecidesOrder}
             onChange={(event) => onSort({ key: event.target.value as SortKey, direction: event.target.value === 'bst' || event.target.value === 'power' ? 'desc' : 'asc' })}
-            className="h-11 rounded-poke-md border border-hairline bg-surface px-2 text-sm text-fg focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-accent-ink disabled:opacity-50 sm:h-9"
           >
             {sorts.map((key) => (
               <option key={key} value={key}>
                 {t(`sort.${key}`)}
               </option>
             ))}
-          </select>
+          </Select>
           <button
             type="button"
             aria-label={`${t('sort.direction')}: ${sort.direction === 'asc' ? t('sort.asc') : t('sort.desc')}`}

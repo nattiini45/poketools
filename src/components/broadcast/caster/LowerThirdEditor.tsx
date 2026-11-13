@@ -71,7 +71,7 @@ export default function LowerThirdEditor({ sessionId }: LowerThirdEditorProps) {
             key={p}
             type="button"
             onClick={() => applyPreset(p)}
-            className="px-2.5 py-1 rounded-lg text-[10px] font-bold bg-elevated text-fg-muted hover:text-fg border transition-colors"
+            className="px-2.5 py-1 rounded-lg text-micro font-bold bg-elevated text-fg-muted hover:text-fg border transition-colors"
           >
             {presetText(p)}
           </button>

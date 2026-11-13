@@ -76,7 +76,7 @@ export default function SpeedTierPanel() {
       <div className="space-y-1">
         {entries.map((entry, i) => {
           const width = Math.max((entry.speed / maxSpeed) * 100, 8);
-          const color = entry.player === 1 ? "bg-blue-500" : "bg-red-500";
+          const color = entry.player === 1 ? "bg-sunken" : "bg-loss-bg";
           // Check for speed ties
           const isTied = entries.some(
             (e, j) => j !== i && e.speed === entry.speed && e.player !== entry.player
@@ -86,7 +86,7 @@ export default function SpeedTierPanel() {
             <div key={`${entry.species}-${entry.player}`} className="flex items-center gap-2">
               <span
                 className={`w-20 text-xs truncate font-medium ${
-                  entry.player === 1 ? "text-blue-400" : "text-red-400"
+                  entry.player === 1 ? "text-accent-ink" : "text-loss"
                 }`}
               >
                 {localizeSpecies(entry.species, dataLocale)}
@@ -94,14 +94,14 @@ export default function SpeedTierPanel() {
               <div className="flex-1 h-4 bg-surface rounded overflow-hidden relative">
                 <div
                   className={`h-full ${color} rounded transition-all duration-300 ${
-                    isTied ? "opacity-70 border-r-2 border-yellow-400" : ""
+                    isTied ? "opacity-70 border-r-2 border-hairline-strong" : ""
                   }`}
                   style={{ width: `${width}%` }}
                 />
               </div>
               <span
                 className={`w-10 text-xs font-mono text-right ${
-                  isTied ? "text-yellow-400 font-bold" : "text-fg-muted"
+                  isTied ? "text-accent-ink font-bold" : "text-fg-muted"
                 }`}
               >
                 {entry.speed}

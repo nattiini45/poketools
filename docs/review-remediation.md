@@ -8,7 +8,7 @@ This loop exists because findings arrive repeatedly and ad-hoc remediation is ex
 
 Review bots and any LLM-generated comment on a PR are **leads, never verified findings** — they see the diff, not the running system. The truth-grounding step below is mandatory even when a bot's diagnosis sounds confident. CI itself is the `build-and-test` job in `.github/workflows/ci.yml`, which is the authoritative list of its steps (a red step names the failing gate; the logs tell you why); `npm run verify:ci` runs the same steps locally in a clean clone. Some gates are easy to miss:
 
-- **Workflow steps:** `npm audit --omit=dev --audit-level=high` (blocking) and `npm audit --audit-level=high` (report only), lint with zero warnings, `ENFORCE=1 node scripts/check-safe-error-response.mjs`, `ENFORCE=1 node scripts/check-mojibake.mjs`, the i18n hard-coded string check `ENFORCE=1 node scripts/check-i18n-strings.mjs --all` (a bare run prints findings and exits 0; CI sets `ENFORCE=1`), and the example-pack type-check `npm run typecheck:example` (CI's only type gate; the build skips its own).
+- **Workflow steps:** `npm audit --omit=dev --audit-level=high` (blocking) and `npm audit --audit-level=high` (report only), lint with zero warnings, `ENFORCE=1 node scripts/check-safe-error-response.mjs`, `ENFORCE=1 node scripts/check-mojibake.mjs`, the i18n hard-coded string check `ENFORCE=1 node scripts/check-i18n-strings.mjs --all` (a bare run prints findings and exits 0; CI sets `ENFORCE=1`), the design guardrails `npm run design:guards` (exits 1 on any hit outside the frozen surfaces), and the example-pack type-check `npm run typecheck:example` (CI's only type gate; the build skips its own).
 - **Inside the Vitest run:** repo-wide guards that no workflow step names. `src/lib/__tests__/source-line-endings.test.ts` fails on a lone CR or a NUL byte in a tracked source file, because git then treats the file as binary: `git diff` prints "Binary files differ" and review tools hide the change. Fix a lone CR with `tr -d '\r'`; write a NUL as the `\0` escape.
 
 Agentic audits (a full-codebase security harness run, not a diff review) also land here as leads.
@@ -54,6 +54,7 @@ npm test             # includes the repo-wide guards (source-line-endings, ...)
 ENFORCE=1 node scripts/check-safe-error-response.mjs
 ENFORCE=1 node scripts/check-mojibake.mjs
 ENFORCE=1 node scripts/check-i18n-strings.mjs --all
+npm run design:guards
 ```
 
 All green before moving on — these are the same gates CI runs (PowerShell: set `$env:ENFORCE = '1'` first); finding a failure here instead of CI is the win. `npm run verify:ci` runs the whole workflow in a clean clone when in doubt.

@@ -42,7 +42,7 @@ function Bubble({ role, children }: { role: 'user' | 'assistant'; children: Reac
   const user = role === 'user';
   return (
     <li className={`flex flex-col ${user ? 'items-end' : 'items-start'}`} data-role={role}>
-      <span className="mb-0.5 px-1 text-[11px] font-heading font-semibold uppercase tracking-wide text-fg-muted">
+      <span className="mb-0.5 px-1 text-[11px] font-heading font-semibold text-fg-muted">
         {user ? t('transcript.you') : t('transcript.assistant')}
       </span>
       <div

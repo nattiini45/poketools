@@ -56,7 +56,7 @@ export default function MoveQuickSelect({
               key={move}
               type="button"
               onClick={() => handleToggle(move)}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
+              className={`px-2 py-0.5 rounded text-micro font-medium transition-colors ${
                 usedSet.has(move)
                   ? "text-accent-ink border"
                   : "bg-elevated text-fg-muted hover:text-fg border border-transparent"
@@ -76,13 +76,13 @@ export default function MoveQuickSelect({
             .map((move) => (
               <span
                 key={move}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-elevated text-[10px] text-fg border"
+                className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-elevated text-micro text-fg border"
               >
                 {localizeMove(move, dataLocale)}
                 <button
                   type="button"
                   onClick={() => dispatch({ type: "remove_move", player, slot: slotIndex, move })}
-                  className="text-fg-muted hover:text-red-400"
+                  className="text-fg-muted hover:text-loss"
                   aria-label={t("moveSelect.remove", { move: localizeMove(move, dataLocale) })}
                 >
                   x
@@ -105,13 +105,13 @@ export default function MoveQuickSelect({
             }
           }}
           placeholder={t("moveSelect.customPlaceholder")}
-          className="flex-1 px-2 py-0.5 text-[10px] rounded bg-surface border text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
+          className="flex-1 px-2 py-0.5 text-micro rounded bg-surface border text-fg placeholder:text-fg-muted focus:outline-2 focus:outline-offset-2 focus:outline-transparent"
         />
         {customMove.trim() && (
           <button
             type="button"
             onClick={handleCustomSubmit}
-            className="px-2 py-0.5 text-[10px] rounded text-accent-ink font-medium"
+            className="px-2 py-0.5 text-micro rounded text-accent-ink font-medium"
           >
             {t("moveSelect.add")}
           </button>

@@ -282,11 +282,23 @@ diff (`docs/visual-harness.md`). They were built against an 18 px root, so:
 
 ## Guardrails
 
-`npm run design:guards` (`scripts/design/check-design-guards.mts`) reports, at warn level
-and outside the frozen surfaces (`src/lib/design/frozen-surfaces.ts`): text below 11
-px, `uppercase` and `tracking-*`, static Tailwind palette colours, and raw
-`<select>`. Pass `--paths "<files>"` to list the hits in the files you touched;
-new code should add none.
+`npm run design:guards` (`scripts/design/check-design-guards.mts`) is an error-level
+check. Outside the frozen surfaces (`src/lib/design/frozen-surfaces.ts`) it fails
+with exit code 1, and prints the file and line of each hit, when code uses text
+below 11 px, `uppercase` or `tracking-*`, a static Tailwind palette colour, or a
+raw `<select>`. CI runs it as its own step ("Design guardrails"), as does
+`npm run verify:ci`, so a hit blocks the merge. Pass `--paths "<files>"` to check
+only the files you touched. Tests are skipped, and a frozen file's classes stay as
+they are.
+
+Some files are not frozen themselves but are rendered by a frozen surface, a layout or a
+page the frozen compare captures (found by walking the import graph from the frozen
+sources and from the root and public layouts, draft preview, route preview, the league
+tree, draft rooms, the match page and the broadcast tree). Changing their classes would
+move frozen pixels, so they are listed in `scripts/design/guard-exceptions.json`, one
+entry per file with the reason. The guard skips them and prints how many it skipped.
+Convert a file and delete its entry when the surface that renders it is re-baselined;
+never add an entry for new code.
 
 ## Direction B primitives (redesign F4)
 

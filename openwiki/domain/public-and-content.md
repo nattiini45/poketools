@@ -152,16 +152,15 @@ Dedicated dashboard for league organizers and casters at `/creator`.
 
 **Docs:** `docs/design.md`
 
-Warm "Pokémon Center" palette (cream backgrounds, soft shadows, rounded corners).
+Direction B, "Character Select": a sand ground with cream surfaces, one amber accent, four tier plates for the top ranks, and skewed plates for active nav items, tabs and buttons. Sunlit stays in the sand family; dark surfaces belong to the moonlit theme only.
 
 ### Tokens (`src/app/globals.css`, `@theme` blocks)
-- `poke-base` — App background (`#FAF7F2`)
-- `poke-surface` — Card fill (`#FFFFFF`)
-- `poke-elevated` — Raised surfaces (`#F5F0E8`)
-- `poke-muted` — Subtle backgrounds (`#EDE8DD`)
-- `poke-text-primary` / `-secondary` / `-muted` — Text hierarchy
-- `poke-red` (`#E3350D` franchise red), `blue`, `green`, `yellow` — Accent colors
-- `poke-moment-*` — Broadcast highlight palette
+- `page`, `surface`, `elevated`, `sunken` — grounds and fills
+- `fg` / `fg-muted` — text hierarchy; `hairline` / `hairline-strong` — dividers
+- `accent-ink`, `accent-fill`, `accent-subtle` — the amber
+- `tier-1…4` (and `-soft`, `tier-ink`) — rank plates; `live`, `win`, `loss` — status only
+- The `poke-*` names still exist and alias onto these; frozen surfaces keep using them
+- `npm run design:guards` rejects, outside the frozen surfaces, a type size below 11 px, `uppercase` or `tracking-*`, a Tailwind palette colour and a raw `<select>`
 
 ### Typography
 - `font-heading` → Nunito via `next/font/google`

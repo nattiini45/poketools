@@ -73,7 +73,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
 
       {/* Display */}
       <div className="text-center">
-        <div className={`text-4xl font-mono font-bold ${displayRemaining <= 10 && endTime ? "text-red-400 animate-pulse" : "text-fg"}`}>
+        <div className={`text-4xl font-mono font-bold ${displayRemaining <= 10 && endTime ? "text-loss animate-pulse" : "text-fg"}`}>
           {display}
         </div>
         {label && <div className="text-xs text-fg-muted mt-1">{label}</div>}
@@ -99,7 +99,7 @@ export default function CountdownTimer({ sessionId }: CountdownTimerProps) {
           <button
             type="button"
             onClick={stopTimer}
-            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-[rgb(239_68_68/0.2)] text-red-400 hover:bg-[rgb(239_68_68/0.3)] transition-colors"
+            className="px-4 py-1.5 rounded-lg text-xs font-medium bg-[rgb(239_68_68/0.2)] text-loss hover:bg-[rgb(239_68_68/0.3)] transition-colors"
           >
             {t("timer.stop")}
           </button>

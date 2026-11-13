@@ -27,7 +27,7 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
 
   return (
     <div>
-      <h4 className="text-xs font-heading font-bold text-fg-muted uppercase tracking-wide mb-1.5">
+      <h4 className="text-xs font-heading font-bold text-fg-muted mb-1.5">
         {label}
       </h4>
       <div className="flex gap-1.5">
@@ -46,7 +46,7 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
                   ? 'border-accent-ink shadow-poke-sm'
                   : 'border-hairline bg-surface'
                 }
-                ${isFacing ? 'ring-2 ring-yellow-400/60' : ''}
+                ${isFacing ? 'ring-2 ring-hairline-strong' : ''}
               `}
             >
               {set?.species ? (
@@ -56,7 +56,7 @@ export default function CastTeamStrip({ team, activeSlot, facingSlot, onSlotClic
                     alt={localizeSpecies(set.species, dataLocale)}
                     className="w-10 h-10"
                   />
-                  <span className="text-[9px] text-fg-muted truncate w-full text-center px-0.5">
+                  <span className="text-micro text-fg-muted truncate w-full text-center px-0.5">
                     {localizeSpecies(set.species, dataLocale)}
                   </span>
                 </>

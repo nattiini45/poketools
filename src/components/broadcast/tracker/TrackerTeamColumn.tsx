@@ -44,8 +44,8 @@ export default function TrackerTeamColumn({
           </div>
           <div className="flex items-center gap-2 text-xs text-fg-muted">
             <span>{t('tracker.broughtOfSix', { count: broughtCount })}</span>
-            <span className="text-orange-400">{t('tracker.kosDealt', { count: totalKoDealt })}</span>
-            <span className="text-red-400">{t('tracker.koedCount', { count: koedCount })}</span>
+            <span className="text-accent-ink">{t('tracker.kosDealt', { count: totalKoDealt })}</span>
+            <span className="text-loss">{t('tracker.koedCount', { count: koedCount })}</span>
           </div>
         </div>
       </div>

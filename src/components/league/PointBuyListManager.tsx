@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useState, useEffect, useCallback } from 'react';
 import type { PointBuyListVersion } from '@/types/point-buy';
 import Button from '@/components/ui/Button';
@@ -85,11 +86,10 @@ export function PointBuyListManagerView({
           <label className="mb-1 block text-sm font-medium text-fg-muted">
             {t('listManager.versionLabel')}
           </label>
-          <select
+          <Select
             value={selectedId}
             onChange={(e) => onSelect(e.target.value)}
             disabled={failed}
-            className="w-full rounded-lg border border-hairline bg-elevated px-3 py-2 text-sm text-fg focus:border-accent-ink focus:outline-2 focus:outline-offset-2 focus:outline-transparent disabled:opacity-50"
           >
             <option value="">{t('listManager.selectList')}</option>
             {versions.map((v) => (
@@ -100,7 +100,7 @@ export function PointBuyListManagerView({
                 })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <Button onClick={onBind} disabled={failed || saving || !selectedId}>
           {saving ? t('listManager.binding') : t('listManager.bind')}

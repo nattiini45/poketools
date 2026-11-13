@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { ArrowDown, ArrowUp, Check } from 'lucide-react';
 import TypeSprite from '@/components/shared/TypeSprite';
@@ -179,8 +180,9 @@ export default function MovePicker({
               {localizeMoveCategory(cat, dl)}
             </button>
           ))}
-          <select
-            className="ml-auto text-caption bg-surface border border-hairline rounded px-1.5 py-0.5 text-fg-muted focus:ring-1 outline-2 outline-offset-2 outline-transparent"
+          <div className="ml-auto">
+          <Select
+            className="h-8 text-caption"
             value={typeFilter ?? ''}
             onChange={(e) => setTypeFilter(e.target.value || null)}
             aria-label={t('movePicker.filterByType')}
@@ -191,7 +193,8 @@ export default function MovePicker({
                 {localizeType(type, dl)}
               </option>
             ))}
-          </select>
+          </Select>
+          </div>
         </div>
 
         {/* Sort controls aligned to result columns */}

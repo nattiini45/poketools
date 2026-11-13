@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import SpriteImg from '@/components/shared/SpriteImg';
 import type { PokemonSet, StatSpread } from '@/types/team';
@@ -351,27 +352,25 @@ export default function CastSetEditor({ set, slotIndex, generation, format: _for
           {/* Nature */}
           <div>
             <label className="text-xs text-fg-muted block mb-1">{t('setEditor.nature')}</label>
-            <select
+            <Select
               value={set.nature}
               onChange={(e) => onUpdate({ nature: e.target.value })}
-              className="w-full rounded-poke-md border border-hairline bg-surface px-2 py-1 text-sm text-fg"
             >
               {natureOptions.map((n) => <option key={n.value} value={n.value}>{n.label}</option>)}
-            </select>
+            </Select>
           </div>
 
           {/* Tera Type */}
           {generation >= 9 && (
             <div>
               <label className="text-xs text-fg-muted block mb-1">{t('setEditor.teraType')}</label>
-              <select
+              <Select
                 value={set.tera_type ?? ''}
                 onChange={(e) => onUpdate({ tera_type: e.target.value || undefined })}
-                className="w-full rounded-poke-md border border-hairline bg-surface px-2 py-1 text-sm text-fg"
               >
                 <option value="">{t('setEditor.none')}</option>
                 {teraOptions.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
+              </Select>
             </div>
           )}
 

@@ -1,0 +1,122 @@
+[
+  {
+    "file": "src/app/(broadcast)/broadcast/wiki/moves/[name]/page.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/app/(broadcast)/broadcast/wiki/tera/[type]/page.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/app/(public)/draft-preview/page.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/app/(public)/draft-room/trainer-creator/client.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/app/(public)/leagues/[id]/teams/[pid]/page.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/bracket/BracketMatchCard.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/bracket/BracketSkeletonCard.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/bracket/RoundRobinTable.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft-admin/DraftAuditViewer.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft-admin/InstanceConfigForm.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft-admin/LineSelect.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft-admin/LiveControls.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft-admin/PenaltyStageEditor.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/draft/EvolutionEventBanner.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/evolution/EpbPokemonRow.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/evolution/MatchEvolutionSummary.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/evolution/MatchupClient.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/evolution/MatchupPokemonDetail.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/evolution/MatchupRosterPanel.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/insights/ScopedInsightsView.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/match/GameDetailCard.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/match/GameDetailEditForm.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/match/MatchAnalysisCard.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/notifications/NotificationBell.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/ruleset/RulesetDetailView.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/shared/TypeBadgeView.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/tournament/TournamentReportCard.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/ui/Table.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/ui/fluid/command-menu.tsx",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  },
+  {
+    "file": "src/components/ui/panel.ts",
+    "reason": "rendered by a frozen surface, a page or a layout; converted when that surface is re-baselined"
+  }
+]

@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import PlayerAvatar from '@/components/shared/PlayerAvatar';
@@ -141,17 +142,16 @@ export default function LeaderboardContent({ initialRows }: LeaderboardContentPr
         <p className="text-sm text-fg-muted">{t('leaderboard.title')}</p>
         <label className="inline-flex items-center gap-2 text-sm text-fg-muted">
           {t('leaderboard.minGames')}
-          <select
+          <Select
             value={minGames}
             onChange={(event) => setMinGames(Number(event.target.value))}
-            className="bg-elevated border border-hairline rounded-poke-md px-2 py-1 text-fg"
           >
             {MIN_GAMES_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
               </option>
             ))}
-          </select>
+          </Select>
         </label>
       </div>
 

@@ -496,15 +496,14 @@ export default function EvolutionTierEditor({
                       <label className="block text-xs font-heading font-semibold text-fg mb-1">
                         {t('tierEditor.powerTier')}
                       </label>
-                      <select
+                      <Select
                         value={powerTier}
                         onChange={(e) => setPowerTier(e.target.value as PowerTier)}
-                        className="w-full border border-hairline bg-surface rounded-poke-md px-2 py-1.5 text-sm text-fg focus:border-accent-ink focus:ring-1 transition-colors"
                       >
                         {POWER_TIERS.map((pt) => (
                           <option key={pt} value={pt}>{tShared('tier', { tier: pt })}</option>
                         ))}
-                      </select>
+                      </Select>
                     </div>
                   </div>
 
@@ -536,7 +535,7 @@ export default function EvolutionTierEditor({
             variant="primary"
             size="sm"
             onClick={() => setShowWildcardForm(!showWildcardForm)}
-            className="bg-purple-600 hover:bg-purple-700"
+            className="bg-accent-fill hover:bg-accent-ink"
           >
             {showWildcardForm ? t('tierEditor.cancel') : t('tierEditor.assignWildcardCta')}
           </Button>
@@ -549,7 +548,7 @@ export default function EvolutionTierEditor({
               return (
                 <div
                   key={wc.id}
-                  className="flex items-center justify-between p-3 bg-purple-900/20 border border-purple-700/40 rounded-poke-lg text-sm"
+                  className="flex items-center justify-between p-3 bg-tier-3-soft border border-hairline-strong rounded-poke-lg text-sm"
                 >
                   <div className="flex items-center gap-3 flex-wrap">
                     <Badge variant="purple" size="sm">{player?.name ?? t('tierEditor.unknownPlayer')}</Badge>
@@ -689,7 +688,7 @@ export default function EvolutionTierEditor({
                 size="sm"
                 loading={wildcardSubmitting}
                 disabled={!wildcardPlayerId || !wildcardChain}
-                className="bg-purple-600 hover:bg-purple-700"
+                className="bg-accent-fill hover:bg-accent-ink"
               >
                 {t('tierEditor.assignWildcard')}
               </Button>

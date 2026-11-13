@@ -1,7 +1,9 @@
 // usage: npx --no-install tsx scripts/design/check-design-guards.mts [--paths "<files>"]
-// Direction B guardrails (redesign F3), warn level: lists what new and redesigned code should not use, and always
-// exits 0. Frozen surfaces (src/lib/design/frozen-surfaces.ts) are skipped. docs/design.md, "Guardrails".
-import { execSync } from 'node:child_process';
+// Direction B guardrails (redesign F3, error level since Z1): fails with exit 1 when any file uses what new and
+// redesigned code should not. Frozen surfaces (src/lib/design/frozen-surfaces.ts) are skipped. --paths limits the run to the
+// given files. Every hit prints as file:line. Files in scripts/design/guard-exceptions.json (rendered by a frozen
+// surface) are skipped and counted. docs/design.md, "Guardrails".
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { isFrozenSource } from '../../src/lib/design/frozen-surfaces';
 
@@ -19,8 +21,11 @@ const RULES: Array<{ id: string; why: string; test: (line: string, file: string)
 
 const argv = process.argv.slice(2);
 const pathsArg = argv.indexOf('--paths');
-const files = (pathsArg >= 0 ? argv[pathsArg + 1].split(/\s+/) : execSync("git ls-files 'src/components/**/*.tsx' 'src/components/**/*.ts' 'src/app/**/*.tsx'", { encoding: 'utf8' }).split('\n'))
+const exceptions = new Set((JSON.parse(readFileSync('scripts/design/guard-exceptions.json', 'utf8')) as Array<{ file: string }>).map((entry) => entry.file));
+const candidates = (pathsArg >= 0 ? argv[pathsArg + 1].split(/\s+/) : execFileSync('git', ['ls-files', 'src/components/**/*.tsx', 'src/components/**/*.ts', 'src/app/**/*.tsx'], { encoding: 'utf8' }).split('\n'))
   .filter((file) => file && !file.includes('__tests__') && !isFrozenSource(file.replace(/^src\//, '')));
+const files = candidates.filter((file) => !exceptions.has(file));
+const excepted = candidates.length - files.length;
 
 const hits = new Map(RULES.map((rule) => [rule.id, [] as string[]]));
 for (const file of files) {
@@ -28,8 +33,19 @@ for (const file of files) {
     for (const rule of RULES) if (rule.test(line, file)) hits.get(rule.id)!.push(`${file}:${index + 1}`);
   });
 }
+if (files.length === 0) {
+  console.error('design-guards: no files to check');
+  process.exit(1);
+}
+console.log(`design-guards: ${files.length} files checked, ${excepted} listed in guard-exceptions.json skipped`);
+let total = 0;
 for (const rule of RULES) {
   const list = hits.get(rule.id)!;
+  total += list.length;
   console.log(`design-guards: ${rule.id}: ${list.length} (${rule.why})`);
-  if (pathsArg >= 0) for (const hit of list) console.log('  ' + hit);
+  for (const hit of list) console.log('  ' + hit);
+}
+if (total > 0) {
+  console.error(`design-guards: ${total} hit(s)`);
+  process.exit(1);
 }

@@ -39,7 +39,7 @@ export default function DecisionMatchPanel({
         className="flex w-full items-center justify-between text-left"
         aria-expanded={expanded}
       >
-        <span className="text-sm font-semibold text-amber-400">
+        <span className="text-sm font-semibold text-accent-ink">
           {t('decision.title')}
         </span>
         <span className="text-xs text-fg-muted">{expanded ? <ChevronDown aria-hidden="true" className="size-4" /> : <ChevronRight aria-hidden="true" className="size-4" />}</span>
@@ -59,7 +59,7 @@ export default function DecisionMatchPanel({
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
                 href={`/admin/tournaments/${tournamentId}/rounds`}
-                className="rounded-lg border border-[rgb(217_119_6/0.5)] bg-[rgb(120_53_15/0.3)] px-3 py-1.5 text-xs font-medium text-amber-300 hover:bg-[rgb(120_53_15/0.5)]"
+                className="rounded-lg border border-[rgb(217_119_6/0.5)] bg-[rgb(120_53_15/0.3)] px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-[rgb(120_53_15/0.5)]"
               >
                 {t('decision.enter')}
               </Link>

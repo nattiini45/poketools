@@ -8,11 +8,11 @@ import { broadcastCasterMessages } from "@/i18n/messages/broadcast-caster";
 import { localizeSpecies } from "@/lib/pkmn/i18n/names/species";
 
 function effColor(eff: number): string {
-  if (eff === 0) return "bg-gray-900 text-gray-600";
-  if (eff < 1) return "bg-[rgb(69_10_10/0.5)] text-red-400";
+  if (eff === 0) return "bg-sunken text-fg-muted";
+  if (eff < 1) return "bg-[rgb(69_10_10/0.5)] text-loss";
   if (eff === 1) return "bg-surface text-fg-muted";
-  if (eff === 2) return "bg-[rgb(2_44_34/0.5)] text-emerald-400";
-  return "bg-[rgb(6_78_59/0.6)] text-emerald-300"; // 4x
+  if (eff === 2) return "bg-[rgb(2_44_34/0.5)] text-win";
+  return "bg-[rgb(6_78_59/0.6)] text-win"; // 4x
 }
 
 function effLabel(eff: number): string {
@@ -58,13 +58,13 @@ export default function TypeMatchupMatrix() {
       <table className="w-full text-center">
         <thead>
           <tr>
-            <th className="p-1 text-[10px] text-fg-muted font-normal">
+            <th className="p-1 text-micro text-fg-muted font-normal">
               {t("matrix.corner")}
             </th>
             {matrix.p2.map((def) => (
               <th
                 key={def.species}
-                className="p-1 text-[10px] text-red-400 font-medium"
+                className="p-1 text-micro text-loss font-medium"
                 title={species(def.species)}
               >
                 {/* Table cells ignore max-width: truncate inside a block wrapper. */}
@@ -77,7 +77,7 @@ export default function TypeMatchupMatrix() {
           {matrix.p1.map((atk, ri) => (
             <tr key={atk.species}>
               <td
-                className="p-1 text-[10px] text-blue-400 font-medium text-left"
+                className="p-1 text-micro text-accent-ink font-medium text-left"
                 title={species(atk.species)}
               >
                 <div className="max-w-[60px] truncate">{species(atk.species)}</div>
@@ -85,7 +85,7 @@ export default function TypeMatchupMatrix() {
               {matrix.grid[ri].map((eff, ci) => (
                 <td
                   key={`${ri}-${ci}`}
-                  className={`p-1 text-[10px] font-bold rounded-sm ${effColor(eff)}`}
+                  className={`p-1 text-micro font-bold rounded-sm ${effColor(eff)}`}
                 >
                   {effLabel(eff)}
                 </td>
@@ -95,7 +95,7 @@ export default function TypeMatchupMatrix() {
         </tbody>
       </table>
 
-      <div className="flex gap-3 mt-2 text-[9px] text-fg-muted justify-center">
+      <div className="flex gap-3 mt-2 text-micro text-fg-muted justify-center">
         <span className="flex items-center gap-1">
           <span className="w-3 h-3 rounded-sm bg-[rgb(2_44_34/0.5)]" /> {t("matrix.superEffective")}
         </span>
@@ -106,7 +106,7 @@ export default function TypeMatchupMatrix() {
           <span className="w-3 h-3 rounded-sm bg-[rgb(69_10_10/0.5)]" /> {t("matrix.notVeryEffective")}
         </span>
         <span className="flex items-center gap-1">
-          <span className="w-3 h-3 rounded-sm bg-gray-900" /> {t("matrix.immune")}
+          <span className="w-3 h-3 rounded-sm bg-sunken" /> {t("matrix.immune")}
         </span>
       </div>
     </div>

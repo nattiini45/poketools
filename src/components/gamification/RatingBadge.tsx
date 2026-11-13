@@ -45,7 +45,7 @@ const ICON_SIZE: Record<NonNullable<RatingBadgeProps['size']>, number> = {
 };
 
 const PROVISIONAL_CHIP_SIZE: Record<NonNullable<RatingBadgeProps['size']>, string> = {
-  sm: 'text-[10px]',
+  sm: 'text-micro',
   md: 'text-[11px]',
   lg: 'text-xs',
 };

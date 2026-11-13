@@ -1,5 +1,6 @@
 'use client';
 
+import Select from '@/components/ui/Select';
 import { useState, useMemo, type ReactNode } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -229,11 +230,11 @@ export default function TournamentTabsUnified({
       {showRoundFilter && (
         <div className="flex items-center gap-2">
           <label htmlFor="tournament-round-filter" className="text-body text-fg-muted">{t('roundFilter.label')}</label>
-          <select
+          <Select
             id="tournament-round-filter"
             value={selectedRound}
             onChange={(e) => setSelectedRound(Number(e.target.value))}
-            className="min-h-9 rounded-poke-sm border border-hairline-strong bg-surface px-2 py-1 text-body text-fg max-sm:min-h-11"
+            className="min-h-9 max-sm:min-h-11"
           >
             {Array.from({ length: totalRounds }, (_, i) => i + 1).map((r) => (
               <option key={r} value={r}>
@@ -242,7 +243,7 @@ export default function TournamentTabsUnified({
                   : tContent('round.round', { n: r })}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
       )}
 

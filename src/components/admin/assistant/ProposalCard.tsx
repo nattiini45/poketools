@@ -300,7 +300,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
         {groups.map(([group, notes]) =>
           notes.length === 0 ? null : (
             <div key={group}>
-              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">{cards.dynamic(`undo.${group}`, undefined, '')}</h4>
+              <h4 className="font-heading text-xs font-semibold text-fg-muted">{cards.dynamic(`undo.${group}`, undefined, '')}</h4>
               <ul className="list-disc space-y-0.5 pl-5 text-sm text-fg-muted">
                 {notes.map((note, index) => (
                   <li key={`${note.op}-${note.id ?? 'x'}-${index}`}>
@@ -527,7 +527,7 @@ export default function ProposalCard({ proposalId, approveEnabled, onChanged, on
 
           {stored.outwardEffects.length > 0 && (
             <div className="space-y-1">
-              <h4 className="font-heading text-xs font-semibold uppercase tracking-wide text-fg-muted">{cards('effects.heading')}</h4>
+              <h4 className="font-heading text-xs font-semibold text-fg-muted">{cards('effects.heading')}</h4>
               <ul className="space-y-1 text-sm">
                 {stored.outwardEffects.map((effect) => (
                   <li key={effect.key}>

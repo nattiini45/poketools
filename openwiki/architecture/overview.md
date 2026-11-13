@@ -137,8 +137,9 @@ try {
 - `@pkmn/dex` is large — server-side only via API routes
 
 ### Design System
-- Warm "Pokémon Center" palette defined as CSS custom properties in `src/app/globals.css`
-- Tailwind tokens under `poke-*` namespace (defined in the `@theme` blocks of `src/app/globals.css`)
+- Direction B, "Character Select": sand ground, cream surfaces, one amber, four tier plates and skewed plates for nav, tabs and buttons, defined as CSS custom properties in `src/app/globals.css`
+- New code uses the B tokens (`fg`, `surface`, `elevated`, `hairline`, `accent-ink`, `tier-1…4`); the older `poke-*` names alias onto them
+- `npm run design:guards` fails CI on a type size below 11 px, `uppercase` or `tracking-*`, a Tailwind palette colour or a raw `<select>` outside the frozen surfaces
 - UI primitives in `src/components/ui/` — see [Design](../domain/public-and-content.md#design-system)
 - See `docs/design.md` for full token reference
 

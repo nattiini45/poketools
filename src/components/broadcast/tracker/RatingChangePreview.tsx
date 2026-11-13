@@ -34,10 +34,10 @@ export default function RatingChangePreview() {
       <div className="text-center">
         <div className="text-fg-muted">{t("rating.wins", { name: data?.player1.name ?? "" })}</div>
         <div className="flex gap-3 mt-0.5">
-          <span className="text-emerald-400 font-mono font-bold">
+          <span className="text-win font-mono font-bold">
             +{previews.p1Win.player1Delta}
           </span>
-          <span className="text-red-400 font-mono font-bold">
+          <span className="text-loss font-mono font-bold">
             {previews.p1Win.player2Delta}
           </span>
         </div>
@@ -46,10 +46,10 @@ export default function RatingChangePreview() {
       <div className="text-center">
         <div className="text-fg-muted">{t("rating.wins", { name: data?.player2.name ?? "" })}</div>
         <div className="flex gap-3 mt-0.5">
-          <span className="text-red-400 font-mono font-bold">
+          <span className="text-loss font-mono font-bold">
             {previews.p2Win.player1Delta}
           </span>
-          <span className="text-emerald-400 font-mono font-bold">
+          <span className="text-win font-mono font-bold">
             +{previews.p2Win.player2Delta}
           </span>
         </div>

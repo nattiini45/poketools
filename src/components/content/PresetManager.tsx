@@ -52,7 +52,7 @@ export default function PresetManager({ presets, onLoad, onDelete, deleting }: P
       <div className="space-y-4">
         {Object.entries(grouped).map(([type, typePresets]) => (
           <div key={type}>
-            <h4 className="text-xs font-heading font-semibold text-fg-muted uppercase tracking-wider mb-2">
+            <h4 className="text-xs font-heading font-semibold text-fg-muted mb-2">
               {t.dynamic(`presetType.${type}`, undefined, type)}
             </h4>
             <div className="space-y-2">

@@ -32,7 +32,7 @@ export default function HotkeyHelpModal() {
       <div className="space-y-4">
         {Array.from(grouped.entries()).map(([scope, entries]) => (
           <div key={scope}>
-            <h3 className="text-xs font-semibold text-fg-muted uppercase tracking-wider mb-2">
+            <h3 className="text-xs font-semibold text-fg-muted mb-2">
               {t.dynamic(`hotkeys.scope.${scope}`, undefined, scope)}
             </h3>
             <div className="space-y-1">

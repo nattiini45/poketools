@@ -151,12 +151,12 @@ export default function BattleTracker({
 
       {/* Error banner */}
       {error && (
-        <div className="px-4 py-2 rounded-lg bg-[rgb(239_68_68/0.1)] border border-[rgb(239_68_68/0.3)] text-sm text-red-400">
+        <div className="px-4 py-2 rounded-lg bg-[rgb(239_68_68/0.1)] border border-[rgb(239_68_68/0.3)] text-sm text-loss">
           {error === SUBMIT_FAILED ? t('tracker.submitFailed') : errorText(error)}
           <button
             type="button"
             onClick={() => setError(null)}
-            className="ml-2 text-red-300 hover:text-red-100"
+            className="ml-2 text-loss hover:text-loss"
             aria-label={t('tracker.dismissError')}
           >
             <X aria-hidden="true" className="size-4" />
@@ -183,7 +183,7 @@ export default function BattleTracker({
       {matchComplete && (
         <div className="space-y-3">
           <div className="px-4 py-3 rounded-xl bg-[rgb(16_185_129/0.1)] border border-[rgb(16_185_129/0.3)] text-center">
-            <div className="text-lg font-bold text-emerald-400">{t('tracker.matchComplete')}</div>
+            <div className="text-lg font-bold text-win">{t('tracker.matchComplete')}</div>
             <div className="text-sm text-fg-muted mt-1">
               {t('tracker.matchWinner', {
                 name:
