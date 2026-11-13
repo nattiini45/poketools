@@ -100,6 +100,14 @@ describe('NavBar source contract', () => {
     expect(count('lg:hidden')).toBe(3);
   });
 
+  it('shows a signed-in player the row icons from 1152 px, never below, and never hides a label', () => {
+    expect(source).toContain("player ? 'hidden min-[1152px]:inline-block' : ''");
+    expect(source).not.toContain('xl:inline-block');
+    expect(count('iconClassName')).toBe(4);
+    const row = source.slice(source.indexOf('lg:flex'), source.indexOf('aria-label="Search"'));
+    expect(row).not.toMatch(/label=\{[^}]*hidden/);
+  });
+
   it('carries no Admin or Creator Hub link in the bar: they live in the account menu', () => {
     expect(source).not.toMatch(/['"]\/admin['"]/);
     expect(source).not.toMatch(/['"]\/creator['"]/);

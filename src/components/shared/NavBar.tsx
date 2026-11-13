@@ -142,8 +142,8 @@ export default function NavBar({
   const player = session?.player;
   const t = useT(navMessages);
   const links = primaryNavLinks(Boolean(player));
-  // The six links of a player only fit beside the right cluster with their icons from xl; a visitor's four fit from lg.
-  const iconClassName = player ? 'hidden xl:inline-block' : '';
+  // The six links of a player fit beside the right cluster with their icons from 1152 px (measured with German labels and an admin's long name; below it the account name truncates); a visitor's four fit from lg.
+  const iconClassName = player ? 'hidden min-[1152px]:inline-block' : '';
   const closeDrawer = () => setMobileOpen(false);
 
   return (

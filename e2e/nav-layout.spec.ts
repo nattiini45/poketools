@@ -1,6 +1,6 @@
 import { expect, test } from './support/fixtures';
 
-const WIDTHS = [1024, 1280, 1344, 1400, 1440, 1536, 1600, 1707, 1792, 1920];
+const WIDTHS = [1024, 1100, 1152, 1200, 1240, 1280, 1344, 1400, 1440, 1536, 1600, 1707, 1792, 1920];
 
 test.describe('site nav layout', () => {
   for (const width of WIDTHS) {
