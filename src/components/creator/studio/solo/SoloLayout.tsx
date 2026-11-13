@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useState } from 'react';
+import { Check, Copy } from 'lucide-react';
 import { useCastStudio } from '../CastStudioContext';
 import CastTeamEditor from '../CastTeamEditor';
 import CastToolbar from '../CastToolbar';
@@ -99,7 +100,7 @@ export default function SoloLayout() {
                 title={t('solo.copyUrlTitle')}
                 aria-label={t('solo.copyUrlTitle')}
               >
-                {copiedUrl === path ? '✓' : '⎘'}
+                {copiedUrl === path ? <Check aria-hidden="true" className="size-4" /> : <Copy aria-hidden="true" className="size-4" />}
               </Button>
             </div>
           ))}

@@ -1,6 +1,7 @@
 'use client';
 
 import { useReducer, useCallback, useState } from 'react';
+import { X } from 'lucide-react';
 import TrackerTeamColumn from './TrackerTeamColumn';
 import TrackerScorebar from './TrackerScorebar';
 import TrackerControls from './TrackerControls';
@@ -158,7 +159,7 @@ export default function BattleTracker({
             className="ml-2 text-red-300 hover:text-red-100"
             aria-label={t('tracker.dismissError')}
           >
-            ✕
+            <X aria-hidden="true" className="size-4" />
           </button>
         </div>
       )}

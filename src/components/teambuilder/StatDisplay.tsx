@@ -1,6 +1,7 @@
 'use client';
 
 import type { PokemonSet } from '@/types/team';
+import { ArrowDown, ArrowUp } from 'lucide-react';
 import { calcStat, getNatureModifier, getNatureLabel, getStatBarColor, getStatBarWidth, SHOWDOWN_MAX_STATS, STAT_KEYS } from '@/lib/pkmn/stat-calc';
 import { useDataLocale } from '@/i18n/client';
 import { localizeStat } from '@/lib/pkmn/i18n/names/misc';
@@ -91,7 +92,7 @@ export default function StatDisplay({ set, baseStats, compact = false, className
             </span>
             {(isBoost || isReduce) && (
               <span className={`text-[10px] ${textColor}`}>
-                {isBoost ? '▲' : '▼'}
+                {isBoost ? <ArrowUp aria-hidden="true" className="size-3" /> : <ArrowDown aria-hidden="true" className="size-3" />}
               </span>
             )}
           </div>
