@@ -81,6 +81,12 @@ Filtering is intentionally **client of the URL** — the form uses
 `method="get"`, so every filter state is shareable and bookmarkable. Column
 sorting uses `SortableTableHeader` links that rewrite the `sort` param.
 
+The League/Tournament column shows the parent league for a league stage and
+the tournament for a standalone event. It links to that competition through
+the row's public `competitionUrl` (the same join also selects the season id);
+missing metadata remains unlinked. The `league` sort key follows this combined
+display name, while the League and Tournament filters keep their separate fields.
+
 ## Caching
 
 ```typescript
