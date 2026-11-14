@@ -146,10 +146,11 @@ export default function PokemonDetailClient({
           )}
 
           {/* Player filter */}
-          {filters && filters.players.length > 0 && (
+          {((filters?.players.length ?? 0) > 0 || playerId !== '') && (
             <WikiSelect label={t('usage.player')} value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
               <option value="">{t('usage.allPlayers')}</option>
-              {filters.players.map((p) => (
+              {playerId !== '' && !filters?.players.some((player) => player.id === playerId) && <option value={playerId}>{h('selectedPlayerWithoutObservations')}</option>}
+              {filters?.players.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
               ))}
             </WikiSelect>

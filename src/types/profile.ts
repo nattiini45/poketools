@@ -74,7 +74,7 @@ export interface ProfileHeadlineStats {
   total_losses: number;
   total_draws?: number;
   win_rate: number;
-  total_kos_dealt: number;
+  total_kos_dealt: number | null;
   unique_pokemon_used: number;
   tournaments_entered: number;
   tournaments_won: number;

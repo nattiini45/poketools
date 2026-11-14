@@ -61,6 +61,43 @@ describe('historical profile combination', () => {
     expect(result.headline.total_kos_dealt).toBe(32);
   });
 
+  it('does not substitute live games or win rate when an existing historical row has unknown appearances', () => {
+    const live = profile();
+    live.live_pokemon_counters = [counter('Mew', 7, 4)];
+    const result = combineHistoricalProfile(live, contribution({ pokemon: [{ pokemonName: 'Mew', appearances: null, wins: null, kos: 20 }] }), ready);
+    expect(result.most_used_pokemon).toEqual([]);
+    expect(result.best_kill_pokemon[0]).toMatchObject({ pokemon_name: 'Mew', kos_dealt: 24 });
+    expect(result.headline.total_kos_dealt).toBe(27);
+  });
+
+  it('keeps species and headline KOs unknown when a mixed live/historical species has unknown historical KOs', () => {
+    const result = combineHistoricalProfile(profile(), contribution({ pokemon: [{ pokemonName: 'Mew', appearances: 10, wins: 5, kos: null }] }), ready);
+    expect(result.most_used_pokemon[0]).toMatchObject({ pokemon_name: 'Mew', total_games: 17, total_kos_dealt: null, win_rate: 71 });
+    expect(result.best_kill_pokemon.some((row) => row.pokemon_name === 'Mew')).toBe(false);
+    expect(result.headline).toMatchObject({ total_kos_dealt: null, total_matches: 8, total_wins: 5, total_losses: 2 });
+  });
+
+  it('retains an already unknown headline KO total even when all historical KOs are known', () => {
+    const live = profile();
+    live.headline.total_kos_dealt = null;
+    expect(combineHistoricalProfile(live, contribution(), ready).headline.total_kos_dealt).toBeNull();
+  });
+
+  it('preserves live species counters when there is no corresponding historical row', () => {
+    const result = combineHistoricalProfile(profile(), contribution({ pokemon: [{ pokemonName: 'Celebi', appearances: 1, wins: 0, kos: null }] }), ready);
+    expect(result.most_used_pokemon[0]).toMatchObject({ pokemon_name: 'Pikachu', total_games: 10, total_kos_dealt: 1, total_koed: 1, kill_differential: 0, win_rate: 100 });
+    expect(result.best_kill_pokemon[0]).toMatchObject({ pokemon_name: 'Mew', kos_dealt: 4 });
+    expect(result.headline.total_kos_dealt).toBeNull();
+  });
+
+  it('leaves Off totals unchanged even when the excluded historical rows contain unknown metrics', () => {
+    const live = profile();
+    const result = combineHistoricalProfile(live, contribution({ pokemon: [{ pokemonName: 'Mew', appearances: null, wins: null, kos: null }] }), { state: 'excluded', coverage: [] });
+    expect(result.headline).toEqual(live.headline);
+    expect(result.most_used_pokemon).toEqual(live.most_used_pokemon);
+    expect(result.best_kill_pokemon).toEqual(live.best_kill_pokemon);
+  });
+
   it('counts only proven historical species while retaining every live species', () => {
     const live = profile();
     live.live_pokemon_counters!.push(counter('Unown', 0, 0));

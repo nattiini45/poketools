@@ -37,6 +37,7 @@ export default defineDe<typeof en>()({
     recordWithDraws: '{wins}-{losses}-{draws}',
     winRate: 'Siege %',
     totalKos: 'KOs gesamt',
+    unknown: 'Unbekannt',
     pokemon: 'Pokémon',
     titles: 'Titel',
     form: 'Form',

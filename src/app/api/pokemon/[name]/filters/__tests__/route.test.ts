@@ -19,6 +19,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/players', () => ({
   getPlayersByIds: vi.fn(),
 }));
+vi.mock('@/lib/cache/public-reads', () => ({ publicReads: { hiddenPlayerIds: vi.fn().mockResolvedValue([]) } }));
 
 import { GET } from '../route';
 import { getAggregateScopesForPokemon, getPlayerIdsForPokemon } from '@/lib/supabase/queries/aggregates';

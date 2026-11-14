@@ -112,11 +112,13 @@ export async function GET(
       const hidden = await publicReads.hiddenPlayerIds();
       const visibleLive = withoutHiddenPlayers(livePlayers, hidden);
       const earlier = new Map((historical.data?.players ?? [])
-        .filter((row) => row.pokemon.some((counter) => counter.pokemonName === pokemonName
-          && ((counter.appearances ?? 0) > 0 || (counter.kos ?? 0) > 0)))
+        .filter((row) => row.pokemon.some((counter) => counter.pokemonName === pokemonName))
         .map((row) => [row.playerId, row]));
       const current = new Map(visibleLive.map((row) => [row.player_id, row]));
-      const playerIds = [...new Set([...current.keys(), ...earlier.keys()])].filter((id) => !hidden.includes(id));
+      const historicalPlayerIds = [...earlier.values()].filter((row) => row.pokemon.some((counter) =>
+        counter.pokemonName === pokemonName && ((counter.appearances ?? 0) > 0 || (counter.kos ?? 0) > 0),
+      )).map((row) => row.playerId);
+      const playerIds = [...new Set([...current.keys(), ...historicalPlayerIds])].filter((id) => !hidden.includes(id));
       const names = playerIds.length > 0 ? await resolvePlayerNames(playerIds) : {};
       result.players = playerIds.map((id): PokemonPlayerRow => {
         const live = current.get(id);
@@ -132,7 +134,7 @@ export async function GET(
           kos_dealt: row.kos_dealt, koed_rate: row.koed_rate,
           bring_rate: row.bring_rate, lead_rate: row.lead_rate, win_rate: row.win_rate,
         };
-      }).filter((row) => row.games !== null || row.kos_dealt !== null);
+      });
     }
 
     return NextResponse.json<ApiResult<PokemonDetailStats>>(

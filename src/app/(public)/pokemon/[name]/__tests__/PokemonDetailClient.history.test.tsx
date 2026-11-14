@@ -22,6 +22,38 @@ const archiveOptions: HistoricalCompetitionOption[] = [
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Pokémon archive picker', () => {
+  it.each([
+    ['en', 'Player', 'Scope', 'Selected player (no included observations)'],
+    ['de', 'Spieler', 'Bereich', 'Ausgewählter Spieler (keine einbezogenen Beobachtungen)'],
+  ] as const)('keeps an excluded player filter visible and clearable in %s without retaining its name', async (locale, playerLabel, scopeLabel, fallbackLabel) => {
+    let includeHistory = true;
+    const fetchMock = vi.fn(async (input: string) => ({ json: async () => input.endsWith('/filters')
+      ? { success: true, data: { leagues: [], tournaments: [], players: includeHistory ? [{ id: 'star-trainer', name: 'Star Trainer' }] : [] } }
+      : { success: true, data: initialStats } }));
+    vi.stubGlobal('fetch', fetchMock);
+    const user = userEvent.setup();
+    const { rerender } = render(withI18n(<PokemonDetailClient pokemonName="Pikachu" initialStats={initialStats} archiveOptions={archiveOptions} />, { locale }));
+    await screen.findByRole('option', { name: 'Star Trainer' });
+    await user.selectOptions(screen.getByRole('combobox', { name: playerLabel }), 'star-trainer');
+    await user.selectOptions(screen.getByRole('combobox', { name: scopeLabel }), 'archive');
+    includeHistory = false;
+    rerender(withI18n(<PokemonDetailClient pokemonName="Pikachu" initialStats={{ ...initialStats, history: { state: 'excluded', coverage: [] } }} archiveOptions={archiveOptions} />, { locale }));
+    const fallback = await screen.findByRole('option', { name: fallbackLabel });
+    expect(fallback).toHaveProperty('selected', true);
+    expect(screen.getByRole('combobox', { name: playerLabel })).toHaveProperty('value', 'star-trainer');
+    expect(screen.queryByRole('option', { name: 'Star Trainer' })).toBeNull();
+    expect(screen.getByRole('combobox', { name: scopeLabel })).toHaveProperty('value', 'archive');
+    await user.selectOptions(screen.getByRole('combobox', { name: playerLabel }), '');
+    expect(screen.queryByRole('combobox', { name: playerLabel })).toBeNull();
+    expect(screen.queryByRole('option', { name: fallbackLabel })).toBeNull();
+    await waitFor(() => {
+      const url = new URL(fetchMock.mock.calls.at(-1)?.[0] ?? '', 'https://example.test');
+      expect(url.searchParams.get('scope')).toBe('archive');
+      expect(url.searchParams.get('scope_id')).toBe('star-cup');
+      expect(url.searchParams.has('player_id')).toBe(false);
+    });
+  });
+
   it('refreshes player names on server prop changes and ignores stale filter responses without resetting selection', async () => {
     type FilterResult = { success: boolean; data: PokemonFilterOptions };
     let finishOld: (value: FilterResult) => void = () => { throw new Error('No pending fixture request'); };

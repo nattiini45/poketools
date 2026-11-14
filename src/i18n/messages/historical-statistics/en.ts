@@ -10,6 +10,7 @@ export default {
   },
   "appearancesUnknown": "Team appearances were not recorded.",
   "archive": "Archive",
+  "selectedPlayerWithoutObservations": "Selected player (no included observations)",
   "noRecordedKos": "No recorded KO totals for this scope.",
   "archiveMovesUnavailable": "Move usage was not recorded for archived competitions.",
   "ratingsLiveOnly": "Ratings use live matches only; historical records do not create ratings.",

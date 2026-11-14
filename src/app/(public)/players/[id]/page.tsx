@@ -73,7 +73,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
   const achievementProgress: AchievementProgressSource = {
     totalWins: profile.rating?.wins,
     totalGames: profile.rating ? profile.rating.wins + profile.rating.losses + profile.rating.draws : undefined,
-    totalKos: profile.headline.total_kos_dealt,
+    totalKos: profile.headline.total_kos_dealt ?? undefined,
     totalTournaments: profile.current_participations.length + profile.past_participations.length,
     uniquePokemon: profile.headline.unique_pokemon_used,
     rating: profile.rating?.rating,
@@ -206,7 +206,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
               )}
             </ProfileSection>
 
-            <SupplementaryRecordSection playerId={profile.player.id} />
+            {!packExtensions.historicalProfile && <SupplementaryRecordSection playerId={profile.player.id} />}
             {ExtensionProfileSection && <ExtensionProfileSection playerId={profile.player.id} />}
           </div>
         </div>

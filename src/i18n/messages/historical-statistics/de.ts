@@ -13,6 +13,7 @@ export default defineDe<typeof en>()({
   },
   "appearancesUnknown": "Team-Einsätze wurden nicht erfasst.",
   "archive": "Archiv",
+  "selectedPlayerWithoutObservations": "Ausgewählter Spieler (keine einbezogenen Beobachtungen)",
   "noRecordedKos": "Keine erfassten KO-Summen für diesen Bereich.",
   "archiveMovesUnavailable": "Für archivierte Wettbewerbe wurde keine Attacken-Nutzung erfasst.",
   "ratingsLiveOnly": "Wertungen basieren nur auf Live-Spielen; historische Ergebnisse erzeugen keine Wertungen.",

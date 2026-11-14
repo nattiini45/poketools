@@ -146,11 +146,29 @@ describe('optional historical statistics API composition', () => {
       { playerId: 'trainer-comet', pokemon: earlier.pokemon },
       { playerId: 'trainer-orbit', pokemon: [{ pokemonName: 'Pikachu', appearances: 0, wins: 0, kos: null }] },
       { playerId: 'trainer-lunar', pokemon: [{ pokemonName: 'Eevee', appearances: 3, wins: 2, kos: 1 }] },
+      { playerId: 'trainer-hidden', pokemon: earlier.pokemon },
     ] } });
+    mocks.playerIds.mockResolvedValue(['trainer-hidden']);
+    mocks.hidden.mockResolvedValue(['trainer-hidden']);
     mocks.playerRows.mockResolvedValue(new Map([['trainer-comet', { id: 'trainer-comet', name: 'Trainer Comet' }]]));
     const response = await filtersGET(request(''), speciesParams);
     expect(mocks.playerRows).toHaveBeenCalledWith(['trainer-comet']);
     expect((await response.json()).data.players).toEqual([{ id: 'trainer-comet', name: 'Trainer Comet' }]);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
+  });
+
+  it('propagates explicit unknown counters through the actual species API with live observations', async () => {
+    const unknown = { pokemonName: 'Pikachu', appearances: null, wins: null, kos: null };
+    mocks.players.mockResolvedValue([{ ...live, player_id: 'trainer-comet' }]);
+    mocks.historical.mockResolvedValue({ state: 'ready', data: {
+      ...earlier, pokemon: [unknown], players: [{ playerId: 'trainer-comet', pokemon: [unknown] }],
+    } });
+    const response = await pokemonGET(request('scope=all_time'), speciesParams);
+    const body = await response.json();
+    expect(body.data).toMatchObject({
+      total_appearances: null, usage_percent: null, kos_dealt: null, win_rate: null,
+      sourceCounts: { liveAppearances: 4, historicalAppearances: null, liveKos: 3, historicalKos: null },
+    });
+    expect(body.data.players).toEqual([expect.objectContaining({ player_id: 'trainer-comet', games: null, kos_dealt: null, win_rate: null })]);
   });
 });

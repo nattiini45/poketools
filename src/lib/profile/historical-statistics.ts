@@ -28,8 +28,8 @@ export function combineHistoricalProfile<T extends PlayerProfile | CachedPlayerP
   const counters: ProfilePokemonStat[] = [...names].map((pokemon_name) => {
     const current = live.get(pokemon_name);
     const previous = earlier.get(pokemon_name);
-    const games = previous?.appearances === null ? current?.total_games ?? null : (current?.total_games ?? 0) + (previous?.appearances ?? 0);
-    const kos = previous?.kos === null ? current?.total_kos_dealt ?? null : (current?.total_kos_dealt ?? 0) + (previous?.kos ?? 0);
+    const games = previous?.appearances === null ? null : (current?.total_games ?? 0) + (previous?.appearances ?? 0);
+    const kos = previous?.kos === null ? null : (current?.total_kos_dealt ?? 0) + (previous?.kos ?? 0);
     const winsKnown = !previous || previous.appearances === 0 || previous.appearances !== null && previous.wins !== null;
     return {
       pokemon_name,
@@ -75,7 +75,10 @@ export function combineHistoricalProfile<T extends PlayerProfile | CachedPlayerP
       total_losses: profile.headline.total_losses + (record?.losses ?? 0),
       total_draws: (profile.headline.total_draws ?? profile.headline.total_matches - profile.headline.total_wins - profile.headline.total_losses) + (record?.draws ?? 0),
       win_rate: matches > 0 ? Math.round(wins / matches * 100) : 0,
-      total_kos_dealt: profile.headline.total_kos_dealt + historical.pokemon.reduce((sum, row) => sum + (row.kos ?? 0), 0),
+      total_kos_dealt: historical.pokemon.reduce<number | null>(
+        (sum, row) => sum === null || row.kos === null ? null : sum + row.kos,
+        profile.headline.total_kos_dealt,
+      ),
       unique_pokemon_used: new Set([
         ...live.keys(),
         ...historical.pokemon.filter((row) => (row.appearances ?? 0) > 0 || (row.kos ?? 0) > 0).map((row) => row.pokemonName),

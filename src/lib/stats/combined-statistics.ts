@@ -34,16 +34,16 @@ export function combinePokemonUsage(
     const liveRow = current.get(pokemon_name);
     const historicalRow = earlier.get(pokemon_name);
     const historicalAppearances = historicalRow ? historicalRow.appearances : historical.battleCount > 0 ? 0 : null;
-    const appearances = liveRow || historicalAppearances !== null
+    const appearances = historicalRow?.appearances !== null && (liveRow || historicalAppearances !== null)
       ? (liveRow?.total_appearances ?? 0) + (historicalAppearances ?? 0) : null;
-    const kos = liveRow || historicalRow?.kos !== null && historicalRow?.kos !== undefined
+    const kos = historicalRow?.kos !== null && (liveRow || historicalRow?.kos !== undefined)
       ? (liveRow?.total_kos_dealt ?? 0) + (historicalRow?.kos ?? 0) : null;
     const winsKnown = historicalAppearances === null || historicalAppearances === 0 || historicalRow?.wins !== null && historicalRow?.wins !== undefined;
     return {
       pokemon_name,
       usage_percent: appearances !== null && battleCount > 0 ? appearances / battleCount * 100 : null,
       total_appearances: appearances,
-      total_games: liveRow || historicalAppearances !== null
+      total_games: historicalRow?.appearances !== null && (liveRow || historicalAppearances !== null)
         ? (liveRow?.total_games ?? 0) + (historicalAppearances ?? 0) : null,
       kos_dealt: kos,
       koed_rate: liveRow && liveRow.total_appearances > 0 ? liveRow.total_koed / liveRow.total_appearances * 100 : null,

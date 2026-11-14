@@ -68,4 +68,31 @@ describe('combinePokemonUsage', () => {
     expect(row).toMatchObject({ total_appearances: 4, total_games: 6, usage_percent: 40, kos_dealt: 3, win_rate: 50 });
     expect(combinePokemonUsage([], 0, { battleCount: 0, pokemon: [], coverage: [] })).toEqual([]);
   });
+
+  it('keeps explicitly unknown historical counters unknown when the species also has live data', () => {
+    const [row] = combinePokemonUsage([live], 10, {
+      battleCount: 5, coverage: [],
+      pokemon: [{ pokemonName: 'Pikachu', appearances: null, wins: null, kos: null }],
+    });
+    expect(row).toMatchObject({ total_appearances: null, total_games: null, usage_percent: null, win_rate: null, kos_dealt: null });
+    expect(row.sourceCounts).toEqual({ liveAppearances: 4, historicalAppearances: null, liveKos: 3, historicalKos: null });
+    expect(row.koed_rate).toBe(25);
+    expect(row.efficiency).toBe(1.5);
+  });
+
+  it('keeps appearances, wins and KOs independent when only one historical counter is unknown', () => {
+    const [unknownKos] = combinePokemonUsage([live], 10, {
+      battleCount: 5, coverage: [],
+      pokemon: [{ pokemonName: 'Pikachu', appearances: 3, wins: 2, kos: null }],
+    });
+    expect(unknownKos.total_appearances).toBe(7);
+    expect(unknownKos.kos_dealt).toBeNull();
+    expect(unknownKos.win_rate).toBeCloseTo(4 / 7 * 100);
+    const [unknownAppearances] = combinePokemonUsage([live], 10, {
+      battleCount: 5, coverage: [],
+      pokemon: [{ pokemonName: 'Pikachu', appearances: null, wins: null, kos: 8 }],
+    });
+    expect(unknownAppearances.usage_percent).toBeNull();
+    expect(unknownAppearances.kos_dealt).toBe(11);
+  });
 });

@@ -2,8 +2,18 @@ import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import ProfileHistoricalHonors from '../ProfileHistoricalHonors';
 import ProfilePokemonSpotlight from '../ProfilePokemonSpotlight';
+import ProfileHeader from '../ProfileHeader';
 
 describe('historical profile display', () => {
+  it('renders an unknown headline KO total as a dash with localized accessible text', () => {
+    const header = <ProfileHeader
+      player={{ id: 'trainer-orbit', name: 'Trainer Orbit', avatar_url: null, ps_username: 'orbit_ps', champions_username: 'orbit_champs', joined_date: '2025-01-01', is_creator: false, is_guest: false }}
+      headline={{ total_matches: 2, total_wins: 1, total_losses: 1, win_rate: 50, total_kos_dealt: null, unique_pokemon_used: 1, tournaments_entered: 1, tournaments_won: 0 }}
+      recentForm={[]}
+    />;
+    expect(renderWithI18n(header)).toContain('<span aria-hidden="true">—</span><span class="sr-only">Unknown</span>');
+    expect(renderWithI18n(header, { locale: 'de' })).toContain('<span aria-hidden="true">—</span><span class="sr-only">Unbekannt</span>');
+  });
   it('shows shared archive honors with source links in both languages', () => {
     const honors = [{ eventKey: 'fable', kind: 'champion' as const, playerIds: ['trainer-orbit'], shared: true, liveScopeIds: [], preferLive: false,
       competition: { id: 'fable-cup', name: 'Fable Cup', href: '/archive/fable-cup', kind: 'cup' as const, year: 2021, parentId: null, seasonLabel: null }, pokemonName: null, count: null }];

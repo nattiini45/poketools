@@ -35,6 +35,7 @@ export default {
     recordWithDraws: '{wins}-{losses}-{draws}',
     winRate: 'Win %',
     totalKos: 'Total KOs',
+    unknown: 'Unknown',
     pokemon: 'Pokemon',
     titles: 'Titles',
     form: 'Form',

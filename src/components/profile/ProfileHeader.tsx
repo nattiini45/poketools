@@ -29,7 +29,7 @@ interface ProfileHeaderProps {
   action?: ReactNode;
 }
 
-function StatPlate({ label, value }: { label: string; value: string | number }) {
+function StatPlate({ label, value }: { label: string; value: ReactNode }) {
   return (
     <li className="skew-plate justify-items-start px-3.5 py-2">
       <span aria-hidden="true" className="skew-plate-bg border border-hairline-strong bg-surface" />
@@ -100,7 +100,9 @@ export default function ProfileHeader({ player, headline, recentForm, rating, st
             value={headline.total_draws ? t('header.recordWithDraws', { wins: headline.total_wins, draws: headline.total_draws, losses: headline.total_losses }) : t('header.recordValue', { wins: headline.total_wins, losses: headline.total_losses })}
           />
           <StatPlate label={t('header.winRate')} value={formatter.percentOf(headline.win_rate, 0)} />
-          <StatPlate label={t('header.totalKos')} value={formatter.number(headline.total_kos_dealt)} />
+          <StatPlate label={t('header.totalKos')} value={headline.total_kos_dealt === null
+            ? <><span aria-hidden="true">—</span><span className="sr-only">{t('header.unknown')}</span></>
+            : formatter.number(headline.total_kos_dealt)} />
           <StatPlate label={t('header.pokemon')} value={formatter.number(headline.unique_pokemon_used)} />
           {headline.tournaments_won > 0 && (
             <StatPlate label={t('header.titles')} value={formatter.number(headline.tournaments_won)} />

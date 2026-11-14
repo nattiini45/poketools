@@ -9,6 +9,7 @@ import { listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { readHistoricalUsage } from '@/lib/stats/historical-statistics';
 import { CACHE } from '@/lib/api/cache';
+import { publicReads } from '@/lib/cache/public-reads';
 import type { ApiResult } from '@/types/api';
 import type { PokemonFilterOptions } from '@/types/game';
 
@@ -23,10 +24,11 @@ export async function GET(
 
   try {
     // Get all scopes where this Pokémon has aggregate data
-    const [scopes, livePlayerIds, historical] = await Promise.all([
+    const [scopes, livePlayerIds, historical, hiddenPlayerIds] = await Promise.all([
       getAggregateScopesForPokemon(pokemonName),
       getPlayerIdsForPokemon(pokemonName),
       readHistoricalUsage({ scopeType: 'all_time', scopeId: null }),
+      publicReads.hiddenPlayerIds(),
     ]);
 
     // Separate league and tournament scope_ids
@@ -43,7 +45,7 @@ export async function GET(
       ...(historical.data?.players ?? []).filter((player) => player.pokemon.some((counter) =>
         counter.pokemonName === pokemonName && ((counter.appearances ?? 0) > 0 || (counter.kos ?? 0) > 0),
       )).map((player) => player.playerId),
-    ])];
+    ])].filter((id) => !hiddenPlayerIds.includes(id));
 
     // Batch-fetch names in parallel via query modules
     const [allLeagues, allTournaments, playerMap] = await Promise.all([
