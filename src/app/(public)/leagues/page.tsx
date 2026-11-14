@@ -8,6 +8,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { leaguesMessages } from '@/i18n/messages/leagues';
+import { packExtensions } from '@/lib/pack-extensions';
 
 // Stays dynamic although it reads no session: without `force-dynamic` the
 // page would be prerendered by `next build`, which queries Supabase at build
@@ -34,6 +35,8 @@ export default async function LeaguesPage({ searchParams }: { searchParams?: Pro
     getFormatter(),
     searchParams,
   ]);
+
+  const CompetitionArchiveSection = packExtensions.CompetitionArchiveSection;
 
   return (
     <PageContainer title={t('list.title')} icon="poke-ball">
@@ -74,6 +77,7 @@ export default async function LeaguesPage({ searchParams }: { searchParams?: Pro
                 : undefined,
         }))}
       />
+      {CompetitionArchiveSection && <CompetitionArchiveSection kind="league" />}
     </PageContainer>
   );
 }
