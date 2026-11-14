@@ -20,7 +20,8 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
-vi.mock('@/lib/supabase/queries/replay-library', () => ({
+vi.mock('@/lib/supabase/queries/replay-library', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/supabase/queries/replay-library')>(),
   listReplayLibraryRows,
   listReplayLibraryPage,
   listReplayLibraryFacetRows,
@@ -89,6 +90,34 @@ describe('ReplaysPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cookieJar.locale = undefined;
+  });
+
+  it.each([
+    ['en', 'League/Tournament', 'Unknown league/tournament'],
+    ['de', 'Liga/Turnier', 'Liga/Turnier unbekannt'],
+  ])('identifies league stages, standalone tournaments and missing metadata in %s', async (locale, heading, unknown) => {
+    cookieJar.locale = locale;
+    const rows = [
+      { ...ALICE_BOB, competitionUrl: '/leagues/league-1' },
+      { ...ZARA_BEA, league: 'Unknown league', tournamentName: 'Autumn Cup', competitionUrl: '/tournaments/t-2' },
+      { ...ALICE_CHRIS, league: 'Unknown league', tournamentName: '', competitionUrl: null },
+    ];
+    listReplayLibraryPage.mockResolvedValueOnce({ rows, total: rows.length, page: 1 });
+    listReplayLibraryFacetRows.mockResolvedValueOnce(facetsOf(rows));
+
+    const html = renderToStaticMarkup(await ReplaysPage({ searchParams: Promise.resolve({}) }));
+    const body = html.slice(html.indexOf('<tbody'));
+
+    expect(html).toContain(heading);
+    expect(body).toMatch(/href="\/leagues\/league-1"[^>]*>[\s\S]*?Summer League/);
+    expect(body).toMatch(/href="\/tournaments\/t-2"[^>]*>[\s\S]*?Autumn Cup/);
+    expect(body).toContain(unknown);
+    expect(body).not.toContain('href="null"');
+    expect(body).not.toContain('href="/leagues/undefined"');
+    expect(body).not.toContain('Winter Playoffs');
+    expect(body).toContain(locale === 'de'
+      ? 'Zara vs. Bea, Autumn Cup, Finale, Partie 3'
+      : 'Zara vs Bea, Autumn Cup, Finals, match 3');
   });
 
   it('renders the public replay library heading and empty state', async () => {

@@ -25,6 +25,8 @@ export default {
     search: 'Search',
     searchPlaceholder: 'Players, Showdown usernames, league, or round',
     league: 'League',
+    competition: 'League/Tournament',
+    unknownCompetition: 'Unknown league/tournament',
     allLeagues: 'All leagues',
     tournament: 'Tournament',
     allTournaments: 'All tournaments',

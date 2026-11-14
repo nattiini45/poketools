@@ -49,7 +49,7 @@ const replayRow = {
     rounds: { name: 'Round 3' },
     tournaments: {
       name: 'Summer Open',
-      seasons: { name: 'Summer League' },
+      seasons: { id: 'league-1', name: 'Summer League' },
     },
   },
 };
@@ -82,6 +82,7 @@ describe('listReplayLibraryRows', () => {
         date: '2026-06-30T12:00:00Z',
         league: 'Summer League',
         tournamentName: 'Summer Open',
+        competitionUrl: '/leagues/league-1',
         round: 'Round 3',
         matchNumber: 2,
         player1Name: 'Opponent 1',
@@ -116,10 +117,23 @@ describe('listReplayLibraryRows', () => {
     const result = await listReplayLibraryRows();
 
     expect(result[0]).toMatchObject({
-      label: 'Opponent 1 vs Opponent 2, Unknown league, Unknown round, match 2',
+      label: 'Opponent 1 vs Opponent 2, Summer Open, Unknown round, match 2',
       league: 'Unknown league',
       round: 'Unknown round',
+      competitionUrl: '/tournaments/tournament-1',
     });
+  });
+
+  it('leaves a genuinely missing competition unlinked', async () => {
+    mockBuilder.range.mockReturnValueOnce({
+      data: [{ ...replayRow, matches: { ...replayRow.matches, tournaments: null } }],
+      error: null,
+      count: 1,
+    });
+
+    const [result] = await listReplayLibraryRows();
+
+    expect(result).toMatchObject({ league: 'Unknown league', tournamentName: '', competitionUrl: null });
   });
 
   it('falls back to the game created date when the match date is missing', async () => {

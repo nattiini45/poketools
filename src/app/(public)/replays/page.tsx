@@ -31,6 +31,7 @@ import {
   type ReplayLibrarySortColumn,
 } from './replay-library-utils';
 import {
+  getReplayLibraryCompetitionName,
   listReplayLibraryFacetRows,
   listReplayLibraryPage,
   listReplayLibraryRows,
@@ -117,10 +118,15 @@ function replayRowLabel(row: ReplayLibraryRow, t: Translator<typeof discoverEn>,
   return t('replays.rowLabel', {
     player1: player(row.player1Name),
     player2: player(row.player2Name),
-    league: row.league === UNKNOWN_LEAGUE ? t('replays.unknownLeague') : row.league,
+    league: competitionLabel(row, t),
     round: roundLabel(row.round, t, locale),
     n: row.matchNumber,
   });
+}
+
+function competitionLabel(row: ReplayLibraryRow, t: Translator<typeof discoverEn>): string {
+  const name = getReplayLibraryCompetitionName(row);
+  return name === UNKNOWN_LEAGUE ? t('replays.unknownCompetition') : name;
 }
 
 function roundLabel(round: string, t: Translator<typeof discoverEn>, locale: Locale): string {
@@ -323,7 +329,7 @@ export default async function ReplaysPage({ searchParams }: PageProps) {
                   className={`${headClass} lg:w-[26%]`}
                 />
                 <SortableTableHeader
-                  label={t('replays.league')}
+                  label={t('replays.competition')}
                   column="league"
                   sortState={sortState}
                   href={sortHref('league')}
@@ -368,14 +374,16 @@ export default async function ReplaysPage({ searchParams }: PageProps) {
                     </span>
                   </td>
                   <td className={`order-2 min-w-0 basis-full ${cell}`}>
-                    {row.league ? (
-                      <SkewChip>
-                        <span className="block max-w-[16rem] truncate lg:max-w-[9rem] xl:max-w-[18rem]">
-                          {row.league === UNKNOWN_LEAGUE ? t('replays.unknownLeague') : row.league}
-                        </span>
-                      </SkewChip>
+                    {row.competitionUrl ? (
+                      <Link href={row.competitionUrl} className="inline-block rounded-poke-sm focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring hover:underline">
+                        <SkewChip>
+                          <span className="block max-w-[16rem] truncate lg:max-w-[9rem] xl:max-w-[18rem]">
+                            {competitionLabel(row, t)}
+                          </span>
+                        </SkewChip>
+                      </Link>
                     ) : (
-                      '—'
+                      <SkewChip>{competitionLabel(row, t)}</SkewChip>
                     )}
                   </td>
                   <td className={`order-3 flex-1 whitespace-nowrap text-caption text-fg-muted ${cell}`}>

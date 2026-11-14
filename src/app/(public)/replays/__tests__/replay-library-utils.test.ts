@@ -15,6 +15,7 @@ const rows: ReplayLibraryRow[] = [
     date: '2026-02-03T10:00:00Z',
     league: 'Winter League',
     tournamentName: 'Winter Playoffs',
+    competitionUrl: '/leagues/winter',
     round: 'Finals',
     matchNumber: 3,
     player1Name: 'Zara',
@@ -29,6 +30,7 @@ const rows: ReplayLibraryRow[] = [
     date: '2026-06-12T10:00:00Z',
     league: 'Summer League',
     tournamentName: 'Summer Open',
+    competitionUrl: '/leagues/summer',
     round: 'Round 2',
     matchNumber: 1,
     player1Name: 'Alice',
@@ -43,6 +45,7 @@ const rows: ReplayLibraryRow[] = [
     date: '2026-06-14T10:00:00Z',
     league: 'Summer League',
     tournamentName: 'Summer Open',
+    competitionUrl: '/leagues/summer',
     round: 'Round 3',
     matchNumber: 2,
     player1Name: 'Alice',
@@ -92,6 +95,25 @@ describe('parseReplayLibraryParams', () => {
 });
 
 describe('applyReplayLibraryParams', () => {
+  it('sorts the combined column by the displayed competition without changing the separate filters', () => {
+    const standalone = { ...rows[0], league: 'Unknown league', tournamentName: 'Autumn Cup' };
+    const mixed = [rows[1], standalone, rows[0]];
+    expect(applyReplayLibraryParams(mixed, parseReplayLibraryParams({ sort: 'league-asc' })))
+      .toEqual([standalone, rows[1], rows[0]]);
+    expect(applyReplayLibraryParams(mixed, parseReplayLibraryParams({ sort: 'league-desc' })))
+      .toEqual([rows[0], rows[1], standalone]);
+    expect(applyReplayLibraryParams(mixed, parseReplayLibraryParams({ league: 'Autumn Cup' }))).toEqual([]);
+    expect(applyReplayLibraryParams(mixed, parseReplayLibraryParams({ tournament: 'Autumn Cup' }))).toEqual([standalone]);
+    expect(getReplayLibraryLeagueOptions(mixed)).not.toContain('Autumn Cup');
+    expect(getReplayLibraryTournamentOptions(mixed)).toContain('Autumn Cup');
+  });
+
+  it('compares competition names before using the round as a tiebreaker', () => {
+    const cup = { ...rows[0], league: 'Unknown league', tournamentName: 'Autumn Cup' };
+    const league = { ...rows[1], league: 'Autumn', round: 'Round 10' };
+    expect(applyReplayLibraryParams([cup, league], parseReplayLibraryParams({ sort: 'league-asc' })))
+      .toEqual([league, cup]);
+  });
   it('filters rows when legacy username is folded into q tokens', () => {
     expect(
       applyReplayLibraryParams(rows, {
