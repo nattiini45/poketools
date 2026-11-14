@@ -8,6 +8,8 @@ import ProfilePokemonSpotlight from '@/components/profile/ProfilePokemonSpotligh
 import ProfileParticipations from '@/components/profile/ProfileParticipations';
 import ProfileMatchList from '@/components/profile/ProfileMatchList';
 import ProfileTrophies from '@/components/profile/ProfileTrophies';
+import ProfileHistoricalHonors from '@/components/profile/ProfileHistoricalHonors';
+import HistoricalStatisticsCoverage from '@/components/stats/HistoricalStatisticsCoverage';
 import ProfileEmpty from '@/components/profile/ProfileEmpty';
 import PlateLink from '@/components/profile/PlateLink';
 import RatingHistoryChart from '@/components/gamification/RatingHistoryChart';
@@ -21,6 +23,8 @@ import { publicReads } from '@/lib/cache/public-reads';
 import { playerMetadata } from '@/lib/seo/page-metadata';
 import { readPlayerProfile } from '@/lib/seo/page-reads';
 import { packExtensions } from '@/lib/pack-extensions';
+import { combineHistoricalProfile, readHistoricalProfile } from '@/lib/profile/historical-statistics';
+import { toPublicPlayerProfile } from '@/lib/profile/redact';
 import { getT } from '@/i18n/server';
 import { profileMessages } from '@/i18n/messages/profile';
 import type { AchievementProgressSource } from '@/components/gamification/achievement-progress';
@@ -44,16 +48,18 @@ export default async function PlayerProfilePage({ params }: PageProps) {
   const { id } = await params;
   const viewer = await getSessionPlayer();
 
-  const [profile, ratingHistory, achievementDefinitions, t] = await Promise.all([
+  const [cachedProfile, historical, ratingHistory, achievementDefinitions, t] = await Promise.all([
     readPlayerProfile(id),
+    readHistoricalProfile(id),
     publicReads.playerRatingHistory(id, 60),
     publicReads.achievementDefinitions(),
     getT(profileMessages),
   ]);
 
-  if (!profile) {
+  if (!cachedProfile) {
     notFound();
   }
+  const profile = toPublicPlayerProfile(combineHistoricalProfile(cachedProfile, historical.data, historical.history));
 
   const publicPlayer = profile.player;
   const isLoggedIn = viewer != null;
@@ -67,7 +73,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
   const achievementProgress: AchievementProgressSource = {
     totalWins: profile.rating?.wins,
     totalGames: profile.rating ? profile.rating.wins + profile.rating.losses + profile.rating.draws : undefined,
-    totalKos: profile.headline.total_kos_dealt,
+    totalKos: profile.headline.total_kos_dealt ?? undefined,
     totalTournaments: profile.current_participations.length + profile.past_participations.length,
     uniquePokemon: profile.headline.unique_pokemon_used,
     rating: profile.rating?.rating,
@@ -102,6 +108,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
             ) : undefined
           }
         />
+        <HistoricalStatisticsCoverage history={historical.history} />
 
         <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,21rem)_minmax(0,1fr)]">
           {/* Record rail */}
@@ -115,8 +122,11 @@ export default async function PlayerProfilePage({ params }: PageProps) {
             </ProfileSection>
 
             <ProfileSection title={t('page.trophies')} icon="kings-rock">
-              {profile.trophies.length > 0 ? (
-                <ProfileTrophies trophies={profile.trophies} />
+              {profile.trophies.length > 0 || (profile.historical_honors?.length ?? 0) > 0 ? (
+                <div className="flex flex-col gap-3">
+                  <ProfileTrophies trophies={profile.trophies} />
+                  <ProfileHistoricalHonors honors={profile.historical_honors ?? []} />
+                </div>
               ) : (
                 <ProfileEmpty action={isOwnProfile ? <PlateLink href="/tournaments">{t('page.browseTournaments')}</PlateLink> : undefined}>
                   {t('page.trophiesEmpty')}
@@ -196,7 +206,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
               )}
             </ProfileSection>
 
-            <SupplementaryRecordSection playerId={profile.player.id} />
+            {!packExtensions.historicalProfile && <SupplementaryRecordSection playerId={profile.player.id} />}
             {ExtensionProfileSection && <ExtensionProfileSection playerId={profile.player.id} />}
           </div>
         </div>

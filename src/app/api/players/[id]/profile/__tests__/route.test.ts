@@ -118,7 +118,7 @@ describe('GET /api/players/[id]/profile', () => {
     const [req, ctx] = makeArgs('42a45442-73fb-469e-8b74-3e8f3fdfdb13');
     const json = await (await GET(req, ctx)).json();
 
-    expect(json.data).toEqual(profile);
+    expect(json.data).toEqual({ ...profile, history: { state: 'absent', coverage: [] } });
   });
 
   it('a site admin (live player from requireAuth) gets the full row', async () => {

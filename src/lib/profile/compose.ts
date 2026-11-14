@@ -157,6 +157,13 @@ export async function composePlayerProfile(
     upcoming_matches,
     recent_matches,
     most_used_pokemon,
+    live_pokemon_counters: playerAggregates.map((row) => ({
+      pokemon_name: row.pokemon_name,
+      total_games: row.total_games,
+      total_wins: row.total_wins,
+      total_kos_dealt: row.total_kos_dealt,
+      total_koed: row.total_koed,
+    })),
     best_kill_pokemon,
     recent_form,
     trophies,
@@ -338,7 +345,7 @@ function computeMostUsedPokemonFromAggregates(
         ? Math.round((agg.total_wins / agg.total_games) * 100)
         : 0,
     }))
-    .sort((a, b) => b.total_games - a.total_games)
+    .sort((a, b) => (b.total_games ?? 0) - (a.total_games ?? 0))
     .slice(0, 3);
 }
 

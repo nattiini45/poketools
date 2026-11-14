@@ -60,6 +60,8 @@ export default {
     noResults: 'No results',
   },
   scope: {
+    archive: 'Archive',
+    archiveSearch: 'Search archived competitions',
     label: 'Scope',
     globalOnly: 'Ratings are global only',
     global: 'Global (all time)',

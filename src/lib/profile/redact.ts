@@ -1,5 +1,5 @@
 import type { Player, PublicPlayer } from '@/types/player';
-import type { PlayerProfile } from '@/types/profile';
+import type { CachedPlayerProfile, PlayerProfile, PublicPlayerProfile } from '@/types/profile';
 import { toPublicPlayer } from '@/lib/players/public-player';
 
 /**
@@ -26,11 +26,13 @@ export interface PublicProfileView {
   trophies: PlayerProfile['trophies'];
   current_participations: PlayerProfile['current_participations'];
   past_participations: PlayerProfile['past_participations'];
+  history?: PlayerProfile['history'];
+  historical_honors?: PlayerProfile['historical_honors'];
 }
 
-export function toPublicProfileView(profile: PlayerProfile): PublicProfileView {
+export function toPublicProfileView(profile: PlayerProfile | CachedPlayerProfile): PublicProfileView {
   return {
-    player: redactPlayer(profile.player),
+    player: toPublicPlayer(profile.player),
     headline: profile.headline,
     recent_form: profile.recent_form,
     most_used_pokemon: profile.most_used_pokemon,
@@ -41,5 +43,16 @@ export function toPublicProfileView(profile: PlayerProfile): PublicProfileView {
     trophies: profile.trophies,
     current_participations: profile.current_participations,
     past_participations: profile.past_participations,
+    ...(profile.history ? { history: profile.history } : {}),
+    ...(profile.historical_honors ? { historical_honors: profile.historical_honors } : {}),
+  };
+}
+
+export function toPublicPlayerProfile(profile: PlayerProfile | CachedPlayerProfile): PublicPlayerProfile {
+  return {
+    ...toPublicProfileView(profile),
+    upcoming_matches: profile.upcoming_matches,
+    recent_matches: profile.recent_matches,
+    streaks: profile.streaks,
   };
 }

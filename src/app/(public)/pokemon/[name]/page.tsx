@@ -23,7 +23,10 @@ import WikiHeader from '@/components/wiki/WikiHeader';
 import WikiLinkList from '@/components/wiki/WikiLinkList';
 import { WikiHero, WikiSection } from '@/components/wiki/WikiParts';
 import SupplementaryPokemonKos from '@/components/supplementary/SupplementaryPokemonKos';
-import type { PokemonSpeciesInfo, PokemonDetailStats } from '@/types/game';
+import { packExtensions } from '@/lib/pack-extensions';
+import { historicalCompetitionOptions, readHistoricalUsage } from '@/lib/stats/historical-statistics';
+import { pokemonDetailStats } from '@/lib/stats/pokemon-detail';
+import type { PokemonSpeciesInfo } from '@/types/game';
 
 // Dynamic: the page reads the session (community notes are login-only and
 // stay live). The all-time usage block comes from the tagged public read
@@ -59,59 +62,17 @@ export default async function PokemonDetailPage({ params }: PageProps) {
   const [session, t, dataLocale] = await Promise.all([getSession(), getT(wikiMessages), getDataLocale()]);
 
   // Fetch default all_time stats + wiki content (notes only when logged in)
-  const [aggregate, totalGames, notes] = await Promise.all([
+  const [aggregate, totalGames, notes, historical, archiveOptions] = await Promise.all([
     publicReads.pokemonAggregate(species.name),
     publicReads.totalGames('all_time', null),
     session
       ? getApprovedNotes('pokemon', species.name).catch(() => [])
       : Promise.resolve([]),
+    readHistoricalUsage({ scopeType: 'all_time', scopeId: null }),
+    historicalCompetitionOptions(),
   ]);
 
-  const initialStats: PokemonDetailStats = aggregate
-    ? {
-        pokemon_name: species.name,
-        total_appearances: aggregate.total_appearances,
-        total_games_in_scope: totalGames,
-        usage_percent: totalGames > 0 ? (aggregate.total_appearances / totalGames) * 100 : 0,
-        kos_dealt: aggregate.total_kos_dealt,
-        koed_rate: aggregate.total_appearances > 0
-          ? (aggregate.total_koed / aggregate.total_appearances) * 100
-          : 0,
-        bring_rate: aggregate.total_games > 0
-          ? (aggregate.total_brought / aggregate.total_games) * 100
-          : null,
-        lead_rate: aggregate.total_games > 0
-          ? (aggregate.total_led / aggregate.total_games) * 100
-          : null,
-        win_rate: aggregate.total_appearances > 0
-          ? (aggregate.total_wins / aggregate.total_appearances) * 100
-          : null,
-        moves: Object.entries(aggregate.move_counts)
-          .map(([moveName, count]) => ({
-            name: moveName,
-            count,
-            usage_percent: aggregate.total_appearances > 0
-              ? (count / aggregate.total_appearances) * 100
-              : 0,
-          }))
-          .sort((a, b) => b.count - a.count),
-        items: [],
-        players: [],
-      }
-    : {
-        pokemon_name: species.name,
-        total_appearances: 0,
-        total_games_in_scope: totalGames,
-        usage_percent: 0,
-        kos_dealt: 0,
-        koed_rate: 0,
-        bring_rate: null,
-        lead_rate: null,
-        win_rate: null,
-        moves: [],
-        items: [],
-        players: [],
-      };
+  const initialStats = pokemonDetailStats(species.name, aggregate, totalGames, historical.data, historical.history);
 
   return (
     <PageContainer>
@@ -197,9 +158,9 @@ export default async function PokemonDetailPage({ params }: PageProps) {
       </div>
 
       {/* Stats section and battle-stats block share one scope picker (the client component owns it). */}
-      <PokemonDetailClient pokemonName={species.name} initialStats={initialStats}>
+      <PokemonDetailClient pokemonName={species.name} initialStats={initialStats} archiveOptions={archiveOptions}>
         {/* Pack extensions (docs/format-packs.md): nothing without a provider. */}
-        <SupplementaryPokemonKos species={species.name} />
+        {!packExtensions.historicalUsage && <SupplementaryPokemonKos species={species.name} />}
       </PokemonDetailClient>
 
       <WikiNotesSection

@@ -271,6 +271,13 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Fixed
 
+- **Combined historical statistics keep unknown counters unknown.** A historical appearance or KO counter marked
+  unknown no longer becomes zero when live data exists. Usage, Pokémon and profile totals/rankings preserve nulls;
+  known live observations remain identifiable without presenting them as complete combined totals.
+- **Public Pokémon filters enforce player visibility after merging sources.** Hidden players are removed before
+  their names are loaded, and an excluded historical-only selected player keeps a visible, neutral filter option
+  until the viewer explicitly clears it.
+
 - **Format engine: phase ownership, closed-league team writes and finalize races** (review round on the format studio PR).
   - A started phase that a league's format created no longer takes roster, seed, status, delete or reorder writes through the
     phase routes (409 `format_phase_owned`); an upcoming format phase and a phase the format does not own stay editable.

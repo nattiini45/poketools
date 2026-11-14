@@ -6,7 +6,8 @@ import { insightsMessages } from '@/i18n/messages/insights';
 export type InsightsScope =
   | { type: 'global' }
   | { type: 'league'; id: string }
-  | { type: 'tournament'; id: string };
+  | { type: 'tournament'; id: string }
+  | { type: 'archive'; id: string };
 
 export type InsightsTab =
   | 'ratings'
@@ -51,6 +52,9 @@ export function parseScopeFromSearchParams(input: SearchParamInput): InsightsSco
   if (scope === 'tournament' && id) {
     return { type: 'tournament', id };
   }
+  if (scope === 'archive' && id && /^[a-z0-9][a-z0-9-]{0,99}$/.test(id)) {
+    return { type: 'archive', id };
+  }
   return { type: 'global' };
 }
 
@@ -61,11 +65,14 @@ export function scopeToQueryString(scope: InsightsScope): string {
   if (scope.type === 'tournament') {
     return `scope=tournament&id=${encodeURIComponent(scope.id)}`;
   }
+  if (scope.type === 'archive') {
+    return `scope=archive&id=${encodeURIComponent(scope.id)}`;
+  }
   return 'scope=global';
 }
 
 export function scopeAggregateKey(
-  scope: InsightsScope,
+  scope: Exclude<InsightsScope, { type: 'archive' }>,
 ): { scopeType: AggregateScope; scopeId: string | null } {
   if (scope.type === 'league') {
     return { scopeType: 'league', scopeId: scope.id };

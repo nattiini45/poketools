@@ -4,11 +4,12 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import PokemonLink from '@/components/shared/PokemonLink';
 import AnimatedSprite from '@/components/shared/AnimatedSprite';
 import Table, { type Column, type TablePaginationLabels } from '@/components/ui/Table';
-import { useDataLocale, useFormatter, useMessages } from '@/i18n/client';
+import { useDataLocale, useFormatter, useMessages, useT } from '@/i18n/client';
+import { historicalStatisticsMessages } from '@/i18n/messages/historical-statistics';
 import { statsMessages } from '@/i18n/messages/stats';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { foldForSearch } from '@/lib/pkmn/i18n/search';
-import type { PokemonUsageRow } from '@/types/game';
+import type { CombinedPokemonUsageRow } from '@/lib/stats/combined-statistics';
 import { fixedNumber, fixedPercent } from './stat-format';
 
 /**
@@ -38,7 +39,7 @@ export interface PokemonUsageTableLabels {
 export const DEFAULT_POKEMON_USAGE_LABELS: PokemonUsageTableLabels = { ...statsMessages.en.usage };
 
 interface PokemonUsageTableProps {
-  data: PokemonUsageRow[];
+  data: CombinedPokemonUsageRow[];
   isDoubles?: boolean;
   labels?: PokemonUsageTableLabels;
 }
@@ -52,14 +53,26 @@ export default function PokemonUsageTable({
   const labels: PokemonUsageTableLabels = labelsOverride ?? localized;
   const dl = useDataLocale();
   const f = useFormatter();
-  const percent = (value: number | null) => (value !== null ? fixedPercent(f, value) : '—');
+  const t = useT(historicalStatisticsMessages);
+  const unknown = <span aria-label={t('notRecorded')}>—</span>;
+  const percent = (value: number | null) => (value !== null ? fixedPercent(f, value) : unknown);
+  const count = (value: number | null, live?: number, historical?: number | null) => (
+    <span className="text-poke-text-secondary">
+      {value === null ? unknown : f.number(value)}
+      {live !== undefined && (
+        <span className="block text-xs text-poke-text-muted">
+          {t('sourceCounts', { live: f.number(live), historical: historical == null ? t('notRecorded') : f.number(historical) })}
+        </span>
+      )}
+    </span>
+  );
 
-  const columns: Column<PokemonUsageRow>[] = [
+  const columns: Column<CombinedPokemonUsageRow>[] = [
     {
       key: 'rank',
       header: '#',
       width: '2.5rem',
-      render: (_row, i) => <span className="text-poke-text-muted">{i + 1}</span>,
+      render: (row, i) => row.usage_percent === null ? unknown : <span className="text-poke-text-muted">{i + 1}</span>,
     },
     {
       key: 'pokemon_name',
@@ -80,18 +93,16 @@ export default function PokemonUsageTable({
       header: labels.usage,
       align: 'left',
       sortable: true,
-      sortValue: (row) => row.usage_percent,
-      render: (row) => <UsageBar value={row.usage_percent} label={fixedPercent(f, row.usage_percent)} />,
+      sortValue: (row) => row.usage_percent ?? -1,
+      render: (row) => row.usage_percent === null ? unknown : <UsageBar value={row.usage_percent} label={fixedPercent(f, row.usage_percent)} />,
     },
     {
       key: 'total_appearances',
       header: labels.teams,
       align: 'center',
       sortable: true,
-      sortValue: (row) => row.total_appearances,
-      render: (row) => (
-        <span className="text-poke-text-secondary">{row.total_appearances}</span>
-      ),
+      sortValue: (row) => row.total_appearances ?? -1,
+      render: (row) => row.sourceCounts ? count(row.total_appearances, row.sourceCounts.liveAppearances, row.sourceCounts.historicalAppearances) : <span className="text-poke-text-secondary">{row.total_appearances === null ? unknown : row.total_appearances}</span>,
     },
     {
       key: 'efficiency',
@@ -99,21 +110,22 @@ export default function PokemonUsageTable({
       align: 'center',
       sortable: true,
       sortValue: (row) => row.efficiency ?? -1,
-      render: (row) => (row.efficiency != null ? fixedNumber(f, row.efficiency, 2) : '—'),
+      render: (row) => (row.efficiency != null ? fixedNumber(f, row.efficiency, 2) : unknown),
     },
     {
       key: 'kos_dealt',
       header: labels.kos,
       align: 'center',
       sortable: true,
-      sortValue: (row) => row.kos_dealt,
+      sortValue: (row) => row.kos_dealt ?? -1,
+      render: (row) => row.sourceCounts ? count(row.kos_dealt, row.sourceCounts.liveKos, row.sourceCounts.historicalKos) : row.kos_dealt === null ? unknown : row.kos_dealt,
     },
     {
       key: 'koed_rate',
       header: labels.koedRate,
       align: 'center',
       sortable: true,
-      sortValue: (row) => row.koed_rate,
+      sortValue: (row) => row.koed_rate ?? -1,
       render: (row) => percent(row.koed_rate),
     },
     ...(isDoubles
@@ -123,16 +135,16 @@ export default function PokemonUsageTable({
             header: labels.bringRate,
             align: 'center' as const,
             sortable: true,
-            sortValue: (row: PokemonUsageRow) => row.bring_rate ?? -1,
-            render: (row: PokemonUsageRow) => percent(row.bring_rate),
+            sortValue: (row: CombinedPokemonUsageRow) => row.bring_rate ?? -1,
+            render: (row: CombinedPokemonUsageRow) => percent(row.bring_rate),
           },
           {
             key: 'lead_rate',
             header: labels.leadRate,
             align: 'center' as const,
             sortable: true,
-            sortValue: (row: PokemonUsageRow) => row.lead_rate ?? -1,
-            render: (row: PokemonUsageRow) => percent(row.lead_rate),
+            sortValue: (row: CombinedPokemonUsageRow) => row.lead_rate ?? -1,
+            render: (row: CombinedPokemonUsageRow) => percent(row.lead_rate),
           },
         ]
       : []),

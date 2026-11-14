@@ -93,4 +93,13 @@ describe('WikiUsageStats render', () => {
     expect(de).toContain('Unbekannter Spieler');
     expect(de).not.toContain('Unknown');
   });
+
+  it('renders unknown player counts and faint rates as dashes, not zero', () => {
+    const s: PokemonDetailStats = { ...stats(1, 1), total_appearances: null, kos_dealt: 9, players: [{ ...player('p1', 'Star Trainer'), games: null, kos_dealt: null, koed_rate: null }] };
+    const html = render(s);
+    expect(html).toContain('Star Trainer');
+    expect(html.match(/aria-label="Not recorded"/g)).toHaveLength(3);
+    expect(html).not.toContain('0.0%');
+    expect(render({ ...s, history: { state: 'not_ready', coverage: [] } })).toContain('Historical data has not been activated.');
+  });
 });

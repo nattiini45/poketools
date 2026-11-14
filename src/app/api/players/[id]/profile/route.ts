@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAuth } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { composePlayerProfile } from '@/lib/profile/compose';
-import { toPublicPlayer } from '@/lib/players/public-player';
+import { toPublicPlayerProfile } from '@/lib/profile/redact';
+import { combineHistoricalProfile, readHistoricalProfile } from '@/lib/profile/historical-statistics';
 import type { ApiResult } from '@/types/api';
 import type { PlayerProfile, PublicPlayerProfile } from '@/types/profile';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
@@ -35,12 +36,14 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
     const viewer = session.player;
     const seesFullRow = viewer != null && (viewer.playerId === id || viewer.isAdmin === true);
+    const historical = await readHistoricalProfile(id);
+    const combined = combineHistoricalProfile(profile, historical.data, historical.history);
+    const publicProfile = toPublicPlayerProfile(combined);
     if (seesFullRow) {
-      return NextResponse.json<ApiResult<PlayerProfile>>({ success: true, data: profile });
+      return NextResponse.json<ApiResult<PlayerProfile>>({ success: true, data: { ...publicProfile, player: combined.player } }, { headers: { 'Cache-Control': 'private, no-store' } });
     }
 
-    const publicProfile: PublicPlayerProfile = { ...profile, player: toPublicPlayer(profile.player) };
-    return NextResponse.json<ApiResult<PublicPlayerProfile>>({ success: true, data: publicProfile });
+    return NextResponse.json<ApiResult<PublicPlayerProfile>>({ success: true, data: publicProfile }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch player profile');
   }

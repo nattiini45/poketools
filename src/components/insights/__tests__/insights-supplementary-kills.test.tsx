@@ -1,8 +1,3 @@
-/**
- * The global kills tab of supplementary records (docs/format-packs.md, "Pack extensions"): the
- * global scope keeps no kills tab unless the active pack supplies earlier records; then the tab
- * lists them (or says they failed) under their own label. Scoped kill rankings are untouched.
- */
 import { createElement, type ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
@@ -32,9 +27,11 @@ const GLOBAL: Props = {
 };
 
 describe('InsightsTabs: supplementary kill ranking', () => {
-  it('has no kills tab in the global scope without supplementary records (unchanged)', () => {
+  it('keeps a requested empty kills tab explicit without supplementary records', () => {
     const html = renderWithI18n(<InsightsTabs {...GLOBAL} />);
-    expect(html).not.toContain('Kill Ranking');
+    expect(html).toContain('Kill Ranking');
+    expect(html).toMatch(/tab=kills"[^>]*aria-current="page"/);
+    expect(html).toContain('No kill data yet');
     expect(html).not.toContain('Earlier records');
   });
 
@@ -46,7 +43,7 @@ describe('InsightsTabs: supplementary kill ranking', () => {
     expect(html).toContain('Garchomp');
   });
 
-  it('keeps the tab hidden for an empty supplementary ranking', () => {
+  it('does not label an empty supplementary ranking as earlier records', () => {
     const html = renderWithI18n(<InsightsTabs {...GLOBAL} supplementaryKills={{ state: 'ready', rows: [] }} />);
     expect(html).not.toContain('Earlier records');
   });

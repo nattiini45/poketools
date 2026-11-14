@@ -52,7 +52,7 @@ import { getStandingsPreview } from '@/lib/stats/standings-preview';
 import { buildWorldRouteData, type WorldRouteDataPreload } from '@/lib/worlds/route-data';
 import type { AggregateScope } from '@/types/game';
 import type { StreakLeaderboardEntry } from '@/types/insights';
-import type { PublicPlayerProfile } from '@/types/profile';
+import type { CachedPlayerProfile, PublicPlayerProfile } from '@/types/profile';
 import type { MatchRecord } from '@/lib/tournament/types';
 
 /**
@@ -578,7 +578,7 @@ const tournamentGroups = cache((tournamentId: string) =>
 const playerProfile = cache((playerId: string) =>
   cachedRead(
     {
-      name: 'player-profile-v3',
+      name: 'player-profile-v4',
       key: [playerId],
       tags: [
         publicTags.player(playerId),
@@ -589,7 +589,7 @@ const playerProfile = cache((playerId: string) =>
       ],
       ttl: PUBLIC_DETAIL_TTL_S,
     },
-    async (): Promise<PublicPlayerProfile | null> => {
+    async (): Promise<CachedPlayerProfile | null> => {
       const profile = await composePlayerProfile(playerId);
       return profile ? { ...profile, player: toPublicPlayer(profile.player) } : null;
     },

@@ -75,3 +75,9 @@ Push, update the PR description with the finding dispositions, and watch one ful
 ## 7. Episode log
 
 Record each completed remediation batch here: the date, the source (bot review, CI step or audit batch), the finding count, the dispositions, and the validation that closed it (local gates and CI runs, by commit).
+
+### 2026-11-14 — PR #245
+
+The first pawcommit-review pass identified two valid findings: explicit unknown historical counters were presented as complete combined totals, and the public Pokémon filter lacked its own hidden-player check. Both were fixed in `a6a9e19a`, with regression coverage, concrete replies and resolved review threads. Unknown values now propagate through Usage, player breakdowns and profile totals; hidden identities are removed before name lookup.
+
+Private/example typechecks, lint, production build, 533 affected tests (one opt-in database case skipped), repository guards and the high-severity production dependency audit passed locally. All 12 CI checks on `a6a9e19a` passed, including build-and-test, visual and the next pawcommit-review pass. The separately reproduced, unchanged optional-overlay color fixture failure remains disclosed; production activation and deployed-data verification are outside this remediation episode.

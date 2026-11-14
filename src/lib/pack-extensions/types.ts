@@ -1,5 +1,14 @@
 import 'server-only';
 import type { ComponentType } from 'react';
+import type {
+  HistoricalCompetitionOption,
+  HistoricalProfileContribution,
+  HistoricalStatisticsRequest,
+  HistoricalStatisticsResult,
+  HistoricalUsageContribution,
+} from './historical-statistics-types';
+
+export type * from './historical-statistics-types';
 
 /**
  * The pack-extension contract (docs/format-packs.md, "Pack extensions").
@@ -75,6 +84,15 @@ export interface PackNavItem {
 }
 
 export interface PackExtensions {
+  historicalScopes?: () => Promise<readonly HistoricalCompetitionOption[]>;
+  historicalUsage?: (
+    request: HistoricalStatisticsRequest,
+    ctx: PackRequestContext,
+  ) => Promise<HistoricalStatisticsResult<HistoricalUsageContribution>>;
+  historicalProfile?: (
+    playerId: string,
+    ctx: PackRequestContext,
+  ) => Promise<HistoricalStatisticsResult<HistoricalProfileContribution>>;
   /**
    * Whether supplementary records count for this request (a site default and a viewer choice,
    * for example). Without it every supplementary provider is consulted.
