@@ -722,7 +722,7 @@ This map covers the main pages and the routes whose contracts the rest of the sp
 ### Public pages (`(public)` group)
 ```
 /                              Landing — hero, featured event, recent lists, Insights/Wiki CTAs
-/tournaments                   Tournament list
+/tournaments                   Tournament list, with an optional pack-owned archive section below
 /tournaments/[id]              World-shell sections layout: anchored sections (bracket or
                                standings, stats, rounds, report, ruleset per bracket type)
                                with anchor nav; parent season's world when world-registered,
@@ -730,7 +730,7 @@ This map covers the main pages and the routes whose contracts the rest of the sp
 /tournaments/[id]/stats        → 308 redirect to /insights?scope=tournament&id=
 /tournaments/[id]/matches/[mid] Match detail
 
-/leagues                       All leagues list
+/leagues                       All leagues list, with an optional pack-owned archive section below
 /leagues/[id]                  Every format renders a route world (resolveViewerWorld: ?world= >
                                admin route_theme pin > auto-map on seasons.format_type):
                                - evolution_point_buy → evoliga plaza

@@ -62,7 +62,7 @@ async function renderPage(searchParams: Record<string, string>): Promise<ReactEl
 
 /** Renders the page for a scope and returns the standings rows handed to the client tabs. */
 async function renderStandings(searchParams: Record<string, string>): Promise<StandingsRowView[]> {
-  const tabs = (await renderPage(searchParams)).find((child) => child.type === InsightsTabs) as ReactElement<{
+  const tabs = (await renderPage(searchParams)).find((child) => child?.type === InsightsTabs) as ReactElement<{
     standings: StandingsRowView[];
   }>;
   return tabs.props.standings;
@@ -70,7 +70,7 @@ async function renderStandings(searchParams: Record<string, string>): Promise<St
 
 /** The tournament options handed to the scope selector. */
 async function renderTournamentOptions(searchParams: Record<string, string>): Promise<{ id: string; name: string }[]> {
-  const selector = (await renderPage(searchParams)).find((child) => child.type === ScopeSelector) as ReactElement<{
+  const selector = (await renderPage(searchParams)).find((child) => child?.type === ScopeSelector) as ReactElement<{
     tournaments: { id: string; name: string }[];
   }>;
   return selector.props.tournaments;
