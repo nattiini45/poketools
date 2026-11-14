@@ -4,6 +4,10 @@
  * of POST /api/seasons. The test-flag and archive behaviour is in route.test.ts.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
+vi.mock('@/lib/utils/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 }),
+}));
 import type { NextRequest } from 'next/server';
 import type { Season } from '@/types/season';
 

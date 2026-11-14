@@ -49,6 +49,12 @@ manual and browser checks: nothing it does reaches the hosted project.
 
 Some suites prove behaviour only a real Postgres shows (grants, RPCs, constraints, PostgREST shapes). They live in `*.local.test.ts` and `*.live-db.test.ts` files and run in their own Vitest project, `db`, which `npm run test` never loads, so a plain test run cannot reach a database.
 
+Ordinary Vitest projects replace inherited Supabase configuration with dummy values before loading tests. Their worker setup refuses unmocked HTTP(S) fetches and socket connections, and fails the suite even when application code catches the refusal (for example, a fail-open limiter). Mock the Supabase client or `fetch` explicitly. Non-network fetches keep native behaviour, including rejection of relative URLs in Node. The guard covers the worker, not subprocesses spawned by script tests; subprocess harnesses must supply their own isolated environment and network policy. The opt-in `db` project keeps its explicit local configuration and existing loopback/CI guards instead of the unit guard.
+
+A transport integration test can register its own already-listening loopback server with `allowLoopbackFixture` (`src/test/loopback-fixture.ts`). Only that server's numeric loopback address and port are allowed, until it closes; other loopback ports and hosted redirects remain refused. This keeps the SDK deadline tests active without allowing a real database or blanket localhost access.
+
+The existing live Smogon-tool tests retain GET access to `https://pkmn.github.io/smogon/data/` (and its HTTPS socket destination). This read-only public dataset is the only remote exception; Supabase remains blocked. The harness is an accident guard, not a sandbox against test code that deliberately replaces its transports.
+
 ```bash
 npx supabase start
 npx supabase migration up --local   # or db reset --local, which also empties the data

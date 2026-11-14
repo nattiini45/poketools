@@ -2,9 +2,9 @@ import { configDefaults, defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import { existsSync } from 'fs';
 import path from 'path';
+import { isolateUnitEnv } from './src/test/unit-env';
 
-process.env.NEXT_PUBLIC_SUPABASE_URL ??= 'https://example.supabase.co';
-process.env.SUPABASE_SERVICE_ROLE_KEY ??= 'dummy-service-role-key';
+if (process.env.LOCAL_STACK_DB !== '1') isolateUnitEnv(process.env);
 // Unit tests exercise the Postgres limiter path against a mocked `supabase.rpc` (no network);
 // tests of the in-memory store stub RATE_LIMIT_STORE themselves (src/lib/utils/rate-limit.ts).
 process.env.RATE_LIMIT_STORE ??= 'postgres';
@@ -82,6 +82,7 @@ export default defineConfig({
     // docblock on its first lines (docs/dependencies.md, "DOM tests"); the setup file unmounts what it rendered.
     environment: 'node',
     setupFiles: ['./src/test/dom-setup.ts'],
+    sequence: { setupFiles: 'list' },
     coverage: {
       provider: 'v8',
       include: [
@@ -112,6 +113,7 @@ export default defineConfig({
         resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS } },
         test: {
           name: 'app',
+          setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
           include: ['src/**/__tests__/**/*.test.{ts,tsx}'],
           exclude: ['src/format-packs/private/**', ...LOCAL_STACK_SUITES, ...configDefaults.exclude],
         },
@@ -120,6 +122,7 @@ export default defineConfig({
         extends: true,
         test: {
           name: 'scripts',
+          setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
           include: ['scripts/**/__tests__/**/*.test.mjs'],
           exclude: GAUNTLET_STATEFUL,
           testTimeout: SCRIPT_TEST_TIMEOUT_MS,
@@ -152,6 +155,7 @@ export default defineConfig({
               extends: true as const,
               test: {
                 name: 'gauntlet-stateful',
+                setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
                 include: GAUNTLET_STATEFUL,
                 fileParallelism: false,
                 testTimeout: SCRIPT_TEST_TIMEOUT_MS,
@@ -166,6 +170,7 @@ export default defineConfig({
               resolve: { alias: { '@format-pack': PRIVATE_PACK, '@pack-extensions': PRIVATE_EXTENSIONS } },
               test: {
                 name: 'private-pack',
+                setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
                 include: ['src/format-packs/private/__tests__/**/*.test.{ts,tsx}'],
               },
             },

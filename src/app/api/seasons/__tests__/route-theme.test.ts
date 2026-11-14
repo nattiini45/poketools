@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('@/lib/utils/rate-limit', () => ({
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 }),
+}));
+
 // The route expires public read-cache tags after its write (D37). Outside a
 // Next request `revalidateTag` throws, so record the calls instead.
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
