@@ -2,6 +2,7 @@ import type {
   ReplayLibraryFacetRow,
   ReplayLibraryRow,
 } from '@/lib/supabase/queries/replay-library';
+import { getReplayLibraryCompetitionName } from '@/lib/supabase/queries/replay-library';
 import {
   parseSortParam,
   type ColumnSortState,
@@ -127,15 +128,14 @@ export function applyReplayLibraryParams(
     direction: DEFAULT_SORT.direction,
   });
 
+  const collator = new Intl.Collator(undefined, { sensitivity: 'base', numeric: true });
   return [...filtered].sort((a, b) => {
     let cmp = 0;
     if (sortState.key === 'date') {
       cmp = a.date.localeCompare(b.date);
     } else if (sortState.key === 'league') {
-      cmp = `${a.league} ${a.round}`.localeCompare(`${b.league} ${b.round}`, undefined, {
-        sensitivity: 'base',
-        numeric: true,
-      });
+      cmp = collator.compare(getReplayLibraryCompetitionName(a), getReplayLibraryCompetitionName(b))
+        || collator.compare(a.round, b.round);
     } else if (sortState.key === 'players') {
       cmp = `${a.player1Name} ${a.player2Name}`.localeCompare(
         `${b.player1Name} ${b.player2Name}`,

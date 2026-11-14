@@ -24,6 +24,8 @@ export default defineDe<typeof en>()({
     search: 'Suche',
     searchPlaceholder: 'Spieler, Showdown-Namen, Liga oder Runde',
     league: 'Liga',
+    competition: 'Liga/Turnier',
+    unknownCompetition: 'Liga/Turnier unbekannt',
     allLeagues: 'Alle Ligen',
     tournament: 'Turnier',
     allTournaments: 'Alle Turniere',

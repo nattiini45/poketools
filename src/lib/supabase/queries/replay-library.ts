@@ -14,7 +14,7 @@ type ReplayLibraryGameRow = {
     rounds: { name: string } | null;
     tournaments: {
       name: string;
-      seasons: { name: string } | null;
+      seasons: { id: string; name: string } | null;
     } | null;
   };
 };
@@ -24,6 +24,7 @@ export interface ReplayLibraryRow {
   date: string;
   league: string;
   tournamentName: string;
+  competitionUrl: string | null;
   round: string;
   matchNumber: number;
   player1Name: string;
@@ -48,7 +49,7 @@ const REPLAY_LIBRARY_SELECT = `
     rounds!matches_round_id_fkey ( name ),
     tournaments!inner (
       name,
-      seasons ( name )
+      seasons ( id, name )
     )
   )
 `;
@@ -60,6 +61,14 @@ const REPLAY_LIBRARY_SELECT = `
 export const UNKNOWN_PLAYER = 'Unknown';
 export const UNKNOWN_LEAGUE = 'Unknown league';
 export const UNKNOWN_ROUND = 'Unknown round';
+
+export function getReplayLibraryCompetitionName(
+  row: Pick<ReplayLibraryRow, 'league' | 'tournamentName'>,
+): string {
+  return row.league && row.league !== UNKNOWN_LEAGUE
+    ? row.league
+    : row.tournamentName || UNKNOWN_LEAGUE;
+}
 
 function toReplayLibraryRow(row: ReplayLibraryGameRow): ReplayLibraryRow {
   const player1Name = row.matches.player_1?.name ?? UNKNOWN_PLAYER;
@@ -73,7 +82,7 @@ function toReplayLibraryRow(row: ReplayLibraryGameRow): ReplayLibraryRow {
 
   const labelParts = [
     `${player1Name} vs ${player2Name}`,
-    league,
+    getReplayLibraryCompetitionName({ league, tournamentName }),
     round,
     `match ${matchNumber}`,
   ];
@@ -83,6 +92,9 @@ function toReplayLibraryRow(row: ReplayLibraryGameRow): ReplayLibraryRow {
     date: row.matches.date_played ?? row.created_at,
     league,
     tournamentName,
+    competitionUrl: row.matches.tournaments?.seasons?.name
+      ? `/leagues/${row.matches.tournaments.seasons.id}`
+      : tournamentName ? `/tournaments/${row.matches.tournament_id}` : null,
     round,
     matchNumber,
     player1Name,
