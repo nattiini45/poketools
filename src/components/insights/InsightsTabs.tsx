@@ -5,6 +5,8 @@ import Link from 'next/link';
 import PokemonUsageTable from '@/components/stats/PokemonUsageTable';
 import HistoricalStatisticsCoverage from '@/components/stats/HistoricalStatisticsCoverage';
 import PokemonLink from '@/components/shared/PokemonLink';
+import PokemonSprite from '@/components/shared/PokemonSprite';
+import AnimatedSprite from '@/components/shared/AnimatedSprite';
 import Table, { type Column } from '@/components/ui/Table';
 import MoveUsageTable from '@/components/stats/MoveUsageTable';
 import HeadToHeadMatrix from '@/components/stats/HeadToHeadMatrix';
@@ -76,9 +78,16 @@ export default function InsightsTabs({
   const hasHistory = history?.state === 'ready' && history.coverage.length > 0;
   const koColumns: Column<CombinedPokemonUsageRow>[] = [
     {
+      key: 'rank', header: '#', width: '2.5rem',
+      render: (_row, i) => <span className="text-poke-text-muted">{i + 1}</span>,
+    },
+    {
       key: 'pokemon_name', header: s('usage.pokemon'), sortable: true,
       sortValue: (row) => foldForSearch(localizeSpecies(row.pokemon_name, dl)),
-      render: (row) => <PokemonLink name={row.pokemon_name}>{localizeSpecies(row.pokemon_name, dl)}</PokemonLink>,
+      render: (row) => <PokemonLink name={row.pokemon_name}>
+        <AnimatedSprite><PokemonSprite name={row.pokemon_name} size={24} /></AnimatedSprite>
+        <span className="font-medium">{localizeSpecies(row.pokemon_name, dl)}</span>
+      </PokemonLink>,
     },
     {
       key: 'kos_dealt', header: s('usage.kos'), sortable: true, align: 'right',
