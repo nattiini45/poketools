@@ -246,6 +246,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
   ]);
   const ratingRows = withoutHiddenPlayers(allRatingRows, hiddenPlayerIds);
   const streakEntries = withoutHiddenPlayers(allStreakEntries, hiddenPlayerIds);
+  const ExtensionInsightsSection = packExtensions.InsightsSection;
 
   if (!scopeData) {
     return (
@@ -272,6 +273,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
         tournaments={tournamentOptions}
         globalOnly={tab === 'ratings'}
       />
+      {ExtensionInsightsSection && <ExtensionInsightsSection />}
       <InsightsTabs
         activeTab={tab}
         scope={scope}

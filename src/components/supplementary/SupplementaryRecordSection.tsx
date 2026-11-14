@@ -24,7 +24,7 @@ export default async function SupplementaryRecordSection({ playerId }: { playerI
   const t = await getT(supplementaryRecordsMessages);
   if (record === undefined) {
     return (
-      <ProfileSection title={t('title')} defaultCollapsed>
+      <ProfileSection title={t('title')}>
         <p role="status" className="text-sm text-fg-muted">
           {t('loadFailed')}
         </p>
@@ -33,7 +33,7 @@ export default async function SupplementaryRecordSection({ playerId }: { playerI
   }
 
   return (
-    <ProfileSection title={t('title')} defaultCollapsed>
+    <ProfileSection title={t('title')}>
       <div className="space-y-2">
         {/* A record of honors only (no played matches known) shows no W / D / L line. */}
         {record.played > 0 && (

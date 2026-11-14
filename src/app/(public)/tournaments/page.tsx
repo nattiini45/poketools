@@ -8,6 +8,7 @@ import { enumLabel } from '@/i18n/content/enum-label';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
 import { tournamentsMessages } from '@/i18n/messages/tournaments';
+import { packExtensions } from '@/lib/pack-extensions';
 
 // Stays dynamic although it reads no session: without `force-dynamic` the
 // page would be prerendered by `next build`, which queries Supabase at build
@@ -30,6 +31,8 @@ export default async function TournamentsPage({ searchParams }: { searchParams?:
     getT(enumMessages),
     searchParams,
   ]);
+
+  const CompetitionArchiveSection = packExtensions.CompetitionArchiveSection;
 
   return (
     <PageContainer title={t('list.title')} icon="kings-rock">
@@ -62,6 +65,7 @@ export default async function TournamentsPage({ searchParams }: { searchParams?:
           badges: tournament.is_doubles ? <Badge variant="purple">{t('list.doubles')}</Badge> : undefined,
         }))}
       />
+      {CompetitionArchiveSection && <CompetitionArchiveSection kind="tournament" />}
     </PageContainer>
   );
 }

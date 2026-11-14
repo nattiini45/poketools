@@ -100,6 +100,8 @@ export interface PackExtensions {
   ) => Promise<SupplementaryPokemonKos | null>;
   /** A server component rendered as an extra section of a player's profile. */
   ProfileSection?: ComponentType<{ playerId: string }>;
+  CompetitionArchiveSection?: ComponentType<{ kind: 'league' | 'tournament' }>;
+  InsightsSection?: ComponentType;
   /** A server component rendered as an extra section of `/dashboard/settings` (signed-in only). */
   SettingsSection?: ComponentType;
   /** Admin pages the extension adds to the admin navigation. */
