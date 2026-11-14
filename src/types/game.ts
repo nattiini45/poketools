@@ -504,26 +504,28 @@ export interface MatchPrepAnalysisContent {
 
 export interface PokemonDetailStats {
   pokemon_name: string;
-  total_appearances: number;
+  total_appearances: number | null;
   total_games_in_scope: number;
-  usage_percent: number;
-  kos_dealt: number;
-  koed_rate: number;
+  usage_percent: number | null;
+  kos_dealt: number | null;
+  koed_rate: number | null;
   bring_rate: number | null;
   lead_rate: number | null;
   win_rate: number | null;
   moves: { name: string; count: number; usage_percent: number }[];
   items: { name: string; count: number; usage_percent: number }[];
   players: PokemonPlayerRow[];
+  history?: import('@/lib/stats/combined-statistics').HistoricalStatisticsView;
+  sourceCounts?: import('@/lib/stats/combined-statistics').CombinedPokemonUsageRow['sourceCounts'];
 }
 
 export interface PokemonPlayerRow {
   player_id: string;
   /** Null when the player's name cannot be resolved; the UI shows a localized "unknown player". */
   player_name: string | null;
-  games: number;
-  kos_dealt: number;
-  koed_rate: number;
+  games: number | null;
+  kos_dealt: number | null;
+  koed_rate: number | null;
   bring_rate: number | null;
   lead_rate: number | null;
   win_rate: number | null;

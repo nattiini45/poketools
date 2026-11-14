@@ -37,7 +37,8 @@ src/components/
 export type InsightsScope =
   | { type: 'global' }
   | { type: 'league'; id: string }
-  | { type: 'tournament'; id: string };
+  | { type: 'tournament'; id: string }
+  | { type: 'archive'; id: string };
 
 export type InsightsTab =
   | 'ratings' | 'usage' | 'moves' | 'kills' | 'h2h' | 'streaks';
@@ -52,7 +53,7 @@ export type InsightsTab =
 - **`scopeToQueryString(scope)`** — inverse of parse; used by `ScopeSelector`.
 - **`scopeAggregateKey(scope)`** — maps to `{ scopeType: AggregateScope,
   scopeId: string | null }` for aggregate queries (`all_time | league |
-  tournament`).
+  tournament`). It accepts live scopes only; archive reads never fall through to live all-time aggregates.
 - **`scopeLabel(scope)`** — short label ("Global" / "League" / "Tournament").
 
 ## Data Flow
@@ -70,11 +71,16 @@ export type InsightsTab =
 ```
 
 ### `loadScopeData(scope)`
+- Optional historical contributions are loaded outside the shared cache and combined before the global Smogon fallback. External meta percentages are never added to community counts. A failed or inactive historical read has its own state instead of silently displaying external fallback data.
+- Archive scopes read the selected archive cohort only. Scope metadata remains available with inclusion off. Coverage identifies each competition, included/excluded/withheld battles, missing periods and unmatched teams; unknown counters render as unknown, not zero. Player-filtered Pokémon usage keeps the full selected battle denominator while filtering actor counters.
+- Global/archive species KO rankings use combined known source totals, with provenance; requested empty kills views stay selected. Existing scoped live player rankings remain separate. Moves, ratings and streaks identify their live-only coverage; archive moves never query an unrelated live scope.
 - Always: `getAggregates(scopeType, scopeId)` + `getTotalGamesInScope(...)` →
   `aggregatesToUsageRows(...)` for the usage tab.
 - **Global fallback**: if no scoped aggregates exist, falls back to
   `getUsageByFormat(DEFAULT_GLOBAL_META_FORMAT, …)` → `metaUsageToUsageRows`
   (Smogon meta-usage import — see [Smogon](./smogon.md)).
+
+`GET /api/stats?view=usage` returns the same inclusion-aware combined usage rows. `view=raw` preserves raw live aggregates and exposes the historical contribution separately; it never invents missing aggregate fields. `view=moves` keeps its live counters and identifies `metricCoverage: 'live_only'` when the historical provider exists. Preference-aware responses use `no-store`, while their underlying data caches remain shared.
 - **Tournament scope**: `getTournamentWithDetails`, `getParticipants`,
   `getCompletedMatchRecords`, `getBattleStatsForTournament` → standings +
   kill ranking.

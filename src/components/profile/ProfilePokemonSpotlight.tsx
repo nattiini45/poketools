@@ -51,8 +51,8 @@ export default function ProfilePokemonSpotlight({
           <ul className="flex flex-col gap-1">
             {mostUsed.map((mon) => (
               <SpotlightRow key={mon.pokemon_name} name={mon.pokemon_name} displayName={localizeSpecies(mon.pokemon_name, dl)}>
-                {t('spotlight.gamesWinRate', {
-                  count: mon.total_games,
+                {mon.win_rate === null ? t('spotlight.knownGames', { count: mon.total_games ?? 0 }) : t('spotlight.gamesWinRate', {
+                  count: mon.total_games ?? 0,
                   winRate: formatter.percentOf(mon.win_rate, 0),
                 })}
               </SpotlightRow>
@@ -68,7 +68,7 @@ export default function ProfilePokemonSpotlight({
           <ul className="flex flex-col gap-1">
             {bestKillers.map((mon) => (
               <SpotlightRow key={mon.pokemon_name} name={mon.pokemon_name} displayName={localizeSpecies(mon.pokemon_name, dl)}>
-                {t.rich('spotlight.kosOverall', {
+                {mon.rank === null ? t('spotlight.knownKos', { count: mon.kos_dealt }) : t.rich('spotlight.kosOverall', {
                   count: mon.kos_dealt,
                   rank: t(`overallRank.${ordinalSuffix(mon.rank)}`, { n: mon.rank }),
                   em: (chunks) => <span className="font-[550] text-accent-ink">{chunks}</span>,

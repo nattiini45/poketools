@@ -34,6 +34,7 @@ export default defineDe<typeof en>()({
   },
   standings: 'Tabelle',
   scope: {
+    archive: 'Archiv',
     global: 'Global (gesamte Zeit)',
     league: 'Liga',
     tournament: 'Turnier',

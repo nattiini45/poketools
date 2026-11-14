@@ -19,6 +19,8 @@ import {
   DEFAULT_GLOBAL_META_FORMAT,
 } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
+import { combinePokemonUsage, type CombinedPokemonUsageRow } from '@/lib/stats/combined-statistics';
+import { historicalCompetitionOptions, readHistoricalUsage } from '@/lib/stats/historical-statistics';
 import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
 import {
   formatScoresByes,
@@ -31,9 +33,7 @@ import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils'
 import { getT } from '@/i18n/server';
 import { insightsMessages } from '@/i18n/messages/insights';
 
-// Reads no session. Rendered per request because it reads `searchParams`;
-// every read comes from the tagged public read cache (60 s for the lists and
-// all-time data, 30 s for one league or tournament; expired by match writes).
+// Public reads are shared; the viewer's inclusion preference is applied outside their caches.
 
 interface PageProps {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -79,6 +79,12 @@ interface ScopeRows {
  * exist. Only ids and names leave this function for the client tabs.
  */
 async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
+  if (scope.type === 'archive') {
+    const competition = (await historicalCompetitionOptions()).find((option) => option.id === scope.id);
+    return competition ? {
+      title: competition.name, isDoubles: false, participants: [], tournamentId: null, standings: [], killRanking: [],
+    } : null;
+  }
   if (scope.type === 'tournament') {
     const tournament = await publicReads.tournament(scope.id);
     if (!tournament) {
@@ -179,21 +185,26 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
  * scope reads instead of before them.
  */
 async function loadScopeData(scope: InsightsScope) {
-  const { scopeType, scopeId } = scopeAggregateKey(scope);
+  const { scopeType, scopeId } = scope.type === 'archive'
+    ? { scopeType: 'archive' as const, scopeId: scope.id }
+    : scopeAggregateKey(scope);
 
-  const [[aggregates, totalGames], rows] = await Promise.all([
-    Promise.all([
+  const [[aggregates, totalGames], rows, historical] = await Promise.all([
+    scopeType === 'archive' ? Promise.resolve<[never[], number]>([[], 0]) : Promise.all([
       publicReads.aggregatesSummary(scopeType, scopeId),
       publicReads.totalGames(scopeType, scopeId),
     ]),
     loadScopeRows(scope),
+    readHistoricalUsage({ scopeType, scopeId }),
   ]);
   if (!rows) {
     return null;
   }
 
-  let usageRows = aggregatesToUsageRows(aggregates, totalGames);
-  if (scope.type === 'global' && usageRows.length === 0) {
+  let usageRows: CombinedPokemonUsageRow[] = historical.data
+    ? combinePokemonUsage(aggregates, totalGames, historical.data)
+    : aggregatesToUsageRows(aggregates, totalGames);
+  if (scope.type === 'global' && usageRows.length === 0 && historical.history.state !== 'failed' && historical.history.state !== 'not_ready') {
     const meta = await publicReads.metaUsage(DEFAULT_GLOBAL_META_FORMAT, 100);
     usageRows = metaUsageToUsageRows(meta.data);
   }
@@ -201,6 +212,7 @@ async function loadScopeData(scope: InsightsScope) {
   return {
     ...rows,
     usageRows,
+    history: historical.history,
     aggregateScopeType: scopeType,
     aggregateScopeId: scopeId,
   };
@@ -215,7 +227,7 @@ type SupplementaryKills = { state: 'ready'; rows: SupplementaryKillRowView[] } |
  * not global.
  */
 async function loadSupplementaryKills(scope: InsightsScope): Promise<SupplementaryKills> {
-  if (scope.type !== 'global') return undefined;
+  if (scope.type !== 'global' || packExtensions.historicalUsage) return undefined;
   const result = await loadSupplement('supplementaryKillRanking', packExtensions.supplementaryKillRanking);
   if (result.state === 'failed') return { state: 'failed' };
   if (result.state !== 'ready') return undefined;
@@ -234,7 +246,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
     typeof params.tab === 'string' ? params.tab : undefined,
   );
 
-  const [leagues, tournaments, allRatingRows, scopeData, allStreakEntries, t, supplementaryKills, hiddenPlayerIds] = await Promise.all([
+  const [leagues, tournaments, allRatingRows, scopeData, allStreakEntries, t, supplementaryKills, hiddenPlayerIds, archiveOptions] = await Promise.all([
     publicReads.seasonList(),
     publicReads.tournamentList(),
     publicReads.ratingLeaderboard(5),
@@ -243,6 +255,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
     getT(insightsMessages),
     loadSupplementaryKills(scope),
     publicReads.hiddenPlayerIds(),
+    historicalCompetitionOptions(),
   ]);
   const ratingRows = withoutHiddenPlayers(allRatingRows, hiddenPlayerIds);
   const streakEntries = withoutHiddenPlayers(allStreakEntries, hiddenPlayerIds);
@@ -271,6 +284,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
         scope={scope}
         leagues={leagueOptions}
         tournaments={tournamentOptions}
+        archiveOptions={archiveOptions}
         globalOnly={tab === 'ratings'}
       />
       {ExtensionInsightsSection && <ExtensionInsightsSection />}
@@ -278,6 +292,7 @@ async function InsightsPageContent({ searchParams }: PageProps) {
         activeTab={tab}
         scope={scope}
         usageRows={scopeData.usageRows}
+        history={scopeData.history}
         isDoubles={scopeData.isDoubles}
         standings={scopeData.standings}
         killRanking={scopeData.killRanking}

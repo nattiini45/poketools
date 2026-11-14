@@ -160,6 +160,17 @@ describe('composePlayerProfile', () => {
     expect(getPlayerAchievements).toHaveBeenCalledWith('player-1');
   });
 
+  it('retains full numeric counters before truncating the live spotlight', async () => {
+    vi.mocked(getAllTimePlayerAggregates).mockResolvedValueOnce(
+      ['Pikachu', 'Eevee', 'Ditto', 'Mew'].map((name, index) => aggregateRow(name, { total_games: 10 - index })),
+    );
+    const profile = await composePlayerProfile('player-1');
+    expect(profile!.most_used_pokemon).toHaveLength(3);
+    expect(profile!.live_pokemon_counters).toHaveLength(4);
+    expect(Object.keys(profile!.live_pokemon_counters![3])).toEqual(['pokemon_name', 'total_games', 'total_wins', 'total_kos_dealt', 'total_koed']);
+    expect(profile!.live_pokemon_counters![3].pokemon_name).toBe('Mew');
+  });
+
   it('categorizes active tournaments as current participations', async () => {
     const profile = await composePlayerProfile('player-1');
     expect(profile!.current_participations.length).toBe(1);

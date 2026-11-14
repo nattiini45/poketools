@@ -52,6 +52,8 @@ export default defineDe<typeof en>()({
     noResults: 'Keine Ergebnisse',
   },
   scope: {
+    archive: 'Archiv',
+    archiveSearch: 'Archivierte Wettbewerbe durchsuchen',
     label: 'Bereich',
     globalOnly: 'Ratings gibt es nur global',
     global: 'Global (gesamte Zeit)',

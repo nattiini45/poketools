@@ -5,6 +5,8 @@ import type { PlayerRating } from './rating';
 import type { PlayerStreaks } from './streak';
 import type { SignaturePokemon } from './signature';
 import type { EarnedAchievement } from './achievement';
+import type { HistoricalCompetitionOption, HistoricalHonor } from '@/lib/pack-extensions/historical-statistics-types';
+import type { HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
 
 // ─── Per-participation entry ────────────────────────────────────────
 
@@ -28,6 +30,7 @@ export interface ProfileParticipation {
   bracket_type: BracketType | null;
   standing: ProfileStanding | null;
   best_pokemon: ProfileBestPokemon | null;
+  competition?: HistoricalCompetitionOption;
 }
 
 // ─── Match summary ──────────────────────────────────────────────────
@@ -49,18 +52,18 @@ export interface ProfileMatch {
 
 export interface ProfilePokemonStat {
   pokemon_name: string;
-  total_games: number;
-  total_kos_dealt: number;
-  total_koed: number;
-  kill_differential: number;
-  win_rate: number; // percentage 0-100
+  total_games: number | null;
+  total_kos_dealt: number | null;
+  total_koed: number | null;
+  kill_differential: number | null;
+  win_rate: number | null; // percentage 0-100
 }
 
 export interface ProfileKillRanking {
   pokemon_name: string;
   kos_dealt: number;
-  rank: number;
-  total_ranked: number;
+  rank: number | null;
+  total_ranked: number | null;
 }
 
 // ─── Headline stats ─────────────────────────────────────────────────
@@ -69,6 +72,7 @@ export interface ProfileHeadlineStats {
   total_matches: number;
   total_wins: number;
   total_losses: number;
+  total_draws?: number;
   win_rate: number;
   total_kos_dealt: number;
   unique_pokemon_used: number;
@@ -101,13 +105,25 @@ export interface PlayerProfile {
   streaks: PlayerStreaks | null;
   signatures: SignaturePokemon[];
   achievements: EarnedAchievement[];
+  live_pokemon_counters?: ProfilePokemonCounter[];
+  history?: HistoricalStatisticsView;
+  historical_honors?: HistoricalHonor[];
+}
+
+export interface ProfilePokemonCounter {
+  pokemon_name: string;
+  total_games: number;
+  total_wins: number;
+  total_kos_dealt: number;
+  total_koed: number;
 }
 
 /**
  * A profile as anyone but the player themself or an admin receives it: the
  * same sections, with the player row narrowed to the `PublicPlayer` card.
  */
-export type PublicPlayerProfile = Omit<PlayerProfile, 'player'> & { player: PublicPlayer };
+export type PublicPlayerProfile = Omit<PlayerProfile, 'player' | 'live_pokemon_counters'> & { player: PublicPlayer };
+export type CachedPlayerProfile = PublicPlayerProfile & Pick<PlayerProfile, 'live_pokemon_counters'>;
 
 // ─── Raw battle stat with tournament context (internal) ─────────────
 

@@ -2,15 +2,19 @@
 
 import { useMemo } from 'react';
 import Table, { type Column } from '@/components/ui/Table';
+import HistoricalStatisticsCoverage from '@/components/stats/HistoricalStatisticsCoverage';
+import type { HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
 import { WikiEmptyState, WikiSection, WikiUsageBar } from '@/components/wiki/WikiParts';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
+import { historicalStatisticsMessages } from '@/i18n/messages/historical-statistics';
 import { localizeItem } from '@/lib/pkmn/i18n/names/items';
 import type { PokemonDetailStats, PokemonPlayerRow } from '@/types/game';
 
 interface WikiUsageStatsProps {
   /** The stats of the page's one scope picker (the stats section above); this block has no controls of its own. */
   stats: PokemonDetailStats;
+  history?: HistoricalStatisticsView;
   loading: boolean;
   playerId: string;
   /** A row of the breakdown narrows the page to that player. */
@@ -18,11 +22,12 @@ interface WikiUsageStatsProps {
 }
 
 /** Battle stats of a Pokémon: item usage and the player breakdown, for the scope picked in the stats section. */
-export default function WikiUsageStats({ stats, loading, playerId, onSelectPlayer }: WikiUsageStatsProps) {
+export default function WikiUsageStats({ stats, history = stats.history, loading, playerId, onSelectPlayer }: WikiUsageStatsProps) {
   const t = useT(wikiMessages);
+  const h = useT(historicalStatisticsMessages);
   const dl = useDataLocale();
   const formatter = useFormatter();
-  const hasData = stats.total_appearances > 0;
+  const hasData = stats.total_appearances === null || stats.total_appearances > 0 || (stats.kos_dealt ?? 0) > 0 || stats.players.length > 0;
 
   const playerColumns = useMemo((): Column<PokemonPlayerRow>[] => [
     {
@@ -47,7 +52,7 @@ export default function WikiUsageStats({ stats, loading, playerId, onSelectPlaye
       sortable: true,
       sortValue: (p) => p.games,
       render: (player) => (
-        <span className="font-mono tabular-nums text-fg-muted">{player.games}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.games === null ? <span aria-label={h('notRecorded')}>—</span> : formatter.number(player.games)}</span>
       ),
     },
     {
@@ -69,7 +74,7 @@ export default function WikiUsageStats({ stats, loading, playerId, onSelectPlaye
       sortable: true,
       sortValue: (p) => p.kos_dealt,
       render: (player) => (
-        <span className="font-mono tabular-nums text-fg-muted">{player.kos_dealt}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.kos_dealt === null ? <span aria-label={h('notRecorded')}>—</span> : formatter.number(player.kos_dealt)}</span>
       ),
     },
     {
@@ -79,7 +84,7 @@ export default function WikiUsageStats({ stats, loading, playerId, onSelectPlaye
       sortable: true,
       sortValue: (p) => p.koed_rate,
       render: (player) => (
-        <span className="font-mono tabular-nums text-fg-muted">{formatter.percentOf(player.koed_rate)}</span>
+        <span className="font-mono tabular-nums text-fg-muted">{player.koed_rate === null ? <span aria-label={h('notRecorded')}>—</span> : formatter.percentOf(player.koed_rate)}</span>
       ),
     },
     {
@@ -106,15 +111,17 @@ export default function WikiUsageStats({ stats, loading, playerId, onSelectPlaye
         </span>
       ),
     },
-  ], [t, formatter, onSelectPlayer]);
+  ], [t, h, formatter, onSelectPlayer]);
 
   return (
     <WikiSection title={t('usage.battleStats')}>
+      {!loading && history && <HistoricalStatisticsCoverage history={history} />}
       {!loading && hasData ? (
         <>
           {stats.items.length > 0 && (
             <div className="flex flex-col gap-2">
               <h3 className="text-subtitle font-[550] text-fg">{t('usage.itemUsage')}</h3>
+              {history?.state === 'ready' && history.coverage.length > 0 && <p className="text-caption text-fg-muted">{h('itemsLiveOnly')}</p>}
               <ul className="flex flex-col gap-2.5 rounded-poke-lg border border-hairline bg-surface p-4">
                 {stats.items.map((item) => (
                   <WikiUsageBar

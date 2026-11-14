@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
+import { readHistoricalUsage } from '@/lib/stats/historical-statistics';
+import { combinePokemonUsage, type CombinedPokemonUsageRow, type HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
+import { packExtensions } from '@/lib/pack-extensions';
+import type { HistoricalUsageContribution } from '@/lib/pack-extensions/historical-statistics-types';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { CACHE } from '@/lib/api/cache';
 import { getMoveNatDex } from '@/lib/pkmn/dex';
@@ -12,8 +16,13 @@ import type {
   MoveUsageResponse,
   MoveUsageRow,
   MovePokemonTotals,
-  PokemonUsageRow,
 } from '@/types/game';
+
+type StatsApiResult<T> = ApiResult<T> & {
+  history?: HistoricalStatisticsView;
+  historical?: HistoricalUsageContribution;
+  metricCoverage?: 'live_only';
+};
 
 /** Longest accepted `move=` value (real move names are under 32 characters). */
 const MAX_MOVE_FILTER_LENGTH = 64;
@@ -34,7 +43,7 @@ function isStatsView(value: string): value is StatsView {
 // Pokémon that used it. `move` is ignored by the other views.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const scopeType = (searchParams.get('scope') ?? 'tournament') as AggregateScope;
+  const scopeType = (searchParams.get('scope') ?? 'tournament') as AggregateScope | 'archive';
   const scopeId = searchParams.get('scope_id') ?? null;
   const view = searchParams.get('view') ?? 'usage';
   const rawMove = searchParams.get('move');
@@ -59,7 +68,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!['tournament', 'league', 'all_time'].includes(scopeType)) {
+  if (!['tournament', 'league', 'all_time', 'archive'].includes(scopeType)) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'scope must be tournament, league, or all_time', code: 'stats_scope_invalid' },
       { status: 400 }
@@ -77,7 +86,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (scopeId && !isValidUuid(scopeId)) {
+  if (scopeId && (scopeType === 'archive' ? !/^[a-z0-9][a-z0-9-]{0,99}$/.test(scopeId) : !isValidUuid(scopeId))) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'scope_id must be a valid UUID', code: 'stats_scope_id_invalid' },
       { status: 400 }
@@ -85,12 +94,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const aggregates = await getAggregates(scopeType, scopeId);
+    const scopedId = scopeType === 'all_time' ? null : scopeId;
+    const [aggregates, historical] = await Promise.all([
+      scopeType === 'archive' ? Promise.resolve([]) : getAggregates(scopeType, scopedId),
+      readHistoricalUsage({ scopeType, scopeId: scopedId }),
+    ]);
+    const headers = packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS;
+    const provenance = historical.history.state === 'absent' ? {} : { history: historical.history };
 
     if (view === 'raw') {
-      return NextResponse.json<ApiResult<Aggregate[]>>(
-        { success: true, data: aggregates },
-        { headers: CACHE.STATS }
+      return NextResponse.json<StatsApiResult<Aggregate[]>>(
+        { success: true, data: aggregates, ...provenance, ...(historical.data ? { historical: historical.data } : {}) },
+        { headers }
       );
     }
 
@@ -146,20 +161,22 @@ export async function GET(request: NextRequest) {
       }
       rows.sort((a, b) => b.count - a.count);
 
-      return NextResponse.json<ApiResult<MoveUsageResponse>>(
-        { success: true, data: { rows, pokemonTotals } },
-        { headers: CACHE.STATS },
+      return NextResponse.json<StatsApiResult<MoveUsageResponse>>(
+        { success: true, data: { rows, pokemonTotals }, ...provenance, ...(historical.history.state === 'absent' ? {} : { metricCoverage: 'live_only' }) },
+        { headers },
       );
     }
 
     // Default: usage view with computed percentages
-    const totalGames = await getTotalGamesInScope(scopeType, scopeId);
+    const totalGames = scopeType === 'archive' ? 0 : await getTotalGamesInScope(scopeType, scopedId);
 
-    const usageRows: PokemonUsageRow[] = aggregatesToUsageRows(aggregates, totalGames);
+    const usageRows = historical.data
+      ? combinePokemonUsage(aggregates, totalGames, historical.data)
+      : aggregatesToUsageRows(aggregates, totalGames);
 
-    return NextResponse.json<ApiResult<PokemonUsageRow[]>>(
-      { success: true, data: usageRows },
-      { headers: CACHE.STATS }
+    return NextResponse.json<StatsApiResult<CombinedPokemonUsageRow[]>>(
+      { success: true, data: usageRows, ...provenance },
+      { headers }
     );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch stats');

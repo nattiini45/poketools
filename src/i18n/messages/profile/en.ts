@@ -32,6 +32,7 @@ export default {
     memberSince: 'Member since {date}',
     record: 'Record',
     recordValue: '{wins}-{losses}',
+    recordWithDraws: '{wins}-{losses}-{draws}',
     winRate: 'Win %',
     totalKos: 'Total KOs',
     pokemon: 'Pokemon',
@@ -53,10 +54,19 @@ export default {
     kos: '{count}K',
   },
   spotlight: {
+    knownGames: { one: '{count} known game', other: '{count} known games' },
+    knownKos: { one: '{count} known KO · overall rank unavailable', other: '{count} known KOs · overall rank unavailable' },
     mostUsed: 'Most Used',
     topKillers: 'Top Killers',
     gamesWinRate: { one: '{count} game · {winRate} WR', other: '{count} games · {winRate} WR' },
     kosOverall: { one: '{count} KO · <em>{rank}</em>', other: '{count} KOs · <em>{rank}</em>' },
+  },
+  honors: {
+    champion: 'Champion',
+    runner_up: 'Runner-up',
+    top_killer: 'Top killer',
+    archive: 'Historical record',
+    shared: 'Shared honor',
   },
   /** English ordinals by suffix; German writes "3." for all of them. */
   ordinal: { st: '{n}st', nd: '{n}nd', rd: '{n}rd', th: '{n}th' },

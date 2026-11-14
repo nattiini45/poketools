@@ -7,11 +7,13 @@ import {
 import { listSeasonsByIds } from '@/lib/supabase/queries/seasons';
 import { listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
+import { readHistoricalUsage } from '@/lib/stats/historical-statistics';
+import { CACHE } from '@/lib/api/cache';
 import type { ApiResult } from '@/types/api';
 import type { PokemonFilterOptions } from '@/types/game';
 
 // Public — returns available filter options for a Pokémon's stats page.
-// Reads from pre-computed aggregates only (CLAUDE.md rule #4).
+// Reads pre-computed live and approved historical counters.
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ name: string }> }
@@ -21,7 +23,11 @@ export async function GET(
 
   try {
     // Get all scopes where this Pokémon has aggregate data
-    const scopes = await getAggregateScopesForPokemon(pokemonName);
+    const [scopes, livePlayerIds, historical] = await Promise.all([
+      getAggregateScopesForPokemon(pokemonName),
+      getPlayerIdsForPokemon(pokemonName),
+      readHistoricalUsage({ scopeType: 'all_time', scopeId: null }),
+    ]);
 
     // Separate league and tournament scope_ids
     const leagueScopeIds = scopes
@@ -32,7 +38,12 @@ export async function GET(
       .filter((s) => s.scope_type === 'tournament' && s.scope_id)
       .map((s) => s.scope_id as string);
 
-    const playerIds = await getPlayerIdsForPokemon(pokemonName);
+    const playerIds = [...new Set([
+      ...livePlayerIds,
+      ...(historical.data?.players ?? []).filter((player) => player.pokemon.some((counter) =>
+        counter.pokemonName === pokemonName && ((counter.appearances ?? 0) > 0 || (counter.kos ?? 0) > 0),
+      )).map((player) => player.playerId),
+    ])];
 
     // Batch-fetch names in parallel via query modules
     const [allLeagues, allTournaments, playerMap] = await Promise.all([
@@ -61,7 +72,7 @@ export async function GET(
     return NextResponse.json<ApiResult<PokemonFilterOptions>>({
       success: true,
       data: result,
-    });
+    }, { headers: CACHE.NONE });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch filter options');
   }

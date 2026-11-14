@@ -293,6 +293,8 @@ One row per Pokémon per player per game: unique index `battle_stats_game_player
 | move_counts | Text | JSON: { "Earthquake": 14, ... } |
 | last_updated | Date | |
 
+Optional historical statistics are composed at read time through the pack extensions contract (`docs/format-packs.md`, "Combined historical statistics"), never written into these live rows. Exact usage combines paired six-slot team-preview observations and their battle denominator; authoritative source KOs can cover a broader sample and retain that provenance. Missing counters remain nullable. Viewer inclusion is applied outside shared caches, and preference-aware API responses are not publicly CDN-cached. Archive scopes do not query live all-time aggregates. Current verified identity links govern individual credit; shared actors remain shared, and mapped duplicate event honors/participations do not add credit again when their live counterpart is present.
+
 ### 4.11 Draft Pools
 | Field | Type | Notes |
 |---|---|---|

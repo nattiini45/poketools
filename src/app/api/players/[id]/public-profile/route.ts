@@ -3,6 +3,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { composePlayerProfile } from '@/lib/profile/compose';
 import { toPublicProfileView } from '@/lib/profile/redact';
+import { combineHistoricalProfile, readHistoricalProfile } from '@/lib/profile/historical-statistics';
 import type { ApiResult } from '@/types/api';
 import type { PublicProfileView } from '@/lib/profile/redact';
 
@@ -26,10 +27,11 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const historical = await readHistoricalProfile(id);
     return NextResponse.json<ApiResult<PublicProfileView>>({
       success: true,
-      data: toPublicProfileView(profile),
-    });
+      data: toPublicProfileView(combineHistoricalProfile(profile, historical.data, historical.history)),
+    }, { headers: { 'Cache-Control': 'private, no-store' } });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch player profile');
   }

@@ -93,4 +93,19 @@ describe('PokemonDetailClient render', () => {
     expect(de).toContain('Unbekannter Spieler');
     expect(de).not.toContain('Unknown');
   });
+
+  it('shows KO-only historical data without inventing usage or appearances', () => {
+    const s: PokemonDetailStats = {
+      ...stats(0, 0), total_appearances: null, usage_percent: null, kos_dealt: 12, koed_rate: null, players: [],
+      history: { state: 'not_ready', coverage: [] },
+      sourceCounts: { liveAppearances: 0, historicalAppearances: null, liveKos: 0, historicalKos: 12 },
+    };
+    const html = renderWithI18n(<PokemonDetailClient pokemonName="Garchomp" initialStats={s} />);
+    expect(html).toContain('>12<');
+    expect(html).toContain('Team appearances were not recorded.');
+    expect(html).toContain('Live 0 · Historical 12');
+    expect(html).toContain('Historical data has not been activated.');
+    expect(html).not.toContain('0.0%');
+    expect(html).not.toContain('No battle data yet');
+  });
 });

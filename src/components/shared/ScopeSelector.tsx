@@ -2,6 +2,7 @@
 
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import type { InsightsScope } from '@/lib/insights/scope';
+import type { HistoricalCompetitionOption } from '@/lib/pack-extensions/historical-statistics-types';
 import { scopeToQueryString } from '@/lib/insights/scope';
 import Combobox from '@/components/ui/Combobox';
 import Select from '@/components/ui/Select';
@@ -18,6 +19,7 @@ interface ScopeSelectorProps {
   scope: InsightsScope;
   leagues: ScopeOption[];
   tournaments: ScopeOption[];
+  archiveOptions?: readonly HistoricalCompetitionOption[];
   /** When true, only global scope is selectable (e.g. ratings tab). */
   globalOnly?: boolean;
   className?: string;
@@ -29,6 +31,7 @@ export default function ScopeSelector({
   scope,
   leagues,
   tournaments,
+  archiveOptions = [],
   globalOnly = false,
   className = '',
   onScopeChange,
@@ -57,11 +60,10 @@ export default function ScopeSelector({
     router.push(`${pathname}?${params.toString()}`);
   };
 
-  const scopeType =
-    scope.type === 'global' ? 'global' : scope.type === 'league' ? 'league' : 'tournament';
+  const scopeType = scope.type;
 
   // The combobox's own label is smaller than the select's, so both fields get the select's label here.
-  const picker = (kind: 'league' | 'tournament', options: ScopeOption[], selectedId: string) => (
+  const picker = (kind: 'league' | 'tournament' | 'archive', options: readonly ScopeOption[], selectedId: string) => (
     <label className="block min-w-0 flex-1 basis-56 space-y-1.5 sm:max-w-sm">
       <span className="block text-sm font-body font-medium text-fg">{t(`scope.${kind}`)}</span>
       <Combobox
@@ -89,17 +91,22 @@ export default function ScopeSelector({
             else if (v === 'tournament' && tournaments[0]) {
               pushScope({ type: 'tournament', id: tournaments[0].id });
             }
+            else if (v === 'archive' && archiveOptions[0]) {
+              pushScope({ type: 'archive', id: archiveOptions[0].id });
+            }
           }}
           title={globalOnly ? t('scope.globalOnly') : undefined}
         >
           <option value="global">{t('scope.global')}</option>
           {!globalOnly && <option value="league">{t('scope.league')}</option>}
           {!globalOnly && <option value="tournament">{t('scope.tournament')}</option>}
+          {!globalOnly && (archiveOptions.length > 0 || scope.type === 'archive') && <option value="archive">{t('scope.archive')}</option>}
         </Select>
       </div>
 
       {!globalOnly && scope.type === 'league' && picker('league', leagues, scope.id)}
       {!globalOnly && scope.type === 'tournament' && picker('tournament', tournaments, scope.id)}
+      {!globalOnly && scope.type === 'archive' && picker('archive', archiveOptions, scope.id)}
     </div>
   );
 }

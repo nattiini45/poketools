@@ -97,7 +97,7 @@ export default function ProfileHeader({ player, headline, recentForm, rating, st
         <ul className="flex flex-wrap gap-x-4 gap-y-2.5 px-1.5">
           <StatPlate
             label={t('header.record')}
-            value={t('header.recordValue', { wins: headline.total_wins, losses: headline.total_losses })}
+            value={headline.total_draws ? t('header.recordWithDraws', { wins: headline.total_wins, draws: headline.total_draws, losses: headline.total_losses }) : t('header.recordValue', { wins: headline.total_wins, losses: headline.total_losses })}
           />
           <StatPlate label={t('header.winRate')} value={formatter.percentOf(headline.win_rate, 0)} />
           <StatPlate label={t('header.totalKos')} value={formatter.number(headline.total_kos_dealt)} />

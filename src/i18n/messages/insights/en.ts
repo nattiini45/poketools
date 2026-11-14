@@ -35,6 +35,7 @@ export default {
   },
   standings: 'Standings',
   scope: {
+    archive: 'Archive',
     global: 'Global (all time)',
     league: 'League',
     tournament: 'Tournament',

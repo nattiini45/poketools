@@ -33,7 +33,7 @@ function ParticipationRow({ p }: { p: ProfileParticipation }) {
   return (
     <li>
       <Link
-        href={`/tournaments/${p.id}`}
+        href={p.competition?.href ?? `/tournaments/${p.id}`}
         className={cn(
           'flex items-center gap-3 rounded-poke-md border border-hairline bg-elevated px-3 py-2.5 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover',
           FOCUS,
@@ -45,6 +45,7 @@ function ParticipationRow({ p }: { p: ProfileParticipation }) {
             <SkewChip tone={STATUS_TONE[p.status]}>{enumLabel(tEnums, 'tournamentStatus', p.status)}</SkewChip>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-caption text-fg-muted">
+            {p.competition && <span>{[p.competition.seasonLabel, p.competition.year].filter((value) => value !== null).join(' · ')}</span>}
             {p.bracket_type && <span>{enumLabel(tEnums, 'bracketType', p.bracket_type)}</span>}
             {p.standing && (
               <span className="inline-flex items-center gap-1 tabular-nums">

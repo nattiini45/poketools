@@ -3,6 +3,9 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import PokemonUsageTable from '@/components/stats/PokemonUsageTable';
+import HistoricalStatisticsCoverage from '@/components/stats/HistoricalStatisticsCoverage';
+import PokemonLink from '@/components/shared/PokemonLink';
+import Table, { type Column } from '@/components/ui/Table';
 import MoveUsageTable from '@/components/stats/MoveUsageTable';
 import HeadToHeadMatrix from '@/components/stats/HeadToHeadMatrix';
 import KillRankingTable from '@/components/stats/KillRankingTable';
@@ -15,17 +18,22 @@ import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import LinkTabs from '@/components/ui/LinkTabs';
 import Select from '@/components/ui/Select';
 import { scopeToQueryString, type InsightsScope, type InsightsTab } from '@/lib/insights/scope';
-import type { PokemonUsageRow, KillRankingRow, StandingsRow } from '@/types/game';
+import type { KillRankingRow, StandingsRow } from '@/types/game';
+import type { CombinedPokemonUsageRow, HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
 import type { RatingLeaderboardEntry } from '@/types/rating';
 import type { StreakLeaderboardEntry } from '@/types/insights';
-import { useT } from '@/i18n/client';
+import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { insightsMessages } from '@/i18n/messages/insights';
+import { historicalStatisticsMessages } from '@/i18n/messages/historical-statistics';
+import { statsMessages } from '@/i18n/messages/stats';
+import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+import { foldForSearch } from '@/lib/pkmn/i18n/search';
 
 interface InsightsTabsProps {
-  /** The tab the URL selects (`?tab=`); a tab this scope does not have falls back to usage. */
   activeTab: InsightsTab;
   scope: InsightsScope;
-  usageRows: PokemonUsageRow[];
+  usageRows: CombinedPokemonUsageRow[];
+  history?: HistoricalStatisticsView;
   isDoubles: boolean;
   standings: StandingsRow[];
   killRanking: KillRankingRow[];
@@ -57,14 +65,40 @@ export default function InsightsTabs({
   ratingRows,
   streakEntries,
   supplementaryKills,
+  history,
 }: InsightsTabsProps) {
   const t = useT(insightsMessages);
+  const h = useT(historicalStatisticsMessages);
+  const s = useT(statsMessages);
+  const dl = useDataLocale();
+  const f = useFormatter();
+  const combinedKills = scope.type === 'archive' || scope.type === 'global' && history !== undefined && history.state !== 'absent';
+  const hasHistory = history?.state === 'ready' && history.coverage.length > 0;
+  const koColumns: Column<CombinedPokemonUsageRow>[] = [
+    {
+      key: 'pokemon_name', header: s('usage.pokemon'), sortable: true,
+      sortValue: (row) => foldForSearch(localizeSpecies(row.pokemon_name, dl)),
+      render: (row) => <PokemonLink name={row.pokemon_name}>{localizeSpecies(row.pokemon_name, dl)}</PokemonLink>,
+    },
+    {
+      key: 'kos_dealt', header: s('usage.kos'), sortable: true, align: 'right',
+      sortValue: (row) => row.kos_dealt,
+      render: (row) => <span className="tabular-nums">
+        {row.kos_dealt === null ? <span aria-label={h('notRecorded')}>—</span> : f.number(row.kos_dealt)}
+        {row.sourceCounts && <span className="block text-xs text-fg-muted">{h('sourceCounts', {
+          live: f.number(row.sourceCounts.liveKos),
+          historical: row.sourceCounts.historicalKos === null ? h('notRecorded') : f.number(row.sourceCounts.historicalKos),
+        })}</span>}
+      </span>,
+    },
+  ];
 
   const showSupplementaryKills =
+    !combinedKills &&
     scope.type === 'global' &&
     supplementaryKills !== undefined &&
     (supplementaryKills.state === 'failed' || supplementaryKills.rows.length > 0);
-  const showKills = (scope.type !== 'global' && killRanking.length > 0) || showSupplementaryKills;
+  const showKills = requestedTab === 'kills' || combinedKills || (scope.type !== 'global' && killRanking.length > 0) || showSupplementaryKills;
   const showH2h = scope.type === 'tournament' && tournamentId && participants.length > 0;
   const showStandings = scope.type !== 'global' && standings.length > 0;
 
@@ -92,8 +126,11 @@ export default function InsightsTabs({
         glideId="insights-tabs"
       />
 
+      {history && <HistoricalStatisticsCoverage history={history} />}
+
       {activeTab === 'ratings' && (
         <div className="space-y-2">
+          {hasHistory && <p className="text-caption text-fg-muted">{h('ratingsLiveOnly')}</p>}
           {scope.type !== 'global' && (
             <p className="text-caption text-fg-muted">{t('ratingsGlobalNote')}</p>
           )}
@@ -105,7 +142,11 @@ export default function InsightsTabs({
         <PokemonUsageTable data={usageRows} isDoubles={isDoubles} />
       )}
 
-      {activeTab === 'kills' && showKills && !showSupplementaryKills && (
+      {activeTab === 'kills' && combinedKills && (
+        <Table columns={koColumns} data={usageRows.filter((row) => row.kos_dealt !== null && row.kos_dealt > 0)} keyExtractor={(row) => row.pokemon_name} stickyColumn="pokemon_name" defaultSort={{ key: 'kos_dealt', direction: 'desc' }} emptyMessage={h('noRecordedKos')} />
+      )}
+
+      {activeTab === 'kills' && showKills && !showSupplementaryKills && !combinedKills && (
         <KillRankingTable data={killRanking} />
       )}
 
@@ -117,10 +158,13 @@ export default function InsightsTabs({
       )}
 
       {activeTab === 'moves' && (
+        scope.type === 'archive' ? <p className="text-body text-fg-muted">{h('archiveMovesUnavailable')}</p> : <div className="space-y-3">
+          {hasHistory && <p className="text-caption text-fg-muted">{h('movesLiveOnly')}</p>}
         <MoveUsageTable
           scopeType={aggregateScopeType}
           scopeId={aggregateScopeId ?? ''}
         />
+        </div>
       )}
 
       {activeTab === 'h2h' && showH2h && tournamentId && (
@@ -166,6 +210,7 @@ export default function InsightsTabs({
 
       {activeTab === 'streaks' && (
         <div className="rounded-poke-lg border border-hairline bg-surface px-5 py-2">
+          {hasHistory && <p className="py-3 text-caption text-fg-muted">{h('streaksLiveOnly')}</p>}
           {streakEntries.length === 0 && <p className="py-3 text-body text-fg-muted">{t('streaks.empty')}</p>}
           {streakEntries.length > 0 && (
             <ol>

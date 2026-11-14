@@ -5,52 +5,63 @@ import { WikiEmptyState, WikiSection, WikiSelect, WikiStatStrip, WikiUsageBar } 
 import WikiUsageStats from '@/components/wiki/WikiUsageStats';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { wikiMessages } from '@/i18n/messages/wiki';
+import { historicalStatisticsMessages } from '@/i18n/messages/historical-statistics';
+import type { HistoricalCompetitionOption } from '@/lib/pack-extensions/historical-statistics-types';
 import { localizeMove } from '@/lib/pkmn/i18n/names/moves';
 import type { PokemonDetailStats, PokemonFilterOptions } from '@/types/game';
 
 interface PokemonDetailClientProps {
   pokemonName: string;
   initialStats: PokemonDetailStats;
+  archiveOptions?: readonly HistoricalCompetitionOption[];
   /** Rendered between the stats section and the battle-stats block (server-rendered extensions). */
   children?: ReactNode;
 }
 
-type ScopeFilter = 'all_time' | 'league' | 'tournament';
+type ScopeFilter = 'all_time' | 'league' | 'tournament' | 'archive';
 
 export default function PokemonDetailClient({
   pokemonName,
   initialStats,
+  archiveOptions = [],
   children,
 }: PokemonDetailClientProps) {
   const t = useT(wikiMessages);
+  const h = useT(historicalStatisticsMessages);
   const dl = useDataLocale();
   const formatter = useFormatter();
-  const [stats, setStats] = useState<PokemonDetailStats>(initialStats);
+  const [result, setResult] = useState({ stats: initialStats, scopeKey: 'all_time::', initialStats });
+  const stats = result.stats;
   const [filters, setFilters] = useState<PokemonFilterOptions | null>(null);
   const [scopeType, setScopeType] = useState<ScopeFilter>('all_time');
   const [scopeId, setScopeId] = useState<string>('');
   const [playerId, setPlayerId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const scopeKey = `${scopeType}:${scopeId}:${playerId}`;
+  const loading = fetching || !failed && (result.scopeKey !== scopeKey || result.initialStats !== initialStats);
 
-  // Fetch filter options on mount
   useEffect(() => {
+    const controller = new AbortController();
     async function fetchFilters() {
       try {
-        const res = await fetch(`/api/pokemon/${encodeURIComponent(pokemonName)}/filters`);
+        const res = await fetch(`/api/pokemon/${encodeURIComponent(pokemonName)}/filters`, { signal: controller.signal, cache: 'no-store' });
         const json = await res.json();
-        if (json.success) {
+        if (!controller.signal.aborted && json.success) {
           setFilters(json.data);
         }
       } catch {
         // Filters are optional — page still works without them
       }
     }
-    fetchFilters();
-  }, [pokemonName]);
+    void fetchFilters();
+    return () => controller.abort();
+  }, [pokemonName, initialStats]);
 
   // Fetch stats when filters change
-  const fetchStats = useCallback(async () => {
-    setLoading(true);
+  const fetchStats = useCallback(async (signal: AbortSignal) => {
+    setFetching(true);
+    setFailed(false);
     try {
       const params = new URLSearchParams();
       params.set('scope', scopeType);
@@ -58,32 +69,38 @@ export default function PokemonDetailClient({
       if (playerId) params.set('player_id', playerId);
 
       const res = await fetch(
-        `/api/pokemon/${encodeURIComponent(pokemonName)}/stats?${params}`
+        `/api/pokemon/${encodeURIComponent(pokemonName)}/stats?${params}`, { signal }
       );
       const json = await res.json();
-      if (json.success) {
-        setStats(json.data);
+      if (!signal.aborted && json.success) {
+        setResult({ stats: json.data, scopeKey, initialStats });
+      } else if (!signal.aborted) {
+        setFailed(true);
       }
     } catch {
-      // Keep existing stats on error
+      if (!signal.aborted) setFailed(true);
     } finally {
-      setLoading(false);
+      if (!signal.aborted) setFetching(false);
     }
-  }, [pokemonName, scopeType, scopeId, playerId]);
+  }, [pokemonName, scopeType, scopeId, playerId, scopeKey, initialStats]);
 
   // The server render carries the all-time totals and move usage only; the items and the player breakdown of the
   // battle-stats block come from this request, which also re-runs whenever the scope or the player changes.
   useEffect(() => {
-    void fetchStats();
+    const controller = new AbortController();
+    void fetchStats(controller.signal);
+    return () => controller.abort();
   }, [fetchStats]);
 
   const handleScopeChange = (newScope: ScopeFilter) => {
     setScopeType(newScope);
-    setScopeId(''); // Reset specific scope when type changes
+    setScopeId(newScope === 'archive' ? archiveOptions[0]?.id ?? '' : '');
   };
 
-  const hasData = stats.total_appearances > 0;
+  const hasData = stats.total_appearances === null || stats.total_appearances > 0 || (stats.kos_dealt ?? 0) > 0;
   const pct = (value: number | null): string => (value !== null ? formatter.percentOf(value) : '—');
+  const count = (value: number | null): string => value === null ? '—' : formatter.number(value);
+  const hasHistory = stats.history?.state === 'ready' && stats.history.coverage.length > 0;
 
   return (
     <>
@@ -100,6 +117,7 @@ export default function PokemonDetailClient({
             <option value="all_time">{t('usage.allTime')}</option>
             <option value="league">{t('usage.league')}</option>
             <option value="tournament">{t('usage.tournament')}</option>
+            {(archiveOptions.length > 0 || scopeType === 'archive') && <option value="archive">{h('archive')}</option>}
           </WikiSelect>
 
           {/* Specific scope selector */}
@@ -121,6 +139,12 @@ export default function PokemonDetailClient({
             </WikiSelect>
           )}
 
+          {scopeType === 'archive' && (
+            <WikiSelect label={h('archive')} value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+              {archiveOptions.map((competition) => <option key={competition.id} value={competition.id}>{competition.name}</option>)}
+            </WikiSelect>
+          )}
+
           {/* Player filter */}
           {filters && filters.players.length > 0 && (
             <WikiSelect label={t('usage.player')} value={playerId} onChange={(e) => setPlayerId(e.target.value)}>
@@ -137,29 +161,36 @@ export default function PokemonDetailClient({
         </div>
 
         {/* Stat Cards */}
-        {hasData ? (
+        {failed ? <p role="alert" className="text-body text-fg-muted">{h('loadFailed')}</p> : !loading && hasData ? (
           <>
             <WikiStatStrip
               className="grid-cols-2 sm:grid-cols-3 lg:grid-cols-6"
               stats={[
-                { label: t('usage.usageRate'), value: formatter.percentOf(stats.usage_percent) },
+                { label: t('usage.usageRate'), value: pct(stats.usage_percent) },
                 { label: t('usage.winRate'), value: pct(stats.win_rate) },
-                { label: t('usage.kos'), value: formatter.number(stats.kos_dealt) },
-                { label: t('usage.koedRate'), value: formatter.percentOf(stats.koed_rate) },
+                { label: t('usage.kos'), value: count(stats.kos_dealt) },
+                { label: t('usage.koedRate'), value: pct(stats.koed_rate) },
                 { label: t('usage.bringRate'), value: pct(stats.bring_rate) },
                 { label: t('usage.leadRate'), value: pct(stats.lead_rate) },
               ]}
             />
 
             <p className="text-caption text-fg-muted">
-              {t('usage.appearances', {
+              {stats.total_appearances === null ? h('appearancesUnknown') : t('usage.appearances', {
                 count: stats.total_appearances,
                 games: t('usage.gamesCount', { count: stats.total_games_in_scope }),
               })}
             </p>
 
+            {stats.sourceCounts && <div className="space-y-1 text-caption text-fg-muted">
+              <p>{t('usage.games')}: {h('sourceCounts', { live: count(stats.sourceCounts.liveAppearances), historical: count(stats.sourceCounts.historicalAppearances) })}</p>
+              <p>{t('usage.kos')}: {h('sourceCounts', { live: count(stats.sourceCounts.liveKos), historical: count(stats.sourceCounts.historicalKos) })}</p>
+            </div>}
+
+            {scopeType === 'archive' ? <p className="text-caption text-fg-muted">{h('archiveMovesUnavailable')}</p> : hasHistory && <p className="text-caption text-fg-muted">{h('movesLiveOnly')}</p>}
+
             {/* Move Usage */}
-            {stats.moves.length > 0 && (
+            {scopeType !== 'archive' && stats.moves.length > 0 && (
               <div className="flex flex-col gap-2">
                 <h3 className="text-subtitle font-[550] text-fg">{t('usage.moveUsage')}</h3>
                 <ul className="flex flex-col gap-2.5 rounded-poke-lg border border-hairline bg-surface p-4">
@@ -175,13 +206,13 @@ export default function PokemonDetailClient({
               </div>
             )}
           </>
-        ) : (
+        ) : !loading && !failed ? (
           <WikiEmptyState title={t('usage.noDataPokemon')} hint={t('usage.noDataPokemonHintFuture')} />
-        )}
+        ) : null}
       </div>
     </WikiSection>
     {children}
-    <WikiUsageStats stats={stats} loading={loading} playerId={playerId} onSelectPlayer={setPlayerId} />
+    {!failed && <WikiUsageStats stats={stats} loading={loading} history={loading ? undefined : stats.history} playerId={playerId} onSelectPlayer={setPlayerId} />}
     </>
   );
 }
