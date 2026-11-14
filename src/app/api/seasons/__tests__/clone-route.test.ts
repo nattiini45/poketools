@@ -4,6 +4,9 @@
  * The clone module itself runs for real; only the data layer is mocked.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { checkRateLimit } from '@/lib/utils/rate-limit';
+
+vi.mock('@/lib/utils/rate-limit', () => ({ checkRateLimit: vi.fn() }));
 import type { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
@@ -108,6 +111,7 @@ const cloneBody = (clone: Record<string, unknown> = {}) => ({
 
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 });
   vi.spyOn(console, 'error').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   mocks.requireAnyAdmin.mockResolvedValue(siteAdmin);

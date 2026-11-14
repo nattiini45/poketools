@@ -4,6 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { createTimeoutFetch } from '@/lib/supabase/timeout-fetch';
+import { allowLoopbackFixture } from '@/test/loopback-fixture';
 
 /**
  * Real supabase-js against a loopback server that accepts requests and never
@@ -24,6 +25,7 @@ beforeAll(async () => {
     // Otherwise never respond; the stall_body response never ends.
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  allowLoopbackFixture(server);
   baseUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
 });
 
