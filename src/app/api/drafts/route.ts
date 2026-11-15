@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { requireAnyAdmin, requireResourceAdmin, requirePlayer } from '@/lib/auth/helpers';
+import { requireAdmin, requireAnyAdmin, requireResourceAdmin, requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { DraftRuleError } from '@/lib/draft/errors';
@@ -49,8 +49,9 @@ import type { SeasonGroupWithMembers } from '@/types/season-group';
 type SeasonPoolsResponse = ApiResponse<DraftPool | null> & { pools: AdminPoolSummary[] };
 
 /**
- * GET /api/drafts              — list all draft pools
- * GET /api/drafts?season_id=x  — the season's first draft pool (`data`) and all
+ * GET /api/drafts              — list all draft pools across every league (site admins only: the list spans
+ *                                archived and test leagues and has no caller outside the admin tier)
+ * GET /api/drafts?season_id=x  — any signed-in player: the season's first draft pool (`data`) and all
  *                                its pools as `pools: AdminPoolSummary[]` (each with
  *                                its `engine`: `'legacy'` pre-M2 pools are not queue drafts).
  *                                In a league with groups `data` is the caller's own group's
@@ -66,18 +67,18 @@ export async function GET(request: NextRequest) {
       const invalid = rejectInvalidPathId(seasonId, 'INVALID_SEASON_ID');
       if (invalid) return invalid;
     }
-    const player = await requirePlayer();
-
-    if (seasonId) {
-      const [pool, pools] = await Promise.all([
-        getInitialPoolForPlayer(seasonId, player.playerId),
-        getDraftPoolsBySeason(seasonId),
-      ]);
-      return NextResponse.json<SeasonPoolsResponse>({ success: true, data: pool, pools });
+    if (!seasonId) {
+      await requireAdmin();
+      const pools = await listDraftPools();
+      return NextResponse.json<ApiResult<DraftPoolWithDetails[]>>({ success: true, data: pools });
     }
 
-    const pools = await listDraftPools();
-    return NextResponse.json<ApiResult<DraftPoolWithDetails[]>>({ success: true, data: pools });
+    const player = await requirePlayer();
+    const [pool, pools] = await Promise.all([
+      getInitialPoolForPlayer(seasonId, player.playerId),
+      getDraftPoolsBySeason(seasonId),
+    ]);
+    return NextResponse.json<SeasonPoolsResponse>({ success: true, data: pool, pools });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch draft pools');
   }
