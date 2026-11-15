@@ -5,11 +5,24 @@
  * from its result cannot leak it. Pure and client-safe.
  */
 import { seededRand } from '@/lib/format-kit/expr/rand';
-import type { RelationDef } from '@/lib/format-kit/types';
+import type { FormatDefinition, RelationDef } from '@/lib/format-kit/types';
 
 export interface LinkPair {
   from: string;
   to: string;
+}
+
+/**
+ * Whether a rule of the format reveals the relation to its recipients one by one (a `reveal_relation` effect with a
+ * target). Such a relation is never publicly disclosed, even once every link has been revealed to its own recipient, so
+ * the audit and checks masks that hide a giver from a participating admin stay in force for it.
+ */
+export function revealsPerRecipient(def: Pick<FormatDefinition, 'rules'>, relationKey: string): boolean {
+  return def.rules.some(
+    (rule) =>
+      rule.kind === 'rule.on_event' &&
+      rule.effects.some((effect) => effect.effect === 'reveal_relation' && effect.relation === relationKey && effect.to !== undefined),
+  );
 }
 
 const sortedUnique = (ids: readonly string[]): string[] => [...new Set(ids)].sort();

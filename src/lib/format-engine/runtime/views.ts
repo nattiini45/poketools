@@ -42,7 +42,7 @@ import { buildLateJoiners, type FiredEventRecord } from './late-joiners';
 import { domainView, findDomainView, visibleEntries, type DomainView } from './domains';
 import { entryContext, type EnvBase } from './expr-env';
 import type { KitContext } from './load';
-import { visibleLinks } from './relations';
+import { revealsPerRecipient, visibleLinks } from './relations';
 import { own, type ActionPick, type KitRuntimeState, type RuntimeSubmission } from './types';
 import {
   CHALLENGE_STATES,
@@ -622,6 +622,7 @@ export function hiddenGiverActions(ctx: Pick<MaskContext, 'def' | 'state'>): Rea
     (ctx.def.relations ?? [])
       .filter((relation) => {
         if (relation.visibility.from !== 'hidden') return false;
+        if (revealsPerRecipient(ctx.def, relation.key)) return true;
         const links = ctx.state.links.filter((l) => l.relation === relation.key);
         return !(links.length > 0 && links.every((l) => l.revealed));
       })

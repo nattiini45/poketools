@@ -603,6 +603,19 @@ describe('rows of the history', () => {
       expect(giverHiddenActions(context({ defs: [withRelation({ visibility: { from: 'own', to: 'own' } })] }), 'p1').size).toBe(0);
     });
 
+    it('stays hidden for a relation that reveals one recipient at a time, even once every link is revealed', () => {
+      const perRecipient: DefPatch = (def) => ({
+        ...def,
+        rules: [
+          ...def.rules,
+          { kind: 'rule.on_event', id: 'per_recipient_reveal', event: { type: 'match_completed' }, effects: [{ effect: 'reveal_relation', relation: 'santa', to: { who: 'event_players' } }] } as unknown as FormatDefinition['rules'][number],
+        ],
+      });
+      const everyRevealed = { links: [link('p1', 'p2', 'santa', true), link('p2', 'p1', 'santa', true)] };
+      expect(hiddenGiverActions(context({ state: everyRevealed, defs: [perRecipient] }))).toEqual(new Set(['choose_gift']));
+      expect([...giverHiddenActions(context({ state: everyRevealed, defs: [perRecipient] }), 'p1')]).toEqual(['choose_gift']);
+    });
+
     it('drops the player of a deadline_missed action check for a viewer who plays, keeping the rest', () => {
       const hidden = giverHiddenActions(context(), 'p1');
       const view = toCheckView(missed(), new Map(), NAMES, hidden);
@@ -857,7 +870,8 @@ describe('the shipped Wichtelcup document keeps the leak contract', () => {
       { from: ref(g4), to: ref(g1), revealed: true },
     ]);
     expect(JSON.stringify(player(g1, revealed))).not.toContain(g3);
-    expect(giverHiddenActions(revealed, g1).size).toBe(0);
+    // A per-recipient reveal is never public disclosure: the giver mask for a participating admin stays in force.
+    expect(giverHiddenActions(revealed, g1).size).toBe(1);
   });
 
   it('passes the private-player-data check on both read models', () => {
