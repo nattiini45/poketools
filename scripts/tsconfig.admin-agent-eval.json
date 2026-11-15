@@ -11,6 +11,7 @@
       "@/*": ["../src/*"],
       "@format-pack": ["../src/format-packs/example"],
       "@pack-extensions": ["../src/format-packs/example/extensions"],
+      "@pack-format-providers": ["../src/format-packs/example/extensions/format-providers"],
       "server-only": ["../src/test/server-only-stub.ts"],
       "next/cache": ["../src/lib/ai/admin-agent/eval/stubs/next-cache.ts"]
     }
