@@ -7,6 +7,7 @@ import ItemIcon from '@/components/ui/ItemIcon';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import SkewPlate from '@/components/ui/SkewPlate';
 import AgentChatWidget from '@/components/agent/AgentChatWidget';
+import HeroBall from '@/components/home/HeroBall';
 import Pokeball from '@/components/shared/Pokeball';
 import { getSessionPlayer } from '@/lib/auth/helpers';
 import type { ItemIconId } from '@/lib/pkmn/item-icons';
@@ -190,7 +191,7 @@ export default async function Home() {
           </div>
         </div>
         <div className="league-hero-slab group relative flex min-w-0 flex-row items-center justify-center gap-6 px-5 py-6 sm:gap-10 sm:px-8 lg:flex-col lg:gap-8 lg:py-10">
-          <Pokeball interactive className="h-20 w-20 shrink-0 rotate-12 sm:h-28 sm:w-28 lg:h-36 lg:w-36" />
+          <HeroBall className="h-20 w-20 shrink-0 rotate-12 sm:h-28 sm:w-28 lg:h-36 lg:w-36" />
           <ul className="grid min-w-0 grid-cols-3 gap-x-5 sm:gap-x-8">
             <Score value={leagues.length} label={t('hero.stats.leagues', { count: leagues.length })} />
             <Score value={tournaments.length} label={t('hero.stats.tournaments', { count: tournaments.length })} />

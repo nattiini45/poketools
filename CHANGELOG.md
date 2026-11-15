@@ -195,6 +195,10 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Changed
 
+- **The home hero Pokéball no longer opens.** The halves-splitting hover animation is gone; the ball stays closed and
+  each new pointer entry advances its design Poké Ball → Great Ball → Ultra Ball → Master Ball → Poké Ball. A tap or
+  Enter/Space cycles too; with `prefers-reduced-motion` the design switches with no motion. The divider ball further
+  down the page is unchanged.
 - **`GET /api/drafts` without `season_id` is site-admin only.** The list spans every league, archived and test
   leagues included, and used to answer any signed-in player (a non-admin now gets 403). Nothing in the app calls it
   over HTTP; `GET /api/drafts?season_id=` is unchanged.

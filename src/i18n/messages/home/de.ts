@@ -11,6 +11,16 @@ export default defineDe<typeof en>()({
       tournaments: { one: 'Turnier', other: 'Turniere' },
       live: { one: 'läuft gerade', other: 'laufen gerade' },
     },
+    ball: {
+      label: '{name} — Design wechseln',
+      hint: 'Zum Wechseln darüberfahren, tippen oder Enter drücken',
+      names: {
+        poke: 'Pokéball',
+        great: 'Superball',
+        ultra: 'Ultraball',
+        master: 'Meisterball',
+      },
+    },
   },
   dividerTitle: 'Schnapp sie dir alle!',
   featured: {
