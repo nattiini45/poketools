@@ -195,6 +195,9 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Changed
 
+- **`GET /api/drafts` without `season_id` is site-admin only.** The list spans every league, archived and test
+  leagues included, and used to answer any signed-in player (a non-admin now gets 403). Nothing in the app calls it
+  over HTTP; `GET /api/drafts?season_id=` is unchanged.
 - **Supported Node is `^22.22.2 || ^24.15.0`, enforced.** `package.json` declares it in `engines` and `.npmrc` sets
   `engine-strict`, so `npm install` / `npm ci` fail on Node 23, 25 or a 22.x before 22.22.2 instead of printing a
   warning (jsdom 30, used by the DOM tests, needs it). `.nvmrc` pins 24.22.1 and CI reads it; `@types/node` is on 24.

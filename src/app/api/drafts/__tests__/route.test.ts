@@ -5,6 +5,7 @@ import type { SessionPlayer } from '@/types/auth';
 
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: vi.fn(),
+  requireAdmin: vi.fn(),
   requireResourceAdmin: vi.fn(),
   requireAnyAdmin: vi.fn(async () => ({ playerId: 'admin-1', isAdmin: true })),
   AuthError: class AuthError extends Error {
@@ -70,7 +71,7 @@ vi.mock('@/lib/supabase/queries/format-rules', () => ({
 }));
 
 import { GET, POST } from '@/app/api/drafts/route';
-import { requirePlayer, requireResourceAdmin, requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
+import { requirePlayer, requireAdmin, requireResourceAdmin, requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
 import {
   listDraftPools,
   getDraftPoolBySeason,
@@ -173,7 +174,7 @@ describe('GET /api/drafts', () => {
   });
 
   it('returns 401 when not authenticated', async () => {
-    vi.mocked(requirePlayer).mockRejectedValue(
+    vi.mocked(requireAdmin).mockRejectedValue(
       new (AuthError as unknown as new (m: string, s: number) => Error)('Not authenticated', 401),
     );
 
@@ -188,7 +189,7 @@ describe('GET /api/drafts', () => {
   });
 
   it('returns all draft pools when no season_id', async () => {
-    vi.mocked(requirePlayer).mockResolvedValue(player);
+    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
     vi.mocked(listDraftPools).mockResolvedValue([mockPoolWithDetails]);
 
     const url = new URL('http://localhost:3000/api/drafts');
@@ -253,7 +254,7 @@ describe('GET /api/drafts', () => {
   });
 
   it('returns 500 on unexpected error', async () => {
-    vi.mocked(requirePlayer).mockResolvedValue(player);
+    vi.mocked(requireAdmin).mockResolvedValue(adminPlayer);
     vi.mocked(listDraftPools).mockRejectedValue(new Error('DB error'));
 
     const url = new URL('http://localhost:3000/api/drafts');
