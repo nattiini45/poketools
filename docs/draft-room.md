@@ -326,7 +326,7 @@ Backend-owned. All routes use the `{ success, data } | { success: false, error, 
   - `POST /api/seasons/[id]/comeback-tokens/spend`.
   - Admin: `POST …/comeback-tokens/open`.
 - **Admin routes** (each write is audited and requires a reason):
-  - `GET`/`POST /api/drafts`: list or create pools.
+  - `GET`/`POST /api/drafts`: list or create pools. The list without `season_id` spans every league (archived and test leagues included) and is site-admin only (`requireAdmin`); `GET /api/drafts?season_id=` stays open to any signed-in player (the trainer's own pool and the league's pool summaries). The creator content page reads the same list server-side behind its own `CreatorGuard`.
   - `PATCH …/config`.
   - `POST …/start` (refused with `LEAGUE_NOT_COMPLETABLE` when the league can never fill every roster) and `POST …/end` (an abort: a running initial draft voids every pick and is cancelled; a running redraft cannot be aborted).
   - `POST …/pause`.
