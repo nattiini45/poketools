@@ -102,7 +102,7 @@ const constraints: TeamConstraint[] = [
 export const wichtelcup: FormatDefinition = {
   schema_version: 1,
   identity: {
-    name: ltext('en', 'Wichtelcup (example)', 'Wichtelcup (Beispiel)'),
+    name: ltext('en', 'Wichtelcup', 'Wichtelcup'),
     summary: ltext(
       'en',
       'A made-up Secret Santa cup example: every player gifts three Pokémon to another player, and the gifts decide which team you may bring each week. A maintainer pack replaces it with the real tournament.',
