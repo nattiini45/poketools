@@ -1,5 +1,9 @@
 import 'server-only';
 import type { ComponentType } from 'react';
+import type { FormatDefinition } from '@/lib/format-kit/types';
+import type { PresetList } from '@/lib/pkmn/preset-rules';
+import type { LevelRules } from '@/lib/ruleset-kit/types';
+import type { Slug } from '@/lib/studio-core/keys';
 import type {
   HistoricalCompetitionOption,
   HistoricalProfileContribution,
@@ -9,6 +13,34 @@ import type {
 } from './historical-statistics-types';
 
 export type * from './historical-statistics-types';
+
+/**
+ * A format definition a pack ships in place of (or in addition to) the public example presets. The id is the preset
+ * slug; a pack preset with the same id as a public one replaces it on the admin-only surfaces that list, fork and
+ * create from presets. The definition never reaches the client barrel: only the server merges it into those surfaces,
+ * so a pack may keep tournament tuning (pools, levels, surprise phases) out of the public repository and the client
+ * bundle. Server-only, like every extension member.
+ */
+export interface PackFormatPreset {
+  id: Slug;
+  definition: FormatDefinition;
+}
+
+/**
+ * A pack's override of a catalog rule preset's resolved rules. The id is the catalog rule preset id (such as
+ * `gen9natdexwichtelcup`). A category the override names replaces the preset's resolved list; `levels` becomes the
+ * level rules of the ruleset the format attach materialises for the preset. This is where a pack keeps an exact
+ * allowlist and per-species required levels that must not ship in the public repository. Categories left out keep the
+ * public preset's resolution, so a public checkout (no override) is unchanged.
+ */
+export interface PackRulesetPresetOverride {
+  id: string;
+  pokemon?: PresetList;
+  moves?: PresetList;
+  items?: PresetList;
+  abilities?: PresetList;
+  levels?: LevelRules | null;
+}
 
 /**
  * The pack-extension contract (docs/format-packs.md, "Pack extensions").
@@ -131,4 +163,22 @@ export interface PackExtensions {
    * request, for the admin audit log and dashboard. An action it leaves out is shown humanized.
    */
   auditActionLabels?: () => Promise<Readonly<Record<string, string>>>;
+  /**
+   * Format definitions the pack ships (server-only). Merged over the public example presets by id on the admin-only
+   * preset surfaces; absent means the public examples alone. Static pack data, read synchronously.
+   */
+  formatPresets?: () => readonly PackFormatPreset[];
+  /**
+   * Overrides of catalog rule presets' resolved rules and materialised levels (server-only). Absent means the public
+   * resolution alone. Static pack data, read synchronously.
+   */
+  rulesetPresetOverrides?: () => readonly PackRulesetPresetOverride[];
 }
+
+/**
+ * The pure-data subset of the extensions: the format presets and rule-preset overrides a pack ships. It is read
+ * through its own lightweight entry (`@pack-format-providers`, `extensions/format-providers.ts`) so a server module
+ * that resolves presets (`preset-rules.server.ts`) never pulls the full extension barrel and its React server
+ * components into its import graph. A pack without them exports `{}`.
+ */
+export type PackFormatProviders = Pick<PackExtensions, 'formatPresets' | 'rulesetPresetOverrides'>;

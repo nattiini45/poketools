@@ -6,8 +6,8 @@ import type { KitContext } from '../load';
 import { buildPlayerView } from '../views';
 import { PLAYERS, SEED, link, stateFor } from './helpers';
 
-// The `pools` of the player view with the shipped Wichtelcup: the New Year pool is in no action step (the only step
-// pools are junk and premium), so only `pools` can tell the teambuilder card that it is locked and when it opens.
+// The `pools` of the player view with the shipped Wichtelcup: the New Year pool is the surprise, hidden (`when_unlocked`)
+// until the organizer opens it, so it is absent from `pools` and `poolSpecies` while locked and appears only once unlocked.
 
 const compiled = compile(wichtelcup);
 if (compiled.definition === null) throw new Error('the Wichtelcup example does not compile');
@@ -32,16 +32,18 @@ function poolsAt(flags: Record<string, string>) {
 }
 
 describe('the pools of the player view', () => {
-  it('lists the locked New Year pool in weeks 1 to 3 although no action step draws from it', () => {
+  it('hides the locked New Year pool entirely in weeks 1 to 3: its existence is the surprise', () => {
     const view = poolsAt({ 'action:choose_gifts': 'open' });
     expect(view.actions.flatMap((a) => a.steps.map((s) => s.domain))).not.toContain('new_year');
     const byKey = new Map(view.pools.map((p) => [p.key, p.unlocked]));
-    expect(byKey.get('new_year')).toBe(false);
+    // A when_unlocked pool that is still locked is not named at all, so nothing tells a player it exists.
+    expect(byKey.has('new_year')).toBe(false);
+    expect(view.poolSpecies).not.toContain('mewtwo');
     expect(byKey.get('junk')).toBe(true);
     expect(byKey.get('premium')).toBe(true);
   });
 
-  it('shows the New Year pool open once the week 4 unlock has set its flag', () => {
+  it('shows the New Year pool open once the organizer has set its unlock flag', () => {
     const view = poolsAt({ 'action:choose_gifts': 'open', 'domain:new_year': 'unlocked' });
     expect(view.pools.find((p) => p.key === 'new_year')).toMatchObject({ unlocked: true });
   });

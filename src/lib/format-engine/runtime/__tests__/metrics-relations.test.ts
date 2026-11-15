@@ -34,10 +34,11 @@ describe('stageMetricsFor with rel()', () => {
     expect(JSON.stringify(secret)).not.toContain('"c","a"');
   });
 
-  it('carries nothing for a revealed link with a hidden side before the reveal', () => {
+  it('carries nothing for a revealed link with a hidden side: a reveal is per-recipient, never public', () => {
     const revealed = [link('a', 'b', 'santa', true), link('b', 'c')];
     const metrics = stageMetricsFor(defWith({ from: 'hidden', to: 'own' }), stateFor(wichtelDef(), { links: revealed }), SEED, 'swiss', ['a', 'b', 'c']);
-    expect(metrics?.relations).toEqual({ santa: [['a', 'b']] });
+    expect(metrics?.relations).toBeUndefined();
+    expect(JSON.stringify(metrics)).not.toContain('"a","b"');
   });
 
   it('makes the table agree with the open links', () => {

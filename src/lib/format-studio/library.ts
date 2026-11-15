@@ -9,7 +9,8 @@
  */
 import 'server-only';
 
-import { CURRENT_ENV, PRESETS, applyRulesetPreset, compile, isSlug, type Diagnostic } from '@/lib/format-kit';
+import { CURRENT_ENV, applyRulesetPreset, compile, isSlug, type Diagnostic } from '@/lib/format-kit';
+import { findServerFormatPreset } from './preset-source';
 import { resolveLText, type LText } from '@/lib/studio-core/ltext';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import {
@@ -236,7 +237,7 @@ export interface ForkPresetOptions {
  */
 export async function forkPreset(actor: SessionPlayer, presetId: string, options: ForkPresetOptions = {}): Promise<CreatedFormat> {
   const { slug, rulesetPreset } = options;
-  const preset = isSlug(presetId) ? PRESETS.find((entry) => entry.id === presetId) : undefined;
+  const preset = isSlug(presetId) ? findServerFormatPreset(presetId) : undefined;
   if (preset === undefined) throw new FormatStudioError('format_preset_not_found');
   const structure = rulesetPreset === undefined ? preset.definition : applyRulesetPreset(preset.definition, rulesetPreset, { retitle: true });
   const document = withBasedOn(structure as unknown as Record<string, unknown>, preset.id);

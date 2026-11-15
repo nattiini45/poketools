@@ -423,7 +423,7 @@ const EFFECT: Spec = {
   variants: [
     { tag: 'unlock_domain', spec: variant('effect', 'unlock_domain', [req('domain', KEY)]) },
     { tag: 'lock_domain', spec: variant('effect', 'lock_domain', [req('domain', KEY)]) },
-    { tag: 'reveal_relation', spec: variant('effect', 'reveal_relation', [req('relation', KEY)]) },
+    { tag: 'reveal_relation', spec: variant('effect', 'reveal_relation', [req('relation', KEY), opt('to', EFFECT_TARGET)]) },
     { tag: 'generate_relation', spec: variant('effect', 'generate_relation', [req('relation', KEY)]) },
     { tag: 'grant_resource', spec: RESOURCE_EFFECT('grant_resource') },
     { tag: 'revoke_resource', spec: RESOURCE_EFFECT('revoke_resource') },
@@ -522,7 +522,7 @@ const WHEN_FIELD = (): FieldSpec => opt('when', EXPR_BOOL);
 function countSourceSpec(depth: number): Spec {
   const variants = [
     { tag: 'domain', spec: variant('kind', 'domain', [req('domain', KEY), dflt('unlocked_only', BOOL, false)]) },
-    { tag: 'resource', spec: variant('kind', 'resource', [req('resource', KEY)]) },
+    { tag: 'resource', spec: variant('kind', 'resource', [req('resource', KEY), opt('ordinal', int(1, 64))]) },
     { tag: 'species', spec: variant('kind', 'species', [req('ids', arr(KEY, 1, MAX_COUNT_SPECIES))]) },
   ];
   if (depth > 0) {

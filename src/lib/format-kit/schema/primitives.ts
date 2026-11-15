@@ -228,7 +228,7 @@ const countDomainSchema = z.strictObject({
   domain: keySchema,
   unlocked_only: z.boolean().default(false),
 });
-const countResourceSchema = z.strictObject({ kind: z.literal('resource'), resource: keySchema });
+const countResourceSchema = z.strictObject({ kind: z.literal('resource'), resource: keySchema, ordinal: intRange(1, 64).optional() });
 const countSpeciesSchema = z.strictObject({
   kind: z.literal('species'),
   ids: boundedArray(keySchema, 1, MAX_COUNT_SPECIES),
@@ -560,7 +560,7 @@ const resourceEffect = <T extends 'grant_resource' | 'revoke_resource'>(effect: 
 export const effectSchema = z.discriminatedUnion('effect', [
   z.strictObject({ effect: z.literal('unlock_domain'), domain: keySchema }),
   z.strictObject({ effect: z.literal('lock_domain'), domain: keySchema }),
-  z.strictObject({ effect: z.literal('reveal_relation'), relation: keySchema }),
+  z.strictObject({ effect: z.literal('reveal_relation'), relation: keySchema, to: effectTargetSchema.optional() }),
   z.strictObject({ effect: z.literal('generate_relation'), relation: keySchema }),
   resourceEffect('grant_resource'),
   resourceEffect('revoke_resource'),

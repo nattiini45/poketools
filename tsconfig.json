@@ -32,6 +32,10 @@
       "@pack-extensions": [
         "./src/format-packs/private/extensions",
         "./src/format-packs/example/extensions"
+      ],
+      "@pack-format-providers": [
+        "./src/format-packs/private/extensions/format-providers",
+        "./src/format-packs/example/extensions/format-providers"
       ]
     },
     "target": "ES2020"

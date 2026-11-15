@@ -500,6 +500,7 @@ export default defineDe<typeof en>()({
     max_per: 'Höchstens je Wert',
     mode: 'Modus',
     unlocked_only: 'Nur freigeschaltete Einträge',
+    ordinal: 'Auswahlreihenfolge',
     ids: 'Arten',
     marks: 'Benannte Zeitpunkte',
     deadlines: 'Fristen',

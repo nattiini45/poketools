@@ -75,11 +75,13 @@ export interface VisibleLink {
 }
 
 /**
- * The links `viewer` may see. Admins see every link whole. For anyone else, once a link is revealed both sides are
- * public; before that the `to` side (the target) is seen per `visibility.to` and the `from` side (the source) per
- * `visibility.from`: `all` everyone, `own` only the other end of the link (the source sees the target, the target
- * sees the source), `hidden` nobody. A link shows up only when the viewer may learn one of its sides; the viewer's own
- * id on the other side is filled in, as they know it anyway. The result is sorted by the visible fields only.
+ * The links `viewer` may see. Admins see every link whole. For anyone else a link is private to its two ends: the `to`
+ * side (the target) is seen per `visibility.to` and the `from` side (the source) per `visibility.from`: `all` everyone,
+ * `own` only the other end of the link (the source sees the target, the target sees the source), `hidden` nobody.
+ * Revealing a link lifts a hidden side ONLY for the other end of that link — a revealed Secret Santa lets the recipient
+ * see their giver, never the whole field — so `revealed` grants `to` the `from` side and `from` the `to` side, and no
+ * one else. A link shows up only when the viewer may learn one of its sides; the viewer's own id on the other side is
+ * filled in, as they know it anyway. The result is sorted by the visible fields only.
  */
 export function visibleLinks(
   relation: Pick<RelationDef, 'visibility'>,
@@ -91,8 +93,8 @@ export function visibleLinks(
   for (const link of links) {
     const isFrom = viewer.playerId !== null && viewer.playerId === link.from;
     const isTo = viewer.playerId !== null && viewer.playerId === link.to;
-    const seesTo = link.revealed || relation.visibility.to === 'all' || (relation.visibility.to === 'own' && isFrom);
-    const seesFrom = link.revealed || relation.visibility.from === 'all' || (relation.visibility.from === 'own' && isTo);
+    const seesTo = (link.revealed && isFrom) || relation.visibility.to === 'all' || (relation.visibility.to === 'own' && isFrom);
+    const seesFrom = (link.revealed && isTo) || relation.visibility.from === 'all' || (relation.visibility.from === 'own' && isTo);
     if (!seesTo && !seesFrom) continue;
     out.push({
       from: seesFrom || isFrom ? link.from : null,

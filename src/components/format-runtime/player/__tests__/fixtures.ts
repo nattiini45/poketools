@@ -110,5 +110,5 @@ export const item = (over: Partial<ItemView> = {}): ItemView => ({
 });
 
 export function runningView(over: Partial<Extract<PlayerFormatView, { running: true }>> = {}): Extract<PlayerFormatView, { running: true }> {
-  return { running: true, actions: [action()], domains: DOMAINS, pools: [], items: [], relations: [], ladders: [], ...over };
+  return { running: true, actions: [action()], domains: DOMAINS, pools: [], poolSpecies: [], items: [], relations: [], ladders: [], ...over };
 }

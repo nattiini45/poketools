@@ -17,6 +17,7 @@ import 'server-only';
  */
 import { ltext } from '@/lib/studio-core/ltext';
 import { getRulesetPreset } from '@/lib/pkmn/ruleset-preset-catalog';
+import { packRulesetPresetOverride } from '@/lib/pack-extensions';
 import { deleteRulesetDefinition } from '@/lib/supabase/queries/ruleset-definitions';
 import { getPublishedRulesetHeads } from '@/lib/supabase/queries/season-formats';
 import { FIELD_LIMITS } from '@/lib/validation/schemas';
@@ -85,10 +86,15 @@ export async function ensurePresetRulesets(input: EnsurePresetRulesetsInput): Pr
         continue;
       }
       const name = presetRulesetName(leagueName, known.name);
+      // A pack override supplies the preset's level rules (its exact per-species required levels); without one the
+      // ruleset starts with no level rules, as before (docs/format-packs.md, "Pack extensions").
+      const document = newRulesetDocument(name, 'en', preset);
+      const levels = packRulesetPresetOverride(preset)?.levels;
+      if (levels) document.levels = levels;
       const { definitionId, versionId } = await createPublished({
         name: ltext('en', name),
         slugBase: `${leagueName} ${preset}`,
-        document: newRulesetDocument(name, 'en', preset) as unknown as Record<string, unknown>,
+        document: document as unknown as Record<string, unknown>,
         ownerId: actorId,
         kind: 'custom',
         visibility: 'private',

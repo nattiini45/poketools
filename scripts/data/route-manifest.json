@@ -9,8 +9,8 @@
       "expires": ["revalidatePath"],
       "audit": ["ruleset.delete"],
       "emits": [],
-      "importFingerprint": "fc2682d3aeec9f51",
-      "importFiles": 155,
+      "importFingerprint": "8d16333beeac6893",
+      "importFiles": 157,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
@@ -20,8 +20,8 @@
         "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "a83266a9d64affa5", "files": 88 },
         "src/lib/ruleset-studio/library.ts": {
           "names": ["assertCanEditDraft", "changeVisibility", "getRulesetDetail", "removeDefinition"],
-          "closure": "71914625d760d3e7",
-          "files": 99
+          "closure": "6cf586e97bfd548e",
+          "files": 138
         },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -106,8 +106,8 @@
       "expires": ["expireSeasonReads"],
       "audit": ["season.bind_point_buy_list", "season.set_test_flag", "season.update"],
       "emits": [],
-      "importFingerprint": "8dd451f48b8ad78a",
-      "importFiles": 283,
+      "importFingerprint": "5bb252f09a541c5d",
+      "importFiles": 285,
       "imports": {
         "src/lib/api/delete-rebuild-warning.ts": { "names": ["testFlagRebuildUnsettledWarning", "toTestFlagRebuildWarning"], "closure": "1aded7404bcdef25", "files": 2 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -115,7 +115,7 @@
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/audit/log.ts": { "names": ["diffField", "logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAdmin", "requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/format-studio/attach.ts": { "names": ["assertFormatTypeChangeAllowed"], "closure": "29836c7e7505da80", "files": 228 },
+        "src/lib/format-studio/attach.ts": { "names": ["assertFormatTypeChangeAllowed"], "closure": "1f88017b545270dd", "files": 230 },
         "src/lib/league-trash/errors.ts": { "names": ["toLeagueTrashError"], "closure": "6ff105536466cb1b", "files": 18 },
         "src/lib/league-trash/service.ts": { "names": ["finishLeagueDeleteRebuild", "trashLeague"], "closure": "34ec8e6449aa7777", "files": 121 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
@@ -141,8 +141,8 @@
       "expires": ["expireTournamentReads"],
       "audit": ["tournament.update"],
       "emits": [],
-      "importFingerprint": "82ab6fd382106196",
-      "importFiles": 320,
+      "importFingerprint": "c4c95387fc9ffa05",
+      "importFiles": 322,
       "imports": {
         "src/lib/api/delete-rebuild-warning.ts": { "names": ["toDeleteRebuildWarning"], "closure": "1aded7404bcdef25", "files": 2 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -170,8 +170,8 @@
         },
         "src/lib/tournament/tournament-transition.ts": {
           "names": ["statusEffectsAuditMetadata", "updateTournamentWithStatus"],
-          "closure": "3f53598dd9a4db36",
-          "files": 264
+          "closure": "cdae61c48e56e7e0",
+          "files": 283
         },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "tournamentUpdateSchema"], "closure": "549662de2f15c47a", "files": 25 }
       },
@@ -225,8 +225,8 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.create"],
       "emits": [],
-      "importFingerprint": "99c1cba953fc5011",
-      "importFiles": 203,
+      "importFingerprint": "1d4b3e9a7dee9021",
+      "importFiles": 206,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
@@ -235,10 +235,10 @@
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": {
           "names": ["formatCreateSchema", "formatListQuerySchema", "validationFailedResponse"],
-          "closure": "25a24f2f8c85551d",
-          "files": 43
+          "closure": "df6b7f3c42455d2a",
+          "files": 102
         },
-        "src/lib/format-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "59ec327f1bc874be", "files": 135 },
+        "src/lib/format-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "831b9d4db0844a03", "files": 184 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/supabase/queries/format-definitions.ts": { "names": ["listFormatDefinitions"], "closure": "cc434e53693bbfb7", "files": 21 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
@@ -253,15 +253,15 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "69bef02da0bfd831",
-      "importFiles": 200,
+      "importFingerprint": "e38097c0742a2680",
+      "importFiles": 203,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireFormatViewer"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["formatForkSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
-        "src/lib/format-studio/library.ts": { "names": ["forkDefinition"], "closure": "59ec327f1bc874be", "files": 135 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["formatForkSchema", "validationFailedResponse"], "closure": "df6b7f3c42455d2a", "files": 102 },
+        "src/lib/format-studio/library.ts": { "names": ["forkDefinition"], "closure": "831b9d4db0844a03", "files": 184 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -275,15 +275,15 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "a6f5f019a28b4d1a",
-      "importFiles": 200,
+      "importFingerprint": "0d66ac9cc6999278",
+      "importFiles": 203,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
-        "src/lib/format-studio/library.ts": { "names": ["forkPreset"], "closure": "59ec327f1bc874be", "files": 135 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "df6b7f3c42455d2a", "files": 102 },
+        "src/lib/format-studio/library.ts": { "names": ["forkPreset"], "closure": "831b9d4db0844a03", "files": 184 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -297,8 +297,8 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "4e6291c6e0f171d3",
-      "importFiles": 414,
+      "importFingerprint": "f2459d4540ceab8d",
+      "importFiles": 416,
       "imports": {
         "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "ad2ddb234ef0495f", "files": 213 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -323,8 +323,8 @@
             "loadKitPhaseOfTournament",
             "wantsForcedStart"
           ],
-          "closure": "53ef78a20cc73c38",
-          "files": 366
+          "closure": "462887de6f921de2",
+          "files": 368
         },
         "src/lib/format-engine/write-fence.ts": { "names": ["kitWriteFence"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
@@ -367,8 +367,8 @@
       "expires": ["revalidatePath"],
       "audit": ["ruleset.create"],
       "emits": [],
-      "importFingerprint": "ccf84588b336f8f2",
-      "importFiles": 150,
+      "importFingerprint": "7cdd8fec6e8a43b3",
+      "importFiles": 152,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
@@ -379,7 +379,7 @@
           "closure": "b95ec64d25316ee6",
           "files": 35
         },
-        "src/lib/ruleset-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "71914625d760d3e7", "files": 99 },
+        "src/lib/ruleset-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "6cf586e97bfd548e", "files": 138 },
         "src/lib/supabase/queries/ruleset-definitions.ts": { "names": ["listRulesetDefinitions"], "closure": "8b18c5a4fe0ee07d", "files": 23 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -393,8 +393,8 @@
       "expires": ["revalidatePath"],
       "audit": ["ruleset.fork"],
       "emits": [],
-      "importFingerprint": "a98fd1a62b2998c8",
-      "importFiles": 151,
+      "importFingerprint": "d8cca4b1d5443200",
+      "importFiles": 153,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
@@ -402,7 +402,7 @@
         "src/lib/ruleset-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "30a24c6e69a82d8c", "files": 20 },
         "src/lib/ruleset-studio/api-schemas.ts": { "names": ["rulesetForkSchema", "validationFailedResponse"], "closure": "b95ec64d25316ee6", "files": 35 },
         "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "a83266a9d64affa5", "files": 88 },
-        "src/lib/ruleset-studio/library.ts": { "names": ["forkDefinition"], "closure": "71914625d760d3e7", "files": 99 },
+        "src/lib/ruleset-studio/library.ts": { "names": ["forkDefinition"], "closure": "6cf586e97bfd548e", "files": 138 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/cache", "next/server"]
@@ -457,15 +457,15 @@
       "expires": ["revalidatePath"],
       "audit": ["ruleset.publish"],
       "emits": [],
-      "importFingerprint": "c61e04a3e5bb20b0",
-      "importFiles": 151,
+      "importFingerprint": "43e38ee380946fd6",
+      "importFiles": 153,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/ruleset-studio/api-body.ts": { "names": ["readBoundedJson"], "closure": "30a24c6e69a82d8c", "files": 20 },
         "src/lib/ruleset-studio/api-schemas.ts": { "names": ["rulesetPublishSchema", "validationFailedResponse"], "closure": "b95ec64d25316ee6", "files": 35 },
         "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "a83266a9d64affa5", "files": 88 },
-        "src/lib/ruleset-studio/library.ts": { "names": ["assertCanEditDraft", "publish"], "closure": "71914625d760d3e7", "files": 99 },
+        "src/lib/ruleset-studio/library.ts": { "names": ["assertCanEditDraft", "publish"], "closure": "6cf586e97bfd548e", "files": 138 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/cache", "next/server"]
@@ -478,15 +478,15 @@
       "expires": ["revalidatePath"],
       "audit": ["ruleset.fork"],
       "emits": [],
-      "importFingerprint": "bc81110c35c2bd12",
-      "importFiles": 150,
+      "importFingerprint": "ea4fb746ac3bcffb",
+      "importFiles": 152,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/ruleset-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "30a24c6e69a82d8c", "files": 20 },
         "src/lib/ruleset-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "b95ec64d25316ee6", "files": 35 },
-        "src/lib/ruleset-studio/library.ts": { "names": ["forkPreset"], "closure": "71914625d760d3e7", "files": 99 },
+        "src/lib/ruleset-studio/library.ts": { "names": ["forkPreset"], "closure": "6cf586e97bfd548e", "files": 138 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/cache", "next/server"]
@@ -499,15 +499,15 @@
       "expires": ["expireFormatLibraryReads", "expireSeasonReads", "revalidatePath"],
       "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create", "season.create_from_format"],
       "emits": [],
-      "importFingerprint": "3835c6984bb6d44f",
-      "importFiles": 306,
+      "importFingerprint": "5b21083439b90bfe",
+      "importFiles": 309,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["seasonCreateWithFormatSchema"], "closure": "25a24f2f8c85551d", "files": 43 },
-        "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "4bf6257b4bd98253", "files": 234 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["seasonCreateWithFormatSchema"], "closure": "df6b7f3c42455d2a", "files": 102 },
+        "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "521bd04f170e073d", "files": 237 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads", "expireSeasonReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "20c204f93a71f355", "files": 89 },
@@ -518,7 +518,7 @@
         },
         "src/lib/season/format-rules-defaults.ts": { "names": ["initializeEpbFormatRules"], "closure": "f3189f4845dd1cb6", "files": 27 },
         "src/lib/season/format-utils.ts": { "names": ["isEvolutionPointBuy"], "closure": "0060e20a18d30504", "files": 3 },
-        "src/lib/season/point-buy-battle-ruleset.ts": { "names": ["ensurePointBuyBattleRuleset"], "closure": "394c451530d13ca0", "files": 107 },
+        "src/lib/season/point-buy-battle-ruleset.ts": { "names": ["ensurePointBuyBattleRuleset"], "closure": "72656a79030de48c", "files": 146 },
         "src/lib/season/settings-guards.ts": { "names": ["assertSeasonDateRange"], "closure": "5a93f2281e7b0434", "files": 4 },
         "src/lib/supabase/queries/point-buy-lists.ts": { "names": ["bindSeasonToList", "getActiveListVersion"], "closure": "c9268583a73b376c", "files": 31 },
         "src/lib/supabase/queries/resource-admins.ts": { "names": ["addResourceAdmin"], "closure": "cc4c4d91097d36a0", "files": 5 },
@@ -658,8 +658,8 @@
       "expires": ["expireTournamentReads"],
       "audit": ["bracket.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitSocialEvent(round_generated)"],
-      "importFingerprint": "eeb46b5ee549fdf1",
-      "importFiles": 421,
+      "importFingerprint": "a1eae46e3c46f24e",
+      "importFiles": 423,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
@@ -668,15 +668,15 @@
         "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "bc711b759b8b9f5e", "files": 71 },
         "src/lib/format-engine/route-guards.ts": {
           "names": ["announceKitRound", "assertPhaseReadyForFirstRound", "isKitEnginePhase", "loadKitPhaseOfTournament", "wantsForcedStart"],
-          "closure": "53ef78a20cc73c38",
-          "files": 366
+          "closure": "462887de6f921de2",
+          "files": 368
         },
         "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/season/start-season.ts": { "names": ["startSeasonIfUpcoming"], "closure": "46512df70c2c5086", "files": 31 },
         "src/lib/social/notify.ts": { "names": ["emitSocialEvent"], "closure": "5f76d98ef242f5a1", "files": 58 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": { "names": ["getParticipants", "getTournamentById"], "closure": "dc70eb64e7d8de0e", "files": 10 },
-        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "328bd6c57065f3e2", "files": 312 },
+        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "c19496529d193fb5", "files": 330 },
         "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 }
       },
       "packages": ["next/server"]
@@ -729,14 +729,14 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "4bcf16e5d84b9865",
-      "importFiles": 198,
+      "importFingerprint": "ec2139d7d27f61f0",
+      "importFiles": 201,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/auth/helpers.ts": { "names": ["requireFormatViewer"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
-        "src/lib/format-studio/api-schemas.ts": { "names": ["formatDraftSchema", "validationFailedResponse"], "closure": "25a24f2f8c85551d", "files": 43 },
-        "src/lib/format-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "59ec327f1bc874be", "files": 135 },
+        "src/lib/format-studio/api-schemas.ts": { "names": ["formatDraftSchema", "validationFailedResponse"], "closure": "df6b7f3c42455d2a", "files": 102 },
+        "src/lib/format-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "831b9d4db0844a03", "files": 184 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "15d7b742f293570f", "files": 12 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -750,14 +750,14 @@
       "expires": ["revalidatePath"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "fc7a5858a10b5e54",
-      "importFiles": 149,
+      "importFingerprint": "a94a4ea0f9310fbb",
+      "importFiles": 151,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/ruleset-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "30a24c6e69a82d8c", "files": 20 },
         "src/lib/ruleset-studio/api-schemas.ts": { "names": ["rulesetDraftSchema", "validationFailedResponse"], "closure": "b95ec64d25316ee6", "files": 35 },
         "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "a83266a9d64affa5", "files": 88 },
-        "src/lib/ruleset-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "71914625d760d3e7", "files": 99 },
+        "src/lib/ruleset-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "6cf586e97bfd548e", "files": 138 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/cache", "next/server"]

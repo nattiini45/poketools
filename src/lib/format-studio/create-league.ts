@@ -18,7 +18,8 @@ import 'server-only';
 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { DEFAULT_CONTENT_LOCALE } from '@/i18n/config';
-import { CURRENT_ENV, PRESETS, applyRulesetPreset, compile } from '@/lib/format-kit';
+import { CURRENT_ENV, applyRulesetPreset, compile } from '@/lib/format-kit';
+import { findServerFormatPreset } from './preset-source';
 import { namedRulesetsOf, presetsOf } from '@/lib/format-kit/ruleset-presets';
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -107,7 +108,7 @@ function hashMatches(spec: FormatDefinition, stored: string): boolean {
 
 /** A shipped example as a fork to publish: the document the definition keeps, the compiled spec and its hash. */
 function resolvePreset(presetId: string, rulesetPreset: string | undefined): ResolvedSource {
-  const preset = PRESETS.find((entry) => entry.id === presetId);
+  const preset = findServerFormatPreset(presetId);
   if (preset === undefined) throw new FormatStudioError('format_preset_not_found');
   const structure = rulesetPreset === undefined ? preset.definition : applyRulesetPreset(preset.definition, rulesetPreset, { retitle: true });
   const document = withBasedOn(structure as unknown as Record<string, unknown>, preset.id);

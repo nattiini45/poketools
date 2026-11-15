@@ -10,6 +10,7 @@ import { teambuilderIntelMessages } from '@/i18n/messages/teambuilder-intel';
 import { localizeStat, localizeType } from '@/lib/pkmn/i18n/names/misc';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import { useEditorContext } from '../editor/EditorContext';
+import { useKitLeagueView } from '../validation/PoolsCard';
 import { TYPE_NAMES } from '../constants';
 import type { UsageListItem } from '@/types/usage';
 import {
@@ -264,7 +265,19 @@ export default function SpeciesPicker({ onSelect, onCancel }: SpeciesPickerProps
   const applyLegality = !draft;
   const extraBans = rulesetOverrides?.extraBans;
   const additions = rulesetOverrides?.additions;
-  const allowOnly = rulesetOverrides?.allowOnly;
+  // A kit league's pools narrow the species list to what the viewer may use right now: the server sends only the
+  // species of the pools they can see, so a still-hidden pool never appears here. Without pools there is no narrowing.
+  const kitView = useKitLeagueView(state.seasonId);
+  const kitPoolSpecies = useMemo(() => {
+    if (!kitView || kitView.pools.length === 0) return null;
+    return new Set(kitView.poolSpecies.map((id) => id.toLowerCase()));
+  }, [kitView]);
+  const rulesetAllowOnly = rulesetOverrides?.allowOnly;
+  const allowOnly = useMemo(() => {
+    if (kitPoolSpecies === null) return rulesetAllowOnly;
+    if (rulesetAllowOnly === null || rulesetAllowOnly === undefined) return kitPoolSpecies;
+    return new Set([...rulesetAllowOnly].filter((id) => kitPoolSpecies.has(id)));
+  }, [rulesetAllowOnly, kitPoolSpecies]);
   const view = useMemo(
     () =>
       buildSpeciesListView(pokemonList, {

@@ -17,7 +17,8 @@ export type FormatOp =
   | { op: 'set_flag'; key: string; value: Json }
   /** Inserts the links only when the relation has none yet; otherwise a no-op. */
   | { op: 'set_relation'; relation: string; links: { from: string; to: string }[] }
-  | { op: 'reveal_relation'; relation: string }
+  /** Reveals the relation's links; with `players`, only the links whose `to` side is one of them (a per-recipient reveal). */
+  | { op: 'reveal_relation'; relation: string; players?: string[] }
   | {
       op: 'grant_item';
       resource: string;
@@ -60,6 +61,8 @@ export interface RuntimeItem {
   exclusive: boolean;
   source: 'event' | 'action' | 'adjustment';
   source_ref: string | null;
+  /** The 1-based order of this holding within its resource (the gift's selection order); null for unmapped legacy rows. */
+  ordinal: number | null;
 }
 
 /** One pick of an action: the 0-based step of the action and the domain entry id. */

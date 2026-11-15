@@ -9,7 +9,7 @@ import PageContainer from '@/components/ui/PageContainer';
 import { wizardHref } from '@/lib/league-admin/wizard';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { PRESETS } from '@/lib/format-kit/client';
+import { findServerFormatPreset } from '@/lib/format-studio/preset-source';
 import { resolveLText } from '@/lib/studio-core/ltext';
 import { presetViews } from '@/lib/format-studio/loader';
 import { getLocale, getT } from '@/i18n/server';
@@ -25,7 +25,7 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { presetId } = await params;
   const [t, locale] = await Promise.all([getT(formatStudioAdminMessages), getLocale()]);
-  const preset = PRESETS.find((p) => p.id === presetId);
+  const preset = findServerFormatPreset(presetId);
   if (!preset) return { title: t('meta.galleryTitle') };
   const name = resolveLText(preset.definition.identity.name, { viewer: locale })?.value ?? preset.id;
   return { title: t('meta.exampleTitle', { name }) };
@@ -41,7 +41,7 @@ export default async function FormatExamplePage({ params }: PageProps) {
   const access = await getLiveAccess();
   if (!access?.isAnyAdmin || !access.player) return <AdminGuard>{null}</AdminGuard>;
 
-  const preset = PRESETS.find((p) => p.id === presetId);
+  const preset = findServerFormatPreset(presetId);
   const view = presetViews().find((p) => p.id === presetId)?.view;
   if (!preset || !view) notFound();
 

@@ -160,8 +160,13 @@ export type PlayerFormatView =
       running: true;
       actions: ActionView[];
       domains: DomainEntriesView[];
-      /** Every non-admin pool with its lock state, so the teambuilder can say which pools are open this week. */
+      /** Every pool the viewer may know about with its lock state, so the teambuilder can say which pools are open. */
       pools: PoolView[];
+      /**
+       * The species of every pool the viewer may currently see (a locked surprise pool contributes none), so the
+       * teambuilder can narrow its species list to what is usable now without ever receiving a hidden pool's members.
+       */
+      poolSpecies: string[];
       items: ItemView[];
       relations: RelationView[];
       ladders: LadderView[];

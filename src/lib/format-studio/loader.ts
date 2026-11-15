@@ -17,7 +17,8 @@
  */
 import 'server-only';
 
-import { compile, mappedBracketType, PRESETS, type FormatDefinition } from '@/lib/format-kit';
+import { compile, mappedBracketType, type FormatDefinition } from '@/lib/format-kit';
+import { serverFormatPresets } from './preset-source';
 import type { Coverage } from '@/lib/format-kit/client';
 import { epbPack } from '@/lib/format-pack';
 import { availableLeagueAdminTabs, LEAGUE_ADMIN_RULES_SECTION, leagueAdminHref, leagueHasRulesSection, type LeagueAdminTab } from '@/lib/league-admin/tabs';
@@ -203,6 +204,6 @@ let presetMemo: { id: string; view: FormatView }[] | null = null;
  * public data, but only the admin routes show it, so there is nothing to cache across requests.
  */
 export function presetViews(): { id: string; view: FormatView }[] {
-  presetMemo ??= PRESETS.map((preset) => ({ id: preset.id, view: toFormatView(compile(preset.definition)) }));
+  presetMemo ??= serverFormatPresets().map((preset) => ({ id: preset.id, view: toFormatView(compile(preset.definition)) }));
   return presetMemo;
 }

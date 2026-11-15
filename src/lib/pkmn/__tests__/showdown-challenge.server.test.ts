@@ -21,60 +21,53 @@ describe('challengeSpeciesLookup', () => {
   });
 });
 
-describe('the Wichtelcup challenge', () => {
+describe('the Wichtelcup example challenge', () => {
   const preset = resolvePresetRules('gen9natdexwichtelcup');
   if (preset === null) throw new Error('the Wichtelcup preset is missing');
   const resolved = computeEffective(newRulesetDocument('Wichtelcup', 'en', 'gen9natdexwichtelcup'), preset);
   const challenge = toShowdownChallenge(resolved, challengeSpeciesLookup(resolved.gen));
   const rules = challenge.slice(challenge.indexOf('@@@') + 4).split(', ');
+  const dex = Dex.forGen(9);
 
   it('starts with the National Dex AG base and rules out every Pokémon first', () => {
     expect(challenge.startsWith('gen9nationaldexag @@@ -All Pokemon, ')).toBe(true);
   });
 
-  it('closes the formes a "base form" entry would open: Mega Rayquaza, Primal Groudon, the Origin formes, Necrozma fusions', () => {
-    const closed = [
-      'rayquazamega', 'groudonprimal', 'dialgaorigin', 'palkiaorigin', 'necrozmaultra', 'necrozmaduskmane',
-      'necrozmadawnwings', 'magearnaoriginal', 'magearnamega',
-    ];
-    for (const forme of closed) expect(rules, forme).toContain(`-pokemon:${forme}`);
-    for (const base of ['rayquaza', 'groudon', 'dialga', 'palkia', 'necrozma', 'magearna', 'toxtricity']) {
-      expect(rules, base).toContain(`+pokemon:${base}`);
+  it('admits every made-up pool entry as a base species', () => {
+    for (const id of resolved.pokemon.ids) expect(rules, id).toContain(`+pokemon:${id}`);
+    expect(rules).toContain('+pokemon:pikachu');
+    expect(rules).toContain('+pokemon:dragonite');
+    expect(rules).toContain('+pokemon:mewtwo');
+  });
+
+  it('closes every Mega forme a base-form entry would open, and keeps the base species', () => {
+    const allowed = new Set(resolved.pokemon.ids);
+    for (const id of allowed) {
+      const species = dex.species.get(id);
+      if (!species.exists || species.baseSpecies !== species.name) continue;
+      for (const formeName of species.otherFormes ?? []) {
+        const forme = dex.species.get(formeName);
+        if (allowed.has(forme.id)) continue;
+        expect(rules, forme.id).toContain(`-pokemon:${forme.id}`);
+      }
     }
+    // A concrete pair: Charizard stays, its two Megas are closed.
+    expect(rules).toContain('+pokemon:charizard');
+    expect(rules).toContain('-pokemon:charizardmegax');
+    expect(rules).toContain('-pokemon:charizardmegay');
   });
 
-  it('does not close Toxtricity-Low-Key: the rules text admits both formes of the standard species', () => {
-    expect(rules).toContain('+pokemon:toxtricity');
-    expect(rules).toContain('+pokemon:toxtricitylowkey');
-    expect(rules).not.toContain('-pokemon:toxtricitylowkey');
-  });
-
-  it('writes the exact-pattern cosmetic entries as their base species, once', () => {
-    for (const id of ['vivillonicysnow', 'deerlingwinter', 'sawsbuckwinter']) expect(challenge).not.toContain(id);
-    for (const base of ['vivillon', 'deerling', 'sawsbuck']) expect(rules.filter((rule) => rule === `+pokemon:${base}`)).toHaveLength(1);
-  });
-
-  it('never closes a forme the cup lists, and keeps a listed forme whose base is not listed', () => {
-    expect(rules).toContain('+pokemon:rotomfrost');
-    expect(rules).not.toContain('-pokemon:rotomfrost');
-    expect(rules).toContain('+pokemon:sandslashalola');
-    expect(rules).not.toContain('+pokemon:sandslash');
-  });
-
-  it('bans the forme-changing items and carries the Mega Rayquaza Clause, but bans no move', () => {
+  it('bans the Mega stones, the Z-crystals and Light Clay, carries the clauses, and bans no move', () => {
     expect(rules).toEqual(
-      expect.arrayContaining(['-item:redorb', '-item:adamantcrystal', '-item:lustrousglobe', '-item:lightclay', 'Mega Rayquaza Clause', 'Terastal Clause']),
+      expect.arrayContaining(['-item:lightclay', '-item:charizarditex', '-item:mewtwonitex', '-item:normaliumz', '-item:ultranecroziumz', 'Mega Rayquaza Clause', 'Terastal Clause']),
     );
-    // Dragon Ascent is legal; Mega Rayquaza stays closed by the clause and the closed forme.
     expect(rules.filter((rule) => rule.startsWith('-move:') || rule === '-All Moves')).toEqual([]);
-    expect(rules).toContain('-pokemon:rayquazamega');
   });
 
-  it('bans exactly the items and abilities the rules text names or implies (Mega Stones, Z-crystals, forme items)', () => {
+  it('bans exactly the items and abilities the example names (Light Clay, Mega Stones, Z-crystals; Moody and Snow Cloak)', () => {
     expect(rules.filter((rule) => rule.startsWith('-ability:'))).toEqual(['-ability:moody', '-ability:snowcloak']);
     const items = rules.filter((rule) => rule.startsWith('-item:')).map((rule) => rule.slice(6));
-    const dex = Dex.forGen(9);
-    const named = new Set(['lightclay', 'redorb', 'adamantcrystal', 'lustrousglobe']);
+    const named = new Set(['lightclay']);
     expect(items.filter((id) => !named.has(id) && !dex.items.get(id).megaStone && !dex.items.get(id).zMove)).toEqual([]);
   });
 

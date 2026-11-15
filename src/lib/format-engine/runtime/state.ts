@@ -88,6 +88,7 @@ export function buildRuntimeState(
             exclusive: row.exclusive,
             source: row.source as RuntimeItem['source'],
             source_ref: row.source_ref,
+            ordinal: row.ordinal,
           },
         ]
       : [],

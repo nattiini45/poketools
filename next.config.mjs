@@ -28,6 +28,12 @@ const PACK_EXTENSIONS_ENTRY = FORMAT_PACK_ENTRY.replace(/index\.ts$/, 'extension
 if (!existsSync(new URL(PACK_EXTENSIONS_ENTRY, import.meta.url))) {
   throw new Error(`[format-pack] ${PACK_EXTENSIONS_ENTRY} is missing (a pack without extensions exports {})`);
 }
+// The lightweight format-provider entry (`extensions/format-providers.ts`): the pack's pure format presets and
+// rule-preset overrides, read without the full extension barrel so preset resolution never pulls its components.
+const PACK_FORMAT_PROVIDERS_ENTRY = FORMAT_PACK_ENTRY.replace(/index\.ts$/, 'extensions/format-providers.ts');
+if (!existsSync(new URL(PACK_FORMAT_PROVIDERS_ENTRY, import.meta.url))) {
+  throw new Error(`[format-pack] ${PACK_FORMAT_PROVIDERS_ENTRY} is missing (a pack without format providers exports {})`);
+}
 // The Vercel build log is checked against this line.
 console.log(`[format-pack] using ${FORMAT_PACK_ENTRY.includes('/private/') ? 'private' : 'example'} pack`);
 // A production build that fell back to the example pack (FORMAT_PACK unset) warns: its placeholder
@@ -113,6 +119,7 @@ const nextConfig = {
     resolveAlias: {
       '@format-pack': FORMAT_PACK_ENTRY,
       '@pack-extensions': PACK_EXTENSIONS_ENTRY,
+      '@pack-format-providers': PACK_FORMAT_PROVIDERS_ENTRY,
       // Pack validation runs on the server only; client bundles get the identity (no zod).
       '@/lib/format-pack/validate': { browser: './src/lib/format-pack/validate.browser.ts' },
     },

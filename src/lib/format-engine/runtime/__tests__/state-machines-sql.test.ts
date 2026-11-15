@@ -197,9 +197,12 @@ describe('format_checks.status', () => {
 });
 
 describe('format_relation_links.revealed_at', () => {
-  it('the reveal_relation op sets revealed_at only where it is still null', () => {
+  it('the reveal_relation op sets revealed_at only where it is still null, optionally scoped to recipients', () => {
     const { body } = lastDefinition('format__apply_ops');
-    expect(body).toMatch(/UPDATE public\.format_relation_links SET revealed_at = now\(\)\s+WHERE [^;]*AND revealed_at IS NULL;/);
+    expect(body).toMatch(/UPDATE public\.format_relation_links SET revealed_at = now\(\)\s+WHERE [^;]*AND revealed_at IS NULL[^;]*;/);
+    // A `players` member scopes the reveal to the links whose `to` side is listed (a per-recipient reveal); without one
+    // the whole relation is revealed. An empty list reveals nothing.
+    expect(body).toMatch(/AND \(NOT \(v_op \? 'players'\) OR to_player_id IN \(SELECT jsonb_array_elements_text\(v_op -> 'players'\)::uuid\)\);/);
     expect(relationRevealMachine.sourcesOf('revealed')).toEqual(['hidden']);
   });
 });

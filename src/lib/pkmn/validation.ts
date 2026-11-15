@@ -443,7 +443,8 @@ export function validateTeam(
       const override = levelRules.entries.find((entry) => entry.status === 'approved' && entry.id === toID(species.name));
       const required = override?.level ?? levelRules.default;
       const actual = typeof set.level === 'number' ? set.level : 100;
-      if (levelRules.policy === 'exact' && actual !== required) {
+      const policy = override?.policy ?? levelRules.policy;
+      if (policy === 'exact' && actual !== required) {
         issues.push({
           pokemon_index: i,
           species: species.name,
@@ -451,7 +452,7 @@ export function validateTeam(
           severity: 'error',
           ...codedIssue('level_exact', { level: required, value: actual }),
         });
-      } else if (levelRules.policy === 'max' && actual > required) {
+      } else if (policy === 'max' && actual > required) {
         issues.push({
           pokemon_index: i,
           species: species.name,

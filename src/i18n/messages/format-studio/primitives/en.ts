@@ -502,6 +502,7 @@ export default {
     max_per: 'At most per value',
     mode: 'Mode',
     unlocked_only: 'Unlocked entries only',
+    ordinal: 'Selection order',
     ids: 'Species',
     marks: 'Named points in time',
     deadlines: 'Deadlines',

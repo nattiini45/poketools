@@ -53,6 +53,11 @@ export interface LevelRuleEntry {
   id: string;
   level: number;
   status: 'experimental' | 'approved';
+  /**
+   * The entry's own policy, overriding the ruleset's global `policy` for this species only. Absent means the global
+   * policy applies. Lets a ruleset hold a few species at an exact required level while the rest keep the global rule.
+   */
+  policy?: 'exact' | 'max';
 }
 
 export interface LevelRules {
