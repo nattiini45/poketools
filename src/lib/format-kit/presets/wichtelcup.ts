@@ -1,17 +1,19 @@
 /**
- * Example format: the Wichtelcup (a Secret Santa cup). Four weekly Swiss rounds; before the first round every player
- * chooses two junk gifts and one premium gift for the recipient they were drawn for, and each week the team check
- * lets a player bring only the normal pool, their OWN gifts and (in week 4) the New Year pool.
+ * A NEUTRAL Secret Santa cup example (made-up pools). It demonstrates the mechanic the private community tournament
+ * builds on: every player gifts two junk Pokémon (different primary roles) and one premium Pokémon to the player they
+ * drew; the weeks then demand the gifts in a fixed order, and a surprise pool stays hidden until the organizer opens
+ * it. The real tournament's pools, exact levels, six-round structure and playoff live in the private pack, which
+ * replaces this example (docs/format-packs.md, "Pack extensions").
  *
  * Nothing in the engine knows the word Wichtelcup: the pools are domains, the gifts are resource items held by the
  * recipient, the Secret Santa is a derangement relation, the gift form is a player action and the weekly obligations
- * are `count` constraints gated on the round. The species tables are transcribed once, in
- * `@/lib/pkmn/preset-data/wichtelcup` (dex-free, no imports), and mapped to dex ids here.
+ * are `count` constraints gated on the round. The two junk gifts are told apart by their `ordinal` (the selection
+ * order stored on the holding), so week 1 demands junk gift #1 and week 2 junk gift #2.
  *
- * Two layers share the work. The format (this document) owns what differs per player and per week. The pinned rule
- * preset `gen9natdexwichtelcup` owns the exact-forme species allowlist, the item and ability bans, the Species Clause,
- * the Item Clause and the levels. Legality is expressed with `when` on `round`, never with the unlock flag of a domain,
- * so a late audit of a week-1 team does not see the New Year pool as open.
+ * The species tables are transcribed once, in `@/lib/pkmn/preset-data/wichtelcup` (dex-free, no imports), and mapped
+ * to dex ids here. The pinned rule preset `gen9natdexwichtelcup` owns the exact-forme allowlist, the item and ability
+ * bans, the Species Clause, the Item Clause and the levels. Legality is expressed with `when` on `round`, never with
+ * the unlock flag of a domain, so a late audit of a week-1 team does not see the surprise pool as open.
  */
 import {
   WICHTELCUP_JUNK,
@@ -53,43 +55,48 @@ const domains: DomainDef[] = [
     visibility: 'public',
   },
   {
+    // The surprise: its very existence stays hidden from players until the organizer unlocks it (`when_unlocked`).
     key: 'new_year',
     label: ltext('en', "New Year's pool", 'Silvester-Pool'),
     entries: entries(WICHTELCUP_NEW_YEAR),
     initially: 'locked',
-    visibility: 'public',
+    visibility: 'when_unlocked',
   },
 ];
 
-/** `round` of the team check. Inequalities, not `== 4`, so a tiebreak round after week 4 follows the week 4 rules. */
+/** `round` of the team check. */
 const round: Expr = { k: 'ref', name: 'round', t: 'number' };
 const roundIs = (op: '==' | '<=' | '>=', n: number): Expr => ({ k: 'cmp', op, a: round, b: { k: 'num', v: n } });
-const weeks2To3: Expr = { k: 'and', args: [roundIs('>=', 2), roundIs('<=', 3)] };
 
 const junkGifts = { kind: 'resource', resource: 'junk_gifts' } as const;
+const junkGift1 = { kind: 'resource', resource: 'junk_gifts', ordinal: 1 } as const;
+const junkGift2 = { kind: 'resource', resource: 'junk_gifts', ordinal: 2 } as const;
 const premiumGift = { kind: 'resource', resource: 'premium_gift' } as const;
-const newYear = { kind: 'domain', domain: 'new_year', unlocked_only: false } as const;
+const newYear = { kind: 'domain', domain: 'new_year', unlocked_only: true } as const;
 
 const constraints: TeamConstraint[] = [
   // Exactly six Pokémon, no Terastallization.
   { kind: 'roster_size', min: 6, max: 6 },
   { kind: 'tera', mode: 'banned' },
-  // The allowlist: the normal pool, the player's OWN gifts and the New Year pool; everything else is outside it.
+  // The allowlist: the normal pool, the player's OWN gifts and the surprise pool; everything else is outside it.
   {
     kind: 'count',
     source: { kind: 'not', source: { kind: 'any_of', sources: [{ kind: 'domain', domain: 'normal', unlocked_only: false }, junkGifts, premiumGift, newYear] } },
     max: 0,
   },
-  // Week 1: exactly one of the two junk gifts, no premium gift yet.
-  { kind: 'count', source: junkGifts, min: 1, max: 1, when: roundIs('==', 1) },
-  // Weeks 2 and 3: both junk gifts.
-  { kind: 'count', source: junkGifts, min: 2, max: 2, when: weeks2To3 },
-  // Weeks 1 and 2: the premium gift is not available yet. From week 3 on it is mandatory (and stays so in week 4).
-  { kind: 'count', source: premiumGift, max: 0, when: roundIs('<=', 2) },
-  { kind: 'count', source: premiumGift, min: 1, when: roundIs('>=', 3) },
-  // The New Year pool is closed until week 4, then at most two of its Pokémon fit in one team.
-  { kind: 'count', source: newYear, max: 0, when: roundIs('<=', 3) },
-  { kind: 'count', source: newYear, max: 2, when: roundIs('>=', 4) },
+  // Week 1: exactly junk gift #1, and not junk gift #2.
+  { kind: 'count', source: junkGift1, min: 1, max: 1, when: roundIs('==', 1) },
+  { kind: 'count', source: junkGift2, max: 0, when: roundIs('==', 1) },
+  // Week 2: exactly junk gift #2, and not junk gift #1.
+  { kind: 'count', source: junkGift2, min: 1, max: 1, when: roundIs('==', 2) },
+  { kind: 'count', source: junkGift1, max: 0, when: roundIs('==', 2) },
+  // Weeks 3 and 4: both junk gifts.
+  { kind: 'count', source: junkGifts, min: 2, max: 2, when: roundIs('>=', 3) },
+  // The premium gift is not available before week 4, then mandatory.
+  { kind: 'count', source: premiumGift, max: 0, when: roundIs('<=', 3) },
+  { kind: 'count', source: premiumGift, min: 1, when: roundIs('>=', 4) },
+  // The surprise pool is closed through the December weeks (the example has four rounds).
+  { kind: 'count', source: newYear, max: 0, when: roundIs('<=', 4) },
 ];
 
 export const wichtelcup: FormatDefinition = {
@@ -98,8 +105,8 @@ export const wichtelcup: FormatDefinition = {
     name: ltext('en', 'Wichtelcup', 'Wichtelcup'),
     summary: ltext(
       'en',
-      'A four-week Secret Santa cup: every player gifts three Pokémon to another player, and the gifts decide which team you may bring each week.',
-      'Ein vierwöchiger Wichtel-Cup: Jeder beschenkt einen anderen Spieler mit drei Pokémon, und die Geschenke bestimmen, welches Team du in welcher Woche spielen darfst.',
+      'A made-up Secret Santa cup example: every player gifts three Pokémon to another player, and the gifts decide which team you may bring each week. A maintainer pack replaces it with the real tournament.',
+      'Ein erfundenes Wichtel-Cup-Beispiel: Jeder beschenkt einen anderen Spieler mit drei Pokémon, und die Geschenke bestimmen, welches Team du in welcher Woche spielen darfst. Ein Maintainer-Pack ersetzt es durch das echte Turnier.',
     ),
   },
   stages: [
@@ -134,7 +141,6 @@ export const wichtelcup: FormatDefinition = {
         marks: [
           { key: 'gifts_open', round: 1, offset_hours: -336 },
           { key: 'gifts_close', round: 1, offset_hours: -12 },
-          { key: 'week4', round: 4, offset_hours: 0 },
         ],
         deadlines: [
           { applies: 'action', action: 'choose_gifts', offset_hours: 0, on_miss: 'admin_review' },
@@ -163,7 +169,6 @@ export const wichtelcup: FormatDefinition = {
       label: ltext('en', 'Secret Santa', 'Wichtel'),
       shape: 'derangement',
       visibility: { from: 'hidden', to: 'own' },
-      reveal_on: { event: 'time', mark: 'week4' },
     },
   ],
   resources: [
@@ -202,21 +207,13 @@ export const wichtelcup: FormatDefinition = {
       ],
     },
     {
+      // Each recipient's giver is revealed to that recipient alone, right after their own week-4 match — never the
+      // whole field at once. The organizer opens the surprise pool separately, by hand.
       kind: 'rule.on_event',
-      id: 'week4_unlock',
-      on: { event: 'time', mark: 'week4' },
-      effects: [
-        { effect: 'unlock_domain', domain: 'new_year' },
-        {
-          effect: 'notify',
-          message: ltext(
-            'en',
-            'We go out with a bang! The New Year pool is open and the Secret Santas are revealed.',
-            'Wir gehen mit einem Knall! Der Silvester-Pool ist offen und die Wichtel werden enthüllt.',
-          ),
-          to: { who: 'all' },
-        },
-      ],
+      id: 'christmas_reveal',
+      on: { event: 'match_completed', stage: 'cup' },
+      when: roundIs('==', 4),
+      effects: [{ effect: 'reveal_relation', relation: 'santa', to: { who: 'event_players' } }],
     },
     {
       kind: 'player.action',
@@ -254,64 +251,16 @@ export const wichtelcup: FormatDefinition = {
       when: 'once',
       visible_to_players: true,
     },
-    {
-      kind: 'rule.custom',
-      id: 'new_year_levels',
-      text: ltext(
-        'en',
-        'The level limits of the New Year week are set by the organizer in the ruleset of this league and apply only once approved.',
-        'Die Level-Grenzen der Silvesterwoche legt der Organisator im Regelwerk dieser Liga fest; sie gelten erst nach der Freigabe.',
-      ),
-      scope: { kind: 'season' },
-      verify: 'admin_checklist',
-      when: 'once',
-      visible_to_players: true,
-    },
-    {
-      kind: 'rule.custom',
-      id: 'junk_roles_confirmed',
-      text: ltext(
-        'en',
-        'The organizer confirms the primary role of every junk gift species before the gift window opens.',
-        'Der Organisator bestätigt die Hauptrolle jeder Schrottgeschenk-Spezies, bevor das Geschenkfenster öffnet.',
-      ),
-      scope: { kind: 'season' },
-      verify: 'admin_checklist',
-      when: 'once',
-      visible_to_players: true,
-    },
-    {
-      kind: 'rule.custom',
-      id: 'dropouts_and_substitutes',
-      text: ltext(
-        'en',
-        'If a player drops out after the draw, the organizer re-grants their gifts to the recipient by a logged correction; the Secret Santa links themselves are not redrawn.',
-        'Steigt ein Spieler nach der Auslosung aus, vergibt der Organisator dessen Geschenke per protokollierter Korrektur neu an den Beschenkten; die Wichtel-Zuordnung selbst wird nicht neu gelost.',
-      ),
-      scope: { kind: 'season' },
-      verify: 'admin_checklist',
-      when: 'once',
-      visible_to_players: true,
-    },
   ],
   text: {
     sections: [
       {
         id: 'overview',
-        title: ltext('en', 'How the Wichtelcup works', 'So funktioniert der Wichtelcup'),
+        title: ltext('en', 'How the example works', 'So funktioniert das Beispiel'),
         body: ltext(
           'en',
-          'A small field plays four weekly Swiss rounds, one best-of-one match per player per week, six against six. A win is worth 30 points, a loss 10, and every fainted opposing Pokémon adds 1 point. Everyone gives three Pokémon to one other player (the Secret Santa) and receives three from another one. What you may bring in a week depends on those gifts. Terastallization is not allowed.',
-          'Ein kleines Feld spielt vier wöchentliche Schweizer Runden, pro Woche ein Match im Best-of-One, sechs gegen sechs. Ein Sieg zählt 30 Punkte, eine Niederlage 10, und jedes besiegte gegnerische Pokémon bringt 1 Punkt. Jeder schenkt einem anderen Spieler drei Pokémon (der Wichtel) und bekommt drei von einem anderen. Was du in einer Woche mitbringen darfst, hängt von diesen Geschenken ab. Terakristallisierung ist nicht erlaubt.',
-        ),
-      },
-      {
-        id: 'secret_santa',
-        title: ltext('en', 'Secret Santa and gifts', 'Wichteln und Geschenke'),
-        body: ltext(
-          'en',
-          'Before the cup starts the organizer draws the Secret Santa: every player gives to exactly one other player and receives from exactly one other player. The draw is one single cycle over all players, so nobody gifts themselves and nobody gifts the player who gifts them. Each giver first chooses two junk gifts with different primary roles, then one premium gift, reviews the choice and confirms it; after the confirmation it is locked. Junk gifts may be chosen by several givers, a premium Pokémon is reserved for one giver only, first come first served at the final confirmation. You see which Pokémon you received but not who sent them; the givers are revealed at the start of week 4. All gifts must be confirmed before the first round. Corrections by the organizer are explicit and logged.',
-          'Vor dem Start des Cups lost der Organisator die Wichtel aus: Jeder Spieler beschenkt genau einen anderen Spieler und wird von genau einem anderen beschenkt. Die Auslosung ist ein einziger Zyklus über alle Spieler, also beschenkt niemand sich selbst und niemand den Spieler, der ihn selbst beschenkt. Jeder Schenkende wählt zuerst zwei Schrottgeschenke mit verschiedenen Hauptrollen, dann ein Premiumgeschenk, prüft die Auswahl und bestätigt sie; nach der Bestätigung ist sie gesperrt. Schrottgeschenke dürfen von mehreren Schenkenden gewählt werden, ein Premium-Pokémon wird nur für einen Schenkenden reserviert, wer zuerst endgültig bestätigt, bekommt es. Du siehst, welche Pokémon du bekommen hast, aber nicht von wem; die Schenkenden werden zu Beginn von Woche 4 enthüllt. Alle Geschenke müssen vor der ersten Runde bestätigt sein. Korrekturen durch den Organisator sind ausdrücklich und werden protokolliert.',
+          'A made-up example of the Secret Santa cup mechanic. A small field plays four weekly Swiss rounds, one best-of-one match per player per week, six against six. A win is worth 30 points, a loss 10, and every fainted opposing Pokémon adds 1 point. Everyone gives three Pokémon to one other player and receives three from another one. What you may bring in a week depends on those gifts. Terastallization is not allowed. The real community tournament ships in a maintainer pack.',
+          'Ein erfundenes Beispiel der Wichtel-Cup-Mechanik. Ein kleines Feld spielt vier wöchentliche Schweizer Runden, pro Woche ein Match im Best-of-One, sechs gegen sechs. Ein Sieg zählt 30 Punkte, eine Niederlage 10, und jedes besiegte gegnerische Pokémon bringt 1 Punkt. Jeder schenkt einem anderen Spieler drei Pokémon und bekommt drei von einem anderen. Was du in einer Woche mitbringen darfst, hängt von diesen Geschenken ab. Terakristallisierung ist nicht erlaubt. Das echte Community-Turnier wird in einem Maintainer-Pack ausgeliefert.',
         ),
       },
       {
@@ -319,53 +268,8 @@ export const wichtelcup: FormatDefinition = {
         title: ltext('en', 'What you bring each week', 'Was du jede Woche mitbringst'),
         body: ltext(
           'en',
-          'Every match uses exactly six Pokémon. Week 1: exactly one of your two junk gifts, the rest from the normal pool; the premium gift is not available yet. Week 2: both junk gifts, the rest from the normal pool. Week 3: both junk gifts and the premium gift, the rest from the normal pool. Week 4: the premium gift stays mandatory, the junk gifts become optional, and up to two Pokémon of the New Year pool may be added. A Pokémon may only be used if it is in the normal pool, one of your own gifts or, in week 4, the New Year pool. A gift is not available to other players. The Species Clause and the Item Clause apply every week. The league rule check runs in the team builder and again after the match.',
-          'Jedes Match verwendet genau sechs Pokémon. Woche 1: genau eines deiner beiden Schrottgeschenke, der Rest aus dem normalen Pool; das Premiumgeschenk ist noch nicht verfügbar. Woche 2: beide Schrottgeschenke, der Rest aus dem normalen Pool. Woche 3: beide Schrottgeschenke und das Premiumgeschenk, der Rest aus dem normalen Pool. Woche 4: Das Premiumgeschenk bleibt Pflicht, die Schrottgeschenke werden optional, und bis zu zwei Pokémon des Silvester-Pools dürfen dazukommen. Ein Pokémon darf nur verwendet werden, wenn es im normalen Pool steht, eines deiner eigenen Geschenke ist oder in Woche 4 im Silvester-Pool steht. Ein Geschenk steht anderen Spielern nicht zur Verfügung. Spezies-Klausel und Item-Klausel gelten jede Woche. Die Prüfung der Ligaregeln läuft im Teambuilder und noch einmal nach dem Match.',
-        ),
-      },
-      {
-        id: 'new_year_pool',
-        title: ltext('en', "The New Year's pool", 'Der Silvester-Pool'),
-        body: ltext(
-          'en',
-          "The New Year's pool opens at the start of week 4 (We go out with a bang!). It is shared and not exclusive: different players may use the same species. At most two of its Pokémon fit in one team; zero, one or two are fine. The pool is visible from the start but locked, and the team check refuses it in weeks 1 to 3.",
-          'Der Silvester-Pool öffnet sich zu Beginn von Woche 4 (Wir gehen mit einem Knall!). Er wird von allen geteilt und ist nicht exklusiv: Verschiedene Spieler dürfen dieselbe Spezies verwenden. Höchstens zwei seiner Pokémon passen in ein Team; keins, eins oder zwei sind in Ordnung. Der Pool ist von Anfang an sichtbar, aber gesperrt, und die Teamprüfung lehnt ihn in den Wochen 1 bis 3 ab.',
-        ),
-      },
-      {
-        id: 'scoring',
-        title: ltext('en', 'Points', 'Punkte'),
-        body: ltext(
-          'en',
-          'A win gives 30 points, a loss 10, plus 1 point for every opposing Pokémon that faints, whatever the cause (recoil, hazards, poison and weather count). A no-show, concession or forfeit gives the winner 30 and the other player 0, and no faint points for either side. A tie in the standings is settled by extra matches arranged by the organizer, not by a tiebreak formula.',
-          'Ein Sieg gibt 30 Punkte, eine Niederlage 10, dazu 1 Punkt für jedes gegnerische Pokémon, das besiegt wird, egal wodurch (Rückstoß, Fallen, Gift und Wetter zählen). Ein Nichtantreten, eine Aufgabe oder eine Niederlage durch Forfeit gibt dem Sieger 30 und dem anderen Spieler 0 Punkte, ohne Besiegt-Punkte für eine der Seiten. Ein Gleichstand in der Tabelle wird durch Zusatzspiele des Organisators entschieden, nicht durch eine Wertungsformel.',
-        ),
-      },
-      {
-        id: 'junk_roles',
-        title: ltext('en', 'The junk gift roles', 'Die Rollen der Schrottgeschenke'),
-        body: ltext(
-          'en',
-          'Every junk gift Pokémon has exactly one primary role: hazard removal (spinners and defoggers), hazard setter (Stealth Rock, Spikes, Sticky Web), wall or stall (defensive staying power), support (screens, status, disruption), weather setter (automatic or manual weather) or attacker (offense and setup). A giver must choose two junk gifts with different primary roles. The role is a selection tag only: it does not require any move, ability or item in battle.',
-          'Jedes Schrottgeschenk-Pokémon hat genau eine Hauptrolle: Fallenentferner (Rapid Spin und Defog), Fallensteller (Stealth Rock, Spikes, Sticky Web), Wall oder Stall (defensive Ausdauer), Support (Schutzwände, Status, Störung), Wettersetzer (automatisches oder manuelles Wetter) oder Angreifer (Offensive und Aufbau). Ein Schenkender muss zwei Schrottgeschenke mit verschiedenen Hauptrollen wählen. Die Rolle ist nur ein Auswahl-Etikett: Sie verlangt keine Attacke, Fähigkeit oder Item im Kampf.',
-        ),
-      },
-      {
-        id: 'pinned_ruleset',
-        title: ltext('en', 'This format relies on its pinned ruleset', 'Dieses Format stützt sich auf sein festgelegtes Regelwerk'),
-        body: ltext(
-          'en',
-          'The exact list of allowed formes (for Vivillon only the Icy Snow pattern), the banned items and abilities, the Species Clause, the Item Clause and the level limits come from the pinned Wichtelcup rule preset. This format only adds the per-player pools and the weekly gift rules. If you switch the stage to another ruleset, those checks are gone. A break of the ruleset layer (a banned item, a wrong forme) is shown while you build the team, but it is not part of the check after the match: the organizer reviews it by hand.',
-          'Die genaue Liste der erlaubten Formen (bei Vivillon nur das Eisschnee-Muster), die gesperrten Items und Fähigkeiten, die Spezies-Klausel, die Item-Klausel und die Level-Grenzen kommen aus dem festgelegten Wichtelcup-Regelwerk. Dieses Format ergänzt nur die Pools je Spieler und die wöchentlichen Geschenkregeln. Wechselst du die Stufe auf ein anderes Regelwerk, entfallen diese Prüfungen. Ein Verstoß gegen das Regelwerk (ein gesperrtes Item, eine falsche Form) wird beim Teambau angezeigt, gehört aber nicht zur Prüfung nach dem Match: Der Organisator prüft ihn von Hand.',
-        ),
-      },
-      {
-        id: 'organizer_items',
-        title: ltext('en', 'What the organizer handles', 'Was der Organisator übernimmt'),
-        body: ltext(
-          'en',
-          'The organizer draws the Secret Santa once the field is final, confirms the roles of the junk gifts, sets the season start date before attaching this format, switches the league to the format engine, and decides the consequence of an illegal team, a missed gift window, a missed match deadline, a tie of three or more players and a drawn or invalid battle result. Late changes (a dropout, a missing gift) are corrections that are logged with a reason.',
-          'Der Organisator lost die Wichtel aus, sobald das Teilnehmerfeld feststeht, bestätigt die Rollen der Schrottgeschenke, legt vor dem Anhängen dieses Formats das Startdatum der Saison fest, schaltet die Liga auf die Format-Engine um und entscheidet über die Folgen eines illegalen Teams, eines verpassten Geschenkfensters, einer verpassten Match-Frist, eines Gleichstands von drei oder mehr Spielern und eines unentschiedenen oder ungültigen Kampfergebnisses. Spätere Änderungen (ein Ausstieg, ein fehlendes Geschenk) sind Korrekturen, die mit Begründung protokolliert werden.',
+          'Every match uses exactly six Pokémon. Week 1: your junk gift #1, the rest from the normal pool. Week 2: your junk gift #2, the rest from the normal pool. Week 3: both junk gifts, the rest from the normal pool. Week 4: both junk gifts and your premium gift, the rest from the normal pool. A gift is not available to other players. The Species Clause and the Item Clause apply every week.',
+          'Jedes Match verwendet genau sechs Pokémon. Woche 1: dein Schrottgeschenk #1, der Rest aus dem normalen Pool. Woche 2: dein Schrottgeschenk #2, der Rest aus dem normalen Pool. Woche 3: beide Schrottgeschenke, der Rest aus dem normalen Pool. Woche 4: beide Schrottgeschenke und dein Premiumgeschenk, der Rest aus dem normalen Pool. Ein Geschenk steht anderen Spielern nicht zur Verfügung. Spezies-Klausel und Item-Klausel gelten jede Woche.',
         ),
       },
     ],

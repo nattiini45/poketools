@@ -3232,6 +3232,7 @@ export type Database = {
           exclusive: boolean
           id: string
           item_id: string | null
+          ordinal: number | null
           player_id: string
           resource_key: string
           season_id: string
@@ -3244,6 +3245,7 @@ export type Database = {
           exclusive?: boolean
           id?: string
           item_id?: string | null
+          ordinal?: number | null
           player_id: string
           resource_key: string
           season_id: string
@@ -3256,6 +3258,7 @@ export type Database = {
           exclusive?: boolean
           id?: string
           item_id?: string | null
+          ordinal?: number | null
           player_id?: string
           resource_key?: string
           season_id?: string

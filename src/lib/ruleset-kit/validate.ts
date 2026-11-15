@@ -354,13 +354,14 @@ function parseLevels(value: unknown, out: Collector): LevelRules | null | undefi
   const entries: LevelRules['entries'] = [];
   rawEntries.forEach((raw, index) => {
     if (!isRecord(raw)) { fail(`entries/${index}`); ok = false; return; }
-    for (const key of unknownKeys(raw, ['id', 'level', 'status'])) fail(`entries/${index}/${key}`);
+    for (const key of unknownKeys(raw, ['id', 'level', 'status', 'policy'])) fail(`entries/${index}/${key}`);
     const id = own(raw, 'id');
     const level = own(raw, 'level');
     const status = own(raw, 'status');
-    const valid = typeof id === 'string' && ID_PATTERN.test(id) && id.length <= MAX_ID_LENGTH && intInRange(level, 1, 100) && (status === 'experimental' || status === 'approved');
+    const entryPolicy = own(raw, 'policy');
+    const valid = typeof id === 'string' && ID_PATTERN.test(id) && id.length <= MAX_ID_LENGTH && intInRange(level, 1, 100) && (status === 'experimental' || status === 'approved') && (entryPolicy === undefined || entryPolicy === 'exact' || entryPolicy === 'max');
     if (!valid) { fail(`entries/${index}`); ok = false; return; }
-    entries.push({ id, level, status });
+    entries.push({ id, level, status, ...(entryPolicy === undefined ? {} : { policy: entryPolicy }) });
   });
   return ok ? { policy: policy as 'exact' | 'max', default: defaultLevel as number, entries } : undefined;
 }

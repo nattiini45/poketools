@@ -99,7 +99,13 @@ function sourceMatcher(source: CountSource, input: ConstraintInput): Matcher {
     case 'resource': {
       const ids = new Set<string>();
       for (const item of input.state.items) {
-        if (item.resource === source.resource && item.player_id === input.playerId && item.item_id !== null) ids.add(item.item_id);
+        if (
+          item.resource === source.resource &&
+          item.player_id === input.playerId &&
+          item.item_id !== null &&
+          (source.ordinal === undefined || item.ordinal === source.ordinal)
+        )
+          ids.add(item.item_id);
       }
       return idMatcher(ids);
     }
@@ -120,9 +126,12 @@ function sourceLabel(source: CountSource): string {
   switch (source.kind) {
     case 'domain':
       return source.unlocked_only ? `domain ${source.domain} (when unlocked)` : `domain ${source.domain}`;
-    case 'resource':
-      // The player's own holdings of a resource, read as a phrase (`junk_gifts` -> "your own junk gifts").
-      return `your own ${source.resource.replace(/_/g, ' ')}`;
+    case 'resource': {
+      // The player's own holdings of a resource, read as a phrase (`junk_gifts` -> "your own junk gifts"); an ordinal
+      // names one slot of it ("your own junk gifts #1").
+      const name = source.resource.replace(/_/g, ' ');
+      return source.ordinal === undefined ? `your own ${name}` : `your own ${name} #${source.ordinal}`;
+    }
     case 'species':
       return `species ${source.ids.join(', ')}`;
     case 'any_of':

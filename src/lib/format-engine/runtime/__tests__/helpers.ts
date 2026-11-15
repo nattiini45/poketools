@@ -25,7 +25,7 @@ let itemCounter = 0;
 
 export function item(over: Partial<RuntimeItem> & Pick<RuntimeItem, 'resource' | 'player_id'>): RuntimeItem {
   itemCounter += 1;
-  return { id: `i-${itemCounter}`, item_id: null, amount: 1, exclusive: false, source: 'event', source_ref: null, ...over };
+  return { id: `i-${itemCounter}`, item_id: null, amount: 1, exclusive: false, source: 'event', source_ref: null, ordinal: null, ...over };
 }
 
 const text = (en: string) => ({ en: { v: en, s: 'human' as const }, base: 'en' as const });

@@ -54,6 +54,9 @@ const EXAMPLE_PACK = path.resolve(__dirname, 'src/format-packs/example/index.ts'
 /** `@pack-extensions` (docs/format-packs.md, "Pack extensions") follows `@format-pack` in every project. */
 const PRIVATE_EXTENSIONS = path.resolve(__dirname, 'src/format-packs/private/extensions/index.ts');
 const EXAMPLE_EXTENSIONS = path.resolve(__dirname, 'src/format-packs/example/extensions/index.ts');
+/** `@pack-format-providers` is the lightweight pure-data entry, resolved with the pack like `@pack-extensions`. */
+const PRIVATE_FORMAT_PROVIDERS = path.resolve(__dirname, 'src/format-packs/private/extensions/format-providers.ts');
+const EXAMPLE_FORMAT_PROVIDERS = path.resolve(__dirname, 'src/format-packs/example/extensions/format-providers.ts');
 /** FORMAT_PACK is trimmed and validated the same way next.config.mjs does it. */
 function runPrivatePack(): boolean {
   const mode = (process.env.FORMAT_PACK ?? '').trim();
@@ -110,7 +113,7 @@ export default defineConfig({
     projects: [
       {
         extends: true,
-        resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS } },
+        resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS, '@pack-format-providers': EXAMPLE_FORMAT_PROVIDERS } },
         test: {
           name: 'app',
           setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
@@ -135,7 +138,7 @@ export default defineConfig({
         ? [
             {
               extends: true as const,
-              resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS } },
+              resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS, '@pack-format-providers': EXAMPLE_FORMAT_PROVIDERS } },
               test: {
                 name: 'db',
                 include: LOCAL_STACK_SUITES,
@@ -167,7 +170,7 @@ export default defineConfig({
         ? [
             {
               extends: true as const,
-              resolve: { alias: { '@format-pack': PRIVATE_PACK, '@pack-extensions': PRIVATE_EXTENSIONS } },
+              resolve: { alias: { '@format-pack': PRIVATE_PACK, '@pack-extensions': PRIVATE_EXTENSIONS, '@pack-format-providers': PRIVATE_FORMAT_PROVIDERS } },
               test: {
                 name: 'private-pack',
                 setupFiles: ['./src/test/unit-setup.ts', './src/test/dom-setup.ts'],
@@ -184,6 +187,7 @@ export default defineConfig({
       // Each project overrides it (see PRIVATE_PACK above); the root entry is the example pack.
       '@format-pack': EXAMPLE_PACK,
       '@pack-extensions': EXAMPLE_EXTENSIONS,
+      '@pack-format-providers': EXAMPLE_FORMAT_PROVIDERS,
       '@': path.resolve(__dirname, './src'),
       'server-only': path.resolve(__dirname, './src/test/server-only-stub.ts'),
     },

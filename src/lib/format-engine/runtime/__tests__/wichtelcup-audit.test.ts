@@ -1,9 +1,9 @@
 /**
- * The post-match team audit with the SHIPPED Wichtelcup preset (not the placeholder fixture): the real pools, the real
- * round-bound constraints and the real gift resources, through `auditMatchTeams` with the real constraint evaluation.
- * A week-1 team that holds a New Year Pokemon stays illegal when it is audited after the `week4` unlock; a premium
- * species the player never received is a rules issue, and one the player played but did not register is an
- * `observed_mismatch`.
+ * The post-match team audit with the SHIPPED Wichtelcup EXAMPLE (not the placeholder fixture): the made-up pools, the
+ * round-bound ordinal gift constraints and the gift resources, through `auditMatchTeams` with the real constraint
+ * evaluation. A week-1 team that holds a surprise species stays illegal when it is audited after the organizer unlocks
+ * the pool; a premium species the player never received is a rules issue, and one the player played but did not register
+ * is an `observed_mismatch`.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { compile } from '@/lib/format-kit/compile';
@@ -55,10 +55,11 @@ const JUNK = pool('junk');
 const PREMIUM = pool('premium');
 const NEW_YEAR = pool('new_year');
 const OWN_JUNK = JUNK[0];
+const OWN_JUNK2 = JUNK[1];
 const OWN_PREMIUM = PREMIUM[0];
 const NEVER_RECEIVED = PREMIUM[1];
 
-const gift = (resource: 'junk_gifts' | 'premium_gift', itemId: string) => item({ resource, player_id: 'p1', item_id: itemId });
+const gift = (resource: 'junk_gifts' | 'premium_gift', itemId: string, ordinal: number) => item({ resource, player_id: 'p1', item_id: itemId, ordinal });
 
 function context(flags: Record<string, string> = {}): KitContext {
   return {
@@ -66,7 +67,7 @@ function context(flags: Record<string, string> = {}): KitContext {
     seed: SEED,
     revision: 1,
     def: DEF,
-    state: stateFor(DEF, { flags, items: [gift('junk_gifts', OWN_JUNK), gift('premium_gift', OWN_PREMIUM)] }),
+    state: stateFor(DEF, { flags, items: [gift('junk_gifts', OWN_JUNK, 1), gift('junk_gifts', OWN_JUNK2, 2), gift('premium_gift', OWN_PREMIUM, 1)] }),
     tunableIssues: [],
     phases: [{ id: 'cup-1', stage: CUP!, members: ['p1', 'p2'] }],
   };
@@ -119,42 +120,39 @@ describe('auditMatchTeams with the shipped Wichtelcup', () => {
     expect(NORMAL.length).toBeGreaterThanOrEqual(5);
   });
 
-  it('accepts a week 1 team of an own junk gift and five normal Pokemon', async () => {
+  it('accepts a week 1 team of junk gift #1 and five normal Pokemon', async () => {
     vi.mocked(getPlayerTeamForMatch).mockImplementation(async (playerId) => (playerId === 'p1' ? (team(OWN_JUNK, ...NORMAL.slice(0, 5)) as never) : null));
     await expect(auditMatchTeams(input(context()))).resolves.toEqual({ opened: 0 });
   });
 
-  it('keeps a week 1 team with a New Year Pokemon illegal when audited after the week4 unlock', async () => {
+  it('keeps a week 1 team with a surprise species illegal when audited after the organizer unlocks the pool', async () => {
     vi.mocked(getPlayerTeamForMatch).mockImplementation(async (playerId) =>
       playerId === 'p1' ? (team(OWN_JUNK, NEW_YEAR[0], ...NORMAL.slice(0, 4)) as never) : null,
     );
-    // The domain is unlocked and the week4 event has fired by the time the audit runs; the legality is bound to the match round.
-    const afterWeek4 = context({ 'domain:new_year': 'unlocked' });
-    afterWeek4.state = { ...afterWeek4.state, firedEventKeys: ['week4'] };
-    await expect(auditMatchTeams(input(afterWeek4))).resolves.toEqual({ opened: 1 });
+    // The pool is unlocked by the time the audit runs; the legality is bound to the match round, not the unlock flag.
+    const afterUnlock = context({ 'domain:new_year': 'unlocked' });
+    await expect(auditMatchTeams(input(afterUnlock))).resolves.toEqual({ opened: 1 });
     const [call] = opened();
     expect(call).toMatchObject({ source: 'team_audit', dedupeKey: 'team_audit:m-1:0:p1' });
     expect(subjectOf(call).reasons).toContain('rules');
     expect(subjectOf(call).issues.map((issue) => issue.code)).toEqual(['kit_count_max']);
     expect(subjectOf(call).issues[0].pokemon_indexes).toEqual([1]);
 
-    // The same kind of team is legal in a week 4 match (up to two New Year Pokemon, the premium gift required).
+    // A legal week 4 team (both junk gifts and the premium gift) stays legal after the unlock.
     vi.mocked(openFormatCheck).mockClear();
     vi.mocked(getRoundById).mockResolvedValue({ id: 'r-1', round_number: 4 } as never);
     vi.mocked(getPlayerTeamForMatch).mockImplementation(async (playerId) =>
-      playerId === 'p1' ? (team(OWN_PREMIUM, NEW_YEAR[0], ...NORMAL.slice(0, 4)) as never) : null,
+      playerId === 'p1' ? (team(OWN_JUNK, OWN_JUNK2, OWN_PREMIUM, ...NORMAL.slice(0, 3)) as never) : null,
     );
-    await expect(auditMatchTeams(input(afterWeek4))).resolves.toEqual({ opened: 0 });
+    await expect(auditMatchTeams(input(afterUnlock))).resolves.toEqual({ opened: 0 });
   });
 
   it('flags a premium species the player never received as a rules issue', async () => {
     vi.mocked(getRoundById).mockResolvedValue({ id: 'r-1', round_number: 3 } as never);
     vi.mocked(getPlayerTeamForMatch).mockImplementation(async (playerId) =>
-      playerId === 'p1' ? (team(OWN_JUNK, JUNK[1], NEVER_RECEIVED, ...NORMAL.slice(0, 3)) as never) : null,
+      playerId === 'p1' ? (team(OWN_JUNK, OWN_JUNK2, NEVER_RECEIVED, ...NORMAL.slice(0, 3)) as never) : null,
     );
-    const ctx = context();
-    ctx.state = { ...ctx.state, items: [...ctx.state.items, gift('junk_gifts', JUNK[1])] };
-    await auditMatchTeams(input(ctx));
+    await auditMatchTeams(input(context()));
     const [call] = opened();
     expect(subjectOf(call).reasons).toContain('rules');
     expect(subjectOf(call).issues.map((issue) => issue.code)).toContain('kit_not_allowed');

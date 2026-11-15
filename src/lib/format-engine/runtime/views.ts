@@ -42,7 +42,7 @@ import { buildLateJoiners, type FiredEventRecord } from './late-joiners';
 import { domainView, findDomainView, visibleEntries, type DomainView } from './domains';
 import { entryContext, type EnvBase } from './expr-env';
 import type { KitContext } from './load';
-import { visibleLinks } from './relations';
+import { revealsPerRecipient, visibleLinks } from './relations';
 import { own, type ActionPick, type KitRuntimeState, type RuntimeSubmission } from './types';
 import {
   CHALLENGE_STATES,
@@ -195,9 +195,9 @@ function buildAction(ctx: KitContext, rule: PlayerActionRule, viewer: string, na
     const domainDef = (def.domains ?? []).find((d) => d.key === step.domain);
     const domainView = findDomainView(def, step.domain, state.flags, state.amendments);
     const blocked: BlockedEntry[] = [];
-    // A domain a player may not know of (`admins`, unlisted in `pools`) is not named by its step either: no key, no label,
-    // no lock state, and nothing to pick.
-    if (domainView?.visibility === 'admins') {
+    // A domain a player may not know of (`admins`, or a `when_unlocked` one still locked) is not named by its step
+    // either: no key, no label, no lock state, and nothing to pick.
+    if (domainView?.visibility === 'admins' || (domainView?.visibility === 'when_unlocked' && !domainView.unlocked)) {
       return {
         index,
         resource: step.resource,
@@ -381,11 +381,22 @@ export function buildPlayerView(
     if (entries.length > 0) domains.push({ key: domain.key, label: domain.label, entries: entries.map(entryView) });
   }
 
-  // Every pool the viewer may know about with its lock state (an `admins` domain stays unlisted): the teambuilder card
-  // shows a pool that is not a step of any action, such as one the calendar unlocks later.
+  // Every pool the viewer may know about with its lock state: an `admins` domain stays unlisted, and a `when_unlocked`
+  // domain that is still locked stays unlisted too (its very existence is the surprise until it opens). The teambuilder
+  // card shows a pool that is not a step of any action, such as one the organizer unlocks later.
   const pools: PoolView[] = domainView(def, state.flags, state.amendments)
-    .filter((view) => view.visibility !== 'admins')
+    .filter((view) => view.visibility !== 'admins' && !(view.visibility === 'when_unlocked' && !view.unlocked))
     .map((view) => ({ key: view.key, label: labelOf((def.domains ?? []).find((d) => d.key === view.key)?.label, view.key), unlocked: view.unlocked }));
+
+  // The species of every pool the viewer may see (a locked surprise pool contributes none): the teambuilder narrows its
+  // species list to these, so a hidden pool's members never reach the client. Own gifts are species the viewer holds.
+  const poolSpecies = new Set<string>();
+  for (const view of domainView(def, state.flags, state.amendments)) {
+    for (const entry of visibleEntries(view, false)) poolSpecies.add(entry.id);
+  }
+  for (const item of state.items) {
+    if (item.player_id === viewer && item.item_id !== null) poolSpecies.add(item.item_id);
+  }
 
   // Items: the viewer's own always, other players' only for a resource every player may see. Merged per holder and item.
   const resources = new Map<string, ResourceDef>((def.resources ?? []).map((r) => [r.key, r]));
@@ -418,7 +429,7 @@ export function buildPlayerView(
     return view === null ? [] : [view];
   });
 
-  return { running: true, actions, domains, pools, items, relations, ladders: ladderViews };
+  return { running: true, actions, domains, pools, poolSpecies: [...poolSpecies].sort(), items, relations, ladders: ladderViews };
 }
 
 // ─── Admin ──────────────────────────────────────────────────────────────────────────────────────
@@ -611,6 +622,7 @@ export function hiddenGiverActions(ctx: Pick<MaskContext, 'def' | 'state'>): Rea
     (ctx.def.relations ?? [])
       .filter((relation) => {
         if (relation.visibility.from !== 'hidden') return false;
+        if (revealsPerRecipient(ctx.def, relation.key)) return true;
         const links = ctx.state.links.filter((l) => l.relation === relation.key);
         return !(links.length > 0 && links.every((l) => l.revealed));
       })

@@ -4,6 +4,7 @@ import raw from '@pack-extensions';
 import type { PackAdminLink, PackExtensions, PackRequestContext } from './types';
 
 export type * from './types';
+export { packFormatPresets, packRulesetPresetOverrides, packRulesetPresetOverride } from './format-providers';
 
 /**
  * The active pack's extensions (docs/format-packs.md, "Pack extensions"). The ONLY module that

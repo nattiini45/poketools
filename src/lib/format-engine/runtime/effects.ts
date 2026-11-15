@@ -215,8 +215,12 @@ class Planner {
         return this.push({ op: 'set_flag', key: domainFlagKey(effect.domain), value: 'unlocked' });
       case 'lock_domain':
         return this.push({ op: 'set_flag', key: domainFlagKey(effect.domain), value: 'locked' });
-      case 'reveal_relation':
-        return this.push({ op: 'reveal_relation', relation: effect.relation });
+      case 'reveal_relation': {
+        // Without a target the whole relation is revealed; with one, only the links whose `to` side is a target player
+        // (a per-recipient reveal, e.g. after that recipient's own match).
+        if (effect.to === undefined) return this.push({ op: 'reveal_relation', relation: effect.relation });
+        return this.push({ op: 'reveal_relation', relation: effect.relation, players: this.targets(effect.to) });
+      }
       case 'generate_relation': {
         const relation = (this.def.relations ?? []).find((r) => r.key === effect.relation);
         if (relation === undefined) return this.issue('relation_unknown', effect.relation);
@@ -314,6 +318,6 @@ export function eventNeedsRows(def: FormatDefinition, event: KitEvent): boolean 
     (rule) =>
       rule.kind === 'rule.on_event' &&
       eventMatches(rule.on, event) &&
-      rule.effects.some((effect) => 'to' in effect && effect.to.where !== undefined),
+      rule.effects.some((effect) => 'to' in effect && effect.to?.where !== undefined),
   );
 }

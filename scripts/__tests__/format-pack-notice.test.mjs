@@ -65,6 +65,7 @@ describe('next.config.mjs prints the warning', () => {
     mkdirSync(join(dir, 'src', 'format-packs', 'example', 'extensions'), { recursive: true });
     writeFileSync(join(dir, 'src', 'format-packs', 'example', 'index.ts'), 'export default {};\n');
     writeFileSync(join(dir, 'src', 'format-packs', 'example', 'extensions', 'index.ts'), 'export default {};\n');
+    writeFileSync(join(dir, 'src', 'format-packs', 'example', 'extensions', 'format-providers.ts'), 'export default {};\n');
   });
 
   afterAll(() => {

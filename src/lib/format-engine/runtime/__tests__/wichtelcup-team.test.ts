@@ -5,8 +5,9 @@ import type { FormatDefinition } from '@/lib/format-kit/types';
 import { evaluateConstraints, type ConstraintIssue, type TeamMember } from '../team';
 import { item, stateFor } from './helpers';
 
-// The shipped Wichtelcup example through the team constraints of its `cup` stage: the allowlist, the weekly gift
-// obligations, the New Year pool and the team size, per week and per player. Species are the real pool entries.
+// The shipped Wichtelcup EXAMPLE through the team constraints of its `cup` stage: the allowlist, the ordinal gift
+// obligations (junk gift #1 in week 1, #2 in week 2, both from week 3, the premium from week 4) and the hidden surprise
+// pool, per week and per player. Species are the made-up pool entries; the real tournament's data lives in the private pack.
 
 const compiled = compile(wichtelcup);
 if (compiled.definition === null) throw new Error('the Wichtelcup example does not compile');
@@ -17,12 +18,14 @@ const CUP = DEF.stages.find((stage) => stage.key === 'cup')?.constraints ?? [];
 const SIZE = 0;
 const TERA = 1;
 const ALLOWLIST = 2;
-const JUNK_WEEK_1 = 3;
-const JUNK_WEEKS_2_3 = 4;
-const NO_PREMIUM = 5;
-const PREMIUM_REQUIRED = 6;
-const NEW_YEAR_CLOSED = 7;
-const NEW_YEAR_CAP = 8;
+const JUNK1_REQUIRED = 3;
+const JUNK2_FORBIDDEN_W1 = 4;
+const JUNK2_REQUIRED = 5;
+const JUNK1_FORBIDDEN_W2 = 6;
+const BOTH_JUNK = 7;
+const NO_PREMIUM = 8;
+const PREMIUM_REQUIRED = 9;
+const NEW_YEAR_CLOSED = 10;
 
 const pool = (key: string): string[] => (DEF.domains?.find((d) => d.key === key)?.entries ?? []).map((e) => e.id);
 const NORMAL = pool('normal');
@@ -34,13 +37,14 @@ function member(id: string, over: Partial<TeamMember> = {}): TeamMember {
   return { name: id, species: id, baseName: id, baseSpecies: id, types: ['Ice'], item: `held-${id}`, itemName: `Held ${id}`, teraType: null, evolution: 'fe', ...over };
 }
 
-const gift = (resource: 'junk_gifts' | 'premium_gift', itemId: string, player = 'p1') => item({ resource, player_id: player, item_id: itemId });
+const gift = (resource: 'junk_gifts' | 'premium_gift', itemId: string, ordinal: number, player = 'p1') =>
+  item({ resource, player_id: player, item_id: itemId, ordinal });
 
-/** Player p1 holds junk gifts `bergmite` (hazard removal) and `delibird` (hazard setter) and the premium gift `glastrier`. */
-const OWN = [gift('junk_gifts', 'bergmite'), gift('junk_gifts', 'delibird'), gift('premium_gift', 'glastrier')];
-const J1 = 'bergmite';
-const J2 = 'delibird';
-const P = 'glastrier';
+/** Player p1 holds junk gift #1 `starmie` (hazard removal), junk gift #2 `golem` (hazard setter) and the premium `dragonite`. */
+const OWN = [gift('junk_gifts', 'starmie', 1), gift('junk_gifts', 'golem', 2), gift('premium_gift', 'dragonite', 1)];
+const J1 = 'starmie';
+const J2 = 'golem';
+const P = 'dragonite';
 
 function check(round: number, ids: string[], opts: { items?: ReturnType<typeof item>[]; flags?: Record<string, string>; members?: TeamMember[] } = {}): ConstraintIssue[] {
   return evaluateConstraints({
@@ -59,11 +63,11 @@ const normals = (n: number, from = 0) => NORMAL.slice(from, from + n);
 
 describe('the Wichtelcup example data', () => {
   it('has the constraint order this file reads', () => {
-    expect(CUP.map((c) => c.kind)).toEqual(['roster_size', 'tera', 'count', 'count', 'count', 'count', 'count', 'count', 'count']);
-    expect(NORMAL).toHaveLength(64);
-    expect(JUNK).toHaveLength(30);
-    expect(PREMIUM).toHaveLength(23);
-    expect(NEW_YEAR).toHaveLength(24);
+    expect(CUP.map((c) => c.kind)).toEqual(['roster_size', 'tera', 'count', 'count', 'count', 'count', 'count', 'count', 'count', 'count', 'count']);
+    expect(NORMAL).toHaveLength(8);
+    expect(JUNK).toHaveLength(6);
+    expect(PREMIUM).toHaveLength(6);
+    expect(NEW_YEAR).toHaveLength(3);
     expect(JUNK).toContain(J1);
     expect(JUNK).toContain(J2);
     expect(PREMIUM).toContain(P);
@@ -71,18 +75,18 @@ describe('the Wichtelcup example data', () => {
 });
 
 describe('week 1', () => {
-  it('accepts one own junk gift and five normal Pokémon', () => {
+  it('accepts junk gift #1 and five normal Pokémon', () => {
     expect(check(1, [J1, ...normals(5)])).toEqual([]);
   });
 
-  it('asks for a junk gift when there is none', () => {
-    expect(codes(check(1, normals(6)))).toEqual([`kit_count_min#${JUNK_WEEK_1}`]);
+  it('asks for junk gift #1 when there is none', () => {
+    expect(codes(check(1, normals(6)))).toEqual([`kit_count_min#${JUNK1_REQUIRED}`]);
   });
 
-  it('allows only one of the two junk gifts', () => {
+  it('refuses junk gift #2 in week 1', () => {
     const issues = check(1, [J1, J2, ...normals(4)]);
-    expect(codes(issues)).toEqual([`kit_count_max#${JUNK_WEEK_1}`]);
-    expect(issues[0].pokemon_indexes).toEqual([0, 1]);
+    expect(codes(issues)).toEqual([`kit_count_max#${JUNK2_FORBIDDEN_W1}`]);
+    expect(issues[0].pokemon_indexes).toEqual([1]);
   });
 
   it('refuses the premium gift', () => {
@@ -91,96 +95,91 @@ describe('week 1', () => {
     expect(issues[0].pokemon_indexes).toEqual([1]);
   });
 
-  it('refuses the New Year pool even when its flag says unlocked', () => {
-    const open = check(1, [J1, 'necrozma', ...normals(4)], { flags: { 'domain:new_year': 'unlocked' } });
+  it('refuses a surprise species: outside the allowlist while locked, capped once unlocked', () => {
+    const locked = check(1, [J1, NEW_YEAR[0], ...normals(4)]);
+    expect(codes(locked)).toEqual([`kit_not_allowed#${ALLOWLIST}`]);
+    expect(locked[0].pokemon_indexes).toEqual([1]);
+    const open = check(1, [J1, NEW_YEAR[0], ...normals(4)], { flags: { 'domain:new_year': 'unlocked' } });
     expect(codes(open)).toEqual([`kit_count_max#${NEW_YEAR_CLOSED}`]);
     expect(open[0].pokemon_indexes).toEqual([1]);
-    expect(codes(check(1, [J1, 'necrozma', ...normals(4)]))).toEqual([`kit_count_max#${NEW_YEAR_CLOSED}`]);
   });
 });
 
 describe('week 2', () => {
-  it('accepts both junk gifts and four normal Pokémon', () => {
-    expect(check(2, [J1, J2, ...normals(4)])).toEqual([]);
+  it('accepts junk gift #2 and five normal Pokémon', () => {
+    expect(check(2, [J2, ...normals(5)])).toEqual([]);
   });
 
-  it('asks for both junk gifts', () => {
-    expect(codes(check(2, [J1, ...normals(5)]))).toEqual([`kit_count_min#${JUNK_WEEKS_2_3}`]);
+  it('asks for junk gift #2 and refuses junk gift #1', () => {
+    expect(codes(check(2, [J1, ...normals(5)]))).toEqual([`kit_count_min#${JUNK2_REQUIRED}`, `kit_count_max#${JUNK1_FORBIDDEN_W2}`]);
   });
 
   it('refuses the premium gift', () => {
-    expect(codes(check(2, [J1, J2, P, ...normals(3)]))).toEqual([`kit_count_max#${NO_PREMIUM}`]);
+    expect(codes(check(2, [J2, P, ...normals(4)]))).toEqual([`kit_count_max#${NO_PREMIUM}`]);
   });
 });
 
 describe('week 3', () => {
-  it('accepts both junk gifts, the premium gift and three normal Pokémon', () => {
-    expect(check(3, [J1, J2, P, ...normals(3)])).toEqual([]);
-  });
-
-  it('asks for the premium gift', () => {
-    expect(codes(check(3, [J1, J2, ...normals(4)]))).toEqual([`kit_count_min#${PREMIUM_REQUIRED}`]);
+  it('accepts both junk gifts and four normal Pokémon', () => {
+    expect(check(3, [J1, J2, ...normals(4)])).toEqual([]);
   });
 
   it('asks for both junk gifts', () => {
-    expect(codes(check(3, [J1, P, ...normals(4)]))).toEqual([`kit_count_min#${JUNK_WEEKS_2_3}`]);
+    expect(codes(check(3, [J1, ...normals(5)]))).toEqual([`kit_count_min#${BOTH_JUNK}`]);
   });
 
-  it('keeps the New Year pool closed', () => {
-    expect(codes(check(3, [J1, J2, P, 'jirachi', ...normals(2)]))).toEqual([`kit_count_max#${NEW_YEAR_CLOSED}`]);
+  it('refuses the premium gift', () => {
+    expect(codes(check(3, [J1, J2, P, ...normals(3)]))).toEqual([`kit_count_max#${NO_PREMIUM}`]);
+  });
+
+  it('keeps the surprise pool closed', () => {
+    expect(codes(check(3, [J1, J2, NEW_YEAR[0], ...normals(3)]))).toEqual([`kit_not_allowed#${ALLOWLIST}`]);
   });
 });
 
 describe('week 4', () => {
+  it('accepts both junk gifts, the premium gift and three normal Pokémon', () => {
+    expect(check(4, [J1, J2, P, ...normals(3)])).toEqual([]);
+  });
+
   it('keeps the premium gift mandatory', () => {
-    expect(codes(check(4, normals(6)))).toEqual([`kit_count_min#${PREMIUM_REQUIRED}`]);
-    expect(check(4, [P, ...normals(5)])).toEqual([]);
+    expect(codes(check(4, [J1, J2, ...normals(4)]))).toEqual([`kit_count_min#${PREMIUM_REQUIRED}`]);
   });
 
-  it('makes the junk gifts optional', () => {
-    expect(check(4, [P, J1, ...normals(4)])).toEqual([]);
-    expect(check(4, [P, J1, J2, ...normals(3)])).toEqual([]);
+  it('asks for both junk gifts', () => {
+    expect(codes(check(4, [J1, P, ...normals(4)]))).toEqual([`kit_count_min#${BOTH_JUNK}`]);
   });
 
-  it('admits zero, one or two New Year Pokémon and refuses three', () => {
-    expect(check(4, [P, ...normals(5)])).toEqual([]);
-    expect(check(4, [P, NEW_YEAR[0], ...normals(4)])).toEqual([]);
-    expect(check(4, [P, NEW_YEAR[0], NEW_YEAR[1], ...normals(3)])).toEqual([]);
-    const issues = check(4, [P, NEW_YEAR[0], NEW_YEAR[1], NEW_YEAR[2], ...normals(2)]);
-    expect(codes(issues)).toEqual([`kit_count_max#${NEW_YEAR_CAP}`]);
-    expect(issues[0].pokemon_indexes).toEqual([1, 2, 3]);
-  });
-
-  it('follows the same rules in a tiebreak round after week 4', () => {
-    expect(check(5, [P, NEW_YEAR[0], ...normals(4)])).toEqual([]);
-    expect(codes(check(5, [P, NEW_YEAR[0], NEW_YEAR[1], NEW_YEAR[2], ...normals(2)]))).toEqual([`kit_count_max#${NEW_YEAR_CAP}`]);
+  it('keeps the surprise pool closed through week 4', () => {
+    expect(codes(check(4, [J1, J2, P, NEW_YEAR[0], ...normals(2)]))).toEqual([`kit_not_allowed#${ALLOWLIST}`]);
+    expect(codes(check(4, [J1, J2, P, NEW_YEAR[0], ...normals(2)], { flags: { 'domain:new_year': 'unlocked' } }))).toEqual([`kit_count_max#${NEW_YEAR_CLOSED}`]);
   });
 });
 
 describe('the pools of one player', () => {
   it('refuses a gift of another player, on its own slot', () => {
-    const items = [...OWN, gift('junk_gifts', 'sudowoodo', 'p2')];
-    const issues = check(1, [], { items, members: ['sudowoodo', ...normals(5)].map((id) => member(id)) });
+    const items = [...OWN, gift('junk_gifts', 'blissey', 1, 'p2')];
+    const issues = check(1, [], { items, members: ['blissey', ...normals(5)].map((id) => member(id)) });
     expect(issues).toEqual([
-      { code: 'kit_not_allowed', constraint_index: ALLOWLIST, pokemon_indexes: [0], params: { species: 'sudowoodo' } },
-      { code: 'kit_count_min', constraint_index: JUNK_WEEK_1, params: { source: 'your own junk gifts', min: 1, have: 0 } },
+      { code: 'kit_not_allowed', constraint_index: ALLOWLIST, pokemon_indexes: [0], params: { species: 'blissey' } },
+      { code: 'kit_count_min', constraint_index: JUNK1_REQUIRED, params: { source: 'your own junk gifts #1', min: 1, have: 0 } },
     ]);
   });
 
-  it('refuses the premium gift of another player in week 3', () => {
-    const items = [gift('junk_gifts', J1), gift('junk_gifts', J2), gift('premium_gift', 'tyranitar', 'p2')];
-    const issues = check(3, [], { items, members: [J1, J2, 'tyranitar', ...normals(3)].map((id) => member(id)) });
+  it('refuses the premium gift of another player in week 4', () => {
+    const items = [gift('junk_gifts', J1, 1), gift('junk_gifts', J2, 2), gift('premium_gift', 'tyranitar', 1, 'p2')];
+    const issues = check(4, [], { items, members: [J1, J2, 'tyranitar', ...normals(3)].map((id) => member(id)) });
     expect(codes(issues)).toEqual([`kit_not_allowed#${ALLOWLIST}`, `kit_count_min#${PREMIUM_REQUIRED}`]);
     expect(issues[0].pokemon_indexes).toEqual([2]);
   });
 
   it('refuses a species of no pool and names it', () => {
-    const issues = check(1, [J1, 'garchomp', ...normals(4)]);
-    expect(issues.find((i) => i.code === 'kit_not_allowed')).toEqual({ code: 'kit_not_allowed', constraint_index: ALLOWLIST, pokemon_indexes: [1], params: { species: 'garchomp' } });
+    const issues = check(1, [J1, 'arceus', ...normals(4)]);
+    expect(issues.find((i) => i.code === 'kit_not_allowed')).toEqual({ code: 'kit_not_allowed', constraint_index: ALLOWLIST, pokemon_indexes: [1], params: { species: 'arceus' } });
   });
 
   it('lists each outsider as its own issue', () => {
-    const issues = check(1, [J1, 'garchomp', 'dragapult', ...normals(3)]);
+    const issues = check(1, [J1, 'arceus', 'rayquaza', ...normals(3)]);
     const outsiders = issues.filter((i) => i.code === 'kit_not_allowed');
     expect(outsiders.map((i) => i.pokemon_indexes)).toEqual([[1], [2]]);
   });
@@ -190,8 +189,13 @@ describe('the pools of one player', () => {
   });
 
   it('lets two players hold the same junk species', () => {
-    const items = [gift('junk_gifts', J1), gift('junk_gifts', J1, 'p2')];
+    const items = [gift('junk_gifts', J1, 1), gift('junk_gifts', J1, 1, 'p2')];
     expect(check(1, [J1, ...normals(5)], { items })).toEqual([]);
+  });
+
+  it('an unmapped legacy holding (null ordinal) satisfies no ordinal slot', () => {
+    const items = [gift('junk_gifts', J1, 1), { ...gift('junk_gifts', J2, 2), ordinal: null }, gift('premium_gift', P, 1)];
+    expect(codes(check(2, [J2, ...normals(5)], { items }))).toEqual([`kit_count_min#${JUNK2_REQUIRED}`]);
   });
 });
 
@@ -215,13 +219,12 @@ describe('the round decides', () => {
   it('judges the same team differently in different weeks', () => {
     const ids = [J1, ...normals(5)];
     expect(check(1, ids)).toEqual([]);
-    expect(codes(check(2, ids))).toEqual([`kit_count_min#${JUNK_WEEKS_2_3}`]);
+    expect(codes(check(2, ids))).toEqual([`kit_count_min#${JUNK2_REQUIRED}`, `kit_count_max#${JUNK1_FORBIDDEN_W2}`]);
   });
 
   it('judges a week-4 team by week-3 rules when the match is a week-3 match', () => {
-    const week4Team = [P, J1, NEW_YEAR[0], ...normals(3)];
+    const week4Team = [J1, J2, P, ...normals(3)];
     expect(check(4, week4Team)).toEqual([]);
-    const asWeek3 = check(3, week4Team);
-    expect(codes(asWeek3)).toEqual([`kit_count_min#${JUNK_WEEKS_2_3}`, `kit_count_max#${NEW_YEAR_CLOSED}`]);
+    expect(codes(check(3, week4Team))).toEqual([`kit_count_max#${NO_PREMIUM}`]);
   });
 });

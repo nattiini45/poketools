@@ -106,7 +106,7 @@ function publicSites(def: FormatDefinition): PublicSite[] {
       sites.push({ context: 'event_condition', kind: 'rule', owner: rule.id, pointer: ptr('rules', i, 'when'), expr: rule.when });
     }
     rule.effects.forEach((effect, j) => {
-      if ('to' in effect) targetSites(sites, rule.id, effect.to, ptr('rules', i, 'effects', j, 'to'));
+      if ('to' in effect && effect.to !== undefined) targetSites(sites, rule.id, effect.to, ptr('rules', i, 'effects', j, 'to'));
     });
   });
 

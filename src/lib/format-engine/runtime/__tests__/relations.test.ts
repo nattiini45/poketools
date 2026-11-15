@@ -96,10 +96,31 @@ describe('visibleLinks', () => {
     expect(visibleLinks(open, links, { playerId: 'b', admin: false })).toEqual([{ from: 'a', to: 'b', revealed: false }]);
   });
 
-  it('shows every side to everyone once revealed, or when set to all', () => {
+  it('reveals a link only to its two ends: the receiver learns their giver, nobody else does', () => {
     const revealed = links.map((l) => ({ ...l, revealed: true }));
-    expect(visibleLinks(santa, revealed, { playerId: null, admin: false })).toEqual(revealed);
+    // b receives from a and gives to c: revealing lifts the hidden giver for b alone, and b's own target stays visible.
+    expect(visibleLinks(santa, revealed, { playerId: 'b', admin: false })).toEqual([
+      { from: 'a', to: 'b', revealed: true },
+      { from: 'b', to: 'c', revealed: true },
+    ]);
+    // An outsider and the anonymous public still learn nothing: a reveal is not a publication.
+    expect(visibleLinks(santa, revealed, { playerId: 'outsider', admin: false })).toEqual([]);
+    expect(visibleLinks(santa, revealed, { playerId: null, admin: false })).toEqual([]);
+    // a receives from c: with every link revealed, a learns their giver c too, plus their own target b.
+    expect(visibleLinks(santa, revealed, { playerId: 'a', admin: false })).toEqual([
+      { from: 'a', to: 'b', revealed: true },
+      { from: 'c', to: 'a', revealed: true },
+    ]);
+    // With only a->b revealed, a sees their own target but not their giver (c->a is still hidden).
+    const partly = [{ from: 'a', to: 'b', revealed: true }, { from: 'b', to: 'c', revealed: false }, { from: 'c', to: 'a', revealed: false }];
+    expect(visibleLinks(santa, partly, { playerId: 'a', admin: false })).toEqual([
+      { from: 'a', to: 'b', revealed: true },
+    ]);
+  });
+
+  it('shows every side to everyone when visibility is all, revealed or not', () => {
     const everyone = { visibility: { from: 'all' as const, to: 'all' as const } };
     expect(visibleLinks(everyone, links, { playerId: 'outsider', admin: false })).toHaveLength(3);
+    expect(visibleLinks(everyone, links, { playerId: null, admin: false })).toHaveLength(3);
   });
 });

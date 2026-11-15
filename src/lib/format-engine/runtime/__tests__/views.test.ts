@@ -181,11 +181,16 @@ describe('hidden relation sides', () => {
     expect(asGiver).not.toContain(ids[2]);
   });
 
-  it('makes both sides public once the relation is revealed', () => {
+  it('reveals a giver to their recipient alone, never to a bystander or the whole field', () => {
     const revealed = context({ state: { links: [link('p1', 'p2', 'santa', true), link('p2', 'p3', 'santa', true), link('p3', 'p1', 'santa', true)] } });
-    const santa = viewOf('p4', revealed).relations.find((r) => r.key === 'santa')!;
-    expect(santa.links).toHaveLength(3);
-    expect(santa.links.every((l) => l.revealed && l.from !== null && l.to !== null)).toBe(true);
+    // p4 is in no link: a reveal is per-recipient, so a bystander still sees nothing.
+    expect(viewOf('p4', revealed).relations.find((r) => r.key === 'santa')!.links).toEqual([]);
+    // p2 receives from p1 and gives to p3: they learn their giver p1, and keep their own outgoing link.
+    const santa = viewOf('p2', revealed).relations.find((r) => r.key === 'santa')!;
+    expect(santa.links).toEqual([
+      { from: { id: 'p1', name: 'Name p1' }, to: { id: 'p2', name: 'Name p2' }, revealed: true },
+      { from: { id: 'p2', name: 'Name p2' }, to: { id: 'p3', name: 'Name p3' }, revealed: true },
+    ]);
   });
 
   it('carries no information in the order of the output (a viewer who sees the targets only)', () => {
@@ -598,6 +603,19 @@ describe('rows of the history', () => {
       expect(giverHiddenActions(context({ defs: [withRelation({ visibility: { from: 'own', to: 'own' } })] }), 'p1').size).toBe(0);
     });
 
+    it('stays hidden for a relation that reveals one recipient at a time, even once every link is revealed', () => {
+      const perRecipient: DefPatch = (def) => ({
+        ...def,
+        rules: [
+          ...def.rules,
+          { kind: 'rule.on_event', id: 'per_recipient_reveal', event: { type: 'match_completed' }, effects: [{ effect: 'reveal_relation', relation: 'santa', to: { who: 'event_players' } }] } as unknown as FormatDefinition['rules'][number],
+        ],
+      });
+      const everyRevealed = { links: [link('p1', 'p2', 'santa', true), link('p2', 'p1', 'santa', true)] };
+      expect(hiddenGiverActions(context({ state: everyRevealed, defs: [perRecipient] }))).toEqual(new Set(['choose_gift']));
+      expect([...giverHiddenActions(context({ state: everyRevealed, defs: [perRecipient] }), 'p1')]).toEqual(['choose_gift']);
+    });
+
     it('drops the player of a deadline_missed action check for a viewer who plays, keeping the rest', () => {
       const hidden = giverHiddenActions(context(), 'p1');
       const view = toCheckView(missed(), new Map(), NAMES, hidden);
@@ -784,11 +802,11 @@ describe('the shipped Wichtelcup document keeps the leak contract', () => {
 
   it('lists the junk and the premium pool without saying which premium gift a giver holds or took', () => {
     const items = [
-      item({ resource: 'premium_gift', player_id: g3, item_id: 'glastrier', exclusive: true, source: 'action', source_ref: 'sub-1' }),
-      item({ resource: 'junk_gifts', player_id: g3, item_id: 'bergmite', source: 'action', source_ref: 'sub-1' }),
+      item({ resource: 'premium_gift', player_id: g3, item_id: 'dragonite', exclusive: true, source: 'action', source_ref: 'sub-1' }),
+      item({ resource: 'junk_gifts', player_id: g3, item_id: 'starmie', source: 'action', source_ref: 'sub-1' }),
     ];
     const submissions: RuntimeSubmission[] = [
-      { id: 'sub-1', action: 'choose_gifts', actor: g2, target: g3, status: 'submitted', picks: [{ step: 1, item_id: 'glastrier' }] },
+      { id: 'sub-1', action: 'choose_gifts', actor: g2, target: g3, status: 'submitted', picks: [{ step: 1, item_id: 'dragonite' }] },
     ];
     const view = player(g1, wichtelContext({ items, submissions }));
     const card = cardOf(view);
@@ -796,17 +814,17 @@ describe('the shipped Wichtelcup document keeps the leak contract', () => {
     // premium_gift is visibility 'own' and exclusive 'global': the held premium is flagged taken (the submit says so
     // anyway), but nothing says who holds it, and the junk step marks nothing.
     expect(card.steps[0].blocked.every((entry) => entry.reason !== 'taken')).toBe(true);
-    expect(card.steps[1].blocked).toEqual([{ id: 'glastrier', reason: 'taken' }]);
+    expect(card.steps[1].blocked).toEqual([{ id: 'dragonite', reason: 'taken' }]);
     expect(JSON.stringify(view)).not.toContain(g3);
     expect(JSON.stringify(view)).not.toContain('sub-1');
-    expect(JSON.stringify(view.items)).not.toContain('glastrier');
+    expect(JSON.stringify(view.items)).not.toContain('dragonite');
   });
 
   it('shows a held own-visibility gift only to its holder', () => {
-    const items = [item({ resource: 'premium_gift', player_id: g3, item_id: 'glastrier', exclusive: true })];
+    const items = [item({ resource: 'premium_gift', player_id: g3, item_id: 'dragonite', exclusive: true })];
     const ctx = wichtelContext({ items });
-    expect(JSON.stringify(player(g3, ctx).items)).toContain('glastrier');
-    expect(JSON.stringify(player(g1, ctx).items)).not.toContain('glastrier');
+    expect(JSON.stringify(player(g3, ctx).items)).toContain('dragonite');
+    expect(JSON.stringify(player(g1, ctx).items)).not.toContain('dragonite');
   });
 
   it('keeps the givers out of the admin overview, and gives an admin who plays only their own link', () => {
@@ -843,12 +861,17 @@ describe('the shipped Wichtelcup document keeps the leak contract', () => {
     expect(toCheckView(row, new Map(), WNAMES, giverHiddenActions(ctx, 'admin-0005')).subject).toMatchObject({ player_id: g3 });
   });
 
-  it('shows the whole ring once the givers are revealed', () => {
+  it('reveals each giver to their own recipient, never the whole ring', () => {
     const revealed = wichtelContext({ links: RING.map((l) => ({ ...l, revealed: true })) });
+    // g1 gives to g2 and receives from g4: they see their own outgoing link and their revealed giver, not the rest.
     const santa = player(g1, revealed).relations.find((r) => r.key === 'santa')!;
-    expect(santa.links).toHaveLength(4);
-    expect(santa.links.every((l) => l.revealed && l.from !== null && l.to !== null)).toBe(true);
-    expect(giverHiddenActions(revealed, g1).size).toBe(0);
+    expect(santa.links).toEqual([
+      { from: ref(g1), to: ref(g2), revealed: true },
+      { from: ref(g4), to: ref(g1), revealed: true },
+    ]);
+    expect(JSON.stringify(player(g1, revealed))).not.toContain(g3);
+    // A per-recipient reveal is never public disclosure: the giver mask for a participating admin stays in force.
+    expect(giverHiddenActions(revealed, g1).size).toBe(1);
   });
 
   it('passes the private-player-data check on both read models', () => {

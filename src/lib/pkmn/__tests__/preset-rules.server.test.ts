@@ -51,25 +51,23 @@ describe('resolvePresetRules', () => {
   });
 });
 
-describe('the Wichtelcup community preset', () => {
-  it('allows exactly the 141 pool entries plus the Low-Key forme, and inherits no tier bans or competitive clauses', () => {
+describe('the Wichtelcup example preset', () => {
+  it('allows exactly the made-up pool entries, and inherits no tier bans or competitive clauses', () => {
     const cup = rules('gen9natdexwichtelcup');
     expect(cup.source).toBe('poketools');
     expect(cup.universe).toBe('national');
     expect(cup.pokemon.mode).toBe('allow');
-    expect(cup.pokemon.ids).toHaveLength(142);
-    expect(new Set(cup.pokemon.ids).size).toBe(142);
-    expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['vivillonicysnow', 'deerlingwinter', 'sawsbuckwinter', 'necrozma', 'rayquaza']));
-    // Toxtricity is "standard species" in the rules text: both formes may be brought.
-    expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['toxtricity', 'toxtricitylowkey']));
-    expect(cup.pokemon.ids).not.toContain('garchomp');
-    // No move is banned: Dragon Ascent is an ordinary attack, "no Mega" is kept by the Mega Rayquaza Clause and the allowlist.
+    expect(cup.pokemon.ids).toHaveLength(23);
+    expect(new Set(cup.pokemon.ids).size).toBe(23);
+    expect(cup.pokemon.ids).toEqual(expect.arrayContaining(['pikachu', 'starmie', 'dragonite', 'mewtwo']));
+    expect(cup.pokemon.ids).not.toContain('arceus');
+    // No move is banned; "no Mega" is kept by the Mega Rayquaza Clause and the allowlist.
     expect(cup.moves).toEqual({ mode: 'block', ids: [] });
-    expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz', 'redorb', 'adamantcrystal', 'lustrousglobe']));
+    expect(cup.items.ids).toEqual(expect.arrayContaining(['lightclay', 'normaliumz', 'charizarditex', 'ultranecroziumz']));
     expect(cup.abilities.ids).toEqual(['moody', 'snowcloak']);
     expect(cup.clauses).toEqual(['speciesclause', 'itemclause', 'terastalclause', 'megarayquazaclause']);
     expect(cup.clauses).not.toEqual(expect.arrayContaining(['sleepclausemod', 'ohkoclause', 'evasionclause']));
-    expect([WICHTELCUP_NORMAL.length, WICHTELCUP_JUNK.length, WICHTELCUP_PREMIUM.length, WICHTELCUP_NEW_YEAR.length]).toEqual([64, 30, 23, 24]);
+    expect([WICHTELCUP_NORMAL.length, WICHTELCUP_JUNK.length, WICHTELCUP_PREMIUM.length, WICHTELCUP_NEW_YEAR.length]).toEqual([8, 6, 6, 3]);
   });
 });
 

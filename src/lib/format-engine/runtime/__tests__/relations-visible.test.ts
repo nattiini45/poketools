@@ -38,8 +38,8 @@ describe('publicLinkPairs', () => {
     { from: 'b', to: 'c', revealed: true },
   ];
 
-  it('leaves out a link with a hidden side', () => {
-    expect(publicLinkPairs({ visibility: { from: 'hidden', to: 'all' } }, links)).toEqual([['b', 'c']]);
+  it('leaves out a link with a hidden side, even a revealed one (a reveal is per-recipient, not public)', () => {
+    expect(publicLinkPairs({ visibility: { from: 'hidden', to: 'all' } }, links)).toEqual([]);
   });
 
   it('keeps every link when both sides are public', () => {

@@ -318,7 +318,9 @@ export interface EntryAttr {
 /**
  * A link runs from -> to (santa: giver -> recipient). `to` says who sees the TARGET of a link (own: the from player
  * sees whom they give to); `from` says who sees the SOURCE (hidden: only admins; own: the to player sees their
- * giver; all: everyone). Once `reveal_on` fired both sides are 'all'. A hidden side is never serialised to others.
+ * giver; all: everyone). Once `reveal_on` fired a hidden side is lifted for the OTHER end of that link only (the
+ * recipient sees their giver), never for the whole field; admins always see every link. A hidden side is never
+ * serialised to others.
  */
 export interface RelationDef {
   key: Key;
@@ -400,7 +402,7 @@ export interface EffectTarget {
 export type Effect =
   | { effect: 'unlock_domain'; domain: Key }
   | { effect: 'lock_domain'; domain: Key }
-  | { effect: 'reveal_relation'; relation: Key }
+  | { effect: 'reveal_relation'; relation: Key; to?: EffectTarget }
   | { effect: 'generate_relation'; relation: Key }
   | { effect: 'grant_resource'; resource: Key; to: EffectTarget; /** int 1..64, default 1 */ amount: number; item?: Key }
   | { effect: 'revoke_resource'; resource: Key; to: EffectTarget; amount: number; item?: Key }
@@ -473,7 +475,7 @@ export type RuleEntry = RuleCard | OnEventRule | PlayerActionRule | CheckRule | 
 /** Where a count constraint looks: a domain, the player's own holdings of a resource, listed species, or a combination. */
 export type CountLeaf =
   | { kind: 'domain'; domain: Key; /** default false */ unlocked_only: boolean }
-  | { kind: 'resource'; resource: Key }
+  | { kind: 'resource'; resource: Key; ordinal?: number }
   | { kind: 'species'; /** 1..64 @pkmn species ids */ ids: Key[] };
 
 /**

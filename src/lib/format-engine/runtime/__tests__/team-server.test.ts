@@ -161,7 +161,7 @@ describe('evaluateTeam', () => {
 
   it('reads a player resource from the runtime state', async () => {
     const state = stateFor(DEF, {
-      items: [{ id: 'i1', resource: 'gifts_junk', player_id: 'p1', item_id: 'wobbuffet', amount: 1, exclusive: false, source: 'event', source_ref: null }],
+      items: [{ id: 'i1', resource: 'gifts_junk', player_id: 'p1', item_id: 'wobbuffet', amount: 1, exclusive: false, source: 'event', source_ref: null, ordinal: null }],
     });
     vi.mocked(loadFreshKitContext).mockResolvedValue(context({ state }));
     const out = await evaluateTeam(input(team('Wobbuffet')));

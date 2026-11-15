@@ -83,6 +83,7 @@ describe('stateBeforeCompletion', () => {
     exclusive: false,
     source: 'event',
     source_ref: ref,
+    ordinal: null,
   });
 
   it('drops only the items the completion itself granted', () => {

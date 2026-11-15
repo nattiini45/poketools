@@ -5,7 +5,7 @@
  */
 import { z } from 'zod';
 import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
-import { PRESETS } from '@/lib/format-kit/presets';
+import { serverFormatPresets } from './preset-source';
 import { seasonCreateRequestSchema } from '@/lib/validation/schemas';
 import { SEASON_FORMAT_ENGINES } from './library-types';
 import { ltextSchema, slugSchema, uuidSchema } from '@/lib/studio-core/text-schema';
@@ -84,7 +84,7 @@ export type SeasonFormatAttachBody = z.infer<typeof seasonFormatAttachSchema>;
  */
 export const seasonFromFormatSchema = z.union([
   z.strictObject({
-    preset_id: z.string().refine((id) => PRESETS.some((preset) => preset.id === id), { message: 'Unknown example format' }),
+    preset_id: z.string().refine((id) => serverFormatPresets().some((preset) => preset.id === id), { message: 'Unknown example format' }),
     ruleset_preset_id: z.string().refine(isRulesetPresetId, { message: 'Unknown rule preset' }).optional(),
   }),
   z.strictObject({

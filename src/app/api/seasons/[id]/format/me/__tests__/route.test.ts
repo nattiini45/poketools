@@ -49,6 +49,7 @@ const view: PlayerFormatView = {
   actions: [],
   domains: [],
   pools: [],
+  poolSpecies: [],
   items: [],
   relations: [
     {

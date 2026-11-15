@@ -164,7 +164,7 @@ export function describeRuleset(rules: ResolvedRules, locale: Locale, options: D
     const levels = rules.levels;
     const lines = [t(levels.policy === 'exact' ? 'levels.defaultExact' : 'levels.defaultMax', { level: levels.default })];
     for (const entry of levels.entries) {
-      lines.push(t(levels.policy === 'exact' ? 'levels.entryExact' : 'levels.entryMax', {
+      lines.push(t((entry.policy ?? levels.policy) === 'exact' ? 'levels.entryExact' : 'levels.entryMax', {
         species: nameOf('pokemon', entry.id),
         level: entry.level,
         status: t(entry.status === 'approved' ? 'levels.approved' : 'levels.experimental'),

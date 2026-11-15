@@ -26,6 +26,7 @@ import { clauseId } from './clauses';
 import { getGeneration, listNationalItems, listNationalSpecies } from './dex';
 import { getPreset, type RulesetPreset } from './format-catalog';
 import { toID } from './i18n/id';
+import { packRulesetPresetOverride } from '@/lib/pack-extensions/format-providers';
 import { CHAMPIONS_ROSTER } from './preset-data/champions';
 import { DRAFT_BANS, DRAFT_COMBINATION_BANS, DRAFT_TIER_BANS } from './preset-data/draft';
 import { PRESET_RULES_VERSION } from './preset-data/pin';
@@ -226,6 +227,11 @@ export function resolvePresetRules(id: string): PresetRules | null {
   const preset = getPreset(id);
   if (preset === undefined) return null;
   const collected = collect(preset);
+  // A pack may replace a preset's resolved lists (its exact allowlist and bans) without shipping them in the public
+  // repository; without an override the public resolution stands (docs/format-packs.md, "Pack extensions").
+  const override = packRulesetPresetOverride(id);
+  const resolvedList = (list: PresetList | undefined, category: Category): PresetList =>
+    list === undefined ? listOf(category, collected) : { mode: list.mode, ids: [...new Set(list.ids)].sort() };
   const rules: PresetRules = {
     id: preset.id,
     name: preset.name,
@@ -235,10 +241,10 @@ export function resolvePresetRules(id: string): PresetRules | null {
     doubles: preset.gameType === 'doubles',
     source: preset.source,
     clauses: preset.clauses.map(clauseId),
-    pokemon: listOf('pokemon', collected),
-    moves: listOf('moves', collected),
-    items: listOf('items', collected),
-    abilities: listOf('abilities', collected),
+    pokemon: resolvedList(override?.pokemon, 'pokemon'),
+    moves: resolvedList(override?.moves, 'moves'),
+    items: resolvedList(override?.items, 'items'),
+    abilities: resolvedList(override?.abilities, 'abilities'),
     facts: preset.rules,
     combination_bans: [...(DRAFT_COMBINATION_BANS[preset.id] ?? [])],
     catalog_version: PRESET_RULES_VERSION,
