@@ -10,6 +10,17 @@ export default {
       tournaments: { one: 'tournament', other: 'tournaments' },
       live: { one: 'live now', other: 'live now' },
     },
+    /** The cycling Pokéball on the hero's slab. */
+    ball: {
+      label: '{name} — change design',
+      hint: 'Hover, tap or press Enter to cycle the ball',
+      names: {
+        poke: 'Poké Ball',
+        great: 'Great Ball',
+        ultra: 'Ultra Ball',
+        master: 'Master Ball',
+      },
+    },
   },
   dividerTitle: "Gotta catch 'em all",
   featured: {

@@ -195,6 +195,10 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Changed
 
+- **The home hero Pokéball no longer opens.** The halves-splitting hover animation is gone; the ball stays closed and
+  each new pointer entry advances its design Poké Ball → Great Ball → Ultra Ball → Master Ball → Poké Ball. A tap or
+  Enter/Space cycles too; with `prefers-reduced-motion` the design switches with no motion. The divider ball further
+  down the page is unchanged.
 - **Supported Node is `^22.22.2 || ^24.15.0`, enforced.** `package.json` declares it in `engines` and `.npmrc` sets
   `engine-strict`, so `npm install` / `npm ci` fail on Node 23, 25 or a 22.x before 22.22.2 instead of printing a
   warning (jsdom 30, used by the DOM tests, needs it). `.nvmrc` pins 24.22.1 and CI reads it; `@types/node` is on 24.
