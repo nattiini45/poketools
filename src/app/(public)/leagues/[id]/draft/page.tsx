@@ -15,6 +15,7 @@ import { getSessionPlayer } from '@/lib/auth/helpers';
 import { getT } from '@/i18n/server';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import DraftBoard from '@/components/draft/DraftBoard';
+import { TeamComparisonProvider } from '@/components/team-comparison/TeamComparisonDialog';
 import TierListDisplay from '@/components/draft/TierListDisplay';
 import ItemIcon from '@/components/ui/ItemIcon';
 import SkewChip from '@/components/ui/SkewChip';
@@ -168,23 +169,25 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
 
       {/* Draft board */}
       {pool && player && (
-        <DraftBoard
-          poolId={pool.id}
-          currentPlayerId={player.playerId}
-          isAdmin={player.isAdmin}
-          playerNames={playerNames}
-          seasonId={id}
-          poolEntries={
-            isEpb && epbPoolEntries.length > 0
-              ? epbPoolEntries
-              : poolEntries.length > 0
-                ? poolEntries
-                : undefined
-          }
-          evoTiers={isEvoLeague && !isEpb ? evoTiers : undefined}
-          tierLimits={tierLimits.length > 0 && !isEpb ? tierLimits : undefined}
-          isEpb={isEpb}
-        />
+        <TeamComparisonProvider seasonId={id}>
+          <DraftBoard
+            poolId={pool.id}
+            currentPlayerId={player.playerId}
+            isAdmin={player.isAdmin}
+            playerNames={playerNames}
+            seasonId={id}
+            poolEntries={
+              isEpb && epbPoolEntries.length > 0
+                ? epbPoolEntries
+                : poolEntries.length > 0
+                  ? poolEntries
+                  : undefined
+            }
+            evoTiers={isEvoLeague && !isEpb ? evoTiers : undefined}
+            tierLimits={tierLimits.length > 0 && !isEpb ? tierLimits : undefined}
+            isEpb={isEpb}
+          />
+        </TeamComparisonProvider>
       )}
 
       {pool && !player && (
@@ -196,4 +199,3 @@ export default async function DraftPage({ params, searchParams }: PageProps) {
     </div>
   );
 }
-

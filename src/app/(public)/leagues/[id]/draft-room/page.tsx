@@ -32,6 +32,7 @@ import GroupPoolPicker, {
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import { isValidUuid } from '@/lib/utils/uuid';
 import DraftRoomClient from './client';
+import { TeamComparisonProvider } from '@/components/team-comparison/TeamComparisonDialog';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -271,27 +272,29 @@ export default async function DraftRoomPage({ params, searchParams }: PageProps)
   return (
     <WorldShell world={world}>
       <WorldOverrideRedirect />
-      <div>
-        <DraftRoomClient
-          key={pool.id}
-          header={header}
-          poolId={pool.id}
-          seasonId={id}
-          seasonGroup={seasonGroupOf(pool.id)}
-          leagueName={league.name}
-          catalog={catalog}
-          initialSnapshot={snapshot}
-          indexUrl={indexUrl}
-          viewer={{ playerId: player?.playerId ?? null, isSiteAdmin: access?.isSiteAdmin ?? false }}
-          links={{
-            redraft: `/leagues/${id}/redraft`,
-            tokens: `/leagues/${id}/tokens`,
-            admin: isPoolAdmin ? `/admin/leagues/${id}/draft` : null,
-            adminAudit: isPoolAdmin ? `/admin/leagues/${id}/draft/audit` : null,
-            trainerCreator: '/draft-room/trainer-creator',
-          }}
-        />
-      </div>
+      <TeamComparisonProvider seasonId={id} enabled={player !== null}>
+        <div>
+          <DraftRoomClient
+            key={pool.id}
+            header={header}
+            poolId={pool.id}
+            seasonId={id}
+            seasonGroup={seasonGroupOf(pool.id)}
+            leagueName={league.name}
+            catalog={catalog}
+            initialSnapshot={snapshot}
+            indexUrl={indexUrl}
+            viewer={{ playerId: player?.playerId ?? null, isSiteAdmin: access?.isSiteAdmin ?? false }}
+            links={{
+              redraft: `/leagues/${id}/redraft`,
+              tokens: `/leagues/${id}/tokens`,
+              admin: isPoolAdmin ? `/admin/leagues/${id}/draft` : null,
+              adminAudit: isPoolAdmin ? `/admin/leagues/${id}/draft/audit` : null,
+              trainerCreator: '/draft-room/trainer-creator',
+            }}
+          />
+        </div>
+      </TeamComparisonProvider>
     </WorldShell>
   );
 }

@@ -1423,6 +1423,14 @@ as before: no phase group mirrors anything, no cross-group week exists and every
 
 All visibility enforcement is in Next.js API routes. Supabase stores full data unconditionally.
 
+### Current league team comparison
+
+Trainer names in the draft order and the comparison action on a public player profile open the same team comparison dialog. The viewer must be a registered player. The profile defaults to the most recent shared league (start date, then creation date); a league picker includes completed leagues, so preparation remains available after a draft ends. The draft order starts with its own league.
+
+`GET /api/players/[id]/team-comparison?season_id=<optional UUID>` compares only leagues in which both players are enrolled. Evolution Point Buy rosters use the trackers' current forms, including branch choices, not the draft's base or final forms. Other drafted leagues use non-voided picks; otherwise the latest registered league/stage team is used. Registered teams follow the per-row visibility rules below (owner override, no admin override on this surface); a hidden latest roster is never replaced by a historical public roster. Only species and types leave the server, never sets or raw player rows.
+
+Coverage lists super-effective hits separately in each direction: each attacker's own types against both defender types, multiplied using the Gen 9 chart in the existing Pokémon data layer. No moves, abilities, items or Tera are inferred. Missing type data and empty or hidden rosters are explicit, not neutral matchups.
+
 ```typescript
 function canViewTeam(requestingUserId, teamOwnerId, match) {
   if (requestingUserId === teamOwnerId) return true      // always see own team

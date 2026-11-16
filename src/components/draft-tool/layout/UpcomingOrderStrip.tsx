@@ -9,6 +9,7 @@
  * strip scrolls horizontally on its own (never the page).
  */
 import { Fragment } from 'react';
+import { ComparisonTrainer } from '@/components/team-comparison/TeamComparisonDialog';
 import { useFormatter, useT } from '@/i18n/client';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import type { ActiveSlotVM, UpcomingVM } from '@/lib/draft-ui/snapshot-adapter';
@@ -62,9 +63,9 @@ export default function UpcomingOrderStrip({
           <span className={`${styles.digits} text-xs`} aria-hidden="true">
             {now.pick_number}
           </span>
-          <span className="truncate" title={now.playerName} aria-hidden="true">
+          <ComparisonTrainer playerId={now.player_id} name={now.playerName} disabled={now.isViewer} className="truncate text-start hover:underline focus-visible:outline focus-visible:outline-2">
             {now.isViewer ? t('order.you') : now.playerName}
-          </span>
+          </ComparisonTrainer>
         </li>
       ) : null}
       {now && shown.length > 0 ? (
@@ -95,9 +96,9 @@ export default function UpcomingOrderStrip({
               <span className={`${styles.digits} text-xs text-[var(--draft-ink-2)]`} aria-hidden="true">
                 {item.pickNumber}
               </span>
-              <span className="truncate" title={item.name} aria-hidden="true">
+              <ComparisonTrainer playerId={item.playerId} name={item.name} disabled={item.isViewer} className="truncate text-start hover:underline focus-visible:outline focus-visible:outline-2">
                 {name}
-              </span>
+              </ComparisonTrainer>
               {makeup ? (
                 <span className={`${styles.digits} text-xs text-[var(--draft-ink-2)]`} aria-hidden="true">
                   {t('order.makeup')} ↻{makeupTime ? ` ${makeupTime}` : ''}

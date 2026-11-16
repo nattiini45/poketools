@@ -51,6 +51,9 @@ src/lib/team/
 ## API Routes
 - `/api/teams`
 - `/api/teams/[id]`
+- `/api/players/[id]/team-comparison` — live registered viewer, shared league membership, species-only comparison; see spec §7. The shared UI is `src/components/team-comparison/TeamComparison.tsx`, with UI SDK dialog and league selector.
+
+The comparison reads EPB trackers or non-voided draft picks through league-tagged 30-second caches. Shared memberships use the seasons tag. Registered team reads stay live and viewer-scoped: only the newest league/stage row is considered, and its visibility is checked before parsing its sets. Ordinary cold EPB loads cost four reads including the live player guard (one membership read and two roster reads); an undrafted registered league costs at most eight (two pick reads, two stage reads and two newest-team reads). History reads page with a hard bound rather than silently truncate. Opening a draft or player page adds no comparison reads; the dialog loads on demand, aborts stale requests, and refreshes when reopened.
 
 **Closed tournaments and leagues.** In a completed or archived tournament, or a tournament whose league is completed or archived, `POST /api/teams` and `PATCH /api/teams/[id]` answer a player 403 and `DELETE /api/teams/[id]` does too, except that a player may still delete their OWN team that is linked to no match (`match_id` is empty). A team linked to a match stays, and a site admin's write is a correction that the gate never asks about. The code names the real reason (`teamWritesClosed`, `team-writes-closed-response.ts`): `team_submission_closed` (the tournament is completed), `team_submission_tournament_archived`, or `team_submission_league_closed` (the league is completed or archived); the texts are in the `errors/teams` catalog, EN and DE.
 
