@@ -19,7 +19,7 @@ interface ProfileSectionProps {
 }
 
 /**
- * A profile section in Direction B: an item icon (or the skewed amber slash), a Geist Pixel title and a body that
+ * A profile section in Direction B: an item icon (or the skewed amber slash), a Geist Sans title and a body that
  * collapses. The descendant overrides strip a child's own card chrome, so a composed panel sits flat inside the
  * section (pack extensions render their sections through this component too).
  */

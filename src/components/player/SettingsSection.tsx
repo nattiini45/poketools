@@ -14,7 +14,7 @@ interface SettingsSectionProps {
 }
 
 /**
- * One section of a player settings page in Direction B: an item icon and a Geist Pixel title over a calm body. The
+ * One section of a player settings page in Direction B: an item icon and a Geist Sans title over a calm body. The
  * sections of a page share one surface rhythm; a section with unsaved changes reports them to the page's save bar
  * (`settings-save.tsx`).
  */
