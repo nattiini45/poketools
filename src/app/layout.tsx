@@ -37,16 +37,9 @@ const dmSans = localFont({
   weight: "100 1000",
 });
 
-// Direction B (redesign F3): Geist Pixel Square for display and title text, Geist Sans for everything else,
-// Geist Mono for number columns (OFL, src/app/fonts/OFL-Geist.txt). Nunito and DM Sans stay loaded for the
-// frozen surfaces, which keep them (globals.css, "Fonts").
-const geistPixel = localFont({
-  src: "./fonts/geist-pixel-square.woff2",
-  variable: "--font-geist-pixel",
-  display: "swap",
-  weight: "400",
-});
-
+// Direction B (redesign F3): Geist Sans everywhere, display and title text included, and Geist Mono for number
+// columns (OFL, src/app/fonts/OFL-Geist.txt). Nunito and DM Sans stay loaded for the frozen surfaces, which
+// keep them (globals.css, "Fonts").
 const geist = localFont({
   src: "./fonts/geist-variable.woff2",
   variable: "--font-geist",
@@ -118,7 +111,7 @@ export default async function RootLayout({
         <script nonce={nonce} dangerouslySetInnerHTML={{ __html: SITE_PALETTE_PREPAINT_SCRIPT }} />
       </head>
       <body
-        className={`${nunito.variable} ${dmSans.variable} ${geistPixel.variable} ${geist.variable} ${geistMono.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
+        className={`${nunito.variable} ${dmSans.variable} ${geist.variable} ${geistMono.variable} font-body antialiased bg-poke-base text-poke-text-primary`}
       >
         <I18nProvider {...i18n}>
           <ThemeProvider nonce={nonce}>

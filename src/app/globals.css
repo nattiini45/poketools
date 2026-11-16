@@ -672,14 +672,23 @@
 }
 
 /* ─── Fonts (redesign F3) ───
-   Redesigned surfaces: Geist Pixel Square for display and title (font-heading; one weight, so no synthesised
-   bold), Geist Sans for everything else (font-body), Geist Mono for number columns (font-mono). Frozen roots
-   keep Nunito, DM Sans and the system mono stack they were built with. */
+   Redesigned surfaces: Geist Sans for everything, display and title text included (font-heading), and Geist
+   Mono for number columns (font-mono). Frozen roots keep Nunito, DM Sans and the system mono stack they were
+   built with. */
 body {
-  --font-heading-face: var(--font-geist-pixel), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
+  --font-heading-face: var(--font-geist), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --font-body-face: var(--font-geist), "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji";
   --font-mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   font-synthesis-weight: none;
+}
+
+/* Heading text carries its weight: a display or title set in the body face needs one to stay a heading. A weight
+   utility in the markup still wins (it is in the utilities layer, above this one), and frozen roots keep the
+   weight they were built with. */
+@layer base {
+  :where(.font-heading):not([data-frozen], [data-frozen] *) {
+    font-weight: 600;
+  }
 }
 
 [data-frozen] {
@@ -3091,7 +3100,12 @@ html:has([data-draft-room-screen]) #main-content {
    Direction B's versus screen: the arena sand with a hex texture, and a slab for the match. In sunlit the slab
    is a deeper arena sand (no dark surface on the light theme); only moonlit makes it near-black. The slab
    carries its own ink through the --hero-slab-* properties, so anything that borrows these classes follows.
-   From lg the slab's left edge leans like every skewed plate and an accent stripe runs along it. */
+   From lg the slab's left edge leans like every skewed plate and an accent stripe runs along it.
+
+   The hex tile is one period of the honeycomb, 56 × 97 px (a pointy-top hexagon of width 56 is 2·56/√3 ≈ 64.66
+   tall, and the rows repeat every 1.5 heights). It holds the hexagon centred on the tile plus the two halves of
+   the neighbouring columns' vertical edges at x = 28, so every edge meets its counterpart in the adjacent tile.
+   All three numbers move together: change the tile size and the path has to be redrawn with it. */
 .league-hero {
   --hero-slab: #dfcd9f;
   --hero-slab-ink: var(--fg);
@@ -3099,14 +3113,14 @@ html:has([data-draft-room-screen]) #main-content {
   --hero-vs: var(--accent-ink);
   --hero-lean: 72px;
   background-color: var(--sunken);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23241a0c' stroke-opacity='.07'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 16.17 56 32.33v32.34L28 80.83 0 64.67V32.33zM28 0v16.17M28 80.83v16.17' fill='none' stroke='%23241a0c' stroke-opacity='.07'/%3E%3C/svg%3E");
 }
 html[data-theme="dark"] .league-hero {
   --hero-slab: #0e0b06;
   --hero-slab-ink: #f5eddd;
   --hero-slab-muted: #c4b596;
   --hero-vs: var(--tier-1);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 1 55 16.5v32L28 64 1 48.5v-32zM28 64v32M1 96.5l27-15.5 27 15.5' fill='none' stroke='%23f5eddd' stroke-opacity='.06'/%3E%3C/svg%3E");
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 16.17 56 32.33v32.34L28 80.83 0 64.67V32.33zM28 0v16.17M28 80.83v16.17' fill='none' stroke='%23f5eddd' stroke-opacity='.06'/%3E%3C/svg%3E");
 }
 .league-hero-slab {
   background-color: var(--hero-slab);
