@@ -10,7 +10,6 @@ Two manifests, both expanded into one job per page load (target × matrix × vie
 
   | Surface | How it is reached | Root |
   |---|---|---|
-  | Draft room: pick screen, redraft center, token center, in-room admin sheet, their sheets and dialogs | `/draft-preview?scenario=…&world=evoliga\|sakura\|none&now=…` (30 scenarios; the four admin control-page scenarios are not frozen) | `[data-frozen="draft-room"]` |
   | Themed route worlds (DOM tier) | `/route-preview?world=…&scenario=…&tier=lite` | `[data-world]` |
   | Themed world league pages | `/leagues/<seeded id>` | `[data-world]` |
   | Broadcast overlays | `/broadcast/…` with seeded ids, 1920×1080 | full page |
@@ -22,6 +21,8 @@ Two manifests, both expanded into one job per page load (target × matrix × vie
   Every target runs at 1440×900 (desktop) and 390×844 (mobile) unless it names its own viewports, in sunlit (light) and moonlit (dark).
 
 - **`routes.json`: surface captures, reviewed and never gated.** Public, player and admin pages at 390, 768, 1280 and 1440 px, both themes, `en` and `de`, as an anonymous visitor, a player and a site admin.
+
+- **`draft-room.json`: responsive fixture baselines, reviewed and never frozen.** Decision F2 lifts the draft-room freeze, including its redraft, token and admin sheets, and restores the normal 16 px site root. The former draft-room matrices now capture `[data-draft-room]` at 390, 768, 1366 and 1920 px. Run `npm run visual:capture -- --label draft-room-after --set draft-room --no-seed --base-url http://localhost:<port>`; these fixtures need no database. The remaining frozen surfaces still require zero diff.
 
 ## Running it
 

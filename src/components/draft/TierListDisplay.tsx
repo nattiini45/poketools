@@ -1,5 +1,7 @@
 'use client';
 
+import { useState } from 'react';
+import { Button } from '@ui-sdk/react/button';
 import PokemonSprite from '@/components/shared/PokemonSprite';
 import SkewPlate from '@/components/ui/SkewPlate';
 import { useDataLocale, useT } from '@/i18n/client';
@@ -7,6 +9,7 @@ import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { EvolutionTier, DraftTierLimit, PowerTier } from '@/types/evolution';
 import { POWER_TIERS } from '@/types/evolution';
+import { compareSortValues, cycleColumnSort, type ColumnSortState } from '@/lib/ui/table-params';
 
 interface TierListDisplayProps {
   tiers: EvolutionTier[];
@@ -19,11 +22,20 @@ const TIER_PLATE: Record<PowerTier, 1 | 2 | 3 | 4> = { S: 1, A: 2, B: 3, C: 4 };
 export default function TierListDisplay({ tiers, tierLimits }: TierListDisplayProps) {
   const t = useT(draftLegacyBoardMessages);
   const dataLocale = useDataLocale();
+  const [sort, setSort] = useState<ColumnSortState | null>(null);
   // Group tiers by power tier
   const tiersByPower: Record<PowerTier, EvolutionTier[]> = { S: [], A: [], B: [], C: [] };
   for (const tier of tiers) {
     const pt = (tier.power_tier || 'C') as PowerTier;
     if (tiersByPower[pt]) tiersByPower[pt].push(tier);
+  }
+  if (sort) {
+    const value = (tier: EvolutionTier) => sort.key === 'next'
+      ? tier.stage2_kos
+      : tier.stage3_pokemon ? tier.stage3_kos ?? tier.stage2_kos : tier.stage2_kos;
+    for (const group of Object.values(tiersByPower)) {
+      group.sort((a, b) => compareSortValues(value(a), value(b)) * (sort.direction === 'asc' ? 1 : -1));
+    }
   }
 
   // Build limits lookup
@@ -34,6 +46,18 @@ export default function TierListDisplay({ tiers, tierLimits }: TierListDisplayPr
 
   return (
     <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap gap-2">
+        {(['next', 'total'] as const).map((key) => (
+          <Button
+            key={key}
+            onClick={() => setSort(cycleColumnSort(sort, key))}
+            className="min-h-11 rounded-poke-md border border-hairline bg-elevated px-3 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2"
+          >
+            {t(`tierList.sort.${key}`)}
+            {sort?.key === key ? ` ${sort.direction === 'asc' ? '↑' : '↓'}` : ''}
+          </Button>
+        ))}
+      </div>
       {/* Limits summary */}
       <ul className="flex flex-wrap gap-x-5 gap-y-2">
         {POWER_TIERS.map((pt) => {

@@ -253,7 +253,7 @@ the 3D layer obeys the same grammar as the DOM. See the route-world design spec 
 
 ## Frozen surfaces and the 16 px root
 
-The draft rooms, themed route worlds, broadcast overlays, EPB animations
+The themed route worlds, broadcast overlays, EPB animations
 (`CrystalXPBar`, `EvolutionRosterCard`), the match highlight card and the social
 images keep their pre-redesign pixels (plan addendum B). Their roots carry
 `data-frozen="<surface>"` (no styles), and the visual harness holds them to zero
@@ -269,11 +269,10 @@ diff (`docs/visual-harness.md`). They were built against an 18 px root, so:
 - Inside frozen code, write lengths through the spacing scale (`min-w-112`,
   `calc(var(--spacing)*30)`), never an arbitrary `rem` value: those cannot be pinned.
   Plain `rounded` is one spacing step for the same reason.
-- Draft-room pages keep the pre-F3 site look (`html:has([data-frozen="draft-room"])`): the
-  18 px root, the plaza ground and the Nunito / DM Sans page font. The room fills
-  the page under the nav and leaves its ground transparent, and its sticky clock
-  bar paints pixel-identical only under the root size and page font it was built
-  with, even with identical geometry.
+- Decision F2 lifts the draft-room freeze. Its screen, redraft, tokens and sheets
+  use the normal 16 px site root and current typography. `[data-draft-room]`
+  identifies those reviewed captures without applying frozen pins; the pick screen
+  uses container queries and can grow to 1920 px. The remaining surfaces stay frozen.
 - The containers that size a frozen root keep their pre-F3 pixel widths until
   their track redesigns them: the layout `<main>` (1440 px, 18/27/36 px gutters),
   `PageContainer` (756/1008/1152/1440 px) and the draft board's roster grid gap.

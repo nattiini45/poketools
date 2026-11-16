@@ -1,5 +1,7 @@
 'use client';
 
+import { Select, SelectContent, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@ui-sdk/react/select';
+
 /**
  * The finder bar above the wall (draft-frontend §5.5 `FinderBar`, §5.3, SPEC:211-232): bilingual search
  * (debounced 120 ms into `setText`), the stage mode ("On the same Pokémon" / "Anywhere in the line", FR-6),
@@ -193,23 +195,30 @@ export default function FinderBar({
       </button>
 
       <div className="inline-flex flex-wrap items-center gap-2">
-        <label className="inline-flex items-center gap-1.5 text-sm text-[var(--draft-ink-2,var(--poke-text-secondary))]">
-          <span>{t('sort.label')}</span>
-          <select
-            value={view.sort}
-            onChange={(e) => dispatch({ type: 'setSort', sort: e.target.value as SortKey })}
+        <Select
+          items={sortOptions.map(({ key, label }) => ({ value: key, label }))}
+          value={view.sort}
+          onValueChange={(value) => {
+            if (SORT_KEYS.includes(value as SortKey)) dispatch({ type: 'setSort', sort: value as SortKey });
+          }}
+        >
+          <SelectLabel className="text-sm">{t('sort.label')}</SelectLabel>
+          <SelectTrigger
             className={cn(
-              'min-h-[44px] rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))] md:min-h-0 md:py-1',
+              'min-h-[44px] max-w-full rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] px-2 text-sm text-[var(--draft-ink,var(--poke-text-primary))]',
               FOCUS_RING,
             )}
           >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent className="z-50 max-h-80 overflow-y-auto rounded-poke-md border border-[var(--draft-border,var(--poke-border))] bg-[var(--draft-surface,var(--poke-surface))] p-1 text-[var(--draft-ink,var(--poke-text-primary))] shadow-poke-lg">
             {sortOptions.map((o) => (
-              <option key={o.key} value={o.key}>
+              <SelectItem key={o.key} value={o.key} className="min-h-11 cursor-pointer rounded px-3 py-2 text-sm data-highlighted:bg-[var(--draft-elevated,var(--poke-elevated))]">
                 {o.label}
-              </option>
+              </SelectItem>
             ))}
-          </select>
-        </label>
+          </SelectContent>
+        </Select>
         <span className="inline-flex items-center gap-1.5 text-sm text-[var(--draft-ink-2,var(--poke-text-secondary))]">
           <span aria-hidden="true">{t('sort.stage.label')}</span>
           <SegmentedControl

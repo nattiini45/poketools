@@ -57,7 +57,7 @@
    * border); `DraftToolScreen` measures `#site-nav` and the clock row and
    * overrides both inline, so this value only holds before hydration.
    */
-  --nav-h: calc(72px + 1px);
+  --nav-h: 65px;
   --draft-clock-h: 0px;
   /*
    * The public layout's `<main>` vertical padding (`py-6`, 27px top and
@@ -89,18 +89,18 @@
    * the footer's height follows its sprite.
    */
   --draft-card-border: 2px;
-  --draft-card-head: 31.5px;
-  --draft-card-sprite: 99px;
+  --draft-card-head: 28px;
+  --draft-card-sprite: 88px;
   --draft-card-name: 18px;
   --draft-card-meta: 15.75px;
-  --draft-card-footer-sprite: 45px;
+  --draft-card-footer-sprite: 40px;
   --draft-card-footer: calc(var(--draft-card-footer-sprite) + 9px);
   --draft-card-h: calc(
     var(--draft-card-head) + var(--draft-card-sprite) + var(--draft-card-name) + var(--draft-card-meta) +
       var(--draft-card-footer) + 2 * var(--draft-card-border)
   );
   /* Narrowest card the wall's grid tracks allow (names and the footer need the room). */
-  --draft-card-min: 121.5px;
+  --draft-card-min: 112px;
   /*
    * The one skew of the card frame (negative: the top edge leans right), the
    * footer plate inside it and the dock tiles. Read it with `tan()`: a row at
@@ -135,7 +135,7 @@
   .tokens,
   .root {
     --draft-card-skew: -8deg;
-    --draft-card-min: 157.5px;
+    --draft-card-min: 112px;
   }
 }
 
@@ -158,140 +158,75 @@
 
 /* ── Screen grid ─────────────────────────────────────────────────────── */
 
+.roomContainer {
+  container: draft-room / inline-size;
+}
+
 .screen {
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  min-width: 0;
+  gap: clamp(0.5rem, 1cqi, 1rem);
+  min-inline-size: 0;
 }
+
+.screenHeader { order: 0; }
+.clockRow { order: 1; }
+.orderRow { order: 2; }
+.stagePane { order: 3; }
+.wallPane { order: 4; }
+.extras { order: 5; }
+.bottomBar { order: 6; }
 
 .screenHeader,
 .clockRow,
-.orderRow {
-  min-width: 0;
-}
-
-/*
- * The page header the host passes in (title, subtitle, group switch, notices):
- * the screen's own first row, so its real height, however it wraps or
- * whichever notices show, comes out of the same box as everything else and
- * nothing measures it. Sorted ahead of the clock row (`order: 1`); spans both
- * columns from 768 px.
- */
-.screenHeader {
-  order: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 13.5px;
-}
-
+.orderRow,
 .stagePane,
 .wallPane {
-  min-width: 0;
-  position: relative;
+  min-inline-size: 0;
 }
 
-/*
- * Phone: the left column dissolves (`display: contents`, the frame and its
- * scroller both) so its parts can be ordered around the wall: selected card →
- * wall → roster/picks/compare → sticky bottom bar (§5.3 phone list).
- */
 .stagePane,
 .stageScroll {
   display: contents;
 }
 
+.screenHeader,
 .stageCard,
 .extras {
   display: flex;
   flex-direction: column;
-  gap: 13.5px;
-  min-width: 0;
-  padding: 9px;
+  gap: 0.75rem;
+}
+
+.stageCard,
+.extras,
+.wallPane {
+  padding: clamp(0.5rem, 1.2cqi, 1rem);
   border: 1px solid var(--draft-border);
-  border-radius: 13.5px;
+  border-radius: 0.75rem;
   background: var(--draft-surface);
+  min-inline-size: 0;
 }
 
-.clockRow {
-  order: 1;
-}
-.orderRow {
-  order: 2;
-}
-.stageCard,
-.stagePane {
-  order: 3;
-}
-.wallPane {
-  order: 4;
-}
-.extras {
-  order: 5;
-}
-.bottomBar {
-  order: 6;
-}
-
-/*
- * From 768 px the left column is a frame (`.stagePane`: border, fill, from
- * 1024 px the diagonal clip) around its one scroller (`.stageScroll`), which
- * holds the padding and the gap. They are two elements because the scrollbar
- * belongs to the scroller: on the clipped frame itself it would sit under the
- * diagonal edge, which cuts away the whole right strip toward the bottom.
- */
-@media (min-width: 768px) {
-  .stagePane {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--draft-border);
-    border-radius: 13.5px;
-    background: var(--draft-surface);
-  }
-  .stageScroll {
-    display: flex;
-    flex-direction: column;
-    gap: 13.5px;
-    min-width: 0;
-    padding: 13.5px;
-  }
-  .stageCard,
-  .extras {
-    padding: 0;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-  }
-}
+.stageCard { order: 3; }
 
 .wallPane {
+  container: draft-wall / inline-size;
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 9px;
-  padding: 13.5px;
-  border: 1px solid var(--draft-border);
-  border-radius: 13.5px;
+  gap: 0.5rem;
   background: var(--draft-wall);
   isolation: isolate;
-  /*
-   * `clip`, not `hidden`: it clips the lattice and the corners without
-   * becoming a scroll container, so the price tabs can stick to the viewport
-   * below 1024 px. Browsers without `clip` keep `hidden`.
-   */
-  overflow: hidden;
-  overflow: clip;
 }
 
-/* Bars above the grid keep their height; only the grid gives way. */
-.wallPane > * {
-  flex-shrink: 0;
-}
+.wallPane > * { flex-shrink: 0; }
 
-/* Static hex lattice (the mockup's pulsing glow is dropped, §5.4). */
 .wallPane::before {
   content: '';
   position: absolute;
   inset: 0;
+  border-radius: inherit;
   z-index: -1;
   background: var(--draft-hex-line);
   -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='56' height='97' viewBox='0 0 56 97'%3E%3Cpath d='M28 0 56 16.2v32.3L28 64.7 0 48.5V16.2zM28 64.7V97M0 97h0M56 97h0' fill='none' stroke='black' stroke-width='1.2'/%3E%3C/svg%3E") repeat;
@@ -302,89 +237,59 @@
   pointer-events: none;
 }
 
-/* Tablet: two columns, no diagonal. */
-@media (min-width: 768px) {
+@container draft-room (min-width: 44rem) {
   .screen {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+    grid-template-columns: minmax(17rem, 0.8fr) minmax(0, 1.2fr);
     grid-template-rows: auto auto minmax(0, 1fr);
-    gap: 13.5px;
+    align-items: start;
   }
   .screenHeader,
   .clockRow,
-  .orderRow {
-    grid-column: 1 / -1;
+  .orderRow { grid-column: 1 / -1; }
+  .stagePane,
+  .stageScroll {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
   }
-  .orderRow {
-    display: none;
-  }
+  .stagePane { position: sticky; top: calc(var(--nav-h) + 0.75rem); }
+  .stageCard { max-height: none; }
+  .stageScroll { padding: 0; }
+  .extras { padding: 0.75rem; }
 }
 
-/*
- * Desktop: the Prompt 9 split with a diagonal edge, and a screen of fixed
- * height: the viewport minus the site nav and the layout's main padding. The
- * page header is the screen's first row (`.screenWithHeader` adds its track),
- * so it is inside that height and the document never outgrows the viewport:
- * only the left column (`.stageScroll`) and the roster grid (`.wallScroll`)
- * scroll. The floor is the wall's offset below the screen's top
- * (`--draft-lower-top`, measured) plus two card rows, so the wall always shows
- * two full rows and the left column fits; in a shorter window the page scrolls
- * instead. A taller window keeps filling the viewport.
- */
-@media (min-width: 1024px) {
+@container draft-room (min-width: 66rem) {
   .screen {
-    grid-template-columns: minmax(360px, 5fr) minmax(0, 7fr);
-    gap: 0;
-    row-gap: 9px;
-    height: calc(100dvh - var(--nav-h) - var(--draft-page-pad-y));
-    min-height: calc(var(--draft-lower-top, 360px) + 2 * var(--draft-card-h) + 45px);
+    grid-template-columns: minmax(20rem, 0.7fr) minmax(0, 1.3fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    block-size: calc(100dvh - var(--nav-h) - var(--draft-page-pad-y));
+    min-block-size: 48rem;
+    align-items: stretch;
   }
-  .screenWithHeader {
-    grid-template-rows: auto auto auto minmax(0, 1fr);
-  }
-  .orderRow {
-    display: block;
-  }
+  .screenWithHeader { grid-template-rows: auto auto auto minmax(0, 1fr); }
   .stagePane {
-    border-radius: 13.5px 0 0 13.5px;
-    padding-right: 67.5px;
-    clip-path: polygon(0 0, 100% 0, calc(100% - 48px) 100%, 0 100%);
-    z-index: 1;
+    position: relative;
+    top: auto;
+    min-block-size: 0;
+    border: 1px solid var(--draft-border);
+    border-radius: 0.75rem;
+    background: var(--draft-surface);
   }
-  /*
-   * The scroller ends 67.5px short of the frame's right edge, which the
-   * diagonal (48px at the bottom) never reaches, so its scrollbar is never
-   * clipped. The gutter keeps the content width from jumping when the bar
-   * appears.
-   */
   .stageScroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    padding-right: 0;
+    min-block-size: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;
+    padding: 0.75rem;
   }
-  /*
-   * The stage card never outgrows the scroller minus the dock below it: the dock is sticky at the bottom, so a
-   * taller card would end under it with the base stage cut off. Capped, the card's one flexible item, the line
-   * picture (`.previewArea`), takes the shortfall, and the dock sits in its natural place right under the card
-   * (the scroller's gap is the 13.5px taken off here). `100%` is the scroller's content height: definite,
-   * because the scroller is a flex item of the fixed-height frame. In a window too short for even the
-   * picture's floor, `min-height: min-content` lets the card keep its content height instead of overflowing
-   * its box (an overflow would stay under the dock at every scroll position): the column scrolls, and once
-   * the card has scrolled past the dock's natural place the stage is whole.
-   */
-  .stageCard {
-    flex: 0 0 auto;
-    min-height: min-content;
-    max-height: calc(100% - var(--draft-dock-h) - 13.5px);
-  }
-  .wallPane {
-    margin-left: -48px;
-    padding-left: calc(48px + 13.5px);
-    border-radius: 0 13.5px 13.5px 0;
-  }
+  .stageCard,
+  .extras { border: 0; padding: 0; }
+  .wallPane { min-block-size: 0; }
+}
+
+@container draft-room (min-width: 100rem) {
+  .screen { grid-template-columns: minmax(24rem, 0.65fr) minmax(0, 1.35fr); }
 }
 
 /* ── Wall: price tabs pinned on top, the card grid scrolls ─────────────── */
@@ -432,7 +337,7 @@
   }
 }
 
-@media (min-width: 1024px) {
+@container draft-room (min-width: 66rem) {
   .wallTabs {
     position: static;
     background: transparent;
@@ -460,9 +365,29 @@
  * decide it, not the column count.
  */
 .wallGrid {
+  --draft-card-sprite: 72px;
+  --draft-card-footer-sprite: 32px;
+  --draft-card-footer: calc(var(--draft-card-footer-sprite) + 9px);
+  --draft-card-h: calc(var(--draft-card-head) + var(--draft-card-sprite) + var(--draft-card-name) + var(--draft-card-meta) + var(--draft-card-footer) + 2 * var(--draft-card-border));
+  --draft-card-overhang: calc(var(--draft-card-h) / 2 * tan(var(--draft-card-skew)) * -1);
+  --draft-card-grid-inset: calc(var(--draft-card-overhang) + var(--draft-card-ring));
+  --draft-card-head-shift: calc((var(--draft-card-h) - var(--draft-card-head) - 2 * var(--draft-card-border)) / 2 * tan(var(--draft-card-skew)) * -1);
+  --draft-card-footer-shift: calc((var(--draft-card-h) - var(--draft-card-footer) - 2 * var(--draft-card-border)) / 2 * tan(var(--draft-card-skew)) * -1);
   grid-auto-rows: var(--draft-card-h);
   grid-template-columns: repeat(auto-fill, minmax(var(--draft-card-min), 1fr));
   padding-inline: var(--draft-card-grid-inset);
+}
+
+@container draft-wall (min-width: 28rem) {
+  .wallGrid {
+    --draft-card-min: 128px;
+    --draft-card-sprite: clamp(72px, 13cqi, 108px);
+    --draft-card-footer-sprite: 36px;
+  }
+}
+
+@container draft-wall (min-width: 48rem) {
+  .wallGrid { --draft-card-min: 144px; }
 }
 
 /* ── Roster card ─────────────────────────────────────────────────────── */
@@ -690,7 +615,8 @@
   place-items: center;
   aspect-ratio: 100 / var(--draft-preview-h);
   /* A size container has no content height of its own, so the floor is explicit: a tight flex column never squashes it below it. */
-  min-height: 198px;
+  min-height: 144px;
+  max-height: 320px;
 }
 
 .previewStage {
@@ -750,7 +676,8 @@
  */
 @media (max-width: 767px) {
   .previewArea {
-    max-height: calc(100svh - var(--nav-h) - var(--draft-clock-h) - var(--draft-bottom-bar-h) - 27px);
+    aspect-ratio: auto;
+    height: clamp(144px, 24svh, 200px);
   }
 }
 
@@ -976,6 +903,44 @@
     top: var(--nav-h);
     z-index: 20;
   }
+  .clockBar {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 8px;
+    padding: 8px;
+  }
+  .clockProgress,
+  .clockActive {
+    grid-column: 1 / -1;
+  }
+  .clockActive {
+    order: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(80px, 0.7fr);
+    gap: 8px;
+  }
+  .clockActive > .banner,
+  .clockActive > .onClockPill {
+    font-size: 12px;
+    line-height: 1.25;
+    padding: 6px 8px;
+  }
+  .clockActive .timerTrack {
+    min-width: 40px;
+    flex-basis: 40px;
+  }
+  .clockExtensions { grid-column: 1; order: 3; }
+  .clockActions {
+    grid-column: 2;
+    order: 3;
+    max-inline-size: min(10rem, 45cqi);
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .clockBar > .nextSingle,
+  .clockBar > .banner { grid-column: 1 / -1; }
+  .clockBar > .banner { order: 1; }
+  .clockBar > .nextSingle { order: 4; }
 }
 
 .timerTrack {
@@ -987,6 +952,13 @@
   overflow: hidden;
   border-radius: 9999px;
   background: var(--draft-clock-track);
+}
+
+@media (pointer: coarse) {
+  .clockBar button {
+    min-block-size: 44px;
+    min-inline-size: 44px;
+  }
 }
 
 .timerTrackCompact {
@@ -1202,9 +1174,14 @@
   display: none;
 }
 
-@media (min-width: 768px) and (max-width: 1023px) {
+@container draft-room (44rem <= width < 66rem) {
+  .orderRow {
+    display: none;
+  }
   .nextFive {
     display: flex;
+    grid-column: 1 / -1;
+    order: 4;
     flex: 1 1 100%;
     align-items: center;
     gap: 9px;
@@ -1283,7 +1260,7 @@
     display: flex;
     flex-direction: column;
     gap: 4.5px;
-    padding: 9px 0;
+    padding: 9px 0 max(9px, env(safe-area-inset-bottom));
     background: linear-gradient(to top, var(--draft-surface) 80%, transparent);
   }
   .bottomBar .cta {
@@ -1379,24 +1356,24 @@
 
 @media (prefers-reduced-motion: no-preference) {
   .timerFill {
-    transition: width 250ms linear, background-color 120ms ease;
+    transition: width var(--motion-slow) linear, background-color var(--motion-fast) ease;
   }
   .dockTile,
   .orderChip,
   .cta {
-    transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 120ms ease;
+    transition: background-color var(--motion-fast) ease, color var(--motion-fast) ease, border-color var(--motion-fast) ease, transform var(--motion-fast) ease;
   }
   .dockTile:hover {
     transform: skewX(var(--draft-card-skew)) translateY(-2px);
   }
   .filterSheet[data-state="open"] {
-    animation: filterSheetIn 180ms ease-out;
+    animation: filterSheetIn var(--motion-moderate) ease-out;
   }
   .liveDot:not(.liveDotPaused),
   .seatNow:not(.seatPaused) {
-    animation: livePulse 1.6s ease-in-out infinite;
+    animation: livePulse calc(var(--motion-moderate) * 10) ease-in-out infinite;
   }
   .filterSheet[data-state="closed"] {
-    animation: filterSheetOut 120ms ease-in;
+    animation: filterSheetOut var(--motion-fast) ease-in;
   }
 }

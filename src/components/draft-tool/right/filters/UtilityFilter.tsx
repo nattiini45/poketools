@@ -128,7 +128,7 @@ export default function UtilityFilter({ view, dispatch, ix, names, dl, banned }:
                           />
                           <span className={cn(isBanned && 'line-through')}>{name}</span>
                           {isBanned && (
-                            <span className="rounded-full border border-[var(--draft-warn-ink,var(--poke-amber-ink))] px-1.5 text-[10px] font-semibold text-[var(--draft-warn-ink,var(--poke-amber-ink))]">
+                            <span className="rounded-full border border-[var(--draft-warn-ink,var(--poke-amber-ink))] px-1.5 text-[11px] font-semibold text-[var(--draft-warn-ink,var(--poke-amber-ink))]">
                               {t('utility.banned')}
                             </span>
                           )}

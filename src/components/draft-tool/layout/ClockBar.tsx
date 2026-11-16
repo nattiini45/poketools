@@ -15,6 +15,7 @@
  * rendered ALL CAPS through `.caps`.
  */
 import type { ReactNode } from 'react';
+import { Button } from '@ui-sdk/react/button';
 import { ShieldCheck, Users } from 'lucide-react';
 import Link from 'next/link';
 import { useFormatter, useT } from '@/i18n/client';
@@ -112,7 +113,7 @@ export default function ClockBar({
   return (
     <section className={styles.clockBar} aria-label={t('clock.label')}>
       {slot && running && progress ? (
-        <div className="flex min-w-0 flex-col gap-1">
+        <div className={`${styles.clockProgress} flex min-w-0 flex-col gap-1`}>
           <span className="flex flex-wrap items-center gap-2 text-sm font-semibold">
             <span>
               {t('clock.roundOf', { round: progress.round, rounds: progress.roundsTotal, pick: progress.pickInRound, picks: progress.picksInRound })}
@@ -162,7 +163,7 @@ export default function ClockBar({
       ) : null}
 
       {slot && running ? (
-        <div className="flex min-w-0 flex-[2_1_288px] flex-wrap items-center gap-x-3 gap-y-1">
+        <div className={`${styles.clockActive} flex min-w-0 flex-[2_1_288px] flex-wrap items-center gap-x-3 gap-y-1`}>
           {vm.viewerOnClock ? (
             <span className={`${styles.banner} ${styles.caps} text-sm`}>{tGlossary('draft.youOnClock')}</span>
           ) : (
@@ -186,12 +187,12 @@ export default function ClockBar({
       ) : null}
 
       {showExtensions ? (
-        <div className="flex items-center gap-1.5" title={t('clock.extHint')}>
+        <div className={`${styles.clockExtensions} flex items-center gap-1.5`} title={t('clock.extHint')}>
           {(['plus120', 'plus60'] as const).map((kind) => {
             const used = vm.viewer.extensions[kind] === 'used';
             const time = f.clock(EXTENSION_SECONDS[kind]);
             return (
-              <button
+              <Button
                 key={kind}
                 type="button"
                 onClick={() => onExtension(kind)}
@@ -201,7 +202,7 @@ export default function ClockBar({
               >
                 {t('clock.extAdd', { time })}
                 {used ? <span className="ml-1 text-xs font-normal">({t('clock.extUsed')})</span> : null}
-              </button>
+              </Button>
             );
           })}
         </div>
@@ -230,12 +231,12 @@ export default function ClockBar({
         </div>
       ) : null}
 
-      <div className="ml-auto flex items-center gap-2">
+      <div className={`${styles.clockActions} ml-auto flex items-center gap-2`}>
         {vm.viewer.isParticipant && vm.status !== 'complete' ? (
           <NotifyToggle state={notify} onToggle={onNotifyToggle} slow={vm.mode === 'slow'} />
         ) : null}
         {onOpenAdmin ? (
-          <button
+          <Button
             type="button"
             onClick={onOpenAdmin}
             onPointerEnter={onPrefetchAdmin}
@@ -246,16 +247,16 @@ export default function ClockBar({
           >
             <ShieldCheck className="h-4 w-4" aria-hidden="true" />
             {t('clock.admin')}
-          </button>
+          </Button>
         ) : null}
-        <button
+        <Button
           type="button"
           onClick={onOpenPlayers}
           className={`${styles.focusable} inline-flex min-h-[44px] items-center gap-2 rounded-lg border border-[var(--draft-border)] px-3 text-sm hover:bg-[var(--draft-elevated)] md:min-h-[36px]`}
         >
           <Users className="h-4 w-4" aria-hidden="true" />
           {t('clock.players')}
-        </button>
+        </Button>
       </div>
     </section>
   );

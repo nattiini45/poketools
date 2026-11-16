@@ -434,7 +434,7 @@ async function runPool(items, concurrency, worker) {
 
 export async function capture({ label, sets, only = [], appDir = REPO, port = DEFAULT_PORT, baseUrl = null, concurrency = 4, out = join(REPO, '.visual'), withSeed = true }) {
   if (!Number.isInteger(concurrency) || concurrency < 1) throw new Error('visual: --concurrency must be a whole number of at least 1');
-  const manifests = Object.fromEntries(await Promise.all(sets.map(async (set) => [set, await readJson(join(HERE, set === 'frozen' ? 'frozen.json' : 'routes.json'))])));
+  const manifests = Object.fromEntries(await Promise.all(sets.map(async (set) => [set, await readJson(join(HERE, set === 'frozen' ? 'frozen.json' : set === 'draft-room' ? 'draft-room.json' : 'routes.json'))])));
   const known = Object.values(manifests).flatMap((m) => m.targets.map((t) => t.id));
   const unknown = only.filter((pattern) => pattern !== 'social-image' && !known.some((id) => id === pattern || id.startsWith(pattern + '/')));
   if (unknown.length) throw new Error('visual: --only names no target: ' + unknown.join(', '));
@@ -533,8 +533,8 @@ async function main() {
   }
   const set = option(argv, 'set', 'frozen');
   const sets = set === 'all' ? ['frozen', 'surfaces'] : [set];
-  if (!sets.every((s) => s === 'frozen' || s === 'surfaces')) {
-    console.error('visual: --set must be frozen, surfaces or all');
+  if (!sets.every((s) => s === 'frozen' || s === 'surfaces' || s === 'draft-room')) {
+    console.error('visual: --set must be frozen, surfaces, draft-room or all');
     process.exit(2);
   }
   const result = await capture({

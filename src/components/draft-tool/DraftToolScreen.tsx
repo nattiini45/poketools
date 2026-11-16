@@ -288,7 +288,8 @@ export default function DraftToolScreen({
   );
 
   return (
-    <div ref={rootRef} className={screenClass} data-frozen="draft-room">
+    <div className={styles.roomContainer} data-draft-room-screen>
+    <div ref={rootRef} className={screenClass} data-draft-room>
       {header ? <div className={styles.screenHeader}>{header}</div> : null}
       <div ref={clockRowRef} className={styles.clockRow}>
         <ClockBar
@@ -316,7 +317,7 @@ export default function DraftToolScreen({
             <StageStatus stale={stale} spectator={spectator} />
 
             {pinned ? (
-              <PhoneSection title={t('stage.selected')}>
+              <>
                 <InfoBox
                   entry={pinned}
                   dl={dl}
@@ -342,7 +343,7 @@ export default function DraftToolScreen({
                   />
                 ) : null}
                 <LinePreview entry={pinned} />
-              </PhoneSection>
+              </>
             ) : (
               <div className={`${styles.halftone} flex min-h-[144px] flex-col items-center justify-center gap-1 rounded-lg p-4 text-center`}>
                 <p className="font-semibold">{t('stage.empty')}</p>
@@ -525,6 +526,7 @@ export default function DraftToolScreen({
         notify={notify}
         onNotifyToggle={onNotifyToggle}
       />
+    </div>
     </div>
   );
 }

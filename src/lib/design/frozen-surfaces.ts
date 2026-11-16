@@ -4,10 +4,6 @@
  * guard in motion-guards.test.ts) skip them. Paths are relative to src/.
  */
 export const FROZEN_SOURCE_PATHS = [
-  'components/draft-tool/',
-  'components/draft-redraft/',
-  'components/draft-tokens/',
-  'components/draft-admin/RoomAdminSheet.tsx',
   'components/world/',
   'components/broadcast/overlays/',
   'components/broadcast/shared/',

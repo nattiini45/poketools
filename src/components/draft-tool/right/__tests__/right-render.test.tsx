@@ -350,8 +350,8 @@ describe('FinderBar', () => {
     expect(html).toContain('aria-haspopup="dialog"');
     expect(html).toContain('id="draft-filter-panel-trigger"');
     expect(html).toMatch(/>Filters<\/button>/);
-    expect(html).toContain('>Speed</option>');
-    expect(html).toContain('>BST</option>');
+    expect(renderWithI18n(<FinderBar view={view({ sort: 'spe' })} dispatch={noop} indexReady names={testNames} />)).toContain('>Speed<');
+    expect(renderWithI18n(<FinderBar view={view({ sort: 'bst' })} dispatch={noop} indexReady names={testNames} />)).toContain('>BST<');
     expect(html).not.toContain('final stage');
     expect(html).toContain('Show drafted');
   });
@@ -364,7 +364,8 @@ describe('FinderBar', () => {
       expect(groups(html)).toHaveLength(2);
       expect(groups(html)[0]).toContain('aria-label="Where the filters must match"');
       expect(groups(html)[1]).toContain('aria-label="Stats of"');
-      expect(html.indexOf('<select')).toBeLessThan(html.indexOf('aria-label="Stats of"'));
+      expect(html.indexOf('role="combobox"')).toBeGreaterThan(0);
+      expect(html.indexOf('role="combobox"')).toBeLessThan(html.indexOf('aria-label="Stats of"'));
       expect(html).toMatch(/aria-checked="true"[^>]*>Final</);
       expect(html).toMatch(/aria-checked="false"[^>]*>Base</);
     });
@@ -378,7 +379,7 @@ describe('FinderBar', () => {
     });
 
     it('stays in place but is disabled and muted for the sorts without a stat', () => {
-      for (const sort of ['default', 'alpha', 'favorites'] as const) {
+      for (const sort of ['default', 'alpha', 'favorites', 'next', 'total'] as const) {
         const html = renderWithI18n(<FinderBar view={view({ sort })} dispatch={noop} indexReady names={testNames} />);
         expect(groups(html)[1]).toContain('aria-disabled="true"');
         expect(html.match(/<button[^>]*role="radio"[^>]*disabled=""/g)).toHaveLength(2);
@@ -401,7 +402,7 @@ describe('FinderBar', () => {
     });
     expect(html).toContain('Am selben Pokémon');
     expect(html).toContain('Irgendwo in der Linie');
-    expect(html).toContain('>Init.</option>');
+    expect(renderWithI18n(<FinderBar view={view({ sort: 'spe' })} dispatch={noop} indexReady={false} names={testNames} />, { locale: 'de' })).toContain('>Init.<');
     expect(html).not.toContain('(Endstufe)');
     expect(html).toContain('Gedraftete anzeigen');
     expect(html).toContain('Filter werden geladen');

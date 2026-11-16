@@ -106,6 +106,8 @@ export default {
     default: 'Default (price)',
     alpha: 'Alphabetical',
     favorites: 'Favourites first',
+    next: 'Kills to first evolution',
+    total: 'Total kills to final evolution',
     bst: 'BST',
     /** Whose stats the stat sorts and BST read: the first or the last stage of a line. */
     stage: {

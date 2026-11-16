@@ -9,6 +9,7 @@
  * Clicking only opens the confirmation dialog; nothing is committed here.
  */
 import { forwardRef, useId } from 'react';
+import { Button } from '@ui-sdk/react/button';
 import { useT } from '@/i18n/client';
 import { draftScreenMessages } from '@/i18n/messages/draft/screen';
 import { glossaryMessages } from '@/i18n/messages/glossary';
@@ -38,7 +39,7 @@ const DraftButton = forwardRef<HTMLButtonElement, DraftButtonProps>(function Dra
 
   return (
     <div className={`flex flex-col gap-1 ${className ?? ''}`}>
-      <button
+      <Button
         ref={ref}
         type="button"
         onClick={onClick}
@@ -47,7 +48,7 @@ const DraftButton = forwardRef<HTMLButtonElement, DraftButtonProps>(function Dra
         className={`${styles.cta} ${variant === 'admin' ? styles.ctaAdmin : ''}`}
       >
         <span className={variant === 'player' ? styles.caps : undefined}>{label}</span>
-      </button>
+      </Button>
       {showReason ? (
         <p id={reasonId} className="text-sm text-[var(--draft-ink-2)]">
           {reasonText}

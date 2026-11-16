@@ -183,9 +183,9 @@ describe('bottom tab bar contract (plan §3.1)', () => {
   });
 
   it('pads main by the bar while it is mounted, and never on a draft-room page', () => {
-    expect(css).toContain('html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {\n  display: none;');
+    expect(css).toContain('html:has([data-draft-room]) [data-site-bottom-bar] {\n  display: none;');
     expect(css).toMatch(
-      /html:not\(\.world-route-live\):not\(:has\(\[data-frozen="draft-room"\]\)\) body:has\(\[data-site-bottom-bar\]\) #main-content \{\s*padding-bottom: calc\(27px \+ 56px \+ env\(safe-area-inset-bottom\)\);/,
+      /html:not\(\.world-route-live\):not\(:has\(\[data-draft-room\]\)\) body:has\(\[data-site-bottom-bar\]\) #main-content \{\s*padding-bottom: calc\(27px \+ 56px \+ env\(safe-area-inset-bottom\)\);/,
     );
   });
 

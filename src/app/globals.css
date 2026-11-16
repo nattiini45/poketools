@@ -1,3 +1,4 @@
+@layer ui-sdk;
 @layer theme, base, components, utilities;
 @import "tailwindcss/theme.css" layer(theme);
 @import "./tailwind-base.css" layer(base);
@@ -274,12 +275,6 @@
 @layer base {
   html {
     font-size: 100%; /* 16 px; frozen surfaces keep 18 px through frozen-scale.css */
-  }
-
-  /* A draft room fills the page under the nav, and its sticky clock bar only paints pixel-identical at the root it
-     was built against: frozen-scale.css keeps its geometry, not Chrome's edge snapping. Its pages keep 18 px. */
-  html:has([data-frozen="draft-room"]) {
-    font-size: 18px;
   }
 
   :where([data-frozen]:not([data-frozen] *)) {
@@ -676,14 +671,6 @@
   --poke-live: var(--live);
 }
 
-/* A draft room fills the page and leaves its ground transparent, so its page keeps the plaza ground it was built
-   on (as it keeps the 18 px root). The site palette blocks below come later at the same specificity, so a palette
-   keeps its own ground. */
-html:has([data-frozen="draft-room"]) {
-  --background: var(--palette-plaza-ground);
-  --poke-base: var(--palette-plaza-ground);
-}
-
 /* ─── Fonts (redesign F3) ───
    Redesigned surfaces: Geist Sans for everything, display and title text included (font-heading), and Geist
    Mono for number columns (font-mono). Frozen roots keep Nunito, DM Sans and the system mono stack they were
@@ -704,8 +691,7 @@ body {
   }
 }
 
-[data-frozen],
-html:has([data-frozen="draft-room"]) body {
+[data-frozen] {
   --font-heading-face: var(--font-nunito);
   --font-body-face: var(--font-dm-sans);
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
@@ -3096,12 +3082,16 @@ html.world-route-live .world-nav-hud {
    While the bar is mounted (a signed-in player, below lg) the page keeps its last rows clear of it. A draft
    room owns its bottom edge (the pick dock of a fixed-height screen), so the bar is not drawn there and the
    page keeps its padding. A live 3D route world parks the bar with the NavBar (D33 block above). */
-html:has([data-frozen="draft-room"]) [data-site-bottom-bar] {
+html:has([data-draft-room]) [data-site-bottom-bar] {
   display: none;
 }
 
+html:has([data-draft-room-screen]) #main-content {
+  max-width: 1920px;
+}
+
 @media (max-width: 1023.98px) {
-  html:not(.world-route-live):not(:has([data-frozen="draft-room"])) body:has([data-site-bottom-bar]) #main-content {
+  html:not(.world-route-live):not(:has([data-draft-room])) body:has([data-site-bottom-bar]) #main-content {
     padding-bottom: calc(27px + 56px + env(safe-area-inset-bottom));
   }
 }

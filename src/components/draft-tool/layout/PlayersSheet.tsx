@@ -45,7 +45,7 @@ export default function PlayersSheet({ vm, catalog, open, onClose, notify, onNot
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 backdrop-blur-[2px]" />
         <Dialog.Content
-          data-frozen="draft-room"
+          data-draft-room
           // `.tokens`, not `.root`: the root's `position: relative` would beat Tailwind's `fixed` (same specificity, later sheet).
           className={`${styles.tokens} fixed inset-y-0 right-0 z-50 flex w-full max-w-md flex-col gap-3 overflow-y-auto border-l border-[var(--draft-border)] bg-[var(--draft-surface)] p-4 shadow-poke-lg`}
         >

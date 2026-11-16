@@ -195,6 +195,13 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Changed
 
+- **The draft room adapts to its available width at the normal 16 px site root.** The selected evolution portrait
+  stays open on phones, the clock and cards use less space there, and the two-pane layout gives the Pokémon wall
+  more room on laptops and large monitors. Decision F2 lifts the draft-room visual freeze; its fixture captures
+  are rebaselined as reviewed surfaces, while the other frozen surfaces remain pixel-identical.
+- **Evolution reference sorting.** Both the draft-room pick wall and legacy tier reference can sort by kills to
+  the first evolution or total kills to the final stage, using each line's own cumulative requirements without
+  loading trainer progress. Rewritten controls use the pinned UI SDK beta.6.
 - **The home hero Pokéball no longer opens.** The halves-splitting hover animation is gone; the ball stays closed and
   each new pointer entry advances its design Poké Ball → Great Ball → Ultra Ball → Master Ball → Poké Ball. A tap or
   Enter/Space cycles too; with `prefers-reduced-motion` the design switches with no motion. The divider ball further

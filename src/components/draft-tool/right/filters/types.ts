@@ -16,7 +16,7 @@ export interface FilterSectionProps {
 }
 
 /** A sub-heading inside a filter group (`h4`; the group header is the `h3`). */
-export const SECTION_HEADING = 'mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--draft-ink-2,var(--poke-text-secondary))]';
+export const SECTION_HEADING = 'mb-2 text-xs font-semibold text-[var(--draft-ink-2,var(--poke-text-secondary))]';
 
 /** A toggle pill (type, move, ability options): 44 px touch target on phones, 32 px from `md` up. */
 export function pillClass(pressed: boolean): string {
