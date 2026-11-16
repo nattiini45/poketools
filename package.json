@@ -71,6 +71,8 @@
     "@smogon/calc": "^0.11.0",
     "@supabase/supabase-js": "^2.99.2",
     "@tanstack/react-virtual": "3.14.23",
+    "@ui-sdk/core": "0.1.0-beta.6",
+    "@ui-sdk/react": "0.1.0-beta.6",
     "@vercel/analytics": "^2.0.1",
     "ai": "6.0.289",
     "braintrust": "^3.11.0",
