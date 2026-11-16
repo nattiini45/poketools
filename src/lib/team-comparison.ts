@@ -63,6 +63,7 @@ export function superEffectiveStabs(attackers: readonly ComparisonPokemon[], def
 
 export function mostRecentSharedLeague(leagues: readonly ComparisonLeague[]): ComparisonLeague | undefined {
   return [...leagues].sort((a, b) =>
-    (b.start_date ?? b.created_at).localeCompare(a.start_date ?? a.created_at) || b.id.localeCompare(a.id)
+    (b.start_date ?? b.created_at).localeCompare(a.start_date ?? a.created_at) ||
+    b.created_at.localeCompare(a.created_at) || b.id.localeCompare(a.id)
   )[0];
 }

@@ -55,3 +55,10 @@ it('opens from a player, fetches only on demand, and closes with Escape', async 
   await user.keyboard('{Escape}');
   expect(screen.queryByRole('dialog')).toBeNull();
 });
+
+it('labels missing types as partial coverage in both directions while retaining known hits', () => {
+  render(withI18n(<TeamComparison data={{ ...data, mine: { ...data.mine, pokemon: [...mine, { species: 'MissingNo.', types: [] }] } }} opponentName="Maple" onLeagueChange={vi.fn()} />));
+  expect(screen.getAllByText('Coverage is incomplete because some Pokémon have no type data. Only known hits are listed.')).toHaveLength(2);
+  expect(screen.queryByText('No super-effective STAB hits.')).toBeNull();
+  expect(screen.getByText('Wartortle → Charmeleon: Water ×2')).toBeTruthy();
+});

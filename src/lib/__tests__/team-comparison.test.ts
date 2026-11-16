@@ -40,4 +40,10 @@ describe('current league comparison', () => {
     expect(mostRecentSharedLeague(leagues)?.id).toBe('newer');
     expect(leagues[0]).toBe(older);
   });
+
+  it('breaks tied start dates by creation time before comparing ids', () => {
+    const older = { id: 'zzz', name: 'Earlier Cup', format_type: 'standard', start_date: '2026-11-01', created_at: '2025-01-01' };
+    const newer = { ...older, id: 'aaa', created_at: '2026-01-01' };
+    expect(mostRecentSharedLeague([older, newer])?.id).toBe('aaa');
+  });
 });

@@ -17,6 +17,7 @@ export default function TeamComparison({ data, opponentName, onLeagueChange }: {
   const t = useT(teamComparisonMessages);
   const f = useFormatter();
   const dl = useDataLocale();
+  const missingTypes = [...data.mine.pokemon, ...data.theirs.pokemon].some((pokemon) => pokemon.types.length === 0);
 
   function roster(team: ComparisonRoster, title: string) {
     return <section className={styles.roster}>
@@ -37,10 +38,13 @@ export default function TeamComparison({ data, opponentName, onLeagueChange }: {
     return <section className={styles.coverage}>
       <h3 className="font-heading font-bold">{title}</h3>
       {data.mine.hidden || data.theirs.hidden || !data.mine.pokemon.length || !data.theirs.pokemon.length ?
-        <p className="text-sm text-fg-muted">{t('unavailable')}</p> : entries.length === 0 ? <p className="text-sm text-fg-muted">{t('emptyHits')}</p> :
-          <ul className="mt-3 space-y-2 text-sm">{entries.map((hit) => <li key={`${hit.attacker}:${hit.defender}:${hit.type}`}>
+        <p className="text-sm text-fg-muted">{t('unavailable')}</p> : <>
+          {missingTypes && <p className="mt-3 text-sm text-fg-muted">{t('partial')}</p>}
+          {entries.length === 0 ? !missingTypes && <p className="text-sm text-fg-muted">{t('emptyHits')}</p> :
+            <ul className="mt-3 space-y-2 text-sm">{entries.map((hit) => <li key={`${hit.attacker}:${hit.defender}:${hit.type}`}>
             {t('hit', { attacker: localizeName('species', hit.attacker, dl), defender: localizeName('species', hit.defender, dl), type: localizeName('type', hit.type, dl), multiplier: f.number(hit.multiplier) })}
           </li>)}</ul>}
+        </>}
     </section>;
   }
 

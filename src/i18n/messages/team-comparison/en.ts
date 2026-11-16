@@ -12,6 +12,7 @@ export default {
   emptyHits: 'No super-effective STAB hits.',
   emptyRoster: 'No current roster registered.',
   unknown: 'Type data unavailable',
+  partial: 'Coverage is incomplete because some Pokémon have no type data. Only known hits are listed.',
   hidden: 'This roster is hidden by the league’s team visibility rules.',
   unavailable: 'Coverage is unavailable while a roster is hidden or empty.',
   note: 'Typing only, at the current evolution stage. Moves, abilities, items and Tera are not considered. A STAB type does not guarantee a damaging move is available.',

@@ -3,10 +3,10 @@ import { comparisonPokemon, superEffectiveStabs, type TeamComparisonData } from 
 import { I18nProvider } from '@/i18n/client';
 import Preview from './preview';
 
-export default async function TeamComparisonPreview({ searchParams }: { searchParams: Promise<{ lang?: string }> }) {
+export default async function TeamComparisonPreview({ searchParams }: { searchParams: Promise<{ lang?: string; unknown?: string }> }) {
   if (process.env.NODE_ENV === 'production') notFound();
-  const { lang } = await searchParams;
-  const mine = comparisonPokemon(['Charmeleon', 'Grovyle', 'Metang', 'Pikachu']);
+  const { lang, unknown } = await searchParams;
+  const mine = comparisonPokemon(['Charmeleon', 'Grovyle', 'Metang', 'Pikachu', ...(unknown === '1' ? ['MissingNo.'] : [])]);
   const theirs = comparisonPokemon(['Wartortle', 'Umbreon', 'Gligar', 'Heatran']);
   const data: TeamComparisonData = {
     leagueId: 'example-league',

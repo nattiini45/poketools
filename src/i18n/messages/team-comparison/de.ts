@@ -15,6 +15,7 @@ export default defineDe<typeof en>()({
   emptyHits: 'Keine sehr effektiven STAB-Treffer.',
   emptyRoster: 'Noch kein aktueller Kader registriert.',
   unknown: 'Keine Typdaten verfügbar',
+  partial: 'Die Abdeckung ist unvollständig, weil für manche Pokémon Typdaten fehlen. Du siehst nur bekannte Treffer.',
   hidden: 'Dieser Kader ist durch die Teamsichtbarkeit der Liga verborgen.',
   unavailable: 'Solange ein Kader verborgen oder leer ist, ist keine Abdeckung verfügbar.',
   note: 'Nur Typen auf der aktuellen Entwicklungsstufe. Attacken, Fähigkeiten, Items und Tera zählen nicht. Ein STAB-Typ garantiert keine verfügbare Schadensattacke.',
