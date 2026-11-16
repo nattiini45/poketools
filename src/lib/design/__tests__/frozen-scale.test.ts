@@ -23,10 +23,10 @@ describe('frozen-surface scale (redesign F3)', () => {
     for (const value of decls.values()) expect(value).not.toMatch(/rem\b/);
   });
 
-  it('keeps the site root at 16 px, and the draft room pages at 18 px', () => {
+  it('keeps the normal 16 px site root on draft-room pages too', () => {
     const globals = SOURCES[1];
     expect(globals).toMatch(/html \{\s*font-size: 100%;/);
-    expect(globals).toMatch(/html:has\(\[data-frozen="draft-room"\]\) \{\s*font-size: 18px;/);
+    expect(globals).not.toMatch(/html:has\([^)]*draft-room[^)]*\)\s*\{\s*font-size:/);
     expect(read('src/app/layout.tsx')).toMatch(/import "\.\/frozen-pins\.css";\nimport "\.\/frozen-scale\.css";/);
   });
 

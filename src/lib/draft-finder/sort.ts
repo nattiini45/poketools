@@ -10,6 +10,7 @@
  */
 import type { Locale } from '@/i18n/config';
 import type { LineId } from '@/types/draft-queue';
+import { compareSortValues } from '@/lib/ui/table-params';
 import { STAT_KEYS, type SortKey, type SortStage } from './filter-types';
 import type { DraftLineCatalogEntry } from './line-catalog';
 import type { NameResolver } from './names-port';
@@ -45,7 +46,7 @@ function statOf(ix: PreparedIndex | null, id: LineId, sort: SortKey, stage: Sort
 }
 
 /** True for the sorts that read a stat (and so a stage): the five stat sorts and `bst`. */
-export function isStatSort(sort: SortKey): sort is Exclude<SortKey, 'default' | 'alpha' | 'favorites'> {
+export function isStatSort(sort: SortKey): sort is Exclude<SortKey, 'default' | 'alpha' | 'favorites' | 'next' | 'total'> {
   return sort === 'bst' || (STAT_KEYS as readonly string[]).includes(sort);
 }
 
@@ -72,6 +73,13 @@ export function sortLineIds(ids: readonly LineId[], sort: SortKey, ctx: SortCont
   let cmp: (a: SortRow, b: SortRow) => number;
   if (sort === 'alpha') cmp = byNames;
   else if (sort === 'favorites') cmp = (a, b) => Number(b.favorite) - Number(a.favorite) || byDefault(a, b);
+  else if (sort === 'next' || sort === 'total') {
+    const threshold = (row: SortRow) => {
+      const values = ctx.catalog.get(row.id)?.thresholds.cumulative;
+      return values ? (sort === 'next' ? values[0] : values[1] ?? values[0]) : null;
+    };
+    cmp = (a, b) => compareSortValues(threshold(a), threshold(b)) || byDefault(a, b);
+  }
   else if (isStatSort(sort)) cmp = (a, b) => b.stat - a.stat || byDefault(a, b);
   else cmp = byDefault;
 

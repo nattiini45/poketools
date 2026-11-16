@@ -85,7 +85,7 @@ export default function FilterPanel(props: FilterPanelProps) {
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50" />
         <Dialog.Content
-          data-frozen="draft-room"
+          data-draft-room
           id={id}
           onCloseAutoFocus={(event) => {
             const trigger = document.getElementById(triggerId);

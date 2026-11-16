@@ -143,6 +143,7 @@ export default defineDe<typeof en>()({
     pricing: { none: 'Ohne Punkte', fixed: 'Feste Preise', auction: 'Auktion', pointBuy: 'Point Buy' },
   },
   tierList: {
+    sort: { next: 'Kills bis zur ersten Entwicklung', total: 'Kills insgesamt bis zur Endstufe' },
     tier: '{tier}-Tier',
     availableLimited: '{count} verfügbar · max. {max} pro Spieler',
     availableUnlimited: '{count} verfügbar · unbegrenzt',

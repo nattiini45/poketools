@@ -98,7 +98,7 @@ describe('DraftToolScreen', () => {
   it('keeps the DRAFT button enabled for an available line on the viewer’s turn, with the CTA label in caps', () => {
     const html = renderWithI18n(<DraftToolScreen {...props(snapshot(), initialFinderState({ pinnedLineId: 'oshawott--samurott' }))} />);
     expect(capsTexts(html)).toContain('Draft');
-    expect(html).toMatch(new RegExp(`<button type="button" ${cls(styles.cta)}><span ${cls(styles.caps)}>Draft</span>`));
+    expect(html).toMatch(new RegExp(`<button ${cls(styles.cta)} data-slot="button" type="button"><span ${cls(styles.caps)}>Draft</span>`));
     expect(html).toContain('Remaining after pick:');
   });
 
@@ -106,7 +106,7 @@ describe('DraftToolScreen', () => {
     const dto = snapshot({ viewer: { ...snapshot().viewer, player_id: MISTY, pick_block: { code: 'NOT_YOUR_TURN' } } });
     const html = renderWithI18n(<DraftToolScreen {...props(dto, initialFinderState({ pinnedLineId: 'oshawott--samurott' }))} />);
     expect(html).toContain('It is not your turn.');
-    expect(html).toMatch(new RegExp(`<button type="button" disabled="" aria-describedby="[^"]+" ${cls(styles.cta)}>`));
+    expect(html).toMatch(new RegExp(`<button aria-describedby="[^"]+" ${cls(styles.cta)} data-slot="button" type="button" disabled="" aria-disabled="true" data-disabled="">`));
     expect(capsTexts(html)).not.toContain('You are on the clock');
   });
 
@@ -132,7 +132,7 @@ describe('DraftToolScreen', () => {
   it('links every visible disabled reason to its DRAFT button, including the phone bottom bar', () => {
     const dto = snapshot({ viewer: { ...snapshot().viewer, player_id: MISTY, pick_block: { code: 'NOT_YOUR_TURN' } } });
     const html = renderWithI18n(<DraftToolScreen {...props(dto, initialFinderState({ pinnedLineId: 'oshawott--samurott' }))} />);
-    const ids = [...html.matchAll(/<button type="button" disabled="" aria-describedby="([^"]+)"/g)].map((m) => m[1]);
+    const ids = [...html.matchAll(/<button aria-describedby="([^"]+)"[^>]*data-slot="button"[^>]*disabled=""/g)].map((m) => m[1]);
     expect(ids).toHaveLength(2);
     for (const id of ids) expect(html).toMatch(new RegExp(`<p id="${esc(id)}"[^>]*>It is not your turn.</p>`));
   });
@@ -273,7 +273,8 @@ describe('DraftToolScreen', () => {
     const toggles = [...html.matchAll(new RegExp(`<button type="button" ${cls(styles.phoneToggle)} aria-expanded="true" aria-controls="[^"]+"><span[^>]*>([^<]+)</span>`, 'g'))].map(
       (m) => m[1],
     );
-    expect(toggles).toEqual(['Selected line', 'My roster (1/9)', 'Last picks']);
+    expect(toggles).toEqual(['My roster (1/9)', 'Last picks']);
+    expect(html).not.toContain('>Selected line</span>');
   });
 
   it('always renders the chip row with the match count once, also before the index loads', () => {

@@ -151,7 +151,7 @@ export default function RedraftCenter({
   }
 
   return (
-    <div className="flex flex-col gap-4" data-frozen="draft-room">
+    <div className="flex flex-col gap-4" data-draft-room>
       {redraft.phase === 'drafting' ? (
         <Link
           href={links.room}

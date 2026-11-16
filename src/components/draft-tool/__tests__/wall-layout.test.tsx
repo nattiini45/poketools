@@ -1,4 +1,8 @@
+/** @vitest-environment jsdom */
 import { readFileSync } from 'node:fs';
+import { act, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { createAgent } from '@ui-sdk/react/agent';
 import path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
@@ -18,6 +22,24 @@ import FilterPanel from '../right/FilterPanel';
 import FinderBar from '../right/FinderBar';
 import RosterCard, { CARD_SPRITE_PX, FOOTER_SPRITE_PX } from '../right/RosterCard';
 import styles from '../draft-tool.module.css';
+
+Object.assign(globalThis, { __UI_SDK_STRICT__: true });
+const agent = createAgent();
+
+HTMLElement.prototype.showPopover = function () {};
+HTMLElement.prototype.hidePopover = function () {};
+Element.prototype.getAnimations = () => [];
+Element.prototype.scrollIntoView = function () {};
+Element.prototype.checkVisibility = () => true;
+Object.defineProperty(Element.prototype, 'getClientRects', { value: () => [] });
+document.elementFromPoint = () => null;
+document.elementsFromPoint = () => [];
+globalThis.ResizeObserver = class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+document.head.append(Object.assign(document.createElement('style'), { textContent: '[popover] { display: block !important }' }));
 
 /**
  * The line wall's layout contract (owner feedback 2026-10-18): the grid scrolls inside the wall pane from
@@ -39,7 +61,7 @@ const CSS = readFileSync(path.resolve(__dirname, '../draft-tool.module.css'), 'u
 /** The declarations of the first rule `selector { … }` inside `scope` (the whole file or one @media block). */
 function rule(selector: string, scope: string = CSS): string {
   const esc = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const m = new RegExp(`(?:^|[\\s}])${esc}\\s*\\{([^}]*)\\}`).exec(scope);
+  const m = new RegExp(`(?:^|\\n)[ \\t]*${esc}\\s*\\{([^}]*)\\}`).exec(scope);
   if (!m) throw new Error(`no rule for ${selector}`);
   return m[1];
 }
@@ -48,7 +70,8 @@ function rule(selector: string, scope: string = CSS): string {
 function media(query: string, selector: string): string {
   let from = 0;
   for (;;) {
-    const at = CSS.indexOf(`@media ${query}`, from);
+    const breakpoint = query === '(min-width: 1024px)' && !['.tokens,\n  .root'].includes(selector) ? '@container draft-room (min-width: 66rem)' : query === '(min-width: 768px)' && selector === '.screen' ? '@container draft-room (min-width: 44rem)' : `@media ${query}`;
+    const at = CSS.indexOf(breakpoint, from);
     if (at === -1) throw new Error(`no ${query} block with ${selector}`);
     let depth = 0;
     let i = CSS.indexOf('{', at);
@@ -64,7 +87,13 @@ function media(query: string, selector: string): string {
 }
 
 describe('wall layout CSS', () => {
-  it('makes the grid wrapper the scroll container from 1024 px and keeps it positioned', () => {
+  it('shows one upcoming order strip in the tablet container, not a duplicate below the clock', () => {
+    const tablet = CSS.slice(CSS.indexOf('@container draft-room (44rem <= width < 66rem)'));
+    expect(rule('.orderRow', tablet)).toMatch(/display: none;/);
+    expect(rule('.nextFive', tablet)).toMatch(/display: flex;/);
+    expect(rule('.nextFive', tablet)).toMatch(/grid-column: 1 \/ -1;/);
+  });
+  it('makes the grid wrapper the scroll container in a wide room and keeps it positioned', () => {
     expect(rule('.wallScroll')).toMatch(/position: relative;/);
     const desktop = rule('.wallScroll', media('(min-width: 1024px)', '.wallScroll'));
     expect(desktop).toMatch(/overflow-y: auto;/);
@@ -74,11 +103,11 @@ describe('wall layout CSS', () => {
     // layout's main padding. The page header is the screen's own first row, so nothing else is subtracted and the
     // page itself does not scroll past it.
     const screen = rule('.screen', media('(min-width: 1024px)', '.screen'));
-    expect(screen).toMatch(/height: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/);
+    expect(screen).toMatch(/block-size: calc\(100dvh - var\(--nav-h\) - var\(--draft-page-pad-y\)\);/);
     expect(CSS).toMatch(/--draft-page-pad-y: 54px;/);
     // The floor: in a short window the page scrolls instead of crushing the panes; it is the wall's measured
     // offset plus two card rows, so the wall always shows two full rows.
-    expect(screen).toMatch(/min-height: calc\(var\(--draft-lower-top, 360px\) \+ 2 \* var\(--draft-card-h\) \+ 45px\);/);
+    expect(screen).toMatch(/min-block-size: 48rem;/);
   });
 
   it('gives the page header its own grid row, ahead of the clock row, so it sits inside the fixed height', () => {
@@ -94,28 +123,29 @@ describe('wall layout CSS', () => {
     expect(SCREEN_SRC).toMatch(/header \? `\$\{styles\.root\} \$\{styles\.screen\} \$\{styles\.screenWithHeader\}`/);
   });
 
-  it('scrolls the left column in an inner scroller, so its scrollbar stays clear of the diagonal clip', () => {
+  it('scrolls the left column in an inner scroller without clipping its controls', () => {
     // The clipped frame is not a scroller; the scroller ends 67.5px short of its right edge (the diagonal takes 48px).
     const frame = rule('.stagePane', media('(min-width: 1024px)', '.stagePane'));
-    expect(frame).toMatch(/clip-path: polygon\(/);
-    expect(frame).toMatch(/padding-right: 67\.5px;/);
+    expect(frame).toMatch(/border: 1px solid var\(--draft-border\);/);
+    expect(frame).not.toMatch(/clip-path:/);
     expect(frame).not.toMatch(/overflow/);
     const scroller = rule('.stageScroll', media('(min-width: 1024px)', '.stageScroll'));
     expect(scroller).toMatch(/overflow-y: auto;/);
-    expect(scroller).toMatch(/min-height: 0;/);
-    expect(scroller).toMatch(/flex: 1 1 auto;/);
-    expect(scroller).toMatch(/padding-right: 0;/);
+    expect(scroller).toMatch(/min-block-size: 0;/);
+    expect(scroller).toMatch(/scrollbar-gutter: stable;/);
+    expect(scroller).toMatch(/padding: 0\.75rem;/);
     // Phones dissolve both, so the card, the dock and the extras still order around the wall.
     expect(CSS).toMatch(/\.stagePane,\s*\.stageScroll \{\s*display: contents;/);
   });
 
-  it('clips the wall pane without making it a scroller, so sticky tabs reach the viewport below 1024 px', () => {
+  it('keeps the wall pane out of overflow containers so sticky tabs reach the viewport', () => {
     // The pane's own rule (not the shared `.stagePane, .wallPane` one): `hidden` first as the fallback, then `clip`.
-    expect(CSS).toMatch(/\n\.wallPane \{[^}]*overflow: hidden;\s*overflow: clip;/);
+    expect(rule('.wallPane')).not.toMatch(/overflow:/);
+    expect(CSS).toMatch(/\.wallPane \{\s*container: draft-wall \/ inline-size;/);
     expect(rule('.wallPane > *')).toMatch(/flex-shrink: 0;/);
   });
 
-  it('pins the price tabs: sticky under the nav (and the phone clock row), a fixed row from 1024 px', () => {
+  it('pins the price tabs under the sticky bars, or in a fixed row in wide rooms', () => {
     const tabs = rule('.wallTabs');
     expect(tabs).toMatch(/position: sticky;/);
     expect(tabs).toMatch(/top: var\(--nav-h\);/);
@@ -132,21 +162,21 @@ describe('wall layout CSS', () => {
     expect(CSS).not.toMatch(/\.clockBar \{[^}]*position: sticky;/);
     // The row is a direct child of the screen (the tall containing block it sticks within), right after the header.
     expect(SCREEN_SRC).toMatch(
-      /<div ref=\{rootRef\} className=\{screenClass\} data-frozen="draft-room">\s*\{header \? <div className=\{styles\.screenHeader\}>\{header\}<\/div> : null\}\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/,
+      /<div ref=\{rootRef\} className=\{screenClass\} data-draft-room>\s*\{header \? <div className=\{styles\.screenHeader\}>\{header\}<\/div> : null\}\s*<div ref=\{clockRowRef\} className=\{styles\.clockRow\}>/,
     );
   });
 
-  it('keeps the line picture above the sticky bars: capped on phones, the stage card capped above the dock from 1024 px', () => {
+  it('keeps the line picture visible with fluid phone height and uncapped desktop flow', () => {
     const phone = media('(max-width: 767px)', '.previewArea');
     expect(rule('.previewArea', phone)).toMatch(
-      /max-height: calc\(100svh - var\(--nav-h\) - var\(--draft-clock-h\) - var\(--draft-bottom-bar-h\) - 27px\);/,
+      /height: clamp\(144px, 24svh, 200px\);/,
     );
     // From 1024 px the card ends where the dock begins: the scroller's height less the measured dock and the gap.
-    const desktop = rule('.stageCard', media('(min-width: 1024px)', '.stageCard'));
-    expect(desktop).toMatch(/max-height: calc\(100% - var\(--draft-dock-h\) - 13\.5px\);/);
-    expect(desktop).toMatch(/flex: 0 0 auto;/);
+    const desktop = rule('.stageCard', media('(min-width: 768px)', '.screen'));
+    expect(desktop).toMatch(/max-height: none;/);
+    expect(rule('.previewArea')).toMatch(/max-height: 320px;/);
     // Too short a window: the card keeps its content height (the column scrolls) rather than overflowing its box.
-    expect(desktop).toMatch(/min-height: min-content;/);
+    expect(rule('.previewArea')).toMatch(/min-height: 144px;/);
     // The dock's height is measured (a verdict can wrap), not assumed: the screen hands the dock to the offsets hook.
     expect(SCREEN_SRC).toMatch(/useStickyOffsets\(rootRef, clockRowRef, dockRef, wallScrollRef\);/);
     expect(SCREEN_SRC).toMatch(/<div ref=\{dockRef\} className=\{`\$\{styles\.ctaDock\}/);
@@ -156,12 +186,13 @@ describe('wall layout CSS', () => {
   it('never lets the timer bar push past a narrow clock row (375 px phones)', () => {
     // The track's floor is capped by the line it is on, and its row's flex basis lets bar and digits wrap whole.
     expect(rule('.timerTrack')).toMatch(/min-width: min\(108px, 100%\);/);
+    expect(rule('.clockActive .timerTrack')).toMatch(/min-width: 40px;/);
     expect(TIMER_SRC).toMatch(/className="flex min-w-0 flex-\[1_1_180px\] flex-wrap/);
   });
 
   it('defines --nav-h once on the root instead of a silent 64 px fallback', () => {
     expect(CSS).not.toMatch(/var\(--nav-h,/);
-    expect(rule('.tokens,\n.root')).toMatch(/--nav-h: calc\(72px \+ 1px\);/);
+    expect(rule('.tokens,\n.root')).toMatch(/--nav-h: 65px;/);
   });
 
   it('gives every card one height token and one fixed row skeleton, rows included', () => {
@@ -198,7 +229,7 @@ describe('wall layout CSS', () => {
 
   it('keeps the sprite constants of the card in step with the CSS boxes they fill', () => {
     const tokens = rule('.tokens,\n.root');
-    const rem = (name: string) => (Number(new RegExp(`${name}: ([\\d.]+)px;`).exec(tokens)?.[1]) / 18) * 16;
+    const rem = (name: string) => Number(new RegExp(`${name}: ([\\d.]+)px;`).exec(tokens)?.[1]);
     expect(rem('--draft-card-sprite')).toBe(CARD_SPRITE_PX);
     expect(rem('--draft-card-footer-sprite')).toBe(FOOTER_SPRITE_PX);
     // The Pokémon dominates its card: the sprite row is the tallest, well above the old 64px.
@@ -485,17 +516,18 @@ describe('DraftToolScreen page header', () => {
 
   it('renders the host header as the first row of the screen, before the clock row', () => {
     const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} header={<h1>Room title</h1>} />);
-    const root = html.indexOf(`<div class="${styles.root} ${styles.screen} ${styles.screenWithHeader}" data-frozen="draft-room">`);
+    const root = html.indexOf(`<div class="${styles.root} ${styles.screen} ${styles.screenWithHeader}" data-draft-room="true">`);
     const header = html.indexOf(`<div class="${styles.screenHeader}"><h1>Room title</h1></div>`);
     const clock = html.indexOf(`class="${styles.clockRow}"`);
-    expect(root).toBe(0);
+    expect(root).toBeGreaterThan(0);
+    expect(html.startsWith(`<div class="${styles.roomContainer}" data-draft-room-screen="true">`)).toBe(true);
     expect(header).toBeGreaterThan(root);
     expect(clock).toBeGreaterThan(header);
   });
 
   it('adds no header row or track without one (the dev preview keeps its picker outside)', () => {
     const html = renderWithI18n(<DraftToolScreen {...screenProps(view)} />);
-    expect(html.startsWith(`<div class="${styles.root} ${styles.screen}" data-frozen="draft-room">`)).toBe(true);
+    expect(html.startsWith(`<div class="${styles.roomContainer}" data-draft-room-screen="true"><div class="${styles.root} ${styles.screen}" data-draft-room="true">`)).toBe(true);
     expect(html).not.toContain(`class="${styles.screenHeader}"`);
     expect(html).not.toContain(styles.screenWithHeader);
   });
@@ -541,13 +573,26 @@ describe('finder bar and filter sheet', () => {
     expect(search).not.toContain('md:flex-1');
   });
 
-  it('offers every sort key of the stored preference in the sort select, in order', () => {
-    const html = renderWithI18n(
-      <FinderBar view={initialFinderState()} dispatch={() => {}} indexReady filterPanelId="fp" names={stubNames} />,
+  it('offers every sort key of the stored preference in the sort select, in order', async () => {
+    const dispatch = vi.fn();
+    render(
+      <FinderBar view={initialFinderState()} dispatch={dispatch} indexReady filterPanelId="fp" names={stubNames} />,
     );
-    const select = /<select[^>]*>([\s\S]*?)<\/select>/.exec(html)?.[1] ?? '';
-    const values = [...select.matchAll(/<option[^>]*value="([^"]*)"/g)].map((m) => m[1]);
-    expect(values).toEqual([...SORT_KEYS]);
+    await userEvent.setup().click(screen.getByRole('combobox', { name: 'Sort' }));
+    const options = screen.getAllByRole('option');
+    expect(options).toHaveLength(SORT_KEYS.length);
+    expect(options.map(option => option.textContent)).toEqual([
+      'Default (price)', 'Alphabetical', 'Favourites first', 'Kills to first evolution',
+      'Total kills to final evolution', 'spe', 'atk', 'def', 'spa', 'spd', 'BST',
+    ]);
+    await userEvent.setup().click(screen.getByRole('option', { name: 'Total kills to final evolution' }));
+    expect(dispatch).toHaveBeenCalledWith({ type: 'setSort', sort: 'total' });
+    expect(agent.snapshot().filter(entry => !entry.offPage).map(entry => entry.label)).toContain('Sort');
+    await act(async () => {
+      const result = await agent.act({ steps: [{ ref: 'Sort', action: 'setValue', args: ['Kills to first evolution'] }] });
+      expect(result.ok).toBe(true);
+    });
+    expect(dispatch).toHaveBeenCalledWith({ type: 'setSort', sort: 'next' });
   });
 
   it('renders the filters as a portalled sheet outside the wall pane (no anchored panel to clip)', () => {

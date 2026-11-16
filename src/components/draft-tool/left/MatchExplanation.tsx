@@ -57,7 +57,7 @@ export default function MatchExplanation({
 
   return (
     <section className="flex flex-col gap-1" aria-label={t('explain.title')}>
-      <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--draft-ink-2)]">{t('explain.title')}</h3>
+      <h3 className="text-xs font-semibold text-[var(--draft-ink-2)]">{t('explain.title')}</h3>
       {reasons}
     </section>
   );

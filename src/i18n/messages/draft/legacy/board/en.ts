@@ -182,6 +182,7 @@ export default {
     pricing: { none: 'No points', fixed: 'Fixed prices', auction: 'Auction bids', pointBuy: 'Point Buy' },
   },
   tierList: {
+    sort: { next: 'Kills to first evolution', total: 'Total kills to final evolution' },
     tier: '{tier}-Tier',
     availableLimited: '{count} available · max {max} per player',
     availableUnlimited: '{count} available · unlimited',

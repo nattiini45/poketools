@@ -226,7 +226,7 @@ export default function RosterCard({
       </span>
       {/* Always rendered (empty when available or blocked), so every card keeps the same rows. */}
       <span
-        className={cn(styles.cardMeta, 'text-[10px] font-semibold', STRIP_INK[state])}
+        className={cn(styles.cardMeta, 'text-[11px] font-semibold', STRIP_INK[state])}
         data-card-row="meta"
         title={ownerText ?? undefined}
         aria-hidden="true"

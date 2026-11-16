@@ -44,7 +44,7 @@ export function hasHoverDetails(evaluation: LineEvaluation | null, entry: DraftL
   return (evaluation?.results.length ?? 0) > 0 || entry.specialRules !== null;
 }
 
-const SECTION_TITLE = 'mb-1 text-xs font-semibold uppercase tracking-wide text-[var(--draft-ink-2,var(--poke-text-secondary))]';
+const SECTION_TITLE = 'mb-1 text-xs font-semibold text-[var(--draft-ink-2,var(--poke-text-secondary))]';
 
 export function HoverDetailsContent({ evaluation, entry, filters, ix, stageMode, names }: HoverDetailsContentProps) {
   const t = useT(draftFinderMessages);

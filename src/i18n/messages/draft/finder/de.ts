@@ -97,6 +97,8 @@ export default defineDe<typeof en>()({
     default: 'Standard (Preis)',
     alpha: 'Alphabetisch',
     favorites: 'Favoriten zuerst',
+    next: 'Kills bis zur ersten Entwicklung',
+    total: 'Kills insgesamt bis zur Endstufe',
     bst: 'BST',
     stage: {
       label: 'Werte der',

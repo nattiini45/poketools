@@ -4,6 +4,7 @@ import { comparePixels, expandMatrix, expandTargets, fillTemplate, requestPolicy
 
 const frozen = JSON.parse(readFileSync(new URL('../visual/frozen.json', import.meta.url), 'utf8'));
 const routes = JSON.parse(readFileSync(new URL('../visual/routes.json', import.meta.url), 'utf8'));
+const draftRoom = JSON.parse(readFileSync(new URL('../visual/draft-room.json', import.meta.url), 'utf8'));
 const ids = JSON.parse(readFileSync(new URL('../visual/seed-ids.json', import.meta.url), 'utf8'));
 
 function image(width, height, fill) {
@@ -47,22 +48,23 @@ describe('visual harness target expansion', () => {
   it('gives every frozen job a unique key and a root or a full-page capture', () => {
     const jobs = expandTargets(frozen, { now: frozen.now, ids });
     expect(new Set(jobs.map((j) => j.target))).toEqual(new Set(frozen.targets.map((t) => t.id)));
-    expect(jobs.length).toBeGreaterThan(300);
+    expect(jobs.length).toBe(150);
+    expect(jobs.some((job) => job.target.startsWith('draft-room'))).toBe(false);
     expect(new Set(jobs.map((j) => j.key)).size).toBe(jobs.length);
     for (const job of jobs) expect(job.fullPage || job.roots.length > 0).toBe(true);
   });
 
   it('covers both themes and the desktop and phone widths for the draft room and the worlds', () => {
-    const jobs = expandTargets(frozen, { now: frozen.now, only: ['draft-room', 'route-world'] });
+    const jobs = [...expandTargets(frozen, { now: frozen.now, only: ['route-world'] }), ...expandTargets(draftRoom, { now: draftRoom.now, only: ['draft-room'] })];
     for (const target of ['draft-room', 'route-world']) {
       const mine = jobs.filter((j) => j.target === target);
       expect(new Set(mine.map((j) => j.theme))).toEqual(new Set(['light', 'dark']));
-      expect(new Set(mine.map((j) => j.viewportName))).toEqual(new Set(['desktop', 'mobile']));
+      expect(new Set(mine.map((j) => j.viewportName))).toEqual(new Set(target === 'draft-room' ? ['phone', 'tablet', 'laptop', 'monitor'] : ['desktop', 'mobile']));
     }
   });
 
   it('keeps the admin control-page scenarios out of the frozen draft room (they are redesigned)', () => {
-    const scenarios = frozen.targets.find((t) => t.id === 'draft-room').matrix.scenario;
+    const scenarios = draftRoom.targets.find((t) => t.id === 'draft-room').matrix.scenario;
     for (const admin of ['admin-panel', 'admin-publish-refused', 'admin-tokens', 'admin-audit']) expect(scenarios).not.toContain(admin);
   });
 
@@ -75,7 +77,8 @@ describe('visual harness target expansion', () => {
   it('skips a seeded target when its ids are missing', () => {
     const jobs = expandTargets(frozen, { now: frozen.now, ids: {} });
     expect(jobs.some((j) => j.target === 'match-highlight-card-bo3')).toBe(false);
-    expect(jobs.some((j) => j.target === 'draft-room')).toBe(true);
+    expect(jobs.some((j) => j.target === 'route-world')).toBe(true);
+    expect(expandTargets(draftRoom, { now: draftRoom.now, ids: {} }).some((j) => j.target === 'draft-room')).toBe(true);
   });
 });
 

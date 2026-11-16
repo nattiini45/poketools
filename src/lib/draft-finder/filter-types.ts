@@ -14,7 +14,7 @@ export type StageMode = (typeof STAGE_MODES)[number];
 /** = `StatKey` of `src/lib/pkmn/i18n/types.ts` (declared here so only `names-port.ts` touches the pkmn layer). */
 export type StatKey = 'hp' | 'atk' | 'def' | 'spa' | 'spd' | 'spe';
 /** Every sort of the wall, in the order of the select; also the allowlist of the stored preference. */
-export const SORT_KEYS = ['default', 'alpha', 'favorites', 'spe', 'atk', 'def', 'spa', 'spd', 'bst'] as const;
+export const SORT_KEYS = ['default', 'alpha', 'favorites', 'next', 'total', 'spe', 'atk', 'def', 'spa', 'spd', 'bst'] as const;
 export type SortKey = (typeof SORT_KEYS)[number];
 /**
  * Which stage of a line a stat reading uses: the line's first stage (`base`) or its last (`final`, stage 3, or
