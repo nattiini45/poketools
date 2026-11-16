@@ -28,6 +28,7 @@ import { toPublicPlayerProfile } from '@/lib/profile/redact';
 import { getT } from '@/i18n/server';
 import { profileMessages } from '@/i18n/messages/profile';
 import type { AchievementProgressSource } from '@/components/gamification/achievement-progress';
+import { ComparePlayerButton } from '@/components/team-comparison/TeamComparisonDialog';
 
 // Dynamic: the page reads the viewer's session (it gates the match sections).
 // The profile, rating history and achievement catalogue come from the tagged
@@ -105,7 +106,7 @@ export default async function PlayerProfilePage({ params }: PageProps) {
                 <Pencil aria-hidden="true" className="h-4 w-4" />
                 {t('page.editProfile')}
               </PlateLink>
-            ) : undefined
+            ) : isLoggedIn ? <ComparePlayerButton playerId={publicPlayer.id} name={publicPlayer.name} /> : undefined
           }
         />
         <HistoricalStatisticsCoverage history={historical.history} />

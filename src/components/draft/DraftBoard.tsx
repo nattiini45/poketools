@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import PokemonSprite from '@/components/shared/PokemonSprite';
+import { ComparisonTrainer } from '@/components/team-comparison/TeamComparisonDialog';
 import PokemonLink from '@/components/shared/PokemonLink';
 import AnimatedSprite from '@/components/shared/AnimatedSprite';
 import PickSelector from './PickSelector';
@@ -450,10 +451,12 @@ export default function DraftBoard({
                 <ol className="-mx-1 flex flex-wrap gap-y-1 md:justify-end">
                   {state.pick_order.map((playerId, seat) => (
                     <li key={playerId} aria-current={playerId === state.current_picker ? 'true' : undefined}>
+                      <ComparisonTrainer playerId={playerId} name={playerNames[playerId] ?? tLegacy('unknownPlayer')} disabled={playerId === currentPlayerId} className="hover:underline focus-visible:outline focus-visible:outline-2">
                       <SkewPlate variant="nav" active={playerId === state.current_picker} className="text-body">
                         <span className="mr-1.5 font-mono text-caption tabular-nums">{seat + 1}</span>
                         {playerNames[playerId] ?? tLegacy('unknownPlayer')}
                       </SkewPlate>
+                      </ComparisonTrainer>
                     </li>
                   ))}
                 </ol>
