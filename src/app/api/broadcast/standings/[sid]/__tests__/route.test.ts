@@ -18,6 +18,7 @@ vi.mock('@/lib/api/error-response', () => ({
 
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonById: vi.fn(),
+  getPublicSeasonParticipants: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
@@ -27,7 +28,10 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchesByTournament: vi.fn(),
+  getMatchesByTournamentIds: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/ratings', () => ({
   getPlayerRatingsBatch: vi.fn(),
@@ -41,8 +45,10 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
 }));
 
-vi.mock('@/lib/tournament/season-standings', () => ({
+vi.mock('@/lib/tournament/season-standings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tournament/season-standings')>()),
   computeStandingsForSeason: vi.fn(),
+  loadRankingContext: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
@@ -60,17 +66,21 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 }));
 
 import { GET } from '@/app/api/broadcast/standings/[sid]/route';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import {
   getStagesBySeasonId,
   getParticipants,
 } from '@/lib/supabase/queries/tournaments';
-import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getMatchesByTournament, getMatchesByTournamentIds } from '@/lib/supabase/queries/matches';
+import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { computeStandingsForSeason, loadRankingContext } from '@/lib/tournament/season-standings';
+import { leaguePlayoffsFixture } from '@/test/fixtures/league-playoffs';
+import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
+import { expectNoPrivateMatchData } from '@/lib/match/__tests__/private-match-fields';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { makeRequest } from '@/lib/__tests__/helpers/api-request';
 
@@ -137,6 +147,29 @@ const mockStandings = [
 ];
 
 describe('GET /api/broadcast/standings/[sid]', () => {
+  it('uses bracket places and shared third place without adding playoff wins to the group records', async () => {
+    const fixture = leaguePlayoffsFixture();
+    vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: 'singles' } as never);
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([...fixture.stages] as never);
+    vi.mocked(getPublicSeasonParticipants).mockResolvedValue([...fixture.participants] as never);
+    vi.mocked(getMatchesByTournamentIds).mockResolvedValue(new Map(fixture.matchesByStage));
+    vi.mocked(getSeasonGroups).mockResolvedValue([...fixture.groups!] as never);
+    vi.mocked(loadRankingContext).mockResolvedValue(undefined);
+    vi.mocked(getPlayerRatingsBatch).mockResolvedValue(new Map());
+    vi.mocked(getPlayerSignaturesBatch).mockResolvedValue(new Map());
+    vi.mocked(getAggregates).mockResolvedValue([]);
+
+    const response = await GET(makeRequest(), routeContext);
+    const body = await response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.standings.slice(0, 4).map((row: { player_id: string; rank: number }) => [row.player_id, row.rank]))
+      .toEqual([['Orbit', 1], ['Nova', 2], ['Comet', 3], ['Meteor', 3]]);
+    expect(body.data.standings[0].wins).toBe(0);
+    expect(getMatchesByTournamentIds).toHaveBeenCalledOnce();
+    expect(getParticipants).not.toHaveBeenCalled();
+    expectNoPrivatePlayerData(body);
+    expectNoPrivateMatchData(body);
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

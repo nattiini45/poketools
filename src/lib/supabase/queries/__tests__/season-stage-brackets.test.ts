@@ -39,8 +39,10 @@ describe('getSeasonStageBrackets', () => {
   it('reads the stage ids, bracket types and the season format in one tournaments query', async () => {
     h.result = {
       data: [
-        { id: 'a', bracket_type: 'round_robin', seasons: { format_type: 'singles' } },
-        { id: 'b', bracket_type: 'swiss', seasons: { format_type: 'singles' } },
+        { id: 'b', name: 'Swiss', stage_order: 2, bracket_type: 'swiss', third_place_enabled: false,
+          bracket_reset_enabled: true, tournament_participants: [{ count: 6 }], seasons: { format_type: 'singles', season_groups: [{ count: 2 }] } },
+        { id: 'a', name: 'Groups', stage_order: 1, bracket_type: 'round_robin', third_place_enabled: false,
+          bracket_reset_enabled: true, tournament_participants: [{ count: 6 }], seasons: { format_type: 'singles', season_groups: [{ count: 2 }] } },
       ],
       error: null,
     };
@@ -49,10 +51,13 @@ describe('getSeasonStageBrackets', () => {
       stageIds: ['a', 'b'],
       hasSwissStage: true,
       formatType: 'singles',
+      hasGroups: true,
+      stages: [{ id: 'a', name: 'Groups', bracket_type: 'round_robin', third_place_enabled: false, bracket_reset_enabled: true, participant_count: 6 },
+        { id: 'b', name: 'Swiss', bracket_type: 'swiss', third_place_enabled: false, bracket_reset_enabled: true, participant_count: 6 }],
     });
     expect(h.from).toHaveBeenCalledTimes(1);
     expect(h.from).toHaveBeenCalledWith('tournaments');
-    expect(h.select).toHaveBeenCalledWith('id, bracket_type, seasons ( format_type )');
+    expect(h.select).toHaveBeenCalledWith('id, name, stage_order, bracket_type, third_place_enabled, bracket_reset_enabled, tournament_participants(count), seasons ( format_type, season_groups(count) )');
     expect(h.eq).toHaveBeenCalledWith('season_id', 'season-1');
   });
 
@@ -76,6 +81,8 @@ describe('getSeasonStageBrackets', () => {
       stageIds: [],
       hasSwissStage: false,
       formatType: null,
+      stages: [],
+      hasGroups: false,
     });
   });
 

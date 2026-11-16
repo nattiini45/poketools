@@ -1,14 +1,17 @@
 import { AI_MAX_TOKENS } from '../../constants';
-import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { computeStandingsForSeason, loadRankingContext } from '@/lib/tournament/season-standings';
+import { getLeagueSchedule } from '@/lib/supabase/queries/league-standings';
+import { isPlayoffStage } from '@/lib/tournament/league-placings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import { countByesByPlayer, formatRecord } from '@/lib/tournament/byes';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import type { ReportDefinition } from '../registry';
 import type { PromptTask, PipelineMode, ValidationResult, ReportParams } from '../types';
 import type { SeasonSummaryContent } from '@/types/tournament-report';
+import type { Standing } from '@/lib/tournament/types';
 
 // ─── Fact Pack ──────────────────────────────────────────────────────
 
@@ -36,10 +39,10 @@ async function buildFactPack(params: ReportParams): Promise<SeasonSummaryFactPac
   if (!tournament?.season_id) throw new Error('Tournament has no season');
   const seasonId = tournament.season_id;
 
-  const [season, participants, allMatchRecords, aggregates, totalGames] = await Promise.all([
+  const [season, participants, stageInfo, aggregates, totalGames] = await Promise.all([
     getSeasonById(seasonId),
     getSeasonParticipants(seasonId),
-    getCompletedMatchRecords(params.tournamentId),
+    getSeasonStageBrackets(seasonId),
     getAggregates('league', seasonId),
     getTotalGamesInScope('league', seasonId),
   ]);
@@ -57,18 +60,29 @@ async function buildFactPack(params: ReportParams): Promise<SeasonSummaryFactPac
   }
 
   // A Swiss tournament's standings score its stored byes as wins; each record says how many of its wins are byes.
-  const byes = await loadScoringByes(tournament);
-  const byeCounts = countByesByPlayer(byes);
-  const standings = await computeStandingsForSeason(
-    seasonId,
-    participantIds, participantNames, allMatchRecords,
-    participantAvatars,
-    { pointsPerWin: 3, pointsPerDraw: 1, byes },
-    gymTypes
-  );
+  let standings: Standing[];
+  let byeCounts: Record<string, number>;
+  if (stageInfo.stages?.some(isPlayoffStage)) {
+    const ranking = await loadRankingContext(seasonId, season.format_type);
+    const schedule = await getLeagueSchedule(seasonId, { stages: stageInfo.stages, participants, context: ranking ?? { formatType: season.format_type } });
+    standings = schedule.finalPlacings ?? schedule.standings;
+    byeCounts = schedule.byeCounts ?? {};
+  } else {
+    const [byes, allMatchRecords] = await Promise.all([
+      loadScoringByes(tournament), getCompletedMatchRecords(params.tournamentId),
+    ]);
+    byeCounts = countByesByPlayer(byes);
+    standings = await computeStandingsForSeason(
+      seasonId,
+      participantIds, participantNames, allMatchRecords,
+      participantAvatars,
+      { pointsPerWin: 3, pointsPerDraw: 1, byes },
+      gymTypes
+    );
+  }
 
   const finalStandings = standings.map((s, i) => ({
-    rank: i + 1,
+    rank: s.rank ?? i + 1,
     player_name: s.player_name,
     player_id: s.player_id,
     points: s.points,

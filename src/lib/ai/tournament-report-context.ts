@@ -1,3 +1,4 @@
+import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -186,7 +187,7 @@ export async function buildRoundRecapPrompt(
   const { participantIds, participantNames, participantAvatars, gymTypes } =
     buildParticipantLookups(participants, seasonData);
 
-  const standingsOpts = { pointsPerWin: 3, pointsPerDraw: 1 };
+  const standingsOpts = { pointsPerWin: 3, pointsPerDraw: 1, ...playoffStandingsOptions(tournament, participantIds.length) };
   // A Swiss stage scores its stored byes as wins; "through round N" keeps the byes of those rounds.
   const byes = await loadScoringByes(tournament);
   const currentStandings = await computeStandingsForSeason(
@@ -265,7 +266,7 @@ export async function buildRoundForecastPrompt(
         tournament.season_id,
         participantIds, participantNames, allMatchRecords,
         participantAvatars,
-        { pointsPerWin: 3, pointsPerDraw: 1, byes },
+        { pointsPerWin: 3, pointsPerDraw: 1, byes, ...playoffStandingsOptions(tournament, participantIds.length) },
         gymTypes
       )
     : [];
@@ -536,10 +537,10 @@ function formatMatchDetailsSection(
 
   // Build rank lookups for before/after this round
   const afterRankMap: Record<string, number> = {};
-  currentStandings.forEach((s, i) => { afterRankMap[s.player_id] = i + 1; });
+  currentStandings.forEach((s, i) => { afterRankMap[s.player_id] = s.rank ?? i + 1; });
   const beforeRankMap: Record<string, number> = {};
   if (previousStandings) {
-    previousStandings.forEach((s, i) => { beforeRankMap[s.player_id] = i + 1; });
+    previousStandings.forEach((s, i) => { beforeRankMap[s.player_id] = s.rank ?? i + 1; });
   }
 
   function playerRankLabel(playerId: string): string {
@@ -616,12 +617,12 @@ function formatStandingsSection(
 
   const prevPositionMap: Record<string, number> = {};
   if (previous) {
-    previous.forEach((s, i) => { prevPositionMap[s.player_id] = i + 1; });
+    previous.forEach((s, i) => { prevPositionMap[s.player_id] = s.rank ?? i + 1; });
   }
 
   for (let i = 0; i < current.length; i++) {
     const s = current[i];
-    const pos = i + 1;
+    const pos = s.rank ?? i + 1;
     let delta = '';
     if (previous && prevPositionMap[s.player_id] !== undefined) {
       const change = prevPositionMap[s.player_id] - pos;
@@ -651,7 +652,7 @@ function formatPairingsSection(
   }
 
   const positionMap: Record<string, number> = {};
-  standings.forEach((s, i) => { positionMap[s.player_id] = i + 1; });
+  standings.forEach((s, i) => { positionMap[s.player_id] = s.rank ?? i + 1; });
 
   const lines = ['## UPCOMING MATCHUPS'];
 

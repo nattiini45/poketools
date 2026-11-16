@@ -4,6 +4,8 @@ import { kitForPhase, ranksWithKit } from '@/lib/format-engine/context';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
+import { playoffStandingsOptions, type LeagueRankingStage } from '@/lib/tournament/league-placings';
+import { rankCombinedTable } from '@/lib/tournament/group-standings';
 
 /**
  * The context of ONE phase's table: its kit data narrowed to that phase, so a phase with no completed match yet ranks by
@@ -33,6 +35,8 @@ export function buildStandingsRowsFromMatchRecords(
   matchRecords: MatchRecord[],
   byes: readonly ByeRecord[] = [],
   ranking?: SeasonStandingsContext,
+  phase?: LeagueRankingStage,
+  grouped = false,
 ): StandingsRow[] {
   const participantIds = participants.map((p) => p.id);
   const names: Record<string, string> = {};
@@ -53,13 +57,15 @@ export function buildStandingsRowsFromMatchRecords(
           names,
           matchRecords,
           avatars,
-          { byes: [...byes] },
+          { byes: [...byes], ...playoffStandingsOptions(phase, participants.length) },
           gymTypes,
           { evolutionPoints: ranking.evolutionPoints, tiebreakerOrder: ranking.tiebreakerOrder, kit: ranking.kit },
         )
-      : computeStandings(participantIds, names, matchRecords, avatars, { byes: [...byes] }, gymTypes);
+      : computeStandings(participantIds, names, matchRecords, avatars, { byes: [...byes], ...playoffStandingsOptions(phase, participants.length) }, gymTypes);
 
-  return standings.map((s) => ({
+  const table = grouped ? rankCombinedTable(standings).standings : standings;
+  return table.map((s) => ({
+    ...(s.rank === undefined ? {} : { rank: s.rank }),
     player_id: s.player_id,
     player_name: s.player_name,
     player_avatar_url: s.player_avatar_url,

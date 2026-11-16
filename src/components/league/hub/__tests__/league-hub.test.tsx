@@ -85,6 +85,8 @@ import type { HubGroupTable, HubRoundMatches, HubStageMatches, HubTableStage } f
 import { getFormatName } from '@/lib/pkmn/formats';
 import type { PublicSeasonParticipant, PublicTournamentParticipant } from '@/lib/players/public-player';
 import type { LeagueStanding } from '@/lib/supabase/queries/league-standings';
+import { assembleLeagueSchedule } from '@/lib/supabase/queries/league-standings';
+import { leaguePlayoffsFixture } from '@/test/fixtures/league-playoffs';
 import type { Standing } from '@/lib/tournament/types';
 import type { GameSummary, MatchWithPlayers } from '@/types/match';
 import type { Round } from '@/types/round';
@@ -817,6 +819,22 @@ describe('LeagueHub tab bar', () => {
 // ─── Standings ────────────────────────────────────────────────────────────
 
 describe('standings panel', () => {
+  it.each(['en', 'de'] as const)('keeps the group tables and displays the playoff final with tied third places in %s', (locale) => {
+    const fixture = leaguePlayoffsFixture();
+    const schedule = assembleLeagueSchedule(fixture);
+    const rendered = renderHub({ locale, participants: fixture.participants.map((participant) => ({
+      ...participant, gym_type: null, core_types: null,
+    })), panel: { tab: 'standings', isEvolutionPointBuy: false, ...schedule } });
+    const { panel } = rendered;
+    const final = findOne(panel, (node) => 'data-hub-final-placings' in node.attrs, 'final placings');
+    const finalRows = bodyRows(findOne(final, tag('table'), 'final table'));
+    expect(finalRows.slice(0, 4).map((row) => squash(findAll(row, tag('td'))[0]))).toEqual(['1', '2', '3', '3']);
+    expect(finalRows.slice(0, 4).map((row) => squash(findOne(row, tag('a'), 'player link'))))
+      .toEqual(['Orbit', 'Nova', 'Comet', 'Meteor']);
+    expect(standingsTables(panel)).toHaveLength(4);
+    expect(squash(final)).toContain(locale === 'de' ? 'Endplatzierungen' : 'Final placings');
+    expectNoSection(rendered);
+  });
   it('renders the season table in order with movement glyphs', () => {
     const rendered = renderHub({ panel: STANDINGS_PANEL });
     const { panel } = rendered;

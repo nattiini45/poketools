@@ -45,6 +45,7 @@ src/lib/tournament/
 ├── previous-round-guard.ts  # Refuses legacy elimination generation over unfinished matches
 ├── schedule-drift.ts  # Drift guard of the round-robin schedule
 ├── season-standings.ts, standings-rules.ts  # Format-aware standings entry point and the scoring rules it follows
+├── league-placings.ts       # Group-stage boundaries and playoff-derived final league places
 ├── page-view.ts             # Public tournament page: its `?tab=` link tabs and the hero's view (live or next match, else the leader)
 ├── seed-errors.ts  # Domain errors of the participant seed update
 ├── settings-patch.ts, standalone-lock.ts  # Standalone settings fields and their lock after the start
@@ -113,6 +114,8 @@ src/lib/tournament/
 League phases advance through `syncStandingsEnrollment()` in `enrollment-sync.ts`: it ranks the source phase and enrolls the top N of the target phase's `advancement_rule` (overall, or per group). There is no separate advancement module.
 
 ### Standings
+
+League-wide standings exclude elimination phases; final league placings are derived separately from bracket results rather than by comparing points or Buchholz across phases. A phase-scoped playoff standing follows bracket placement, including shared third place when no bronze match is played. See [Group-stage tables and final placings](./season.md#group-stage-tables-and-final-placings) and the [reader map](./league-standings-readers.md).
 - **File**: `standings.ts`
 - **Purpose**: Compute ranked standings and pairing history
 - **Key Methods**: `computeStandings()`, `buildPairingHistory()`, `havePlayed()`

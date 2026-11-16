@@ -567,6 +567,7 @@ export interface PokemonUsageRow {
 }
 
 export interface StandingsRow {
+  rank?: number;
   player_id: string;
   player_name: string;
   player_avatar_url: string | null;

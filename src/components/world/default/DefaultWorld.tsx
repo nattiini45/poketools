@@ -9,6 +9,8 @@ import Card from '@/components/ui/frozen/Card';
 import Badge from '@/components/ui/frozen/Badge';
 import { getButtonClasses } from '@/components/ui/frozen/buttonStyles';
 import GymTypedName from '@/components/shared/GymTypedName';
+import HubStandingsTable from '@/components/league/hub/HubStandingsTable';
+import { leagueHubCopy } from '@/lib/league-hub/copy';
 import CoreLigaParticipants from '@/components/league/CoreLigaParticipants';
 import TournamentReportCard from '@/components/tournament/TournamentReportCard';
 import ScopedInsightsView from '@/components/insights/ScopedInsightsView';
@@ -71,6 +73,7 @@ interface DefaultWorldProps {
   killRanking: KillRankingRow[];
   isDoubles: boolean;
   standings: LeagueStanding[];
+  finalPlacings?: (LeagueStanding & { rank: number })[];
   fixtures: LeagueFixture[];
   typeCoreParticipants?: { id: string; name: string; coreTypes: CoreTriple | null }[];
   gymTypeMap: Map<string, string | null>;
@@ -96,6 +99,7 @@ export default async function DefaultWorld({
   killRanking,
   isDoubles,
   standings,
+  finalPlacings,
   fixtures,
   typeCoreParticipants,
   gymTypeMap,
@@ -169,6 +173,13 @@ export default async function DefaultWorld({
 
           <div className="grid gap-4 lg:grid-cols-2">
             <div className={`${PANEL} p-5`}>
+              {finalPlacings && (
+                <div className="mb-5 space-y-2">
+                  <h3 className="font-heading text-title text-fg">{leagueHubCopy(locale).finalPlacings}</h3>
+                  <p className="text-caption text-fg-muted">{leagueHubCopy(locale).finalPlacingsNote}</p>
+                  <HubStandingsTable rows={finalPlacings} copy={leagueHubCopy(locale)} caption={leagueHubCopy(locale).finalPlacings} />
+                </div>
+              )}
               <h3 className="text-xs font-heading font-semibold uppercase tracking-wide text-arena-ink-secondary mb-3">
                 {t('defaultWorld.standings')}
               </h3>

@@ -1,3 +1,4 @@
+import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { getMatchById, getH2HBetweenPlayers, getMatchesByPlayer, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
@@ -247,12 +248,12 @@ export async function fetchCasterData(
       // A Swiss stage scores its stored byes as wins, as the tournament page does.
       const byes = tournament ? await loadScoringByes(tournament) : [];
       const computed = await computeStandingsForSeason(
-        tournament?.season_id ?? null, ids, participantNames, matchRecords, {}, { byes }
+        tournament?.season_id ?? null, ids, participantNames, matchRecords, {}, { byes, ...playoffStandingsOptions(tournament, ids.length) }
       );
       standings = computed.slice(0, 12).map((s, i) => ({
         playerId: s.player_id,
         playerName: s.player_name,
-        rank: i + 1,
+        rank: s.rank ?? i + 1,
         points: s.points,
         wins: s.wins,
         losses: s.losses,

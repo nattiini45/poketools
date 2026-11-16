@@ -99,13 +99,21 @@ function Panel({
       const scoring = panel.isEvolutionPointBuy ? copy.seasonEvolutionScoring : copy.seasonScoring;
       const groupStandings = panel.groupStandings ?? [];
       const byPointsPerMatch = panel.standingsRanking === 'points_per_match';
+      const finalTable = panel.finalPlacings ? (
+        <div className="space-y-2" data-hub-final-placings>
+          <h4 className="font-heading text-title text-fg">{copy.finalPlacings}</h4>
+          <p className="text-caption text-fg-muted">{copy.finalPlacingsNote}</p>
+          <HubStandingsTable rows={panel.finalPlacings} copy={copy} caption={copy.finalPlacings} gymTypes={gymTypes} />
+        </div>
+      ) : null;
       // No groups, or a single league group (its table IS the combined
       // table): one table, as a league without groups shows it.
       if (groupStandings.length <= 1) {
         return (
           <div className="space-y-2">
+            {finalTable}
             <p className="text-caption text-fg-muted">
-              {copy.standingsNote} {scoring}
+              {panel.finalPlacings ? copy.groupStageNote : copy.standingsNote} {scoring}
               {byPointsPerMatch ? ` ${copy.combinedByPointsPerMatch}` : ''}
             </p>
             <HubStandingsTable
@@ -122,6 +130,7 @@ function Panel({
       // the combined table below them.
       return (
         <div className="space-y-6" data-hub-group-standings>
+          {finalTable}
           <p className="text-xs text-arena-ink-secondary">
             {copy.groupTablesNote} {scoring}
           </p>

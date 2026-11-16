@@ -2,14 +2,18 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getStagesBySeasonId, getParticipants } from '@/lib/supabase/queries/tournaments';
-import { getMatchesByTournament } from '@/lib/supabase/queries/matches';
+import { getMatchesByTournament, getMatchesByTournamentIds } from '@/lib/supabase/queries/matches';
+import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
+import { assembleLeagueSchedule } from '@/lib/supabase/queries/league-standings';
+import { isPlayoffStage } from '@/lib/tournament/league-placings';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getAggregates } from '@/lib/supabase/queries/aggregates';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
-import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { computeStandingsForSeason, loadRankingContext } from '@/lib/tournament/season-standings';
+import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
+import { formatScoresByes } from '@/lib/tournament/byes';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import type { ApiResult } from '@/types/api';
 import type { SeasonLeaders } from '@/types/broadcast';
@@ -84,13 +88,16 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // Use the first (primary) tournament for standings
     const primaryTournament = tournaments[0];
+    const hasPlayoffs = tournaments.some(isPlayoffStage);
 
     // Fetch matches and participants in parallel (redact PII from participants)
-    const [allMatches, rawParticipants] = await Promise.all([
-      getMatchesByTournament(primaryTournament.id),
-      getParticipants(primaryTournament.id),
+    const [matchesByStage, rawParticipants] = await Promise.all([
+      hasPlayoffs ? getMatchesByTournamentIds(tournaments.map((stage) => stage.id))
+        : getMatchesByTournament(primaryTournament.id).then((matches) => new Map([[primaryTournament.id, matches]])),
+      hasPlayoffs ? getPublicSeasonParticipants(sid) : getParticipants(primaryTournament.id),
     ]);
-    const participants = rawParticipants.map(({ discord_id: _, auth_user_id: __, ...rest }) => rest);
+    const allMatches = [...matchesByStage.values()].flat();
+    const participants = rawParticipants;
 
     const completedMatches = allMatches.filter((m) => m.status === 'completed');
 
@@ -113,15 +120,28 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
     // Format-aware: EPB seasons use the evolution-points tiebreaker chain.
     // A Swiss primary stage scores its stored byes as wins.
-    const baseStandings = await computeStandingsForSeason(
-      sid,
-      participantIds,
-      participantNames,
-      matchRecords,
-      participantAvatars,
-      // The stage rows carry no league format, so the season's is passed for the bye gate.
-      { byes: await loadScoringByes({ ...primaryTournament, season_format_type: season.format_type }) },
-    );
+    let baseStandings: Standing[];
+    if (hasPlayoffs) {
+      const [ranking, groups, byeRoundsByStage] = await Promise.all([
+        loadRankingContext(sid, season.format_type),
+        getSeasonGroups(sid),
+        formatScoresByes(season.format_type) && tournaments.some((stage) => stage.bracket_type === 'swiss')
+          ? loadSeasonSwissByeRounds(sid) : undefined,
+      ]);
+      const schedule = assembleLeagueSchedule({ stages: tournaments, participants, matchesByStage,
+        context: ranking ?? { formatType: season.format_type }, groups, byeRoundsByStage });
+      baseStandings = schedule.finalPlacings ?? schedule.standings;
+    } else {
+      baseStandings = await computeStandingsForSeason(
+        sid,
+        participantIds,
+        participantNames,
+        matchRecords,
+        participantAvatars,
+        // The stage rows carry no league format, so the season's is passed for the bye gate.
+        { byes: await loadScoringByes({ ...primaryTournament, season_format_type: season.format_type }) },
+      );
+    }
 
     // Enrich each player with rating + top signature (batch — 2 queries instead of 2N)
     const playerIds = baseStandings.map((s) => s.player_id);

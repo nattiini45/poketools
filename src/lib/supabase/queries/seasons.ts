@@ -13,6 +13,8 @@ import {
 } from '@/lib/season/core-assignment';
 import type { Json, Tables } from '@/types/database';
 import type { PlayerStatus } from '@/types/player';
+import type { BracketType } from '@/types/tournament';
+import type { LeagueRankingStage } from '@/lib/tournament/league-placings';
 import type {
   Season,
   SeasonWithDetails,
@@ -231,6 +233,8 @@ export async function getSeasonStageIds(seasonId: string): Promise<string[]> {
 
 /** The stage ids of a season with the two facts that decide whether its table scores Swiss byes. */
 export interface SeasonStageBrackets {
+  stages?: (LeagueRankingStage & { name: string; bracket_type: BracketType })[];
+  hasGroups?: boolean;
   stageIds: string[];
   hasSwissStage: boolean;
   /** The season's format, read through the stage rows; null for a season without a stage. */
@@ -245,15 +249,21 @@ export interface SeasonStageBrackets {
 export async function getSeasonStageBrackets(seasonId: string): Promise<SeasonStageBrackets> {
   const { data, error } = await supabase
     .from('tournaments')
-    .select('id, bracket_type, seasons ( format_type )')
+    .select('id, name, stage_order, bracket_type, third_place_enabled, bracket_reset_enabled, tournament_participants(count), seasons ( format_type, season_groups(count) )')
     .eq('season_id', seasonId);
 
   if (error) throw error;
-  const rows = data ?? [];
+  const rows = [...(data ?? [])].sort((a, b) => a.stage_order - b.stage_order);
+  const season = rows[0]?.seasons as { format_type: SeasonFormatType; season_groups?: { count: number }[] } | null | undefined;
   return {
+    stages: rows.map((row) => ({ id: row.id, name: row.name, bracket_type: row.bracket_type,
+      third_place_enabled: row.third_place_enabled,
+      bracket_reset_enabled: row.bracket_reset_enabled,
+      participant_count: row.tournament_participants?.[0]?.count ?? 0 })),
     stageIds: rows.map((row) => row.id as string),
     hasSwissStage: rows.some((row) => row.bracket_type === 'swiss'),
-    formatType: (rows[0]?.seasons as { format_type: SeasonFormatType } | null | undefined)?.format_type ?? null,
+    hasGroups: (season?.season_groups?.[0]?.count ?? 0) > 0,
+    formatType: season?.format_type ?? null,
   };
 }
 

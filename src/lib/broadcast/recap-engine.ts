@@ -1,3 +1,4 @@
+import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { getMatchesByRound, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
@@ -313,7 +314,9 @@ async function computeStandingsMovement(
       player_1_id: m.player_1_id,
       player_2_id: m.player_2_id,
       winner_id: m.winner_id,
-      round_number: 0, // Not used by computeStandings unless maxRound is set
+      round_number: m.round_number ?? 0,
+      bracket_side: m.bracket_side,
+      bracket_pos: m.bracket_pos,
     }));
 
     // We need round numbers — derive from match round context
@@ -338,7 +341,7 @@ async function computeStandingsMovement(
       participantNames,
       matchRecords,
       participantAvatars,
-      { byes },
+      { byes, ...playoffStandingsOptions(tournament, participantIds.length) },
     );
 
     // Previous standings (exclude current round's matches)
@@ -359,15 +362,15 @@ async function computeStandingsMovement(
       participantNames,
       previousMatches,
       participantAvatars,
-      { byes },
+      { byes, ...playoffStandingsOptions(tournament, participantIds.length) },
     );
 
     // Build rank maps
     const currentRankMap = new Map<string, number>();
-    currentStandings.forEach((s, i) => currentRankMap.set(s.player_id, i + 1));
+    currentStandings.forEach((s, i) => currentRankMap.set(s.player_id, s.rank ?? i + 1));
 
     const previousRankMap = new Map<string, number>();
-    previousStandings.forEach((s, i) => previousRankMap.set(s.player_id, i + 1));
+    previousStandings.forEach((s, i) => previousRankMap.set(s.player_id, s.rank ?? i + 1));
 
     const risers: { player_name: string; old_rank: number; new_rank: number }[] = [];
     const fallers: { player_name: string; old_rank: number; new_rank: number }[] = [];

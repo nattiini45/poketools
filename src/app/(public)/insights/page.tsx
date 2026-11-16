@@ -22,6 +22,7 @@ import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { combinePokemonUsage, type CombinedPokemonUsageRow } from '@/lib/stats/combined-statistics';
 import { historicalCompetitionOptions, readHistoricalUsage } from '@/lib/stats/historical-statistics';
 import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
+import { groupStageRanking } from '@/lib/tournament/league-placings';
 import {
   formatScoresByes,
   groupRoundsByStage,
@@ -123,6 +124,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
         records,
         byes,
         rankingForPhase(ranking, scope.id),
+        tournament,
       ),
     };
   }
@@ -164,7 +166,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
         })),
         matchRecords,
         byes,
-        ranking,
+        ranking ? groupStageRanking(ranking, stages) : ranking,
       ),
     };
   }

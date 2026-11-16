@@ -14,6 +14,7 @@ interface StandingsTableProps {
 }
 
 function compareStandingsRows(a: StandingsRow, b: StandingsRow): number {
+  if (a.rank !== undefined && b.rank !== undefined) return a.rank - b.rank;
   if (b.wins !== a.wins) return b.wins - a.wins;
   if (a.losses !== b.losses) return a.losses - b.losses;
   return (b.game_wins - b.game_losses) - (a.game_wins - a.game_losses);
@@ -31,8 +32,8 @@ export default function StandingsTable({ standings }: StandingsTableProps) {
       key: 'rank',
       header: '#',
       width: '2.5rem',
-      render: (_row: StandingsRow, i: number) => (
-        <span className="text-poke-text-muted">{i + 1}</span>
+      render: (row: StandingsRow, i: number) => (
+        <span className="text-poke-text-muted">{row.rank ?? i + 1}</span>
       ),
     },
     {

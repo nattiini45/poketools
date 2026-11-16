@@ -89,6 +89,7 @@ export type LeagueHubPanelData =
       tab: 'standings';
       /** The season table; in a league with groups the combined table, shown below the group tables. */
       standings: LeagueStanding[];
+      finalPlacings?: (LeagueStanding & { rank: number })[];
       /** One table per league group (cross-group matches included); empty or absent without groups. */
       groupStandings?: LeagueGroupStandings[];
       /** How `standings` is ranked: `points` (also when absent) unless a grouped league's match counts differ. */
@@ -194,6 +195,7 @@ export async function loadLeagueHubPanel(
       return {
         tab,
         standings: data.standings,
+        finalPlacings: data.finalPlacings,
         groupStandings: data.groupStandings ?? [],
         standingsRanking: data.standingsRanking ?? 'points',
         isEvolutionPointBuy: epb,

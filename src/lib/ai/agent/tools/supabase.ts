@@ -40,6 +40,7 @@ export interface RosterEntry {
 }
 
 export interface StandingEntry {
+  rank?: number;
   player_id: string;
   name: string;
   wins: number;
@@ -161,8 +162,10 @@ export async function queryLeagueData(
     records,
     byes,
     rankingForPhase(ranking, scope.id),
+    tournament ?? undefined,
   );
   const standings: StandingEntry[] = rows.map((r) => ({
+    ...(r.rank === undefined ? {} : { rank: r.rank }),
     player_id: r.player_id,
     name: r.player_name,
     wins: r.wins,

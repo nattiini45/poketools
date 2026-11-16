@@ -97,7 +97,7 @@ describe('getCompletedMatchRecords', () => {
     ]);
     for (const q of f.queries) {
       expect(q.table).toBe('matches');
-      expect(q.select).toBe('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )');
+      expect(q.select).toBe('id, player_1_id, player_2_id, winner_id, bracket_side, bracket_pos, rounds!inner( round_number )');
       expect(q.limit).toBeNull();
       expect(q.orders).toEqual([
         { column: 'created_at', ascending: true },
@@ -166,6 +166,12 @@ describe('getCompletedMatchRecords', () => {
 });
 
 describe('getCompletedMatchRecordsBatch', () => {
+  it('retains the bracket side and position needed to distinguish a final, reset and bronze match in one read', async () => {
+    const f = use(completedRows(1).map((row) => ({ ...row, bracket_side: 'grand_finals', bracket_pos: 1 })));
+    const records = await getCompletedMatchRecordsBatch([T]);
+    expect(records.get(T)).toEqual([{ ...expectedRecord(0), bracket_side: 'grand_finals', bracket_pos: 1 }]);
+    expect(f.queries).toHaveLength(1);
+  });
   it('returns every row of 2345 matches over 3 tournaments, grouped per tournament in read order', async () => {
     // Interleave tournaments by index so each page mixes them.
     const rows = completedRows(2345).map((r) => ({
