@@ -71,6 +71,7 @@ export default function LeagueAttractScreen({
           league_name: json.data?.league_name ?? null,
           standings: standingsData.map(
             (s: {
+              rank?: number;
               player_name: string;
               wins: number;
               losses: number;
@@ -79,7 +80,7 @@ export default function LeagueAttractScreen({
             }, i: number) => ({
               name: s.player_name,
               record: `${s.wins}-${s.losses}`,
-              rank: i + 1,
+              rank: s.rank ?? i + 1,
               avatar_url: s.player_avatar_url ?? null,
               rating: s.rating ?? null,
             }),

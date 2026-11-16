@@ -9,13 +9,14 @@ import {
   type SeasonStandingsContext,
 } from '@/lib/tournament/season-standings';
 import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
-import { formatScoresByes, scoringByeRecordsForStages } from '@/lib/tournament/byes';
+import { countByesByPlayer, formatScoresByes, scoringByeRecordsForStages } from '@/lib/tournament/byes';
 import type { Standing, MatchRecord, ByeRecord } from '@/lib/tournament/types';
 import { rankCombinedTable, splitGroupTables, type CombinedRanking } from '@/lib/tournament/group-standings';
-import type { MatchWithPlayers } from '@/types/match';
+import type { MatchWithRoundNumber } from '@/types/match';
 import { toPublicMatch, type PublicMatch, type PublicMatchSource } from '@/lib/match/public-match';
 import type { TournamentWithDetails } from '@/types/tournament';
 import type { PublicSeasonParticipant } from '@/lib/players/public-player';
+import { finalLeaguePlacings, groupStageIds, groupStageRanking } from '@/lib/tournament/league-placings';
 
 /**
  * Server-side league schedule + standings for the EvoLiga world.
@@ -23,7 +24,7 @@ import type { PublicSeasonParticipant } from '@/lib/players/public-player';
  * The broadcast standings overlay fetches its data through the public API
  * route `/api/broadcast/standings/[sid]` (client-side fetch) — not cleanly
  * reusable from a server component, and it only covers the FIRST stage of a
- * season. This module computes season-wide standings across ALL stages with
+ * season. This module computes group-stage standings, excluding elimination phases, with
  * the format-aware standings dispatch (EPB tiebreaker chain included) and
  * returns the fixtures per stage, reading every stage's matches in one query. Each standings row also
  * carries its rank movement against the previous matchday's table
@@ -91,8 +92,10 @@ export interface LeagueGroupStandings {
 }
 
 export interface LeagueSchedule {
+  byeCounts?: Record<string, number>;
+  finalPlacings?: (LeagueStanding & { rank: number })[];
   /**
-   * Season-wide standings across all stages, sorted by the format tiebreakers. In a league with groups this is
+   * Group-stage standings, sorted by the format tiebreakers. In a league with groups this is
    * the combined table: ranked by points per match while the trainers have played different numbers of matches
    * (`standingsRanking`), else by points.
    */
@@ -186,7 +189,7 @@ export function deriveRankChanges(
  * scores them as wins; a stage without it (or any other type) scores none.
  */
 export type LeagueScheduleStage = Pick<TournamentWithDetails, 'id' | 'name'> &
-  Partial<Pick<TournamentWithDetails, 'bracket_type'>>;
+  Partial<Pick<TournamentWithDetails, 'bracket_type' | 'third_place_enabled' | 'participant_count' | 'bracket_reset_enabled'>>;
 
 /** The participant fields the schedule reads (public columns only). */
 export type LeagueScheduleParticipant = Pick<PublicSeasonParticipant, 'id' | 'name' | 'avatar_url'>;
@@ -197,7 +200,7 @@ export interface LeagueScheduleInput {
   stages: readonly LeagueScheduleStage[];
   participants: readonly LeagueScheduleParticipant[];
   /** Matches per stage id (`getMatchesByTournamentIds`); a missing id means none. */
-  matchesByStage: ReadonlyMap<string, MatchWithPlayers[]>;
+  matchesByStage: ReadonlyMap<string, MatchWithRoundNumber[]>;
   /** The season's format and, for EPB, its evolution points. */
   context: SeasonStandingsContext;
   /** The league's groups in display order (`getSeasonGroups`); empty or absent for a league without groups. */
@@ -310,7 +313,8 @@ function seasonByes(
  * exactly the season table it always was.
  */
 export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedule {
-  const { stages, participants, matchesByStage, context } = input;
+  const { stages, participants, matchesByStage } = input;
+  const context = groupStageRanking(input.context, stages);
   const groups = input.groups ?? [];
 
   // The public boundary: full match rows in, `PublicMatch` out, so neither
@@ -331,15 +335,31 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
     participantAvatars[p.id] = p.avatar_url ?? null;
   }
 
-  const matchRecords: MatchRecord[] = fixtures
+  const tableStageIds = new Set(groupStageIds(stages));
+  const tableFixtures = fixtures.filter((fixture) => tableStageIds.has(fixture.stageId));
+  const matchRecords: MatchRecord[] = tableFixtures
     .filter((f) => f.match.status === 'completed')
     .map(toMatchRecord);
 
   // Every match counts for one point per win here, whatever its stage, so a Swiss stage's bye is worth that win
   // too (the stage's own table uses the same single point). Evolution Point Buy standings ignore byes. A legacy
   // round holds no bye, so a league without Swiss byes is exactly the table it always was.
-  const matchdays = completedMatchdays(fixtures);
+  const matchdays = completedMatchdays(tableFixtures);
   const byes = seasonByes(stages, input.byeRoundsByStage ?? new Map(), matchdays);
+  const playoffRecords = new Map(stages.map((stage) => [stage.id, (matchesByStage.get(stage.id) ?? []).map((match) => ({
+    match_id: match.id,
+    player_1_id: match.player_1_id,
+    player_2_id: match.player_2_id,
+    winner_id: match.status === 'completed' ? match.winner_id : null,
+    round_number: match.round_number ?? 0,
+    bracket_side: match.bracket_side,
+    bracket_pos: match.bracket_pos,
+  }))]));
+  const withPlacings = (schedule: LeagueSchedule): LeagueSchedule => {
+    const finalPlacings = finalLeaguePlacings(schedule.standings, stages, playoffRecords);
+    return { ...schedule, ...(finalPlacings ? { finalPlacings } : {}),
+      ...(byes.current.length > 0 && formatScoresByes(context.formatType) ? { byeCounts: countByesByPlayer(byes.current) } : {}) };
+  };
 
   const standings = computeStandingsFromContext(
     context,
@@ -383,7 +403,7 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
       rank_change: rankChanges.get(row.player_id) ?? null,
     }));
 
-    return { standings: table, fixtures };
+    return withPlacings({ standings: table, fixtures });
   }
 
   const withMovement = (current: Standing[], previous: Standing[] | null): LeagueStanding[] => {
@@ -397,7 +417,7 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
     ? new Map(splitGroupTables(previousStandings, tableGroups).map((t) => [t.group.id, t.standings]))
     : null;
 
-  return {
+  return withPlacings({
     standings: withMovement(combined.standings, previousCombined),
     fixtures,
     groupStandings: splitGroupTables(standings, tableGroups).map(({ group, standings: rows }) => ({
@@ -406,5 +426,5 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
       standings: withMovement(rows, previousByGroup?.get(group.id) ?? null),
     })),
     standingsRanking: combined.ranking,
-  };
+  });
 }

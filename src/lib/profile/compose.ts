@@ -7,6 +7,7 @@ import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/s
 import { listTournamentsByIds, getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByesBatch } from '@/lib/tournament/scoring-byes';
 import { kitForPhase } from '@/lib/format-engine/context';
+import { isPlayoffStage } from '@/lib/tournament/league-placings';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
@@ -244,12 +245,12 @@ async function loadParticipationStandings(
         participantNames,
         matchRecords,
         {},
-        { byes },
+        { byes, ...(isPlayoffStage(t) ? { playoffStage: { ...t, participant_count: participants.length } } : {}) },
       );
       const playerIdx = standings.findIndex((s) => s.player_id === playerId);
       if (playerIdx !== -1) {
         standingsMap.set(t.id, {
-          rank: playerIdx + 1,
+          rank: standings[playerIdx].rank ?? playerIdx + 1,
           total: standings.length,
           wins: standings[playerIdx].wins,
           losses: standings[playerIdx].losses,

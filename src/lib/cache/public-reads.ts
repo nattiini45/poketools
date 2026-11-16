@@ -3,6 +3,7 @@ import 'server-only';
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
 import { publicTags } from '@/lib/revalidation';
+import { groupStageIds } from '@/lib/tournament/league-placings';
 import { getAggregateForPokemon, getAggregatesSummary, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { listAchievementDefinitions } from '@/lib/supabase/queries/achievements';
 import { getSeasonEvolutionPoints, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
@@ -25,7 +26,7 @@ import {
   getPublicSeasonParticipants,
   getSeasonById,
   getSeasonParticipantGymTypes,
-  getSeasonStageIds,
+  getSeasonStageBrackets,
   getSeasonWithDetails,
   listSeasons,
 } from '@/lib/supabase/queries/seasons';
@@ -270,7 +271,7 @@ const teamRoles = cache(() =>
 const standingsPreview = cache((kind: 'league' | 'tournament', id: string, limit: number) =>
   cachedRead(
     {
-      name: 'standings-preview-v3',
+      name: 'standings-preview-v4',
       key: [kind, id, limit],
       tags: [
         kind === 'league' ? publicTags.season(id) : publicTags.tournament(id),
@@ -414,9 +415,10 @@ const seasonByeRounds = cache((seasonId: string) =>
 
 /** Completed match records of every stage of a league, flattened. */
 const seasonMatchRecords = cache((seasonId: string) =>
-  cachedRead(seasonSpec('season-match-records-v2', seasonId), async (): Promise<MatchRecord[]> => {
-    const stageIds = await getSeasonStageIds(seasonId);
-    const byStage = await getCompletedMatchRecordsBatch(stageIds);
+  cachedRead(seasonSpec('season-match-records-v3', seasonId), async (): Promise<MatchRecord[]> => {
+    const { stageIds, stages } = await getSeasonStageBrackets(seasonId);
+    const tableIds = stages ? groupStageIds(stages) : stageIds;
+    const byStage = await getCompletedMatchRecordsBatch(tableIds);
     return [...byStage.values()].flat();
   }),
 );
@@ -440,7 +442,7 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
     ...(preload.league.format_type === 'custom' ? [publicTags.ratings] : []),
     ...(listId ? [publicTags.pointBuyList(listId)] : []),
   ];
-  return cachedRead(seasonSpec('world-route-data-public-v6', seasonId, extraTags), () =>
+  return cachedRead(seasonSpec('world-route-data-public-v7', seasonId, extraTags), () =>
     buildWorldRouteData(seasonId, preload),
   );
 }
@@ -455,7 +457,7 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
  */
 function leagueSchedule(seasonId: string, preload: LeagueSchedulePreload) {
   const tags = [publicTags.players, ...(preload.context?.formatType === 'custom' ? [publicTags.ratings] : [])];
-  return cachedRead(seasonSpec('league-schedule-public-v5', seasonId, tags), () =>
+  return cachedRead(seasonSpec('league-schedule-public-v6', seasonId, tags), () =>
     getLeagueSchedule(seasonId, preload),
   );
 }
@@ -543,7 +545,7 @@ const tournamentParticipants = cache((tournamentId: string) =>
 );
 
 const tournamentMatchRecords = cache((tournamentId: string) =>
-  cachedRead(tournamentSpec('tournament-match-records-v2', tournamentId), () =>
+  cachedRead(tournamentSpec('tournament-match-records-v3', tournamentId), () =>
     getCompletedMatchRecords(tournamentId),
   ),
 );
@@ -578,7 +580,7 @@ const tournamentGroups = cache((tournamentId: string) =>
 const playerProfile = cache((playerId: string) =>
   cachedRead(
     {
-      name: 'player-profile-v4',
+      name: 'player-profile-v5',
       key: [playerId],
       tags: [
         publicTags.player(playerId),

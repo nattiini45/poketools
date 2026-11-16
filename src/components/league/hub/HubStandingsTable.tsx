@@ -139,6 +139,7 @@ export default function HubStandingsTable({
         </thead>
         <tbody>
           {rows.map((row, index) => {
+            const rank = row.rank ?? index + 1;
             const inZone = cut !== null && index < cut;
             const lastInZone = cut !== null && index === cut - 1;
             const change = columns.movement ? rankChange(row) : null;
@@ -153,8 +154,8 @@ export default function HubStandingsTable({
               >
                 <td className="whitespace-nowrap px-3 py-2">
                   <span title={inZone ? copy.table.advancementZone : undefined} className="inline-flex">
-                    <SkewChip tone={index < 4 ? RANK_TONE[index] : 'neutral'} className="min-w-7">
-                      {index + 1}
+                    <SkewChip tone={rank <= 4 ? RANK_TONE[rank - 1] : 'neutral'} className="min-w-7">
+                      {rank}
                     </SkewChip>
                   </span>
                 </td>

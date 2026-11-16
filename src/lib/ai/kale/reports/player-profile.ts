@@ -1,3 +1,4 @@
+import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { AI_MAX_TOKENS } from '../../constants';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
@@ -85,12 +86,12 @@ async function buildFactPack(params: ReportParams): Promise<PlayerProfileFactPac
     tournament.season_id,
     participantIds, participantNames, allMatchRecords,
     participantAvatars,
-    { pointsPerWin: 3, pointsPerDraw: 1, byes },
+    { pointsPerWin: 3, pointsPerDraw: 1, byes, ...playoffStandingsOptions(tournament, participantIds.length) },
     gymTypes
   );
 
   const playerStanding = standings.find((s) => s.player_id === params.playerId);
-  const final_rank = playerStanding ? standings.indexOf(playerStanding) + 1 : 0;
+  const final_rank = playerStanding ? playerStanding.rank ?? standings.indexOf(playerStanding) + 1 : 0;
 
   // Notable wins (matches this player won)
   const notableWins = allMatchRecords

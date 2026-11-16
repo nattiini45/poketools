@@ -74,9 +74,12 @@ export interface LeagueHubCopy {
     pointsPerMatch: string;
   };
   standingsNote: string;
+  groupStageNote: string;
   /** League groups: the group tables count cross-group matches; the combined table follows. */
   groupTablesNote: string;
   combinedTable: string;
+  finalPlacings: string;
+  finalPlacingsNote: string;
   combinedByPointsPerMatch: string;
   combinedByPoints: string;
   /** A points-per-match value in the viewer's number format, two decimals ("1.50" / "1,50"). */
@@ -149,6 +152,9 @@ function buildCopy(locale: Locale): LeagueHubCopy {
     links: { ...m.links, draft: glossary.draft.draftRoom },
     table: { ...m.table, evolutionPoints: glossary.progress.evolutionPointsShort },
     standingsNote: m.standingsNote,
+    groupStageNote: m.groupStageNote,
+    finalPlacings: m.finalPlacings,
+    finalPlacingsNote: m.finalPlacingsNote,
     groupTablesNote: m.groupTablesNote,
     combinedTable: m.combinedTable,
     combinedByPointsPerMatch: m.combinedByPointsPerMatch,

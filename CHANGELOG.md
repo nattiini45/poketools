@@ -285,6 +285,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Fixed
 
+- League group and combined tables exclude playoff results. Final placings follow the completed bracket, with shared third place when there is no third-place match; non-qualifiers retain their group-table order. League previews, broadcasts and phase-scoped standings use the same placement rules without changing statistical totals.
+
 - **Combined historical statistics keep unknown counters unknown.** A historical appearance or KO counter marked
   unknown no longer becomes zero when live data exists. Usage, Pokémon and profile totals/rankings preserve nulls;
   known live observations remain identifiable without presenting them as complete combined totals.

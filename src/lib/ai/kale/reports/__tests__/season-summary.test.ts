@@ -6,6 +6,7 @@ import type { SeasonSummaryContent } from '@/types/tournament-report';
 vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonById: vi.fn(),
   getSeasonParticipants: vi.fn(),
+  getSeasonStageBrackets: vi.fn().mockResolvedValue({ stageIds: ['t1'], hasSwissStage: false, formatType: 'singles', stages: [] }),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getCompletedMatchRecords: vi.fn(),
@@ -17,8 +18,14 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
 }));
-vi.mock('@/lib/tournament/season-standings', () => ({
+vi.mock('@/lib/tournament/season-standings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/tournament/season-standings')>()),
   computeStandingsForSeason: vi.fn(),
+  loadRankingContext: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/league-standings', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/supabase/queries/league-standings')>()),
+  getLeagueSchedule: vi.fn(),
 }));
 vi.mock('@/lib/tournament/scoring-byes', () => ({
   loadScoringByes: vi.fn(),
@@ -27,11 +34,13 @@ vi.mock('@/lib/tournament/scoring-byes', () => ({
 // ─── Import after mocks ────────────────────────────────────────────
 
 import { seasonSummaryDefinition } from '../season-summary';
-import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
+import { getSeasonById, getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { computeStandingsForSeason, loadRankingContext } from '@/lib/tournament/season-standings';
+import { assembleLeagueSchedule, getLeagueSchedule } from '@/lib/supabase/queries/league-standings';
+import { leaguePlayoffsFixture } from '@/test/fixtures/league-playoffs';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 
 const mockGetSeasonById = vi.mocked(getSeasonById);
@@ -46,6 +55,7 @@ const mockLoadByes = vi.mocked(loadScoringByes);
 // ─── Fixtures ──────────────────────────────────────────────────────
 
 function setupMocks() {
+  vi.mocked(getSeasonStageBrackets).mockResolvedValue({ stageIds: ['t1'], hasSwissStage: false, formatType: 'singles', stages: [] });
   mockGetTournament.mockResolvedValue({
     id: 't1', name: 'Season 1', season_id: 's1', ruleset_id: 'r1',
   } as never);
@@ -83,6 +93,22 @@ describe('seasonSummaryDefinition', () => {
   });
 
   describe('buildFactPack', () => {
+    it('crowns the playoff champion rather than the group-table leader and preserves shared third place', async () => {
+      const fixture = leaguePlayoffsFixture();
+      vi.mocked(getSeasonStageBrackets).mockResolvedValue({ stageIds: fixture.stages.map((stage) => stage.id),
+        hasSwissStage: false, formatType: 'singles', stages: fixture.stages } as never);
+      mockGetSeasonParticipants.mockResolvedValue([...fixture.participants] as never);
+      vi.mocked(loadRankingContext).mockResolvedValue(undefined);
+      vi.mocked(getLeagueSchedule).mockResolvedValue(assembleLeagueSchedule(fixture));
+      const fp = await seasonSummaryDefinition.buildFactPack({ tournamentId: 't1', roundId: 'r1' }) as {
+        seasonMvp: { player_id: string }; finalStandings: { player_id: string; rank: number }[];
+      };
+      expect(fp.seasonMvp.player_id).toBe('Orbit');
+      expect(fp.finalStandings.slice(0, 4).map((row) => [row.player_id, row.rank]))
+        .toEqual([['Orbit', 1], ['Nova', 2], ['Comet', 3], ['Meteor', 3]]);
+      expect(getLeagueSchedule).toHaveBeenCalledOnce();
+      expect(mockComputeStandings).not.toHaveBeenCalled();
+    });
     it('throws if tournament has no season', async () => {
       mockGetTournament.mockResolvedValue({ id: 't1', season_id: null } as never);
       await expect(

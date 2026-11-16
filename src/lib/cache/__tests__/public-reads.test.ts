@@ -128,6 +128,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
   getSeasonWithDetails: vi.fn(async (id: string) => ({ id, name: `Liga ${id}` })),
   getSeasonById: vi.fn(async (id: string) => ({ id, format_type: 'singles' })),
   getSeasonStageIds: vi.fn(async () => ['stage-a', 'stage-b']),
+  getSeasonStageBrackets: vi.fn(async () => ({ stageIds: ['stage-a', 'stage-b'], hasSwissStage: false, formatType: 'singles' })),
   getPublicSeasonParticipants: vi.fn(async () => [{ id: P, name: 'Mara', gym_type: 'fire', avatar_url: null, core_types: null }]),
   getSeasonParticipantGymTypes: vi.fn(async () => ({ [P]: 'fire' })),
 }));
@@ -695,8 +696,8 @@ describe('public read cache — no session data and no private player columns', 
     expect(names).toEqual({
       tournamentMatches: 'tournament-matches-public',
       tournamentHeadToHead: 'tournament-h2h-public',
-      worldRouteData: 'world-route-data-public-v6',
-      leagueSchedule: 'league-schedule-public-v5',
+      worldRouteData: 'world-route-data-public-v7',
+      leagueSchedule: 'league-schedule-public-v6',
     });
   });
 

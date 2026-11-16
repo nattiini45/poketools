@@ -206,6 +206,16 @@ Phase CRUD and per-phase enrollment live under `/api/seasons/[id]/phases/*` (see
 
 ## League groups (schedule and standings)
 
+### Group-stage tables and final placings
+
+League tables include table stages only (`swiss`, `round_robin`, and other non-elimination stages). A playoff's matches remain in the schedule and statistics, but never add points, opponents, or matchday movement to the group-stage table. The group tables and combined group-stage table remain available after the playoffs.
+
+Once a playoff bracket establishes its result, final league placings follow the bracket: champion first, finalist second, both semifinal losers third without a third-place match, and equal-round eliminations sharing the next applicable place in larger brackets. A recorded third-place match decides third and fourth instead. A double-elimination final waits for a required reset. Non-qualifiers follow in group-table order, after the bracket's places. No playoff means the existing standings behavior is unchanged.
+
+`LeagueSchedule.finalPlacings` is separate from `standings`; its records and points still describe the group stage, not a combined points contest. The hub shows both tables, while league previews, completed-league hero ranks, broadcasts and season summaries use final placings when available. Insights league scope remains group-stage only; statistical scopes and aggregate counters are unchanged. The complete reader map is [League standings readers](./league-standings-readers.md).
+
+The private history provider derives archive final placings at read time only when its source contains the playoff results. It retains the original group-stage table and never rewrites imported source rows. Archives without playoff results remain unchanged.
+
 A league may split its trainers into league groups (draft side: [draft-room.md](./draft-room.md); the full rules:
 [spec §6.4a](./poketools-spec.md)). Without groups nothing below applies and every page reads as before.
 

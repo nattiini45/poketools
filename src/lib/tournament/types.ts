@@ -1,6 +1,7 @@
 /** Internal types for tournament pairing algorithms */
 
 export interface Standing {
+  rank?: number;
   player_id: string;
   player_name: string;
   player_avatar_url: string | null;
@@ -51,6 +52,8 @@ export interface ByeRecord {
 }
 
 export interface MatchRecord {
+  bracket_side?: 'winners' | 'losers' | 'grand_finals' | null;
+  bracket_pos?: number | null;
   /** The match's id: what `gamesByMatch` is keyed on (a rematch of the same pair is a different match). */
   match_id?: string;
   player_1_id: string;

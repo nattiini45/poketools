@@ -36,6 +36,8 @@ export interface MatchWithPlayers extends Match {
   games: GameSummary[];
 }
 
+export type MatchWithRoundNumber = MatchWithPlayers & { round_number?: number };
+
 export interface GameSummary {
   id: string;
   game_number: number;

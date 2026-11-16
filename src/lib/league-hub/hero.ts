@@ -80,7 +80,7 @@ export function buildLeagueHero(input: {
       name,
       avatarUrl,
       ace: teamAces[playerId] ?? null,
-      rank: index >= 0 ? index + 1 : null,
+      rank: index >= 0 ? standings[index].rank ?? index + 1 : null,
       points: index >= 0 ? standings[index].points : null,
     };
   };

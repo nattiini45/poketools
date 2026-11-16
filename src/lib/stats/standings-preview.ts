@@ -6,6 +6,7 @@ import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
 import { loadRankingContext } from '@/lib/tournament/season-standings';
 import type { StandingsRow } from '@/types/game';
+import { finalLeaguePlacings, groupStageIds, groupStageRanking, isPlayoffStage } from '@/lib/tournament/league-placings';
 
 export interface StandingsPreviewRow {
   rank: number;
@@ -17,7 +18,7 @@ export interface StandingsPreviewRow {
 
 function toPreviewRows(standings: StandingsRow[], limit: number): StandingsPreviewRow[] {
   return standings.slice(0, limit).map((row, index) => ({
-    rank: index + 1,
+    rank: row.rank ?? index + 1,
     player_id: row.player_id,
     player_name: row.player_name,
     wins: row.wins,
@@ -29,7 +30,7 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
   // Both reads throw on a Supabase error: a failed stage read must not turn
   // into an all-zero table that the public cache then serves to everyone.
   const parts = await getSeasonParticipants(seasonId);
-  const { stageIds, hasSwissStage, formatType } = await getSeasonStageBrackets(seasonId);
+  const { stageIds, hasSwissStage, formatType, stages, hasGroups } = await getSeasonStageBrackets(seasonId);
   // The Swiss stages' stored byes score in the season table as in each stage's own table: one rounds read for all
   // stages. A league without a Swiss stage has none, and Evolution Point Buy tables never read byes, so neither
   // pays the read.
@@ -41,10 +42,10 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
     formatType ? loadRankingContext(seasonId, formatType) : undefined,
   ]);
-  const matchRecords = [...recordsMap.values()].flat();
+  const matchRecords = (stages ? groupStageIds(stages) : stageIds).flatMap((id) => recordsMap.get(id) ?? []);
   // The loader holds Swiss stages only.
   const byes = scoringByeRecords('swiss', [...(byeRoundsByStage?.values() ?? [])].flat());
-  return buildStandingsRowsFromMatchRecords(
+  const table = buildStandingsRowsFromMatchRecords(
     parts.map((p) => ({
       id: p.id,
       name: p.name,
@@ -53,8 +54,11 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
     })),
     matchRecords,
     byes,
-    ranking,
+    ranking && stages ? groupStageRanking(ranking, stages) : ranking,
+    undefined,
+    hasGroups && stages?.some(isPlayoffStage),
   );
+  return stages ? finalLeaguePlacings(table, stages, recordsMap) ?? table : table;
 }
 
 /**
@@ -90,6 +94,7 @@ export async function getStandingsPreview(
       records,
       byes,
       rankingForPhase(ranking, id),
+      tournament ?? undefined,
     );
     return toPreviewRows(standings, limit);
   }

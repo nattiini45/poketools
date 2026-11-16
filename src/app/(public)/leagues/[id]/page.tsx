@@ -168,7 +168,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     const hero = buildLeagueHero({
       league,
       stages,
-      standings: routeData.standings,
+      standings: routeData.finalPlacings ?? routeData.standings,
       fixtures: routeData.fixtures,
       teamAces: routeData.teamAces,
       viewerId: sessionPlayer?.playerId ?? null,
@@ -275,6 +275,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
         killRanking={killRanking}
         isDoubles={isDoubles}
         standings={schedule.standings}
+        finalPlacings={schedule.finalPlacings}
         fixtures={schedule.fixtures}
         typeCoreParticipants={
           caps.typeCores

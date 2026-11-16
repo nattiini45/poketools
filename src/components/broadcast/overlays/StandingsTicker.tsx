@@ -22,6 +22,7 @@ interface StandingsTickerProps {
 }
 
 interface StandingsEntry {
+  rank?: number;
   player_name: string;
   wins: number;
   losses: number;
@@ -55,6 +56,7 @@ export default function StandingsTicker({
 
     const rows: StandingsEntry[] = (json.data?.standings ?? []).map(
       (r: {
+        rank?: number;
         player_name: string;
         wins: number;
         losses: number;
@@ -66,6 +68,7 @@ export default function StandingsTicker({
         signature_pokemon?: string | null;
         signature_sprite_url?: string | null;
       }) => ({
+        rank: r.rank,
         player_name: r.player_name,
         wins: r.wins,
         losses: r.losses,
@@ -90,7 +93,7 @@ export default function StandingsTicker({
     const speed = scrollSpeed === 'slow' ? 40 : scrollSpeed === 'fast' ? 15 : 25;
     const tickerText = standings
       .map((s, i) => {
-        const base = { rank: i + 1, name: s.player_name, wins: s.wins, losses: s.losses };
+        const base = { rank: s.rank ?? i + 1, name: s.player_name, wins: s.wins, losses: s.losses };
         return s.signature_pokemon
           ? t('standings.tickerEntryWithPokemon', { ...base, pokemon: localizeSpecies(s.signature_pokemon, dl) })
           : t('standings.tickerEntry', base);
@@ -161,10 +164,10 @@ export default function StandingsTicker({
                 <div
                   className="w-8 text-center text-lg font-black"
                   style={{
-                    color: i < 3 ? 'var(--broadcast-accent)' : 'var(--broadcast-text-muted)',
+                    color: (entry.rank ?? i + 1) <= 3 ? 'var(--broadcast-accent)' : 'var(--broadcast-text-muted)',
                   }}
                 >
-                  {i + 1}
+                  {entry.rank ?? i + 1}
                 </div>
 
                 {/* Avatar */}

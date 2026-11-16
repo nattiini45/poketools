@@ -7,7 +7,7 @@ import { compareReplayOrder } from '@/lib/rating/replay-order';
 import { releaseTeamsFromMatches } from './teams';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
-import type { Match, MatchWithPlayers, MatchStatus, GameSummary, GameSource } from '@/types/match';
+import type { Match, MatchWithPlayers, MatchWithRoundNumber, MatchStatus, GameSummary, GameSource } from '@/types/match';
 import type { MatchRecord } from '@/lib/tournament/types';
 import { AUTO_CONFIRM_FROM, matchTimestampsFor } from '@/lib/tournament/match-state';
 import {
@@ -58,7 +58,7 @@ type GameJoin = {
   source: string;
   stats_locked: boolean;
 };
-type RoundJoin = { status: string };
+type RoundJoin = { status: string; round_number?: number };
 type MatchWithPlayersRow = MatchRow & {
   player_1: PlayerJoin;
   player_2: PlayerJoin;
@@ -70,7 +70,7 @@ type MatchWithTournamentRow = MatchWithPlayersRow & {
   tournaments: { name: string };
 };
 
-function toMatchWithPlayers(row: MatchWithPlayersRow): MatchWithPlayers {
+function toMatchWithPlayers(row: MatchWithPlayersRow): MatchWithRoundNumber {
   return {
     ...toMatch(row),
     player_1_name: row.player_1.name,
@@ -79,6 +79,7 @@ function toMatchWithPlayers(row: MatchWithPlayersRow): MatchWithPlayers {
     player_2_avatar_url: row.player_2.avatar_url ?? null,
     winner_name: row.winner?.name ?? null,
     round_status: (row.round?.status ?? 'pending') as MatchWithPlayers['round_status'],
+    ...(row.round?.round_number === undefined ? {} : { round_number: row.round.round_number }),
     games: (row.games ?? [])
       .sort((a, b) => a.game_number - b.game_number)
       .map((g): GameSummary => ({
@@ -98,7 +99,7 @@ const MATCH_WITH_PLAYERS_SELECT = `
   player_2:players!matches_player_2_id_fkey ( name, avatar_url ),
   winner:players!matches_winner_id_fkey ( name ),
   games ( id, game_number, winner_id, replay_url, source, stats_locked ),
-  round:rounds!matches_round_id_fkey ( status )
+  round:rounds!matches_round_id_fkey ( status, round_number )
 `;
 
 /**
@@ -909,7 +910,7 @@ const TOURNAMENT_MATCH_MAX_PAGES = 10;
  */
 export async function getMatchesByTournament(
   tournamentId: string
-): Promise<MatchWithPlayers[]> {
+): Promise<MatchWithRoundNumber[]> {
   const rows: MatchWithPlayersRow[] = [];
   for (let page = 0; page < TOURNAMENT_MATCH_MAX_PAGES; page++) {
     const from = page * POSTGREST_MAX_ROWS;
@@ -947,9 +948,9 @@ export async function getMatchesByTournament(
  */
 export async function getMatchesByTournamentIds(
   tournamentIds: readonly string[]
-): Promise<Map<string, MatchWithPlayers[]>> {
+): Promise<Map<string, MatchWithRoundNumber[]>> {
   const unique = [...new Set(tournamentIds)];
-  const grouped = new Map<string, MatchWithPlayers[]>(unique.map((id) => [id, []]));
+  const grouped = new Map<string, MatchWithRoundNumber[]>(unique.map((id) => [id, []]));
   if (unique.length === 0) return grouped;
 
   const cap = MATCHES_PER_TOURNAMENT_LIMIT * unique.length;
@@ -1885,7 +1886,7 @@ export async function getCompletedMatchRecords(
     (from, to) =>
       supabase
         .from('matches')
-        .select('id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, player_1_id, player_2_id, winner_id, bracket_side, bracket_pos, rounds!inner( round_number )')
         .eq('tournament_id', tournamentId)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1896,6 +1897,7 @@ export async function getCompletedMatchRecords(
 
   return rows.map((row) => ({
     match_id: row.id,
+    ...(row.bracket_side ? { bracket_side: row.bracket_side as Match['bracket_side'], bracket_pos: row.bracket_pos } : {}),
     player_1_id: row.player_1_id,
     player_2_id: row.player_2_id,
     winner_id: row.winner_id,
@@ -1944,7 +1946,7 @@ export async function getCompletedMatchRecordsBatch(
     (from, to) =>
       supabase
         .from('matches')
-        .select('id, tournament_id, player_1_id, player_2_id, winner_id, rounds!inner( round_number )')
+        .select('id, tournament_id, player_1_id, player_2_id, winner_id, bracket_side, bracket_pos, rounds!inner( round_number )')
         .in('tournament_id', tournamentIds)
         .eq('status', 'completed')
         .order('created_at', { ascending: true })
@@ -1957,6 +1959,7 @@ export async function getCompletedMatchRecordsBatch(
   for (const row of rows) {
     const record: MatchRecord = {
       match_id: row.id,
+      ...(row.bracket_side ? { bracket_side: row.bracket_side as Match['bracket_side'], bracket_pos: row.bracket_pos } : {}),
       player_1_id: row.player_1_id,
       player_2_id: row.player_2_id,
       winner_id: row.winner_id,

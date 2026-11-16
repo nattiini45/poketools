@@ -1,3 +1,4 @@
+import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -70,7 +71,7 @@ export async function buildRecapFactPack(
   const matchDetails = await fetchMatchDetails(roundMatches);
 
   // Compute standings
-  const standingsOpts = { pointsPerWin: 3, pointsPerDraw: 1 };
+  const standingsOpts = { pointsPerWin: 3, pointsPerDraw: 1, ...playoffStandingsOptions(tournament, participantIds.length) };
   const throughRoundRecords = allMatchRecords.filter(
     (m) => m.round_number <= round.round_number
   );
@@ -194,7 +195,7 @@ export async function buildForecastFactPack(
         tournament.season_id,
         participantIds, participantNames, allMatchRecords,
         participantAvatars,
-        { pointsPerWin: 3, pointsPerDraw: 1, byes },
+        { pointsPerWin: 3, pointsPerDraw: 1, byes, ...playoffStandingsOptions(tournament, participantIds.length) },
         gymTypes
       )
     : [];
@@ -389,11 +390,11 @@ function buildStandingFacts(
 ): StandingFact[] {
   const prevRankMap: Record<string, number> = {};
   if (previous) {
-    previous.forEach((s, i) => { prevRankMap[s.player_id] = i + 1; });
+    previous.forEach((s, i) => { prevRankMap[s.player_id] = s.rank ?? i + 1; });
   }
 
   return current.map((s, i) => {
-    const rank = i + 1;
+    const rank = s.rank ?? i + 1;
     const prevRank = prevRankMap[s.player_id];
 
     let rankChange: string;

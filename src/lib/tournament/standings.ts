@@ -4,8 +4,10 @@ import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import { computeEvolutionPointBuyStandings } from './evolution-standings';
 import { effectiveMatchPoints } from './standings-rules';
 import { kitStandings, ranksWithKit, type KitStandingsData } from '@/lib/format-engine/context';
+import { finalLeaguePlacings, type LeagueRankingStage } from './league-placings';
 
 export interface StandingsOptions {
+  playoffStage?: LeagueRankingStage;
   /** Points awarded per win (Swiss: 1, Round Robin: 3). Ignored for evolution_point_buy: the format pack decides. */
   pointsPerWin?: number;
   /** Points awarded per draw (Swiss: 0.5, Round Robin: 0). Ignored for evolution_point_buy. */
@@ -29,6 +31,13 @@ export interface StandingsOptions {
    * evolution_point_buy standings, which keep their own scoring unchanged.
    */
   byes?: ByeRecord[];
+}
+
+function withPlayoffPlacings(standings: Standing[], matches: MatchRecord[], options: StandingsOptions): Standing[] {
+  const { playoffStage: stage, maxRound } = options;
+  if (!stage) return standings;
+  const records = maxRound ? matches.filter((match) => match.round_number <= maxRound) : matches;
+  return finalLeaguePlacings(standings, [stage], new Map([[stage.id, records]])) ?? standings;
 }
 
 /**
@@ -165,7 +174,7 @@ export function computeStandings(
     return b.wins - a.wins;
   });
 
-  return standings;
+  return withPlayoffPlacings(standings, filteredMatches, options);
 }
 
 /**
@@ -198,10 +207,11 @@ export function computeStandingsForFormat(
   epb?: { evolutionPoints?: Record<string, number>; tiebreakerOrder?: unknown; kit?: KitStandingsData },
 ): Standing[] {
   if (ranksWithKit(formatType, epb?.kit)) {
-    return kitStandings(epb.kit, participant_ids, participant_names, matches, participant_avatars, options, participant_gym_types);
+    const standings = kitStandings(epb.kit, participant_ids, participant_names, matches, participant_avatars, options, participant_gym_types);
+    return withPlayoffPlacings(standings, matches, options);
   }
   if (formatType === 'evolution_point_buy') {
-    return computeEvolutionPointBuyStandings(
+    const standings = computeEvolutionPointBuyStandings(
       participant_ids,
       participant_names,
       matches,
@@ -213,6 +223,7 @@ export function computeStandingsForFormat(
         tiebreakerOrder: epb?.tiebreakerOrder,
       },
     );
+    return withPlayoffPlacings(standings, matches, options);
   }
   return computeStandings(
     participant_ids,

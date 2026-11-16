@@ -121,6 +121,7 @@ export interface WorldRouteData {
    * counts differ, see `standingsRanking`), shown below the group tables.
    */
   standings: LeagueStanding[];
+  finalPlacings?: (LeagueStanding & { rank: number })[];
   /**
    * League groups only, absent in a league without groups (whose payload is unchanged): one table per group,
    * in group order, counting all of its members' matches (cross-group matches included).
@@ -159,6 +160,7 @@ export interface WorldRouteDataInput {
   rosterLines?: PointBuyListEntry[] | null;
   trackers: EvolutionTracker[];
   standings: LeagueStanding[];
+  finalPlacings?: (LeagueStanding & { rank: number })[];
   /** League groups only (`assembleLeagueSchedule`); absent or empty for a league without groups. */
   groupStandings?: LeagueGroupStandings[];
   standingsRanking?: CombinedRanking;
@@ -282,6 +284,7 @@ export function assembleWorldRouteData(input: WorldRouteDataInput): WorldRouteDa
     teamAces: deriveTeamAcesFromLeads(input.teamLeads ?? []),
     trackers: input.trackers,
     standings: input.standings,
+    ...(input.finalPlacings ? { finalPlacings: input.finalPlacings } : {}),
     // League groups only: a league without groups keeps the exact payload it always had.
     ...(input.groupStandings && input.groupStandings.length > 0
       ? { groupStandings: input.groupStandings, standingsRanking: input.standingsRanking ?? 'points' }
@@ -409,6 +412,7 @@ export async function buildWorldRouteData(
     rosterLines: pointBuyEntries,
     trackers: evolutionTrackers,
     standings: schedule.standings,
+    finalPlacings: schedule.finalPlacings,
     groupStandings: schedule.groupStandings,
     standingsRanking: schedule.standingsRanking,
     fixtures: schedule.fixtures,
