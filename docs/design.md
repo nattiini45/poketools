@@ -145,8 +145,9 @@ wherever possible (they swap with the theme, the constants cannot).
 
 Fonts (OFL, self-hosted woff2 through `next/font/local`, so the build never fetches a font):
 
-- `font-heading` → Geist Pixel Square: display and title text, the wordmark. One
-  weight, so `font-synthesis-weight: none` keeps it from being faked bold.
+- `font-heading` → Geist Sans 600: display and title text, the wordmark. The
+  weight is the utility's default (`globals.css`, "Fonts"), so a `font-bold`
+  or `font-normal` in the markup still wins.
 - `font-body` → Geist Sans (variable, 100–900): everything else, at weights 400 and 550.
 - `font-mono` → Geist Mono (variable): pure number columns.
 - Emoji fall back to the system emoji font (Geist has none).
@@ -160,8 +161,8 @@ are `text-<role>`, and `cn()` merges them as font sizes, so
 
 | Role | Size / line height | Face |
 |---|---|---|
-| display | 28 / 34 | Geist Pixel Square |
-| title | 18 / 24 | Geist Pixel Square |
+| display | 28 / 34 | Geist Sans 600 |
+| title | 18 / 24 | Geist Sans 600 |
 | subtitle | 15 / 22 | Geist Sans 550 |
 | body | 14 / 20 | Geist Sans |
 | caption | 12 / 16 | Geist Sans |

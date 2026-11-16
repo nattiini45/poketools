@@ -1,7 +1,7 @@
 /**
  * Direction B type roles (redesign F3). Sizes and line heights live in the Tailwind theme (globals.css,
- * `--text-<role>`); display and title set in Geist Pixel Square (font-heading), the rest in Geist Sans.
- * Weights are 400 and 550 only, so a heavier label never needs a synthesised face.
+ * `--text-<role>`); display and title set in Geist Sans (font-heading) at 600, the rest in Geist Sans at 400
+ * and 550. Every weight is a real face of the variable font, so a heavier label never needs a synthesised one.
  */
 export const TYPE_ROLES = ['display', 'title', 'subtitle', 'body', 'caption', 'micro'] as const;
 
