@@ -527,7 +527,7 @@ BEGIN
     SELECT id FROM public.league_trash WHERE purge_after <= p_now AND NOT rebuild_pending
      ORDER BY purge_after LIMIT greatest(p_limit, 1) FOR UPDATE SKIP LOCKED
   ), mids AS (
-    SELECT d.id, coalesce((SELECT jsonb_agg(m ->> 'id') FROM public.league_trash_tables lt, jsonb_array_elements(lt.rows) m WHERE lt.trash_id = d.id AND lt.rel IN ('matches', 'phase_matches')), '[]'::jsonb) AS match_ids
+    SELECT d.id, coalesce((SELECT jsonb_agg(DISTINCT m ->> 'id') FROM public.league_trash_tables lt, jsonb_array_elements(lt.rows) m WHERE lt.trash_id = d.id AND lt.rel IN ('matches', 'phase_matches')), '[]'::jsonb) AS match_ids
       FROM due d
   ), gone AS (
     DELETE FROM public.league_trash t USING due WHERE t.id = due.id

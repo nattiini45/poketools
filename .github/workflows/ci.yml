@@ -170,7 +170,13 @@ jobs:
           done
 
       - name: Local-stack suites
-        run: npm run test:db
+        run: |
+          docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT public.phase_storage_transition('legacy', 'frozen_legacy');
+          SELECT public.phase_storage_transition('frozen_legacy', 'frozen_phase');
+          SELECT public.phase_storage_transition('frozen_phase', 'phase');
+          SQL
+          npm run test:db
         env:
           LOCAL_STACK_CI: '1'
 

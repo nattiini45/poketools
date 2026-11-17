@@ -36,6 +36,8 @@ Old captured snapshots are not converted by an expand migration. Their schema-aw
 
 ## Delivery and verification
 
+The PostgREST recycle-bin fixture populates both ownership families and checks native clocks, fingerprints and aggregate jobs without relaxing its every-owned-table assertion. After the dormant-state SQL rehearsal, database CI enables phase mode only on its disposable local stack for this fixture. A manual run of that fixture likewise requires operator-enabled phase mode on a disposable stack; never change a shared or hosted stack for a test.
+
 The sequence is additive schema/security/trash, lifecycle/pairing persistence, match pipelines/projections, ancillary services/contracts, canonical routes/cache/redirects, then an explicitly approved maintenance transfer. The private companion ships its matching adapter changes before cutover. Retirement is separate work and is not part of the initial transfer.
 
 Before enabling phase writes, prove global replay binding across both games stores, capability-token uniqueness, state/CAS races, phase and combined aggregate idempotency, cache invalidation and bounded queries. Existing phase URLs will receive 308 redirects under their league only when the canonical surfaces are ready. The foundation changes no public URLs or UI.

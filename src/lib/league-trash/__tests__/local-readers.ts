@@ -152,6 +152,10 @@ const EXCLUDED: Readonly<Record<string, readonly string[]>> = {
   format_challenges: ['expires_at'],
   season_formats: ['revision', 'clock_shift_seconds'],
   games: ['aggregate_applied_at'],
+  phase_matches: ['auto_confirm_at'],
+  phase_rounds: ['deadline'],
+  phase_match_proposals: ['expires_at'],
+  phase_games: ['aggregate_applied_at'],
 };
 
 function valuesFor(keys: KeyName, ids: LeagueIds): string[] {
@@ -247,5 +251,8 @@ export async function readClocks(client: Client, ids: LeagueIds): Promise<Record
   await take('match_proposals', 'expires_at', (r) => r.status === 'pending');
   await take('rounds', 'deadline', (r) => r.status !== 'completed');
   await take('format_challenges', 'expires_at', (r) => r.status === 'open');
+  await take('phase_matches', 'auto_confirm_at', (r) => r.status === 'pending_confirmation');
+  await take('phase_match_proposals', 'expires_at', (r) => r.status === 'pending');
+  await take('phase_rounds', 'deadline', (r) => r.status !== 'completed');
   return clocks;
 }
