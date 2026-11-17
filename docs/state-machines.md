@@ -40,6 +40,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
 - [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
 - [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
+- [Phase storage generation](#phase-storage-generation) — `phase_storage_state.mode`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
 - [Redraft submission window](#redraft-submission-window) — `derived: draft_pools.phase = 'submissions' and submission_deadline_at vs now()`
@@ -380,7 +381,7 @@ stateDiagram-v2
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
 | `pause` | `running` | `paused` | admin | `supabase/migrations/20261018140100_draft_quiet_hours.sql#draft_set_paused`<br>`src/app/api/drafts/[id]/pause/route.ts`<br>`supabase/migrations/20261018180000_league_groups.sql#draft_admin_void_pick` | A paused pool answers ALREADY_PAUSED; outside drafting DRAFT_NOT_ACTIVE. A complete pool (never paused) reopened by a void also comes back paused. |
-| `freeze` | `running` | `paused` | system | `supabase/migrations/20261026091000_league_trash.sql#league_trash_delete` | Moving a league to the recycle bin pauses its running drafts; restoring it keeps them paused. |
+| `freeze` | `running` | `paused` | system | `supabase/migrations/20261117101000_phase_trash_foundation.sql#league_trash_delete` | Moving a league to the recycle bin pauses its running drafts; restoring it keeps them paused. |
 | `resume` | `paused` | `running` | admin | `supabase/migrations/20261018140100_draft_quiet_hours.sql#draft_set_paused`<br>`supabase/migrations/20261018140100_draft_quiet_hours.sql#draft__resume`<br>`src/app/api/drafts/[id]/pause/route.ts` | A running pool answers NOT_PAUSED. Restarts the active clock with its remaining time, or activates the next slot. |
 | `complete` | `paused` | `running` | system | `supabase/migrations/20261018140200_draft_pool_completability.sql#draft__activate_next` | A restored drop that empties the queue completes the pool, which clears the pause. |
 
@@ -867,14 +868,14 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `delete` | `live`, `restored_rebuild_pending` | `rebuild_pending` | admin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_delete`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/seasons/[id]/route.ts` | DELETE /api/seasons/[id] (site admins). Deleting a restored league again drops its restore tombstone. |
+| `delete` | `live`, `restored_rebuild_pending` | `rebuild_pending` | admin | `supabase/migrations/20261117101000_phase_trash_foundation.sql#league_trash_delete`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/seasons/[id]/route.ts` | DELETE /api/seasons/[id] (site admins). Deleting a restored league again drops its restore tombstone. |
 | `rebuild_done` | `rebuild_pending` | `in_bin` | system, superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The delete's derived-data rebuild is confirmed: right after the delete, or later from the trash page's Run rebuild. |
 | `rebuild_done` | `expired_rebuild_pending` | `purgeable` | superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The way out of the limbo: the rebuild works whatever the purge date. |
 | `purge_date_passes` | `rebuild_pending` | `expired_rebuild_pending` | clock | `src/lib/league-trash/lifecycle-state.ts` | purge_after <= now while the delete rebuild is pending. |
 | `purge_date_passes` | `in_bin` | `purgeable` | clock | `src/lib/league-trash/lifecycle-state.ts` | purge_after <= now: the entry can no longer be restored. |
-| `restore` | `in_bin` | `restored_rebuild_pending` | superadmin | `supabase/migrations/20261106090000_format_challenges.sql#league_trash_restore`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/restore/route.ts` | Refused past the purge date (LEAGUE_TRASH_EXPIRED) and while the delete rebuild is pending (LEAGUE_TRASH_REBUILD_PENDING). Writes the restore tombstone and queues the aggregate jobs of the counted games. |
+| `restore` | `in_bin` | `restored_rebuild_pending` | superadmin | `supabase/migrations/20261117101000_phase_trash_foundation.sql#league_trash_restore`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/restore/route.ts` | Refused past the purge date (LEAGUE_TRASH_EXPIRED) and while the delete rebuild is pending (LEAGUE_TRASH_REBUILD_PENDING). Writes the restore tombstone and queues the aggregate jobs of the counted games. |
 | `restore_rebuild_done` | `restored_rebuild_pending` | `live` | system, superadmin | `supabase/migrations/20261026091000_league_trash.sql#league_trash_restore_rebuild_done`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/lib/league-trash/service.ts`<br>`src/app/api/admin/league-trash/[id]/rebuild/route.ts` | The restore's derived-data rebuild is confirmed and the tombstone deleted. |
-| `purge` | `purgeable` | `purged` | system | `supabase/migrations/20261026091000_league_trash.sql#league_trash_expire`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/app/api/cron/expire-league-trash/route.ts` | The daily expire-league-trash cron; irreversible. |
+| `purge` | `purgeable` | `purged` | system | `supabase/migrations/20261117101000_phase_trash_foundation.sql#league_trash_expire`<br>`src/lib/supabase/queries/league-trash.ts`<br>`src/app/api/cron/expire-league-trash/route.ts` | The daily expire-league-trash cron; irreversible. |
 
 ## Match
 
@@ -1034,6 +1035,36 @@ stateDiagram-v2
 | `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
 | `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
 | `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
+
+## Phase storage generation
+
+- **Id:** `phase_storage`
+- **State lives in:** phase_storage_state.mode
+- **Module doc:** `docs/phase-separation.md`
+- **States:** `legacy`, `frozen_legacy`, `frozen_phase`, `phase`
+- **Actors:** `operator`
+
+Operator-only storage generation for the phase migration. New phase writes are dormant in legacy mode. Frozen modes are maintenance boundaries; P6 supplies the complete write freeze before any live transfer.
+
+```mermaid
+stateDiagram-v2
+  [*] --> legacy
+  legacy --> frozen_legacy: freeze_legacy
+  frozen_legacy --> legacy: cancel
+  frozen_legacy --> frozen_phase: transfer
+  frozen_phase --> frozen_legacy: reverse_transfer
+  frozen_phase --> phase: open
+  phase --> frozen_phase: freeze_phase
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `freeze_legacy` | `legacy` | `frozen_legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `cancel` | `frozen_legacy` | `legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `transfer` | `frozen_legacy` | `frozen_phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `reverse_transfer` | `frozen_phase` | `frozen_legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `open` | `frozen_phase` | `phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `freeze_phase` | `phase` | `frozen_phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
 
 ## Player moderation status
 

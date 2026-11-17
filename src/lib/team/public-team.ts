@@ -75,6 +75,8 @@ export const PUBLIC_TEAM_FIELDS = [
 export const PRIVATE_TEAM_FIELDS = [
   'share_token',
   'share_enabled_at',
+  'phase_match_id',
+  'forked_from_phase_team_id',
 ] as const satisfies readonly Exclude<keyof Tables<'teams'>, keyof PublicTeam>[];
 
 // ─── Compile-time completeness checks ─────────────────────────────────────

@@ -24,7 +24,7 @@ import { parseDbError } from '@/lib/studio-core/db-errors';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { mapFormatRuntimeDbError } from './format-runtime';
 
-export type FormatChallengeRow = Tables<'format_challenges'>;
+export type FormatChallengeRow = Omit<Tables<'format_challenges'>, 'league_phase_id' | 'phase_match_id'>;
 export type FormatChallengeStatus = 'open' | 'accepted' | 'declined' | 'expired' | 'cancelled';
 
 export const FORMAT_CHALLENGE_ERROR_CODES = [

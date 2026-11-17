@@ -60,7 +60,8 @@ export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly st
     'format_challenges',
     'format_notifications',
   ],
-  phases: ['tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports'],
+  phases: ['tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports',
+    'league_phases', 'phase_participants', 'phase_groups', 'phase_group_members', 'phase_rounds', 'phase_reports'],
   matches: [
     'matches',
     'games',
@@ -73,14 +74,26 @@ export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly st
     'epb_animation_views',
     'broadcast_moments',
     'match_outcomes',
+    'phase_matches',
+    'phase_games',
+    'phase_battle_stats',
+    'phase_match_analyses',
+    'phase_match_prep_analyses',
+    'phase_match_prep_teams',
+    'phase_match_proposals',
+    'phase_match_evolution_snapshots',
+    'phase_epb_animation_views',
+    'phase_broadcast_moments',
+    'phase_match_outcomes',
   ],
   draft: ['draft_pools', 'draft_participants', 'draft_slots', 'draft_picks', 'draft_replay_events', 'draft_line_restrictions'],
-  teams: ['teams'],
+  teams: ['teams', 'phase_teams'],
   evolution: ['evolution_tracker', 'evolution_events', 'evo_progress_log'],
   tokens: ['epb_token_grants', 'epb_draft_token_purchases', 'epb_comeback_token_spends'],
   redraft: ['redraft_slots', 'redraft_submissions', 'redraft_history', 'redraft_trade_requests'],
   storylines: ['season_storylines'],
-  connections: ['resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'wiki_note_reports'],
+  connections: ['resource_admins', 'discord_webhooks', 'social_integrations', 'wiki_notes', 'wiki_note_reports',
+    'phase_admins', 'phase_discord_webhooks', 'phase_social_integrations', 'phase_wiki_notes', 'phase_wiki_note_reports', 'phase_cast_sessions'],
 };
 
 /**
@@ -91,13 +104,14 @@ export const SEASON_DELETE_OWNED: Readonly<Record<SeasonDeleteGroup, readonly st
 export const SEASON_DELETE_UNNAMED_OWNED: readonly string[] = ['seasons', 'legacy_standings', 'epb_kill_credit_epochs'];
 
 /** Tables deleted with the league and not captured: recalculated, not restored. */
-export const SEASON_DELETE_DERIVED: readonly string[] = ['aggregates', 'player_aggregates', 'aggregate_jobs', 'rating_history'];
+export const SEASON_DELETE_DERIVED: readonly string[] = ['aggregates', 'player_aggregates', 'aggregate_jobs', 'rating_history',
+  'phase_aggregates', 'phase_player_aggregates', 'phase_aggregate_jobs', 'phase_rating_history'];
 
 /** Append-only logs: a delete and a restore leave them untouched. */
 export const SEASON_DELETE_KEPT: readonly string[] = ['audit_log', 'draft_action_log'];
 
 /** Tables outside the league whose rows point into it; they stay, and lose the link until a restore. */
-export const SEASON_DELETE_UNLINKS: readonly string[] = ['cast_sessions', 'agent_suggestions', 'teams', 'player_streaks'];
+export const SEASON_DELETE_UNLINKS: readonly string[] = ['cast_sessions', 'agent_suggestions', 'teams', 'phase_teams', 'player_streaks'];
 
 /** The unlinked tables a restore does not link again (their pointers are recalculated instead). */
 export const SEASON_DELETE_NOT_RELINKED: readonly string[] = ['player_streaks'];

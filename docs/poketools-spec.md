@@ -134,6 +134,8 @@ Admin — `is_admin: true` in Players DB
 ### 4.3 Tournaments / League Phases
 A **phase** is stored as a `tournaments` row with `season_id` set. League admin treats phases as first-class entities (`LeaguePhase` type); standalone tournaments keep `season_id = null`. Phase creation uses `POST /api/seasons/[id]/phases` — `POST /api/tournaments` rejects `season_id` payloads.
 
+ADR 0005 fixes the target as full separation. The additive phase-owned schema is documented in [Phase-owned storage](./phase-separation.md); it remains dormant until the separately approved maintenance transfer. The legacy reads and routes described here remain authoritative during that preparation.
+
 | Field | Type | Notes |
 |---|---|---|
 | name | Title | Clean phase name (no "{League} - " prefix stored) |
@@ -454,6 +456,35 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `match_proposals` | Proposed match times and their answers |
 | `games` | Games of a match (4.6) |
 | `match_outcomes` | How a match ended: played (with each side's faints), forfeit, no-show or unresolved (an engine tie); written through `match_outcome_record` (`20261104090000`) |
+| `league_phases` | Dormant phase-owned identity, lifecycle and immutable ruleset pin; see [Phase-owned storage](./phase-separation.md) |
+| `phase_participants` | Dormant phase-owned participants; see [Phase-owned storage](./phase-separation.md) |
+| `phase_groups` | Dormant phase-owned groups; see [Phase-owned storage](./phase-separation.md) |
+| `phase_group_members` | Dormant phase-owned group members; see [Phase-owned storage](./phase-separation.md) |
+| `phase_rounds` | Dormant phase-owned rounds; see [Phase-owned storage](./phase-separation.md) |
+| `phase_reports` | Dormant phase-owned reports; see [Phase-owned storage](./phase-separation.md) |
+| `phase_matches` | Dormant phase-owned matches; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_outcomes` | Dormant phase-owned match outcomes; see [Phase-owned storage](./phase-separation.md) |
+| `phase_games` | Dormant phase-owned games; see [Phase-owned storage](./phase-separation.md) |
+| `phase_battle_stats` | Dormant phase-owned battle stats; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_analyses` | Dormant phase-owned match analyses; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_prep_analyses` | Dormant phase-owned match prep analyses; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_prep_teams` | Dormant phase-owned match prep teams; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_proposals` | Dormant phase-owned match proposals; see [Phase-owned storage](./phase-separation.md) |
+| `phase_match_evolution_snapshots` | Dormant phase-owned match evolution snapshots; see [Phase-owned storage](./phase-separation.md) |
+| `phase_epb_animation_views` | Dormant phase-owned epb animation views; see [Phase-owned storage](./phase-separation.md) |
+| `phase_broadcast_moments` | Dormant phase-owned broadcast moments; see [Phase-owned storage](./phase-separation.md) |
+| `phase_teams` | Dormant phase-owned teams; see [Phase-owned storage](./phase-separation.md) |
+| `phase_cast_sessions` | Dormant phase-owned cast sessions; see [Phase-owned storage](./phase-separation.md) |
+| `phase_admins` | Dormant phase-owned admins; see [Phase-owned storage](./phase-separation.md) |
+| `phase_discord_webhooks` | Dormant phase-owned discord webhooks; see [Phase-owned storage](./phase-separation.md) |
+| `phase_social_integrations` | Dormant phase-owned social integrations; see [Phase-owned storage](./phase-separation.md) |
+| `phase_wiki_notes` | Dormant phase-owned wiki notes; see [Phase-owned storage](./phase-separation.md) |
+| `phase_wiki_note_reports` | Dormant phase-owned wiki note reports; see [Phase-owned storage](./phase-separation.md) |
+| `phase_aggregates` | Dormant phase-owned aggregates projection/queue; see [Phase-owned storage](./phase-separation.md) |
+| `phase_player_aggregates` | Dormant phase-owned player aggregates projection/queue; see [Phase-owned storage](./phase-separation.md) |
+| `phase_aggregate_jobs` | Dormant phase-owned aggregate jobs projection/queue; see [Phase-owned storage](./phase-separation.md) |
+| `phase_rating_history` | Dormant phase-owned rating history projection/queue; see [Phase-owned storage](./phase-separation.md) |
+| `phase_storage_state` | Operator-only storage generation; service role reads it, phase writes remain dormant in legacy mode |
 | `ruleset_definitions` | Ruleset Studio library: one row per ruleset with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the head version (4.7) |
 | `ruleset_definition_versions` | Immutable published versions of a ruleset: document, frozen effective rules, hashes, catalog version. A league or phase pins one (4.7, 9) |
 | `ruleset_pin_backfill_log` | The previous `ruleset_id` of every league and phase the one-time pin replay changed (revert source) |

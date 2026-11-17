@@ -41,6 +41,6 @@ describe('toPublicTeam (C1 allowlist)', () => {
   });
 
   it('the private list names exactly the share columns', () => {
-    expect([...PRIVATE_TEAM_FIELDS].sort()).toEqual(['share_enabled_at', 'share_token']);
+    expect([...PRIVATE_TEAM_FIELDS].sort()).toEqual(['forked_from_phase_team_id', 'phase_match_id', 'share_enabled_at', 'share_token']);
   });
 });

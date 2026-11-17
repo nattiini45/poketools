@@ -117,10 +117,14 @@ describe('the replay sees the schema (sanity)', () => {
   });
 
   it('parses the four lists', () => {
-    expect(OWNED.size).toBe(62);
+    expect(OWNED.size).toBe(86);
     expect(sorted([...INVENTORY].filter(([, c]) => c === 'derived').map(([r]) => r))).toEqual([
       'aggregate_jobs',
       'aggregates',
+      'phase_aggregate_jobs',
+      'phase_aggregates',
+      'phase_player_aggregates',
+      'phase_rating_history',
       'player_aggregates',
       'rating_history',
     ]);
@@ -218,7 +222,11 @@ describe('the restore plan', () => {
   });
 
   it('the deferred column is a real key of its table, and the only cycle', () => {
-    expect(PLAN.flatMap((p) => p.defer.map((col) => `${p.rel}.${col}`))).toEqual(['redraft_slots.filled_by_pick_id']);
+    expect(PLAN.flatMap((p) => p.defer.map((col) => `${p.rel}.${col}`))).toEqual([
+      'redraft_slots.filled_by_pick_id',
+      'teams.phase_match_id',
+      'teams.forked_from_phase_team_id',
+    ]);
     expect(FKS.get('redraft_slots_filled_by_pick_id_fkey')?.parent).toBe('draft_picks');
   });
 });
@@ -244,6 +252,32 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
     'season_groups.trg_season_groups_guard',
     'season_participants.trg_season_participants_group_guard',
     'tournament_groups.trg_tournament_groups_guard_season_group',
+    'teams.trg_phase_storage_pointer_guard',
+    'format_challenges.trg_phase_storage_pointer_guard',
+    'league_phases.trg_phase_storage_guard',
+    'phase_participants.trg_phase_storage_guard',
+    'phase_groups.trg_phase_storage_guard',
+    'phase_group_members.trg_phase_storage_guard',
+    'phase_rounds.trg_phase_storage_guard',
+    'phase_reports.trg_phase_storage_guard',
+    'phase_matches.trg_phase_storage_guard',
+    'phase_match_outcomes.trg_phase_storage_guard',
+    'phase_games.trg_phase_storage_guard',
+    'phase_battle_stats.trg_phase_storage_guard',
+    'phase_match_analyses.trg_phase_storage_guard',
+    'phase_match_prep_analyses.trg_phase_storage_guard',
+    'phase_match_prep_teams.trg_phase_storage_guard',
+    'phase_match_proposals.trg_phase_storage_guard',
+    'phase_match_evolution_snapshots.trg_phase_storage_guard',
+    'phase_epb_animation_views.trg_phase_storage_guard',
+    'phase_broadcast_moments.trg_phase_storage_guard',
+    'phase_teams.trg_phase_storage_guard',
+    'phase_cast_sessions.trg_phase_storage_guard',
+    'phase_admins.trg_phase_storage_guard',
+    'phase_discord_webhooks.trg_phase_storage_guard',
+    'phase_social_integrations.trg_phase_storage_guard',
+    'phase_wiki_notes.trg_phase_storage_guard',
+    'phase_wiki_note_reports.trg_phase_storage_guard',
   ];
 
   it('are exactly the reviewed ones', () => {

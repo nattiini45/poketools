@@ -16,6 +16,8 @@ export const PRIVATE_TEAM_KEYS = PRIVATE_TEAM_FIELDS;
 export const PRIVATE_TEAM_SENTINELS = {
   share_token: '5e17e1a1-dead-4bee-8f00-5ec2e7700000',
   share_enabled_at: '2099-10-10T10:10:10.101Z',
+  phase_match_id: '5e17e1a1-dead-4bee-8f00-5ec2e7700001',
+  forked_from_phase_team_id: '5e17e1a1-dead-4bee-8f00-5ec2e7700002',
 } as const satisfies Record<(typeof PRIVATE_TEAM_KEYS)[number], string>;
 
 /**

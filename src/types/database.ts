@@ -744,6 +744,7 @@ export type Database = {
           conversation_id: string
           id: string
           match_id: string | null
+          phase_match_id: string | null
           player_id: string
           proposed_team: Json | null
           reasoning: string | null
@@ -757,6 +758,7 @@ export type Database = {
           conversation_id: string
           id?: string
           match_id?: string | null
+          phase_match_id?: string | null
           player_id: string
           proposed_team?: Json | null
           reasoning?: string | null
@@ -770,6 +772,7 @@ export type Database = {
           conversation_id?: string
           id?: string
           match_id?: string | null
+          phase_match_id?: string | null
           player_id?: string
           proposed_team?: Json | null
           reasoning?: string | null
@@ -791,6 +794,13 @@ export type Database = {
             columns: ["match_id"]
             isOneToOne: false
             referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "agent_suggestions_phase_match_id_fkey"
+            columns: ["phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
             referencedColumns: ["id"]
           },
           {
@@ -1211,6 +1221,8 @@ export type Database = {
           name: string
           overlay_config: Json
           owner_id: string
+          phase_id: string | null
+          phase_match_id: string | null
           player1_avatar_url: string | null
           player1_id: string | null
           player1_name: string | null
@@ -1237,6 +1249,8 @@ export type Database = {
           name?: string
           overlay_config?: Json
           owner_id: string
+          phase_id?: string | null
+          phase_match_id?: string | null
           player1_avatar_url?: string | null
           player1_id?: string | null
           player1_name?: string | null
@@ -1263,6 +1277,8 @@ export type Database = {
           name?: string
           overlay_config?: Json
           owner_id?: string
+          phase_id?: string | null
+          phase_match_id?: string | null
           player1_avatar_url?: string | null
           player1_id?: string | null
           player1_name?: string | null
@@ -1292,6 +1308,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "players"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cast_sessions_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cast_sessions_phase_match_fkey"
+            columns: ["phase_id", "phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "cast_sessions_phase_match_id_fkey"
+            columns: ["phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cast_sessions_phase_season_fkey"
+            columns: ["season_id", "phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
           },
           {
             foreignKeyName: "cast_sessions_player1_id_fkey"
@@ -2757,8 +2801,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -2770,8 +2816,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id?: string
+          league_phase_id?: string | null
           match_id?: string | null
           phase_id: string
+          phase_match_id?: string | null
           responded_at?: string | null
           round: number
           season_id: string
@@ -2783,8 +2831,10 @@ export type Database = {
           defender_id?: string
           expires_at?: string
           id?: string
+          league_phase_id?: string | null
           match_id?: string | null
           phase_id?: string
+          phase_match_id?: string | null
           responded_at?: string | null
           round?: number
           season_id?: string
@@ -2806,6 +2856,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "format_challenges_league_phase_fkey"
+            columns: ["season_id", "league_phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+          {
+            foreignKeyName: "format_challenges_league_phase_id_fkey"
+            columns: ["league_phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "format_challenges_match_id_fkey"
             columns: ["match_id"]
             isOneToOne: false
@@ -2817,6 +2881,20 @@ export type Database = {
             columns: ["phase_id"]
             isOneToOne: false
             referencedRelation: "tournaments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "format_challenges_phase_match_fkey"
+            columns: ["league_phase_id", "phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "format_challenges_phase_match_id_fkey"
+            columns: ["phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
             referencedColumns: ["id"]
           },
           {
@@ -3451,6 +3529,112 @@ export type Database = {
             columns: ["winner_id"]
             isOneToOne: false
             referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      league_phases: {
+        Row: {
+          advancement_rule: Json | null
+          archived: boolean
+          best_of_default: number
+          bo_overrides: Json
+          bracket_reset_enabled: boolean
+          bracket_type: Database["public"]["Enums"]["bracket_type"]
+          created_at: string
+          current_round: number
+          description: string
+          enrollment_source: Json | null
+          enrollment_source_phase_id: string | null
+          format_group: number
+          format_stage_key: string | null
+          id: string
+          is_doubles: boolean
+          legacy: boolean
+          name: string
+          ruleset_id: string
+          season_id: string
+          stage_order: number
+          stage_spec: Json | null
+          status: Database["public"]["Enums"]["phase_status"]
+          team_visibility: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled: boolean
+          updated_at: string
+        }
+        Insert: {
+          advancement_rule?: Json | null
+          archived?: boolean
+          best_of_default?: number
+          bo_overrides?: Json
+          bracket_reset_enabled?: boolean
+          bracket_type: Database["public"]["Enums"]["bracket_type"]
+          created_at?: string
+          current_round?: number
+          description?: string
+          enrollment_source?: Json | null
+          enrollment_source_phase_id?: string | null
+          format_group?: number
+          format_stage_key?: string | null
+          id?: string
+          is_doubles?: boolean
+          legacy?: boolean
+          name: string
+          ruleset_id: string
+          season_id: string
+          stage_order?: number
+          stage_spec?: Json | null
+          status?: Database["public"]["Enums"]["phase_status"]
+          team_visibility?: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled?: boolean
+          updated_at?: string
+        }
+        Update: {
+          advancement_rule?: Json | null
+          archived?: boolean
+          best_of_default?: number
+          bo_overrides?: Json
+          bracket_reset_enabled?: boolean
+          bracket_type?: Database["public"]["Enums"]["bracket_type"]
+          created_at?: string
+          current_round?: number
+          description?: string
+          enrollment_source?: Json | null
+          enrollment_source_phase_id?: string | null
+          format_group?: number
+          format_stage_key?: string | null
+          id?: string
+          is_doubles?: boolean
+          legacy?: boolean
+          name?: string
+          ruleset_id?: string
+          season_id?: string
+          stage_order?: number
+          stage_spec?: Json | null
+          status?: Database["public"]["Enums"]["phase_status"]
+          team_visibility?: Database["public"]["Enums"]["team_visibility"]
+          third_place_enabled?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "league_phases_enrollment_source_fkey"
+            columns: ["season_id", "enrollment_source_phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+          {
+            foreignKeyName: "league_phases_ruleset_id_fkey"
+            columns: ["ruleset_id"]
+            isOneToOne: false
+            referencedRelation: "ruleset_definition_versions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "league_phases_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
             referencedColumns: ["id"]
           },
         ]
@@ -4238,6 +4422,1751 @@ export type Database = {
         }
         Relationships: []
       }
+      phase_admins: {
+        Row: {
+          created_at: string
+          id: string
+          phase_id: string
+          player_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          phase_id: string
+          player_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          phase_id?: string
+          player_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_admins_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_admins_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_aggregate_jobs: {
+        Row: {
+          attempts: number
+          created_at: string
+          game_id: string
+          id: string
+          last_error: string | null
+          match_id: string
+          max_attempts: number
+          operation: string
+          phase_id: string
+          processed_at: string | null
+          season_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          created_at?: string
+          game_id: string
+          id?: string
+          last_error?: string | null
+          match_id: string
+          max_attempts?: number
+          operation?: string
+          phase_id: string
+          processed_at?: string | null
+          season_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          created_at?: string
+          game_id?: string
+          id?: string
+          last_error?: string | null
+          match_id?: string
+          max_attempts?: number
+          operation?: string
+          phase_id?: string
+          processed_at?: string | null
+          season_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_aggregate_jobs_match_game_fkey"
+            columns: ["match_id", "game_id"]
+            isOneToOne: false
+            referencedRelation: "phase_games"
+            referencedColumns: ["match_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_aggregate_jobs_phase_match_fkey"
+            columns: ["phase_id", "match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_aggregate_jobs_phase_season_fkey"
+            columns: ["season_id", "phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+        ]
+      }
+      phase_aggregates: {
+        Row: {
+          id: string
+          last_updated: string
+          move_counts: Json
+          phase_id: string
+          pokemon_name: string
+          total_appearances: number
+          total_brought: number
+          total_games: number
+          total_koed: number
+          total_kos_dealt: number
+          total_led: number
+          total_wins: number
+        }
+        Insert: {
+          id?: string
+          last_updated?: string
+          move_counts?: Json
+          phase_id: string
+          pokemon_name: string
+          total_appearances?: number
+          total_brought?: number
+          total_games?: number
+          total_koed?: number
+          total_kos_dealt?: number
+          total_led?: number
+          total_wins?: number
+        }
+        Update: {
+          id?: string
+          last_updated?: string
+          move_counts?: Json
+          phase_id?: string
+          pokemon_name?: string
+          total_appearances?: number
+          total_brought?: number
+          total_games?: number
+          total_koed?: number
+          total_kos_dealt?: number
+          total_led?: number
+          total_wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_aggregates_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_battle_stats: {
+        Row: {
+          created_at: string
+          game_id: string
+          id: string
+          kos_dealt: number
+          match_won: boolean
+          moves_used: Json
+          player_id: string
+          pokemon_name: string
+          turns_active: number
+          was_brought: boolean
+          was_koed: boolean
+          was_lead: boolean
+        }
+        Insert: {
+          created_at?: string
+          game_id: string
+          id?: string
+          kos_dealt?: number
+          match_won?: boolean
+          moves_used?: Json
+          player_id: string
+          pokemon_name: string
+          turns_active?: number
+          was_brought?: boolean
+          was_koed?: boolean
+          was_lead?: boolean
+        }
+        Update: {
+          created_at?: string
+          game_id?: string
+          id?: string
+          kos_dealt?: number
+          match_won?: boolean
+          moves_used?: Json
+          player_id?: string
+          pokemon_name?: string
+          turns_active?: number
+          was_brought?: boolean
+          was_koed?: boolean
+          was_lead?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_battle_stats_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "phase_games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_battle_stats_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_broadcast_moments: {
+        Row: {
+          created_by: string
+          description: string | null
+          game_id: string | null
+          id: string
+          match_id: string
+          moment_type: string
+          pokemon_name: string | null
+          timestamp: string
+          turn_number: number | null
+        }
+        Insert: {
+          created_by: string
+          description?: string | null
+          game_id?: string | null
+          id?: string
+          match_id: string
+          moment_type: string
+          pokemon_name?: string | null
+          timestamp?: string
+          turn_number?: number | null
+        }
+        Update: {
+          created_by?: string
+          description?: string | null
+          game_id?: string | null
+          id?: string
+          match_id?: string
+          moment_type?: string
+          pokemon_name?: string | null
+          timestamp?: string
+          turn_number?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_broadcast_moments_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_broadcast_moments_match_game_fkey"
+            columns: ["match_id", "game_id"]
+            isOneToOne: false
+            referencedRelation: "phase_games"
+            referencedColumns: ["match_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_broadcast_moments_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_cast_sessions: {
+        Row: {
+          caster_notes: Json | null
+          created_at: string
+          format: string
+          generation: number
+          id: string
+          match_id: string | null
+          mode: string
+          name: string
+          overlay_config: Json
+          owner_id: string
+          phase_id: string
+          player1_avatar_url: string | null
+          player1_id: string | null
+          player1_name: string | null
+          player1_team: Json
+          player2_avatar_url: string | null
+          player2_id: string | null
+          player2_name: string | null
+          player2_team: Json
+          realtime_key: string
+          season_id: string | null
+          status: string
+          tracker_state: Json | null
+          updated_at: string
+        }
+        Insert: {
+          caster_notes?: Json | null
+          created_at?: string
+          format?: string
+          generation?: number
+          id?: string
+          match_id?: string | null
+          mode?: string
+          name?: string
+          overlay_config?: Json
+          owner_id: string
+          phase_id: string
+          player1_avatar_url?: string | null
+          player1_id?: string | null
+          player1_name?: string | null
+          player1_team?: Json
+          player2_avatar_url?: string | null
+          player2_id?: string | null
+          player2_name?: string | null
+          player2_team?: Json
+          realtime_key?: string
+          season_id?: string | null
+          status?: string
+          tracker_state?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          caster_notes?: Json | null
+          created_at?: string
+          format?: string
+          generation?: number
+          id?: string
+          match_id?: string | null
+          mode?: string
+          name?: string
+          overlay_config?: Json
+          owner_id?: string
+          phase_id?: string
+          player1_avatar_url?: string | null
+          player1_id?: string | null
+          player1_name?: string | null
+          player1_team?: Json
+          player2_avatar_url?: string | null
+          player2_id?: string | null
+          player2_name?: string | null
+          player2_team?: Json
+          realtime_key?: string
+          season_id?: string | null
+          status?: string
+          tracker_state?: Json | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_cast_sessions_owner_id_fkey"
+            columns: ["owner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_phase_match_fkey"
+            columns: ["phase_id", "match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_phase_season_fkey"
+            columns: ["season_id", "phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_player1_id_fkey"
+            columns: ["player1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_player2_id_fkey"
+            columns: ["player2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_cast_sessions_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_discord_webhooks: {
+        Row: {
+          created_at: string
+          enabled: boolean
+          event_filter: string[]
+          format_options: Json
+          id: string
+          label: string
+          phase_id: string
+          updated_at: string
+          webhook_url: string
+        }
+        Insert: {
+          created_at?: string
+          enabled?: boolean
+          event_filter?: string[]
+          format_options?: Json
+          id?: string
+          label?: string
+          phase_id: string
+          updated_at?: string
+          webhook_url: string
+        }
+        Update: {
+          created_at?: string
+          enabled?: boolean
+          event_filter?: string[]
+          format_options?: Json
+          id?: string
+          label?: string
+          phase_id?: string
+          updated_at?: string
+          webhook_url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_discord_webhooks_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_epb_animation_views: {
+        Row: {
+          id: string
+          match_id: string
+          player_id: string
+          viewed_at: string
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          player_id: string
+          viewed_at?: string
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          player_id?: string
+          viewed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_epb_animation_views_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_epb_animation_views_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_games: {
+        Row: {
+          aggregate_applied_at: string | null
+          created_at: string
+          edit_lease_token: string | null
+          edit_lease_until: string | null
+          evolution_applied_at: string | null
+          evolution_credits: Json | null
+          exclude_all_time: boolean
+          game_number: number
+          id: string
+          match_id: string
+          parsed: boolean
+          replay_hash: string | null
+          replay_url: string
+          source: Database["public"]["Enums"]["game_source"]
+          stats_locked: boolean
+          updated_at: string
+          winner_id: string | null
+        }
+        Insert: {
+          aggregate_applied_at?: string | null
+          created_at?: string
+          edit_lease_token?: string | null
+          edit_lease_until?: string | null
+          evolution_applied_at?: string | null
+          evolution_credits?: Json | null
+          exclude_all_time?: boolean
+          game_number: number
+          id?: string
+          match_id: string
+          parsed?: boolean
+          replay_hash?: string | null
+          replay_url?: string
+          source?: Database["public"]["Enums"]["game_source"]
+          stats_locked?: boolean
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Update: {
+          aggregate_applied_at?: string | null
+          created_at?: string
+          edit_lease_token?: string | null
+          edit_lease_until?: string | null
+          evolution_applied_at?: string | null
+          evolution_credits?: Json | null
+          exclude_all_time?: boolean
+          game_number?: number
+          id?: string
+          match_id?: string
+          parsed?: boolean
+          replay_hash?: string | null
+          replay_url?: string
+          source?: Database["public"]["Enums"]["game_source"]
+          stats_locked?: boolean
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_games_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_games_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_group_members: {
+        Row: {
+          group_id: string
+          phase_id: string
+          player_id: string
+          seed: number
+        }
+        Insert: {
+          group_id: string
+          phase_id: string
+          player_id: string
+          seed?: number
+        }
+        Update: {
+          group_id?: string
+          phase_id?: string
+          player_id?: string
+          seed?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_group_members_group_fkey"
+            columns: ["phase_id", "group_id"]
+            isOneToOne: false
+            referencedRelation: "phase_groups"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_group_members_participant_fkey"
+            columns: ["phase_id", "player_id"]
+            isOneToOne: false
+            referencedRelation: "phase_participants"
+            referencedColumns: ["phase_id", "player_id"]
+          },
+          {
+            foreignKeyName: "phase_group_members_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_groups: {
+        Row: {
+          created_at: string
+          group_number: number
+          id: string
+          name: string
+          phase_id: string
+          season_group_id: string | null
+          season_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          group_number: number
+          id?: string
+          name: string
+          phase_id: string
+          season_group_id?: string | null
+          season_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          group_number?: number
+          id?: string
+          name?: string
+          phase_id?: string
+          season_group_id?: string | null
+          season_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_groups_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_groups_phase_season_fkey"
+            columns: ["season_id", "phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_groups_season_group_fkey"
+            columns: ["season_group_id", "season_id"]
+            isOneToOne: false
+            referencedRelation: "season_groups"
+            referencedColumns: ["id", "season_id"]
+          },
+        ]
+      }
+      phase_match_analyses: {
+        Row: {
+          analysis: Json
+          completion_tokens: number | null
+          created_at: string | null
+          error: string | null
+          generation_time_ms: number | null
+          id: string
+          match_id: string
+          model_id: string
+          prompt_tokens: number | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          analysis?: Json
+          completion_tokens?: number | null
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          match_id: string
+          model_id: string
+          prompt_tokens?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          analysis?: Json
+          completion_tokens?: number | null
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          match_id?: string
+          model_id?: string
+          prompt_tokens?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_analyses_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_match_evolution_snapshots: {
+        Row: {
+          base_pokemon: string
+          brought: boolean
+          cosmo_points_delta: number
+          created_at: string
+          draft_tokens_delta: number
+          evolution_triggered: boolean
+          id: string
+          kill_tokens_delta: number
+          line_id: string | null
+          match_id: string
+          player_id: string
+          progress_after: number
+          progress_before: number
+          real_kos: number
+          species_at_match: string
+          stage_at_match: number
+          suspension_triggered: boolean
+          tracker_id: string | null
+        }
+        Insert: {
+          base_pokemon: string
+          brought?: boolean
+          cosmo_points_delta?: number
+          created_at?: string
+          draft_tokens_delta?: number
+          evolution_triggered?: boolean
+          id?: string
+          kill_tokens_delta?: number
+          line_id?: string | null
+          match_id: string
+          player_id: string
+          progress_after?: number
+          progress_before?: number
+          real_kos?: number
+          species_at_match: string
+          stage_at_match: number
+          suspension_triggered?: boolean
+          tracker_id?: string | null
+        }
+        Update: {
+          base_pokemon?: string
+          brought?: boolean
+          cosmo_points_delta?: number
+          created_at?: string
+          draft_tokens_delta?: number
+          evolution_triggered?: boolean
+          id?: string
+          kill_tokens_delta?: number
+          line_id?: string | null
+          match_id?: string
+          player_id?: string
+          progress_after?: number
+          progress_before?: number
+          real_kos?: number
+          species_at_match?: string
+          stage_at_match?: number
+          suspension_triggered?: boolean
+          tracker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_evolution_snapshots_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_evolution_snapshots_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_evolution_snapshots_tracker_id_fkey"
+            columns: ["tracker_id"]
+            isOneToOne: false
+            referencedRelation: "evolution_tracker"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_match_outcomes: {
+        Row: {
+          kind: string
+          match_id: string
+          p1_faints: number | null
+          p2_faints: number | null
+          reason: string | null
+          set_at: string
+          set_by: string | null
+          source: string
+        }
+        Insert: {
+          kind: string
+          match_id: string
+          p1_faints?: number | null
+          p2_faints?: number | null
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          source: string
+        }
+        Update: {
+          kind?: string
+          match_id?: string
+          p1_faints?: number | null
+          p2_faints?: number | null
+          reason?: string | null
+          set_at?: string
+          set_by?: string | null
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_outcomes_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: true
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_outcomes_set_by_fkey"
+            columns: ["set_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_match_prep_analyses: {
+        Row: {
+          analysis: Json
+          completion_tokens: number | null
+          created_at: string | null
+          error: string | null
+          generation_time_ms: number | null
+          has_user_team: boolean
+          id: string
+          match_id: string
+          model_id: string
+          player_id: string
+          prompt_tokens: number | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          analysis?: Json
+          completion_tokens?: number | null
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          has_user_team?: boolean
+          id?: string
+          match_id: string
+          model_id: string
+          player_id: string
+          prompt_tokens?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          analysis?: Json
+          completion_tokens?: number | null
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          has_user_team?: boolean
+          id?: string
+          match_id?: string
+          model_id?: string
+          player_id?: string
+          prompt_tokens?: number | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_prep_analyses_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_prep_analyses_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_match_prep_teams: {
+        Row: {
+          created_at: string
+          id: string
+          import_source: Database["public"]["Enums"]["team_import_source"]
+          match_id: string
+          player_id: string
+          pokemon: Json
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          import_source?: Database["public"]["Enums"]["team_import_source"]
+          match_id: string
+          player_id: string
+          pokemon?: Json
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          import_source?: Database["public"]["Enums"]["team_import_source"]
+          match_id?: string
+          player_id?: string
+          pokemon?: Json
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_prep_teams_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_prep_teams_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_match_proposals: {
+        Row: {
+          created_at: string
+          expires_at: string
+          id: string
+          match_id: string
+          message: string
+          proposed_at: string
+          proposer_id: string
+          responded_at: string | null
+          responder_id: string
+          status: Database["public"]["Enums"]["match_proposal_status"]
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at: string
+          id?: string
+          match_id: string
+          message?: string
+          proposed_at: string
+          proposer_id: string
+          responded_at?: string | null
+          responder_id: string
+          status?: Database["public"]["Enums"]["match_proposal_status"]
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          id?: string
+          match_id?: string
+          message?: string
+          proposed_at?: string
+          proposer_id?: string
+          responded_at?: string | null
+          responder_id?: string
+          status?: Database["public"]["Enums"]["match_proposal_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_match_proposals_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_proposals_proposer_id_fkey"
+            columns: ["proposer_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_match_proposals_responder_id_fkey"
+            columns: ["responder_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_matches: {
+        Row: {
+          auto_confirm_at: string | null
+          bracket_pos: number | null
+          bracket_side: string | null
+          confirmed_at: string | null
+          created_at: string
+          date_played: string | null
+          finalized_at: string | null
+          id: string
+          notes: string
+          phase_id: string
+          player_1_id: string
+          player_2_id: string
+          round_id: string
+          scheduled_at: string | null
+          social_image_url: string | null
+          status: Database["public"]["Enums"]["match_status"]
+          submitter_id: string | null
+          updated_at: string
+          winner_id: string | null
+        }
+        Insert: {
+          auto_confirm_at?: string | null
+          bracket_pos?: number | null
+          bracket_side?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          date_played?: string | null
+          finalized_at?: string | null
+          id?: string
+          notes?: string
+          phase_id: string
+          player_1_id: string
+          player_2_id: string
+          round_id: string
+          scheduled_at?: string | null
+          social_image_url?: string | null
+          status?: Database["public"]["Enums"]["match_status"]
+          submitter_id?: string | null
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Update: {
+          auto_confirm_at?: string | null
+          bracket_pos?: number | null
+          bracket_side?: string | null
+          confirmed_at?: string | null
+          created_at?: string
+          date_played?: string | null
+          finalized_at?: string | null
+          id?: string
+          notes?: string
+          phase_id?: string
+          player_1_id?: string
+          player_2_id?: string
+          round_id?: string
+          scheduled_at?: string | null
+          social_image_url?: string | null
+          status?: Database["public"]["Enums"]["match_status"]
+          submitter_id?: string | null
+          updated_at?: string
+          winner_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_matches_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_matches_phase_round_fkey"
+            columns: ["phase_id", "round_id"]
+            isOneToOne: false
+            referencedRelation: "phase_rounds"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_matches_player_1_id_fkey"
+            columns: ["player_1_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_matches_player_2_id_fkey"
+            columns: ["player_2_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_matches_submitter_id_fkey"
+            columns: ["submitter_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_matches_winner_id_fkey"
+            columns: ["winner_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_participants: {
+        Row: {
+          phase_id: string
+          player_id: string
+          seed: number | null
+          starting_bracket: string
+        }
+        Insert: {
+          phase_id: string
+          player_id: string
+          seed?: number | null
+          starting_bracket?: string
+        }
+        Update: {
+          phase_id?: string
+          player_id?: string
+          seed?: number | null
+          starting_bracket?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_participants_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_participants_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_player_aggregates: {
+        Row: {
+          id: string
+          last_updated: string
+          move_counts: Json
+          phase_id: string
+          player_id: string
+          pokemon_name: string
+          total_appearances: number
+          total_brought: number
+          total_games: number
+          total_koed: number
+          total_kos_dealt: number
+          total_led: number
+          total_wins: number
+        }
+        Insert: {
+          id?: string
+          last_updated?: string
+          move_counts?: Json
+          phase_id: string
+          player_id: string
+          pokemon_name: string
+          total_appearances?: number
+          total_brought?: number
+          total_games?: number
+          total_koed?: number
+          total_kos_dealt?: number
+          total_led?: number
+          total_wins?: number
+        }
+        Update: {
+          id?: string
+          last_updated?: string
+          move_counts?: Json
+          phase_id?: string
+          player_id?: string
+          pokemon_name?: string
+          total_appearances?: number
+          total_brought?: number
+          total_games?: number
+          total_koed?: number
+          total_kos_dealt?: number
+          total_led?: number
+          total_wins?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_player_aggregates_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_player_aggregates_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_rating_history: {
+        Row: {
+          id: string
+          match_id: string
+          opponent_id: string
+          opponent_rating: number
+          player_id: string
+          rating_after: number
+          rating_before: number
+          rating_change: number | null
+          rd_after: number
+          rd_before: number
+          recorded_at: string
+          result: string
+        }
+        Insert: {
+          id?: string
+          match_id: string
+          opponent_id: string
+          opponent_rating: number
+          player_id: string
+          rating_after: number
+          rating_before: number
+          rating_change?: number | null
+          rd_after: number
+          rd_before: number
+          recorded_at?: string
+          result: string
+        }
+        Update: {
+          id?: string
+          match_id?: string
+          opponent_id?: string
+          opponent_rating?: number
+          player_id?: string
+          rating_after?: number
+          rating_before?: number
+          rating_change?: number | null
+          rd_after?: number
+          rd_before?: number
+          recorded_at?: string
+          result?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_rating_history_match_id_fkey"
+            columns: ["match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_rating_history_opponent_id_fkey"
+            columns: ["opponent_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_rating_history_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_reports: {
+        Row: {
+          completion_tokens: number | null
+          content: Json
+          created_at: string | null
+          error: string | null
+          generation_time_ms: number | null
+          id: string
+          model_id: string
+          phase_id: string
+          prompt_tokens: number | null
+          report_type: string
+          round_id: string | null
+          status: string
+          updated_at: string | null
+        }
+        Insert: {
+          completion_tokens?: number | null
+          content?: Json
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          model_id: string
+          phase_id: string
+          prompt_tokens?: number | null
+          report_type: string
+          round_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Update: {
+          completion_tokens?: number | null
+          content?: Json
+          created_at?: string | null
+          error?: string | null
+          generation_time_ms?: number | null
+          id?: string
+          model_id?: string
+          phase_id?: string
+          prompt_tokens?: number | null
+          report_type?: string
+          round_id?: string | null
+          status?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_reports_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_reports_phase_round_fkey"
+            columns: ["phase_id", "round_id"]
+            isOneToOne: false
+            referencedRelation: "phase_rounds"
+            referencedColumns: ["phase_id", "id"]
+          },
+        ]
+      }
+      phase_rounds: {
+        Row: {
+          best_of: number
+          bracket_side: string | null
+          bye_player_ids: string[]
+          created_at: string
+          deadline: string | null
+          id: string
+          name: string
+          pairings_generated: boolean
+          phase_id: string
+          round_number: number
+          status: Database["public"]["Enums"]["round_status"]
+          updated_at: string
+        }
+        Insert: {
+          best_of: number
+          bracket_side?: string | null
+          bye_player_ids?: string[]
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          name: string
+          pairings_generated?: boolean
+          phase_id: string
+          round_number: number
+          status?: Database["public"]["Enums"]["round_status"]
+          updated_at?: string
+        }
+        Update: {
+          best_of?: number
+          bracket_side?: string | null
+          bye_player_ids?: string[]
+          created_at?: string
+          deadline?: string | null
+          id?: string
+          name?: string
+          pairings_generated?: boolean
+          phase_id?: string
+          round_number?: number
+          status?: Database["public"]["Enums"]["round_status"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_rounds_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_social_integrations: {
+        Row: {
+          created_at: string
+          credential_hint: string | null
+          credentials_encrypted: string | null
+          enabled: boolean
+          event_filter: string[]
+          id: string
+          label: string
+          phase_id: string
+          post_options: Json
+          provider: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          credential_hint?: string | null
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          event_filter?: string[]
+          id?: string
+          label: string
+          phase_id: string
+          post_options?: Json
+          provider: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          credential_hint?: string | null
+          credentials_encrypted?: string | null
+          enabled?: boolean
+          event_filter?: string[]
+          id?: string
+          label?: string
+          phase_id?: string
+          post_options?: Json
+          provider?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_social_integrations_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_storage_state: {
+        Row: {
+          id: boolean
+          mode: string
+        }
+        Insert: {
+          id?: boolean
+          mode?: string
+        }
+        Update: {
+          id?: boolean
+          mode?: string
+        }
+        Relationships: []
+      }
+      phase_teams: {
+        Row: {
+          created_at: string
+          draft_pool_id: string | null
+          forked_from_phase_team_id: string | null
+          forked_from_team_id: string | null
+          id: string
+          import_source: Database["public"]["Enums"]["team_import_source"]
+          is_draft_team: boolean
+          library_description: string | null
+          library_published_at: string | null
+          library_tags: string[] | null
+          library_title: string | null
+          locked: boolean
+          match_id: string | null
+          name: string
+          phase_id: string
+          player_id: string
+          pokemon: Json
+          season_id: string | null
+          share_enabled_at: string | null
+          share_token: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          draft_pool_id?: string | null
+          forked_from_phase_team_id?: string | null
+          forked_from_team_id?: string | null
+          id?: string
+          import_source?: Database["public"]["Enums"]["team_import_source"]
+          is_draft_team?: boolean
+          library_description?: string | null
+          library_published_at?: string | null
+          library_tags?: string[] | null
+          library_title?: string | null
+          locked?: boolean
+          match_id?: string | null
+          name?: string
+          phase_id: string
+          player_id: string
+          pokemon?: Json
+          season_id?: string | null
+          share_enabled_at?: string | null
+          share_token?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          draft_pool_id?: string | null
+          forked_from_phase_team_id?: string | null
+          forked_from_team_id?: string | null
+          id?: string
+          import_source?: Database["public"]["Enums"]["team_import_source"]
+          is_draft_team?: boolean
+          library_description?: string | null
+          library_published_at?: string | null
+          library_tags?: string[] | null
+          library_title?: string | null
+          locked?: boolean
+          match_id?: string | null
+          name?: string
+          phase_id?: string
+          player_id?: string
+          pokemon?: Json
+          season_id?: string | null
+          share_enabled_at?: string | null
+          share_token?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_fk_phase_teams_draft_pool"
+            columns: ["draft_pool_id"]
+            isOneToOne: false
+            referencedRelation: "draft_pools"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_teams_forked_from_phase_team_id_fkey"
+            columns: ["forked_from_phase_team_id"]
+            isOneToOne: false
+            referencedRelation: "phase_teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_teams_forked_from_team_id_fkey"
+            columns: ["forked_from_team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_teams_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_teams_phase_match_fkey"
+            columns: ["phase_id", "match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
+            referencedColumns: ["phase_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_teams_phase_season_fkey"
+            columns: ["season_id", "phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["season_id", "id"]
+          },
+          {
+            foreignKeyName: "phase_teams_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_teams_season_id_fkey"
+            columns: ["season_id"]
+            isOneToOne: false
+            referencedRelation: "seasons"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_wiki_note_reports: {
+        Row: {
+          created_at: string
+          details: string | null
+          id: string
+          note_id: string
+          reason: string
+          reporter_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          note_id: string
+          reason: string
+          reporter_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          details?: string | null
+          id?: string
+          note_id?: string
+          reason?: string
+          reporter_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_wiki_note_reports_note_id_fkey"
+            columns: ["note_id"]
+            isOneToOne: false
+            referencedRelation: "phase_wiki_notes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_wiki_note_reports_reporter_id_fkey"
+            columns: ["reporter_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      phase_wiki_notes: {
+        Row: {
+          approved: boolean
+          approved_at: string | null
+          approved_by: string | null
+          author_id: string
+          content: string
+          created_at: string
+          entity_name: string
+          entity_type: string
+          id: string
+          moderation_flags: string[]
+          phase_id: string
+          rejected_at: string | null
+          rejected_by: string | null
+          rejection_reason: string | null
+          resubmission_blocked_at: string | null
+          resubmission_blocked_by: string | null
+          updated_at: string
+        }
+        Insert: {
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          author_id: string
+          content: string
+          created_at?: string
+          entity_name: string
+          entity_type: string
+          id?: string
+          moderation_flags?: string[]
+          phase_id: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
+          updated_at?: string
+        }
+        Update: {
+          approved?: boolean
+          approved_at?: string | null
+          approved_by?: string | null
+          author_id?: string
+          content?: string
+          created_at?: string
+          entity_name?: string
+          entity_type?: string
+          id?: string
+          moderation_flags?: string[]
+          phase_id?: string
+          rejected_at?: string | null
+          rejected_by?: string | null
+          rejection_reason?: string | null
+          resubmission_blocked_at?: string | null
+          resubmission_blocked_by?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "phase_wiki_notes_approved_by_fkey"
+            columns: ["approved_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_wiki_notes_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_wiki_notes_phase_id_fkey"
+            columns: ["phase_id"]
+            isOneToOne: false
+            referencedRelation: "league_phases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_wiki_notes_rejected_by_fkey"
+            columns: ["rejected_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "phase_wiki_notes_resubmission_blocked_by_fkey"
+            columns: ["resubmission_blocked_by"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       player_achievements: {
         Row: {
           achievement_id: string
@@ -4451,6 +6380,7 @@ export type Database = {
           current_win_streak: number
           id: string
           last_match_id: string | null
+          last_phase_match_id: string | null
           player_id: string
           updated_at: string
         }
@@ -4465,6 +6395,7 @@ export type Database = {
           current_win_streak?: number
           id?: string
           last_match_id?: string | null
+          last_phase_match_id?: string | null
           player_id: string
           updated_at?: string
         }
@@ -4479,6 +6410,7 @@ export type Database = {
           current_win_streak?: number
           id?: string
           last_match_id?: string | null
+          last_phase_match_id?: string | null
           player_id?: string
           updated_at?: string
         }
@@ -4488,6 +6420,13 @@ export type Database = {
             columns: ["last_match_id"]
             isOneToOne: false
             referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_streaks_last_phase_match_id_fkey"
+            columns: ["last_phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
             referencedColumns: ["id"]
           },
           {
@@ -5888,6 +7827,7 @@ export type Database = {
         Row: {
           created_at: string
           draft_pool_id: string | null
+          forked_from_phase_team_id: string | null
           forked_from_team_id: string | null
           id: string
           import_source: Database["public"]["Enums"]["team_import_source"]
@@ -5899,6 +7839,7 @@ export type Database = {
           locked: boolean
           match_id: string | null
           name: string
+          phase_match_id: string | null
           player_id: string
           pokemon: Json
           season_id: string | null
@@ -5910,6 +7851,7 @@ export type Database = {
         Insert: {
           created_at?: string
           draft_pool_id?: string | null
+          forked_from_phase_team_id?: string | null
           forked_from_team_id?: string | null
           id?: string
           import_source?: Database["public"]["Enums"]["team_import_source"]
@@ -5921,6 +7863,7 @@ export type Database = {
           locked?: boolean
           match_id?: string | null
           name?: string
+          phase_match_id?: string | null
           player_id: string
           pokemon?: Json
           season_id?: string | null
@@ -5932,6 +7875,7 @@ export type Database = {
         Update: {
           created_at?: string
           draft_pool_id?: string | null
+          forked_from_phase_team_id?: string | null
           forked_from_team_id?: string | null
           id?: string
           import_source?: Database["public"]["Enums"]["team_import_source"]
@@ -5943,6 +7887,7 @@ export type Database = {
           locked?: boolean
           match_id?: string | null
           name?: string
+          phase_match_id?: string | null
           player_id?: string
           pokemon?: Json
           season_id?: string | null
@@ -5960,6 +7905,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "teams_forked_from_phase_team_id_fkey"
+            columns: ["forked_from_phase_team_id"]
+            isOneToOne: false
+            referencedRelation: "phase_teams"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "teams_forked_from_team_id_fkey"
             columns: ["forked_from_team_id"]
             isOneToOne: false
@@ -5971,6 +7923,13 @@ export type Database = {
             columns: ["match_id"]
             isOneToOne: false
             referencedRelation: "matches"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "teams_phase_match_id_fkey"
+            columns: ["phase_match_id"]
+            isOneToOne: false
+            referencedRelation: "phase_matches"
             referencedColumns: ["id"]
           },
           {
@@ -7322,8 +9281,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -7355,8 +9316,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -7382,8 +9345,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -7668,6 +9633,11 @@ export type Database = {
         Args: { p_known_unfinished: string[]; p_phase_id: string }
         Returns: Json
       }
+      phase_storage_mode: { Args: never; Returns: string }
+      phase_storage_transition: {
+        Args: { expected_mode: string; target_mode: string }
+        Returns: string
+      }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: {
@@ -7888,6 +9858,7 @@ export type Database = {
         | "pending_confirmation"
         | "completed"
         | "disputed"
+      phase_status: "upcoming" | "active" | "completed"
       round_status: "pending" | "active" | "completed"
       season_format_type:
         | "singles"
@@ -8045,6 +10016,7 @@ export const Constants = {
         "completed",
         "disputed",
       ],
+      phase_status: ["upcoming", "active", "completed"],
       round_status: ["pending", "active", "completed"],
       season_format_type: [
         "singles",

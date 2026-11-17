@@ -19,3 +19,4 @@ A league phase is stored as a `tournaments` row with `season_id` set, so the sam
 - A phase's rounds, matches, participants, groups and brackets are read through phase-owned tables; no league-wide query has to exclude phases.
 - The old `/tournaments/<id>` addresses for phases stay reachable as redirects, so shared links and bookmarks keep working.
 - Until the scoping pass lands, phases keep living in `tournaments` rows. This ADR fixes the direction and the boundary, not the schema.
+- The additive schema foundation now defines the separate target graph and dormant writer fence ([Phase-owned storage](../phase-separation.md)). Existing phase data and application routes remain on the legacy store until the separately approved maintenance transfer; this expansion does not claim that separation is live.

@@ -61,7 +61,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
   const timings: string[] = [];
 
   async function seed(players: number, phases: number, rounds: number, name: string): Promise<LeagueIds> {
-    const ids = await seedLeague(admin, { players, phases, rounds, name });
+    const ids = await seedLeague(admin, { players, phases, rounds, name, native: true });
     created.push(ids);
     return ids;
   }
@@ -317,7 +317,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(result.warnings).toEqual([{ code: 'pointer_unknown', rel: 'removed_table', column: 'league_ref', count: 2 }]);
       expect(result.restored).toEqual(Object.fromEntries(Object.entries(trash.counts).filter(([, n]) => n > 0)));
       expect(result.paused_pools).toBe(1);
-      expect(result.queued_aggregate_jobs).toBe(league.counts.games);
+      expect(result.queued_aggregate_jobs).toBe(league.counts.games + league.counts.phaseGames);
       expect(restoreShiftSeconds).toBeGreaterThan(30 * 86_400 - 1);
 
       // Row-identical: count and md5 of every owned table, minus the columns that legitimately change.
@@ -351,6 +351,16 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(jobs.count).toBe(league.counts.games);
       expect(new Set(jobs.data?.map((j) => j.game_id)).size).toBe(jobs.data?.length);
       expect(jobs.data?.every((j) => j.operation === 'increment' && j.status === 'pending')).toBe(true);
+
+      const nativeJobs = await admin.from('phase_aggregate_jobs').select('game_id, operation, status', { count: 'exact' }).eq('season_id', league.seasonId);
+      expect(nativeJobs.error).toBeNull();
+      expect(nativeJobs.count).toBe(league.counts.phaseGames);
+      expect(new Set(nativeJobs.data?.map((j) => j.game_id)).size).toBe(league.counts.phaseGames);
+      expect(nativeJobs.data?.every((j) => j.operation === 'increment' && j.status === 'pending')).toBe(true);
+      const nativeGames = await admin.from('phase_games').select('id, aggregate_applied_at').in('id', league.gameIds.slice(0, 50));
+      expect(nativeGames.error).toBeNull();
+      expect(nativeGames.data).toHaveLength(league.counts.phaseGames);
+      expect(nativeGames.data?.every((g) => g.aggregate_applied_at === null)).toBe(true);
 
       // Outside rows are re-linked; the derived streak pointers are not (the app recomputes them).
       const cast = await admin.from('cast_sessions').select('season_id, tournament_id, match_id').eq('id', league.outside.castSessionId).single();

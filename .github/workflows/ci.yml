@@ -128,10 +128,31 @@ jobs:
         run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
 
       - name: Replay every migration on an empty database
+        id: schema-replay
         run: npx supabase db reset --local
 
       - name: Generated types match the replayed schema
+        id: schema-types
         run: npm run db:types:check
+
+      - name: Capture regenerated schema types on drift
+        if: failure() && steps.schema-types.outcome == 'failure'
+        run: npm run db:types
+
+      - name: Upload regenerated schema types
+        if: failure() && steps.schema-types.outcome == 'failure'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: generated-schema-types
+          path: src/types/database.ts
+          if-no-files-found: error
+          retention-days: 3
+
+      - name: Phase storage foundation rehearsal
+        if: always() && steps.schema-replay.outcome == 'success'
+        run: |
+          { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/p1-rehearsal.sql; } |
+            docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1
 
       - name: Export the local stack's URL and keys
         run: |
@@ -149,7 +170,13 @@ jobs:
           done
 
       - name: Local-stack suites
-        run: npm run test:db
+        run: |
+          docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
+          SELECT public.phase_storage_transition('legacy', 'frozen_legacy');
+          SELECT public.phase_storage_transition('frozen_legacy', 'frozen_phase');
+          SELECT public.phase_storage_transition('frozen_phase', 'phase');
+          SQL
+          npm run test:db
         env:
           LOCAL_STACK_CI: '1'
 
@@ -252,4 +279,3 @@ jobs:
           name: visual-report
           path: .visual/diff-*/
           retention-days: 7
-
