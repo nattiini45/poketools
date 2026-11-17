@@ -272,6 +272,10 @@ BEGIN
     WHERE EXISTS (SELECT 1 FROM public.phase_matches m WHERE m.id = (e->>'match_id')::uuid);
   SELECT coalesce(jsonb_agg(e), '[]'::jsonb) INTO v_legacy FROM jsonb_array_elements(p_history) e
     WHERE NOT EXISTS (SELECT 1 FROM public.phase_matches m WHERE m.id = (e->>'match_id')::uuid);
+  DELETE FROM public.rating_history h
+    USING public.matches m, public.tournaments t
+    WHERE h.player_id = p_player_id AND h.match_id = m.id
+      AND m.tournament_id = t.id AND t.season_id IS NOT NULL;
   PERFORM public.rating_replace_player_history(p_player_id, p_state, v_legacy, p_expected_history_match_ids);
   DELETE FROM public.phase_rating_history WHERE player_id = p_player_id;
   INSERT INTO public.phase_rating_history

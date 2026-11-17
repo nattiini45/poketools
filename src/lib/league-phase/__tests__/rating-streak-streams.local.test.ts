@@ -4,7 +4,7 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
-import type { Database } from '@/types/database';
+import type { Database, Json } from '@/types/database';
 import type { RatingStoragePort } from '@/lib/rating/storage';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_RATING_STREAMS');
@@ -132,6 +132,49 @@ describe.skipIf(!optedIn)('rating/streak streams on the disposable phase-mode st
   async function replace(storage: RatingStoragePort, curve: Awaited<ReturnType<typeof ratings.loadAndComputeRatingCurve>>) {
     return storage.replacePlayerCurve(players[0], curve.computed.finalState, curve.computed.history, curve.ownHistoryMatchIds, curve.expectedMatches);
   }
+
+  it('atomically removes excluded legacy league history without weakening the countable stream fence', async () => {
+    const legacyOwner = randomUUID();
+    const legacyRound = randomUUID();
+    const legacyMatch = randomUUID();
+    try {
+      expect((await client.from('tournaments').insert({ id: legacyOwner, season_id: season, name: 'Obsolete league history fixture', bracket_type: 'round_robin', ruleset_id: ruleset })).error).toBeNull();
+      expect((await client.from('rounds').insert({ id: legacyRound, tournament_id: legacyOwner, name: 'Round 1', round_number: 1, best_of: 3 })).error).toBeNull();
+      expect((await client.from('matches').insert({ id: legacyMatch, tournament_id: legacyOwner, round_id: legacyRound, player_1_id: players[0], player_2_id: players[1], winner_id: players[0], status: 'completed', date_played: '2026-01-02T00:00:00Z' })).error).toBeNull();
+      expect((await client.from('rating_history').insert(players.map((player_id, index) => ({
+        player_id, match_id: legacyMatch, opponent_id: players[1 - index], result: index === 0 ? 'win' : 'loss',
+        rating_before: 1500, rating_after: index === 0 ? 1510 : 1490, rd_before: 350, rd_after: 300, opponent_rating: 1500,
+      })))).error).toBeNull();
+      const native = streams.createMixedRatingStorage('phase');
+      const curve = await ratings.loadAndComputeRatingCurve(players[0], { storage: native });
+      expect(curve.expectedMatches?.map((match) => match.id)).not.toContain(legacyMatch);
+      expect(curve.ownHistoryMatchIds).not.toContain(legacyMatch);
+      const before = await snapshot();
+      const malformed = await client.rpc('rating_replace_player_streams', {
+        p_player_id: players[0],
+        p_state: { ...curve.computed.finalState, rating: 'invalid' },
+        p_history: curve.computed.history as unknown as Json,
+        p_expected_history_match_ids: curve.ownHistoryMatchIds,
+        p_expected_matches: curve.expectedMatches!.map((match) => ({
+          kind: match.phase_id === undefined ? 'tournament' : 'phase', match_id: match.id,
+          player_1_id: match.player_1_id, player_2_id: match.player_2_id, winner_id: match.winner_id,
+          confirmed_at: match.confirmed_at ?? null, date_played: match.date_played, created_at: match.created_at,
+        })),
+      });
+      expect(malformed.error?.code).toBe('22023');
+      expect(await snapshot()).toEqual(before);
+      await replace(native, curve);
+      const remaining = await client.from('rating_history').select('player_id').eq('match_id', legacyMatch);
+      expect(remaining.error).toBeNull();
+      expect(remaining.data).toEqual([{ player_id: players[1] }]);
+      const countable = await native.getHistoryByMatches([standaloneMatch, phaseMatch]);
+      expect(countable.filter((row) => row.player_id === players[0]).map((row) => row.match_id).sort()).toEqual([standaloneMatch, phaseMatch].sort());
+      await ratings.rebuildRatingsForPlayersWithStorage(players, native);
+      expect((await client.from('rating_history').select('id').eq('match_id', legacyMatch)).data).toEqual([]);
+    } finally {
+      expect((await client.from('tournaments').delete().eq('id', legacyOwner)).error).toBeNull();
+    }
+  }, 60_000);
 
   it('exposes no obsolete unfenced rating RPC overload', async () => {
     const result = await sql("SELECT to_regprocedure('public.phase_rating_apply_match_result(uuid,jsonb)') IS NULL AND to_regprocedure('public.rating_replace_player_streams(uuid,jsonb,jsonb,uuid[])') IS NULL;");

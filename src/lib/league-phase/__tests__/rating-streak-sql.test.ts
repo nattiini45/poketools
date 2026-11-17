@@ -51,4 +51,12 @@ describe('native projection writer contract', () => {
     }
     expect(sql).not.toMatch(/CREATE\s+(?:TABLE|TRIGGER)|ADD\s+CONSTRAINT/i);
   });
+
+  it('cleans excluded legacy league history inside the fenced replacement transaction', () => {
+    const cleanup = sql.indexOf('DELETE FROM public.rating_history h');
+    expect(cleanup).toBeGreaterThan(sql.indexOf('v_current IS DISTINCT FROM v_expected'));
+    expect(sql.slice(cleanup)).toContain('h.player_id = p_player_id AND h.match_id = m.id');
+    expect(sql.slice(cleanup)).toContain('m.tournament_id = t.id AND t.season_id IS NOT NULL');
+    expect(cleanup).toBeLessThan(sql.indexOf('PERFORM public.rating_replace_player_history'));
+  });
 });

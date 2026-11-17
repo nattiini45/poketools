@@ -294,6 +294,7 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 ### Fixed
 
 - Dormant native rating writes now reject a superseded winner or completion token. Mixed rating replacement validates the full countable match stream, including previously unrated matches made countable by a league flag change, before replacing shared projections.
+- Mixed rating replacement removes excluded legacy league history atomically, so retained source records do not prevent native reconciliation or game-edit rebuilds.
 - Dormant native non-EPB evolution checks now sum phase-owned battle stats through the shared threshold engine instead of reading legacy tournament games.
 
 - League group and combined tables exclude playoff results. Final placings follow the completed bracket, with shared third place when there is no third-place match; non-qualifiers retain their group-table order. League previews, broadcasts and phase-scoped standings use the same placement rules without changing statistical totals.

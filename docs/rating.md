@@ -114,6 +114,8 @@ Native live ratings also require the finalizer's captured completion identity (`
 
 Mixed replacement carries the full expected countable stream, including participants, winner, completion token and replay timestamps. The RPC briefly freezes owner/flag tables parent-first and then match tables with `NOWAIT`; a competing writer raises `PT409` before any projection write, rather than waiting in an owner/child lock cycle. It compares every current countable standalone/native match, including matches with no history yet, then replaces the curve. Replay math runs before these locks are acquired. A flag, completion or result change therefore requires a fresh replay even when no history row existed to fence on.
 
+After validating that stream, the same transaction removes the player's obsolete history for season-owned legacy tournament matches before delegating the standalone history replacement. Those excluded source rows cannot trip the standalone unexpected-history fence; a later failure rolls their removal back with the projection writes. Other players and countable standalone/native history remain fenced normally.
+
 The focused stream unit suite covers mixed replay, deduplication, ordering and retry. `rating-streak-streams.local.test.ts` opts in through `localStackOptIn('LOCAL_PHASE_RATING_STREAMS')`, requires a disposable phase-mode stack and never changes its storage generation.
 
 ## Testing
