@@ -6,9 +6,8 @@
  *   2. builds the per-player context pack and assembles the system prompt,
  *   3. wires the §5 LLM tools into a Vercel AI SDK tool map (dispatch flows
  *      through `executeTool`, so validation + the 5-minute result cache apply),
- *   4. selects the model tier chain and streams with the §2 fallback router,
- *   5. emits Braintrust telemetry when configured, and
- *   6. on finish, persists the turn (user + assistant + tool summary) and
+ *   4. selects the model tier chain and streams with the §2 fallback router, and
+ *   5. on finish, persists the turn (user + assistant + tool summary) and
  *      records a suggestion when the reply proposes a team.
  *
  * It returns the raw `streamText` result so any transport (the Next.js route,
@@ -70,8 +69,6 @@ const FINAL_ANSWER_NUDGE =
   'You have used all available research steps and gathered tool results above. ' +
   'Do not call any more tools. Write your final answer to the user now, using the ' +
   'information already collected.';
-/** Telemetry is on only when a Braintrust key is configured (PRD §9). */
-const BRAINTRUST_ENABLED = (process.env.BRAINTRUST_API_KEY ?? '').trim().length > 0;
 /** Cap the reasoning blob we persist on a suggestion row. */
 const MAX_REASONING_CHARS = 4000;
 /** Showdown-paste fingerprint used to detect a proposed team in free text. */
@@ -369,9 +366,6 @@ export async function runAgent(request: AgentRequest): Promise<RunAgentResult> {
     messages: toModelMessages(messages),
     tools,
     stopWhen: stepCountIs(maxStepsFor(persona)),
-    ...(BRAINTRUST_ENABLED
-      ? { experimental_telemetry: { isEnabled: true, functionId: `agent-${persona}` } }
-      : {}),
   };
 
   const { result, model, escalations } = await streamWithFallback(models, params);

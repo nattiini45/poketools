@@ -71,7 +71,7 @@ Every agent writing code in this repo must follow these patterns. They map to th
 - Never expose stack traces, SQL errors, or internal paths in API responses.
 - Every error branch that returns a response WITHOUT `safeErrorResponse()` must log the original error first (`logger.error`, `src/lib/logger.ts`). An early-return error branch that logs nothing makes the failure undiagnosable — that is a bug, not a style choice.
 - Distinct failure causes must stay distinguishable — via specific safe messages or per-cause `code` values — in both the response and the server logs.
-- AI analysis endpoints log token usage via Braintrust (optional).
+- AI analysis endpoints log token usage through `logger` (counts only, no prompt text).
 
 ## Error Handling Pattern (Mandatory)
 

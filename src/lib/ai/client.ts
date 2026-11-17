@@ -1,5 +1,4 @@
 import Anthropic, { AnthropicError, APIConnectionError, APIError, APIUserAbortError } from '@anthropic-ai/sdk';
-import { initLogger, wrapAnthropic } from 'braintrust';
 import { logger } from '@/lib/logger';
 import { anthropicApiKey } from './api-key';
 import { getClaudeEffort, getClaudeFallbackModelId, getClaudeModelId, type ClaudeEffort } from './constants';
@@ -15,14 +14,6 @@ import { modelAcceptsTemperature, modelSupportsEffort } from './model-capabiliti
 import { logAiUsage, normalizeAnthropicUsage } from './usage-log';
 
 // ─── Configuration ──────────────────────────────────────────────────
-
-const BRAINTRUST_API_KEY = process.env.BRAINTRUST_API_KEY ?? '';
-
-// ─── Braintrust Observability ───────────────────────────────────────
-
-if (BRAINTRUST_API_KEY) {
-  initLogger({ projectName: 'poketools', apiKey: BRAINTRUST_API_KEY });
-}
 
 /**
  * Wall-clock deadline for the primary model attempt. The streaming routes run with
@@ -60,8 +51,7 @@ function getClient(): Anthropic {
     if (!apiKey) {
       throw new Error('ANTHROPIC_API_KEY environment variable is required');
     }
-    const anthropic = new Anthropic({ apiKey });
-    _client = BRAINTRUST_API_KEY ? wrapAnthropic(anthropic) : anthropic;
+    _client = new Anthropic({ apiKey });
   }
   return _client;
 }

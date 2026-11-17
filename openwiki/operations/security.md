@@ -62,7 +62,7 @@ All security rules are defined in `AGENTS.md` (always-needed subset) and `docs/s
 - Never expose stack traces, SQL errors, or internal paths.
 - Every error branch that returns without `safeErrorResponse()` must `logger.error` first.
 - Distinct failure causes must stay distinguishable.
-- AI endpoints log token usage via Braintrust (optional).
+- AI endpoints log token usage through `logger` (counts only).
 
 ## Error Handling Pattern (Mandatory)
 

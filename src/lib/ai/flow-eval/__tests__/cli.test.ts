@@ -190,14 +190,13 @@ describe('main: usage and environment problems send nothing', () => {
 });
 
 describe('main: a live run with a fake model', () => {
-  it('never prints or writes the key, sets the model environment and drops tracing', async () => {
+  it('never prints or writes the key and sets the model environment', async () => {
     const dir = tmp();
-    const h = harness(['--flow', 'recap', '--per-flow', '2', '--out', dir], { env: { BRAINTRUST_API_KEY: 'bt-secret' } });
+    const h = harness(['--flow', 'recap', '--per-flow', '2', '--out', dir]);
     await main(h.options);
     expect(h.env.ANTHROPIC_API_KEY).toBe(SECRET);
     expect(h.env.CLAUDE_MODEL).toBe('claude-sonnet-5-5');
     expect(h.env.CLAUDE_API_EFFORT).toBe('medium');
-    expect(h.env.BRAINTRUST_API_KEY).toBeUndefined();
     const everything = [...h.out, ...h.err, ...readdirSync(dir).map((f) => readFileSync(path.join(dir, f), 'utf8'))].join('\n');
     expect(everything).not.toContain(SECRET);
     expect(everything).not.toContain('never-read');

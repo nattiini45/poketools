@@ -54,7 +54,6 @@ export default defineConfig({
       MINIMAX_API_KEY: '',
       REPLICATE_API_TOKEN: '',
       MESHY_API_KEY: '',
-      BRAINTRUST_API_KEY: '',
     },
   },
 });

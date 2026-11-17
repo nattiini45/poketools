@@ -66,7 +66,7 @@ The 10 LLM tools: `lookupPokemon`, `getTypeChart`, `getLearnset`, `calculateDama
 
 ### Dependencies
 
-- **External**: `ai` (Vercel AI SDK v6 — `streamText`, `tool`, `stepCountIs`), `@ai-sdk/openai` (OpenAI-compatible providers), `@anthropic-ai/*` via `@ai-sdk`, `@pkmn/*` (through the tool layer), Braintrust (optional telemetry).
+- **External**: `ai` (Vercel AI SDK v6 — `streamText`, `tool`, `stepCountIs`), `@ai-sdk/openai` (OpenAI-compatible providers), `@anthropic-ai/*` via `@ai-sdk`, `@pkmn/*` (through the tool layer).
 - **Internal**: `lib/ai/rate-limit`, `lib/supabase/*` (memory + context-pack queries), `lib/pkmn/*` and `lib/match/*` (tools), `components/agent/*` (chat UI).
 
 ### API Routes
