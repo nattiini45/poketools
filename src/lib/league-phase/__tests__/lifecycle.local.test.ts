@@ -30,7 +30,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect((await insertLocalRuleset(admin, { id: rulesetId, name: `Phase fixture ${seasonId}` })).error).toBeNull();
     expect((await admin.from('seasons').insert({ id: seasonId, name: 'Native lifecycle fixture', format_type: 'singles', ruleset_id: rulesetId })).error).toBeNull();
     expect((await admin.from('season_participants').insert(playerIds.slice(0, 4).map((player_id) => ({ season_id: seasonId, player_id })))).error).toBeNull();
-    expect((await admin.from('season_groups').insert(leagueGroupIds.map((id, i) => ({ id, season_id: seasonId, name: `Fixture ${i}`, sort_order: i })))).error).toBeNull();
+    expect((await admin.from('season_groups').insert(leagueGroupIds.map((id, i) => ({ id, season_id: seasonId, name: `Fixture ${i}`, sort_order: i + 1 })))).error).toBeNull();
     expect((await admin.from('season_group_members').insert(playerIds.slice(0, 4).map((player_id, i) => ({ season_id: seasonId, group_id: leagueGroupIds[i % 2], player_id })))).error).toBeNull();
     [phases, rounds, groups] = await Promise.all([
       import('@/lib/supabase/queries/league-phases'), import('@/lib/supabase/queries/phase-rounds'), import('@/lib/supabase/queries/phase-groups'),
