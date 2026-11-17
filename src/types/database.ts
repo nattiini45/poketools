@@ -3572,7 +3572,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
-          enrollment_source_phase_id?: never
+          enrollment_source_phase_id?: string | null
           format_group?: number
           format_stage_key?: string | null
           id?: string
@@ -3599,7 +3599,7 @@ export type Database = {
           current_round?: number
           description?: string
           enrollment_source?: Json | null
-          enrollment_source_phase_id?: never
+          enrollment_source_phase_id?: string | null
           format_group?: number
           format_stage_key?: string | null
           id?: string
@@ -5015,7 +5015,7 @@ export type Database = {
           {
             foreignKeyName: "phase_group_members_participant_fkey"
             columns: ["phase_id", "player_id"]
-            isOneToOne: true
+            isOneToOne: false
             referencedRelation: "phase_participants"
             referencedColumns: ["phase_id", "player_id"]
           },
@@ -5669,7 +5669,7 @@ export type Database = {
           player_id: string
           rating_after: number
           rating_before: number
-          rating_change?: never
+          rating_change?: number | null
           rd_after: number
           rd_before: number
           recorded_at?: string
@@ -5683,7 +5683,7 @@ export type Database = {
           player_id?: string
           rating_after?: number
           rating_before?: number
-          rating_change?: never
+          rating_change?: number | null
           rd_after?: number
           rd_before?: number
           recorded_at?: string
@@ -9281,8 +9281,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -9314,8 +9316,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -9341,8 +9345,10 @@ export type Database = {
           defender_id: string
           expires_at: string
           id: string
+          league_phase_id: string | null
           match_id: string | null
           phase_id: string
+          phase_match_id: string | null
           responded_at: string | null
           round: number
           season_id: string
@@ -9627,6 +9633,7 @@ export type Database = {
         Args: { p_known_unfinished: string[]; p_phase_id: string }
         Returns: Json
       }
+      phase_storage_mode: { Args: never; Returns: string }
       phase_storage_transition: {
         Args: { expected_mode: string; target_mode: string }
         Returns: string
@@ -10025,4 +10032,3 @@ export const Constants = {
     },
   },
 } as const
-

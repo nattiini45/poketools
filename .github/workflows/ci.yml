@@ -128,6 +128,7 @@ jobs:
         run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
 
       - name: Replay every migration on an empty database
+        id: schema-replay
         run: npx supabase db reset --local
 
       - name: Generated types match the replayed schema
@@ -148,6 +149,7 @@ jobs:
           retention-days: 3
 
       - name: Phase storage foundation rehearsal
+        if: always() && steps.schema-replay.outcome == 'success'
         run: |
           { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/p1-rehearsal.sql; } |
             docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1

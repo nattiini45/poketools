@@ -515,7 +515,7 @@ ALTER TABLE public.league_phases ADD CONSTRAINT league_phases_season_id_fkey FOR
 
 ALTER TABLE public.league_phases ADD CONSTRAINT league_phases_ruleset_id_fkey FOREIGN KEY (ruleset_id) REFERENCES public.ruleset_definition_versions(id);
 
-ALTER TABLE public.league_phases ADD CONSTRAINT league_phases_enrollment_source_fkey FOREIGN KEY (season_id, enrollment_source_phase_id) REFERENCES public.league_phases(season_id, id) ON DELETE RESTRICT;
+ALTER TABLE public.league_phases ADD CONSTRAINT league_phases_enrollment_source_fkey FOREIGN KEY (season_id, enrollment_source_phase_id) REFERENCES public.league_phases(season_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED;
 
 CREATE INDEX phase_idx_league_phases_season_stage ON public.league_phases USING btree (season_id, stage_order);
 

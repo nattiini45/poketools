@@ -99,6 +99,16 @@ BEGIN
 END $$;
 
 CREATE TEMP TABLE phase_external_links (kind text PRIMARY KEY, id uuid NOT NULL);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.league_phases WHERE enrollment_source_phase_id IS NOT NULL) THEN
+    RAISE EXCEPTION 'fixture missing phase enrollment-source chain';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conrelid = 'public.league_phases'::regclass
+    AND conname = 'league_phases_enrollment_source_fkey' AND condeferrable AND condeferred AND confdeltype = 'a') THEN
+    RAISE EXCEPTION 'phase enrollment-source constraint is not deferred NO ACTION';
+  END IF;
+END $$;
 WITH added AS (
   INSERT INTO public.teams (player_id, name, phase_match_id)
   SELECT :'actor', 'External match reference', id FROM public.phase_matches ORDER BY id LIMIT 1 RETURNING id

@@ -12,6 +12,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+- The dormant phase foundation keeps its generation-row lock behind a narrow owner-rights accessor and defers enrollment-source integrity until transaction completion, so service-role guards and complete league trash deletion retain their intended behavior.
+
 - **Phase separation is an additive foundation, not a live migration.** The three `2026111710*` phase migrations add service-role-only storage, trash support and a dormant writer fence. Apply them only through the separately approved migration process; do not change `phase_storage_state` or move live rows yet. Existing phase data and routes remain on their legacy store. See [Phase-owned storage](docs/phase-separation.md).
 
 - **Apply `20261108090000_format_notifications.sql` BEFORE deploying the code.** It adds the in-app inbox of kit leagues and the

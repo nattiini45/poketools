@@ -18,11 +18,15 @@ While both generations exist, a challenge's nullable native phase pointer must e
 
 `phase_storage_state` is a singleton whose mode is defined by the registered `phase_storage` machine. It starts in `legacy`. Service role can read, but cannot update the state or execute `phase_storage_transition`; that compare-and-set function is operator-only.
 
+The fence reads its mode through the zero-argument owner-rights `phase_storage_mode` accessor. Its fixed, qualified SELECT takes a shared row lock without granting service role UPDATE privilege on the state table; the accessor accepts no rows or SQL and cannot change the generation.
+
 Phase-table row writes and non-null phase pointers are fenced while mode is not `phase`. The row-level trigger deliberately does not reject an empty legacy cascade. The schema owner may prepare fixtures and transfer rows in a maintenance transaction; this is not a browser or service-role bypass.
 
 The four modes are `legacy`, `frozen_legacy`, `frozen_phase` and `phase`. Frozen modes record the maintenance boundary. **The foundation is not the full-site write freeze:** the cutover package must fence legacy writers, queues and scheduled callers before any live transfer and must not enable phase mode before the new application and integrations are ready. No operator should invoke these transitions merely because the foundation migration has been applied.
 
 ## League recycle bin
+
+The same-league enrollment-source FK is deferred `NO ACTION`: deleting the complete phase graph may remove its source and dependent phases together, but a committed dangling source is still rejected.
 
 The foundation extends the complete inventory, restore order, external pointers, capture predicates, deadline shifts, derived-job restoration and expiry match IDs for both storage families. Legacy snapshot rows remain readable without conversion at this stage. A phase game restored with statistics gets a pending phase aggregate job and an uncounted marker; the phase, league and all-time projections are rebuilt by the phase worker once that worker ships.
 

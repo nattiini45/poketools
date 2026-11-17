@@ -31,12 +31,22 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.phase_storage_transition(text, text) FROM PUBLIC, anon, authenticated, service_role;
 
+CREATE OR REPLACE FUNCTION public.phase_storage_mode()
+RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
+DECLARE v_mode text;
+BEGIN
+  SELECT s.mode INTO v_mode FROM public.phase_storage_state s WHERE s.id FOR SHARE;
+  RETURN v_mode;
+END $$;
+REVOKE ALL ON FUNCTION public.phase_storage_mode() FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.phase_storage_mode() TO service_role;
+
 CREATE OR REPLACE FUNCTION public.phase_storage__guard()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_mode text;
 BEGIN
   IF current_user <> 'postgres' THEN
-    SELECT mode INTO v_mode FROM public.phase_storage_state WHERE id FOR SHARE;
+    v_mode := public.phase_storage_mode();
     IF v_mode IS DISTINCT FROM 'phase' THEN
       RAISE EXCEPTION 'phase_storage_not_ready' USING ERRCODE = 'P0001';
     END IF;

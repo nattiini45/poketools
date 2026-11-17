@@ -49,6 +49,7 @@ describe('phase storage foundation', () => {
     expect(sql).not.toMatch(/CREATE\s+TABLE[^;]*\bLIKE\b/i);
     expect(sql).not.toMatch(/INSERT\s+INTO\s+public\.(?:league_phases|phase_\w+)/i);
     expect(sql).not.toMatch(/DROP\s+TABLE|DELETE\s+FROM\s+public\.(?:tournaments|matches|games)/i);
+    expect(sql).toContain('REFERENCES public.league_phases(season_id, id) ON DELETE NO ACTION DEFERRABLE INITIALLY DEFERRED');
   });
 
   it('fences phase rows without blocking empty legacy cascades', () => {
@@ -60,7 +61,10 @@ describe('phase storage foundation', () => {
     }
     expect(sql).toContain("v_mode IS DISTINCT FROM 'phase'");
     expect(sql).toContain("current_user <> 'postgres'");
-    expect(sql).toContain("WHERE id FOR SHARE");
+    expect(lastFunctionBody('phase_storage_mode')).toContain('WHERE s.id FOR SHARE');
+    expect(sql).toContain("RETURNS text LANGUAGE plpgsql SECURITY DEFINER SET search_path = ''");
+    expect(sql).toContain('v_mode := public.phase_storage_mode()');
+    expect(sql).toContain('GRANT EXECUTE ON FUNCTION public.phase_storage_mode() TO service_role');
     expect(sql).toContain('GRANT SELECT ON TABLE public.phase_storage_state TO service_role');
     expect(sql).not.toMatch(/GRANT (?:ALL|UPDATE|INSERT)[^;]*phase_storage_state/i);
   });
