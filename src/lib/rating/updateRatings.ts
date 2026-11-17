@@ -18,6 +18,22 @@ import {
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { GLICKO2_DEFAULTS, type PlayerRating, type RatingHistoryEntry } from '@/types/rating';
 
+import type { RatingCompletionIdentity, RatingStoragePort, RatingStreamMatch } from './storage';
+
+export const legacyRatingStorage: RatingStoragePort = {
+  countsForRatings: async (matchId) => {
+    const [scope, tournamentId] = await Promise.all([loadRatingScope(), getMatchTournamentIdForRating(matchId)]);
+    return tournamentId === null ? null : matchCountsForRatings({ tournament_id: tournamentId }, scope);
+  },
+  loadScope: () => loadRatingScope(),
+  getCompletedMatches: (id) => getCompletedMatchesForRatingReplay(id),
+  getPlayerRating: (id) => getPlayerRating(id),
+  getHistoryByMatch: (id) => getRatingHistoryByMatch(id),
+  getHistoryByMatches: (ids) => getRatingHistoryByMatches(ids),
+  applyMatchResult: (id, entries) => applyMatchRatingResult(id, entries),
+  replacePlayerCurve: (id, state, history, expected) => replacePlayerRatingCurve(id, state, history, expected),
+};
+
 export interface MutableRatingState {
   rating: number;
   rd: number;
@@ -126,16 +142,17 @@ function isOneSidedHistory(
 async function readSettledMatchHistory(
   matchId: string,
   winnerId: string,
-  loserId: string
+  loserId: string,
+  storage: RatingStoragePort
 ): Promise<RatingHistoryEntry[]> {
-  let existing = await getRatingHistoryByMatch(matchId);
+  let existing = await storage.getHistoryByMatch(matchId);
   for (const waitMs of ONE_SIDED_HISTORY_WAITS_MS) {
     if (!isOneSidedHistory(existing, winnerId, loserId)) return existing;
     console.warn(
       `[rating/live] match ${matchId}: one-sided rating history (a rebuild in another process is writing it?); re-reading in ${waitMs} ms`
     );
     await new Promise<void>((resolve) => setTimeout(resolve, waitMs));
-    existing = await getRatingHistoryByMatch(matchId);
+    existing = await storage.getHistoryByMatch(matchId);
   }
   return existing;
 }
@@ -190,25 +207,41 @@ export function updateRatings(
   isDraw: boolean,
   matchId: string
 ): Promise<RatingUpdateOutcome> {
-  return withRebuildLock(() => applyLiveRatingUpdate(winnerId, loserId, isDraw, matchId));
+  return updateRatingsWithStorage(winnerId, loserId, isDraw, matchId, legacyRatingStorage);
+}
+
+export function updateRatingsWithStorage(
+  winnerId: string,
+  loserId: string,
+  isDraw: boolean,
+  matchId: string,
+  storage: RatingStoragePort,
+  completion?: RatingCompletionIdentity
+): Promise<RatingUpdateOutcome> {
+  return withRebuildLock(() => applyLiveRatingUpdate(winnerId, loserId, isDraw, matchId, storage, completion));
 }
 
 async function applyLiveRatingUpdate(
   winnerId: string,
   loserId: string,
   isDraw: boolean,
-  matchId: string
+  matchId: string,
+  storage: RatingStoragePort,
+  completion?: RatingCompletionIdentity
 ): Promise<RatingUpdateOutcome> {
+  if (storage.requiresCompletionFence && !completion) {
+    throw new Error(`Match ${matchId} has no expected completion token; its ratings were not applied`);
+  }
+  if (completion && completion.winnerId !== (isDraw ? null : winnerId)) {
+    throw new Error(`Match ${matchId} rating winner differs from the expected completion`);
+  }
   // Test leagues stay out of ratings: checked before the history read, so
   // rows left from before the rule are not reported as this match's change.
-  const [scope, tournamentId] = await Promise.all([
-    loadRatingScope(),
-    getMatchTournamentIdForRating(matchId),
-  ]);
-  if (tournamentId === null) {
+  const counts = await storage.countsForRatings(matchId);
+  if (counts === null) {
     throw new Error(`Match ${matchId} not found; its ratings were not applied`);
   }
-  if (!matchCountsForRatings({ tournament_id: tournamentId }, scope)) {
+  if (!counts) {
     console.info(`[rating/live] match ${matchId} belongs to a test league; ratings not applied`);
     return SKIPPED_TEST_SEASON;
   }
@@ -216,17 +249,19 @@ async function applyLiveRatingUpdate(
   for (let attempt = 1; attempt <= LIVE_APPLY_ATTEMPTS; attempt += 1) {
     // A one-sided history (a rebuild elsewhere between its two players'
     // writes) is waited for, then read as the rebuild's result.
-    const existing = await readSettledMatchHistory(matchId, winnerId, loserId);
-    if (existing.length > 0) {
-      return rated(resultFromHistory(existing, winnerId, loserId, matchId));
+    if (!storage.requiresCompletionFence) {
+      const existing = await readSettledMatchHistory(matchId, winnerId, loserId, storage);
+      if (existing.length > 0) {
+        return rated(resultFromHistory(existing, winnerId, loserId, matchId));
+      }
     }
 
     const now = new Date();
     const nowIso = now.toISOString();
 
     const [winnerExisting, loserExisting] = await Promise.all([
-      getPlayerRating(winnerId),
-      getPlayerRating(loserId),
+      storage.getPlayerRating(winnerId),
+      storage.getPlayerRating(loserId),
     ]);
 
     const winnerBase = toMutableState(winnerExisting);
@@ -281,7 +316,7 @@ async function applyLiveRatingUpdate(
       last_match_at: nowIso,
     };
 
-    const outcome = await applyMatchRatingResult(matchId, [
+    const entries: Parameters<RatingStoragePort['applyMatchResult']>[1] = [
       {
         playerId: winnerId,
         expected: toExpectedRatingState(winnerExisting),
@@ -310,7 +345,10 @@ async function applyLiveRatingUpdate(
           result: isDraw ? 'draw' : 'loss',
         },
       },
-    ]);
+    ];
+    const outcome = completion
+      ? await storage.applyMatchResult(matchId, entries, completion)
+      : await storage.applyMatchResult(matchId, entries);
 
     switch (outcome) {
       case 'applied':
@@ -322,7 +360,7 @@ async function applyLiveRatingUpdate(
         });
       case 'already_applied':
         // A concurrent finalize of the same match won: report its change.
-        return rated(resultFromHistory(await getRatingHistoryByMatch(matchId), winnerId, loserId, matchId));
+        return rated(resultFromHistory(await storage.getHistoryByMatch(matchId), winnerId, loserId, matchId));
       case 'stale':
         console.warn(
           `[rating/live] match ${matchId}: a player's rating changed between read and write (attempt ${attempt} of ${LIVE_APPLY_ATTEMPTS}); recomputing`
@@ -333,12 +371,14 @@ async function applyLiveRatingUpdate(
         // for its other row and report the rebuild's result (throws when it
         // stays one-sided).
         return rated(resultFromHistory(
-          await readSettledMatchHistory(matchId, winnerId, loserId), winnerId, loserId, matchId
+          await readSettledMatchHistory(matchId, winnerId, loserId, storage), winnerId, loserId, matchId
         ));
       case 'match_missing':
         throw new Error(`Match ${matchId} not found; its ratings were not applied`);
       case 'match_not_completed':
         throw new Error(`Match ${matchId} is no longer completed; its ratings were not applied`);
+      case 'match_changed':
+        throw new Error(`Match ${matchId} is no longer the expected completion; its ratings were not applied`);
       case 'skipped_test_season':
         // The league became a test league after the check above.
         console.info(`[rating/live] match ${matchId} belongs to a test league (flag set meanwhile); ratings not applied`);
@@ -650,6 +690,7 @@ export interface RebuildRatingsResult {
 
 /** Result of loading + computing a player's rating curve WITHOUT writing. */
 export interface LoadedRatingCurve {
+  expectedMatches?: readonly RatingStreamMatch[];
   /** The recomputed curve (final state + history rows to persist). */
   computed: ComputedRatingCurve;
   /** The currently-stored `player_ratings` row, or null if the player has none. */
@@ -675,6 +716,7 @@ export interface LoadRatingCurveOptions {
   /** The rating scope to replay against (test-league matches are left out).
    * Read once per rebuild batch and passed down; read here when omitted. */
   scope?: RatingScope;
+  storage?: RatingStoragePort;
 }
 
 /**
@@ -703,16 +745,18 @@ export async function loadAndComputeRatingCurve(
   playerId: string,
   options: LoadRatingCurveOptions = {}
 ): Promise<LoadedRatingCurve> {
+  const storage = options.storage ?? legacyRatingStorage;
   const excluded = new Set(options.excludeMatchIds ?? []);
   const [replayMatches, scope] = await Promise.all([
-    getCompletedMatchesForRatingReplay(playerId),
-    options.scope ?? loadRatingScope(),
+    storage.getCompletedMatches(playerId),
+    options.scope ?? storage.loadScope(),
   ]);
-  const completedMatches: CompletedMatchForRating[] = replayMatches
+  const expectedMatches = replayMatches
     .filter((m) => !excluded.has(m.id) && matchCountsForRatings(m, scope))
     // The canonical replay order (shared with the gamification backfill);
     // its tie-breaks reproduce the reader's order for equal timestamps.
-    .sort(compareReplayOrder)
+    .sort(compareReplayOrder);
+  const completedMatches: CompletedMatchForRating[] = expectedMatches
     .map((m): CompletedMatchForRating => ({
       id: m.id,
       player_1_id: m.player_1_id,
@@ -723,7 +767,7 @@ export async function loadAndComputeRatingCurve(
     }));
 
   const matchIds = completedMatches.map((m) => m.id);
-  const historyRows = await getRatingHistoryByMatches(matchIds);
+  const historyRows = await storage.getHistoryByMatches(matchIds);
 
   const rowsByMatch = new Map<string, Map<string, (typeof historyRows)[number]>>();
   for (const row of historyRows) {
@@ -761,13 +805,13 @@ export async function loadAndComputeRatingCurve(
     Promise.resolve(
       computeRatingCurveCore({ playerId, matches: completedMatches, opponentStateByMatch })
     ),
-    getPlayerRating(playerId),
+    storage.getPlayerRating(playerId),
   ]);
 
   const ownHistory = historyRows.filter((row) => row.player_id === playerId);
   const ownHistoryMatchIds = ownHistory.map((row) => row.match_id);
 
-  return { computed, stored, matchesReplayed: computed.matchesReplayed, integrity, ownHistoryMatchIds, ownHistory };
+  return { computed, stored, matchesReplayed: computed.matchesReplayed, integrity, ownHistoryMatchIds, ownHistory, expectedMatches };
 }
 
 // ── Batch planning (gap healing) ─────────────────────────────────────
@@ -821,7 +865,7 @@ async function planRatingRebuildUnlocked(
   const loaded = new Map<string, LoadedRatingCurve>();
   const gaps: RatingHistoryGap[] = [];
   // One scope read for the whole plan (not one per player).
-  const scope = options.scope ?? (await loadRatingScope());
+  const scope = options.scope ?? (await (options.storage ?? legacyRatingStorage).loadScope());
   const loadOptions: LoadRatingCurveOptions = { ...options, scope };
 
   for (let i = 0; i < queue.length; i += 1) {
@@ -985,7 +1029,8 @@ function curveChangesStoredState(curve: LoadedRatingCurve): boolean {
 async function writeLoadedCurve(
   playerId: string,
   curve: LoadedRatingCurve,
-  addedToBatch: boolean
+  addedToBatch: boolean,
+  storage: RatingStoragePort
 ): Promise<RebuildRatingsResult> {
   const { computed, integrity, ownHistoryMatchIds } = curve;
   if (integrity.gaps.length > 0) {
@@ -1001,11 +1046,12 @@ async function writeLoadedCurve(
 
   // One transaction: player_ratings upsert + history delete + history insert,
   // fenced on the history this replay read (RatingCurveStaleError otherwise).
-  await replacePlayerRatingCurve(
+  await storage.replacePlayerCurve(
     playerId,
     { ...finalState, updated_at: new Date().toISOString() },
     history,
-    ownHistoryMatchIds
+    ownHistoryMatchIds,
+    curve.expectedMatches
   );
 
   const ratingBefore = history.length > 0 ? history[0].rating_before : GLICKO2_DEFAULTS.INITIAL_RATING;
@@ -1021,8 +1067,8 @@ async function writeLoadedCurve(
   };
 }
 
-async function rebuildBatchUnlocked(playerIds: readonly string[]): Promise<RebuildRatingsResult[]> {
-  const { plan, loaded, scope } = await planRatingRebuildUnlocked(playerIds, {});
+async function rebuildBatchUnlocked(playerIds: readonly string[], storage: RatingStoragePort): Promise<RebuildRatingsResult[]> {
+  const { plan, loaded, scope } = await planRatingRebuildUnlocked(playerIds, { storage });
   if (plan.addedPlayerIds.length > 0) {
     console.warn(
       `[rating/rebuild] healing ${plan.healedGaps.length} history gap(s) and pairing never-rated matches: rebuilding ${plan.addedPlayerIds.length} additional player(s): ${plan.addedPlayerIds.join(', ')}`
@@ -1036,8 +1082,8 @@ async function rebuildBatchUnlocked(playerIds: readonly string[]): Promise<Rebui
     // since, and the lock is held). Later players are re-read: earlier writes
     // in this batch filled their gaps and changed their opponents' rows.
     const fromPlan = loaded.get(playerId);
-    const curve = index === 0 && fromPlan ? fromPlan : await loadAndComputeRatingCurve(playerId, { scope });
-    results.push(await writeCurveRetryingStale(playerId, curve, added.has(playerId)));
+    const curve = index === 0 && fromPlan ? fromPlan : await loadAndComputeRatingCurve(playerId, { scope, storage });
+    results.push(await writeCurveRetryingStale(playerId, curve, added.has(playerId), storage));
   }
   return results;
 }
@@ -1057,19 +1103,20 @@ const REBUILD_WRITE_ATTEMPTS = 3;
 async function writeCurveRetryingStale(
   playerId: string,
   firstCurve: LoadedRatingCurve,
-  addedToBatch: boolean
+  addedToBatch: boolean,
+  storage: RatingStoragePort
 ): Promise<RebuildRatingsResult> {
   let curve = firstCurve;
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await writeLoadedCurve(playerId, curve, addedToBatch);
+      return await writeLoadedCurve(playerId, curve, addedToBatch, storage);
     } catch (err) {
       if (!(err instanceof RatingCurveStaleError) || attempt >= REBUILD_WRITE_ATTEMPTS) throw err;
       console.warn(
         `[rating/rebuild] player ${playerId}: the history or a test-league flag changed after the replay read it (attempt ${attempt}/${REBUILD_WRITE_ATTEMPTS}); re-reading`
       );
       // No scope passed: the retry reads the current test-league flags.
-      curve = await loadAndComputeRatingCurve(playerId);
+      curve = await loadAndComputeRatingCurve(playerId, { storage });
     }
   }
 }
@@ -1114,5 +1161,12 @@ export async function rebuildRatingsForPlayer(playerId: string): Promise<Rebuild
  * each result's `changed` says whether its write moved anything).
  */
 export function rebuildRatingsForPlayers(playerIds: string[]): Promise<RebuildRatingsResult[]> {
-  return withRebuildLock(() => rebuildBatchUnlocked(playerIds));
+  return rebuildRatingsForPlayersWithStorage(playerIds, legacyRatingStorage);
+}
+
+export function rebuildRatingsForPlayersWithStorage(
+  playerIds: string[],
+  storage: RatingStoragePort
+): Promise<RebuildRatingsResult[]> {
+  return withRebuildLock(() => rebuildBatchUnlocked(playerIds, storage));
 }

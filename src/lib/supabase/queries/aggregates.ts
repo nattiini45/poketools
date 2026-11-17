@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { readBoundedPages } from '../read-bounded-pages';
 import type { Json, Tables } from '@/types/database';
 import type { Aggregate, AggregateScope, BattleStat, PlayerAggregate } from '@/types/game';
+import type { CompetitionOwner } from '@/types/competition-owner';
 
 type AggregateRow = Tables<'aggregates'>;
 type PlayerAggregateRow = Tables<'player_aggregates'>;
@@ -30,6 +31,13 @@ export async function getAggregates(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<Aggregate[]> {
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const { rows } = await readBoundedPages((from, to) => supabase.from('phase_aggregates')
+      .select('*').eq('phase_id', scopeId).order('total_appearances', { ascending: false })
+      .order('id').range(from, to), { label: 'phase aggregates' });
+    return rows.map((row) => toAggregate({ ...row, scope_type: 'phase', scope_id: row.phase_id }));
+  }
   let query = supabase
     .from('aggregates')
     .select('*')
@@ -69,6 +77,14 @@ export async function getAggregatesSummary(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<AggregateSummary[]> {
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const { rows } = await readBoundedPages((from, to) => supabase.from('phase_aggregates')
+      .select('id, phase_id, pokemon_name, total_appearances, total_brought, total_led, total_kos_dealt, total_koed, total_wins, total_games, last_updated')
+      .eq('phase_id', scopeId).order('total_appearances', { ascending: false }).order('id').range(from, to),
+    { label: 'phase aggregate summary' });
+    return rows.map((row) => ({ ...row, scope_type: 'phase', scope_id: row.phase_id, move_counts: {} }));
+  }
   let query = supabase
     .from('aggregates')
     .select(AGGREGATE_SUMMARY_SELECT)
@@ -111,18 +127,19 @@ export async function getAggregatesSummary(
  * build their deltas through `buildGameAggregateDeltas` with the same flag).
  */
 function buildAggregateScopes(
-  tournamentId: string,
-  seasonId: string | null,
+  owner: CompetitionOwner,
   excludeAllTime: boolean
 ): { type: AggregateScope; id: string | null }[] {
   const scopes: { type: AggregateScope; id: string | null }[] = [
-    { type: 'tournament', id: tournamentId },
+    owner.kind === 'phase'
+      ? { type: 'phase', id: owner.phase_id }
+      : { type: 'tournament', id: owner.tournament_id },
   ];
   if (!excludeAllTime) {
     scopes.push({ type: 'all_time', id: null });
   }
-  if (seasonId) {
-    scopes.push({ type: 'league', id: seasonId });
+  if (owner.season_id) {
+    scopes.push({ type: 'league', id: owner.season_id });
   }
   return scopes;
 }
@@ -147,6 +164,16 @@ export async function updateAggregatesForScope(
 ): Promise<void> {
   if (battleStats.length === 0) return;
   const scopes = [{ type: scopeType, id: scopeId }];
+
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const results = await Promise.all([
+      supabase.rpc('batch_upsert_phase_aggregates', { p_deltas: buildAggregateDeltas(battleStats, scopes).sort(compareDeltaKeys) as unknown as Json }),
+      supabase.rpc('batch_upsert_phase_player_aggregates', { p_deltas: buildPlayerAggregateDeltas(battleStats, scopes).sort(compareDeltaKeys) as unknown as Json }),
+    ]);
+    for (const { error } of results) if (error) throw error;
+    return;
+  }
 
   await Promise.all([
     batchUpsertAggregates(buildAggregateDeltas(battleStats, scopes).sort(compareDeltaKeys)),
@@ -282,8 +309,23 @@ export function buildGameAggregateDeltas(
   tournamentId: string,
   seasonId: string | null,
   opts?: { excludeAllTime?: boolean }
+): GameAggregateDeltas;
+export function buildGameAggregateDeltas(
+  battleStats: BattleStat[],
+  owner: CompetitionOwner,
+  opts?: { excludeAllTime?: boolean }
+): GameAggregateDeltas;
+export function buildGameAggregateDeltas(
+  battleStats: BattleStat[],
+  owner: string | CompetitionOwner,
+  seasonOrOpts?: string | null | { excludeAllTime?: boolean },
+  opts?: { excludeAllTime?: boolean }
 ): GameAggregateDeltas {
-  const scopes = buildAggregateScopes(tournamentId, seasonId, opts?.excludeAllTime === true);
+  const context: CompetitionOwner = typeof owner === 'string'
+    ? { kind: 'tournament', tournament_id: owner, season_id: typeof seasonOrOpts === 'string' ? seasonOrOpts : null }
+    : owner;
+  const options = typeof owner === 'string' ? opts : typeof seasonOrOpts === 'object' ? seasonOrOpts : undefined;
+  const scopes = buildAggregateScopes(context, options?.excludeAllTime === true);
   return {
     aggregateDeltas: buildAggregateDeltas(battleStats, scopes).sort(compareDeltaKeys),
     playerDeltas: buildPlayerAggregateDeltas(battleStats, scopes).sort(compareDeltaKeys),
@@ -419,6 +461,16 @@ export async function clearAggregatesForScope(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<ClearAggregatesForScopeResult> {
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const [aggregate, player] = await Promise.all([
+      supabase.from('phase_aggregates').delete({ count: 'exact' }).eq('phase_id', scopeId),
+      supabase.from('phase_player_aggregates').delete({ count: 'exact' }).eq('phase_id', scopeId),
+    ]);
+    if (aggregate.error) throw aggregate.error;
+    if (player.error) throw player.error;
+    return { aggregatesDeleted: aggregate.count ?? 0, playerAggregatesDeleted: player.count ?? 0 };
+  }
   let aggQuery = supabase.from('aggregates').delete({ count: 'exact' }).eq('scope_type', scopeType);
   let playerQuery = supabase
     .from('player_aggregates')
@@ -454,6 +506,7 @@ export async function getTotalGamesInScope(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<number> {
+  if (scopeType === 'phase') return getTotalGamesInMixedScope(scopeType, scopeId);
   // Count actual games from the games table, joining through matches
   // to filter by scope and exclude scheduled (unplayed) matches.
   const { data, error } = await supabase.rpc('get_total_games_in_scope', {
@@ -462,6 +515,15 @@ export async function getTotalGamesInScope(
   });
   if (error) throw error;
   return typeof data === 'number' ? data : 0;
+}
+
+export async function getTotalGamesInMixedScope(scopeType: AggregateScope, scopeId: string | null): Promise<number> {
+  if (scopeType !== 'all_time' && !scopeId) throw new Error('scope_id required for competition and league game totals');
+  const { data, error } = await supabase.rpc('get_total_games_in_mixed_scope', {
+    p_scope_type: scopeType, p_scope_id: scopeId ?? '00000000-0000-0000-0000-000000000000',
+  });
+  if (error) throw error;
+  return data;
 }
 
 // ─── Read (Pokemon detail page) ─────────────────────────────────────
@@ -618,6 +680,13 @@ export async function getAggregateForPokemon(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<Aggregate | null> {
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const { data, error } = await supabase.from('phase_aggregates').select('*')
+      .eq('phase_id', scopeId).eq('pokemon_name', pokemonName).maybeSingle();
+    if (error) throw error;
+    return data ? toAggregate({ ...data, scope_type: 'phase', scope_id: data.phase_id }) : null;
+  }
   let query = supabase
     .from('aggregates')
     .select('*')
@@ -645,6 +714,16 @@ export async function getPlayerAggregatesForPokemon(
   scopeId: string | null,
   playerId?: string
 ): Promise<PlayerAggregate[]> {
+  if (scopeType === 'phase') {
+    if (!scopeId) throw new Error('scope_id required for phase aggregates');
+    const { rows } = await readBoundedPages((from, to) => {
+      let query = supabase.from('phase_player_aggregates').select('*')
+        .eq('phase_id', scopeId).eq('pokemon_name', pokemonName);
+      if (playerId) query = query.eq('player_id', playerId);
+      return query.order('total_appearances', { ascending: false }).order('id').range(from, to);
+    }, { label: 'phase player aggregates' });
+    return rows.map((row) => toPlayerAggregate({ ...row, scope_type: 'phase', scope_id: row.phase_id }));
+  }
   let query = supabase
     .from('player_aggregates')
     .select('*')

@@ -1,10 +1,25 @@
-import {
+import type {
   getSeasonTrackers,
   getAllTiers,
   getSeasonKosForLine,
   updateTracker,
 } from '@/lib/supabase/queries/evolutions';
 import type { EvolutionTier, EvolutionEvent } from '@/types/evolution';
+
+export interface EvolutionCheckStorage {
+  getSeasonTrackers: typeof getSeasonTrackers;
+  getAllTiers: typeof getAllTiers;
+  getSeasonKosForLine: typeof getSeasonKosForLine;
+  updateTracker: typeof updateTracker;
+}
+
+export function createEvolutionChecker(storage: EvolutionCheckStorage) {
+  return {
+    checkEvolutions: (seasonId: string) => checkEvolutionsWithStorage(seasonId, storage),
+    checkPlayerEvolutions: (seasonId: string, playerId: string) =>
+      checkEvolutionsWithStorage(seasonId, storage, playerId),
+  };
+}
 
 /**
  * Determine the correct form and stage for a given KO count against a tier.
@@ -53,10 +68,20 @@ function getLineFormNames(tier: EvolutionTier): string[] {
 export async function checkEvolutions(
   seasonId: string
 ): Promise<EvolutionEvent[]> {
-  const [trackers, allTiers] = await Promise.all([
-    getSeasonTrackers(seasonId),
-    getAllTiers(seasonId),
+  const storage = await import('@/lib/supabase/queries/evolutions');
+  return checkEvolutionsWithStorage(seasonId, storage);
+}
+
+async function checkEvolutionsWithStorage(
+  seasonId: string,
+  storage: EvolutionCheckStorage,
+  playerId?: string,
+): Promise<EvolutionEvent[]> {
+  const [allTrackers, allTiers] = await Promise.all([
+    storage.getSeasonTrackers(seasonId),
+    storage.getAllTiers(seasonId),
   ]);
+  const trackers = playerId === undefined ? allTrackers : allTrackers.filter((tracker) => tracker.player_id === playerId);
 
   // If no evo league setup, skip
   if (allTiers.length === 0 || trackers.length === 0) {
@@ -89,7 +114,7 @@ export async function checkEvolutions(
 
     // Sum KOs across all forms in this line for this player
     const formNames = getLineFormNames(tier);
-    const totalKos = await getSeasonKosForLine(
+    const totalKos = await storage.getSeasonKosForLine(
       seasonId,
       tracker.player_id,
       formNames
@@ -107,7 +132,7 @@ export async function checkEvolutions(
       const isFormChange = resolved.form !== tracker.current_form;
       const previousForm = tracker.current_form;
 
-      await updateTracker(tracker.id, {
+      await storage.updateTracker(tracker.id, {
         current_form: resolved.form,
         total_kos: totalKos,
         current_stage: resolved.stage,
@@ -139,75 +164,8 @@ export async function checkPlayerEvolutions(
   seasonId: string,
   playerId: string
 ): Promise<EvolutionEvent[]> {
-  const [allTrackers, allTiers] = await Promise.all([
-    getSeasonTrackers(seasonId),
-    getAllTiers(seasonId),
-  ]);
-
-  const trackers = allTrackers.filter((t) => t.player_id === playerId);
-  if (allTiers.length === 0 || trackers.length === 0) {
-    return [];
-  }
-
-  const tierMap = new Map<string, EvolutionTier>();
-  for (const tier of allTiers) {
-    if (tier.player_id) {
-      tierMap.set(`${tier.base_pokemon}::${tier.player_id}`, tier);
-    }
-    const generalKey = `${tier.base_pokemon}::`;
-    if (!tier.player_id && !tierMap.has(generalKey)) {
-      tierMap.set(generalKey, tier);
-    }
-  }
-
-  const events: EvolutionEvent[] = [];
-
-  for (const tracker of trackers) {
-    const tier =
-      tierMap.get(`${tracker.base_pokemon}::${tracker.player_id}`) ??
-      tierMap.get(`${tracker.base_pokemon}::`);
-
-    if (!tier) continue;
-
-    const formNames = getLineFormNames(tier);
-    const totalKos = await getSeasonKosForLine(
-      seasonId,
-      tracker.player_id,
-      formNames
-    );
-
-    const resolved = resolveStage(tier, totalKos);
-
-    if (
-      resolved.form !== tracker.current_form ||
-      resolved.stage !== tracker.current_stage ||
-      totalKos !== tracker.total_kos
-    ) {
-      const isFormChange = resolved.form !== tracker.current_form;
-      const previousForm = tracker.current_form;
-
-      await updateTracker(tracker.id, {
-        current_form: resolved.form,
-        total_kos: totalKos,
-        current_stage: resolved.stage,
-        evolved_at: isFormChange ? new Date().toISOString() : tracker.evolved_at,
-      });
-
-      if (isFormChange) {
-        events.push({
-          player_id: tracker.player_id,
-          base_pokemon: tracker.base_pokemon,
-          previous_form: previousForm,
-          new_form: resolved.form,
-          new_stage: resolved.stage,
-          total_kos: totalKos,
-          is_devolution: resolved.stage < tracker.current_stage,
-        });
-      }
-    }
-  }
-
-  return events;
+  const storage = await import('@/lib/supabase/queries/evolutions');
+  return checkEvolutionsWithStorage(seasonId, storage, playerId);
 }
 
 /**
@@ -252,6 +210,7 @@ export async function isEvoLeague(seasonId: string): Promise<boolean> {
   }
 
   // Fallback: check if tiers exist (legacy evo-league detection)
+  const { getAllTiers } = await import('@/lib/supabase/queries/evolutions');
   const tiers = await getAllTiers(seasonId);
   return tiers.length > 0;
 }

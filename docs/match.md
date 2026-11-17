@@ -11,6 +11,12 @@ src/lib/match/
 ├── aggregate-job-state.ts  # aggregateJobMachine: the aggregate_jobs.status machine (client-safe)
 ├── game-marker-state.ts  # The game marker machines: aggregate and evolution markers, edit lease, stats lock (client-safe)
 ├── finalize.ts  # Shared completion side effects for manual/cron finalization
+├── finalization-core.ts  # Completion orchestration shared by explicit legacy and native adapters
+├── auto-confirm.ts  # Guarded auto-confirm and finalization-heal handlers
+├── process-aggregates.ts  # Guarded aggregate queue maintenance handlers
+├── match-decisions.ts  # Legacy match confirmation and dispute adapter
+├── match-decisions-core.ts  # Participant/admin decision workflow shared with native phases
+├── reopen-core.ts  # Reopen orchestration shared by explicit competition adapters
 ├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
 ├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
 ├── schedule-aggregate-processing.ts  # Schedules aggregate processing after a write
@@ -270,3 +276,36 @@ const team = aggregateTeamFromStats(statsByGame, playerId, true);
 - [Tournament Module](./tournament.md)
 - [Rating Module](./rating.md)
 - [Supabase Module](./supabase.md)
+## Dormant native phase match pipeline
+
+League-phase results have their own persistence family: `phase_matches`, `phase_games`, `phase_battle_stats`, outcomes, snapshots, aggregate jobs and competition-level projections. A native match keeps `phase_id`; shared orchestration never presents it as a tournament match. Player, league and all-time projections remain deliberately shared.
+
+`createPhaseMatchServices` in `src/lib/league-phase/match-services.ts` assembles submission, replay-tie handling, game edit/delete, reset, confirmation/dispute, staging, finalization/heal, reopen and the authenticated auto-confirm handler. It binds the concrete native queries, atomic aggregate operations, mixed rating/streak replay, phase achievements and EPB credit/rebuild services. Callers supply the phase-access guard, team release, announcements, cache invalidation and kit ancillary callbacks. Missing phase team-release behavior must fail before child cleanup; clearing a required phase owner is not a release-to-library implementation.
+
+The legacy exports and existing routes remain explicitly bound to legacy storage. The native constructors and mixed maintenance constructors are opt-in service entry points, not a generation detector or an activation switch. Main can deploy without these additive migrations. Applying them does not move records, recount production games or enable native traffic; activation belongs to the separately approved cutover.
+
+### Atomic persistence and replay identity
+
+Both game tables serialize writes for the same replay hash. A deferred check rejects a hash remaining in both stores at commit. A maintenance transaction may temporarily preserve the same game UUID in both stores only if it removes the source before commit; there is no uniqueness bypass. Replay conflicts retain the existing duplicate-replay error behavior.
+
+Native aggregate apply commits the phase, league and permitted all-time counters with the game marker and job completion in one transaction. Rollback is fenced on the marker read by the caller. Cancel, claim, reclaim, retry and requeue retain the legacy queue semantics. The `phase` aggregate scope is stored only in the native competition projections; shared projection tables reject it. Mixed rebuilds page both stores, deduplicate preserved game IDs and leave live increment jobs to their worker.
+
+Mixed scope rebuilds retain the quiescent-write precondition above: the live-job snapshot is not protection against concurrent result recording, edits or deletes. Operator-run rebuilds require the write freeze to remain in force for the whole operation.
+
+Non-EPB evolution checks use `phaseEvolutionChecker`, which shares the existing threshold algorithm but reads only the season's native phase battle stats for that player and evolution line, with stable paging. Standalone games and legacy phase tournaments are not a fallback. EPB continues to use its separate credit ledger.
+
+EPB credits and debits use the native game's marker and stored ledger. A mixed season synchronization validates both match sets and credit payloads, writes both ledgers atomically and advances the season epoch exactly once. Refusal rolls both streams back. Matchday snapshots remain point-in-time records and a heal does not overwrite existing snapshots.
+
+### Finalization, recovery and maintenance
+
+The shared finalization core fences the completion by winner and `confirmed_at`, records the outcome before format effects, propagates the bracket before evaluating a stage end, expires reads after writes and stamps the marker only when every required step succeeds. The existing step name `tournament` remains for catalog compatibility; the native storage port loads a real phase. Heal verifies source-specific native rating history, never repeats announcements or achievements and reruns only replay-safe steps. Native format completion requires its match/winner fence even for a historical null confirmation token: SQL compares that token null-safely instead of dropping the fence or fabricating a timestamp.
+
+Reopen and result takeback read the outcome's `set_at` before their status compare-and-set and delete only that version. Games survive a reopen. A preflight refusal occurs before writes; failures after the status commit remain separately reported. Native status writers receive the actual player, admin or system actor rather than treating a player submission as a recount.
+
+`createPhaseAutoConfirmHandler`, `createPhaseProcessAggregatesHandler` and `createMixedProcessAggregatesHandler` reuse the authenticated maintenance workflows without changing the live cron bindings. The mixed aggregate processor/drains accept native invalidation callbacks. `createMixedSeasonReconciler`, `createMixedTestLeagueRatingRebuilder` and `createMixedEntityDeleteRebuilder` bind the two-store projections explicitly; repair fan-out and rating settle passes keep their existing serialization and bounds.
+
+`createNativeFormatCronPass` uses the configured native match services and kit effects for deadline forfeits, completion backfill, pending revert recovery and round-end backfill. Its phase forfeit is an atomic revision/status/player compare-and-set. Calendar fairness, repair budgets and legacy default bindings remain unchanged. Native downstream deletion locks phases, rounds and matches in order and refuses any still-present target that started or gained a game; missing IDs remain idempotent.
+
+The native match, outcome, job and game-marker machines are registered separately. League-trash restoration classifies both stores' replay guards; its runtime inventory check rejects an unreviewed INSERT trigger before a delete can capture an unrestorable graph. A restored replay that now conflicts with another competition still fails its normal uniqueness check.
+
+Real-database parity and contention suites are gated through `src/test/local-stack.ts` and run against disposable CI databases. They do not authorize a hosted preflight, migration, production recount or cutover.

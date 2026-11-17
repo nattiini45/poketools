@@ -511,7 +511,7 @@ export type GameKillCreditOutcome =
   | 'match_not_completed'
   | 'game_missing';
 
-function toGameKillCreditOutcome(raw: string): GameKillCreditOutcome {
+function toGameKillCreditOutcome(raw: string, rpc = 'epb_credit_game_kills'): GameKillCreditOutcome {
   switch (raw) {
     case 'applied':
     case 'already_applied':
@@ -519,7 +519,7 @@ function toGameKillCreditOutcome(raw: string): GameKillCreditOutcome {
     case 'game_missing':
       return raw;
   }
-  throw new Error(`epb_credit_game_kills returned an unknown outcome: ${JSON.stringify(raw)}`);
+  throw new Error(`${rpc} returned an unknown outcome: ${JSON.stringify(raw)}`);
 }
 
 /**
@@ -554,10 +554,22 @@ export async function creditGameKills(
   return toGameKillCreditOutcome(data);
 }
 
+export async function creditPhaseGameKills(
+  gameId: string,
+  credits: readonly GameKillCredit[]
+): Promise<GameKillCreditOutcome> {
+  const { data, error } = await supabase.rpc('phase_epb_credit_game_kills', {
+    p_game_id: gameId,
+    p_credits: credits as unknown as Json,
+  });
+  if (error) throw error;
+  return toGameKillCreditOutcome(data, 'phase_epb_credit_game_kills');
+}
+
 /** What `uncreditGameKills` did. */
 export type GameKillDebitOutcome = 'rolled_back' | 'not_applied' | 'marker_changed' | 'game_missing';
 
-function toGameKillDebitOutcome(raw: string): GameKillDebitOutcome {
+function toGameKillDebitOutcome(raw: string, rpc = 'epb_uncredit_game_kills'): GameKillDebitOutcome {
   switch (raw) {
     case 'rolled_back':
     case 'not_applied':
@@ -565,7 +577,7 @@ function toGameKillDebitOutcome(raw: string): GameKillDebitOutcome {
     case 'game_missing':
       return raw;
   }
-  throw new Error(`epb_uncredit_game_kills returned an unknown outcome: ${JSON.stringify(raw)}`);
+  throw new Error(`${rpc} returned an unknown outcome: ${JSON.stringify(raw)}`);
 }
 
 /**
@@ -593,6 +605,20 @@ export async function uncreditGameKills(
   });
   if (error) throw error;
   return toGameKillDebitOutcome(data);
+}
+
+export async function uncreditPhaseGameKills(
+  gameId: string,
+  expectedAppliedAt: string,
+  debits: readonly GameKillCredit[]
+): Promise<GameKillDebitOutcome> {
+  const { data, error } = await supabase.rpc('phase_epb_uncredit_game_kills', {
+    p_game_id: gameId,
+    p_expected_applied_at: expectedAppliedAt,
+    p_debits: debits as unknown as Json,
+  });
+  if (error) throw error;
+  return toGameKillDebitOutcome(data, 'phase_epb_uncredit_game_kills');
 }
 
 /**

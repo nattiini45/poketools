@@ -21,7 +21,7 @@ export interface KitCronPhase {
   clock_shift_seconds: number;
 }
 
-interface CronPhaseRow {
+export interface CronPhaseRow {
   id: string;
   season_id: string | null;
   status: string;
@@ -66,6 +66,10 @@ export async function listKitCronPhases(): Promise<KitCronPhase[]> {
         .range(from, to) as unknown as PromiseLike<{ data: CronPhaseRow[] | null; error: unknown }>,
     { label: 'format-cron phases' },
   );
+  return mapKitCronPhases(rows);
+}
+
+export function mapKitCronPhases(rows: readonly CronPhaseRow[]): KitCronPhase[] {
   return rows.flatMap((row) => {
     if (row.season_id === null || row.format_stage_key === null || !hasCalendar(row.stage_spec)) return [];
     const season = Array.isArray(row.seasons) ? row.seasons[0] : row.seasons;

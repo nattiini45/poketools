@@ -22,6 +22,10 @@ import { leagueTrashMachine } from '@/lib/league-trash/lifecycle-state';
 import { phaseStorageMachine } from '@/lib/league-phase/storage-state';
 import { phaseMachine } from '@/lib/league-phase/phase-state';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
+import { phaseMatchMachine } from '@/lib/league-phase/phase-match-state';
+import { phaseMatchOutcomeMachine } from '@/lib/league-phase/phase-outcome-state';
+import { phaseAggregateJobMachine, phaseGameAggregateMarkerMachine } from '@/lib/league-phase/phase-aggregate-job-state';
+import { phaseGameEditLeaseMachine, phaseGameEvolutionCreditMachine, phaseGameStatsLockMachine } from '@/lib/league-phase/phase-game-marker-state';
 import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
 import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMachine, gameStatsLockMachine } from '@/lib/match/game-marker-state';
 import { matchOutcomeMachine } from '@/lib/match/outcome-state';
@@ -64,6 +68,13 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   phaseStorageMachine.spec,
   phaseMachine.spec,
   phaseRoundMachine.spec,
+  phaseMatchMachine.spec,
+  phaseMatchOutcomeMachine.spec,
+  phaseAggregateJobMachine.spec,
+  phaseGameAggregateMarkerMachine.spec,
+  phaseGameEvolutionCreditMachine.spec,
+  phaseGameEditLeaseMachine.spec,
+  phaseGameStatsLockMachine.spec,
   actionWindowMachine.spec,
   actionSubmissionMachine.spec,
   formatChallengeMachine.spec,

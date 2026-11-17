@@ -36,7 +36,7 @@ export default defineDe<typeof en>()({
   gameSource: { ps_replay: 'Showdown-Replay', manual: 'Manuell', champions: 'Champions' },
   teamVisibility: { hidden_until_match: 'Bis zum Spiel verborgen', always_public: 'Immer öffentlich' },
   teamImportSource: { pokepastes: 'PokePaste', manual: 'Manuell', ps_text: 'Showdown-Text' },
-  aggregateScope: { tournament: 'Turnier', league: 'Liga', all_time: 'Gesamt' },
+  aggregateScope: { tournament: 'Turnier', league: 'Liga', all_time: 'Gesamt', phase: 'Phase' },
   ...P,
   teraRule: { any: 'Beliebiger Tera-Typ', stab_only: 'Nur STAB-Tera-Typen', none: 'Kein Terakristallisieren' },
 });

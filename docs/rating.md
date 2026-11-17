@@ -10,6 +10,7 @@ src/lib/rating/
 ├── glicko2-preview.ts  # Read-only preview of next-game rating deltas
 ├── rating-scope.ts     # Which completed matches count toward ratings (test leagues do not)
 ├── replay-order.ts     # The one chronological replay order
+├── storage.ts          # Rating persistence port and lazy legacy adapter
 ├── test-league-rebuild.ts # Rating rebuild after the test-league flag is set; rebuildRatingsSettled (shared with the league restore)
 ├── tiers.ts            # Pokéball tier classifier + tier metadata
 ├── updateRatings.ts    # Match-driven rating updates + rollback
@@ -100,6 +101,22 @@ const result = await updateRatings(winnerId, loserId, false, matchId);
 const tier = getRatingTier(player.rating, player.rd);
 const meta = RATING_TIER_META[tier]; // { label, ballItemId, bg, text, border, overlayColor }
 ```
+
+## Dormant phase-storage hooks
+
+`updateRatingsWithStorage` and `rebuildRatingsForPlayersWithStorage` run the existing live and replay algorithms with an explicit `RatingStoragePort`. `loadAndComputeRatingCurve` and `planRatingRebuild` accept that port as `options.storage`. The default entry points keep the legacy port and perform no phase reads or generation checks.
+
+Activated callers lazily load `createMixedRatingStorage('phase' | 'tournament')` from `src/lib/league-phase/rating-streak-streams.ts`. It combines standalone tournament matches and native phase matches, preferring the native row for a preserved UUID and sorting with `compareReplayOrder`. Legacy phase matches/history are not a fallback. The scope includes current test-league phase ids. Live phase results write only `phase_rating_history`; mixed rebuilds replace both history stores and the shared `player_ratings` projection in one transaction. Migration `20261117123000_phase_rating_streak_streams.sql` supplies service-role-only RPCs using the legacy per-player rating lock namespace. Phase history fencing uses `PT409`, mapped to the existing stale retry error.
+
+Finalize/heal batch verification uses `getPhaseRatingHistoryByMatches(ids)` from the same module. It chunks ids and pages only `phase_rating_history`, so legacy rows cannot satisfy a native history check. The storage port's `getHistoryByMatches` deliberately remains a union reader for mixed rebuilds.
+
+Native live ratings also require the finalizer's captured completion identity (`winnerId`, `confirmedAt`, with historical null retained). They do not take the legacy early-history shortcut: `phase_rating_apply_match_result` checks the required completion JSON under the match lock before reading history or writing ratings. A changed winner or token returns `match_changed`; retries keep the original expected identity instead of reading a newer token.
+
+Mixed replacement carries the full expected countable stream, including participants, winner, completion token and replay timestamps. The RPC briefly freezes owner/flag tables parent-first and then match tables with `NOWAIT`; a competing writer raises `PT409` before any projection write, rather than waiting in an owner/child lock cycle. It compares every current countable standalone/native match, including matches with no history yet, then replaces the curve. Replay math runs before these locks are acquired. A flag, completion or result change therefore requires a fresh replay even when no history row existed to fence on.
+
+After validating that stream, the same transaction removes the player's obsolete history for season-owned legacy tournament matches before delegating the standalone history replacement. Those excluded source rows cannot trip the standalone unexpected-history fence; a later failure rolls their removal back with the projection writes. Other players and countable standalone/native history remain fenced normally.
+
+The focused stream unit suite covers mixed replay, deduplication, ordering and retry. `rating-streak-streams.local.test.ts` opts in through `localStackOptIn('LOCAL_PHASE_RATING_STREAMS')`, requires a disposable phase-mode stack and never changes its storage generation.
 
 ## Testing
 - **Test Files**:

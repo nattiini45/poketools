@@ -74,6 +74,7 @@ import { supabase } from '@/lib/supabase/client';
 import { readAllPages } from '@/lib/supabase/read-all-pages';
 import type { EvolutionTracker, EvolutionEvent } from '@/types/evolution';
 import type { BattleStat } from '@/types/game';
+import type { PhaseMatch } from '@/types/league-phase-match';
 import type { Match } from '@/types/match';
 import type { Json } from '@/types/database';
 
@@ -162,6 +163,8 @@ export interface ComputedEvolutionState {
    * debits exactly (`epb_uncredit_game_kills`).
    */
   creditsByGame?: Record<string, GameKillCredit[]>;
+  phaseCreditedMatchIds?: string[];
+  phaseCreditsByGame?: Record<string, GameKillCredit[]>;
 }
 
 export interface EvolutionMismatch {
@@ -179,11 +182,40 @@ export interface RepairResult {
   evolutionPoints: { players_updated: number; points_awarded: number };
 }
 
+export interface EpbRebuildStorage {
+  loadMatches(seasonId: string): Promise<RebuildMatch[]>;
+  getSnapshots(match: RebuildMatch): ReturnType<typeof getMatchSnapshots>;
+  syncCredits(
+    seasonId: string,
+    epoch: number,
+    computed: ComputedEvolutionState,
+  ): Promise<void>;
+}
+
+const legacyRebuildStorage: EpbRebuildStorage = {
+  loadMatches: loadSeasonMatches,
+  getSnapshots: ({ match }) => getMatchSnapshots(match.id),
+  syncCredits: (seasonId, epoch, computed) => syncSeasonGameKillCredit(
+    seasonId, epoch, computed.creditedMatchIds ?? [], computed.creditsByGame ?? {},
+  ),
+};
+
+export function createEpbEvolutionRebuilder(storage: EpbRebuildStorage) {
+  return {
+    computeSeasonEvolutionState: (seasonId: string) => computeSeasonEvolutionStateWithStorage(seasonId, storage),
+    repairSeasonEvolution: (seasonId: string) => repairSeasonEvolutionWithStorage(seasonId, storage),
+  };
+}
+
+export { loadSeasonMatches as loadLegacyEpbSeasonMatches };
+
 // ── Loader input types (already-loaded data, so compute is pure) ──
 
 /** A remaining (non-deleted) match with its matchday, battle stats and registered teams. */
 export interface RebuildMatch {
-  match: Match;
+  match: Match | PhaseMatch;
+  source?: 'tournament' | 'phase';
+  gameIds?: readonly string[];
   /** round_number — the EPB matchday (see game-pipeline.ts / finalize.ts). */
   matchday: number;
   /** Battle stats across all games in this match (flattened). */
@@ -300,7 +332,7 @@ function toEpochMs(value: string | null | undefined): number | null {
 }
 
 /** When the match was completed: completion stamps both confirmed_at and date_played. */
-function matchCompletedAtMs(match: Match): number | null {
+function matchCompletedAtMs(match: Pick<Match, 'confirmed_at' | 'date_played'>): number | null {
   return toEpochMs(match.confirmed_at) ?? toEpochMs(match.date_played);
 }
 
@@ -765,6 +797,7 @@ async function loadSeasonMatches(seasonId: string): Promise<RebuildMatch[]> {
     })
     .map((m) => ({
       match: m.match,
+      gameIds: games.filter((game) => game.match_id === m.match.id).map((game) => game.id),
       matchday: m.matchday,
       battleStats: statsByMatch.get(m.match.id) ?? [],
       registeredSpecies: registeredByMatch.get(m.match.id) ?? new Map<string, string[]>(),
@@ -861,16 +894,18 @@ async function loadSeasonGateInput(seasonId: string): Promise<RebuildGateInput> 
  * detection. */
 async function loadSeasonSnapshots(
   seasonId: string,
-  matches: RebuildMatch[]
+  matches: RebuildMatch[],
+  storage: EpbRebuildStorage,
 ): Promise<RebuildSnapshot[]> {
   const out: RebuildSnapshot[] = [];
   const matchdayById = new Map<string, number>();
   for (const m of matches) matchdayById.set(m.match.id, m.matchday);
 
-  for (const { match } of matches) {
+  for (const entry of matches) {
+    const { match } = entry;
     let snaps;
     try {
-      snaps = await getMatchSnapshots(match.id);
+      snaps = await storage.getSnapshots(entry);
     } catch (err) {
       // Snapshots are best-effort for detection; a read failure should not
       // block the rebuild. The orchestrator can re-surface impossible lineups
@@ -903,14 +938,49 @@ async function loadSeasonSnapshots(
 export async function computeSeasonEvolutionState(
   seasonId: string
 ): Promise<ComputedEvolutionState> {
+  return computeSeasonEvolutionStateWithStorage(seasonId, legacyRebuildStorage);
+}
+
+async function computeSeasonEvolutionStateWithStorage(
+  seasonId: string,
+  storage: EpbRebuildStorage,
+): Promise<ComputedEvolutionState> {
   const [trackers, lines, matches, gate] = await Promise.all([
     getSeasonTrackers(seasonId),
     getSeasonLineThresholds(seasonId),
-    loadSeasonMatches(seasonId),
+    storage.loadMatches(seasonId),
     loadSeasonGateInput(seasonId),
   ]);
-  const snapshots = await loadSeasonSnapshots(seasonId, matches);
-  return computeEvolutionStateCore({ trackers, lines, matches, snapshots, gate });
+  const seenMatches = new Set<string>();
+  const seenGames = new Set<string>();
+  for (const entry of matches) {
+    if (seenMatches.has(entry.match.id)) throw new Error('EPB rebuild: duplicate match identity across streams');
+    seenMatches.add(entry.match.id);
+    for (const id of entry.gameIds ?? new Set(entry.battleStats.map((stat) => stat.game_id))) {
+      if (seenGames.has(id)) throw new Error('EPB rebuild: duplicate game identity across streams');
+      seenGames.add(id);
+    }
+  }
+  const ordered = [...matches].sort((a, b) => a.matchday - b.matchday ||
+    (a.match.date_played ?? '').localeCompare(b.match.date_played ?? '') ||
+    a.match.id.localeCompare(b.match.id));
+  const snapshots = await loadSeasonSnapshots(seasonId, ordered, storage);
+  const computed = computeEvolutionStateCore({ trackers, lines, matches: ordered, snapshots, gate });
+  const phaseMatches = ordered.filter((entry) => entry.source === 'phase');
+  if (phaseMatches.length > 0) {
+    const phaseIds = new Set(phaseMatches.map((entry) => entry.match.id));
+    const phaseGameIds = new Set(phaseMatches.flatMap((entry) =>
+      [...(entry.gameIds ?? new Set(entry.battleStats.map((stat) => stat.game_id)))]));
+    computed.phaseCreditedMatchIds = [...phaseIds];
+    computed.creditedMatchIds = computed.creditedMatchIds?.filter((id) => !phaseIds.has(id));
+    computed.phaseCreditsByGame = {};
+    for (const [id, credits] of Object.entries(computed.creditsByGame ?? {})) {
+      if (!phaseGameIds.has(id)) continue;
+      computed.phaseCreditsByGame[id] = credits;
+      delete computed.creditsByGame![id];
+    }
+  }
+  return computed;
 }
 
 // ── Diff ──────────────────────────────────────────────────────────
@@ -1051,6 +1121,15 @@ export async function applyComputedEvolutionState(
   computed: ComputedEvolutionState,
   killCreditEpoch?: number
 ): Promise<RepairResult> {
+  return applyComputedEvolutionStateWithStorage(seasonId, computed, killCreditEpoch, legacyRebuildStorage);
+}
+
+async function applyComputedEvolutionStateWithStorage(
+  seasonId: string,
+  computed: ComputedEvolutionState,
+  killCreditEpoch: number | undefined,
+  storage: EpbRebuildStorage,
+): Promise<RepairResult> {
   if (computed.creditedMatchIds && killCreditEpoch === undefined) {
     throw new Error('applyComputedEvolutionState: the kill-credit epoch read before the compute is required');
   }
@@ -1112,12 +1191,7 @@ export async function applyComputedEvolutionState(
   // (StaleKillCreditError) and the caller rebuilds again; a credit after the
   // sync applies to the fully rebuilt trackers.
   if (computed.creditedMatchIds && killCreditEpoch !== undefined) {
-    await syncSeasonGameKillCredit(
-      seasonId,
-      killCreditEpoch,
-      computed.creditedMatchIds,
-      computed.creditsByGame ?? {}
-    );
+    await storage.syncCredits(seasonId, killCreditEpoch, computed);
   }
 
   return {
@@ -1160,11 +1234,18 @@ export async function applyComputedEvolutionState(
  * Returns counts + the impossible lineups for surfacing to admins.
  */
 export async function repairSeasonEvolution(seasonId: string): Promise<RepairResult> {
+  return repairSeasonEvolutionWithStorage(seasonId, legacyRebuildStorage);
+}
+
+async function repairSeasonEvolutionWithStorage(
+  seasonId: string,
+  storage: EpbRebuildStorage,
+): Promise<RepairResult> {
   for (let attempt = 1; ; attempt += 1) {
     const killCreditEpoch = await readKillCreditEpoch(seasonId);
-    const computed = await computeSeasonEvolutionState(seasonId);
+    const computed = await computeSeasonEvolutionStateWithStorage(seasonId, storage);
     try {
-      return await applyComputedEvolutionState(seasonId, computed, killCreditEpoch);
+      return await applyComputedEvolutionStateWithStorage(seasonId, computed, killCreditEpoch, storage);
     } catch (err) {
       if (!(err instanceof StaleKillCreditError) || attempt >= REBUILD_ATTEMPTS) throw err;
       console.warn(

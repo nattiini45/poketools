@@ -181,6 +181,7 @@ export default {
   aggregate_claim_failed: 'Failed to claim aggregate jobs',
   // process-aggregates: the reclaim RPC or a queue write failed during the run
   aggregate_queue_failed: 'Failed to process aggregate jobs',
+  aggregate_claim_and_queue_failed: 'Aggregate jobs failed during both claiming and processing',
   // process-aggregates: the queue health probe failed after the run
   aggregate_health_failed: 'Failed to check aggregate job health',
   // auto-confirm: some matches could not be confirmed or finalized (details in the server log)

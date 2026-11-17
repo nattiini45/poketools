@@ -49,10 +49,15 @@ export interface StageEndCheck {
  * the open matches of every round of the phase (see `StageEndCheck.openInRound`), and counts nothing when it is not;
  * `ctx` must have been loaded after the caller's own `match_completed` event fired, or that match counts as open.
  */
-export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundId?: string): Promise<StageEndCheck | null> {
+export interface StageEndReadPort {
+  rounds(id: string): Promise<{ id: string; round_number: number; status: string }[]>;
+  matches(id: string): Promise<{ id: string; round_id: string; status: string; winner_id: string | null; player_1_id: string; player_2_id: string }[]>;
+}
+
+export async function checkStageEnd(ctx: KitContext, phase: KitPhaseInfo, roundId?: string, port?: StageEndReadPort): Promise<StageEndCheck | null> {
   const endWhen = phase.stage.end_when;
   if (endWhen === undefined) return null;
-  const [rounds, matches] = await Promise.all([getRoundsByTournament(phase.id), getMatchesByTournament(phase.id)]);
+  const [rounds, matches] = await Promise.all([port ? port.rounds(phase.id) : getRoundsByTournament(phase.id), port ? port.matches(phase.id) : getMatchesByTournament(phase.id)]);
   const facts = stageFactsOf(rounds, matches, phase.members.length);
   const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
   const fired = new Set(ctx.state.firedEventKeys);

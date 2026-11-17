@@ -130,6 +130,7 @@ export default defineDe<typeof en>()({
     'Statistik-Aufträge hängen fest ({stranded} nicht mehr abholbar, {stale} bleiben in Bearbeitung).',
   aggregate_claim_failed: 'Statistik-Aufträge konnten nicht abgeholt werden.',
   aggregate_queue_failed: 'Statistik-Aufträge konnten nicht verarbeitet werden.',
+  aggregate_claim_and_queue_failed: 'Statistik-Aufträge konnten teils nicht abgeholt und teils nicht verarbeitet werden.',
   aggregate_health_failed: 'Der Zustand der Statistik-Aufträge konnte nicht geprüft werden.',
   auto_confirm_partial_failure: {
     one: 'Die automatische Bestätigung ist bei {count} Spiel fehlgeschlagen.',

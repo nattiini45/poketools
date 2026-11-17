@@ -38,7 +38,7 @@ interface ImportResponse {
 
 type ExportResource = 'players' | 'tournaments' | 'matches' | 'seasons' | 'games' | 'battle_stats';
 type ExportFormat = 'csv' | 'json';
-type RebuildScope = AggregateScope;
+type RebuildScope = Exclude<AggregateScope, 'phase'>;
 type ReconcileScope = 'season' | 'all';
 
 interface DrainAggregateResponse {

@@ -102,43 +102,69 @@ export interface SettledRatingRebuild {
  * the trash. A failure stops the run and is thrown unchanged. Whatever happened, the rating reads of the requested
  * players and of every player rewritten so far are expired: a failed run may already have rewritten some of them.
  */
-export async function rebuildRatingsSettled(playerIds: readonly string[]): Promise<SettledRatingRebuild> {
-  if (playerIds.length === 0) return { rebuiltPlayerIds: [], passes: 0, settled: true, unratedMatches: 0 };
-
-  const rebuilt = new Set<string>();
-  try {
-    const first = await rebuildRatingsForPlayers([...playerIds]);
-    for (const result of first) rebuilt.add(result.playerId);
-    const unratedMatches = unratedMatchCount(first);
-    let passes = 1;
-    let changed = first.some((result) => result.changed);
-
-    // Each further pass replays every player rewritten so far (gap-healing
-    // additions of any pass included) against the states the last pass wrote.
-    // A run that reaches the fixed point on its MAX_PASSES-th pass still gets
-    // the pass that confirms it.
-    while (changed && passes <= MAX_PASSES) {
-      const pass = await rebuildRatingsForPlayers([...rebuilt]);
-      for (const result of pass) rebuilt.add(result.playerId);
-      passes += 1;
-      changed = pass.some((result) => result.changed);
-    }
-    return { rebuiltPlayerIds: [...rebuilt], passes, settled: !changed, unratedMatches };
-  } finally {
-    expireRatingReads([...new Set([...playerIds, ...rebuilt])]);
-  }
+export interface TestLeagueRatingRebuildStorage {
+  listSeasonCompletedMatchPlayerIds: typeof listSeasonCompletedMatchPlayerIds;
+  rebuildRatingsForPlayers: typeof rebuildRatingsForPlayers;
+  recomputeStreaks: typeof recomputeStreaks;
+  expireRatingReads: typeof expireRatingReads;
 }
 
-export async function rebuildRatingsAfterTestFlagChange(
-  seasonId: string,
-  isTestSeason: boolean
-): Promise<TestFlagRatingRebuildSummary> {
-  const playerIds = await listSeasonCompletedMatchPlayerIds(seasonId);
-  const rebuilt = await rebuildRatingsSettled(playerIds);
-  // Streaks follow the same current-flag rule as ratings (`matchCountsForRatings`), so the stored rows of the
-  // league's players are stale until replayed. Each rebuild reads only the player's history, so no pass loop is needed.
-  for (const playerId of playerIds) {
-    await recomputeStreaks(playerId);
+export function createTestLeagueRatingRebuilder(storage: TestLeagueRatingRebuildStorage) {
+  async function rebuildRatingsSettled(playerIds: readonly string[]): Promise<SettledRatingRebuild> {
+    if (playerIds.length === 0) return { rebuiltPlayerIds: [], passes: 0, settled: true, unratedMatches: 0 };
+
+    const rebuilt = new Set<string>();
+    try {
+      const first = await storage.rebuildRatingsForPlayers([...playerIds]);
+      for (const result of first) rebuilt.add(result.playerId);
+      const unratedMatches = unratedMatchCount(first);
+      let passes = 1;
+      let changed = first.some((result) => result.changed);
+
+      // Each further pass replays every player rewritten so far (gap-healing
+      // additions of any pass included) against the states the last pass wrote.
+      // A run that reaches the fixed point on its MAX_PASSES-th pass still gets
+      // the pass that confirms it.
+      while (changed && passes <= MAX_PASSES) {
+        const pass = await storage.rebuildRatingsForPlayers([...rebuilt]);
+        for (const result of pass) rebuilt.add(result.playerId);
+        passes += 1;
+        changed = pass.some((result) => result.changed);
+      }
+      return { rebuiltPlayerIds: [...rebuilt], passes, settled: !changed, unratedMatches };
+    } finally {
+      storage.expireRatingReads([...new Set([...playerIds, ...rebuilt])]);
+    }
   }
-  return { seasonId, isTestSeason, playerIds, ...rebuilt, streaksRebuilt: playerIds.length };
+
+  async function rebuildRatingsAfterTestFlagChange(
+    seasonId: string,
+    isTestSeason: boolean
+  ): Promise<TestFlagRatingRebuildSummary> {
+    const playerIds = await storage.listSeasonCompletedMatchPlayerIds(seasonId);
+    const rebuilt = await rebuildRatingsSettled(playerIds);
+    // Streaks follow the same current-flag rule as ratings (`matchCountsForRatings`), so the stored rows of the
+    // league's players are stale until replayed. Each rebuild reads only the player's history, so no pass loop is needed.
+    for (const playerId of playerIds) {
+      await storage.recomputeStreaks(playerId);
+    }
+    return { seasonId, isTestSeason, playerIds, ...rebuilt, streaksRebuilt: playerIds.length };
+  }
+
+  return { rebuildRatingsSettled, rebuildRatingsAfterTestFlagChange };
+}
+
+const legacyRebuilder = createTestLeagueRatingRebuilder({
+  listSeasonCompletedMatchPlayerIds: (id) => listSeasonCompletedMatchPlayerIds(id),
+  rebuildRatingsForPlayers: (ids) => rebuildRatingsForPlayers(ids),
+  recomputeStreaks: (id) => recomputeStreaks(id),
+  expireRatingReads: (ids) => expireRatingReads(ids),
+});
+
+export async function rebuildRatingsSettled(playerIds: readonly string[]): Promise<SettledRatingRebuild> {
+  return legacyRebuilder.rebuildRatingsSettled(playerIds);
+}
+
+export async function rebuildRatingsAfterTestFlagChange(seasonId: string, isTestSeason: boolean): Promise<TestFlagRatingRebuildSummary> {
+  return legacyRebuilder.rebuildRatingsAfterTestFlagChange(seasonId, isTestSeason);
 }

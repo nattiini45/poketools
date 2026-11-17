@@ -87,166 +87,6 @@ export interface EntityDeleteRebuildSummary {
   evolutionRepair: { trackersUpdated: number; eventsRewritten: number; pointsAwarded: number } | null;
 }
 
-async function rebuildPlayers(playerIds: string[]): Promise<Pick<EntityDeleteRebuildSummary, 'playerIds' | 'ratingsRebuilt' | 'streaksRebuilt'>> {
-  // rebuildRatingsForPlayers is strictly sequential (mutual opponents' frozen
-  // rating_history rows are read while the player's own rows are rewritten).
-  // It may add players to heal history gaps; ratingsRebuilt counts them all.
-  let ratingsRebuilt = 0;
-  if (playerIds.length > 0) {
-    ratingsRebuilt = await step('ratings', async () => (await rebuildRatingsForPlayers(playerIds)).length);
-  }
-  await step('streaks', async () => {
-    for (const playerId of playerIds) {
-      await recomputeStreaks(playerId);
-    }
-  });
-  return { playerIds, ratingsRebuilt, streaksRebuilt: playerIds.length };
-}
-
-async function maybeRepairEvolution(seasonId: string): Promise<EntityDeleteRebuildSummary['evolutionRepair']> {
-  return step('evolution', async () => {
-    const season = await getSeasonById(seasonId);
-    if (!season || !isEvolutionPointBuy(season.format_type)) return null;
-    const repair = await repairSeasonEvolution(seasonId);
-    return {
-      trackersUpdated: repair.trackersUpdated,
-      eventsRewritten: repair.eventsRewritten,
-      pointsAwarded: repair.evolutionPoints.points_awarded,
-    };
-  });
-}
-
-/**
- * Rebuild derived data after a tournament hard-delete. Call AFTER the delete
- * committed; `playerIds` must be the tournament's participants captured
- * BEFORE the delete (the cascade removes the participant rows).
- */
-export async function rebuildAfterTournamentDelete(input: {
-  tournamentId: string;
-  /** Parent season id, null for standalone tournaments. */
-  seasonId: string | null;
-  playerIds: string[];
-}): Promise<EntityDeleteRebuildSummary> {
-  const { tournamentId, seasonId, playerIds } = input;
-
-  const { tournamentScopeCleared, leagueScope, allTime } = await step('aggregates', async () => {
-    // 1. The tournament's own aggregate scope is now orphaned — clear it.
-    const tournamentScopeCleared = await clearAggregatesForScope('tournament', tournamentId);
-
-    // 2. League scope: rebuild when the season survives (its remaining
-    //    tournaments still feed it); clear when the season is gone too
-    //    (concurrent delete) so no orphan rows remain.
-    let leagueScope: LeagueScopeOutcome | null = null;
-    if (seasonId) {
-      const season = await getSeasonById(seasonId);
-      if (season) {
-        const rebuilt = await rebuildAggregatesForScope('league', seasonId);
-        leagueScope = {
-          seasonId,
-          mode: 'rebuilt',
-          gamesProcessed: rebuilt.gamesProcessed,
-          aggregatesDeleted: rebuilt.aggregatesDeleted,
-          playerAggregatesDeleted: rebuilt.playerAggregatesDeleted,
-        };
-      } else {
-        const cleared = await clearAggregatesForScope('league', seasonId);
-        leagueScope = {
-          seasonId,
-          mode: 'cleared',
-          aggregatesDeleted: cleared.aggregatesDeleted,
-          playerAggregatesDeleted: cleared.playerAggregatesDeleted,
-        };
-      }
-    }
-
-    // 3. all_time always spans every scope, so it is rebuilt globally (the
-    //    rebuild skips games frozen with exclude_all_time).
-    const allTime = await rebuildAggregatesForScope('all_time', null);
-    return { tournamentScopeCleared, leagueScope, allTime };
-  });
-
-  // 4. Ratings + streaks for the deleted tournament's participants.
-  const players = await rebuildPlayers(playerIds);
-
-  // 5. EPB evolution state of the surviving season (match-derived kills and
-  //    stage transitions of the deleted matches must not survive).
-  const evolutionRepair = seasonId ? await maybeRepairEvolution(seasonId) : null;
-
-  return {
-    scope: 'tournament',
-    ...players,
-    tournamentScopeCleared,
-    leagueScope,
-    allTime: {
-      gamesProcessed: allTime.gamesProcessed,
-      aggregatesDeleted: allTime.aggregatesDeleted,
-      playerAggregatesDeleted: allTime.playerAggregatesDeleted,
-    },
-    evolutionRepair,
-  };
-}
-
-/**
- * Rebuild derived data after a league was deleted (moved to the trash). Call
- * AFTER the delete committed; `playerIds` and `phaseIds` come from the delete
- * itself (the participants and phases the league had). The database already
- * removed the league's and the phases' aggregate scope rows with the league;
- * clearing them again here is idempotent and keeps a re-run (the pending
- * rebuild) self-contained. Evolution state is gone with the league and needs
- * no repair.
- */
-export async function rebuildAfterSeasonDelete(input: {
-  seasonId: string;
-  playerIds: string[];
-  /** The league's phases (tournaments): each phase's own aggregate scope is cleared. */
-  phaseIds: string[];
-}): Promise<EntityDeleteRebuildSummary> {
-  const { seasonId, playerIds, phaseIds } = input;
-
-  const { phaseScopes, cleared, allTime } = await step('aggregates', async () => {
-    // 1. The phases' tournament scopes and the league scope are orphaned —
-    //    clear them (no rebuild: nothing feeds the scopes anymore).
-    const phaseScopes: ScopeClear = { aggregatesDeleted: 0, playerAggregatesDeleted: 0 };
-    for (const phaseId of phaseIds) {
-      const phaseCleared = await clearAggregatesForScope('tournament', phaseId);
-      phaseScopes.aggregatesDeleted += phaseCleared.aggregatesDeleted;
-      phaseScopes.playerAggregatesDeleted += phaseCleared.playerAggregatesDeleted;
-    }
-    const cleared = await clearAggregatesForScope('league', seasonId);
-
-    // 2. all_time spans every scope — rebuild globally.
-    const allTime = await rebuildAggregatesForScope('all_time', null);
-    return { phaseScopes, cleared, allTime };
-  });
-
-  // 3. Ratings + streaks for the deleted season's participants.
-  const players = await rebuildPlayers(playerIds);
-
-  return {
-    scope: 'season',
-    ...players,
-    tournamentScopeCleared: phaseIds.length > 0 ? phaseScopes : null,
-    leagueScope: {
-      seasonId,
-      mode: 'cleared',
-      aggregatesDeleted: cleared.aggregatesDeleted,
-      playerAggregatesDeleted: cleared.playerAggregatesDeleted,
-    },
-    allTime: {
-      gamesProcessed: allTime.gamesProcessed,
-      aggregatesDeleted: allTime.aggregatesDeleted,
-      playerAggregatesDeleted: allTime.playerAggregatesDeleted,
-    },
-    evolutionRepair: null,
-  };
-}
-
-/** Wall-clock budget of the aggregate queue drain inside the restore rebuild; the cron finishes what remains. */
-export const RESTORE_AGGREGATE_DRAIN_BUDGET_MS = 90_000;
-
-/** Jobs per drain round of the restore rebuild. */
-const RESTORE_AGGREGATE_BATCH_SIZE = 50;
-
 export interface EntityRestoreRebuildSummary {
   scope: 'season_restore';
   playerIds: string[];
@@ -263,59 +103,268 @@ export interface EntityRestoreRebuildSummary {
   evolutionRepair: { trackersUpdated: number; eventsRewritten: number; pointsAwarded: number } | null;
 }
 
-/**
- * Rebuild derived data after a league was restored from the trash. Call AFTER
- * the restore committed; `playerIds` come from the restore itself. Each step is
- * idempotent, so the pending rebuild can run it again after a failure:
- *   1. aggregates: re-queue the league's increment jobs that failed for good
- *      (a run before this one), drain the aggregate queue (the restore queued
- *      one increment job per game with stats) and count the league's jobs that
- *      failed for good again. League, tournament and all_time scopes are
- *      counted by the queue's own atomic apply, never rebuilt globally here.
- *   2. ratings: the settle loop of the test-league rebuild over the players.
- *   3. streaks: `recomputeStreaks` per player (the restored matches' streak
- *      pointers were not re-linked).
- *   4. evolution: the EPB repair of the restored season.
- */
-export async function rebuildAfterSeasonRestore(input: {
-  seasonId: string;
-  playerIds: string[];
-}): Promise<EntityRestoreRebuildSummary> {
-  const { seasonId, playerIds } = input;
+export const RESTORE_AGGREGATE_DRAIN_BUDGET_MS = 90_000;
 
-  const { requeued, drained, failedForGood } = await step('aggregates', async () => {
-    const requeued = await requeueFailedIncrementJobsForSeason(seasonId);
-    const drained = await drainPendingAggregateJobs({
-      batchSize: RESTORE_AGGREGATE_BATCH_SIZE,
-      deadline: Date.now() + RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
-    });
-    return { requeued, drained, failedForGood: await countFailedIncrementJobsForSeason(seasonId) };
-  });
+export interface EntityRebuildStorage {
+  clearAggregatesForScope: typeof clearAggregatesForScope;
+  getSeasonById: typeof getSeasonById;
+  drainPendingAggregateJobs: typeof drainPendingAggregateJobs;
+  rebuildAggregatesForScope: typeof rebuildAggregatesForScope;
+  countFailedIncrementJobsForSeason: typeof countFailedIncrementJobsForSeason;
+  requeueFailedIncrementJobsForSeason: typeof requeueFailedIncrementJobsForSeason;
+  rebuildRatingsForPlayers: typeof rebuildRatingsForPlayers;
+  rebuildRatingsSettled: typeof rebuildRatingsSettled;
+  recomputeStreaks: typeof recomputeStreaks;
+  repairSeasonEvolution: typeof repairSeasonEvolution;
+  clearPhaseAggregates(id: string): ReturnType<typeof clearAggregatesForScope>;
+}
 
-  const ratings = await step('ratings', () => rebuildRatingsSettled(playerIds));
-
-  await step('streaks', async () => {
-    for (const playerId of playerIds) {
-      await recomputeStreaks(playerId);
+export function createEntityDeleteRebuilder(storage: EntityRebuildStorage) {
+  async function rebuildPlayers(playerIds: string[]): Promise<Pick<EntityDeleteRebuildSummary, 'playerIds' | 'ratingsRebuilt' | 'streaksRebuilt'>> {
+    // rebuildRatingsForPlayers is strictly sequential (mutual opponents' frozen
+    // rating_history rows are read while the player's own rows are rewritten).
+    // It may add players to heal history gaps; ratingsRebuilt counts them all.
+    let ratingsRebuilt = 0;
+    if (playerIds.length > 0) {
+      ratingsRebuilt = await step('ratings', async () => (await storage.rebuildRatingsForPlayers(playerIds)).length);
     }
-  });
+    await step('streaks', async () => {
+      for (const playerId of playerIds) {
+        await storage.recomputeStreaks(playerId);
+      }
+    });
+    return { playerIds, ratingsRebuilt, streaksRebuilt: playerIds.length };
+  }
 
-  const evolutionRepair = await maybeRepairEvolution(seasonId);
+  async function maybeRepairEvolution(seasonId: string): Promise<EntityDeleteRebuildSummary['evolutionRepair']> {
+    return step('evolution', async () => {
+      const season = await storage.getSeasonById(seasonId);
+      if (!season || !isEvolutionPointBuy(season.format_type)) return null;
+      const repair = await storage.repairSeasonEvolution(seasonId);
+      return {
+        trackersUpdated: repair.trackersUpdated,
+        eventsRewritten: repair.eventsRewritten,
+        pointsAwarded: repair.evolutionPoints.points_awarded,
+      };
+    });
+  }
 
+  /**
+   * Rebuild derived data after a tournament hard-delete. Call AFTER the delete
+   * committed; `playerIds` must be the tournament's participants captured
+   * BEFORE the delete (the cascade removes the participant rows).
+   */
+  async function rebuildAfterTournamentDelete(input: {
+    tournamentId: string;
+    /** Parent season id, null for standalone tournaments. */
+    seasonId: string | null;
+    playerIds: string[];
+  }): Promise<EntityDeleteRebuildSummary> {
+    const { tournamentId, seasonId, playerIds } = input;
+
+    const { tournamentScopeCleared, leagueScope, allTime } = await step('aggregates', async () => {
+      // 1. The tournament's own aggregate scope is now orphaned — clear it.
+      const tournamentScopeCleared = await storage.clearAggregatesForScope('tournament', tournamentId);
+
+      // 2. League scope: rebuild when the season survives (its remaining
+      //    tournaments still feed it); clear when the season is gone too
+      //    (concurrent delete) so no orphan rows remain.
+      let leagueScope: LeagueScopeOutcome | null = null;
+      if (seasonId) {
+        const season = await storage.getSeasonById(seasonId);
+        if (season) {
+          const rebuilt = await storage.rebuildAggregatesForScope('league', seasonId);
+          leagueScope = {
+            seasonId,
+            mode: 'rebuilt',
+            gamesProcessed: rebuilt.gamesProcessed,
+            aggregatesDeleted: rebuilt.aggregatesDeleted,
+            playerAggregatesDeleted: rebuilt.playerAggregatesDeleted,
+          };
+        } else {
+          const cleared = await storage.clearAggregatesForScope('league', seasonId);
+          leagueScope = {
+            seasonId,
+            mode: 'cleared',
+            aggregatesDeleted: cleared.aggregatesDeleted,
+            playerAggregatesDeleted: cleared.playerAggregatesDeleted,
+          };
+        }
+      }
+
+      // 3. all_time always spans every scope, so it is rebuilt globally (the
+      //    rebuild skips games frozen with exclude_all_time).
+      const allTime = await storage.rebuildAggregatesForScope('all_time', null);
+      return { tournamentScopeCleared, leagueScope, allTime };
+    });
+
+    // 4. Ratings + streaks for the deleted tournament's participants.
+    const players = await rebuildPlayers(playerIds);
+
+    // 5. EPB evolution state of the surviving season (match-derived kills and
+    //    stage transitions of the deleted matches must not survive).
+    const evolutionRepair = seasonId ? await maybeRepairEvolution(seasonId) : null;
+
+    return {
+      scope: 'tournament',
+      ...players,
+      tournamentScopeCleared,
+      leagueScope,
+      allTime: {
+        gamesProcessed: allTime.gamesProcessed,
+        aggregatesDeleted: allTime.aggregatesDeleted,
+        playerAggregatesDeleted: allTime.playerAggregatesDeleted,
+      },
+      evolutionRepair,
+    };
+  }
+
+  /**
+   * Rebuild derived data after a league was deleted (moved to the trash). Call
+   * AFTER the delete committed; `playerIds` and `phaseIds` come from the delete
+   * itself (the participants and phases the league had). The database already
+   * removed the league's and the phases' aggregate scope rows with the league;
+   * clearing them again here is idempotent and keeps a re-run (the pending
+   * rebuild) self-contained. Evolution state is gone with the league and needs
+   * no repair.
+   */
+  async function rebuildAfterSeasonDelete(input: {
+    seasonId: string;
+    playerIds: string[];
+    /** The league's phases (tournaments): each phase's own aggregate scope is cleared. */
+    phaseIds: string[];
+  }): Promise<EntityDeleteRebuildSummary> {
+    const { seasonId, playerIds, phaseIds } = input;
+
+    const { phaseScopes, cleared, allTime } = await step('aggregates', async () => {
+      // 1. The phases' tournament scopes and the league scope are orphaned —
+      //    clear them (no rebuild: nothing feeds the scopes anymore).
+      const phaseScopes: ScopeClear = { aggregatesDeleted: 0, playerAggregatesDeleted: 0 };
+      for (const phaseId of phaseIds) {
+        const phaseCleared = await storage.clearPhaseAggregates(phaseId);
+        phaseScopes.aggregatesDeleted += phaseCleared.aggregatesDeleted;
+        phaseScopes.playerAggregatesDeleted += phaseCleared.playerAggregatesDeleted;
+      }
+      const cleared = await storage.clearAggregatesForScope('league', seasonId);
+
+      // 2. all_time spans every scope — rebuild globally.
+      const allTime = await storage.rebuildAggregatesForScope('all_time', null);
+      return { phaseScopes, cleared, allTime };
+    });
+
+    // 3. Ratings + streaks for the deleted season's participants.
+    const players = await rebuildPlayers(playerIds);
+
+    return {
+      scope: 'season',
+      ...players,
+      tournamentScopeCleared: phaseIds.length > 0 ? phaseScopes : null,
+      leagueScope: {
+        seasonId,
+        mode: 'cleared',
+        aggregatesDeleted: cleared.aggregatesDeleted,
+        playerAggregatesDeleted: cleared.playerAggregatesDeleted,
+      },
+      allTime: {
+        gamesProcessed: allTime.gamesProcessed,
+        aggregatesDeleted: allTime.aggregatesDeleted,
+        playerAggregatesDeleted: allTime.playerAggregatesDeleted,
+      },
+      evolutionRepair: null,
+    };
+  }
+
+  /** Wall-clock budget of the aggregate queue drain inside the restore rebuild; the cron finishes what remains. */
+
+
+  /** Jobs per drain round of the restore rebuild. */
+  const RESTORE_AGGREGATE_BATCH_SIZE = 50;
+
+
+
+  /**
+   * Rebuild derived data after a league was restored from the trash. Call AFTER
+   * the restore committed; `playerIds` come from the restore itself. Each step is
+   * idempotent, so the pending rebuild can run it again after a failure:
+   *   1. aggregates: re-queue the league's increment jobs that failed for good
+   *      (a run before this one), drain the aggregate queue (the restore queued
+   *      one increment job per game with stats) and count the league's jobs that
+   *      failed for good again. League, tournament and all_time scopes are
+   *      counted by the queue's own atomic apply, never rebuilt globally here.
+   *   2. ratings: the settle loop of the test-league rebuild over the players.
+   *   3. streaks: `recomputeStreaks` per player (the restored matches' streak
+   *      pointers were not re-linked).
+   *   4. evolution: the EPB repair of the restored season.
+   */
+  async function rebuildAfterSeasonRestore(input: {
+    seasonId: string;
+    playerIds: string[];
+  }): Promise<EntityRestoreRebuildSummary> {
+    const { seasonId, playerIds } = input;
+
+    const { requeued, drained, failedForGood } = await step('aggregates', async () => {
+      const requeued = await storage.requeueFailedIncrementJobsForSeason(seasonId);
+      const drained = await storage.drainPendingAggregateJobs({
+        batchSize: RESTORE_AGGREGATE_BATCH_SIZE,
+        deadline: Date.now() + RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
+      });
+      return { requeued, drained, failedForGood: await storage.countFailedIncrementJobsForSeason(seasonId) };
+    });
+
+    const ratings = await step('ratings', () => storage.rebuildRatingsSettled(playerIds));
+
+    await step('streaks', async () => {
+      for (const playerId of playerIds) {
+        await storage.recomputeStreaks(playerId);
+      }
+    });
+
+    const evolutionRepair = await maybeRepairEvolution(seasonId);
+
+    return {
+      scope: 'season_restore',
+      playerIds,
+      aggregateJobs: {
+        requeued,
+        processed: drained.processed,
+        failed: drained.failed,
+        remaining: drained.statsAfter.pending + drained.statsAfter.processing,
+        failedForGood,
+      },
+      ratingsRebuilt: ratings.rebuiltPlayerIds.length,
+      ratingPasses: ratings.passes,
+      ratingsSettled: ratings.settled,
+      streaksRebuilt: playerIds.length,
+      evolutionRepair,
+    };
+  }
+  return { rebuildAfterTournamentDelete, rebuildAfterSeasonDelete, rebuildAfterSeasonRestore };
+}
+
+function legacyEntityRebuildStorage(): EntityRebuildStorage {
   return {
-    scope: 'season_restore',
-    playerIds,
-    aggregateJobs: {
-      requeued,
-      processed: drained.processed,
-      failed: drained.failed,
-      remaining: drained.statsAfter.pending + drained.statsAfter.processing,
-      failedForGood,
-    },
-    ratingsRebuilt: ratings.rebuiltPlayerIds.length,
-    ratingPasses: ratings.passes,
-    ratingsSettled: ratings.settled,
-    streaksRebuilt: playerIds.length,
-    evolutionRepair,
+    clearAggregatesForScope: (...args) => clearAggregatesForScope(...args),
+    getSeasonById: (...args) => getSeasonById(...args),
+    drainPendingAggregateJobs: (...args) => drainPendingAggregateJobs(...args),
+    rebuildAggregatesForScope: (...args) => rebuildAggregatesForScope(...args),
+    countFailedIncrementJobsForSeason: (...args) => countFailedIncrementJobsForSeason(...args),
+    requeueFailedIncrementJobsForSeason: (...args) => requeueFailedIncrementJobsForSeason(...args),
+    rebuildRatingsForPlayers: (...args) => rebuildRatingsForPlayers(...args),
+    rebuildRatingsSettled: (...args) => rebuildRatingsSettled(...args),
+    recomputeStreaks: (...args) => recomputeStreaks(...args),
+    repairSeasonEvolution: (...args) => repairSeasonEvolution(...args),
+    clearPhaseAggregates: (id) => clearAggregatesForScope('tournament', id),
   };
+}
+
+export async function rebuildAfterTournamentDelete(input: { tournamentId: string; seasonId: string | null; playerIds: string[] }): Promise<EntityDeleteRebuildSummary> {
+  return createEntityDeleteRebuilder(legacyEntityRebuildStorage()).rebuildAfterTournamentDelete(input);
+}
+
+export async function rebuildAfterSeasonDelete(input: { seasonId: string; playerIds: string[]; phaseIds: string[] }): Promise<EntityDeleteRebuildSummary> {
+  return createEntityDeleteRebuilder(legacyEntityRebuildStorage()).rebuildAfterSeasonDelete(input);
+}
+
+export async function rebuildAfterSeasonRestore(input: { seasonId: string; playerIds: string[] }): Promise<EntityRestoreRebuildSummary> {
+  return createEntityDeleteRebuilder(legacyEntityRebuildStorage()).rebuildAfterSeasonRestore(input);
 }

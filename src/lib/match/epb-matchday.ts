@@ -35,6 +35,7 @@ import type {
   EvolutionTracker,
   EvoProgressEntry,
 } from '@/types/evolution';
+import type { PhaseMatchWithPlayers } from '@/types/league-phase-match';
 import type { MatchWithPlayers } from '@/types/match';
 
 export interface EpbMatchdayInput {
@@ -42,6 +43,24 @@ export interface EpbMatchdayInput {
   seasonId: string;
   matchday: number;
   battleStats: BattleStat[];
+}
+
+export interface EpbMatchdayStorage {
+  getRegisteredSpeciesByMatch: typeof getRegisteredSpeciesByMatch;
+  insertMatchSnapshots: typeof insertMatchSnapshots;
+  deleteMatchSnapshots: typeof deleteMatchSnapshots;
+}
+
+const legacyMatchdayStorage: EpbMatchdayStorage = {
+  getRegisteredSpeciesByMatch, insertMatchSnapshots, deleteMatchSnapshots,
+};
+
+export type OwnedEpbMatchdayInput = Omit<EpbMatchdayInput, 'match'> & {
+  match: MatchWithPlayers | PhaseMatchWithPlayers;
+};
+
+export function createEpbMatchdayRunner(storage: EpbMatchdayStorage) {
+  return (input: OwnedEpbMatchdayInput): Promise<void> => runEpbMatchdayHooksWithStorage(input, storage);
 }
 
 /** Per-source progress gained by one tracker this matchday. */
@@ -196,6 +215,7 @@ async function writeMatchSnapshots(
   battleStats: BattleStat[],
   evolutionEvents: EvolutionEventRecord[],
   registeredByPlayer: ReadonlyMap<string, readonly string[]>,
+  storage: EpbMatchdayStorage,
 ): Promise<void> {
   const [trackers, lines, logEntries] = await Promise.all([
     getSeasonTrackers(seasonId),
@@ -215,7 +235,7 @@ async function writeMatchSnapshots(
     registeredByPlayer,
   );
 
-  await insertMatchSnapshots(matchId, snapshots);
+  await storage.insertMatchSnapshots(matchId, snapshots);
 }
 
 function trackerSnapshotFields(tracker: EvolutionTracker) {
@@ -247,14 +267,15 @@ async function rollbackMatchdayWrites(
   baseline: EvolutionTracker[],
   baselineEventIds: ReadonlySet<string>,
   playerIds: string[],
-  runStartedAt: string
+  runStartedAt: string,
+  storage: EpbMatchdayStorage,
 ): Promise<void> {
   const playerIdSet = new Set(playerIds);
   const playerTrackers = baseline.filter((t) => playerIdSet.has(t.player_id));
   const trackerIds = playerTrackers.map((t) => t.id);
 
   try {
-    await deleteMatchSnapshots(matchId);
+    await storage.deleteMatchSnapshots(matchId);
   } catch (err) {
     console.error('EPB matchday rollback: failed to delete match snapshots', err);
   }
@@ -315,6 +336,13 @@ async function rollbackMatchdayWrites(
  * log without leaving half-applied bookkeeping.
  */
 export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void> {
+  return runEpbMatchdayHooksWithStorage(input, legacyMatchdayStorage);
+}
+
+async function runEpbMatchdayHooksWithStorage(
+  input: OwnedEpbMatchdayInput,
+  storage: EpbMatchdayStorage,
+): Promise<void> {
   const { match, seasonId, matchday, battleStats } = input;
   const playerIds = [match.player_1_id, match.player_2_id];
 
@@ -323,7 +351,7 @@ export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void
   // here are the rollback's baseline (it deletes only events this run added).
   const [baseline, registeredByPlayer, baselineEvents] = await Promise.all([
     getSeasonTrackers(seasonId),
-    getRegisteredSpeciesByMatch(match.id),
+    storage.getRegisteredSpeciesByMatch(match.id),
     getSeasonEvolutionEvents(seasonId, matchday),
   ]);
   const baselineEventIds = new Set(baselineEvents.map((e) => e.id));
@@ -379,6 +407,7 @@ export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void
       battleStats,
       events.filter((e) => !e.is_devolution),
       registeredByPlayer,
+      storage,
     );
   } catch (err) {
     console.error('EPB matchday hooks failed; rolling back own writes', err);
@@ -389,7 +418,8 @@ export async function runEpbMatchdayHooks(input: EpbMatchdayInput): Promise<void
       baseline,
       baselineEventIds,
       playerIds,
-      runStartedAt
+      runStartedAt,
+      storage,
     );
     throw err;
   }

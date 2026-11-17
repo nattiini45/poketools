@@ -90,15 +90,27 @@ export interface RoundEndCandidate {
  * `stageOfPhase` maps a phase id to its stage key; rounds of other tournaments are ignored. Sorted by round number, then by
  * stage, so the earliest round is repaired first. Pure.
  */
+export function unfiredRoundEnds<R extends Omit<RoundEndCandidate, 'tournament_id'>>(
+  stageOfPhase: ReadonlyMap<string, string>,
+  rounds: readonly R[],
+  firedKeys: readonly string[],
+  ownerId: (round: R) => string,
+): R[];
 export function unfiredRoundEnds(
   stageOfPhase: ReadonlyMap<string, string>,
   rounds: readonly RoundEndCandidate[],
   firedKeys: readonly string[],
-): RoundEndCandidate[] {
+): RoundEndCandidate[];
+export function unfiredRoundEnds<R extends Omit<RoundEndCandidate, 'tournament_id'>>(
+  stageOfPhase: ReadonlyMap<string, string>,
+  rounds: readonly R[],
+  firedKeys: readonly string[],
+  ownerId?: (round: R) => string,
+): R[] {
   const fired = new Set(firedKeys);
-  const groups = new Map<string, { stage: string; rounds: RoundEndCandidate[] }>();
+  const groups = new Map<string, { stage: string; rounds: R[] }>();
   for (const round of rounds) {
-    const stage = stageOfPhase.get(round.tournament_id);
+    const stage = stageOfPhase.get(ownerId ? ownerId(round) : (round as R & { tournament_id: string }).tournament_id);
     if (stage === undefined) continue;
     const key = eventKey({ event: 'round_end', stage, round: round.round_number });
     const group = groups.get(key) ?? { stage, rounds: [] };

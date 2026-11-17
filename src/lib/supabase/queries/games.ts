@@ -172,7 +172,7 @@ export async function createGame(input: GameCreateInput): Promise<Game> {
       );
       throw new GameNumberConflictError();
     }
-    if (isUniqueViolationOf(error, GAMES_REPLAY_HASH_KEY)) {
+    if (isUniqueViolationOf(error, GAMES_REPLAY_HASH_KEY) || isUniqueViolationOf(error, 'games_global_replay_hash_key')) {
       console.error(
         `[createGame] replay ${input.replay_url ?? ''} of match ${input.match_id} is already bound to a game ` +
           `(concurrent or repeated submission of the same battle)`,

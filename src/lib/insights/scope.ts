@@ -73,7 +73,7 @@ export function scopeToQueryString(scope: InsightsScope): string {
 
 export function scopeAggregateKey(
   scope: Exclude<InsightsScope, { type: 'archive' }>,
-): { scopeType: AggregateScope; scopeId: string | null } {
+): { scopeType: Exclude<AggregateScope, 'phase'>; scopeId: string | null } {
   if (scope.type === 'league') {
     return { scopeType: 'league', scopeId: scope.id };
   }

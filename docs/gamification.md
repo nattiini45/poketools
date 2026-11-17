@@ -72,6 +72,12 @@ import { recomputeStreaks } from '@/lib/gamification/streaks';
 const changes = await recomputeStreaks(playerId); // StreakChanges (before/after), for announcements
 ```
 
+## Dormant phase-storage hooks
+
+`recomputeStreaksWithStorage(playerId, storage)` shares the existing replay/retry algorithm. Activated callers lazily import `mixedStreakStorage` from `src/lib/league-phase/rating-streak-streams.ts`; the default `recomputeStreaks` keeps its legacy reads and RPC. The mixed adapter reads both completed streams and their matching stat stores, never both copies of a preserved UUID. RPC `streaks_replace_player_streams` verifies both the completed set and the countable set (including current test-league flags), replaces the shared projection atomically and sets only the last counted source's pointer (`last_match_id` or `last_phase_match_id`).
+
+Signatures already consume shared all-time aggregates and need no phase-specific scan. `checkPhaseAchievements` in `src/lib/league-phase/achievement-streams.ts` reads native match stats, enrollment and rounds, plus shared aggregate/rating/streak/signature projections. It invokes the same achievement evaluation/persistence loop as the legacy entry point, with explicit `phase_id` and `phase_match_id` context. Its competition history combines native phase enrollment and standalone tournament enrollment; it never treats a phase as a synthetic tournament. These explicit hooks are dormant until a caller activates them; no default query or SQL prerequisite changes.
+
 ## Testing
 - **Test Files**: `src/lib/gamification/__tests__/` (3 test files): `streaks.test.ts` (compute rules, rebuild, retry), `achievements.test.ts` and `signatures.test.ts`; plus `src/lib/supabase/queries/__tests__/streaks-replace.test.ts` (RPC wrapper, paged stats read), `streaks-replace.local.test.ts` (`npm run test:db`: fence refusal, two concurrent finalizes both counted, replay safety)
 - **Testing Approach**: Pure compute tests, mocked-reader rebuild tests (history over 1,000 matches), a local-stack concurrency suite, plus route-level and match-completion integration testing

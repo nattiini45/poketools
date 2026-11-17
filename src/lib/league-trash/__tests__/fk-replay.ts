@@ -121,7 +121,7 @@ export function replayForeignKeys(): Map<string, ForeignKey> {
 }
 
 const TRIGGER = new RegExp(
-  String.raw`^CREATE\s+(?:OR\s+REPLACE\s+)?TRIGGER\s+"?([a-z0-9_]+)"?\s+(?:BEFORE|AFTER|INSTEAD\s+OF)\s+([\s\S]*?)\s+ON\s+${IDENT}(?:\s|$)`,
+  String.raw`^CREATE\s+(?:OR\s+REPLACE\s+)?(?:CONSTRAINT\s+)?TRIGGER\s+"?([a-z0-9_]+)"?\s+(?:BEFORE|AFTER|INSTEAD\s+OF)\s+([\s\S]*?)\s+ON\s+${IDENT}(?:\s|$)`,
   'i',
 );
 

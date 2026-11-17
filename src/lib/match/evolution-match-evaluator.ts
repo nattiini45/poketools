@@ -97,7 +97,35 @@ export interface MatchKillCreditResult {
  * counting a game twice. A thrown error leaves every game that was not yet
  * credited uncredited (the per-game transaction rolled back).
  */
+export interface EpbKillStorage {
+  creditGameKills: typeof creditGameKills;
+  uncreditGameKills: typeof uncreditGameKills;
+}
+
+const legacyKillStorage: EpbKillStorage = {
+  creditGameKills: (...args) => creditGameKills(...args),
+  uncreditGameKills: (...args) => uncreditGameKills(...args),
+};
+
+export function createEpbKillEvaluator(storage: EpbKillStorage) {
+  return {
+    creditMatchRealKills: (input: MatchKillCreditInput) => creditMatchRealKillsWithStorage(input, storage),
+    uncreditGameRealKills: (
+      seasonId: string,
+      game: { id: string; evolution_applied_at?: string | null },
+      stats: readonly KillStat[]
+    ) => uncreditGameRealKillsWithStorage(seasonId, game, stats, storage),
+  };
+}
+
 export async function creditMatchRealKills(input: MatchKillCreditInput): Promise<MatchKillCreditResult> {
+  return creditMatchRealKillsWithStorage(input, legacyKillStorage);
+}
+
+async function creditMatchRealKillsWithStorage(
+  input: MatchKillCreditInput,
+  storage: EpbKillStorage
+): Promise<MatchKillCreditResult> {
   const result: MatchKillCreditResult = {
     applied: [],
     alreadyApplied: [],
@@ -116,7 +144,7 @@ export async function creditMatchRealKills(input: MatchKillCreditInput): Promise
 
   for (const gameId of gameIds) {
     const credits = buildGameKillCredits(input.statsByGame[gameId] ?? [], formToTracker);
-    const outcome: GameKillCreditOutcome = await creditGameKills(gameId, credits);
+    const outcome: GameKillCreditOutcome = await storage.creditGameKills(gameId, credits);
     switch (outcome) {
       case 'applied':
         result.applied.push(gameId);
@@ -167,13 +195,22 @@ export async function uncreditGameRealKills(
   game: { id: string; evolution_applied_at?: string | null },
   stats: readonly KillStat[]
 ): Promise<GameKillDebitOutcome> {
+  return uncreditGameRealKillsWithStorage(seasonId, game, stats, legacyKillStorage);
+}
+
+async function uncreditGameRealKillsWithStorage(
+  seasonId: string,
+  game: { id: string; evolution_applied_at?: string | null },
+  stats: readonly KillStat[],
+  storage: EpbKillStorage
+): Promise<GameKillDebitOutcome> {
   if (!game.evolution_applied_at) return 'not_applied';
   const [trackers, lines] = await Promise.all([
     getSeasonTrackers(seasonId),
     getSeasonLineThresholds(seasonId),
   ]);
   const debits = buildGameKillCredits(stats, buildFormToTrackerIndex(trackers, lines));
-  return uncreditGameKills(game.id, game.evolution_applied_at, debits);
+  return storage.uncreditGameKills(game.id, game.evolution_applied_at, debits);
 }
 
 /**

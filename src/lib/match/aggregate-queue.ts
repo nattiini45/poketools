@@ -42,6 +42,14 @@ import {
 } from '@/lib/supabase/queries/games';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
+import { logger } from '@/lib/logger';
+import type { CompetitionOwner } from '@/types/competition-owner';
+import {
+  enqueuePhaseAggregateJob, processPhaseAggregateJobs, getPhaseAggregateJobStats,
+  getPhaseAggregateJobHealth, requeueFailedPhaseIncrementJobsForSeason,
+  countFailedPhaseIncrementJobsForSeason, countFailedPhaseAggregateJobs,
+  type PhaseAggregateOwner,
+} from '@/lib/league-phase/phase-aggregate-storage';
 
 // ─── Types ─────────────────────────────────────────────────────────
 
@@ -88,7 +96,18 @@ export async function enqueueAggregateJob(
   gameId: string,
   tournamentId: string,
   seasonId: string | null
+): Promise<void>;
+export async function enqueueAggregateJob(gameId: string, owner: CompetitionOwner): Promise<void>;
+export async function enqueueAggregateJob(
+  gameId: string,
+  owner: string | CompetitionOwner,
+  legacySeasonId?: string | null,
 ): Promise<void> {
+  if (typeof owner !== 'string' && owner.kind === 'phase') {
+    return enqueuePhaseAggregateJob(gameId, owner);
+  }
+  const tournamentId = typeof owner === 'string' ? owner : owner.tournament_id;
+  const seasonId = typeof owner === 'string' ? legacySeasonId ?? null : owner.season_id;
   const { error } = await supabase.from('aggregate_jobs').insert({
     game_id: gameId,
     tournament_id: tournamentId,
@@ -175,25 +194,42 @@ function errorMessage(err: unknown): string {
  * @param limit  Max jobs to claim in this run. Default 20.
  */
 export async function processAggregateJobs(limit = 20): Promise<ProcessAggregateJobsResult> {
+  return runAggregateQueue<AggregateJob>(limit, {
+    reclaim: () => supabase.rpc('reclaim_stale_aggregate_jobs'),
+    claim: async (batchSize) => {
+      const { data, error } = await supabase.rpc('claim_aggregate_jobs', { p_limit: batchSize });
+      return { data: data as AggregateJob[] | null, error };
+    },
+    process: processJob,
+    fail: markJobFailed,
+    revalidate: (jobs) => Promise.all([...new Set(jobs.map((job) => job.tournament_id))]
+      .map((id) => revalidateMatchPages(id))).then(() => undefined),
+  });
+}
+
+export async function runAggregateQueue<Job extends { id: string }>(limit: number, storage: {
+  reclaim: () => PromiseLike<{ data: number | null; error: unknown }>;
+  claim: (limit: number) => PromiseLike<{ data: Job[] | null; error: unknown }>;
+  process: (job: Job) => Promise<boolean>;
+  fail: (id: string, message: string) => Promise<void>;
+  revalidate: (jobs: Job[]) => Promise<void>;
+}): Promise<ProcessAggregateJobsResult> {
   const result: ProcessAggregateJobsResult = { processed: 0, failed: 0, reclaimed: 0 };
   const housekeepingErrors: unknown[] = [];
 
   // 1. Reclaim jobs orphaned in 'processing' state (serverless crash). A
   //    failure is logged and fails the run, but fresh jobs are still claimed.
-  const { data: reclaimed, error: reclaimError } = await supabase.rpc('reclaim_stale_aggregate_jobs');
+  const { data: reclaimed, error: reclaimError } = await storage.reclaim();
   if (reclaimError) {
     console.error('[aggregate-queue] Reclaim error:', reclaimError);
     housekeepingErrors.push(reclaimError);
   } else {
-    result.reclaimed = reclaimed;
+    result.reclaimed = reclaimed ?? 0;
   }
 
   // 2. Claim a batch of pending jobs. Nothing is claimed on error, so nothing
   //    is left half-done: fail the run right away.
-  const { data: claimedJobs, error: claimError } = await supabase.rpc(
-    'claim_aggregate_jobs',
-    { p_limit: limit }
-  );
+  const { data: claimedJobs, error: claimError } = await storage.claim(limit);
 
   if (claimError) {
     console.error('[aggregate-queue] Claim error:', claimError);
@@ -201,20 +237,20 @@ export async function processAggregateJobs(limit = 20): Promise<ProcessAggregate
   }
 
   // 3. Process each claimed job
-  const affectedTournamentIds = new Set<string>();
-  for (const job of (claimedJobs ?? []) as AggregateJob[]) {
+  const affectedJobs: Job[] = [];
+  for (const job of claimedJobs ?? []) {
     try {
-      const aggregatesUpdated = await processJob(job);
+      const aggregatesUpdated = await storage.process(job);
       result.processed++;
       if (aggregatesUpdated) {
-        affectedTournamentIds.add(job.tournament_id);
+        affectedJobs.push(job);
       }
     } catch (err) {
       console.error(`[aggregate-queue] Job ${job.id} failed:`, err);
       result.failed++;
       if (err instanceof AggregateQueueWriteError) housekeepingErrors.push(err);
       try {
-        await markJobFailed(job.id, errorMessage(err));
+        await storage.fail(job.id, errorMessage(err));
       } catch (markErr) {
         housekeepingErrors.push(markErr);
       }
@@ -222,11 +258,7 @@ export async function processAggregateJobs(limit = 20): Promise<ProcessAggregate
   }
 
   // Bust ISR/CDN after aggregates apply (enqueue-time revalidate in result-effects is too early)
-  if (affectedTournamentIds.size > 0) {
-    await Promise.all(
-      [...affectedTournamentIds].map((tournamentId) => revalidateMatchPages(tournamentId))
-    );
-  }
+  if (affectedJobs.length > 0) await storage.revalidate(affectedJobs);
 
   if (housekeepingErrors.length > 0) {
     throw new AggregateQueueRunError(result, housekeepingErrors);
@@ -616,4 +648,67 @@ export async function getAggregateJobStats(): Promise<AggregateJobStats> {
   });
 
   return counts;
+}
+
+export async function processAllAggregateJobs(
+  limit = 20,
+  onPhaseApplied?: (owner: PhaseAggregateOwner) => Promise<void>,
+): Promise<ProcessAggregateJobsResult> {
+  const results = await Promise.allSettled([
+    processAggregateJobs(limit),
+    onPhaseApplied ? processPhaseAggregateJobs(limit, onPhaseApplied) : processPhaseAggregateJobs(limit),
+  ]);
+  const totals: ProcessAggregateJobsResult = { processed: 0, failed: 0, reclaimed: 0 };
+  const errors: unknown[] = [];
+  for (const [index, result] of results.entries()) {
+    if (result.status === 'rejected') {
+      logger.error('aggregate-queue', 'Aggregate queue family failed', {
+        family: index === 0 ? 'tournament' : 'phase',
+        error: result.reason,
+      });
+      errors.push(result.reason);
+      if (result.reason instanceof AggregateQueueRunError) {
+        totals.processed += result.reason.result.processed;
+        totals.failed += result.reason.result.failed;
+        totals.reclaimed += result.reason.result.reclaimed;
+      }
+    } else {
+      totals.processed += result.value.processed;
+      totals.failed += result.value.failed;
+      totals.reclaimed += result.value.reclaimed;
+    }
+  }
+  if (errors.length > 0) throw new AggregateQueueRunError(totals, errors);
+  return totals;
+}
+
+export async function getAllAggregateJobStats(): Promise<AggregateJobStats> {
+  const [legacy, phase] = await Promise.all([getAggregateJobStats(), getPhaseAggregateJobStats()]);
+  return {
+    pending: legacy.pending + phase.pending, processing: legacy.processing + phase.processing,
+    completed: legacy.completed + phase.completed, failed: legacy.failed + phase.failed,
+    cancelled: legacy.cancelled + phase.cancelled,
+  };
+}
+
+export async function getAllAggregateJobHealth(): Promise<AggregateJobHealth> {
+  const [legacy, phase] = await Promise.all([getAggregateJobHealth(), getPhaseAggregateJobHealth()]);
+  return { strandedPending: legacy.strandedPending + phase.strandedPending, staleProcessing: legacy.staleProcessing + phase.staleProcessing };
+}
+
+export async function countAllFailedIncrementJobsForSeason(seasonId: string): Promise<number> {
+  const counts = await Promise.all([countFailedIncrementJobsForSeason(seasonId), countFailedPhaseIncrementJobsForSeason(seasonId)]);
+  return counts[0] + counts[1];
+}
+
+export async function countAllFailedAggregateJobs(): Promise<number> {
+  const counts = await Promise.all([countFailedAggregateJobs(), countFailedPhaseAggregateJobs()]);
+  return counts[0] + counts[1];
+}
+
+export async function requeueAllFailedIncrementJobsForSeason(seasonId: string): Promise<number> {
+  const results = await Promise.allSettled([requeueFailedIncrementJobsForSeason(seasonId), requeueFailedPhaseIncrementJobsForSeason(seasonId)]);
+  const errors = results.filter((result) => result.status === 'rejected').map((result) => result.reason);
+  if (errors.length > 0) throw new AggregateError(errors, 'Failed to requeue aggregate jobs across both stores');
+  return results.reduce((count, result) => count + (result.status === 'fulfilled' ? result.value : 0), 0);
 }
