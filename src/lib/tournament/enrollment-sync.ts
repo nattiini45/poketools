@@ -46,6 +46,7 @@ export interface EnrollmentPersistence {
   getRounds(id: string): Promise<RoundByeSource[]>;
   replaceEnrollment: typeof replacePhaseEnrollment;
   computeStandings: typeof computeStandingsForSeason;
+  computeSourceStandings?: (phaseId: string, ...args: Parameters<typeof computeStandingsForSeason>) => ReturnType<typeof computeStandingsForSeason>;
   kitAdvancingPlayers: typeof kitAdvancingPlayers;
 }
 
@@ -167,7 +168,7 @@ async function advanceTopNFromStandings(
   matchRecords: MatchRecord[],
   groups: EnrollmentGroup[] | undefined,
   byes: ByeRecord[],
-  storage: EnrollmentPersistence
+  computeStandings: EnrollmentPersistence['computeStandings']
 ): Promise<string[]> {
   if (rule.type !== 'top_n') {
     throw new Error(`Unsupported advancement type: ${rule.type}`);
@@ -181,7 +182,7 @@ async function advanceTopNFromStandings(
     const ordered = [...groups].sort((a, b) => a.group_number - b.group_number);
     const memberIds = ordered.flatMap((group) => group.members.map((m) => m.player_id));
     // A Swiss bye scores for its player only, so the one table over every member stays group-scoped after the split.
-    const table = await storage.computeStandings(seasonId, memberIds, participantNames, matchRecords, {}, { byes });
+    const table = await computeStandings(seasonId, memberIds, participantNames, matchRecords, {}, { byes });
     for (const { standings } of splitGroupTables(
       table,
       ordered.map((group) => ({ id: group.id, name: group.name, playerIds: group.members.map((m) => m.player_id) })),
@@ -199,7 +200,7 @@ async function advanceTopNFromStandings(
           groupPlayerIds.includes(m.player_1_id) &&
           groupPlayerIds.includes(m.player_2_id)
       );
-      const standings = await storage.computeStandings(
+      const standings = await computeStandings(
         seasonId,
         groupPlayerIds,
         participantNames,
@@ -212,7 +213,7 @@ async function advanceTopNFromStandings(
     return advancing;
   }
 
-  const standings = await storage.computeStandings(
+  const standings = await computeStandings(
     seasonId,
     participantIds,
     participantNames,
@@ -232,7 +233,7 @@ async function resolveAdvancingPlayerIds(
   groups: EnrollmentGroup[],
   options: SyncStandingsOptions,
   byes: ByeRecord[],
-  storage: EnrollmentPersistence,
+  computeStandings: EnrollmentPersistence['computeStandings'],
 ): Promise<string[]> {
   if (targetPhase.advancement_rule && !options.top_n) {
     return advanceTopNFromStandings(
@@ -243,7 +244,7 @@ async function resolveAdvancingPlayerIds(
       matchRecords,
       groups.length > 0 ? groups : undefined,
       byes,
-      storage,
+      computeStandings,
     );
   }
 
@@ -261,11 +262,11 @@ async function resolveAdvancingPlayerIds(
       matchRecords,
       options.per_group ? groups : undefined,
       byes,
-      storage,
+      computeStandings,
     );
   }
 
-  const standings = await storage.computeStandings(
+  const standings = await computeStandings(
     seasonId,
     participantIds,
     participantNames,
@@ -379,6 +380,10 @@ async function syncStandingsEnrollmentOnce(
       );
       playerIds = playersOfContributions(contributions);
     } else {
+      const sourceStandings = storage.computeSourceStandings;
+      const computeStandings: EnrollmentPersistence['computeStandings'] = sourceStandings
+        ? (...args) => sourceStandings(sourcePhase.id, ...args)
+        : (...args) => storage.computeStandings(...args);
       playerIds = await resolveAdvancingPlayerIds(
         seasonId,
         phase,
@@ -388,7 +393,7 @@ async function syncStandingsEnrollmentOnce(
         groups,
         options,
         byes,
-        storage,
+        computeStandings,
       );
     }
   } else {

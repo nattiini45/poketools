@@ -18,18 +18,16 @@ import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { runEpbMatchdayHooks } from '@/lib/match/epb-matchday';
 import { creditMatchRealKills } from '@/lib/match/evolution-match-evaluator';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
-import { buildGamePokemonStats, computePokemonScoreFromGameStats } from '@/lib/discord/helpers';
+import { buildFinalizationNotifications } from './finalization-notifications';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { recomputeStreaks } from '@/lib/gamification/streaks';
-import { updateRatings, type RatingUpdateResult } from '@/lib/rating/updateRatings';
+import { updateRatings } from '@/lib/rating/updateRatings';
 import type { MatchWithPlayers } from '@/types/match';
 import type { BattleStat } from '@/types/game';
 import type { Tournament } from '@/types/tournament';
-import type { StreakChanges } from '@/types/streak';
-import type { EarnedAchievement } from '@/types/achievement';
 
-import { createMatchFinalizer } from './finalization-core';
+import { createMatchFinalizer, type FinalizationAnnouncements } from './finalization-core';
 import type { AdminMatchOutcome, StagedAdminOutcome, FinalizeMatchCompletionInput, FinalizeMatchCompletionResult, HealMatchFinalizationResult, NeedsAdminReason } from './finalization-core';
 export { FINALIZE_STEPS, FINALIZE_HEAL_POLICY } from './finalization-core';
 export type { AdminMatchOutcome, StagedAdminOutcome, FinalizeStep, FinalizeMatchCompletionResult, HealMatchFinalizationResult, NeedsAdminReason } from './finalization-core';
@@ -129,146 +127,17 @@ async function runBracketStep(
   );
 }
 
-function emitAnnouncements(input: {
-  match: MatchWithPlayers;
-  winnerId: string;
-  tournament: Tournament;
-  statsByGame: Record<string, BattleStat[]>;
-  ratingChanges: RatingUpdateResult | null;
-  streaks: { winner: StreakChanges; loser: StreakChanges } | null;
-  achievements: { winner: EarnedAchievement[]; loser: EarnedAchievement[] } | null;
-}): void {
-  const { match, winnerId, tournament, statsByGame, ratingChanges, streaks, achievements } = input;
-
-  const gameStats = buildGamePokemonStats(match, statsByGame);
-  const pokScore = computePokemonScoreFromGameStats(
-    gameStats,
-    match.player_1_name,
-    match.player_2_name
-  );
-  const replayUrl = match.games.find((game) => game.replay_url)?.replay_url;
-  const winnerName = winnerId === match.player_1_id ? match.player_1_name : match.player_2_name;
-  const loserName = winnerId === match.player_1_id ? match.player_2_name : match.player_1_name;
-
-  const matchConfirmedPayload = {
-    event_type: 'match_confirmed' as const,
-    tournament_id: match.tournament_id,
-    season_id: tournament.season_id,
-    data: {
-      kind: 'match_confirmed' as const,
-      player_1_name: match.player_1_name,
-      player_2_name: match.player_2_name,
-      player_1_avatar_url: match.player_1_avatar_url,
-      player_2_avatar_url: match.player_2_avatar_url,
-      winner_name: winnerName,
-      game_score: `${pokScore.p1}-${pokScore.p2}`,
-      replay_url: replayUrl || undefined,
-      tournament_name: tournament.name,
-      game_stats: gameStats,
-    },
-  };
-  void emitDiscordEvent(matchConfirmedPayload);
-  void emitSocialEvent({
-    ...matchConfirmedPayload,
-    imageUrl: match.social_image_url || undefined,
-  });
-
-  for (const entry of [
-    ...(achievements?.winner ?? []).map((achievement) => ({ achievement, player_name: winnerName })),
-    ...(achievements?.loser ?? []).map((achievement) => ({ achievement, player_name: loserName })),
-  ]) {
-    if (entry.achievement.tier !== 'gold' && entry.achievement.tier !== 'platinum') {
-      continue;
-    }
-
-    const achievementPayload = {
-      event_type: 'achievement_unlocked' as const,
-      tournament_id: match.tournament_id,
+function emitAnnouncements(input: Omit<FinalizationAnnouncements<MatchWithPlayers, Tournament>, 'competition'> & { tournament: Tournament }): void {
+  const { tournament, ...facts } = input;
+  for (const event of buildFinalizationNotifications(facts)) {
+    const payload = {
+      event_type: event.event_type,
+      tournament_id: facts.match.tournament_id,
       season_id: tournament.season_id,
-      data: {
-        kind: 'achievement_unlocked' as const,
-        player_name: entry.player_name,
-        achievement_name: entry.achievement.name,
-        achievement_key: entry.achievement.key,
-        achievement_tier: entry.achievement.tier,
-        achievement_icon: entry.achievement.icon,
-        achievement_description: entry.achievement.description,
-        tournament_name: tournament.name,
-      },
+      data: { ...event.data, tournament_name: tournament.name },
     };
-    void emitDiscordEvent(achievementPayload);
-    void emitSocialEvent(achievementPayload);
-  }
-
-  // The rebuilt streak can equal the stored one (a match that did not move it), so the milestone needs a real rise.
-  if (
-    streaks &&
-    streaks.winner.win_streak.after >= 5 &&
-    streaks.winner.win_streak.after % 5 === 0 &&
-    streaks.winner.win_streak.after > streaks.winner.win_streak.before
-  ) {
-    const streakMilestonePayload = {
-      event_type: 'streak_milestone' as const,
-      tournament_id: match.tournament_id,
-      season_id: tournament.season_id,
-      data: {
-        kind: 'streak_milestone' as const,
-        player_name: winnerName,
-        streak_type: 'win' as const,
-        streak_count: streaks.winner.win_streak.after,
-        tournament_name: tournament.name,
-      },
-    };
-    void emitDiscordEvent(streakMilestonePayload);
-    void emitSocialEvent(streakMilestonePayload);
-  }
-
-  if (streaks && streaks.loser.win_streak.before >= 5 && streaks.loser.win_streak.after === 0) {
-    const streakBrokenPayload = {
-      event_type: 'streak_broken' as const,
-      tournament_id: match.tournament_id,
-      season_id: tournament.season_id,
-      data: {
-        kind: 'streak_broken' as const,
-        breaker_name: winnerName,
-        broken_player_name: loserName,
-        streak_count: streaks.loser.win_streak.before,
-        tournament_name: tournament.name,
-      },
-    };
-    void emitDiscordEvent(streakBrokenPayload);
-    void emitSocialEvent(streakBrokenPayload);
-  }
-
-  if (!ratingChanges) return;
-
-  const thresholds = [
-    { rating: 1600, key: 'rising_star' },
-    { rating: 1700, key: 'ace_trainer' },
-    { rating: 1800, key: 'elite_four' },
-    { rating: 1900, key: 'champion_tier' },
-  ] as const;
-
-  for (const threshold of thresholds) {
-    if (
-      ratingChanges.winnerRating >= threshold.rating &&
-      (ratingChanges.winnerRating - ratingChanges.winnerChange) < threshold.rating
-    ) {
-      const ratingPayload = {
-        event_type: 'rating_milestone' as const,
-        tournament_id: match.tournament_id,
-        season_id: tournament.season_id,
-        data: {
-          kind: 'rating_milestone' as const,
-          player_name: winnerName,
-          new_rating: ratingChanges.winnerRating,
-          threshold: threshold.key,
-          tournament_name: tournament.name,
-        },
-      };
-      void emitDiscordEvent(ratingPayload);
-      void emitSocialEvent(ratingPayload);
-    }
+    void emitDiscordEvent(payload);
+    void emitSocialEvent({ ...payload, ...('imageUrl' in event ? { imageUrl: event.imageUrl } : {}) });
   }
 }
 

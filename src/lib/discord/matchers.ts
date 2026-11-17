@@ -1,4 +1,5 @@
-import type { DiscordWebhook } from '@/types/discord';
+import type { PhaseDiscordEventPayload } from '@/types/phase-events';
+import type { DiscordEventType, DiscordWebhook } from '@/types/discord';
 
 /**
  * The two rules that decide whether a webhook receives an event, shared by the sender (`notify.ts`) and by any read that
@@ -24,4 +25,10 @@ export function matchesFormatOptions(webhook: Pick<DiscordWebhook, 'format_optio
     return webhook.format_options.show_ratings;
   }
   return true;
+}
+
+export function notificationFilterType(event: DiscordEventType | PhaseDiscordEventPayload['event_type']): DiscordEventType {
+  if (event === 'phase_started') return 'tournament_started';
+  if (event === 'phase_completed') return 'tournament_completed';
+  return event;
 }

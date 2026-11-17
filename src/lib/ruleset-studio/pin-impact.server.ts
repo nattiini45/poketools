@@ -27,6 +27,8 @@ import { RulesetStudioError } from './errors';
 import type { RulesetDefinitionMeta } from './library-types';
 import type { PinImpact, PinImpactTarget } from './pin-info';
 import { loadMoveTargets } from './pins';
+import type { PinTargetState } from '@/lib/supabase/queries/ruleset-definitions';
+import type { PinMoveState } from './pin-move-core';
 
 /** Most teams one request validates, over all its targets (two validations each). */
 export const MAX_IMPACT_TEAMS = 2000;
@@ -85,11 +87,26 @@ export function countBecomingInvalid(
 }
 
 export async function computePinImpact(input: PinImpactInput): Promise<PinImpact> {
+  return computePinImpactWithStorage<'season' | 'tournament', PinTargetState>(input, {
+    targets: (...args) => loadMoveTargets(...args),
+    teams: (state, budget) => listTeamsForPinImpact({ kind: state.kind, id: state.id }, budget),
+  });
+}
+
+export interface PinImpactStorage<K extends string, S extends PinMoveState<K>> {
+  targets(actor: SessionPlayer, targets: readonly { kind: K; id: string }[], versions: readonly { id: string }[]): Promise<S[]>;
+  teams(state: S, budget: number): ReturnType<typeof listTeamsForPinImpact>;
+}
+
+export async function computePinImpactWithStorage<K extends string, S extends PinMoveState<K>>(
+  input: Omit<PinImpactInput, 'targets'> & { targets: readonly { kind: K; id: string }[] },
+  storage: PinImpactStorage<K, S>,
+): Promise<Omit<PinImpact, 'targets'> & { targets: Array<Omit<Required<PinImpactTarget>, 'kind'> & { kind: K }> }> {
   const { actor, definition } = input;
   const versions = await listRulesetVersions(definition.id, 100);
   const to = versions.find((v) => v.version_no === input.toVersionNo);
   if (to === undefined) throw new RulesetStudioError('ruleset_not_found');
-  const states = await loadMoveTargets(actor, input.targets, versions);
+  const states = await storage.targets(actor, input.targets, versions);
 
   const rulesets = new Map<string, Ruleset>();
   const rulesetOf = async (versionId: string): Promise<Ruleset> => {
@@ -102,11 +119,11 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
   };
   const target = await rulesetOf(to.id);
 
-  const answers: Required<PinImpactTarget>[] = [];
+  const answers: Array<Omit<Required<PinImpactTarget>, 'kind'> & { kind: K }> = [];
   let budget = MAX_IMPACT_TEAMS;
   let truncated = false;
   for (const state of states) {
-    const answer: Required<PinImpactTarget> = { kind: state.kind, id: state.id, name: state.name, checked: 0, would_break: 0, malformed: 0 };
+    const answer = { kind: state.kind, id: state.id, name: state.name, checked: 0, would_break: 0, malformed: 0 };
     answers.push(answer);
     // Already on the target version (loadMoveTargets guarantees a pin): nothing changes for it.
     if (state.ruleset_id === null || state.ruleset_id === to.id) continue;
@@ -115,7 +132,7 @@ export async function computePinImpact(input: PinImpactInput): Promise<PinImpact
       continue;
     }
 
-    const { teams, truncated: cut } = await listTeamsForPinImpact({ kind: state.kind, id: state.id }, budget);
+    const { teams, truncated: cut } = await storage.teams(state, budget);
     if (cut) truncated = true;
     budget -= teams.length;
     if (teams.length === 0) continue;

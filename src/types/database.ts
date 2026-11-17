@@ -9976,6 +9976,79 @@ export type Database = {
         Args: { expected_mode: string; target_mode: string }
         Returns: string
       }
+      phase_team_roster_write: {
+        Args: {
+          p_actor?: string
+          p_import_source?: Database["public"]["Enums"]["team_import_source"]
+          p_match_id?: string
+          p_name?: string
+          p_operation: string
+          p_phase_id: string
+          p_player_id: string
+          p_pokemon?: Json
+          p_team_id?: string
+        }
+        Returns: {
+          created_at: string
+          draft_pool_id: string | null
+          forked_from_phase_team_id: string | null
+          forked_from_team_id: string | null
+          id: string
+          import_source: Database["public"]["Enums"]["team_import_source"]
+          is_draft_team: boolean
+          library_description: string | null
+          library_published_at: string | null
+          library_tags: string[] | null
+          library_title: string | null
+          locked: boolean
+          match_id: string | null
+          name: string
+          phase_id: string
+          player_id: string
+          pokemon: Json
+          season_id: string | null
+          share_enabled_at: string | null
+          share_token: string | null
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "phase_teams"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      phase_teams_release_matches: {
+        Args: { p_match_ids: string[] }
+        Returns: number
+      }
+      phase_wiki_report_submit: {
+        Args: {
+          p_details?: string
+          p_note_id: string
+          p_note_updated_at: string
+          p_phase_id: string
+          p_reason: string
+          p_report_updated_at?: string
+          p_reporter_id: string
+        }
+        Returns: {
+          created_at: string
+          details: string | null
+          id: string
+          note_id: string
+          reason: string
+          reporter_id: string
+          status: string
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "phase_wiki_note_reports"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
       rate_limit_hit: {
         Args: { p_key: string; p_max: number; p_window_seconds: number }
         Returns: {

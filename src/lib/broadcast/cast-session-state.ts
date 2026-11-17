@@ -7,10 +7,12 @@ import type { CastSessionStatus } from '@/types/cast-session';
  * names a status (`castSessionUpdateSchema.status`). The dashboard broadcast
  * page reuses the first session of a match that is not `archived`.
  */
+const PHASE_WRITERS = ['src/lib/broadcast/phase-session-services.ts', 'src/lib/supabase/queries/phase-cast-sessions.ts'];
+
 export const castSessionMachine = defineMachine({
   id: 'cast_session',
   title: 'Cast session',
-  storage: 'cast_sessions.status (CHECK cast_sessions_status_check)',
+  storage: 'cast_sessions.status, phase_cast_sessions.status (CHECK constraints)',
   summary:
     'The lifecycle label of a Cast Studio session. A session is created as draft; no screen moves the status today, only a PATCH /api/cast-sessions/[id] that names one, which is guarded with the current status (a status equal to the current one is not a move). The dashboard broadcast page links a match to its first session that is not archived. mode (cast, solo, replaycast) is a type tag picked at creation and edited in the studio, not a lifecycle: it has no machine.',
   doc: 'docs/cast-studio.md',
@@ -24,7 +26,7 @@ export const castSessionMachine = defineMachine({
       from: ['draft'],
       to: 'live',
       actors: ['owner', 'admin'],
-      writers: ['src/app/api/cast-sessions/[id]/route.ts'],
+      writers: ['src/app/api/cast-sessions/[id]/route.ts', ...PHASE_WRITERS],
       note: 'The cast starts.',
     },
     {
@@ -32,7 +34,7 @@ export const castSessionMachine = defineMachine({
       from: ['live'],
       to: 'draft',
       actors: ['owner', 'admin'],
-      writers: ['src/app/api/cast-sessions/[id]/route.ts'],
+      writers: ['src/app/api/cast-sessions/[id]/route.ts', ...PHASE_WRITERS],
       note: 'The cast ends and the session stays in use.',
     },
     {
@@ -40,7 +42,7 @@ export const castSessionMachine = defineMachine({
       from: ['draft', 'live'],
       to: 'archived',
       actors: ['owner', 'admin'],
-      writers: ['src/app/api/cast-sessions/[id]/route.ts'],
+      writers: ['src/app/api/cast-sessions/[id]/route.ts', ...PHASE_WRITERS],
       note: 'The session is put away; the dashboard no longer reuses it for its match.',
     },
     {
@@ -48,7 +50,7 @@ export const castSessionMachine = defineMachine({
       from: ['archived'],
       to: 'draft',
       actors: ['owner', 'admin'],
-      writers: ['src/app/api/cast-sessions/[id]/route.ts'],
+      writers: ['src/app/api/cast-sessions/[id]/route.ts', ...PHASE_WRITERS],
       note: 'An archived session comes back as a draft; it goes live from there.',
     },
   ],

@@ -70,4 +70,16 @@ describe('native enrollment persistence', () => {
     expect(db.rounds).toHaveBeenCalledWith('source');
     expect(db.legacy).not.toHaveBeenCalled();
   });
+
+  it('passes the actual source phase into an explicitly supplied native ranking callback', async () => {
+    const source: EnrollmentPhase = { ...target, id: 'source', status: 'completed', stage_order: 1 };
+    db.phases.mockResolvedValue([source, target]);
+    const results = {
+      getCompletedMatches: vi.fn(async () => []), computeStandings: db.legacy,
+      computeSourceStandings: vi.fn(async () => []), kitAdvancingPlayers: vi.fn(async () => null),
+    };
+    await syncStandingsEnrollment('league', 'target', { source_phase_id: 'source' }, createNativeEnrollmentPersistence(results));
+    expect(results.computeSourceStandings).toHaveBeenCalledExactlyOnceWith('source', 'league', [], {}, [], {}, { byes: [] });
+    expect(db.legacy).not.toHaveBeenCalled();
+  });
 });

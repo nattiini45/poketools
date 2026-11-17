@@ -13,6 +13,7 @@ import type {
 } from './historical-statistics-types';
 
 export type * from './historical-statistics-types';
+export type { CompetitionOwner, Phase, PhaseParticipant, PhaseRound, PhaseMatch } from '@/lib/format-pack/types';
 
 /**
  * A format definition a pack ships in place of (or in addition to) the public example presets. The id is the preset

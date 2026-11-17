@@ -263,8 +263,8 @@ export async function buildForecastFactPack(
 
 // ─── Match Fact Builder ─────────────────────────────────────────────
 
-interface MatchDetail {
-  match: MatchWithPlayers;
+export interface MatchDetail {
+  match: Pick<MatchWithPlayers, 'id' | 'player_1_id' | 'player_2_id' | 'player_1_name' | 'player_2_name' | 'winner_id' | 'status'>;
   p1Team: AggregatedPokemon[];
   p2Team: AggregatedPokemon[];
   p1Score: number;
@@ -274,7 +274,7 @@ interface MatchDetail {
   gamesPlayed: number;
 }
 
-function buildMatchFact(detail: MatchDetail, _gen: number): MatchFact {
+export function buildMatchFact(detail: MatchDetail, _gen: number): MatchFact {
   const { match, p1Team, p2Team, p1Score, p2Score, p1TotalKos, p2TotalKos, gamesPlayed } = detail;
   const isP1Winner = match.winner_id === match.player_1_id;
 
@@ -383,7 +383,7 @@ function buildPreWrittenOneLiner(
 
 // ─── Standing Facts ─────────────────────────────────────────────────
 
-function buildStandingFacts(
+export function buildStandingFacts(
   current: Standing[],
   previous: Standing[] | null,
   byeCounts: Readonly<Record<string, number>> = {}
@@ -433,7 +433,7 @@ function buildStandingFacts(
   });
 }
 
-function buildStandingsChanges(
+export function buildStandingsChanges(
   current: StandingFact[],
   previous: StandingFact[] | null
 ): string[] {
@@ -451,7 +451,7 @@ function buildStandingsChanges(
 
 // ─── Pokemon Usage ──────────────────────────────────────────────────
 
-function buildPokemonUsage(
+export function buildPokemonUsage(
   details: MatchDetail[]
 ): { pokemonName: string; timesBrought: number; totalKos: number }[] {
   const usage: Record<string, { timesBrought: number; totalKos: number }> = {};
@@ -474,7 +474,7 @@ function buildPokemonUsage(
 
 // ─── Best Performer ─────────────────────────────────────────────────
 
-function selectBestPerformer(
+export function selectBestPerformer(
   matchFacts: MatchFact[]
 ): { playerName: string; reason: string } | null {
   if (matchFacts.length === 0) return null;
@@ -506,7 +506,7 @@ function selectBestPerformer(
 
 // ─── Unusual Pick Detection ─────────────────────────────────────────
 
-function detectUnusualPick(
+export function detectUnusualPick(
   details: MatchDetail[],
   gymTypes: Record<string, string | null>,
   participantNames: Record<string, string>
@@ -544,7 +544,7 @@ function detectUnusualPick(
 
 // ─── Match Data Builders (for UI pass-through) ──────────────────────
 
-function buildMatchData(
+export function buildMatchData(
   details: MatchDetail[],
   avatars: Record<string, string | null>
 ): RoundRecapMatchData[] {
@@ -575,7 +575,7 @@ function buildMatchData(
   });
 }
 
-function buildPokemonTypesLookup(
+export function buildPokemonTypesLookup(
   details: MatchDetail[],
   gen: number
 ): Record<string, string[]> {
@@ -619,14 +619,17 @@ async function fetchSeasonContext(seasonId: string): Promise<SeasonContext | nul
   };
 }
 
-async function fetchMatchDetails(matches: MatchWithPlayers[]): Promise<MatchDetail[]> {
+export async function fetchMatchDetails(
+  matches: MatchDetail['match'][],
+  readStats: (matchId: string) => Promise<Record<string, BattleStat[]>> = getBattleStatsByMatch,
+): Promise<MatchDetail[]> {
   const completed = matches.filter((m) => m.status === 'completed' && m.winner_id);
   const details: MatchDetail[] = [];
 
   // A failed stats read fails the pack: "no stats" would silently write a
   // recap without the teams (no error masking, AGENTS.md).
   const statResults: Record<string, BattleStat[]>[] = await Promise.all(
-    completed.map((m) => getBattleStatsByMatch(m.id))
+    completed.map((m) => readStats(m.id))
   );
 
   for (let i = 0; i < completed.length; i++) {

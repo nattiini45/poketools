@@ -23,6 +23,14 @@ export default defineDe<typeof en>()({
     },
     pairing: '• {player1} vs. {player2}',
   },
+  phaseStarted: {
+    title: 'Phase gestartet – {phase}',
+    description: '**{phase}** ist gestartet!',
+  },
+  phaseCompleted: {
+    title: 'Phase beendet – {phase}',
+    description: '**{phase}** ist vorbei. Die Endtabelle findest du auf der Seite!',
+  },
   tournamentStarted: {
     title: 'Turnier gestartet – {tournament}',
     description: '**{tournament}** ist gestartet!',

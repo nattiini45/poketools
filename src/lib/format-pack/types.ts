@@ -18,6 +18,10 @@ import type { PriceGroup } from '@/types/point-buy';
 import type { TierKey } from '@/types/ruleset';
 import type { CoreTriple } from '@/types/season';
 
+export type { CompetitionOwner } from '@/types/competition-owner';
+export type { Phase, PhaseParticipant, PhaseRound } from '@/types/league-phase';
+export type { PhaseMatch } from '@/types/league-phase-match';
+
 export type TeraEligibility = 'any' | 'stab_only' | 'none';
 /** Which part of the season earns Comeback Tokens (`epb.comeback.earnWindow`). */
 export type ComebackEarnWindow = 'season' | 'first_half';

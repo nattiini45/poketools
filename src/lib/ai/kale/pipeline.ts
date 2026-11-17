@@ -11,6 +11,7 @@ import type {
   ReportParams,
 } from './types';
 import type { TournamentReportType, ReportContent } from '@/types/tournament-report';
+import type { ReportDefinition } from './registry';
 
 const MAX_RETRIES = 2;
 
@@ -48,10 +49,18 @@ export async function runPipeline(
   onProgress?: () => void
 ): Promise<GenericPipelineResult> {
   const startTime = Date.now();
-  const mode = getPipelineMode();
   const definition = getReportDefinition(reportType);
-
   const factPack = await definition.buildFactPack(params);
+  return runFactPackPipeline(definition, factPack, onProgress, startTime);
+}
+
+export async function runFactPackPipeline(
+  definition: Pick<ReportDefinition, 'getPromptTasks' | 'validate' | 'assemble'>,
+  factPack: unknown,
+  onProgress?: () => void,
+  startTime = Date.now(),
+): Promise<GenericPipelineResult> {
+  const mode = getPipelineMode();
   const tasks = definition.getPromptTasks(factPack, mode);
 
   const { results, totalPromptTokens, totalCompletionTokens, validationErrors, retryCount, modelUsed } =

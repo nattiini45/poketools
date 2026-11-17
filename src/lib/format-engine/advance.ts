@@ -4,7 +4,7 @@
  */
 import 'server-only';
 
-import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+import { legacyKitStorage, type KitReadStoragePort } from '@/lib/league-phase/kit-storage';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
@@ -31,7 +31,7 @@ export interface KitAdvanceInput {
  * The players the format's edge moves from the source phase to the target, in their target seed order, or null when
  * the league does not advance on the kit (no format, engine not `kit`, or no edge joins the two stages).
  */
-export async function kitAdvancingPlayers(input: KitAdvanceInput, storage: KitStoragePort = legacyKitStorage): Promise<AdvancedPlayer[] | null> {
+export async function kitAdvancingPlayers(input: KitAdvanceInput, storage: KitReadStoragePort = legacyKitStorage): Promise<AdvancedPlayer[] | null> {
   const format = await storage.format(input.seasonId);
   if (format === null || format.engine !== 'kit') return null;
   const phases = await storage.phases(input.seasonId);

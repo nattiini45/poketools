@@ -60,10 +60,17 @@ export const getNativeKitKills: NativeKitConsumers['kills'] = async (ids) => {
 
 export async function getNativeKitCompletedRecords(phaseId: string): Promise<MatchRecord[]> {
   const rows = await readAllPages((from, to) => supabase.from('phase_matches')
-    .select('id, player_1_id, player_2_id, winner_id, phase_rounds!inner(round_number)')
+    .select('id, player_1_id, player_2_id, winner_id, bracket_side, bracket_pos, phase_rounds!inner(round_number)')
     .eq('phase_id', phaseId).eq('status', 'completed').order('id').range(from, to));
-  return rows.map((row) => ({ match_id: row.id, player_1_id: row.player_1_id, player_2_id: row.player_2_id,
-    winner_id: row.winner_id, round_number: row.phase_rounds.round_number }));
+  return rows.map((row) => {
+    const side = row.bracket_side ?? null;
+    if (side !== null && side !== 'winners' && side !== 'losers' && side !== 'grand_finals') {
+      throw new Error(`phase_matches ${row.id}: unknown bracket side ${side}`);
+    }
+    return { match_id: row.id, player_1_id: row.player_1_id, player_2_id: row.player_2_id,
+      winner_id: row.winner_id, round_number: row.phase_rounds.round_number,
+      bracket_side: side, bracket_pos: row.bracket_pos };
+  });
 }
 
 export async function getNativeKitMatchFacts(phaseId: string) {

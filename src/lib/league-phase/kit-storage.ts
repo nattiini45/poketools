@@ -56,10 +56,18 @@ export const legacyKitStorage: KitStoragePort = {
 };
 
 export type NativeKitConsumers = Pick<KitStoragePort, 'outcomes' | 'matchIds' | 'gameCounts' | 'kills' | 'enroll'>;
+export type KitReadStoragePort = Omit<KitStoragePort, 'enroll'>;
 
 export function nativeKitStorage(consumers: NativeKitConsumers): KitStoragePort {
+  return { ...nativeKitReadStorage(consumers), enroll: consumers.enroll };
+}
+
+export function nativeKitReadStorage(consumers: Omit<NativeKitConsumers, 'enroll'>): KitReadStoragePort {
   return {
-    ...consumers,
+    outcomes: consumers.outcomes,
+    matchIds: consumers.matchIds,
+    gameCounts: consumers.gameCounts,
+    kills: consumers.kills,
     head: (input) => getSeasonKitHead(input),
     format: (input) => getSeasonFormat(input),
     runtime: (input) => getFormatRuntime(input),

@@ -1,3 +1,8 @@
+import { notificationFilterType } from '@/lib/discord/matchers';
+import { resolvePhaseSocialIntegrations } from '@/lib/supabase/queries/phase-social-integrations';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import type { PhaseSocialEventPayload } from '@/types/phase-events';
+import type { PhaseSocialIntegrationWithSecrets } from '@/types/phase-integrations';
 import { resolveSocialIntegrations } from '@/lib/supabase/queries/social-integrations';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import { DEFAULT_LOCALE, type Locale } from '@/i18n/config';
@@ -10,7 +15,7 @@ import type {
 } from '@/types/social';
 import { OutboundHttpError } from '@/lib/outbound-fetch';
 import { decryptJson } from './crypto';
-import { formatSocialPost } from './format';
+import { formatSocialPost, formatPhaseSocialPost } from './format';
 import { matchesEventFilter } from './matchers';
 import { BlueskyServiceUrlError } from './bluesky-service';
 import { publishToProvider } from './providers';
@@ -25,35 +30,61 @@ export function emitSocialEvent(payload: SocialEventPayload): void {
   });
 }
 
+export function emitPhaseSocialEvent(payload: PhaseSocialEventPayload): void {
+  void emitPhaseAsync(payload).catch((err: unknown) => {
+    console.error('[Social] Failed to emit phase event:', payload.event_type, classifyPublishFailure(err));
+  });
+}
+
+async function emitPhaseAsync(payload: PhaseSocialEventPayload): Promise<void> {
+  const phase = await getPhaseById(payload.owner.phase_id);
+  if (!phase) {
+    console.error('[Social] Phase notification owner not found:', payload.owner.phase_id);
+    return;
+  }
+  if (phase.season_id !== payload.owner.season_id) {
+    console.error('[Social] Phase notification league ownership mismatch:', phase.id);
+    return;
+  }
+  const integrations = await resolvePhaseSocialIntegrations(phase.id);
+  await deliverSocialEvent(payload, integrations, { seasonId: phase.season_id });
+}
+
 async function emitAsync(payload: SocialEventPayload): Promise<void> {
   try {
     const integrations = await resolveSocialIntegrations(payload.tournament_id, payload.season_id);
-    const matching = integrations.filter((integration) =>
-      matchesEventFilter(integration, payload.event_type),
-    );
-
-    if (matching.length === 0) return;
-
-    // Posts go out in the league's content language (i18n-core §6.3), read
-    // once per event; a failed read falls back to the default language.
-    const lang = await resolveContentLocale({
-      seasonId: payload.season_id,
-      tournamentId: payload.tournament_id,
-    });
-
-    const results = await Promise.allSettled(
-      matching.map((integration) => publishIntegrationEvent(integration, payload, lang)),
-    );
-    results.forEach((result, index) => {
-      if (result.status === 'fulfilled') return;
-      const integration = matching[index];
-      console.error(
-        `[Social] Post failed: integration=${integration.id} provider=${integration.provider} event=${payload.event_type} failure=${classifyPublishFailure(result.reason)}`,
-      );
-    });
+    await deliverSocialEvent(payload, integrations, { seasonId: payload.season_id, tournamentId: payload.tournament_id });
   } catch (err) {
     console.error('[Social] Failed to emit event:', payload.event_type, err instanceof Error ? err.message : String(err));
   }
+}
+
+async function deliverSocialEvent(
+  payload: SocialEventPayload | PhaseSocialEventPayload,
+  integrations: Array<SocialIntegrationWithSecrets | PhaseSocialIntegrationWithSecrets>,
+  contentRef: Parameters<typeof resolveContentLocale>[0],
+): Promise<void> {
+  const filterEvent = notificationFilterType(payload.event_type);
+  const matching = integrations.filter((integration) =>
+    matchesEventFilter(integration, filterEvent),
+  );
+
+  if (matching.length === 0) return;
+
+  // Posts go out in the league's content language (i18n-core §6.3), read
+  // once per event; a failed read falls back to the default language.
+  const lang = await resolveContentLocale(contentRef);
+
+  const results = await Promise.allSettled(
+    matching.map((integration) => publishIntegrationEvent(integration, payload, lang)),
+  );
+  results.forEach((result, index) => {
+    if (result.status === 'fulfilled') return;
+    const integration = matching[index];
+    console.error(
+      `[Social] Post failed: integration=${integration.id} provider=${integration.provider} event=${payload.event_type} failure=${classifyPublishFailure(result.reason)}`,
+    );
+  });
 }
 
 /**
@@ -68,27 +99,33 @@ function classifyPublishFailure(err: unknown): string {
   return err instanceof Error ? err.name : 'unknown';
 }
 
-function parseCredentials(integration: SocialIntegrationWithSecrets): SocialCredentials | null {
+function parseCredentials(integration: SocialIntegrationWithSecrets | PhaseSocialIntegrationWithSecrets): SocialCredentials | null {
   if (!integration.credentials_encrypted) return null;
 
   try {
     const credentials = decryptJson<SocialCredentials>(integration.credentials_encrypted);
     if (credentials.provider !== integration.provider) {
+      const actualProvider = ['x', 'threads', 'bluesky'].includes(credentials.provider) ? credentials.provider : 'invalid_provider';
       console.error(
-        `[Social] Credentials provider mismatch for integration ${integration.id}: expected ${integration.provider}, got ${credentials.provider}`,
+        `[Social] Credentials provider mismatch for integration ${integration.id}: expected ${integration.provider}, got ${actualProvider}`,
       );
       return null;
     }
     return credentials;
   } catch (err) {
-    console.error(`[Social] Failed to decrypt credentials for integration ${integration.id}:`, err instanceof Error ? err.message : String(err));
+    const failure = err instanceof Error && [
+      'SOCIAL_INTEGRATION_ENCRYPTION_KEY is not configured',
+      'SOCIAL_INTEGRATION_ENCRYPTION_KEY must decode to 32 bytes',
+      'Invalid encrypted payload format',
+    ].includes(err.message) ? err.message : err instanceof Error ? err.name : 'unknown';
+    console.error(`[Social] Failed to decrypt credentials for integration ${integration.id}:`, failure);
     return null;
   }
 }
 
 async function publishIntegrationEvent(
-  integration: SocialIntegrationWithSecrets,
-  payload: SocialEventPayload,
+  integration: SocialIntegrationWithSecrets | PhaseSocialIntegrationWithSecrets,
+  payload: SocialEventPayload | PhaseSocialEventPayload,
   lang: Locale,
 ): Promise<void> {
   const credentials = parseCredentials(integration);
@@ -97,7 +134,9 @@ async function publishIntegrationEvent(
     return;
   }
 
-  const text = formatSocialPost(payload, integration.provider, integration.post_options, lang);
+  const text = 'owner' in payload
+    ? formatPhaseSocialPost(payload, integration.provider, integration.post_options, lang)
+    : formatSocialPost(payload, integration.provider, integration.post_options, lang);
   if (!text) return;
 
   await publishToProvider(integration.provider, credentials, text, payload.imageUrl);

@@ -19,8 +19,7 @@ import 'server-only';
  * The caller (the route) expires the read cache and writes one audit event per moved target, from `onMoved`.
  */
 import { AuthError } from '@/lib/auth/helpers';
-import { diffResolved } from '@/lib/ruleset-kit/effective';
-import type { ResolvedRules } from '@/lib/ruleset-kit/types';
+import { movePinsWithStorage } from './pin-move-core';
 import type { SessionPlayer } from '@/types/auth';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import {
@@ -34,7 +33,7 @@ import {
 import type { RulesetActor } from './access';
 import type { PinTarget } from './api-schemas';
 import { MAX_VERSIONS_PER_RULESET, RulesetStudioError } from './errors';
-import { pinTargetCompleted, pinTargetStarted, type MovedPin, type MovePinsOutcome } from './pin-info';
+import { pinTargetCompleted, type MovedPin, type MovePinsOutcome } from './pin-info';
 
 export type { MovedPin, MovePinsOutcome } from './pin-info';
 import type { RulesetDefinitionMeta, RulesetPinTarget, RulesetUsage, RulesetVersionSummary } from './library-types';
@@ -101,7 +100,6 @@ async function assertAdministers(actor: SessionPlayer, target: PinTargetState): 
 
 // A league is "started" by its status here; the finer start signals (rounds, phases) matter for attaching a format, not for
 // the confirmation, which only has to catch a league that is running. The pin card (`pin-info.ts`) uses the same two tests.
-const hasStarted = (target: PinTargetState): boolean => pinTargetStarted(target.status);
 const isFinished = (target: PinTargetState): boolean => pinTargetCompleted(target.status);
 
 /**
@@ -134,53 +132,10 @@ export async function loadMoveTargets(
 }
 
 export async function movePins(input: MovePinsInput): Promise<MovePinsOutcome> {
-  const { actor, definition } = input;
-  const version = await getRulesetVersion(definition.id, input.toVersionNo);
-  if (version === null) throw new RulesetStudioError('ruleset_not_found');
-
-  // Versions are immutable: one read of the list serves the ownership check and the version numbers of the sources.
-  const versions = await listRulesetVersions(definition.id, MAX_VERSIONS_PER_RULESET);
-  const confirmed = new Set(input.confirmStarted);
-  const plan: PinTargetState[] = [];
-  const needConfirmation: string[] = [];
-
-  for (const state of await loadMoveTargets(actor, input.targets, versions)) {
-    if (state.ruleset_id === version.id) continue; // already there: nothing to move
-    if (hasStarted(state) && !confirmed.has(state.id)) needConfirmation.push(state.name);
-    plan.push(state);
-  }
-  if (needConfirmation.length > 0) {
-    throw new RulesetStudioError('ruleset_pin_confirm_required', { targets: needConfirmation.join(', ') });
-  }
-
-  // One read of the rules per distinct source version.
-  const numberOf = new Map(versions.map((v) => [v.id, v.version_no] as const));
-  const sources = new Map<string, ResolvedRules | null>();
-  const sourceRules = async (versionId: string): Promise<ResolvedRules | null> => {
-    if (!sources.has(versionId)) {
-      const no = numberOf.get(versionId);
-      sources.set(versionId, no === undefined ? null : ((await getRulesetVersion(definition.id, no))?.resolved ?? null));
-    }
-    return sources.get(versionId) ?? null;
-  };
-
-  const to = { version_id: version.id, version_no: version.version_no };
-  const moved: MovedPin[] = [];
-  for (const state of plan) {
-    const ok = await repinTarget(state.kind, state.id, state.ruleset_id, version.id);
-    if (!ok) throw new RulesetStudioError('ruleset_pin_moved', { target: state.name });
-    const from = state.ruleset_id === null ? null : await sourceRules(state.ruleset_id);
-    const entry: MovedPin = {
-      kind: state.kind,
-      id: state.id,
-      name: state.name,
-      season_id: state.season_id,
-      from_version_id: state.ruleset_id,
-      started: hasStarted(state),
-      difference: from === null ? null : diffResolved(from, version.resolved),
-    };
-    moved.push(entry);
-    input.onMoved?.(entry, to);
-  }
-  return { ...to, moved };
+  return movePinsWithStorage(input, {
+    version: (...args) => getRulesetVersion(...args),
+    versions: (...args) => listRulesetVersions(...args),
+    targets: (...args) => loadMoveTargets(...args),
+    repin: (state, to) => repinTarget(state.kind, state.id, state.ruleset_id, to),
+  });
 }

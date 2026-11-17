@@ -1,4 +1,5 @@
-import type { DiscordEventPayload, WebhookFormatOptions, GamePokemonStats, RoundRecapPublishedData, RoundForecastPublishedData } from '@/types/discord';
+import type { DiscordEventPayload, WebhookFormatOptions, GamePokemonStats, DiscordEventData } from '@/types/discord';
+import type { PhaseNotificationData } from '@/types/phase-events';
 import { DEFAULT_FORMAT_OPTIONS } from '@/types/discord';
 import type { Locale } from '@/i18n/config';
 import { createTranslator, type Translator } from '@/i18n/core';
@@ -118,6 +119,14 @@ export function buildEmbed(
   options: WebhookFormatOptions | undefined,
   lang: Locale,
 ): BuildEmbedResult {
+  return buildNotificationEmbed(payload, options, lang);
+}
+
+export function buildNotificationEmbed(
+  payload: { data: DiscordEventData | PhaseNotificationData },
+  options: WebhookFormatOptions | undefined,
+  lang: Locale,
+): BuildEmbedResult {
   const { data } = payload;
   const opts = options ?? DEFAULT_FORMAT_OPTIONS;
   const t = createTranslator(outboundDiscordMessages, lang);
@@ -142,7 +151,7 @@ export function buildEmbed(
 
       return {
         embed: {
-          title: t('matchResult.title', { tournament: data.tournament_name }),
+          title: t('matchResult.title', { tournament: competitionName(data) }),
           description,
           color: COLORS.orange,
           timestamp: new Date().toISOString(),
@@ -168,7 +177,7 @@ export function buildEmbed(
 
       return {
         embed: {
-          title: t('matchConfirmed.title', { tournament: data.tournament_name }),
+          title: t('matchConfirmed.title', { tournament: competitionName(data) }),
           description,
           color: COLORS.green,
           timestamp: new Date().toISOString(),
@@ -179,7 +188,7 @@ export function buildEmbed(
     case 'match_disputed':
       return {
         embed: {
-          title: t('matchDisputed.title', { tournament: data.tournament_name }),
+          title: t('matchDisputed.title', { tournament: competitionName(data) }),
           description: t('matchDisputed.description', {
             disputer: data.disputer_name,
             player1: data.player_1_name,
@@ -198,10 +207,26 @@ export function buildEmbed(
         embed: {
           title: t('roundGenerated.title', {
             round: roundLabel(data.round_name, lang),
-            tournament: data.tournament_name,
+            tournament: competitionName(data),
           }),
           description: `${t('roundGenerated.description', { count: data.pairings.length })}\n\n${pairingLines}`,
           color: COLORS.blue,
+          timestamp: new Date().toISOString(),
+        },
+      };
+    }
+
+    case 'phase_status': {
+      const active = data.new_status === 'active';
+      return {
+        embed: {
+          title: active
+            ? t('phaseStarted.title', { phase: data.phase_name })
+            : t('phaseCompleted.title', { phase: data.phase_name }),
+          description: active
+            ? t('phaseStarted.description', { phase: data.phase_name })
+            : t('phaseCompleted.description', { phase: data.phase_name }),
+          color: active ? COLORS.blue : COLORS.green,
           timestamp: new Date().toISOString(),
         },
       };
@@ -212,11 +237,11 @@ export function buildEmbed(
       return {
         embed: {
           title: active
-            ? t('tournamentStarted.title', { tournament: data.tournament_name })
-            : t('tournamentCompleted.title', { tournament: data.tournament_name }),
+            ? t('tournamentStarted.title', { tournament: competitionName(data) })
+            : t('tournamentCompleted.title', { tournament: competitionName(data) }),
           description: active
-            ? t('tournamentStarted.description', { tournament: data.tournament_name })
-            : t('tournamentCompleted.description', { tournament: data.tournament_name }),
+            ? t('tournamentStarted.description', { tournament: competitionName(data) })
+            : t('tournamentCompleted.description', { tournament: competitionName(data) }),
           color: active ? COLORS.blue : COLORS.green,
           timestamp: new Date().toISOString(),
         },
@@ -239,7 +264,7 @@ export function buildEmbed(
 
     case 'draft_pick': {
       // Queue-engine picks carry the line (canonical English); the draft builder localizes it.
-      if (data.line) return buildDraftEmbed(payload, opts, lang);
+      if (data.line) return buildDraftEmbed({ data }, opts, lang);
       const result: BuildEmbedResult = {
         embed: {
           title: t('draftPick.title', { season: data.season_name }),
@@ -288,7 +313,7 @@ export function buildEmbed(
         : { name: data.achievement_name, description: data.achievement_description };
       return {
         embed: {
-          title: t('achievementUnlocked.title', { tournament: data.tournament_name }),
+          title: t('achievementUnlocked.title', { tournament: competitionName(data) }),
           description: `${t('achievementUnlocked.description', {
             icon: data.achievement_icon ?? '🏅',
             player: data.player_name,
@@ -303,7 +328,7 @@ export function buildEmbed(
     case 'streak_milestone':
       return {
         embed: {
-          title: t('streakMilestone.title', { tournament: data.tournament_name }),
+          title: t('streakMilestone.title', { tournament: competitionName(data) }),
           description: t(`streakMilestone.${data.streak_type}`, {
             player: data.player_name,
             count: data.streak_count,
@@ -316,7 +341,7 @@ export function buildEmbed(
     case 'streak_broken':
       return {
         embed: {
-          title: t('streakBroken.title', { tournament: data.tournament_name }),
+          title: t('streakBroken.title', { tournament: competitionName(data) }),
           description: t('streakBroken.description', {
             breaker: data.breaker_name,
             player: data.broken_player_name,
@@ -330,7 +355,7 @@ export function buildEmbed(
     case 'rating_milestone':
       return {
         embed: {
-          title: t('ratingMilestone.title', { tournament: data.tournament_name }),
+          title: t('ratingMilestone.title', { tournament: competitionName(data) }),
           description: t('ratingMilestone.description', {
             player: data.player_name,
             // A rating reads as a plain integer ("1523"), never digit-grouped.
@@ -395,7 +420,7 @@ export function buildEmbed(
         embed: {
           title: t('roundCompleted.title', {
             round: roundLabel(data.round_name, lang),
-            tournament: data.tournament_name,
+            tournament: competitionName(data),
           }),
           description: `${header}${standingsBlock}`,
           color: COLORS.green,
@@ -406,7 +431,7 @@ export function buildEmbed(
 
     case 'round_recap_published': {
       // The recap text is AI-written in the league's language (A7); only the chrome is translated here.
-      const recapData = data as RoundRecapPublishedData;
+      const recapData = data;
       const matchLines = recapData.match_summaries
         .map((ms) => `${ms.players} (${ms.score}): ${ms.one_liner}`)
         .join('\n');
@@ -429,18 +454,18 @@ export function buildEmbed(
         embed: {
           title: t('roundRecap.title', {
             round: roundLabel(recapData.round_name, lang),
-            tournament: recapData.tournament_name,
+            tournament: competitionName(recapData),
           }),
           description: description.slice(0, 4000),
           color: COLORS.purple,
           timestamp: new Date().toISOString(),
-          url: recapData.tournament_url,
+          url: ('phase_url' in recapData ? recapData.phase_url : recapData.tournament_url),
         },
       };
     }
 
     case 'round_forecast_published': {
-      const forecastData = data as RoundForecastPublishedData;
+      const forecastData = data;
       const matchupLines = forecastData.matchup_previews
         .map((mp) => `**${mp.players}**\n${mp.storyline}`)
         .join('\n\n');
@@ -458,25 +483,25 @@ export function buildEmbed(
         embed: {
           title: t('roundForecast.title', {
             round: roundLabel(forecastData.round_name, lang),
-            tournament: forecastData.tournament_name,
+            tournament: competitionName(forecastData),
           }),
           description: description.slice(0, 4000),
           color: COLORS.blue,
           timestamp: new Date().toISOString(),
-          url: forecastData.tournament_url,
+          url: ('phase_url' in forecastData ? forecastData.phase_url : forecastData.tournament_url),
         },
       };
     }
 
     // Draft-tool events.
     case 'draft_turn':
-      return buildDraftEmbed(payload, opts, lang);
+      return buildDraftEmbed({ data }, opts, lang);
     case 'draft_turn_reminder':
-      return buildDraftEmbed(payload, opts, lang);
+      return buildDraftEmbed({ data }, opts, lang);
     case 'draft_admin_alert':
-      return buildDraftEmbed(payload, opts, lang);
+      return buildDraftEmbed({ data }, opts, lang);
     case 'draft_redraft_published':
-      return buildDraftEmbed(payload, opts, lang);
+      return buildDraftEmbed({ data }, opts, lang);
 
     default: {
       // Exhaustive check — if we missed a kind, TypeScript will flag it
@@ -484,4 +509,8 @@ export function buildEmbed(
       return _exhaustive;
     }
   }
+}
+
+function competitionName(data: { tournament_name: string } | { phase_name: string }): string {
+  return 'phase_name' in data ? data.phase_name : data.tournament_name;
 }

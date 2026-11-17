@@ -1,4 +1,5 @@
-import { buildEmbed } from '@/lib/discord/embeds';
+import { buildEmbed, buildNotificationEmbed } from '@/lib/discord/embeds';
+import type { PhaseSocialEventPayload } from '@/types/phase-events';
 import type { Locale } from '@/i18n/config';
 import { DEFAULT_FORMAT_OPTIONS, type WebhookFormatOptions } from '@/types/discord';
 import type { SocialEventPayload, SocialPostOptions, SocialProvider } from '@/types/social';
@@ -25,7 +26,7 @@ function sanitizeDiscordFormatting(text: string): string {
     .trim();
 }
 
-function toHashtags(payload: SocialEventPayload): string[] {
+function toHashtags(payload: SocialEventPayload | PhaseSocialEventPayload): string[] {
   const tags = ['#Poketools'];
 
   if (payload.event_type.startsWith('draft_')) tags.push('#PokemonDraft');
@@ -60,14 +61,28 @@ export function formatSocialPost(
   postOptions: SocialPostOptions,
   lang: Locale,
 ): string {
-  const { embed, content } = buildEmbed(
-    payload,
-    {
-      ...EMBED_OPTIONS,
-      show_replay_link: postOptions.include_replay_link,
-    },
-    lang,
-  );
+  return formatNotificationPost(payload, provider, postOptions, lang);
+}
+
+export function formatPhaseSocialPost(
+  payload: PhaseSocialEventPayload,
+  provider: SocialProvider,
+  postOptions: SocialPostOptions,
+  lang: Locale,
+): string {
+  return formatNotificationPost(payload, provider, postOptions, lang);
+}
+
+function formatNotificationPost(
+  payload: SocialEventPayload | PhaseSocialEventPayload,
+  provider: SocialProvider,
+  postOptions: SocialPostOptions,
+  lang: Locale,
+): string {
+  const options = { ...EMBED_OPTIONS, show_replay_link: postOptions.include_replay_link };
+  const { embed, content } = 'owner' in payload
+    ? buildNotificationEmbed(payload, options, lang)
+    : buildEmbed(payload, options, lang);
 
   const sections: string[] = [];
   if (content) {

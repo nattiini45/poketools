@@ -13,11 +13,16 @@ src/lib/discord/
 ├── notify.ts  # Webhook dispatch/event fan-out
 ├── webhook-test.ts  # Server-side test post for one stored webhook
 ├── webhook-view.ts  # Masked webhook shape the admin API returns
+├── phase-webhook-view.ts  # Masked native phase webhook projection
 ├── draft-embeds.ts  # Discord embeds of the draft tool
 └── matchers.ts  # Which webhook receives an event, shared by the sender and the admin preview
 ```
 
 ## Core Functions/Classes
+
+### Native phase webhook storage (dormant)
+
+`phase-discord-webhooks.ts` keeps phase-owned URLs, filters and options in their own table. Its resolver reads the actual phase's parent and combines enabled phase hooks with paged global/league hooks only; it never treats a phase id as a tournament id. Updates/deletes are scoped to the captured phase and configuration version. `toPhaseWebhookView` explicitly copies the admin-visible fields and a masked URL hint, never the URL. Existing routes/dispatch retain their legacy defaults; these new storage adapters alone send no event and add no native-table read to a legacy request.
 
 ### Notification Fan-Out
 - **File**: `notify.ts`
@@ -90,6 +95,33 @@ void emitDiscordEvent({
   data: payload,
 });
 ```
+
+## Dormant native phase notifications
+
+`emitPhaseDiscordEvent(payload): void` in `src/lib/discord/notify.ts` is an explicit, fire-and-forget entry point. No route or finalizer is bound to it yet. The legacy `emitDiscordEvent` contract and tournament resolution remain unchanged.
+
+`PhaseDiscordEventPayload` (`src/types/phase-events.ts`) is a versioned discriminated union:
+
+```typescript
+{
+  version: 1,
+  owner: { kind: 'phase', phase_id: phase.id, season_id: phase.season_id },
+  event_type: 'match_confirmed',
+  data: {
+    kind: 'match_confirmed', phase_name: phase.name,
+    player_1_name: 'Trainer A', player_2_name: 'Trainer B',
+    winner_name: 'Trainer A', game_score: '2-1',
+  },
+}
+```
+
+The data union supports match submission/confirmation/dispute, round generation/completion, achievements, streak milestones/breaks, rating milestones, round recaps/forecasts, and `phase_started` / `phase_completed`. Status data uses `kind: 'phase_status'` and a matching `new_status: 'active'` / `'completed'`. Other fields retain their legacy event-specific meaning, but `phase_name` replaces the display name and report data carries `phase_url`, never `tournament_name`, `tournament_url` or an invented tournament id. League/draft events stay on their existing league-owned path.
+
+The emitter checks the owner against the live phase, then calls `resolvePhaseWebhooks(phase.id)`. That resolver derives the real parent league and unions enabled phase targets with inherited global/league targets. A missing phase or mismatched supplied league aborts notification delivery without throwing to the primary writer. Locale resolution receives only the verified `seasonId`; no phase id enters a tournament resolver. Each webhook still chooses league/English/German independently.
+
+Stored event-filter values remain compatible: native `phase_started` and `phase_completed` match existing `tournament_started` and `tournament_completed` subscriptions respectively; all other filter values are unchanged. `notificationFilterType` is shared with social dispatch. Achievement/streak/rating switches, spoiler/detail/replay options and optional match-card attachments use the same delivery seam as legacy notifications. Cards are generated once per requested language; a card failure still sends text. Rendering consumes phase data directly through the pure `buildNotificationEmbed`, without a fabricated ownership row. Existing translated template placeholder names are display labels only; status copy explicitly says phase in both languages.
+
+Native dispatch tests mock phase reads, recipient resolution, outbound requests and card generation. They perform no database, Storage, image or provider requests.
 
 ## Testing
 - **Test Files**: `src/lib/discord/__tests__/webhook-test.test.ts`, `webhook-view.test.ts`; the route tests under `src/app/api/discord-webhooks/**/__tests__`; `src/components/discord/__tests__/webhook-test-client.test.ts`

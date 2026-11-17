@@ -4,6 +4,7 @@ import type { PlayerStreaks } from './streak';
 import type { EarnedAchievement } from './achievement';
 import type { MatchAnalysis } from './game';
 import type { Locale } from '@/i18n/config';
+import type { BroadcastPresetResource } from './broadcast-resource';
 
 // ─── Broadcast Moment Types ─────────────────────────────────────────
 
@@ -70,6 +71,7 @@ export interface BroadcastPresetInsert {
 }
 
 export interface BroadcastPresetConfig {
+  resource?: BroadcastPresetResource;
   theme?: OverlayTheme;
   accent?: string;
   accent2?: string;

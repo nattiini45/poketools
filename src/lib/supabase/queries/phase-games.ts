@@ -3,9 +3,23 @@ import { isUniqueViolationOf } from '../unique-violation';
 import type { Tables, TablesInsert } from '@/types/database';
 import type { Game, GameCreateInput, BattleStat, BattleStatInsert } from '@/types/game';
 import { phaseGameStatsLockMachine } from '@/lib/league-phase/phase-game-marker-state';
+import { readAllPages } from '../read-all-pages';
+import type { TournamentBattleStat } from './games';
 
 type GameRow = Tables<'phase_games'>;
 type BattleStatRow = Tables<'phase_battle_stats'>;
+
+export async function getPhaseStandingsBattleStats(phaseId: string): Promise<TournamentBattleStat[]> {
+  const rows = await readAllPages((from, to) => supabase.from('phase_battle_stats')
+    .select('id, game_id, player_id, pokemon_name, was_brought, was_lead, kos_dealt, was_koed, phase_games!inner(phase_matches!inner(phase_id, status, phase_rounds!inner(round_number)))')
+    .eq('phase_games.phase_matches.phase_id', phaseId).eq('phase_games.phase_matches.status', 'completed')
+    .order('id').range(from, to));
+  return rows.map(row => ({
+    game_id: row.game_id, player_id: row.player_id, pokemon_name: row.pokemon_name,
+    was_brought: row.was_brought, was_lead: row.was_lead, kos_dealt: row.kos_dealt, was_koed: row.was_koed,
+    round_number: row.phase_games.phase_matches.phase_rounds.round_number,
+  }));
+}
 
 function toGame(row: GameRow): Game {
   return {
