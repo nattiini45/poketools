@@ -61,7 +61,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
   const timings: string[] = [];
 
   async function seed(players: number, phases: number, rounds: number, name: string): Promise<LeagueIds> {
-    const ids = await seedLeague(admin, { players, phases, rounds, name });
+    const ids = await seedLeague(admin, { players, phases, rounds, name, native: true });
     created.push(ids);
     return ids;
   }

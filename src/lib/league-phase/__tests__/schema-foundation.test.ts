@@ -94,6 +94,9 @@ describe('phase storage foundation', () => {
     const restore = lastFunctionBody('league_trash_restore');
     expect(restore).toContain('INSERT INTO public.phase_aggregate_jobs');
     expect(restore).toContain('v_jobs := v_jobs + v_n');
+    const ignoredColumns = restore.slice(restore.indexOf('SELECT array_agg(c)'), restore.indexOf("'columns_ignored'"));
+    expect(ignoredColumns).toContain('NOT a.attisdropped');
+    expect(ignoredColumns).not.toContain('a.attgenerated');
     expect(restore).toContain("public.phase_games g WHERE g.replay_hash = x ->> 'replay_hash'");
     expect(lastFunctionBody('league_trash_expire')).toContain("lt.rel IN ('matches', 'phase_matches')");
     expect(lastFunctionBody('league_trash__x')).toContain("'{native_phases}'");

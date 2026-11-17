@@ -101,6 +101,9 @@ BEGIN
 END $$;
 
 CREATE TEMP TABLE phase_external_links (kind text PRIMARY KEY, id uuid NOT NULL);
+UPDATE public.phase_teams SET forked_from_team_id = NULL,
+  forked_from_phase_team_id = (SELECT id FROM public.phase_teams ORDER BY id OFFSET 1 LIMIT 1)
+WHERE id = (SELECT id FROM public.phase_teams ORDER BY id LIMIT 1);
 DO $$
 BEGIN
   IF NOT EXISTS (SELECT 1 FROM public.league_phases WHERE enrollment_source_phase_id IS NOT NULL) THEN
@@ -169,6 +172,10 @@ SET ROLE service_role;
 SELECT public.league_trash__assert_inventory();
 SELECT public.league_trash_delete(:'sid', :'actor', 90) ->> 'trash_id' AS tid \gset
 SELECT public.league_trash_rebuild_done(:'tid');
+UPDATE public.league_trash_tables SET rows = (
+  SELECT jsonb_agg(x ORDER BY (x ->> 'forked_from_phase_team_id') IS NULL, x ->> 'id')
+  FROM jsonb_array_elements(rows) x
+) WHERE trash_id = :'tid' AND rel = 'phase_teams';
 SELECT public.league_trash_restore(:'tid', now() + interval '1 day') AS restore_result \gset
 RESET ROLE;
 

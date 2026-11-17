@@ -36,6 +36,8 @@ Old captured snapshots are not converted by an expand migration. Their schema-aw
 
 ## Delivery and verification
 
+The database lifecycle suite explicitly opts into native fixture rows; route and admin-agent fixtures retain legacy storage until their native consumers and aggregate worker ship. Known generated columns are recomputed, not reported as removed-column schema drift.
+
 The PostgREST recycle-bin fixture populates both ownership families and checks native clocks, fingerprints and aggregate jobs without relaxing its every-owned-table assertion. After the dormant-state SQL rehearsal, database CI enables phase mode only on its disposable local stack for this fixture. A manual run of that fixture likewise requires operator-enabled phase mode on a disposable stack; never change a shared or hosted stack for a test.
 
 The sequence is additive schema/security/trash, lifecycle/pairing persistence, match pipelines/projections, ancillary services/contracts, canonical routes/cache/redirects, then an explicitly approved maintenance transfer. The private companion ships its matching adapter changes before cutover. Retirement is separate work and is not part of the initial transfer.

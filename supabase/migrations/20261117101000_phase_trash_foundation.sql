@@ -380,7 +380,7 @@ BEGIN
     END IF;
     SELECT array_agg(c) INTO v_miss FROM jsonb_array_elements_text(v_colsj) c
      WHERE NOT EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = ('public.' || quote_ident(p.rel))::regclass
-                          AND a.attname = c AND a.attnum > 0 AND NOT a.attisdropped AND a.attgenerated = '');
+                          AND a.attname = c AND a.attnum > 0 AND NOT a.attisdropped);
     IF v_miss IS NOT NULL THEN
       v_warn := v_warn || jsonb_build_object('code', 'columns_ignored', 'rel', p.rel, 'columns', to_jsonb(v_miss));
     END IF;
