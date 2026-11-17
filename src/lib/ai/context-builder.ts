@@ -20,7 +20,7 @@ import { renderAllowlists, renderTeamConstraints, renderCoreAssignments } from '
 
 // ─── System Prompt ──────────────────────────────────────────────────
 
-function buildSystemPrompt(gen: number): string {
+export function buildSystemPrompt(gen: number): string {
 return `You are Professor Linden, a competitive Pokémon analyst. You break down matches the way a knowledgeable friend would recap a game they just watched — casual, confident, and analytical without being stiff or academic. No scholarly metaphors, no "my research notes", no professor-speak.
 
 VOICE AND STRUCTURE:
@@ -310,7 +310,7 @@ export async function buildMatchAnalysisPrompt(
 
 // ─── Pre-Match Scouting ─────────────────────────────────────────────
 
-function buildScoutingSystemPrompt(gen: number): string {
+export function buildScoutingSystemPrompt(gen: number): string {
 return `You are Professor Linden, a competitive Pokémon analyst doubling as your team's scout. You break down opponents the way a knowledgeable coach would prep their player before a match — casual, confident, and analytical without being stiff or academic. No scholarly metaphors, no "my research notes", no professor-speak.
 
 VOICE AND STRUCTURE:
@@ -618,7 +618,7 @@ export async function buildMatchPrepPrompt(
 }
 
 /** Aggregate opponent battle stats into a human-readable scouting section */
-function buildOpponentHistorySection(
+export function buildOpponentHistorySection(
   opponentName: string,
   stats: BattleStat[]
 ): string {
@@ -764,7 +764,7 @@ export function buildMetaSection(aggregates: Aggregate[], totalGames: number, is
   return lines.join('\n') + '\n';
 }
 
-function buildTeamSection(playerName: string, pokemon: PokemonSet[]): string {
+export function buildTeamSection(playerName: string, pokemon: PokemonSet[]): string {
   const lines = [`### ${playerName}'s Team Sheet`];
 
   for (const set of pokemon) {
@@ -779,7 +779,7 @@ function buildTeamSection(playerName: string, pokemon: PokemonSet[]): string {
   return lines.join('\n');
 }
 
-function buildBattleStatsSection(playerName: string, stats: BattleStat[]): string {
+export function buildBattleStatsSection(playerName: string, stats: BattleStat[]): string {
   if (stats.length === 0) return '';
 
   const lines = [`### ${playerName}'s Battle Stats`];
@@ -805,7 +805,7 @@ function buildBattleStatsSection(playerName: string, stats: BattleStat[]): strin
   return lines.join('\n');
 }
 
-function buildTypeAnalysisSection(playerName: string, analysis: TeamTypeAnalysis): string {
+export function buildTypeAnalysisSection(playerName: string, analysis: TeamTypeAnalysis): string {
   const lines = [`### ${playerName}'s Type Coverage`];
 
   if (analysis.teamWeaknesses.length > 0) {
@@ -936,7 +936,7 @@ export function buildCondensedFrameSection(frames: BattleFrame[]): string {
 // ─── Helpers ────────────────────────────────────────────────────────
 
 /** Extract unique species list from battle stats or team sheets */
-function extractSpeciesFromContext(
+export function extractSpeciesFromContext(
   battleStatsByGame: Record<string, BattleStat[]>,
   playerId: string,
   teamPokemon?: PokemonSet[]
