@@ -30,6 +30,8 @@ const ALLOWED: Record<string, Allowed> = {
   '@/lib/auth/helpers': ['requireAdmin', 'requireAnyAdmin', 'requireDraftAdmin', 'requireFormatViewer', 'requireResourceAdmin'],
   '@/lib/ruleset-studio/guards': ['assertRulesetUsable', 'requireRulesetOwner', 'requireRulesetViewer'],
   '@/lib/auth/admin-scope': ['getAdminScope', 'scopeAllowsSeason'],
+  '@/lib/auth/phase-access': ['requirePhaseAwareAdmin', 'getPhaseAdminScope'],
+  '@/lib/ai/agent/resource-ref': ['agentResourceRefsSchema'],
   // Pure catalogs, dex lookups and kits.
   '@/lib/pkmn/dex': ['getAbility', 'getAbilityNatDex', 'getItem', 'getItemNatDex', 'getMove', 'getMoveNatDex', 'getSpecies', 'getSpeciesNatDex', 'searchAbilities', 'searchItems', 'searchMoves', 'searchSpecies'],
   '@/lib/pkmn/format-catalog': ['PRESET_FAMILIES', 'getPreset'],
@@ -68,6 +70,7 @@ const ALLOWED: Record<string, Allowed> = {
   // Rate limiting: a read-then-count on a shared bucket, not a domain write (the pin-impact preview shares the route's bucket).
   '@/lib/utils/rate-limit': ['checkRateLimit'],
   // Database query modules: every name listed, none may look like a write.
+  '@/lib/supabase/queries/agent-ownership': ['getAgentOwnershipGraph'],
   '@/lib/supabase/queries/draft-pool-entries': ['getPoolEntries'],
   '@/lib/supabase/queries/draft-pool-templates': ['getTemplate', 'listTemplates'],
   '@/lib/supabase/queries/draft-tier-limits': ['getTierLimits'],
