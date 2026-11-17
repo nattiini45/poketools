@@ -33,6 +33,9 @@ vi.mock('next/cache', () => ({
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getTournamentById: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({
+  getPhaseById: vi.fn(),
+}));
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   clearAggregatesForScope: vi.fn(async () => ({ aggregatesDeleted: 0, playerAggregatesDeleted: 0 })),
   updateAggregatesForScope: vi.fn(async () => undefined),
@@ -50,14 +53,18 @@ vi.mock('@/lib/match/aggregate-queue', () => ({
 
 import {
   EXPIRE_NOW,
+  expirePhaseReads,
   expireRatingReads,
+  expireSeasonReads,
   publicTags,
   revalidateMatchPages,
+  revalidatePhaseMatchPages,
   revalidatePublicPath,
   tagsForPath,
 } from '../revalidation';
 import { rebuildAggregatesForScope } from '../match/aggregate-rebuild';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { listGamesForAggregateRebuild } from '@/lib/supabase/queries/games';
 
 /**
@@ -158,6 +165,10 @@ describe('tagsForPath', () => {
     ['/leagues/s1/stats', ['season:s1', 'aggregates:league:s1']],
     ['/leagues/s1/teams', ['season:s1']],
     ['/leagues/s1/matchup', ['season:s1']],
+    ['/leagues/s1/phases/p1', ['phase:p1', 'season:s1']],
+    ['/leagues/s1/phases/p1/stats', ['phase:p1', 'season:s1', 'aggregates:phase:p1']],
+    ['/leagues/s1/phases/p1/matches/m1', ['phase:p1', 'season:s1']],
+    ['/leagues/s1/phases/p1/matches', []],
     ['/tournaments/t1', ['tournament:t1']],
     ['/tournaments/t1/stats', ['tournament:t1', 'aggregates:tournament:t1']],
     ['/teams', []],
@@ -266,6 +277,62 @@ describe('write path: revalidatePublicPath', () => {
       { kind: 'path', path: '/leagues/s9/stats' },
       { kind: 'tag', tag: 'season:s9', profile: EXPIRE_NOW },
       { kind: 'tag', tag: 'aggregates:league:s9', profile: EXPIRE_NOW },
+    ]);
+  });
+});
+
+describe('native phase writes', () => {
+  it('expires only the native phase, league and profile reads for a phase write', () => {
+    expirePhaseReads('p1', 's1');
+    expect(log.calls).toEqual(['season:s1', 'seasons', 'player-profiles', 'phase:p1'].map(tag => ({
+      kind: 'tag', tag, profile: EXPIRE_NOW,
+    })));
+  });
+
+  it('expires the touched native phases for a league write and deduplicates the tags', () => {
+    expireSeasonReads('s1', { phaseIds: ['p1', 'p2', 'p1'] });
+    expect(tagsIn(log.calls)).toEqual(['season:s1', 'seasons', 'player-profiles', 'phase:p1', 'phase:p2']);
+  });
+
+  it('finds the phase owner for the match service effect and expires canonical and shared reads', async () => {
+    vi.mocked(getPhaseById).mockResolvedValueOnce({ id: 'p1', season_id: 's1' } as never);
+    await revalidatePhaseMatchPages('p1', 'm1');
+    expect(getPhaseById).toHaveBeenCalledExactlyOnceWith('p1');
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expectEveryPathPairedWithItsTags(log.calls);
+
+    const paths = log.calls.flatMap(call => call.kind === 'path' ? [call.path] : []);
+    expect(paths).toEqual(expect.arrayContaining([
+      '/leagues/s1/phases/p1',
+      '/leagues/s1/phases/p1/stats',
+      '/leagues/s1/phases/p1/matches/m1',
+      '/leagues/s1',
+      '/leagues/s1/stats',
+      '/leagues/s1/teams',
+      '/leagues/s1/matchup',
+      '/leagues',
+      '/teams',
+      '/teams/library',
+    ]));
+    expect(paths.some(p => p.startsWith('/tournaments'))).toBe(false);
+    const tags = tagsIn(log.calls);
+    expect(tags.sort()).toEqual([
+      'aggregates:all_time', 'aggregates:league:s1', 'aggregates:phase:p1',
+      'phase:p1', 'player-profiles', 'ratings', 'season:s1', 'seasons',
+    ]);
+  });
+
+  it('skips the owner lookup when the caller already knows the league', async () => {
+    await revalidatePhaseMatchPages('p1', undefined, 's1');
+    expect(getPhaseById).not.toHaveBeenCalled();
+    expect(log.calls).toContainEqual({ kind: 'path', path: '/leagues/s1/phases/p1/stats' });
+  });
+
+  it('still expires phase, aggregate and shared tags after an owner lookup fails', async () => {
+    vi.mocked(getPhaseById).mockRejectedValueOnce(new Error('transient'));
+    await expect(revalidatePhaseMatchPages('p1', 'm1')).resolves.toBeUndefined();
+    expect(tagsIn(log.calls)).toEqual([
+      'phase:p1', 'aggregates:phase:p1', 'ratings', 'aggregates:all_time', 'player-profiles',
     ]);
   });
 });
