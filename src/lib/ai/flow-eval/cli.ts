@@ -400,11 +400,10 @@ export async function main(options: CliOptions): Promise<number> {
     io.error('ai-flow eval: no API key (ANTHROPIC_API_KEY or CLAUDE_API_KEY in the environment or an env file; see --env-file). Nothing was sent. Use --dry-run to see the prompts and the estimate.');
     return 2;
   }
-  // The app's call paths read these; nothing else is taken from an env file, and tracing stays off.
+  // The app's call paths read these; nothing else is taken from an env file.
   env.ANTHROPIC_API_KEY = apiKey;
   env.CLAUDE_MODEL = model;
   env.CLAUDE_API_EFFORT = effort;
-  delete env.BRAINTRUST_API_KEY;
 
   mkdirSync(outDir, { recursive: true });
   const prior = parsed.resume ? priorRows(outDir) : { rows: [] as RunRow[], spentUsd: 0 };

@@ -1,6 +1,5 @@
-import { config } from 'dotenv';
 import { describe, it, expect, beforeAll, beforeEach } from 'vitest';
-import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
+import { assertLoopbackUrl, loadLocalStackEnv, localStackOptIn } from '@/test/local-stack';
 
 // LIVE-DATABASE test: it reads real rows. Automation must never spend the
 // Supabase quota (AGENTS.md hard rule), so it runs only on an explicit opt-in,
@@ -12,7 +11,7 @@ if (liveDbOptIn) {
   // Load the env over vitest.config's placeholders so the Supabase client
   // constructs against the configured DB. Must run before the query modules
   // (which build the client at import time) are dynamically loaded.
-  config({ override: true });
+  loadLocalStackEnv();
   // The .env just loaded may name the hosted project: refuse it before any client is built.
   assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
 }

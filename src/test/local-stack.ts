@@ -12,6 +12,9 @@
  * Test-only: it imports nothing from the app.
  */
 
+import { readFileSync } from 'node:fs';
+import { parseEnv } from 'node:util';
+
 const LOOPBACK_HOSTNAMES: readonly string[] = ['127.0.0.1', 'localhost', '[::1]'];
 
 type Env = Readonly<Record<string, string | undefined>>;
@@ -51,6 +54,25 @@ export function ciAllowsLocalStack(env: Env = process.env): boolean {
 export function localStackOptIn(flag: string, env: Env = process.env): boolean {
   const requested = env[flag] === '1' || env.LOCAL_STACK === '1';
   return requested && ciAllowsLocalStack(env);
+}
+
+/**
+ * Load a `.env` file over the current environment, for a suite that refuses any non-loopback URL afterwards: the file
+ * is the developer's own local stack, never the hosted project. A missing file is not an error (CI has none, and the
+ * caller's `assertLoopbackUrl` still decides whether the run may proceed); every other read error is rethrown.
+ *
+ * `parseEnv` from `node:util` replaces the `dotenv` package these suites used to pick up transitively. Like dotenv's
+ * `config({ override: true })`, it sets what the file holds over what is already there and expands no variables.
+ */
+export function loadLocalStackEnv(file = '.env'): void {
+  let content: string;
+  try {
+    content = readFileSync(file, 'utf8');
+  } catch (err) {
+    if (err instanceof Error && 'code' in err && err.code === 'ENOENT') return;
+    throw err;
+  }
+  Object.assign(process.env, parseEnv(content));
 }
 
 /** A key passed in the environment, never the vitest placeholder. */

@@ -100,7 +100,6 @@ export async function bootDevServer({ appDir, port, logPath }) {
     DISCORD_CLIENT_SECRET: '',
     ANTHROPIC_API_KEY: '',
     REPLICATE_API_TOKEN: '',
-    BRAINTRUST_API_KEY: '',
   };
   const { openSync } = await import('node:fs');
   await mkdir(dirname(logPath), { recursive: true });

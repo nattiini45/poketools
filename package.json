@@ -75,7 +75,6 @@
     "@ui-sdk/react": "0.1.0-beta.6",
     "@vercel/analytics": "^2.0.1",
     "ai": "6.0.289",
-    "braintrust": "^3.11.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "html-to-image": "^1.11.13",

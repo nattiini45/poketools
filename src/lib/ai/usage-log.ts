@@ -2,8 +2,8 @@ import { logger } from '@/lib/logger';
 
 /**
  * One counts-only usage record per model generation, shared by the raw-SDK client and the Kale
- * provider. It is the only telemetry the streaming path has (the Braintrust wrapper proxies
- * `messages.create` alone), and it never carries prompt text, model output or user data.
+ * provider. It is the only telemetry a generation has, and it never carries prompt text, model
+ * output or user data.
  */
 export interface AiUsageRecord {
   /** Where the call came from (`match-analysis`, `slot-coach`, `kale`, ...). */

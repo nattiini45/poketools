@@ -1,8 +1,12 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertLoopbackUrl,
   ciAllowsLocalStack,
   isLoopbackUrl,
+  loadLocalStackEnv,
   localStackOptIn,
   requireLocalKey,
 } from '../local-stack';
@@ -105,5 +109,23 @@ describe('requireLocalKey', () => {
     expect(() => requireLocalKey('SUPABASE_SERVICE_ROLE_KEY', { SUPABASE_SERVICE_ROLE_KEY: 'dummy-service-role-key' })).toThrow(
       /SUPABASE_SERVICE_ROLE_KEY/,
     );
+  });
+});
+
+describe('loadLocalStackEnv', () => {
+  it('writes the file over the current environment and treats a missing file as no env', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'local-stack-'));
+    const file = join(dir, '.env');
+    writeFileSync(file, 'POKETOOLS_LOCAL_STACK_PROBE=from-file\n');
+    process.env.POKETOOLS_LOCAL_STACK_PROBE = 'from-process';
+    try {
+      loadLocalStackEnv(file);
+      expect(process.env.POKETOOLS_LOCAL_STACK_PROBE).toBe('from-file');
+      loadLocalStackEnv(join(dir, 'absent.env'));
+      expect(process.env.POKETOOLS_LOCAL_STACK_PROBE).toBe('from-file');
+    } finally {
+      delete process.env.POKETOOLS_LOCAL_STACK_PROBE;
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
