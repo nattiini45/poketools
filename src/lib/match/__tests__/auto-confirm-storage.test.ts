@@ -6,7 +6,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 vi.mock('@/lib/match/finalize', () => ({
   finalizeMatchCompletion: vi.fn(() => { throw new Error('Legacy finalize must not run'); }),
   healMatchFinalization: vi.fn(() => { throw new Error('Legacy heal must not run'); }),
-  findMatchesNeedingAdmin: vi.fn(() => { throw new Error('Legacy history must not be read'); }),
+  findMatchesNeedingAdmin: vi.fn(() => { throw new Error('Unexpected tournament match lookup'); }),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(() => { throw new Error('Legacy matches must not be read'); }),
