@@ -10,13 +10,7 @@ import {
   formatZodErrors,
 } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import {
-  getTournamentById,
-  getParticipants,
-  addParticipant,
-  removeParticipant,
-  updateParticipantSeeds,
-} from '@/lib/supabase/queries/tournaments';
+import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { assertPhaseEditable } from '@/lib/tournament/league-phase';
@@ -26,6 +20,8 @@ import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { PublicParticipantWithSeed } from '@/types/tournament';
+
+const { getById: getTournamentById, participants: getParticipants, addParticipant, removeParticipant, updateSeeds: updateParticipantSeeds } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;

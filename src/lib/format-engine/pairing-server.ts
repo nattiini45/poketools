@@ -57,10 +57,10 @@ export interface PairingAidsInput {
  * one order of the two players (a pairing has no order, and `a` / `b` are only names for the two). Other pairing kinds
  * need none and return an empty object without reading the runtime state.
  */
-export async function loadPairingAids(input: PairingAidsInput): Promise<PairingAids> {
+export async function loadPairingAids(input: PairingAidsInput, loadContext: typeof loadFreshKitContext = loadFreshKitContext): Promise<PairingAids> {
   const { pairing } = input.stage;
   if (pairing.kind !== 'filter' && pairing.kind !== 'bipartite') return {};
-  const ctx = await loadFreshKitContext(input.seasonId);
+  const ctx = await loadContext(input.seasonId);
   if (ctx === null) throw new Error(`loadPairingAids: league ${input.seasonId} does not run a kit format`);
   const base = envBaseOf(ctx, `pairing:${input.stage.key}:${input.roundNumber}`);
 

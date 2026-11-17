@@ -20,6 +20,8 @@ import { relationRevealMachine } from '@/lib/format-engine/runtime/relation-stat
 import { seasonFormatEngineMachine } from '@/lib/format-studio/engine-state';
 import { leagueTrashMachine } from '@/lib/league-trash/lifecycle-state';
 import { phaseStorageMachine } from '@/lib/league-phase/storage-state';
+import { phaseMachine } from '@/lib/league-phase/phase-state';
+import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
 import { aggregateJobMachine } from '@/lib/match/aggregate-job-state';
 import { gameAggregateMarkerMachine, gameEditLeaseMachine, gameEvolutionCreditMachine, gameStatsLockMachine } from '@/lib/match/game-marker-state';
 import { matchOutcomeMachine } from '@/lib/match/outcome-state';
@@ -60,6 +62,8 @@ export const STATE_MACHINES: readonly MachineSpec<string, string>[] = [
   gameStatsLockMachine.spec,
   leagueTrashMachine.spec,
   phaseStorageMachine.spec,
+  phaseMachine.spec,
+  phaseRoundMachine.spec,
   actionWindowMachine.spec,
   actionSubmissionMachine.spec,
   formatChallengeMachine.spec,

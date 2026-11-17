@@ -1,8 +1,9 @@
 import type { ApiErrorCode } from '@/i18n/messages/errors';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { LeaguePhase } from '@/types/season';
-import type { Round } from '@/types/round';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { RoundStatus } from '@/types/round';
+
+export type PhaseSummarySource = Omit<LeaguePhase, 'rounds_total' | 'rounds_completed' | 'season_id'> & { season_id: string | null };
 
 export class PhaseGuardError extends UserFacingError {
   constructor(message: string, code: ApiErrorCode) {
@@ -12,8 +13,8 @@ export class PhaseGuardError extends UserFacingError {
 }
 
 export function buildLeaguePhase(
-  tournament: TournamentWithDetails,
-  rounds: Round[]
+  tournament: PhaseSummarySource,
+  rounds: readonly { status: RoundStatus }[]
 ): LeaguePhase {
   const roundsCompleted = rounds.filter((r) => r.status === 'completed').length;
   return {

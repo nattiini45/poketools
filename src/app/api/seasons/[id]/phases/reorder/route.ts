@@ -4,11 +4,13 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { phaseReorderSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
-import { getStagesBySeasonId, reorderPhases } from '@/lib/supabase/queries/tournaments';
+import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+
+const { listBySeason: getStagesBySeasonId, reorder: reorderPhases } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string }>;

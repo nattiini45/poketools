@@ -36,7 +36,7 @@ import { slugCandidates } from '@/lib/studio-core/insert-with-slug.server';
 import { contentHash } from '@/lib/studio-core/json';
 import { ltext } from '@/lib/studio-core/ltext';
 import {
-  createCompetitionFromFormat,
+  type createCompetitionFromFormat,
   type CompetitionForkInput,
   type CompetitionRulesetInput,
 } from '@/lib/supabase/queries/competition-create';
@@ -52,6 +52,7 @@ import { toActor, withBasedOn } from './library';
 import type { EngineGap } from './library-types';
 import { engineGaps, planStages } from './materialise';
 import { slugFromName } from './slug';
+import { legacyFormatStorage, type FormatStoragePort } from '@/lib/league-phase/format-storage';
 
 /** Where the league's format comes from: a shipped example (optionally with a rule preset on every stage), or a stored one. */
 export type FromFormat = { preset_id: string; ruleset_preset_id?: string } | { definition_id: string; version_no?: number };
@@ -184,7 +185,7 @@ function mapCreateError(err: unknown): unknown {
   });
 }
 
-export async function createLeagueFromFormat(input: CreateLeagueInput): Promise<CreatedLeague> {
+export async function createLeagueFromFormat(input: CreateLeagueInput, storage: FormatStoragePort = legacyFormatStorage): Promise<CreatedLeague> {
   const { actor, season, fromFormat } = input;
 
   // 1. The source, without writing.
@@ -230,7 +231,7 @@ export async function createLeagueFromFormat(input: CreateLeagueInput): Promise<
   const seasonId = randomUUID();
   let result: Awaited<ReturnType<typeof createCompetitionFromFormat>>;
   try {
-    result = await createCompetitionFromFormat({
+    result = await storage.create({
       actorId: actor.playerId,
       season: {
         id: seasonId,

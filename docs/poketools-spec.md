@@ -136,6 +136,8 @@ A **phase** is stored as a `tournaments` row with `season_id` set. League admin 
 
 ADR 0005 fixes the target as full separation. The additive phase-owned schema is documented in [Phase-owned storage](./phase-separation.md); it remains dormant until the separately approved maintenance transfer. The legacy reads and routes described here remain authoritative during that preparation.
 
+The dormant lifecycle layer supplies native phase/enrollment/group/round/bracket persistence and format materialisation behind explicit storage ports. Existing handlers remain legacy-bound, with no generation lookup or native schema dependency added to their default requests. Native status reactions, advancement and substitution take explicit result/effect callbacks rather than falling back to tournament storage; their activation waits for the later match, ancillary and route layers.
+
 | Field | Type | Notes |
 |---|---|---|
 | name | Title | Clean phase name (no "{League} - " prefix stored) |

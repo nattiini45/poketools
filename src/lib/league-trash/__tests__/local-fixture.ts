@@ -538,7 +538,6 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
 
   if (size.native) {
     const nativePhaseId = phaseIds[0];
-    const nativeGroupId = tournamentGroupIds[0];
     const nativeMatchId = gameRows[0].match_id;
     const nativeMatch = matchById.get(nativeMatchId as string);
     if (!nativeMatch) throw new Error('[local-fixture] missing match for native game');
@@ -547,8 +546,14 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     const nativeOpponentId = nativeMatch.player_2_id;
     await insert(client, 'league_phases', [{ id: nativePhaseId, season_id: seasonId, name: 'Native phase', bracket_type: 'round_robin', ruleset_id: rulesetId, status: 'active' }]);
     await insert(client, 'phase_participants', playerIds.map((player_id) => ({ phase_id: nativePhaseId, player_id })));
-    await insert(client, 'phase_groups', [{ id: nativeGroupId, phase_id: nativePhaseId, season_id: seasonId, name: 'Native group', group_number: 1, season_group_id: groupIds[0] }]);
-    await insert(client, 'phase_group_members', [{ group_id: nativeGroupId, phase_id: nativePhaseId, player_id: nativePlayerId }]);
+    const nativeGroups = tgRows.filter((group) => group.tournament_id === nativePhaseId).map(({ tournament_id, ...group }) => ({
+      ...group, id: group.id, phase_id: tournament_id, season_id: seasonId,
+    }));
+    const nativeGroupIds = new Set(nativeGroups.map((group) => group.id));
+    await insert(client, 'phase_groups', nativeGroups);
+    await insert(client, 'phase_group_members', tgmRows.filter((member) => nativeGroupIds.has(member.group_id)).map((member) => ({
+      ...member, phase_id: nativePhaseId,
+    })));
     await insert(client, 'phase_rounds', [{ id: nativeMatch.round_id, phase_id: nativePhaseId, name: 'Native round', round_number: 1, best_of: 3, status: 'active', deadline: at(DAY) }]);
     const { tournament_id: legacyPhaseId, ...nativeMatchRow } = nativeMatch;
     if (legacyPhaseId !== nativePhaseId) throw new Error('[local-fixture] native match belongs to another phase');

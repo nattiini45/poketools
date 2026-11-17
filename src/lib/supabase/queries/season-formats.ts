@@ -138,18 +138,19 @@ function embeddedCount(value: unknown): number {
  * What `isSeasonStarted` needs, in one read: the league status and, per phase, its status and round count
  * (`rounds ( count )` embed). Null when the league does not exist.
  */
-export async function getSeasonStartSignals(seasonId: string): Promise<SeasonStartSignals | null> {
+export async function getSeasonStartSignals(seasonId: string, storage: 'legacy' | 'native' = 'legacy'): Promise<SeasonStartSignals | null> {
   if (!isValidUuid(seasonId)) return null;
   const { data, error } = await supabase
     .from('seasons')
-    .select('status, tournaments ( status, rounds ( count ) )')
+    .select(storage === 'legacy' ? 'status, tournaments ( status, rounds ( count ) )' : 'status, league_phases ( status, phase_rounds ( count ) )')
     .eq('id', seasonId)
     .maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  const phases = (data.tournaments ?? []) as unknown as Array<{ status: string; rounds: unknown }>;
+  const row = data as unknown as { status: string; tournaments?: Array<{ status: string; rounds: unknown }>; league_phases?: Array<{ status: string; phase_rounds: unknown }> };
+  const phases = storage === 'legacy' ? row.tournaments ?? [] : (row.league_phases ?? []).map((phase) => ({ status: phase.status, rounds: phase.phase_rounds }));
   return {
-    status: data.status,
+    status: row.status as SeasonStartSignals['status'],
     phases: phases.map((phase) => ({
       status: phase.status as SeasonStartSignals['phases'][number]['status'],
       rounds_total: embeddedCount(phase.rounds),
@@ -158,10 +159,10 @@ export async function getSeasonStartSignals(seasonId: string): Promise<SeasonSta
 }
 
 /** Phases of the league that were not created from a format (`format_stage_key` is null): head count. */
-export async function getSeasonManualPhaseCount(seasonId: string): Promise<number> {
+export async function getSeasonManualPhaseCount(seasonId: string, storage: 'legacy' | 'native' = 'legacy'): Promise<number> {
   if (!isValidUuid(seasonId)) return 0;
   const { count, error } = await supabase
-    .from('tournaments')
+    .from(storage === 'legacy' ? 'tournaments' : 'league_phases')
     .select('id', { count: 'exact', head: true })
     .eq('season_id', seasonId)
     .is('format_stage_key', null);
@@ -261,8 +262,8 @@ function stringArray(value: unknown): string[] {
 }
 
 /** Attach (or re-attach) a format version to a custom league: frozen copy plus one phase per stage, one transaction. */
-export async function attachSeasonFormat(input: AttachRpcInput): Promise<AttachRpcResult> {
-  const { data, error } = await supabase.rpc('format_attach_season', {
+export async function attachSeasonFormat(input: AttachRpcInput, storage: 'legacy' | 'native' = 'legacy'): Promise<AttachRpcResult> {
+  const { data, error } = await supabase.rpc(storage === 'legacy' ? 'format_attach_season' : 'phase_format_attach_season', {
     p_season_id: input.seasonId,
     p_definition_id: input.definitionId,
     p_version_no: input.versionNo,
@@ -314,8 +315,9 @@ export async function detachSeasonFormat(
   seasonId: string,
   confirmClear = false,
   confirmedCounts: RuntimeCleared | null = null,
+  storage: 'legacy' | 'native' = 'legacy',
 ): Promise<DetachRpcResult> {
-  const { data, error } = await supabase.rpc('format_detach_season', {
+  const { data, error } = await supabase.rpc(storage === 'legacy' ? 'format_detach_season' : 'phase_format_detach_season', {
     p_season_id: seasonId,
     p_confirm_clear: confirmClear === true,
     ...(confirmedCounts ? { p_confirmed_counts: confirmedCounts as unknown as Json } : {}),

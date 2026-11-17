@@ -23,15 +23,16 @@ import { isKitCandidate, type HookTournament } from './kit-candidate';
 import { onRoundGenerated } from './runtime/hooks';
 import { loadFreshKitContext, rosterOf, type KitContext } from './runtime/load';
 import { assertStageNotEnded } from './runtime/stage-end-server';
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
 
 /**
  * The kit phase a tournament is, or null when it is not a phase of a custom league (or the format does not run it).
  * A custom league without an attached format cannot start: refused before any round is written.
  */
-export async function loadKitPhaseOfTournament(tournament: HookTournament): Promise<KitPhase | null> {
+export async function loadKitPhaseOfTournament(tournament: HookTournament, storage: KitStoragePort = legacyKitStorage): Promise<KitPhase | null> {
   if (!isKitCandidate(tournament)) return null;
   await assertSeasonFormatAttached(tournament.season_id);
-  return loadKitPhase(tournament.season_id, tournament.id);
+  return loadKitPhase(tournament.season_id, tournament.id, storage);
 }
 
 /** Whether the phase is paired by the kit engine itself (not the legacy pairing of a shadow or legacy league). */
@@ -64,9 +65,13 @@ export function assertPhaseGenerates(kitPhase: KitPhase | null): void {
  * Refuses another round (409 `rounds_stage_ended`) for a phase whose stage reached its `end_when`. A read, so it can be
  * outdated by the time the round is written: the write refuses a phase that completed meanwhile (`round_write`).
  */
-export async function assertPhaseOpenForRounds(tournament: HookTournament & { current_round: number }, kitPhase: KitPhase | null): Promise<void> {
+export async function assertPhaseOpenForRounds(
+  tournament: HookTournament & { current_round: number },
+  kitPhase: KitPhase | null,
+  assertOpen: typeof assertStageNotEnded = assertStageNotEnded,
+): Promise<void> {
   if (!isKitEnginePhase(kitPhase) || !isKitCandidate(tournament)) return;
-  await assertStageNotEnded({
+  await assertOpen({
     seasonId: tournament.season_id,
     phaseId: tournament.id,
     stage: kitPhase.stage,
@@ -129,12 +134,15 @@ export async function assertNoOpenRoundBeforeNext(
   tournamentId: string,
   kitPhase: KitPhase | null,
   rounds: readonly Pick<Round, 'id' | 'name' | 'round_number' | 'status'>[],
+  readMatches: (phaseId: string) => Promise<readonly { round_id: string; status: string }[]> = async (id) => {
+    const { getMatchesByTournament } = await import('@/lib/supabase/queries/matches');
+    return getMatchesByTournament(id);
+  },
 ): Promise<void> {
   if (!isKitEnginePhase(kitPhase) || kitPhase.stage.end_when?.kind !== 'expr') return;
   if (!rounds.some((round) => round.status !== 'completed')) return;
   // Loaded on demand: the query layer is only needed for this one kind of stage.
-  const { getMatchesByTournament } = await import('@/lib/supabase/queries/matches');
-  assertNoRoundOpenAhead(kitPhase, rounds, await getMatchesByTournament(tournamentId));
+  assertNoRoundOpenAhead(kitPhase, rounds, await readMatches(tournamentId));
 }
 
 /**
@@ -314,9 +322,10 @@ export async function assertPhaseReadyForFirstRound(
   tournament: HookTournament & { current_round: number; status?: string },
   kitPhase: KitPhase | null,
   options: FirstRoundOptions,
+  loadContext: typeof loadFreshKitContext = loadFreshKitContext,
 ): Promise<ForcedStart | null> {
   if (!isKitEnginePhase(kitPhase) || !isKitCandidate(tournament) || tournament.current_round > 0) return null;
-  const ctx = await loadFreshKitContext(tournament.season_id);
+  const ctx = await loadContext(tournament.season_id);
   if (ctx === null) return null;
   const gap = firstRoundGap(ctx, { stage: kitPhase.stage.key, startsPhase: tournament.status === 'upcoming' });
   if (gap.reasons.length === 0) return null;
@@ -373,10 +382,11 @@ export async function announceKitRound(
   round: AnnouncedRound,
   startsPhase: boolean,
   forcedStart: ForcedStart | null = null,
+  generated: typeof onRoundGenerated = onRoundGenerated,
 ): Promise<void> {
   if (!isKitEnginePhase(kitPhase) || !isKitCandidate(tournament)) return;
   if (forcedStart !== null) auditForcedStart(forcedStart);
-  await onRoundGenerated({ tournament, roundNumber: round.roundNumber, rematches: round.rematches ?? 0, startsPhase });
+  await generated({ tournament, roundNumber: round.roundNumber, rematches: round.rematches ?? 0, startsPhase });
   if ((round.forbidden ?? 0) > 0) {
     await openForbiddenPairingCheck({
       seasonId: tournament.season_id,

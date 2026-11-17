@@ -1,6 +1,6 @@
 import type { AdvancementRule, EnrollmentContribution, EnrollmentSource } from '@/types/season';
-import type { TournamentGroupWithMembers } from '@/types/season';
-import type { Tournament } from '@/types/tournament';
+import type { BracketType, ParticipantWithSeed } from '@/types/tournament';
+import type { RoundByeSource } from './byes';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getSeasonById, getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import {
@@ -18,6 +18,49 @@ import { scoringByeRecords } from '@/lib/tournament/byes';
 import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import { kitAdvancingPlayers } from '@/lib/format-engine/advance';
 
+export interface EnrollmentPhase {
+  id: string;
+  season_id: string | null;
+  name: string;
+  status: 'upcoming' | 'active' | 'completed';
+  bracket_type: BracketType;
+  stage_order: number;
+  advancement_rule: AdvancementRule | null;
+  enrollment_source: EnrollmentSource | null;
+}
+
+export interface EnrollmentGroup {
+  id: string;
+  name: string;
+  group_number: number;
+  season_group_id?: string | null;
+  members: { player_id: string }[];
+}
+
+export interface EnrollmentPersistence {
+  getPhase(id: string): Promise<EnrollmentPhase | null>;
+  listPhases(seasonId: string): Promise<EnrollmentPhase[]>;
+  getParticipants(id: string): Promise<Pick<ParticipantWithSeed, 'id' | 'name'>[]>;
+  getCompletedMatches(id: string): Promise<MatchRecord[]>;
+  getGroups(id: string): Promise<EnrollmentGroup[]>;
+  getRounds(id: string): Promise<RoundByeSource[]>;
+  replaceEnrollment: typeof replacePhaseEnrollment;
+  computeStandings: typeof computeStandingsForSeason;
+  kitAdvancingPlayers: typeof kitAdvancingPlayers;
+}
+
+export const legacyEnrollmentPersistence: EnrollmentPersistence = {
+  getPhase: (...args) => getTournamentById(...args),
+  listPhases: (...args) => getStagesBySeasonId(...args),
+  getParticipants: (...args) => getParticipants(...args),
+  getCompletedMatches: (...args) => getCompletedMatchRecords(...args),
+  getGroups: (...args) => getGroupsByTournament(...args),
+  getRounds: (...args) => getRoundsByTournament(...args),
+  replaceEnrollment: (...args) => replacePhaseEnrollment(...args),
+  computeStandings: (...args) => computeStandingsForSeason(...args),
+  kitAdvancingPlayers: (...args) => kitAdvancingPlayers(...args),
+};
+
 export interface SyncStandingsOptions {
   source_phase_id?: string;
   top_n?: number;
@@ -34,10 +77,10 @@ export interface SyncStandingsResult {
 }
 
 function resolveSourcePhase(
-  stages: Tournament[],
+  stages: EnrollmentPhase[],
   phaseId: string,
   sourcePhaseId?: string
-): Tournament | null {
+): EnrollmentPhase | null {
   if (sourcePhaseId) {
     return stages.find((s) => s.id === sourcePhaseId) ?? null;
   }
@@ -61,7 +104,7 @@ export function mergeKitContributions(
   previous: readonly EnrollmentContribution[] | undefined,
   sourcePhaseId: string,
   incoming: readonly string[],
-  stages: readonly Pick<Tournament, 'id' | 'status'>[],
+  stages: readonly Pick<EnrollmentPhase, 'id' | 'status'>[],
 ): EnrollmentContribution[] {
   const completed = new Set(stages.filter((s) => s.status === 'completed').map((s) => s.id));
   const block: EnrollmentContribution = { source_phase_id: sourcePhaseId, player_ids: [...incoming] };
@@ -90,11 +133,12 @@ function playersOfContributions(blocks: readonly EnrollmentContribution[]): stri
  */
 export async function assertEnrollmentSyncAllowed(
   phaseId: string,
-  force = false
+  force = false,
+  storage: EnrollmentPersistence = legacyEnrollmentPersistence,
 ): Promise<void> {
   if (force) return;
 
-  const phase = await getTournamentById(phaseId);
+  const phase = await storage.getPhase(phaseId);
   if (!phase) {
     throw new Error('Phase not found');
   }
@@ -106,7 +150,7 @@ export async function assertEnrollmentSyncAllowed(
     );
   }
 
-  const rounds = await getRoundsByTournament(phaseId);
+  const rounds = await storage.getRounds(phaseId);
   if (rounds.length > 0) {
     throw new UserFacingError(
       'Enrollment cannot be re-synced while rounds exist. Confirm to overwrite.',
@@ -121,8 +165,9 @@ async function advanceTopNFromStandings(
   participantIds: string[],
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
-  groups?: TournamentGroupWithMembers[],
-  byes: ByeRecord[] = []
+  groups: EnrollmentGroup[] | undefined,
+  byes: ByeRecord[],
+  storage: EnrollmentPersistence
 ): Promise<string[]> {
   if (rule.type !== 'top_n') {
     throw new Error(`Unsupported advancement type: ${rule.type}`);
@@ -136,7 +181,7 @@ async function advanceTopNFromStandings(
     const ordered = [...groups].sort((a, b) => a.group_number - b.group_number);
     const memberIds = ordered.flatMap((group) => group.members.map((m) => m.player_id));
     // A Swiss bye scores for its player only, so the one table over every member stays group-scoped after the split.
-    const table = await computeStandingsForSeason(seasonId, memberIds, participantNames, matchRecords, {}, { byes });
+    const table = await storage.computeStandings(seasonId, memberIds, participantNames, matchRecords, {}, { byes });
     for (const { standings } of splitGroupTables(
       table,
       ordered.map((group) => ({ id: group.id, name: group.name, playerIds: group.members.map((m) => m.player_id) })),
@@ -154,7 +199,7 @@ async function advanceTopNFromStandings(
           groupPlayerIds.includes(m.player_1_id) &&
           groupPlayerIds.includes(m.player_2_id)
       );
-      const standings = await computeStandingsForSeason(
+      const standings = await storage.computeStandings(
         seasonId,
         groupPlayerIds,
         participantNames,
@@ -167,7 +212,7 @@ async function advanceTopNFromStandings(
     return advancing;
   }
 
-  const standings = await computeStandingsForSeason(
+  const standings = await storage.computeStandings(
     seasonId,
     participantIds,
     participantNames,
@@ -180,13 +225,14 @@ async function advanceTopNFromStandings(
 
 async function resolveAdvancingPlayerIds(
   seasonId: string,
-  targetPhase: Tournament,
+  targetPhase: EnrollmentPhase,
   participantIds: string[],
   participantNames: Record<string, string>,
   matchRecords: MatchRecord[],
-  groups: TournamentGroupWithMembers[],
+  groups: EnrollmentGroup[],
   options: SyncStandingsOptions,
-  byes: ByeRecord[]
+  byes: ByeRecord[],
+  storage: EnrollmentPersistence,
 ): Promise<string[]> {
   if (targetPhase.advancement_rule && !options.top_n) {
     return advanceTopNFromStandings(
@@ -196,7 +242,8 @@ async function resolveAdvancingPlayerIds(
       participantNames,
       matchRecords,
       groups.length > 0 ? groups : undefined,
-      byes
+      byes,
+      storage,
     );
   }
 
@@ -213,11 +260,12 @@ async function resolveAdvancingPlayerIds(
       participantNames,
       matchRecords,
       options.per_group ? groups : undefined,
-      byes
+      byes,
+      storage,
     );
   }
 
-  const standings = await computeStandingsForSeason(
+  const standings = await storage.computeStandings(
     seasonId,
     participantIds,
     participantNames,
@@ -243,10 +291,11 @@ export const ENROLLMENT_SYNC_MAX_ATTEMPTS = 4;
 export async function syncStandingsEnrollment(
   seasonId: string,
   phaseId: string,
-  options: SyncStandingsOptions = {}
+  options: SyncStandingsOptions = {},
+  storage: EnrollmentPersistence = legacyEnrollmentPersistence,
 ): Promise<SyncStandingsResult> {
   for (let attempt = 0; attempt < ENROLLMENT_SYNC_MAX_ATTEMPTS; attempt += 1) {
-    const result = await syncStandingsEnrollmentOnce(seasonId, phaseId, options);
+    const result = await syncStandingsEnrollmentOnce(seasonId, phaseId, options, storage);
     if (result !== null) return result;
   }
   throw new UserFacingError(
@@ -259,19 +308,20 @@ export async function syncStandingsEnrollment(
 async function syncStandingsEnrollmentOnce(
   seasonId: string,
   phaseId: string,
-  options: SyncStandingsOptions
+  options: SyncStandingsOptions,
+  storage: EnrollmentPersistence,
 ): Promise<SyncStandingsResult | null> {
-  const phase = await getTournamentById(phaseId);
+  const phase = await storage.getPhase(phaseId);
   if (!phase || phase.season_id !== seasonId) {
     throw new Error('Phase not found in this league');
   }
 
-  await assertEnrollmentSyncAllowed(phaseId, options.force ?? false);
+  await assertEnrollmentSyncAllowed(phaseId, options.force ?? false, storage);
 
   const season = await getSeasonById(seasonId);
   if (!season) throw new Error('League not found');
 
-  const stages = await getStagesBySeasonId(seasonId);
+  const stages = await storage.listPhases(seasonId);
   const sourcePhase = resolveSourcePhase(stages, phaseId, options.source_phase_id);
 
   let playerIds: string[] = [];
@@ -286,25 +336,25 @@ async function syncStandingsEnrollmentOnce(
     sourcePhaseId = sourcePhase.id;
     sourcePhaseName = sourcePhase.name;
 
-    const participants = await getParticipants(sourcePhase.id);
+    const participants = await storage.getParticipants(sourcePhase.id);
     const participantIds = participants.map((p) => p.id);
     const participantNames: Record<string, string> = {};
     for (const p of participants) {
       participantNames[p.id] = p.name;
     }
-    const matchRecords = await getCompletedMatchRecords(sourcePhase.id);
-    const groups = await getGroupsByTournament(sourcePhase.id);
+    const matchRecords = await storage.getCompletedMatches(sourcePhase.id);
+    const groups = await storage.getGroups(sourcePhase.id);
     // A Swiss source phase scores its stored byes as wins, as its own standings do.
     const byes = scoringByeRecords(
       sourcePhase.bracket_type,
-      await getRoundsByTournament(sourcePhase.id)
+      await storage.getRounds(sourcePhase.id)
     );
 
     // A kit league moves players along the edge of its attached format that joins the two stages; any other
     // league, or a kit league without such an edge, keeps the phase's advancement rule.
     const kitPlayers =
       season.format_type === 'custom'
-        ? await kitAdvancingPlayers({
+        ? await storage.kitAdvancingPlayers({
             seasonId,
             sourcePhaseId: sourcePhase.id,
             targetPhaseId: phaseId,
@@ -337,7 +387,8 @@ async function syncStandingsEnrollmentOnce(
         matchRecords,
         groups,
         options,
-        byes
+        byes,
+        storage,
       );
     }
   } else {
@@ -359,7 +410,7 @@ async function syncStandingsEnrollmentOnce(
     ...(contributions ? { contributions } : {}),
   };
 
-  const written = await replacePhaseEnrollment(
+  const written = await storage.replaceEnrollment(
     phaseId,
     entries,
     enrollmentSource,
@@ -378,13 +429,13 @@ async function syncStandingsEnrollmentOnce(
 /**
  * Silent re-sync when enrollment is not frozen and phase has no rounds yet.
  */
-export async function maybeAutoSyncEnrollment(phaseId: string): Promise<SyncStandingsResult | null> {
-  const phase = await getTournamentById(phaseId);
+export async function maybeAutoSyncEnrollment(phaseId: string, storage: EnrollmentPersistence = legacyEnrollmentPersistence): Promise<SyncStandingsResult | null> {
+  const phase = await storage.getPhase(phaseId);
   if (!phase?.season_id) return null;
   if (phase.enrollment_source?.frozen) return null;
 
-  const rounds = await getRoundsByTournament(phaseId);
+  const rounds = await storage.getRounds(phaseId);
   if (rounds.length > 0) return null;
 
-  return syncStandingsEnrollment(phase.season_id, phaseId);
+  return syncStandingsEnrollment(phase.season_id, phaseId, {}, storage);
 }

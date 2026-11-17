@@ -6,6 +6,30 @@ import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getGroupedPhaseWeekPlan } from '@/lib/tournament/phase-week-plan';
 
+export interface EpbPhaseStoragePort {
+  kind: 'legacy' | 'phase';
+  stages: (seasonId: string) => Promise<Array<{ id: string }>>;
+  rounds: (phaseId: string) => Promise<Array<{ id: string; round_number: number; status: string }>>;
+  weekPlan: (phaseId: string) => Promise<{ totalWeeks: number; firstHalfLastWeek: number } | null>;
+  matches: (phaseId: string, roundIds: string[]) => Promise<Array<{ status: string; round_number: number }>>;
+  completedRecords: (phaseId: string) => Promise<Array<{ round_number: number }>>;
+}
+
+export const legacyEpbPhaseStorage: EpbPhaseStoragePort = {
+  kind: 'legacy',
+  stages: (seasonId) => getStagesBySeasonId(seasonId),
+  rounds: (phaseId) => getRoundsByTournament(phaseId),
+  weekPlan: (phaseId) => getGroupedPhaseWeekPlan(phaseId),
+  completedRecords: (phaseId) => getCompletedMatchRecords(phaseId),
+  matches: async (phaseId, roundIds) => {
+    const { data, error } = await supabase.from('matches')
+      .select('id, status, round_id, rounds!inner(round_number)')
+      .eq('tournament_id', phaseId).in('round_id', roundIds);
+    if (error) throw error;
+    return (data ?? []).map(row => ({ status: row.status, round_number: (row.rounds as { round_number: number }).round_number }));
+  },
+};
+
 export interface EpbPhaseStatus {
   /** Primary stage tournament id (lowest stage_order), if any */
   tournament_id: string | null;
@@ -54,13 +78,16 @@ export interface HinrundeScope {
  * `getEpbPhaseStatus`. Null when the season has no stage or its primary stage has no rounds yet
  * (no match can be in the Hinrunde then).
  */
-export async function getHinrundeScope(seasonId: string): Promise<HinrundeScope | null> {
-  const stages = await getStagesBySeasonId(seasonId);
+export function getHinrundeScope(seasonId: string, storage: EpbPhaseStoragePort & { kind: 'phase' }): Promise<{ phase_id: string; last_round: number } | null>;
+export function getHinrundeScope(seasonId: string): Promise<HinrundeScope | null>;
+export async function getHinrundeScope(seasonId: string, storage: EpbPhaseStoragePort = legacyEpbPhaseStorage): Promise<HinrundeScope | { phase_id: string; last_round: number } | null> {
+  const stages = await storage.stages(seasonId);
   if (stages.length === 0) return null;
   const primary = stages[0];
-  const rounds = await getRoundsByTournament(primary.id);
+  const rounds = await storage.rounds(primary.id);
   if (rounds.length === 0) return null;
-  return { tournament_id: primary.id, last_round: await primaryHinrundeCutoff(primary.id, rounds.length) };
+  const last_round = await primaryHinrundeCutoff(primary.id, rounds.length, storage);
+  return storage.kind === 'phase' ? { phase_id: primary.id, last_round } : { tournament_id: primary.id, last_round };
 }
 
 /**
@@ -69,8 +96,8 @@ export async function getHinrundeScope(seasonId: string): Promise<HinrundeScope 
  * it is generated), so the rounds written so far undercount the phase. Any other stage: `hinrundeLastRound` of
  * its rounds, as before.
  */
-async function primaryHinrundeCutoff(tournamentId: string, roundCount: number): Promise<number> {
-  const plan = await getGroupedPhaseWeekPlan(tournamentId);
+async function primaryHinrundeCutoff(tournamentId: string, roundCount: number, storage: EpbPhaseStoragePort): Promise<number> {
+  const plan = await storage.weekPlan(tournamentId);
   return plan ? plan.firstHalfLastWeek : hinrundeLastRound(roundCount);
 }
 
@@ -78,17 +105,23 @@ async function primaryHinrundeCutoff(tournamentId: string, roundCount: number): 
  * Hinrunde = first half of rounds in the primary (lowest stage_order) stage; for a phase whose groups mirror
  * league groups, the first half of its planned weeks (`total_rounds` is then the planned week count).
  */
-export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatus> {
-  const stages = await getStagesBySeasonId(seasonId);
-  if (stages.length === 0) return emptyPhaseStatus();
+export type NativeEpbPhaseStatus = Omit<EpbPhaseStatus, 'tournament_id'> & { phase_id: string | null };
+
+export function getEpbPhaseStatus(seasonId: string, storage: EpbPhaseStoragePort & { kind: 'phase' }): Promise<NativeEpbPhaseStatus>;
+export function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatus>;
+export async function getEpbPhaseStatus(seasonId: string, storage: EpbPhaseStoragePort = legacyEpbPhaseStorage): Promise<EpbPhaseStatus | NativeEpbPhaseStatus> {
+  const identity = (id: string | null) => storage.kind === 'phase' ? { phase_id: id } : { tournament_id: id };
+  const { tournament_id: _unused, ...empty } = emptyPhaseStatus();
+  const stages = await storage.stages(seasonId);
+  if (stages.length === 0) return { ...empty, ...identity(null) };
 
   const primary = stages[0];
-  const rounds = await getRoundsByTournament(primary.id);
+  const rounds = await storage.rounds(primary.id);
   if (rounds.length === 0) {
-    return { ...emptyPhaseStatus(), tournament_id: primary.id };
+    return { ...empty, ...identity(primary.id) };
   }
 
-  const plan = await getGroupedPhaseWeekPlan(primary.id);
+  const plan = await storage.weekPlan(primary.id);
   const totalRounds = plan ? plan.totalWeeks : rounds.length;
   const hinrundeCutoff = plan ? plan.firstHalfLastWeek : hinrundeLastRound(rounds.length);
   // A grouped phase's Hinrunde is weeks 1..cutoff whether or not they are written yet (a missing week keeps it
@@ -99,8 +132,8 @@ export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatu
 
   if (hinrundeRoundNumbers.length === 0) {
     return {
-      ...emptyPhaseStatus(),
-      tournament_id: primary.id,
+      ...empty,
+      ...identity(primary.id),
       total_rounds: totalRounds,
     };
   }
@@ -110,20 +143,14 @@ export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatu
   );
   if (hinrundeRoundIds.size === 0) {
     return {
-      ...emptyPhaseStatus(),
-      tournament_id: primary.id,
+      ...empty,
+      ...identity(primary.id),
       total_rounds: totalRounds,
       hinrunde_round_numbers: hinrundeRoundNumbers,
     };
   }
 
-  const { data: matches, error } = await supabase
-    .from('matches')
-    .select('id, status, round_id, rounds!inner(round_number)')
-    .eq('tournament_id', primary.id)
-    .in('round_id', [...hinrundeRoundIds]);
-
-  if (error) throw error;
+  const matches = await storage.matches(primary.id, [...hinrundeRoundIds]);
 
   const completedMatchesByRound: Record<number, { completed: number; total: number }> = {};
   for (const rn of hinrundeRoundNumbers) {
@@ -132,7 +159,7 @@ export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatu
 
   let hasFirstHalfMatches = false;
   for (const m of matches ?? []) {
-    const roundNumber = (m.rounds as { round_number: number }).round_number;
+    const roundNumber = m.round_number;
     const bucket = completedMatchesByRound[roundNumber];
     if (!bucket) continue;
     bucket.total += 1;
@@ -152,7 +179,7 @@ export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatu
   });
 
   // Fallback: also accept completed match records when round status lags
-  const records = await getCompletedMatchRecords(primary.id);
+  const records = await storage.completedRecords(primary.id);
   const hinrundeRecords = records.filter((r) => hinrundeRoundNumbers.includes(r.round_number));
   if (hinrundeRecords.length > 0) {
     hasFirstHalfMatches = true;
@@ -171,7 +198,7 @@ export async function getEpbPhaseStatus(seasonId: string): Promise<EpbPhaseStatu
         })));
 
   return {
-    tournament_id: primary.id,
+    ...identity(primary.id),
     total_rounds: totalRounds,
     hinrunde_round_numbers: hinrundeRoundNumbers,
     has_first_half_matches: hasFirstHalfMatches,

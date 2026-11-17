@@ -1,7 +1,8 @@
 import type { Enums } from './database';
 import type { Locale } from '@/i18n/config';
 import type { Player } from './player';
-import type { BracketType, TeamVisibility, BoOverrides, TournamentStatus } from './tournament';
+import type { BracketType, TeamVisibility, BoOverrides } from './tournament';
+import type { PhaseStatus } from './league-phase';
 
 /** All 18 standard Pokémon types valid for gym leader assignment */
 export const POKEMON_TYPES = [
@@ -144,7 +145,7 @@ export interface LeaguePhase {
   bo_overrides: BoOverrides;
   is_doubles: boolean;
   team_visibility: TeamVisibility;
-  status: TournamentStatus;
+  status: PhaseStatus;
   stage_order: number;
   advancement_rule: AdvancementRule | null;
   enrollment_source: EnrollmentSource | null;

@@ -87,8 +87,8 @@ function stringArray(value: unknown): string[] {
 }
 
 /** Creates the league, its format and its stages in one transaction. Throws the database error as it came. */
-export async function createCompetitionFromFormat(input: CompetitionCreateInput): Promise<CompetitionCreateResult> {
-  const { data, error } = await supabase.rpc('competition_create_from_format', {
+export async function createCompetitionFromFormat(input: CompetitionCreateInput, storage: 'legacy' | 'native' = 'legacy'): Promise<CompetitionCreateResult> {
+  const { data, error } = await supabase.rpc(storage === 'legacy' ? 'competition_create_from_format' : 'phase_competition_create_from_format', {
     p_actor: input.actorId,
     p_season: input.season as unknown as Json,
     p_format: input.format as unknown as Json,

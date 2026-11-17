@@ -12,6 +12,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+- **Phase lifecycle persistence remains dormant.** The two `2026111711*` migrations add native phase lifecycle and format materialisation RPCs behind explicit adapters. Existing traffic still uses the legacy store and can deploy without these two files. Neither applying them nor deploying this layer authorizes enabling phase mode or moving production data; later match, ancillary and canonical-route layers must be ready first.
+
 - The dormant phase foundation keeps its generation-row lock behind a narrow owner-rights accessor and defers enrollment-source integrity until transaction completion, so service-role guards and complete league trash deletion retain their intended behavior.
 
 - **Phase separation is an additive foundation, not a live migration.** The three `2026111710*` phase migrations add service-role-only storage, trash support and a dormant writer fence. Apply them only through the separately approved migration process; do not change `phase_storage_state` or move live rows yet. Existing phase data and routes remain on their legacy store. See [Phase-owned storage](docs/phase-separation.md).

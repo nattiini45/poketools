@@ -7,13 +7,7 @@ import { phaseCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import {
-  getStagesBySeasonId,
-  createTournament,
-  shiftStageOrders,
-  getTournamentWithDetails,
-} from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
@@ -22,6 +16,8 @@ import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
+
+const { listBySeason: getStagesBySeasonId, create: createTournament, shiftOrders: shiftStageOrders, getWithDetails: getTournamentWithDetails, rounds: getRoundsByTournament } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string }>;
