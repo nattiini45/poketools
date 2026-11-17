@@ -16,11 +16,6 @@ vi.hoisted(() => {
   delete process.env.CLAUDE_API_KEY;
 });
 
-vi.mock('braintrust', () => ({
-  initLogger: vi.fn(),
-  wrapAnthropic: vi.fn((client: unknown) => client),
-}));
-
 // ─── Recorded fetch ────────────────────────────────────────────────
 
 interface RecordedRequest {

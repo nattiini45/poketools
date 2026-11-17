@@ -22,11 +22,6 @@ vi.mock('@anthropic-ai/sdk', async (importOriginal) => {
   return { ...actual, default: MockAnthropic };
 });
 
-vi.mock('braintrust', () => ({
-  initLogger: vi.fn(),
-  wrapAnthropic: vi.fn((client: unknown) => client),
-}));
-
 // ─── Import after mocks ────────────────────────────────────────────
 
 import { complete, completeStreaming } from '../client';
