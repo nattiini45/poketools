@@ -45,7 +45,7 @@ beforeEach(() => {
 });
 
 describe('source-specific phase rating verification', () => {
-  it('never accepts complete legacy history when phase history is absent', async () => {
+  it('never accepts complete tournament ratings when phase ratings are absent', async () => {
     fixture.rows.rating_history = [history('match', 'one'), history('match', 'two')];
     expect(await getPhaseRatingHistoryByMatches(['match'])).toEqual([]);
     expect(fixture.tables).toEqual(['phase_rating_history']);
