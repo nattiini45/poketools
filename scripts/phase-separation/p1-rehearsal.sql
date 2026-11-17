@@ -1,6 +1,8 @@
 SELECT lt_lab.seed(8, 4, 'Phase foundation fixture') AS sid \gset
 SELECT id AS actor FROM public.players WHERE id IN (SELECT player_id FROM public.season_participants WHERE season_id = :'sid') ORDER BY id LIMIT 1 \gset
 
+UPDATE public.format_challenges SET created_at = now() - interval '1 day' WHERE season_id = :'sid';
+
 UPDATE public.tournaments SET enrollment_source = jsonb_build_object(
   'type', 'standings', 'source_phase_id', (SELECT id FROM public.tournaments WHERE season_id = :'sid' AND stage_order = 1), 'frozen', false
 ) WHERE season_id = :'sid' AND stage_order = 2;
