@@ -3,6 +3,7 @@ import { defineMachine } from '@/lib/state-machine/machine';
 const SERVICE = 'src/lib/league-trash/service.ts';
 const QUERIES = 'src/lib/supabase/queries/league-trash.ts';
 const TRASH_MIGRATION = 'supabase/migrations/20261026091000_league_trash.sql';
+const PHASE_TRASH_MIGRATION = 'supabase/migrations/20261117101000_phase_trash_foundation.sql';
 const REBUILD_ROUTE = 'src/app/api/admin/league-trash/[id]/rebuild/route.ts';
 const LIFECYCLE = 'src/lib/league-trash/lifecycle-state.ts';
 
@@ -30,7 +31,7 @@ export const leagueTrashMachine = defineMachine({
       from: ['live', 'restored_rebuild_pending'],
       to: 'rebuild_pending',
       actors: ['admin'],
-      writers: [`${TRASH_MIGRATION}#league_trash_delete`, QUERIES, SERVICE, 'src/app/api/seasons/[id]/route.ts'],
+      writers: [`${PHASE_TRASH_MIGRATION}#league_trash_delete`, QUERIES, SERVICE, 'src/app/api/seasons/[id]/route.ts'],
       note: 'DELETE /api/seasons/[id] (site admins). Deleting a restored league again drops its restore tombstone.',
     },
     {
@@ -71,7 +72,7 @@ export const leagueTrashMachine = defineMachine({
       to: 'restored_rebuild_pending',
       actors: ['superadmin'],
       writers: [
-        'supabase/migrations/20261106090000_format_challenges.sql#league_trash_restore',
+        `${PHASE_TRASH_MIGRATION}#league_trash_restore`,
         QUERIES,
         SERVICE,
         'src/app/api/admin/league-trash/[id]/restore/route.ts',
@@ -91,7 +92,7 @@ export const leagueTrashMachine = defineMachine({
       from: ['purgeable'],
       to: 'purged',
       actors: ['system'],
-      writers: [`${TRASH_MIGRATION}#league_trash_expire`, QUERIES, 'src/app/api/cron/expire-league-trash/route.ts'],
+      writers: [`${PHASE_TRASH_MIGRATION}#league_trash_expire`, QUERIES, 'src/app/api/cron/expire-league-trash/route.ts'],
       note: 'The daily expire-league-trash cron; irreversible.',
     },
   ],

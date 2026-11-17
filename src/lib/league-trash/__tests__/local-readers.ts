@@ -38,6 +38,30 @@ const scoped = (scopeColumn: string, idColumn: string, typeValues: [string, stri
 
 /** The owned tables of `league_trash__inventory()` (the local test compares this list with the database). */
 export const OWNED_SPECS: readonly TableSpec[] = [
+  { table: 'league_phases', order: ['id'], by: [bySeason()] },
+  { table: 'phase_participants', order: ['phase_id', 'player_id'], by: [byPhases('phase_id')] },
+  { table: 'phase_groups', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_group_members', order: ['group_id', 'player_id'], by: [{ column: 'group_id', keys: 'tournamentGroups' }] },
+  { table: 'phase_rounds', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_reports', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_matches', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_match_outcomes', order: ['match_id'], by: [byMatches()] },
+  { table: 'phase_games', order: ['id'], by: [byMatches()] },
+  { table: 'phase_battle_stats', order: ['id'], by: [{ column: 'game_id', keys: 'games' }] },
+  { table: 'phase_match_analyses', order: ['id'], by: [byMatches()] },
+  { table: 'phase_match_prep_analyses', order: ['id'], by: [byMatches()] },
+  { table: 'phase_match_prep_teams', order: ['id'], by: [byMatches()] },
+  { table: 'phase_match_proposals', order: ['id'], by: [byMatches()] },
+  { table: 'phase_match_evolution_snapshots', order: ['id'], by: [byMatches()] },
+  { table: 'phase_epb_animation_views', order: ['id'], by: [byMatches()] },
+  { table: 'phase_broadcast_moments', order: ['id'], by: [byMatches()] },
+  { table: 'phase_teams', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_cast_sessions', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_admins', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_discord_webhooks', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_social_integrations', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_wiki_notes', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_wiki_note_reports', order: ['id'], by: [{ column: 'note_id', keys: 'notes' }] },
   { table: 'seasons', order: ['id'], by: [{ column: 'id', keys: 'season' }] },
   { table: 'season_participants', order: ['season_id', 'player_id'], by: [bySeason()] },
   { table: 'season_groups', order: ['id'], by: [bySeason()] },
@@ -104,6 +128,10 @@ export const OWNED_SPECS: readonly TableSpec[] = [
 
 /** Deleted with the league but never captured: rebuilt by the app. */
 export const DERIVED_SPECS: readonly TableSpec[] = [
+  { table: 'phase_aggregates', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_player_aggregates', order: ['id'], by: [byPhases('phase_id')] },
+  { table: 'phase_aggregate_jobs', order: ['id'], by: [{ column: 'game_id', keys: 'games' }] },
+  { table: 'phase_rating_history', order: ['id'], by: [byMatches()] },
   { table: 'aggregates', order: ['id'], by: scoped('scope_type', 'scope_id', ['league', 'tournament']) },
   { table: 'player_aggregates', order: ['id'], by: scoped('scope_type', 'scope_id', ['league', 'tournament']) },
   { table: 'aggregate_jobs', order: ['id'], by: [{ column: 'game_id', keys: 'games' }] },

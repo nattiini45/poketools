@@ -151,6 +151,7 @@ describe('league recycle bin restore order', () => {
       '20261105090000_format_runtime.sql',
       '20261106090000_format_challenges.sql',
       '20261108090000_format_notifications.sql',
+      '20261117101000_phase_trash_foundation.sql',
     ]);
   });
 });

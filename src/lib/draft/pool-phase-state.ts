@@ -17,7 +17,7 @@ const QH = 'supabase/migrations/20261018140100_draft_quiet_hours.sql';
 const SR = 'supabase/migrations/20261027190000_draft_start_reroll_every_two_rounds.sql';
 const DD = 'supabase/migrations/20261102150000_draft_list_due_pools.sql';
 const RR = 'supabase/migrations/20261012025023_redraft_rpcs.sql';
-const LT = 'supabase/migrations/20261026091000_league_trash.sql';
+const LT = 'supabase/migrations/20261117101000_phase_trash_foundation.sql';
 
 export const draftPoolPhaseMachine = defineMachine({
   id: 'draft_pool.phase',

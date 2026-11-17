@@ -120,6 +120,7 @@ function ephemeralSuggestion(input: RecordSuggestionInput): AgentSuggestionRow {
     conversation_id: input.conversationId,
     context_format: input.contextFormat,
     match_id: input.matchId ?? null,
+    phase_match_id: null,
     proposed_team: input.proposedTeam ?? null,
     reasoning: input.reasoning ?? null,
     suggested_at: now,

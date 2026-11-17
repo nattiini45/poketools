@@ -18,10 +18,7 @@ import type {
   TeamImportSource,
 } from '@/types/team';
 
-/** The share-link columns: only the owner's share route writes or returns them. */
-type TeamShareColumn = 'share_token' | 'share_enabled_at';
-
-type TeamRow = Omit<Tables<'teams'>, TeamShareColumn>;
+type TeamRow = Pick<Tables<'teams'>, keyof Team>;
 
 /**
  * Every `teams` column a team read selects: all of them except the share-link
