@@ -110,6 +110,10 @@ Activated callers lazily load `createMixedRatingStorage('phase' | 'tournament')`
 
 Finalize/heal batch verification uses `getPhaseRatingHistoryByMatches(ids)` from the same module. It chunks ids and pages only `phase_rating_history`, so legacy rows cannot satisfy a native history check. The storage port's `getHistoryByMatches` deliberately remains a union reader for mixed rebuilds.
 
+Native live ratings also require the finalizer's captured completion identity (`winnerId`, `confirmedAt`, with historical null retained). They do not take the legacy early-history shortcut: `phase_rating_apply_match_result` checks the required completion JSON under the match lock before reading history or writing ratings. A changed winner or token returns `match_changed`; retries keep the original expected identity instead of reading a newer token.
+
+Mixed replacement carries the full expected countable stream, including participants, winner, completion token and replay timestamps. The RPC briefly freezes owner/flag tables parent-first and then match tables with `NOWAIT`; a competing writer raises `PT409` before any projection write, rather than waiting in an owner/child lock cycle. It compares every current countable standalone/native match, including matches with no history yet, then replaces the curve. Replay math runs before these locks are acquired. A flag, completion or result change therefore requires a fresh replay even when no history row existed to fence on.
+
 The focused stream unit suite covers mixed replay, deduplication, ordering and retry. `rating-streak-streams.local.test.ts` opts in through `localStackOptIn('LOCAL_PHASE_RATING_STREAMS')`, requires a disposable phase-mode stack and never changes its storage generation.
 
 ## Testing

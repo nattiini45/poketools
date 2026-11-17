@@ -54,6 +54,7 @@ export function createPhaseMatchFinalizer(effects: PhaseFinalizationEffects) {
     recordMatchOutcome: (...args) => recordPhaseMatchOutcome(...args),
     deleteMatchOutcome: (...args) => deletePhaseMatchOutcome(...args),
     updateRatings: (...args) => updateRatingsWithStorage(...args, ratings),
+    updateRatingsForCompletion: (winnerId, loserId, isDraw, matchId, completion) => updateRatingsWithStorage(winnerId, loserId, isDraw, matchId, ratings, completion),
     recomputeStreaks: (id) => recomputeStreaksWithStorage(id, mixedStreakStorage),
     updateSignatures: (...args) => updateSignatures(...args),
     checkAchievements: (id, { match, competition, winnerId, loserId }) => checkPhaseAchievements(id, {

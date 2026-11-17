@@ -210,6 +210,62 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
     expect((await admin.from('phase_matches').select('id').eq('id', target)).data).toEqual([]);
   });
 
+  it('sums native evolution KOs through the real league join without another owner, player, form or legacy fallback', async () => {
+    const otherSeason = randomUUID();
+    const otherPhase = randomUUID();
+    const otherRound = randomUUID();
+    const otherMatch = randomUUID();
+    const linkedTournament = randomUUID();
+    const linkedRound = randomUUID();
+    const linkedMatch = randomUUID();
+    const nativeGame = randomUUID();
+    const otherGame = randomUUID();
+    const legacyGame = randomUUID();
+    const standaloneGame = randomUUID();
+    const { getPhaseSeasonKosForLine } = await import('@/lib/supabase/queries/phase-reconciliation');
+    try {
+      expect((await admin.from('seasons').insert({ id: otherSeason, name: 'Other evolution fixture', format_type: 'singles', ruleset_id: rulesetId })).error).toBeNull();
+      expect((await admin.from('league_phases').insert({ id: otherPhase, season_id: otherSeason, name: 'Other evolution phase', bracket_type: 'round_robin', ruleset_id: rulesetId })).error).toBeNull();
+      expect((await admin.from('phase_rounds').insert({ id: otherRound, phase_id: otherPhase, name: 'Round 1', round_number: 1, best_of: 3 })).error).toBeNull();
+      expect((await admin.from('phase_matches').insert({ id: otherMatch, phase_id: otherPhase, round_id: otherRound, player_1_id: players[0], player_2_id: players[1] })).error).toBeNull();
+      expect((await admin.from('phase_games').insert([
+        { id: nativeGame, match_id: phaseMatch, game_number: 90 },
+        { id: otherGame, match_id: otherMatch, game_number: 1 },
+      ])).error).toBeNull();
+      expect((await admin.from('phase_battle_stats').insert([
+        { game_id: nativeGame, player_id: players[0], pokemon_name: 'Charmander', kos_dealt: 2 },
+        { game_id: nativeGame, player_id: players[0], pokemon_name: 'Charmeleon', kos_dealt: 3 },
+        { game_id: nativeGame, player_id: players[1], pokemon_name: 'Charmander', kos_dealt: 5 },
+        { game_id: nativeGame, player_id: players[0], pokemon_name: 'Bulbasaur', kos_dealt: 7 },
+        { game_id: otherGame, player_id: players[0], pokemon_name: 'Charmander', kos_dealt: 11 },
+      ])).error).toBeNull();
+      expect((await admin.from('tournaments').insert({ id: linkedTournament, season_id: seasonId, name: 'Legacy evolution owner', bracket_type: 'round_robin', ruleset_id: rulesetId })).error).toBeNull();
+      expect((await admin.from('rounds').insert({ id: linkedRound, tournament_id: linkedTournament, name: 'Round 1', round_number: 1, best_of: 3 })).error).toBeNull();
+      expect((await admin.from('matches').insert({ id: linkedMatch, tournament_id: linkedTournament, round_id: linkedRound, player_1_id: players[0], player_2_id: players[1] })).error).toBeNull();
+      expect((await admin.from('games').insert([
+        { id: legacyGame, match_id: linkedMatch, game_number: 1 },
+        { id: standaloneGame, match_id: legacyMatch, game_number: 90 },
+      ])).error).toBeNull();
+      expect((await admin.from('battle_stats').insert([
+        { game_id: legacyGame, player_id: players[0], pokemon_name: 'Charmander', kos_dealt: 17 },
+        { game_id: legacyGame, player_id: players[0], pokemon_name: 'Eevee', kos_dealt: 19 },
+        { game_id: standaloneGame, player_id: players[0], pokemon_name: 'Charmander', kos_dealt: 13 },
+      ])).error).toBeNull();
+
+      expect(await getPhaseSeasonKosForLine(seasonId, players[0], ['Charmander', 'Charmeleon'])).toBe(5);
+      expect(await getPhaseSeasonKosForLine(otherSeason, players[0], ['Charmander'])).toBe(11);
+      expect(await getPhaseSeasonKosForLine(seasonId, players[1], ['Charmander'])).toBe(5);
+      expect(await getPhaseSeasonKosForLine(seasonId, players[0], ['Bulbasaur'])).toBe(7);
+      expect(await getPhaseSeasonKosForLine(seasonId, players[0], ['Eevee'])).toBe(0);
+    } finally {
+      expect((await admin.from('phase_games').delete().eq('id', nativeGame)).error).toBeNull();
+      expect((await admin.from('games').delete().eq('id', standaloneGame)).error).toBeNull();
+      expect((await admin.from('tournaments').delete().eq('id', linkedTournament)).error).toBeNull();
+      expect((await admin.from('league_phases').delete().eq('id', otherPhase)).error).toBeNull();
+      expect((await admin.from('seasons').delete().eq('id', otherSeason)).error).toBeNull();
+    }
+  });
+
   it('preserves native identity, status CAS, outcome staging, leases and snapshots', async () => {
     expect(await matches.getPhaseMatchById(phaseMatch)).toMatchObject({ phase_id: phaseId, player_1_name: `Fixture ${players[0]}` });
     expect(await matches.getPhaseMatchById(phaseMatch)).not.toHaveProperty('tournament_id');

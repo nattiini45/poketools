@@ -47,6 +47,7 @@ export interface MatchFinalizationStorage<M extends FinalizationMatch, C extends
   recordMatchOutcome: typeof recordMatchOutcome;
   deleteMatchOutcome: typeof deleteMatchOutcome;
   updateRatings: typeof updateRatings;
+  updateRatingsForCompletion?(winnerId: string, loserId: string, isDraw: boolean, matchId: string, completion: { winnerId: string; confirmedAt: string | null }): ReturnType<typeof updateRatings>;
   recomputeStreaks(id: string): Promise<StreakChanges>;
   updateSignatures(id: string): Promise<unknown>;
   checkAchievements(id: string, context: FinalizationAchievementContext<M, C>): Promise<EarnedAchievement[]>;
@@ -564,9 +565,13 @@ export function createMatchFinalizer<M extends FinalizationMatch, C extends Fina
       runner.blocked('outcome', 'battle_stats');
     }
 
-    const ratingsStep = await runner.run('ratings', () =>
-      updateRatings(winnerId, loserId, false, match.id)
-    );
+    const ratingsStep = await runner.run('ratings', () => {
+      if (storage.updateRatingsForCompletion) {
+        if (!completionStep.ok) throw new Error(`Match ${match.id} completion identity could not be captured`);
+        return storage.updateRatingsForCompletion(winnerId, loserId, false, match.id, { winnerId, confirmedAt });
+      }
+      return updateRatings(winnerId, loserId, false, match.id);
+    });
 
     // Rebuilt from each player's whole history in one fenced write: two finalizations
     // sharing a player both end up counted, and a rerun lands on the same numbers.

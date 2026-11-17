@@ -6,7 +6,6 @@ import {
   applyMatchRatingResult,
   getPlayerRating,
   RatingCurveStaleError,
-  type ApplyMatchRatingOutcome,
 } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks, StreaksStaleError } from '@/lib/supabase/queries/streaks';
 import { compareReplayOrder } from '@/lib/rating/replay-order';
@@ -51,8 +50,8 @@ async function readStream(playerId: string, kind: 'tournament' | 'phase'): Promi
           : `,${createdId}`
         : '';
       const query = kind === 'phase'
-        ? supabase.from('phase_matches').select('id, phase_id, player_1_id, player_2_id, winner_id, date_played, created_at')
-        : supabase.from('matches').select('id, tournament_id, player_1_id, player_2_id, winner_id, date_played, created_at, tournaments!inner(season_id)').is('tournaments.season_id', null);
+        ? supabase.from('phase_matches').select('id, phase_id, player_1_id, player_2_id, winner_id, confirmed_at, date_played, created_at')
+        : supabase.from('matches').select('id, tournament_id, player_1_id, player_2_id, winner_id, confirmed_at, date_played, created_at, tournaments!inner(season_id)').is('tournaments.season_id', null);
       const filtered = query.eq('status', 'completed').or(`and(or(player_1_id.eq.${playerId},player_2_id.eq.${playerId})${after})`);
       const ordered = dated
         ? filtered.not('date_played', 'is', null).order('date_played', { ascending: false })
@@ -104,6 +103,7 @@ export function getPhaseRatingHistoryByMatches(ids: string[]): Promise<RatingHis
 
 export function createMixedRatingStorage(kind: 'tournament' | 'phase'): RatingStoragePort {
   return {
+    requiresCompletionFence: kind === 'phase',
     loadScope,
     getCompletedMatches,
     getPlayerRating,
@@ -127,24 +127,42 @@ export function createMixedRatingStorage(kind: 'tournament' | 'phase'): RatingSt
       if (data.tournaments.season_id !== null) throw new Error('Mixed rating storage accepts standalone tournaments only');
       return true;
     },
-    applyMatchResult: async (id, entries) => {
+    applyMatchResult: async (id, entries, completion) => {
       if (kind === 'tournament') return applyMatchRatingResult(id, entries);
-      const { data, error } = await supabase.rpc('phase_rating_apply_match_result', {
+      if (!completion) throw new Error('Phase rating apply requires the expected completion identity');
+      const payload = {
         p_match_id: id,
         p_players: entries.map((entry) => ({ player_id: entry.playerId, expected: entry.expected, state: entry.state, history: entry.history })) as unknown as Json,
-      });
+        p_expected_completion: { winner_id: completion.winnerId, confirmed_at: completion.confirmedAt },
+      };
+      const { data, error } = await supabase.rpc('phase_rating_apply_match_result', payload);
       if (error) throw error;
-      const outcomes: readonly string[] = ['applied', 'already_applied', 'stale', 'history_incomplete', 'match_missing', 'match_not_completed', 'skipped_test_season'];
-      if (!outcomes.includes(data)) throw new Error(`Unexpected phase rating outcome: ${data}`);
-      return data as ApplyMatchRatingOutcome;
+      switch (data) {
+        case 'applied': case 'already_applied': case 'stale': case 'history_incomplete':
+        case 'match_missing': case 'match_not_completed': case 'skipped_test_season': case 'match_changed':
+          return data;
+        default: throw new Error(`Unexpected phase rating outcome: ${data}`);
+      }
     },
-    replacePlayerCurve: async (id, state, history, expected) => {
-      const { data, error } = await supabase.rpc('rating_replace_player_streams', {
+    replacePlayerCurve: async (id, state, history, expected, expectedMatches) => {
+      if (!expectedMatches) throw new Error('Mixed rating replace requires the expected countable match stream');
+      const payload = {
         p_player_id: id,
         p_state: state as unknown as Json,
         p_history: [...history] as unknown as Json,
         p_expected_history_match_ids: [...expected],
-      });
+        p_expected_matches: expectedMatches.map((match) => ({
+          kind: match.phase_id === undefined ? 'tournament' : 'phase',
+          match_id: match.id,
+          player_1_id: match.player_1_id,
+          player_2_id: match.player_2_id,
+          winner_id: match.winner_id,
+          confirmed_at: match.confirmed_at ?? null,
+          date_played: match.date_played,
+          created_at: match.created_at,
+        })) as Json,
+      };
+      const { data, error } = await supabase.rpc('rating_replace_player_streams', payload);
       if (error) {
         if (error.code === 'PT409' || error.code === '40001') throw new RatingCurveStaleError(id, error);
         throw error;

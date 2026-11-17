@@ -12,6 +12,7 @@ const ports = vi.hoisted(() => ({
   },
   repair: vi.fn(async () => ({})),
   recheck: vi.fn(async () => ({ events: [], failed: false })),
+  checkEvolution: vi.fn(async () => []),
   kit: {
     completed: vi.fn(async () => true), reverted: vi.fn(async () => true), unresolved: vi.fn(async () => undefined),
     stageEndedWarning: vi.fn(async () => null),
@@ -27,6 +28,7 @@ vi.mock('../reopen', () => ({
   createNativeOutcomeTakeback: () => ({ readOutcomeMark: vi.fn(), takeBackMarkedOutcome: vi.fn() }),
 }));
 vi.mock('../epb-game-edit', () => ({ createNativeEpbGameEditRechecker: () => ports.recheck }));
+vi.mock('../evolution-checker', () => ({ phaseEvolutionChecker: { checkPlayerEvolutions: ports.checkEvolution } }));
 vi.mock('../kit-match-effects', () => ({ createNativeKitMatchEffects: vi.fn(() => ports.kit) }));
 vi.mock('@/lib/reconcile/evolution-rebuild', () => ({ createEpbEvolutionRebuilder: () => ({ repairSeasonEvolution: ports.repair }) }));
 vi.mock('../epb-storage', () => ({ createMixedEpbRebuildStorage: () => ({}) }));
@@ -84,6 +86,14 @@ describe('native match service assembly', () => {
     expect(bound.recheckEpbAfterEdit).toBe(ports.recheck);
     await bound.repairSeasonEvolution('league');
     expect(ports.repair).toHaveBeenCalledWith('league');
+  });
+
+  it('binds the native non-EPB threshold checker to the game pipeline', async () => {
+    createPhaseMatchServices(effects());
+    const bound = vi.mocked(createNativeGamePipeline).mock.calls[0][0];
+    await bound.checkPlayerEvolutions('league', 'player');
+    expect(ports.checkEvolution).toHaveBeenCalledWith('league', 'player');
+    expect(ports.forbidden).not.toHaveBeenCalled();
   });
 
   it('refuses a tournament aggregate owner before any native write', async () => {

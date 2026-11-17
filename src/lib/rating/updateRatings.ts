@@ -18,7 +18,7 @@ import {
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { GLICKO2_DEFAULTS, type PlayerRating, type RatingHistoryEntry } from '@/types/rating';
 
-import type { RatingStoragePort } from './storage';
+import type { RatingCompletionIdentity, RatingStoragePort, RatingStreamMatch } from './storage';
 
 export const legacyRatingStorage: RatingStoragePort = {
   countsForRatings: async (matchId) => {
@@ -215,9 +215,10 @@ export function updateRatingsWithStorage(
   loserId: string,
   isDraw: boolean,
   matchId: string,
-  storage: RatingStoragePort
+  storage: RatingStoragePort,
+  completion?: RatingCompletionIdentity
 ): Promise<RatingUpdateOutcome> {
-  return withRebuildLock(() => applyLiveRatingUpdate(winnerId, loserId, isDraw, matchId, storage));
+  return withRebuildLock(() => applyLiveRatingUpdate(winnerId, loserId, isDraw, matchId, storage, completion));
 }
 
 async function applyLiveRatingUpdate(
@@ -225,8 +226,15 @@ async function applyLiveRatingUpdate(
   loserId: string,
   isDraw: boolean,
   matchId: string,
-  storage: RatingStoragePort
+  storage: RatingStoragePort,
+  completion?: RatingCompletionIdentity
 ): Promise<RatingUpdateOutcome> {
+  if (storage.requiresCompletionFence && !completion) {
+    throw new Error(`Match ${matchId} has no expected completion token; its ratings were not applied`);
+  }
+  if (completion && completion.winnerId !== (isDraw ? null : winnerId)) {
+    throw new Error(`Match ${matchId} rating winner differs from the expected completion`);
+  }
   // Test leagues stay out of ratings: checked before the history read, so
   // rows left from before the rule are not reported as this match's change.
   const counts = await storage.countsForRatings(matchId);
@@ -241,9 +249,11 @@ async function applyLiveRatingUpdate(
   for (let attempt = 1; attempt <= LIVE_APPLY_ATTEMPTS; attempt += 1) {
     // A one-sided history (a rebuild elsewhere between its two players'
     // writes) is waited for, then read as the rebuild's result.
-    const existing = await readSettledMatchHistory(matchId, winnerId, loserId, storage);
-    if (existing.length > 0) {
-      return rated(resultFromHistory(existing, winnerId, loserId, matchId));
+    if (!storage.requiresCompletionFence) {
+      const existing = await readSettledMatchHistory(matchId, winnerId, loserId, storage);
+      if (existing.length > 0) {
+        return rated(resultFromHistory(existing, winnerId, loserId, matchId));
+      }
     }
 
     const now = new Date();
@@ -306,7 +316,7 @@ async function applyLiveRatingUpdate(
       last_match_at: nowIso,
     };
 
-    const outcome = await storage.applyMatchResult(matchId, [
+    const entries: Parameters<RatingStoragePort['applyMatchResult']>[1] = [
       {
         playerId: winnerId,
         expected: toExpectedRatingState(winnerExisting),
@@ -335,7 +345,10 @@ async function applyLiveRatingUpdate(
           result: isDraw ? 'draw' : 'loss',
         },
       },
-    ]);
+    ];
+    const outcome = completion
+      ? await storage.applyMatchResult(matchId, entries, completion)
+      : await storage.applyMatchResult(matchId, entries);
 
     switch (outcome) {
       case 'applied':
@@ -364,6 +377,8 @@ async function applyLiveRatingUpdate(
         throw new Error(`Match ${matchId} not found; its ratings were not applied`);
       case 'match_not_completed':
         throw new Error(`Match ${matchId} is no longer completed; its ratings were not applied`);
+      case 'match_changed':
+        throw new Error(`Match ${matchId} is no longer the expected completion; its ratings were not applied`);
       case 'skipped_test_season':
         // The league became a test league after the check above.
         console.info(`[rating/live] match ${matchId} belongs to a test league (flag set meanwhile); ratings not applied`);
@@ -675,6 +690,7 @@ export interface RebuildRatingsResult {
 
 /** Result of loading + computing a player's rating curve WITHOUT writing. */
 export interface LoadedRatingCurve {
+  expectedMatches?: readonly RatingStreamMatch[];
   /** The recomputed curve (final state + history rows to persist). */
   computed: ComputedRatingCurve;
   /** The currently-stored `player_ratings` row, or null if the player has none. */
@@ -735,11 +751,12 @@ export async function loadAndComputeRatingCurve(
     storage.getCompletedMatches(playerId),
     options.scope ?? storage.loadScope(),
   ]);
-  const completedMatches: CompletedMatchForRating[] = replayMatches
+  const expectedMatches = replayMatches
     .filter((m) => !excluded.has(m.id) && matchCountsForRatings(m, scope))
     // The canonical replay order (shared with the gamification backfill);
     // its tie-breaks reproduce the reader's order for equal timestamps.
-    .sort(compareReplayOrder)
+    .sort(compareReplayOrder);
+  const completedMatches: CompletedMatchForRating[] = expectedMatches
     .map((m): CompletedMatchForRating => ({
       id: m.id,
       player_1_id: m.player_1_id,
@@ -794,7 +811,7 @@ export async function loadAndComputeRatingCurve(
   const ownHistory = historyRows.filter((row) => row.player_id === playerId);
   const ownHistoryMatchIds = ownHistory.map((row) => row.match_id);
 
-  return { computed, stored, matchesReplayed: computed.matchesReplayed, integrity, ownHistoryMatchIds, ownHistory };
+  return { computed, stored, matchesReplayed: computed.matchesReplayed, integrity, ownHistoryMatchIds, ownHistory, expectedMatches };
 }
 
 // ── Batch planning (gap healing) ─────────────────────────────────────
@@ -1033,7 +1050,8 @@ async function writeLoadedCurve(
     playerId,
     { ...finalState, updated_at: new Date().toISOString() },
     history,
-    ownHistoryMatchIds
+    ownHistoryMatchIds,
+    curve.expectedMatches
   );
 
   const ratingBefore = history.length > 0 ? history[0].rating_before : GLICKO2_DEFAULTS.INITIAL_RATING;

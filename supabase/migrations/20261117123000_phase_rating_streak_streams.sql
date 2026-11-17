@@ -1,4 +1,7 @@
 BEGIN;
+DROP FUNCTION IF EXISTS public.phase_rating_apply_match_result(uuid, jsonb);
+DROP FUNCTION IF EXISTS public.rating_replace_player_streams(uuid, jsonb, jsonb, uuid[]);
+
 CREATE FUNCTION public.phase_match_in_test_season(p_match_id uuid)
 RETURNS boolean LANGUAGE sql STABLE SET search_path = public AS $$
 SELECT coalesce((SELECT s.is_test_season FROM public.phase_matches m
@@ -7,7 +10,8 @@ JOIN public.seasons s ON s.id = p.season_id WHERE m.id = p_match_id), false);
 $$;
 CREATE OR REPLACE FUNCTION public.phase_rating_apply_match_result(
   p_match_id uuid,
-  p_players jsonb
+  p_players jsonb,
+  p_expected_completion jsonb
 ) RETURNS text
 LANGUAGE plpgsql
 SET search_path = public
@@ -21,6 +25,8 @@ DECLARE
   v_history_count integer;
   v_current record;
   v_expected jsonb;
+  v_expected_winner_id uuid;
+  v_expected_confirmed_at timestamptz;
 BEGIN
   IF public.phase_storage_mode() IS DISTINCT FROM 'phase' THEN
     RAISE EXCEPTION 'phase_storage_not_ready' USING ERRCODE = 'P0001';
@@ -28,6 +34,14 @@ BEGIN
   IF p_match_id IS NULL THEN
     RAISE EXCEPTION 'rating_apply_match_result: p_match_id is required' USING ERRCODE = '22004';
   END IF;
+  IF jsonb_typeof(p_expected_completion) IS DISTINCT FROM 'object'
+    OR NOT (p_expected_completion ? 'winner_id' AND p_expected_completion ? 'confirmed_at')
+    OR jsonb_typeof(p_expected_completion -> 'winner_id') NOT IN ('string', 'null')
+    OR jsonb_typeof(p_expected_completion -> 'confirmed_at') NOT IN ('string', 'null') THEN
+    RAISE EXCEPTION 'Expected completion needs winner_id and confirmed_at, each a string or null' USING ERRCODE = '22023';
+  END IF;
+  v_expected_winner_id := (p_expected_completion ->> 'winner_id')::uuid;
+  v_expected_confirmed_at := (p_expected_completion ->> 'confirmed_at')::timestamptz;
   IF jsonb_typeof(p_players) IS DISTINCT FROM 'array' OR jsonb_array_length(p_players) <> 2 THEN
     RAISE EXCEPTION 'rating_apply_match_result: p_players must be an array of exactly two entries' USING ERRCODE = '22023';
   END IF;
@@ -76,7 +90,7 @@ BEGIN
     PERFORM pg_advisory_xact_lock(hashtext('rating_replace_player_history'), hashtext(v_player_id::text));
   END LOOP;
 
-  SELECT player_1_id, player_2_id, status INTO v_match FROM public.phase_matches WHERE id = p_match_id FOR SHARE;
+  SELECT player_1_id, player_2_id, status, winner_id, confirmed_at INTO v_match FROM public.phase_matches WHERE id = p_match_id FOR SHARE;
   IF NOT FOUND THEN
     RETURN 'match_missing';
   END IF;
@@ -87,6 +101,16 @@ BEGIN
   END IF;
   IF v_match.status IS DISTINCT FROM 'completed' THEN
     RETURN 'match_not_completed';
+  END IF;
+  IF v_match.winner_id IS DISTINCT FROM v_expected_winner_id
+     OR v_match.confirmed_at IS DISTINCT FROM v_expected_confirmed_at THEN
+    RETURN 'match_changed';
+  END IF;
+  IF EXISTS (SELECT 1 FROM jsonb_array_elements(p_players) e
+    WHERE e -> 'history' ->> 'result' IS DISTINCT FROM CASE
+      WHEN v_expected_winner_id IS NULL THEN 'draw'
+      WHEN (e ->> 'player_id')::uuid = v_expected_winner_id THEN 'win' ELSE 'loss' END) THEN
+    RAISE EXCEPTION 'Rating history result differs from the expected winner' USING ERRCODE = '22023';
   END IF;
 
   IF public.phase_match_in_test_season(p_match_id) THEN
@@ -171,12 +195,14 @@ END;
 $$;
 
 CREATE FUNCTION public.rating_replace_player_streams(
-  p_player_id uuid, p_state jsonb, p_history jsonb, p_expected_history_match_ids uuid[]
+  p_player_id uuid, p_state jsonb, p_history jsonb, p_expected_history_match_ids uuid[], p_expected_matches jsonb
 ) RETURNS integer LANGUAGE plpgsql SET search_path = public AS $$
 DECLARE
   v_legacy jsonb;
   v_phase jsonb;
   v_count integer;
+  v_current jsonb;
+  v_expected jsonb;
 BEGIN
   IF public.phase_storage_mode() IS DISTINCT FROM 'phase' THEN
     RAISE EXCEPTION 'phase_storage_not_ready' USING ERRCODE = 'P0001';
@@ -187,7 +213,40 @@ BEGIN
   IF jsonb_typeof(p_history) IS DISTINCT FROM 'array' THEN
     RAISE EXCEPTION 'History must be an array' USING ERRCODE = '22023';
   END IF;
+  IF jsonb_typeof(p_expected_matches) IS DISTINCT FROM 'array' THEN
+    RAISE EXCEPTION 'Expected countable match stream is required' USING ERRCODE = '22023';
+  END IF;
   PERFORM pg_advisory_xact_lock(hashtext('rating_replace_player_history'), hashtext(p_player_id::text));
+  BEGIN
+    LOCK TABLE public.seasons, public.tournaments, public.league_phases IN EXCLUSIVE MODE NOWAIT;
+    LOCK TABLE public.matches, public.phase_matches IN SHARE MODE NOWAIT;
+  EXCEPTION WHEN lock_not_available THEN
+    RAISE EXCEPTION 'Match owners, flags or streams are being changed; retry rating replay' USING ERRCODE = 'PT409';
+  END;
+
+  SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.kind, m.match_id), '[]'::jsonb) INTO v_current FROM (
+    SELECT 'tournament'::text AS kind, m.id AS match_id, m.player_1_id, m.player_2_id, m.winner_id, m.confirmed_at, m.date_played, m.created_at
+      FROM public.matches m JOIN public.tournaments t ON t.id = m.tournament_id
+      WHERE t.season_id IS NULL AND m.status = 'completed' AND (m.player_1_id = p_player_id OR m.player_2_id = p_player_id)
+        AND NOT EXISTS (SELECT 1 FROM public.phase_matches pm WHERE pm.id = m.id)
+    UNION ALL
+    SELECT 'phase'::text AS kind, m.id AS match_id, m.player_1_id, m.player_2_id, m.winner_id, m.confirmed_at, m.date_played, m.created_at
+      FROM public.phase_matches m JOIN public.league_phases p ON p.id = m.phase_id JOIN public.seasons s ON s.id = p.season_id
+      WHERE NOT s.is_test_season AND m.status = 'completed' AND (m.player_1_id = p_player_id OR m.player_2_id = p_player_id)
+  ) m;
+  SELECT coalesce(jsonb_agg(to_jsonb(m) ORDER BY m.kind, m.match_id), '[]'::jsonb) INTO v_expected
+    FROM jsonb_to_recordset(p_expected_matches) m(kind text, match_id uuid, player_1_id uuid, player_2_id uuid,
+      winner_id uuid, confirmed_at timestamptz, date_played timestamptz, created_at timestamptz);
+  IF v_current IS DISTINCT FROM v_expected THEN
+    RAISE EXCEPTION 'Countable match stream or completion identity changed after rating replay' USING ERRCODE = 'PT409';
+  END IF;
+  IF jsonb_array_length(p_history) <> jsonb_array_length(v_current)
+    OR EXISTS (SELECT 1 FROM jsonb_to_recordset(p_history) r(match_id uuid, result text)
+      LEFT JOIN jsonb_to_recordset(v_current) m(match_id uuid, winner_id uuid) ON m.match_id = r.match_id
+      WHERE m.match_id IS NULL OR r.result IS DISTINCT FROM CASE
+        WHEN m.winner_id IS NULL THEN 'draw' WHEN m.winner_id = p_player_id THEN 'win' ELSE 'loss' END) THEN
+    RAISE EXCEPTION 'Rating history differs from the countable completion stream' USING ERRCODE = 'PT409';
+  END IF;
   IF EXISTS (
     SELECT 1 FROM jsonb_to_recordset(p_history) r(player_id uuid, match_id uuid, opponent_id uuid)
     WHERE r.player_id IS DISTINCT FROM p_player_id OR NOT (
@@ -331,11 +390,11 @@ $$;
 REVOKE ALL ON FUNCTION public.phase_match_in_test_season(uuid) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.phase_match_in_test_season(uuid) TO service_role;
 
-REVOKE ALL ON FUNCTION public.phase_rating_apply_match_result(uuid, jsonb) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.phase_rating_apply_match_result(uuid, jsonb) TO service_role;
+REVOKE ALL ON FUNCTION public.phase_rating_apply_match_result(uuid, jsonb, jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.phase_rating_apply_match_result(uuid, jsonb, jsonb) TO service_role;
 
-REVOKE ALL ON FUNCTION public.rating_replace_player_streams(uuid, jsonb, jsonb, uuid[]) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.rating_replace_player_streams(uuid, jsonb, jsonb, uuid[]) TO service_role;
+REVOKE ALL ON FUNCTION public.rating_replace_player_streams(uuid, jsonb, jsonb, uuid[], jsonb) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.rating_replace_player_streams(uuid, jsonb, jsonb, uuid[], jsonb) TO service_role;
 
 REVOKE ALL ON FUNCTION public.streaks_replace_player_streams(uuid, jsonb, uuid[]) FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.streaks_replace_player_streams(uuid, jsonb, uuid[]) TO service_role;

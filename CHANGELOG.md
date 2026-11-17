@@ -12,6 +12,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Upgrade notes
 
+- **Native match/game workflows remain dormant.** The nine `2026111712*` migrations add phase-owned result writers and explicit mixed maintenance/projection adapters. Existing routes and cron stay legacy-bound and deploy without these files. Applying SQL or deploying this layer does not authorize activation or a production data move.
+
 - **Phase lifecycle persistence remains dormant.** The two `2026111711*` migrations add native phase lifecycle and format materialisation RPCs behind explicit adapters. Existing traffic still uses the legacy store and can deploy without these two files. Neither applying them nor deploying this layer authorizes enabling phase mode or moving production data; later match, ancillary and canonical-route layers must be ready first.
 
 - The dormant phase foundation keeps its generation-row lock behind a narrow owner-rights accessor and defers enrollment-source integrity until transaction completion, so service-role guards and complete league trash deletion retain their intended behavior.
@@ -290,6 +292,9 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
   scripts are documented as `npx --no-install tsx`.
 
 ### Fixed
+
+- Dormant native rating writes now reject a superseded winner or completion token. Mixed rating replacement validates the full countable match stream, including previously unrated matches made countable by a league flag change, before replacing shared projections.
+- Dormant native non-EPB evolution checks now sum phase-owned battle stats through the shared threshold engine instead of reading legacy tournament games.
 
 - League group and combined tables exclude playoff results. Final placings follow the completed bracket, with shared third place when there is no third-place match; non-qualifiers retain their group-table order. League previews, broadcasts and phase-scoped standings use the same placement rules without changing statistical totals.
 

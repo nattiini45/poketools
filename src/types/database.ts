@@ -9936,7 +9936,11 @@ export type Database = {
         Returns: undefined
       }
       phase_rating_apply_match_result: {
-        Args: { p_match_id: string; p_players: Json }
+        Args: {
+          p_expected_completion: Json
+          p_match_id: string
+          p_players: Json
+        }
         Returns: string
       }
       phase_round_complete: {
@@ -9996,6 +10000,7 @@ export type Database = {
       rating_replace_player_streams: {
         Args: {
           p_expected_history_match_ids: string[]
+          p_expected_matches: Json
           p_history: Json
           p_player_id: string
           p_state: Json
@@ -10206,7 +10211,7 @@ export type Database = {
       }
     }
     Enums: {
-      aggregate_scope: "tournament" | "league" | "all_time" | "phase" | "phase" | "phase" | "phase" | "phase" | "phase"
+      aggregate_scope: "tournament" | "league" | "all_time" | "phase"
       bracket_type: "single_elim" | "double_elim" | "round_robin" | "swiss"
       draft_pool_status: "pending" | "in_progress" | "complete"
       draft_type: "snake" | "auction" | "budget"

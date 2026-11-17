@@ -290,6 +290,10 @@ Both game tables serialize writes for the same replay hash. A deferred check rej
 
 Native aggregate apply commits the phase, league and permitted all-time counters with the game marker and job completion in one transaction. Rollback is fenced on the marker read by the caller. Cancel, claim, reclaim, retry and requeue retain the legacy queue semantics. The `phase` aggregate scope is stored only in the native competition projections; shared projection tables reject it. Mixed rebuilds page both stores, deduplicate preserved game IDs and leave live increment jobs to their worker.
 
+Mixed scope rebuilds retain the quiescent-write precondition above: the live-job snapshot is not protection against concurrent result recording, edits or deletes. Operator-run rebuilds require the write freeze to remain in force for the whole operation.
+
+Non-EPB evolution checks use `phaseEvolutionChecker`, which shares the existing threshold algorithm but reads only the season's native phase battle stats for that player and evolution line, with stable paging. Standalone games and legacy phase tournaments are not a fallback. EPB continues to use its separate credit ledger.
+
 EPB credits and debits use the native game's marker and stored ledger. A mixed season synchronization validates both match sets and credit payloads, writes both ledgers atomically and advances the season epoch exactly once. Refusal rolls both streams back. Matchday snapshots remain point-in-time records and a heal does not overwrite existing snapshots.
 
 ### Finalization, recovery and maintenance

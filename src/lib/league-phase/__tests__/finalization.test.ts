@@ -84,7 +84,7 @@ describe('native phase finalization adapter', () => {
     expect(await finalizer.finalizeMatchCompletion({ match, winnerId: 'p1', previousStatus: 'pending_confirmation' }))
       .toEqual({ finalized: true, complete: true, failed_steps: [] });
     expect(createMixedRatingStorage).toHaveBeenCalledWith('phase');
-    expect(updateRatingsWithStorage).toHaveBeenCalledWith('p1', 'p2', false, 'match', ports.ratings);
+    expect(updateRatingsWithStorage).toHaveBeenCalledWith('p1', 'p2', false, 'match', ports.ratings, { winnerId: 'p1', confirmedAt: 'completion' });
     expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('p1', mixedStreakStorage);
     expect(checkPhaseAchievements).toHaveBeenCalledWith('p1', {
       match_id: 'match', phase_id: 'phase', season_id: 'league', winner_id: 'p1', loser_id: 'p2', is_draw: false,
@@ -103,6 +103,21 @@ describe('native phase finalization adapter', () => {
     expect(recordPhaseMatchOutcome).toHaveBeenCalledWith(expect.objectContaining({ matchId: 'match', force: true, openOnly: true }));
     await finalizer.discardStagedAdminOutcome('match', { setAt: 'stage-token' });
     expect(deletePhaseMatchOutcome).toHaveBeenCalledWith('match', { onlyIfSetAt: 'stage-token' });
+  });
+
+  it('keeps the captured completion identity when later finalization work sees a replacement completion', async () => {
+    vi.mocked(getPhaseById).mockImplementationOnce(async () => {
+      vi.mocked(getPhaseMatchById).mockResolvedValue({ ...match, winner_id: 'p2', confirmed_at: 'new-completion' });
+      return phase;
+    });
+    await createPhaseMatchFinalizer(effects()).finalizeMatchCompletion({ match, winnerId: 'p1', previousStatus: 'pending_confirmation' });
+    expect(updateRatingsWithStorage).toHaveBeenCalledWith('p1', 'p2', false, 'match', ports.ratings, { winnerId: 'p1', confirmedAt: 'completion' });
+  });
+
+  it('passes a captured historical null token without fetching a newer token for ratings', async () => {
+    vi.mocked(getPhaseMatchById).mockResolvedValue({ ...match, confirmed_at: null });
+    await createPhaseMatchFinalizer(effects()).finalizeMatchCompletion({ match, winnerId: 'p1', previousStatus: 'pending_confirmation' });
+    expect(updateRatingsWithStorage).toHaveBeenCalledWith('p1', 'p2', false, 'match', ports.ratings, { winnerId: 'p1', confirmedAt: null });
   });
 
   it('uses native EPB credits and matchday hooks with the actual phase match', async () => {

@@ -17,7 +17,7 @@ import { createEpbEvolutionRebuilder } from '@/lib/reconcile/evolution-rebuild';
 import { planRatingRebuild, rebuildRatingsForPlayersWithStorage } from '@/lib/rating/updateRatings';
 import { recomputeStreaksWithStorage } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
-import { checkPlayerEvolutions } from '@/lib/draft/evolution-engine';
+import { phaseEvolutionChecker } from './evolution-checker';
 import { shouldExcludeFromAllTime } from '@/lib/supabase/queries/test-accounts';
 import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { buildGameAggregateDeltas } from '@/lib/supabase/queries/aggregates';
@@ -57,7 +57,7 @@ export function createPhaseMatchServices(effects: PhaseMatchServiceEffects) {
 
   const pipeline = createNativeGamePipeline({
     shouldExcludeFromAllTime: (...args) => shouldExcludeFromAllTime(...args),
-    checkPlayerEvolutions: (...args) => checkPlayerEvolutions(...args),
+    checkPlayerEvolutions: (...args) => phaseEvolutionChecker.checkPlayerEvolutions(...args),
     planRatingRebuild: (ids, options) => planRatingRebuild(ids, { ...options, storage: ratings }),
     rebuildRatingsForPlayers: (ids) => rebuildRatingsForPlayersWithStorage(ids, ratings),
     recomputeStreaks: (id) => recomputeStreaksWithStorage(id, mixedStreakStorage),
