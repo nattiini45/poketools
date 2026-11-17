@@ -12,6 +12,10 @@ import type { Database } from '@/types/database';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_FORMAT');
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
+vi.mock('@/auth', () => ({
+  auth: () => { throw new Error('This fixture supplies its actor explicitly'); },
+  loadSessionPlayer: () => { throw new Error('This fixture supplies its actor explicitly'); },
+}));
 
 describe.skipIf(!optedIn)('native format materialisation on the disposable phase-mode stack', () => {
   const actorId = randomUUID();
