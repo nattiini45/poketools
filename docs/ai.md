@@ -5,7 +5,11 @@ The AI module handles server-side LLM workflows for PokéTools, including match 
 
 Kale Cabbage remains available only as a soft-deprecated legacy tournament-report path. It is disabled by default through `NEXT_PUBLIC_ENABLE_KALE_CABBAGE=false`; new report work should use the standard AI module paths unless a task explicitly opts into Kale validation.
 
+The dormant native round-report store is `src/lib/supabase/queries/phase-reports.ts`, with `PhaseReport` ownership (`phase_id`, never a tournament alias). It supports round recaps/forecasts, complete paged reads, pending creation, guarded AI-artifact settlement and compare-and-set discard for regeneration. The public mapper `toPublicPhaseReport` excludes model, token accounting and diagnostic error fields. `loadPhaseReportStandings` binds the native enrollment and round facts to shared standings algorithms: recaps include the requested round, forecasts exclude it, and kit tables narrow to the actual phase even before its first result. EPB retains its stored tiebreaker order and pack points; Swiss byes and playoff metadata follow the same scoring gates as public tables. Only non-kit standings read narrow phase battle stats for round-granular kills; kit tables use their existing completed-match facts. Existing routes and generators retain legacy storage until activation.
+
 ## File Structure
+
+The dormant native service factory binds the report trigger to publication after a newly generated artifact settles successfully. Disabled, cached, pending and superseded outcomes never reannounce. Publication verifies the actual phase/round pair, expires the owning phase/league cache, copies only recap/forecast notification fields and uses the approved `/leagues/<league>/phases/<phase>` link. It retains the legacy Discord-only report fan-out; model names, accounting and diagnostics are excluded. No existing route selects this factory.
 ```
 src/lib/ai/
 ├── client.ts  # Anthropic client wrapper and completion helpers
@@ -14,6 +18,10 @@ src/lib/ai/
 ├── tournament-report-context.ts  # Round recap/forecast prompt builders
 ├── tournament-report-generator.ts  # Async report generation + parsing
 ├── trigger.ts  # Fire-and-forget trigger helpers
+├── phase-analysis.ts  # Native phase analysis authorization and generation
+├── phase-context.ts  # Native match and scouting prompt context
+├── phase-report-generator.ts  # Native round report generation and settlement
+├── phase-trigger.ts  # Dormant native report trigger and publication binding
 ├── api-key.ts  # The Anthropic API key every AI feature uses (ANTHROPIC_API_KEY, deprecated CLAUDE_API_KEY), blank-trimmed
 ├── model-capabilities.ts  # What a Claude model id accepts on the raw Messages API
 ├── constants.ts  # Shared AI constants (stale-analysis age)
@@ -100,7 +108,7 @@ The executor accepts an optional `storageGeneration`, defaulting to `legacy`. Wi
 
 Actual operation assembly remains legacy-bound: `_ops/g/phase-create.ts` verifies tournament-backed phases and may call its enrollment repair; `start-phase.ts` dispatches `/api/generate-round/[tid]`; bracket and pin bindings also use legacy ownership reads. Native assembly must replace those reads, fingerprints, result refs, ledger entity kinds, undo facts and route bindings together. Merely changing a route template or renaming a tool does not activate a safe native operation. Eval fixtures must gain native phase rows and explicit child owners instead of treating phase ids as tournament ids.
 
-Owner-level broadcast presets retain their unversioned `config` and opaque `extra` unchanged. Remaining preset contracts are a versioned explicit-ref envelope, a selected-store ownership resolver, canonical URL assembly and tests preserving old standalone/default config; unknown extras must never be reinterpreted as phase ids. Player-agent `upcoming_match_id`, conversation tool input/output blobs and suggestion `match_id` likewise remain legacy by default. Remaining player-agent contracts are an explicit match-ref context variant, native match/history/H2H/team tool assembly with live participant visibility, and native suggestion writes to `phase_match_id` exclusively while retaining old standalone pointers and opaque transcripts. This admin reader does not authorize player-agent reads. No routes, default readers, preset resolvers or player-agent tools are activated here.
+Owner-level broadcast presets retain historical config and opaque `extra` unchanged. The dormant `createBroadcastPresetResourceResolver(buildUrl)` accepts an optional versioned explicit match-ref envelope, uses the shared actual-owner reconstruction under a live creator/owner check, and leaves old standalone/default configs on the old path. P5 supplies the canonical OBS URL callback; unknown extras never become phase ids. Player-agent `upcoming_match_id`, conversation tool input/output blobs and suggestion `match_id` remain legacy by default. Native player-agent contracts require a separate explicit match-ref context and native tools with live participant visibility and exclusive `phase_match_id` suggestion writes; the admin reader is not player authorization. No route or default dispatch is activated here.
 
 ## Dependencies
 - **External Libraries**: `@anthropic-ai/sdk`
@@ -129,7 +137,7 @@ void triggerMatchAnalysis(matchId);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/ai/__tests__/` (15 test files): `client.test.ts` and `client.contract.test.ts` (the SDK wrapper and its request contract), `package-pins.test.ts` (the pinned SDK versions), `api-key.test.ts`, `format.test.ts`, `language.test.ts`, `league-context.test.ts`, `rate-limit.test.ts`, `context-builder.test.ts`, `parse-scouting.test.ts`, `tournament-report-context.test.ts`, `tournament-report-generator.test.ts`, `trigger.test.ts`, `ai-helpers.test.ts` and `artifact-state.test.ts`. The agent, the Admin Assistant and the Kale pipeline have their own `__tests__` under `src/lib/ai/agent/`, `src/lib/ai/admin-agent/` and `src/lib/ai/kale/`.
+- **Test Files**: `src/lib/ai/__tests__/` (19 test files): `client.test.ts` and `client.contract.test.ts` (the SDK wrapper and its request contract), `package-pins.test.ts` (the pinned SDK versions), `api-key.test.ts`, `format.test.ts`, `language.test.ts`, `league-context.test.ts`, `rate-limit.test.ts`, `context-builder.test.ts`, `parse-scouting.test.ts`, `tournament-report-context.test.ts`, `tournament-report-generator.test.ts`, `trigger.test.ts`, `ai-helpers.test.ts` and `artifact-state.test.ts`. The agent, the Admin Assistant and the Kale pipeline have their own `__tests__` under `src/lib/ai/agent/`, `src/lib/ai/admin-agent/` and `src/lib/ai/kale/`. Native phase coverage: `phase-analysis.test.ts`, `phase-context.test.ts`, `phase-report-generator.test.ts` and `phase-trigger.test.ts`.
 - **Testing Approach**: Unit tests of the pure helpers (parsers, prompt builders, rate limit, key and language resolution) and the SDK wrapper with a mocked client; the AI routes are covered by their own route tests under `src/app/api/ai/`.
 
 ## Related Modules

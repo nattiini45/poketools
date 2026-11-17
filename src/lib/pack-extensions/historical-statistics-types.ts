@@ -3,14 +3,14 @@ export interface HistoricalCompetitionOption {
   name: string;
   href: string;
   parentId: string | null;
-  kind: 'league' | 'playoff' | 'tournament' | 'cup';
+  kind: 'league' | 'phase' | 'playoff' | 'tournament' | 'cup';
   year: number | null;
   seasonLabel: string | null;
   liveScopeIds?: readonly string[];
 }
 
 export interface HistoricalStatisticsRequest {
-  scopeType: 'all_time' | 'league' | 'tournament' | 'archive';
+  scopeType: 'all_time' | 'league' | 'phase' | 'tournament' | 'archive';
   scopeId: string | null;
   playerId?: string;
 }

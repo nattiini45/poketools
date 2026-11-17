@@ -1,6 +1,6 @@
 import 'server-only';
 import { supabase } from '../client';
-import { agentResourceRefsSchema, type AgentResourceRef } from '@/lib/ai/agent/resource-ref';
+import { agentResourceRefsSchema, type AgentResourceRef, type CompetitionRef } from '@/lib/ai/agent/resource-ref';
 
 type Store = 'phase' | 'tournament';
 interface ParentRow { id: string; parentId: string }
@@ -87,4 +87,31 @@ export async function getAgentOwnershipGraph(input: readonly AgentResourceRef[])
     row.seasonId === null ? [] : [row.seasonId]),
   (ids) => supabase.from('seasons').select('id').in('id', ids));
   return { phase, tournament, seasons: new Set(seasons.map((row) => row.id)) };
+}
+
+export function getAgentResourceOwner(ref: AgentResourceRef, graph: AgentOwnershipGraph): CompetitionRef | null {
+  const store = graph[ref.owner.kind];
+  let competitionId: string;
+  if (ref.resource === 'competition') {
+    competitionId = ref.owner.kind === 'phase' ? ref.owner.phaseId : ref.owner.tournamentId;
+  } else if (ref.resource === 'round') {
+    const round = store.rounds.get(ref.id);
+    if (!round) return null;
+    competitionId = round.parentId;
+  } else {
+    const matchId = ref.resource === 'game' ? store.games.get(ref.id)?.parentId : ref.id;
+    if (!matchId) return null;
+    const match = store.matches.get(matchId);
+    if (!match) return null;
+    const round = store.rounds.get(match.roundId);
+    if (!round || round.parentId !== match.parentId) return null;
+    competitionId = match.parentId;
+  }
+  const competition = store.competitions.get(competitionId);
+  if (!competition) return null;
+  if (ref.owner.kind === 'tournament') {
+    return competition.seasonId === null ? { kind: 'tournament', tournamentId: competition.id } : null;
+  }
+  if (competition.seasonId === null || !graph.seasons.has(competition.seasonId)) return null;
+  return { kind: 'phase', seasonId: competition.seasonId, phaseId: competition.id };
 }

@@ -89,6 +89,42 @@ describe('native social notifications', () => {
     expect(String(vi.mocked(console.error).mock.calls)).not.toContain('secret-');
   });
 
+  it.each([
+    'SOCIAL_INTEGRATION_ENCRYPTION_KEY is not configured',
+    'SOCIAL_INTEGRATION_ENCRYPTION_KEY must decode to 32 bytes',
+    'Invalid encrypted payload format',
+  ])('keeps the safe decryption failure distinct: %s', async message => {
+    vi.mocked(resolvePhaseSocialIntegrations).mockResolvedValue([integration('bad')]);
+    vi.mocked(decryptJson).mockImplementationOnce(() => { throw new Error(message); });
+    emitPhaseSocialEvent(payload);
+    await flush();
+    expect(console.error).toHaveBeenCalledWith('[Social] Failed to decrypt credentials for integration bad:', message);
+    expect(publishToProvider).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['bluesky', 'bluesky'],
+    ['secret-provider', 'invalid_provider'],
+  ])('logs only validated provider identifiers on a mismatch', async (provider, expected) => {
+    vi.mocked(resolvePhaseSocialIntegrations).mockResolvedValue([integration('bad')]);
+    vi.mocked(decryptJson).mockReturnValueOnce({ provider });
+    emitPhaseSocialEvent(payload);
+    await flush();
+    expect(console.error).toHaveBeenCalledWith(`[Social] Credentials provider mismatch for integration bad: expected x, got ${expected}`);
+    expect(String(vi.mocked(console.error).mock.calls)).not.toContain('secret-');
+    expect(publishToProvider).not.toHaveBeenCalled();
+  });
+
+  it('never logs credential plaintext from a JSON parser diagnostic', async () => {
+    vi.mocked(resolvePhaseSocialIntegrations).mockResolvedValue([integration('bad')]);
+    vi.mocked(decryptJson).mockImplementationOnce(() => { throw new SyntaxError('Invalid JSON near secret-access-token'); });
+    emitPhaseSocialEvent(payload);
+    await flush();
+    expect(console.error).toHaveBeenCalledWith('[Social] Failed to decrypt credentials for integration bad:', 'SyntaxError');
+    expect(String(vi.mocked(console.error).mock.calls)).not.toContain('secret-');
+    expect(publishToProvider).not.toHaveBeenCalled();
+  });
+
   it.each([['x', 280], ['threads', 500], ['bluesky', 300]] as const)('preserves %s provider truncation', (provider, limit) => {
     const long = { ...payload, data: { ...payload.data, phase_name: 'A'.repeat(600) } };
     const text = formatPhaseSocialPost(long, provider, DEFAULT_SOCIAL_POST_OPTIONS, 'en');

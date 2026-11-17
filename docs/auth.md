@@ -10,6 +10,7 @@ src/proxy.ts  # Request proxy: path header for sign-in redirects, CSP nonce
 src/lib/auth/
 ├── helpers.ts  # Session + role/resource guard helpers (the live `require*` guards)
 ├── admin-scope.ts  # The seasons and tournaments an admin may manage, for lists and counts
+├── phase-access.ts  # Dormant live native phase guards and inherited league scope
 ├── match-access.ts, match-admin.ts  # May act as an admin on a match; gate of the per-match admin routes
 ├── resource-gate.ts  # Live view gate for pages scoped to one season or tournament
 ├── season-member.ts  # requireSeasonMember / assertSeasonOpenForPlay: the guard of the live-format player routes (a participant, no site-admin bypass; closed leagues take no more moves)
@@ -23,6 +24,14 @@ src/lib/auth/
 ```
 
 ## Core Functions/Classes
+
+### Native phase access (dormant)
+
+`src/lib/auth/phase-access.ts` is the native phase boundary: `requirePhaseAdmin`, `gatePhaseAdmin`, `canAdministerPhaseAccess`, `assertMayRecordPhaseResult` and `getPhaseAdminScope`. These read `phase_admins` and cascade only from the phase's actual parent league. A phase assignment grants neither its league nor a standalone tournament. The route guard starts with `requirePlayer`; the view gate reads the live identity and rejects banned or suspended viewers. Neither trusts the legacy `isResourceAdmin` flag, so a phase-only organizer can pass without widening the session select.
+
+The native scope pages all assignments and inherited phases, with explicit phase ids rather than tournament aliases. Existing session, admin-scope, resource and match guards retain their legacy defaults until activation; importing or using those existing guards adds no native-table read. The native constructors and guards are not bound to routes in this layer.
+
+`getPhaseAwareLiveAccess` (render-memoized) and `requirePhaseAwareAdmin` are opt-in counterparts of the global admin gates for the later activation. They recognize a phase-only assignment without changing the session player or its legacy resource-admin flag. Site/legacy admins need no extra phase role read; signed-out and blocked views never probe assignments. They are not substituted into existing layouts or guards in this layer.
 
 ### NextAuth Config
 - **File**: `src/auth.ts`
@@ -75,7 +84,7 @@ export async function GET() {
 ```
 
 ## Testing
-- **Test Files**: `src/lib/auth/__tests__/` (19 test files): the guards (`helpers.test.ts`, `resource-gate.test.ts`, `admin-scope.test.ts`, `match-access.test.ts`, `match-admin.test.ts`, `require-format-owner.test.ts`, `live-access-render.test.ts`, `season-member.test.ts`), sign-in and redirects (`credentials.test.ts`, `sign-in-redirects.test.ts`, `redirect-to-sign-in.test.ts`, `request-path.test.ts`, `safe-callback-url.test.ts`), `rate-limits.test.ts`, the session epoch (`session-epoch.test.ts`) and the verified-session override (`session-override.test.ts`, `session-override-equivalence.test.ts`, `session-override-static.test.ts`), plus `superadmin-player-id.test.ts`. `src/auth.ts` is covered by `src/__tests__/`.
+- **Test Files**: `src/lib/auth/__tests__/` (20 test files): the guards (`helpers.test.ts`, `resource-gate.test.ts`, `admin-scope.test.ts`, `match-access.test.ts`, `match-admin.test.ts`, `require-format-owner.test.ts`, `live-access-render.test.ts`, `season-member.test.ts`), sign-in and redirects (`credentials.test.ts`, `sign-in-redirects.test.ts`, `redirect-to-sign-in.test.ts`, `request-path.test.ts`, `safe-callback-url.test.ts`), `rate-limits.test.ts`, the session epoch (`session-epoch.test.ts`) and the verified-session override (`session-override.test.ts`, `session-override-equivalence.test.ts`, `session-override-static.test.ts`), plus `superadmin-player-id.test.ts`. `src/auth.ts` is covered by `src/__tests__/`. Native phase access is covered by `phase-access.test.ts`.
 - **Testing Approach**: Unit tests of every guard and gate with a mocked player read, plus route tests of the guarded API routes.
 
 ## Related Modules

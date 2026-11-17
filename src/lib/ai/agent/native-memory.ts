@@ -1,3 +1,4 @@
+import 'server-only';
 import { z } from 'zod';
 import { authorizeNativePlayerMatch, nativePlayerContextSchema } from './native-context';
 import { conversationBelongsTo } from './memory';

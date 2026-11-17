@@ -38,6 +38,7 @@ src/lib/match/
 ├── match-kos.ts  # One player's KO totals across the games of a match
 ├── reopen.ts  # Reopening a completed match
 ├── result-effects.ts  # The effects of a result: events, recap, AI analysis gate
+├── finalization-notifications.ts  # Shared public match completion announcement derivation
 ├── series-tally.ts  # The series tally checked before completing or disputing a match
 ├── social-image-path.ts  # Naming of the match social cards in the social-images bucket
 ├── stage-ended.ts  # Which players advanced from a phase whose stage already ended (the read behind the take-back warning)
@@ -281,6 +282,10 @@ const team = aggregateTeamFromStats(statsByGame, playerId, true);
 League-phase results have their own persistence family: `phase_matches`, `phase_games`, `phase_battle_stats`, outcomes, snapshots, aggregate jobs and competition-level projections. A native match keeps `phase_id`; shared orchestration never presents it as a tournament match. Player, league and all-time projections remain deliberately shared.
 
 `createPhaseMatchServices` in `src/lib/league-phase/match-services.ts` assembles submission, replay-tie handling, game edit/delete, reset, confirmation/dispute, staging, finalization/heal, reopen and the authenticated auto-confirm handler. It binds the concrete native queries, atomic aggregate operations, mixed rating/streak replay, phase achievements and EPB credit/rebuild services. Callers supply the phase-access guard, team release, announcements, cache invalidation and kit ancillary callbacks. Missing phase team-release behavior must fail before child cleanup; clearing a required phase owner is not a release-to-library implementation.
+
+`createNativePhaseServices` in `src/lib/league-phase/services.ts` supplies the live phase-access decision, atomic team release (including its real cleared-pointer count), phase-owned outward effects, native enrollment and kit team audit. It also exposes native team/wiki services and the round-report trigger. Construction performs no data read or activation, and requires explicit match, phase/league and wiki invalidation callbacks; P5 binds those to the new cache tags and canonical routes. The kit audit retains its caller's retry mode, and an automatic phase completion logs the native phase action once; a held-advance retry audits the repair without repeating the completion announcement.
+
+Legacy and native finalization share `buildFinalizationNotifications`, the pure derivation of survivor scores, gold/platinum achievements, rising streak milestones, streak breaks and rating thresholds. Ownership and display names are added only at their respective emitters. Native payloads carry the real phase and season, never a tournament alias, and discard private match fields. The shared game-stat renderer sorts a copy rather than mutating a cached match; replay selection still chooses the first game in game-number order. Existing standalone emitter signatures and event content stay unchanged.
 
 The legacy exports and existing routes remain explicitly bound to legacy storage. The native constructors and mixed maintenance constructors are opt-in service entry points, not a generation detector or an activation switch. Main can deploy without these additive migrations. Applying them does not move records, recount production games or enable native traffic; activation belongs to the separately approved cutover.
 

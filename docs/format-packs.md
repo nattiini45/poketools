@@ -104,6 +104,8 @@ Type-checking the "absent" case: renaming `private/` in place does not detach it
 
 ## Pack extensions
 
+The public format-pack type barrel also exports `CompetitionOwner`, `Phase`, `PhaseRound`, `PhaseParticipant` and `PhaseMatch`; the server-only extension contract re-exports those same native types. A phase uses its actual `phase_id` and parent league, never a manufactured tournament. Historical competition options and statistics requests accept explicit kind/scope `phase`, separately from standalone `tournament`. These are additive contracts for companion adapters and the later route activation: the example extension remains `{}`, no provider is required, and existing requests invoke no new provider or native-table read. Pack tuning and private historical records stay in the companion.
+
 A pack may also extend the app beyond tuning, with data or pages that only its deployment has. The public app offers neutral seams for that and consults them only when the active pack fills them, so the open-source build carries no pack-specific code, schema, wording or data. Mechanics stay public; anything only one league needs lives in its pack.
 
 - **Contract.** `src/lib/pack-extensions/types.ts` (`PackExtensions`, server-only). Every member is optional; the example pack exports `{}`. Read the active pack's extensions only through `@/lib/pack-extensions`, the single importer of `@pack-extensions`.

@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readAllPages } from '../read-all-pages';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import type { Tables } from '@/types/database';
 import type {
@@ -12,6 +13,13 @@ import type {
 import { DEFAULT_SOCIAL_POST_OPTIONS } from '@/types/social';
 
 type SocialIntegrationRow = Tables<'social_integrations'>;
+
+export async function resolveLeagueSocialIntegrations(seasonId: string): Promise<SocialIntegrationWithSecrets[]> {
+  assertValidUuid(seasonId, 'seasonId');
+  const rows = await readAllPages((from, to) => supabase.from('social_integrations').select('*').eq('enabled', true)
+    .or(`scope_type.eq.global,and(scope_type.eq.season,scope_id.eq.${seasonId})`).order('id').range(from, to));
+  return rows.map(toSocialIntegrationWithSecrets);
+}
 
 export interface CreateSocialIntegrationRecord {
   provider: SocialProvider;
@@ -187,4 +195,3 @@ export async function deleteSocialIntegration(id: string): Promise<void> {
     .eq('id', id);
   if (error) throw error;
 }
-

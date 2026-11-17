@@ -15,8 +15,15 @@ import type { Ruleset } from '@/types/ruleset';
 
 /** The ruleset of an exposed version, or null (unknown id, malformed id, or a private ruleset that nothing pins). */
 export async function readExposedRuleset(versionId: string): Promise<Ruleset | null> {
+  return readExposedRulesetWithStorage(versionId, (id) => isVersionPinned(id));
+}
+
+export async function readExposedRulesetWithStorage(
+  versionId: string,
+  isPinned: (id: string) => Promise<boolean>,
+): Promise<Ruleset | null> {
   const found = await getDefinitionOfVersion(versionId);
   if (found === null) return null;
-  if (found.definition.visibility === 'private' && !(await isVersionPinned(versionId))) return null;
+  if (found.definition.visibility === 'private' && !(await isPinned(versionId))) return null;
   return getRulesetById(versionId);
 }

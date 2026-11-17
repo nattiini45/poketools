@@ -15,6 +15,9 @@ src/lib/team/
 ├── match-round.ts  # The round a match-bound team is judged at (the match's round, never the phase's current one)
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
+├── phase-public-team.ts  # Public native phase team projection
+├── phase-services.ts  # Dormant native phase team operations
+├── phase-visibility.ts  # Native phase team visibility and redaction
 ├── showdown-set.ts  # Showdown paste text (always English)
 ├── team-roster-state.ts  # State machine team.roster: the roster write locks and the write verdict (docs/state-machines.md)
 ├── team-share-state.ts  # State machines team.share and team.library: share link and library publication
@@ -66,7 +69,7 @@ const visibleTeams = await filterTeamVisibility(teams, ctx);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/team/__tests__/` (12 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts`, `visibility.test.ts`, `team-roster-state.test.ts` (the roster machine, its read-minimal verdict and the SQL parity) and `team-share-state.test.ts`; `private-team-fields.ts` is the shared leak assertion
+- **Test Files**: `src/lib/team/__tests__/` (15 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts`, `visibility.test.ts`, `team-roster-state.test.ts` (the roster machine, its read-minimal verdict and the SQL parity) and `team-share-state.test.ts`; `private-team-fields.ts` is the shared leak assertion Native coverage: `phase-services.test.ts`, `phase-visibility.test.ts` and the opt-in disposable-stack `phase-teams.local.test.ts`.
 - **Testing Approach**: Unit tests of every helper; the team API routes and pages run the leak assertion on their payloads.
 
 ## Dormant native phase teams

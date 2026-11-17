@@ -105,14 +105,20 @@ function parseCredentials(integration: SocialIntegrationWithSecrets | PhaseSocia
   try {
     const credentials = decryptJson<SocialCredentials>(integration.credentials_encrypted);
     if (credentials.provider !== integration.provider) {
+      const actualProvider = ['x', 'threads', 'bluesky'].includes(credentials.provider) ? credentials.provider : 'invalid_provider';
       console.error(
-        `[Social] Credentials provider mismatch for integration ${integration.id}: expected ${integration.provider}`,
+        `[Social] Credentials provider mismatch for integration ${integration.id}: expected ${integration.provider}, got ${actualProvider}`,
       );
       return null;
     }
     return credentials;
   } catch (err) {
-    console.error(`[Social] Failed to decrypt credentials for integration ${integration.id}:`, err instanceof Error ? err.name : 'unknown');
+    const failure = err instanceof Error && [
+      'SOCIAL_INTEGRATION_ENCRYPTION_KEY is not configured',
+      'SOCIAL_INTEGRATION_ENCRYPTION_KEY must decode to 32 bytes',
+      'Invalid encrypted payload format',
+    ].includes(err.message) ? err.message : err instanceof Error ? err.name : 'unknown';
+    console.error(`[Social] Failed to decrypt credentials for integration ${integration.id}:`, failure);
     return null;
   }
 }

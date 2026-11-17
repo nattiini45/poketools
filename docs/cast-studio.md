@@ -39,6 +39,14 @@ src/app/broadcast/solo/[sessionId]/ko-stats/page.tsx  # Public KO stats overlay
 
 ## Core Functions/Classes
 
+### Native phase sessions (dormant)
+
+`phase-cast-sessions.ts` stores phase-owned sessions separately, derives their league from the real phase, and guards updates with the captured owner, phase, status and monotonic timestamp version. `createPhaseCastServices` keeps the live creator gate and owner/site-admin rule; organizing a phase grants no access to another creator's notes or channel key. Solo creation keeps the live creator defaults. Population reads only native matches, rounds, teams and battle stats, checks phase ownership, and applies the shared match-roster visibility rule: owning a studio session grants no preparation access. Its result carries `phase_id`, never a tournament alias.
+
+`toPublicPhaseCastSession` is a metadata-only allowlist: no realtime key, owner id, private teams, tracker state, overlay configuration or caster notes. Authorized studio reads retain those fields. Match cleanup clears the pointer, not the reusable session; P3's native child cleanup also clears retained legacy cross-store pointers.
+
+`20261117150000_phase_cast_capabilities.sql` serializes realtime-key writes across both stores and checks the final transaction state with deferred constraints. It permits a UUID-preserving transfer only when the source row is removed before commit, and makes a restore fail atomically if an outside session took its key. Both insertion orders, updates, commit/rollback and restore retry have opt-in disposable-database tests. Existing routes and channel names are not activated or changed by this layer, and default requests require no new SQL.
+
 ### CastStudioContext
 - **Provider**: `CastStudioProvider` wraps session data into a `useReducer` state machine
 - **Auto-save** (`castStudioSaveMachine` in `src/lib/broadcast/cast-studio-save-state.ts`; [state machines](./state-machines.md#cast-studio-autosave)): 5 s after the last edit one PATCH sends the whole snapshot, never two at once. The request keeps the body it sent, so an edit made while it runs is still unsaved when it answers. An HTTP error, `success: false` or no answer shows "Save failed" in `CastToolbar` (the API error as its title) until the next edit retries. A `pagehide` sends any unsaved snapshot with `keepalive`. "Change Match" saves `match_id: null` (tests: `src/components/creator/studio/__tests__/CastStudioContext.autosave.test.tsx`)

@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readAllPages } from '../read-all-pages';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import type { Tables } from '@/types/database';
 import type {
@@ -12,6 +13,13 @@ import type {
 import { DEFAULT_FORMAT_OPTIONS } from '@/types/discord';
 
 type WebhookRow = Tables<'discord_webhooks'>;
+
+export async function resolveLeagueWebhooks(seasonId: string): Promise<DiscordWebhook[]> {
+  assertValidUuid(seasonId, 'seasonId');
+  const rows = await readAllPages((from, to) => supabase.from('discord_webhooks').select('*').eq('enabled', true)
+    .or(`scope_type.eq.global,and(scope_type.eq.season,scope_id.eq.${seasonId})`).order('id').range(from, to));
+  return rows.map(toWebhook);
+}
 
 function toWebhook(row: WebhookRow): DiscordWebhook {
   return {

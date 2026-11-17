@@ -1,3 +1,4 @@
+import 'server-only';
 import { z } from 'zod';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getPhaseById, isPlayerPhaseParticipant } from '@/lib/supabase/queries/league-phases';
@@ -8,11 +9,11 @@ import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getPlayerPhaseTeamForMatch } from '@/lib/supabase/queries/phase-teams';
 import { getAgentPhaseHistory, getAgentPhasePrep } from '@/lib/supabase/queries/agent-player-context';
 import { decideMatchRosterVisibility } from '@/lib/team/visibility';
-import { agentResourceRefSchema, competitionRefSchema } from './resource-ref';
+import { matchResourceRefSchema, phaseCompetitionRefSchema } from './resource-ref';
 
 export const nativePlayerContextSchema = z.strictObject({
   generation: z.literal('native-phase-v1'),
-  match: agentResourceRefSchema.options[2].extend({ owner: competitionRefSchema.options[1] }),
+  match: matchResourceRefSchema.extend({ owner: phaseCompetitionRefSchema }),
 });
 export type NativePlayerContext = z.output<typeof nativePlayerContextSchema>;
 

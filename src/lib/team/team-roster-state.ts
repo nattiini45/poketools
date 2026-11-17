@@ -33,12 +33,17 @@ const CORRECTION_SQL = 'supabase/migrations/20261019120000_teams_completed_match
 const ID_ROUTE = 'src/app/api/teams/[id]/route.ts';
 const MATCH_PREP_ROUTE = 'src/app/api/match-prep/route.ts';
 const QUERIES = 'src/lib/supabase/queries/teams.ts';
+const PHASE_WRITERS = [
+  'src/lib/team/phase-services.ts',
+  'src/lib/supabase/queries/phase-teams.ts',
+  'supabase/migrations/20261117130000_phase_team_services.sql',
+];
 
 export const teamRosterMachine = defineMachine({
   id: 'team.roster',
   title: 'Team roster write locks',
   storage:
-    'derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived',
+    'derived: teams / phase_teams locked and match pointers -> matches / phase_matches status; tournament / phase and parent season status/archived',
   summary:
     'Whether a team row may still be edited or deleted, and by whom. The lock is derived on every write from the manual flag teams.locked (no code path sets it today), the closure of its tournament or league (completed or archived) and the status of its linked match, in that order of precedence (teamLockState), so every lock state is an initial state and only the writes themselves are transitions (an edit is a self-loop). Routes ask resolveTeamWriteVerdict, which reads only the facts that can still change the answer. A refusal answers 409 team_locked, 403 with the closure code (team_submission_closed, team_submission_tournament_archived, team_submission_league_closed) or 409 team_match_completed. Creating a team (POST /api/teams) is gated by the closure before any row exists and is not part of this machine. teams.is_draft_team and teams.draft_pool_id are written by no code path and take part in no lock.',
   doc: 'docs/teambuilder-reference.md',
@@ -52,7 +57,7 @@ export const teamRosterMachine = defineMachine({
       from: ['open'],
       to: 'open',
       actors: ['owner', 'participant', 'admin'],
-      writers: [ID_ROUTE, MATCH_PREP_ROUTE, QUERIES],
+      writers: [ID_ROUTE, MATCH_PREP_ROUTE, QUERIES, ...PHASE_WRITERS],
       note: 'The UPDATE is guarded with locked = false; a row locked or deleted in between answers 409 team_changed.',
     },
     {
@@ -60,7 +65,7 @@ export const teamRosterMachine = defineMachine({
       from: ['match_completed'],
       to: 'match_completed',
       actors: ['admin'],
-      writers: [ID_ROUTE, MATCH_PREP_ROUTE, `${CORRECTION_SQL}#team_correct_update`],
+      writers: [ID_ROUTE, MATCH_PREP_ROUTE, `${CORRECTION_SQL}#team_correct_update`, ...PHASE_WRITERS],
       note: 'Only an admin correction passes the teams_completed_match_lock trigger; the owner gets 409 team_match_completed, a participant 409 match_prep_match_completed.',
     },
     {
@@ -68,7 +73,7 @@ export const teamRosterMachine = defineMachine({
       from: ['closed'],
       to: 'closed',
       actors: ['participant', 'admin'],
-      writers: [MATCH_PREP_ROUTE, ID_ROUTE, `${CORRECTION_SQL}#team_correct_update`],
+      writers: [MATCH_PREP_ROUTE, ID_ROUTE, `${CORRECTION_SQL}#team_correct_update`, ...PHASE_WRITERS],
       note: 'The owner gets 403 with the closure code; match prep does not read the closure, so a participant may still save the team of a match that is not completed.',
     },
     {
@@ -76,7 +81,7 @@ export const teamRosterMachine = defineMachine({
       from: ['closed_planned'],
       to: 'closed_planned',
       actors: ['admin'],
-      writers: [ID_ROUTE, `${CORRECTION_SQL}#team_correct_update`],
+      writers: [ID_ROUTE, `${CORRECTION_SQL}#team_correct_update`, ...PHASE_WRITERS],
       note: 'A planned team (no match) of a closed tournament or league; the owner gets 403 with the closure code.',
     },
     {
@@ -84,7 +89,7 @@ export const teamRosterMachine = defineMachine({
       from: ['open', 'closed_planned'],
       to: 'deleted',
       actors: ['owner', 'admin'],
-      writers: [ID_ROUTE, QUERIES, `${CORRECTION_SQL}#team_correct_delete`],
+      writers: [ID_ROUTE, QUERIES, `${CORRECTION_SQL}#team_correct_delete`, ...PHASE_WRITERS],
       note: 'The owner may delete a planned team nobody played with even in a closed tournament; the DELETE is guarded with locked = false.',
     },
     {
@@ -92,7 +97,7 @@ export const teamRosterMachine = defineMachine({
       from: ['match_completed', 'closed', 'locked'],
       to: 'deleted',
       actors: ['admin'],
-      writers: [ID_ROUTE, QUERIES, `${CORRECTION_SQL}#team_correct_delete`],
+      writers: [ID_ROUTE, QUERIES, `${CORRECTION_SQL}#team_correct_delete`, ...PHASE_WRITERS],
       note: 'A site admin deletes any team as a correction.',
     },
   ],

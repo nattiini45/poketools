@@ -10,6 +10,10 @@ src/lib/broadcast/
 ├── draft-replay.ts  # Draft replay state/reducer helpers
 ├── error-retry.ts  # Back-off schedule of the overlay error boundary
 ├── overlay-config.ts  # Overlay configuration helpers
+├── phase-populate.ts  # Native phase caster data assembly
+├── phase-session-services.ts  # Dormant native cast session operations
+├── phase-session-view.ts  # Public native cast session projection
+├── preset-resource.ts  # Versioned preset match ownership resolution
 ├── poll-loop.ts  # `usePollLoop`: chained polling with backoff and Retry-After
 ├── poll-schedule.ts  # Pure backoff and Retry-After maths
 ├── polling.ts  # Polling utilities
@@ -107,6 +111,14 @@ Polling overlays run on `usePollLoop` (`poll-loop.ts`, schedule in `poll-schedul
 - Frame protections stay: `/broadcast/*` is sent with `X-Frame-Options: DENY` and `frame-ancestors 'none'`. A browser source is a top-level page, not a frame, so OBS is unaffected; embedding an overlay in a page is intentionally not supported.
 
 ## Overlay Types (url-builder.ts)
+
+### Dormant versioned saved match references
+
+`BroadcastPresetConfig.resource` is an optional explicit envelope: `{ version: 1, overlay, target }`. The seven match overlay kinds use the strict match-resource reference shared with the agent boundary: a native owner carries `kind: 'phase'`, `seasonId` and `phaseId`; a standalone owner carries `kind: 'tournament'` and `tournamentId`. Appearance settings and opaque `extra` remain unchanged. A config without the envelope stays on the legacy/default path; an unknown envelope version, malformed reference or mismatched overlay/preset family is refused rather than guessed from an extra key.
+
+`createBroadcastPresetResourceResolver(buildUrl)` is a dormant server-only owner-level resolver. It checks the live creator guard and preset owner (or site admin), reconstructs the selected store's real match/round/competition chain with narrow bounded reads, requires the actual native league, and refuses a legacy league phase presented as standalone. It returns no match data or private sheet. Missing or changed ownership never falls back to the other store, even when UUIDs collide; read failures propagate. Neither config nor historical JSON is rewritten.
+
+P5 supplies the canonical OBS URL callback from the verified explicit resource. The resolver invents no overlay route, never interprets an opaque extra as an owner, and changes no existing URL builder or preset route. The callback must serialize only supported appearance/overlay options, not arbitrary opaque extras. Preset loading remains owner/creator authorization, not permission to read private match, team or prep data through the resulting overlay.
 - **Match**: preview, live, results, story, teams, h2h, moments
 - **League**: standings, attract, recap, usage_chart
 - **Draft**: live, pick, replay
@@ -123,7 +135,7 @@ const next = trackerReducer(createInitialState(match), action);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/broadcast/__tests__/` (25 test files), one per helper: the polling stack (`poll-loop.test.tsx`, `poll-schedule.test.ts`, `polling.test.ts`, `polling-hook.test.tsx`, `error-retry.test.ts`, `use-solo-broadcast.test.ts`), the overlay config, language and URL builder (`overlay-config.test.ts`, `overlay-lang-url.test.ts`, `overlay-locale.test.ts`, `url-builder.test.ts`, `wiki-overlay-ids.test.ts`), the tracker and commentary (`tracker-reducer.test.ts`, `commentary-prompts.test.ts`, `caster-data.test.ts`, `momentum-calc.test.ts`, `standings-impact.test.ts`, `win-conditions.test.ts`, `moment-limits.test.ts`, `manual-result-response.test.ts`, `solo-defaults.test.ts`), and `channel.test.ts`, `animations.test.ts`, `draft-replay.test.ts`, `recap-engine.test.ts`, `request-guard.test.ts`.
+- **Test Files**: `src/lib/broadcast/__tests__/` (29 test files), one per helper: the polling stack (`poll-loop.test.tsx`, `poll-schedule.test.ts`, `polling.test.ts`, `polling-hook.test.tsx`, `error-retry.test.ts`, `use-solo-broadcast.test.ts`), the overlay config, language and URL builder (`overlay-config.test.ts`, `overlay-lang-url.test.ts`, `overlay-locale.test.ts`, `url-builder.test.ts`, `wiki-overlay-ids.test.ts`), the tracker and commentary (`tracker-reducer.test.ts`, `commentary-prompts.test.ts`, `caster-data.test.ts`, `momentum-calc.test.ts`, `standings-impact.test.ts`, `win-conditions.test.ts`, `moment-limits.test.ts`, `manual-result-response.test.ts`, `solo-defaults.test.ts`), and `channel.test.ts`, `animations.test.ts`, `draft-replay.test.ts`, `recap-engine.test.ts`, `request-guard.test.ts`. Native coverage: `phase-populate.test.ts`, `phase-session-services.test.ts`, `preset-resource.test.ts` and the opt-in disposable-stack `phase-cast.local.test.ts`.
 - **Testing Approach**: Unit tests of the pure helpers, the reducer and the poll loop; the overlay pages and routes have their own tests next to them.
 
 ## Related Modules

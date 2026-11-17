@@ -3,7 +3,7 @@ SET LOCAL lock_timeout = '5s';
 
 CREATE OR REPLACE FUNCTION public.phase_wiki_report_submit(
   p_phase_id uuid, p_note_id uuid, p_reporter_id uuid, p_reason text,
-  p_details text, p_note_updated_at timestamptz, p_report_updated_at timestamptz
+  p_note_updated_at timestamptz, p_details text DEFAULT NULL, p_report_updated_at timestamptz DEFAULT NULL
 ) RETURNS public.phase_wiki_note_reports
 LANGUAGE plpgsql SECURITY INVOKER SET search_path = '' AS $$
 DECLARE
@@ -46,7 +46,7 @@ BEGIN
   END IF;
   RETURN v_report;
 END $$;
-REVOKE ALL ON FUNCTION public.phase_wiki_report_submit(uuid, uuid, uuid, text, text, timestamptz, timestamptz) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.phase_wiki_report_submit(uuid, uuid, uuid, text, text, timestamptz, timestamptz) TO service_role;
+REVOKE ALL ON FUNCTION public.phase_wiki_report_submit(uuid, uuid, uuid, text, timestamptz, text, timestamptz) FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.phase_wiki_report_submit(uuid, uuid, uuid, text, timestamptz, text, timestamptz) TO service_role;
 
 COMMIT;

@@ -70,7 +70,7 @@ const ALLOWED: Record<string, Allowed> = {
   // Rate limiting: a read-then-count on a shared bucket, not a domain write (the pin-impact preview shares the route's bucket).
   '@/lib/utils/rate-limit': ['checkRateLimit'],
   // Database query modules: every name listed, none may look like a write.
-  '@/lib/supabase/queries/agent-ownership': ['getAgentOwnershipGraph'],
+  '@/lib/supabase/queries/agent-ownership': ['getAgentOwnershipGraph', 'getAgentResourceOwner'],
   '@/lib/supabase/queries/draft-pool-entries': ['getPoolEntries'],
   '@/lib/supabase/queries/draft-pool-templates': ['getTemplate', 'listTemplates'],
   '@/lib/supabase/queries/draft-tier-limits': ['getTierLimits'],

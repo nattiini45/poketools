@@ -23,6 +23,10 @@ src/lib/social/
 
 ## Core Functions/Classes
 
+### Native phase integration storage (dormant)
+
+`phase-social-integrations.ts` separates phase-owned configuration from standalone integrations. Dispatch resolution derives the real parent league and reads enabled phase, league and global targets without querying tournament scope. Configuration updates are phase/version guarded and merge options without replacing an unrelated credential. Ciphertext is stored and transferred byte-for-byte: only explicit secrets reads/resolution return it, while ordinary reads/creates/updates return the field-by-field metadata allowlist and `has_credentials`. No decryption or provider call occurs in this storage layer. Existing routes and emitters remain legacy-bound until activation.
+
 ### Event Fan-Out
 - **File**: `notify.ts`
 - **Purpose**: Fire-and-forget publish for configured integrations

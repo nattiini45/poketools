@@ -1,3 +1,4 @@
+import 'server-only';
 import { z } from 'zod';
 import { buildNativePlayerContext, getNativePlayerHistory, getNativePlayerHeadToHead,
   getNativePlayerTeams, nativePlayerContextSchema } from '../native-context';

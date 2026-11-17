@@ -7,7 +7,7 @@
  */
 import 'server-only';
 
-import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+import { legacyKitStorage, type KitReadStoragePort } from '@/lib/league-phase/kit-storage';
 
 import type { KitPhaseRow, StandingAdjustmentRow } from '@/lib/supabase/queries/format-engine';
 import type { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
@@ -69,7 +69,7 @@ export interface KitPhase {
 }
 
 /** The kit phase `phaseId` of a custom league, or null when the format does not run it (none, `legacy`, not a phase of it). */
-export async function loadKitPhase(seasonId: string, phaseId: string, storage: KitStoragePort = legacyKitStorage): Promise<KitPhase | null> {
+export async function loadKitPhase(seasonId: string, phaseId: string, storage: KitReadStoragePort = legacyKitStorage): Promise<KitPhase | null> {
   const head = await storage.head(seasonId);
   if (head === null || head.engine === 'legacy') return null;
   const phase = (await storage.phases(seasonId)).find((row) => row.id === phaseId);
@@ -105,7 +105,7 @@ export interface StageTableExtrasInput {
  * a threshold or metric on it sees the real count). Reads the format and the runtime rows only when a metric of the
  * format applies to the stage, and seeds and ratings only when the stage ranks by or shows `seed` / `rating`.
  */
-export async function loadStageTableExtras(input: StageTableExtrasInput, storage: KitStoragePort = legacyKitStorage): Promise<StageTableExtras> {
+export async function loadStageTableExtras(input: StageTableExtrasInput, storage: KitReadStoragePort = legacyKitStorage): Promise<StageTableExtras> {
   const { phase, stage, playerIds } = input;
   const [adjustmentRows, gameCounts, kills] = await Promise.all([
     input.adjustmentRows ?? storage.adjustments(input.seasonId),
@@ -158,7 +158,7 @@ const RATING_CHUNK = 100;
  */
 export async function loadSeedsAndRatings(
   entries: readonly { phaseId: string; stage: Pick<Stage, 'rank' | 'columns'>; playerIds: readonly string[] }[],
-  storage: KitStoragePort = legacyKitStorage,
+  storage: KitReadStoragePort = legacyKitStorage,
 ): Promise<{ seeds?: Record<string, Record<string, number>>; ratings?: Record<string, number> }> {
   const seeded = entries.filter((entry) => stageUsesMetric(entry.stage, 'seed'));
   const rated = entries.filter((entry) => stageUsesMetric(entry.stage, 'rating'));
@@ -191,7 +191,7 @@ export async function loadSeedsAndRatings(
 export interface LoadKitOptions {
   /** Load a `legacy` league too, as `shadow` (the admin diff compares before the switch). */
   includeLegacy?: boolean;
-  storage?: KitStoragePort;
+  storage?: KitReadStoragePort;
 }
 
 /**
@@ -286,7 +286,7 @@ async function loadStageMetrics(
   phases: readonly KitPhaseRow[],
   stages: readonly Stage[],
   playersOf: ReadonlyMap<string, string[]>,
-  storage: KitStoragePort,
+  storage: KitReadStoragePort,
 ): Promise<Record<string, KitStageMetrics> | undefined> {
   const [format, runtime] = await Promise.all([storage.format(seasonId), storage.runtime(seasonId)]);
   if (format === null) return undefined;

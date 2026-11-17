@@ -32,7 +32,7 @@ import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getPlayerTeamForMatch, TeamRowConflictError } from '@/lib/supabase/queries/teams';
 import type { Ruleset } from '@/types/ruleset';
-import type { PokemonSet } from '@/types/team';
+import type { PokemonSet, Team } from '@/types/team';
 import type { HookTournament } from '../kit-candidate';
 import { phaseById, type KitContext, type KitPhaseInfo } from './load';
 import {
@@ -75,8 +75,39 @@ export interface AuditMatchTeamsInput {
   retry?: AuditRetry;
 }
 
+export interface PhaseTeamAuditInput extends Omit<AuditMatchTeamsInput, 'tournament'> {
+  phase: HookTournament & { season_id: string };
+}
+
+export interface TeamAuditStorage {
+  round(id: string): Promise<{ round_number: number } | null>;
+  outcome: typeof getMatchOutcome;
+  ruleset: typeof readPhaseRuleset;
+  games: typeof getGamesByMatch;
+  stats: typeof getBattleStatsByMatch;
+  team(playerId: string, scope: { phaseId: string; matchId: string }): Promise<Pick<Team, 'id' | 'pokemon' | 'match_id' | 'updated_at'> | null>;
+  isTeamRowConflict(error: unknown): boolean;
+  match(id: string): Promise<{ confirmed_at: string | null; updated_at: string } | null>;
+  openCheck: typeof openFormatCheck;
+  invalidate: typeof expireSeasonReads;
+}
+
+const legacyTeamAuditStorage: TeamAuditStorage = {
+  round: id => getRoundById(id),
+  outcome: id => getMatchOutcome(id),
+  ruleset: id => readPhaseRuleset(id),
+  games: id => getGamesByMatch(id),
+  stats: id => getBattleStatsByMatch(id),
+  team: (playerId, scope) => getPlayerTeamForMatch(playerId, { id: scope.matchId, tournament_id: scope.phaseId }),
+  isTeamRowConflict: error => error instanceof TeamRowConflictError,
+  match: id => getMatchById(id),
+  openCheck: input => openFormatCheck(input),
+  invalidate: (...args) => expireSeasonReads(...args),
+};
+
 interface Run {
-  input: AuditMatchTeamsInput;
+  input: PhaseTeamAuditInput;
+  storage: TeamAuditStorage;
   phase: KitPhaseInfo;
   completionRef: string;
   evaluatedAt: string;
@@ -130,9 +161,9 @@ async function auditSide(run: Run, shared: Shared, playerId: string): Promise<Te
 
   let team;
   try {
-    team = await getPlayerTeamForMatch(playerId, { id: input.matchId, tournament_id: phase.id });
+    team = await run.storage.team(playerId, { matchId: input.matchId, phaseId: phase.id });
   } catch (error) {
-    if (error instanceof TeamRowConflictError) {
+    if (run.storage.isTeamRowConflict(error)) {
       logger.warn(TAG, 'a player has more than one team row for the match', { matchId: input.matchId, playerId, error });
       return unavailable(playerId, 'team_rows_duplicate');
     }
@@ -187,7 +218,7 @@ async function auditSide(run: Run, shared: Shared, playerId: string): Promise<Te
 
 async function readShared(run: Run): Promise<Shared> {
   const { matchId } = run.input;
-  const [ruleset, games, stats] = await Promise.all([readPhaseRuleset(run.phase.id), getGamesByMatch(matchId), getBattleStatsByMatch(matchId)]);
+  const [ruleset, games, stats] = await Promise.all([run.storage.ruleset(run.phase.id), run.storage.games(matchId), run.storage.stats(matchId)]);
   const observed = new Map<string, string[]>();
   for (const rows of Object.values(stats)) {
     for (const row of rows) {
@@ -202,10 +233,10 @@ async function readShared(run: Run): Promise<Shared> {
 }
 
 /** Opens the planned checks; the count of the ones that did not exist before. */
-async function openPlanned(seasonId: string, checks: readonly TeamAuditCheck[], revision: number): Promise<number> {
+async function openPlanned(seasonId: string, checks: readonly TeamAuditCheck[], revision: number, storage: TeamAuditStorage): Promise<number> {
   let opened = 0;
   for (const check of checks) {
-    const id = await openFormatCheck({
+    const id = await storage.openCheck({
       seasonId,
       source: check.source,
       ruleId: check.rule_id,
@@ -240,7 +271,7 @@ async function reportOrRethrow(run: Run, playerIds: readonly string[], error: un
   if (retry === 'always') throw error;
   let match;
   try {
-    match = await getMatchById(input.matchId);
+    match = await run.storage.match(input.matchId);
   } catch {
     throw error;
   }
@@ -251,7 +282,7 @@ async function reportOrRethrow(run: Run, playerIds: readonly string[], error: un
   const finished = Date.parse(match.confirmed_at ?? match.updated_at);
   if (retry === 'window' && (!Number.isFinite(finished) || Date.now() - finished <= AUDIT_RETRY_WINDOW_MS)) throw error;
   logger.error(TAG, 'team audit gave up after the retry window', { matchId: input.matchId, playerIds, error });
-  return openPlanned(input.tournament.season_id, planFor(run, playerIds.map((id) => unavailable(id, 'read_failed'))), input.context.revision);
+  return openPlanned(input.phase.season_id, planFor(run, playerIds.map((id) => unavailable(id, 'read_failed'))), input.context.revision, run.storage);
 }
 
 /**
@@ -260,12 +291,18 @@ async function reportOrRethrow(run: Run, playerIds: readonly string[], error: un
  * is a check, never an error. A phase whose stage has no team constraints is not audited and reads nothing.
  */
 export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ opened: number }> {
-  const phase = phaseById(input.context, input.tournament.id);
+  const { tournament, ...rest } = input;
+  return auditMatchTeamsWithStorage({ ...rest, phase: tournament }, legacyTeamAuditStorage);
+}
+
+export async function auditMatchTeamsWithStorage(input: PhaseTeamAuditInput, storage: TeamAuditStorage): Promise<{ opened: number }> {
+  const phase = phaseById(input.context, input.phase.id);
   if (phase === undefined || !auditsTeams(phase)) return { opened: 0 };
-  const seasonId = input.tournament.season_id;
+  const seasonId = input.phase.season_id;
   const players = [input.player1Id, input.player2Id];
   const run: Run = {
     input,
+    storage,
     phase,
     completionRef: input.generation === 0 ? input.matchId : `${input.matchId}:${input.generation}`,
     evaluatedAt: new Date().toISOString(),
@@ -274,7 +311,7 @@ export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ op
 
   let shared: Shared;
   try {
-    const [round, outcome] = await Promise.all([getRoundById(input.roundId), getMatchOutcome(input.matchId)]);
+    const [round, outcome] = await Promise.all([storage.round(input.roundId), storage.outcome(input.matchId)]);
     if (round === null) throw new Error(`team audit: round ${input.roundId} of match ${input.matchId} was not found`);
     run.round = round.round_number;
     // The outcome kind is per match: a forfeit or no-show audits neither side.
@@ -282,7 +319,7 @@ export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ op
     shared = await readShared(run);
   } catch (error) {
     const opened = await reportOrRethrow(run, players, error);
-    if (opened > 0) expireSeasonReads(seasonId);
+    if (opened > 0) storage.invalidate(seasonId);
     return { opened };
   }
 
@@ -297,7 +334,7 @@ export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ op
   const errors: unknown[] = [];
   let opened = 0;
   try {
-    opened += await openPlanned(seasonId, planFor(run, sides), input.context.revision);
+    opened += await openPlanned(seasonId, planFor(run, sides), input.context.revision, storage);
   } catch (error) {
     errors.push(error);
   }
@@ -312,7 +349,7 @@ export async function auditMatchTeams(input: AuditMatchTeamsInput): Promise<{ op
       errors.push(error);
     }
   }
-  if (opened > 0) expireSeasonReads(seasonId);
+  if (opened > 0) storage.invalidate(seasonId);
   if (errors.length === 1) throw errors[0];
   if (errors.length > 1) throw new AggregateError(errors, 'team audit failed');
   return { opened };

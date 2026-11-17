@@ -13,9 +13,9 @@ export async function getAgentPhasePrep(matchId: string, playerId: string): Prom
 }
 
 export async function getAgentPhaseHistory(phaseId: string, playerId: string, opponentId?: string) {
-  for (const id of [phaseId, playerId, ...(opponentId ? [opponentId] : [])]) assertValidUuid(id);
+  for (const id of [phaseId, playerId, ...(opponentId !== undefined ? [opponentId] : [])]) assertValidUuid(id);
   const player = postgrestQuoted(playerId);
-  const opponent = opponentId ? postgrestQuoted(opponentId) : null;
+  const opponent = opponentId !== undefined ? postgrestQuoted(opponentId) : null;
   const query = supabase.from('phase_matches')
     .select('id, phase_id, round_id, player_1_id, player_2_id, winner_id, date_played, round:phase_rounds!phase_matches_phase_round_fkey(phase_id)', { count: 'exact' })
     .eq('phase_id', phaseId).eq('status', 'completed')

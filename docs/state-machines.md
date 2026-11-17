@@ -14,8 +14,8 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Admin Assistant plan](#admin-assistant-plan) — `admin_agent_plans.status`
 - [Admin Assistant proposal](#admin-assistant-proposal) — `admin_agent_proposals.status`
 - [Aggregate job](#aggregate-job) — `aggregate_jobs.status`
-- [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)`
-- [Cast session](#cast-session) — `cast_sessions.status (CHECK cast_sessions_status_check)`
+- [AI artifact](#ai-artifact) — `match_analyses.status, match_prep_analyses.status, tournament_reports.status, phase_reports.status, phase_match_analyses.status, phase_match_prep_analyses.status (absent = no row)`
+- [Cast session](#cast-session) — `cast_sessions.status, phase_cast_sessions.status (CHECK constraints)`
 - [Cast Studio autosave](#cast-studio-autosave) — `CastStudioState.save in src/components/creator/studio/CastStudioContext.tsx (client only)`
 - [Form submission](#form-submission) — `client: useSubmitPhase (TournamentForm, NewCompetitionWizard, EpbImportPanel)`
 - [Visible poller](#visible-poller) — `client: createVisiblePoller closure (src/lib/draft/use-visible-poll.ts)`
@@ -56,13 +56,13 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Round](#round) — `rounds.status (enum round_status)`
 - [League](#league) — `seasons.status (enum season_status)`
 - [Season format engine](#season-format-engine) — `season_formats.engine`
-- [Team library publication](#team-library-publication) — `teams.library_published_at (published = set) + library_title, library_description, library_tags`
-- [Team roster write locks](#team-roster-write-locks) — `derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived`
-- [Team share link](#team-share-link) — `teams.share_token + teams.share_enabled_at (on = both set)`
+- [Team library publication](#team-library-publication) — `teams / phase_teams library_published_at (published = set) + library_title, library_description, library_tags`
+- [Team roster write locks](#team-roster-write-locks) — `derived: teams / phase_teams locked and match pointers -> matches / phase_matches status; tournament / phase and parent season status/archived`
+- [Team share link](#team-share-link) — `teams / phase_teams share_token + share_enabled_at (on = both set)`
 - [Teambuilder save](#teambuilder-save) — `client: EditorState.saveStatus in TeamsEditor`
 - [Tournament and league phase](#tournament-and-league-phase) — `tournaments.status (enum tournament_status)`
-- [Wiki note report](#wiki-note-report) — `wiki_note_reports.status`
-- [Wiki note moderation](#wiki-note-moderation) — `wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
+- [Wiki note report](#wiki-note-report) — `wiki_note_reports.status, phase_wiki_note_reports.status`
+- [Wiki note moderation](#wiki-note-moderation) — `wiki_notes / phase_wiki_notes approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)`
 
 ## Admin Assistant ledger row
 
@@ -217,7 +217,7 @@ stateDiagram-v2
 ## AI artifact
 
 - **Id:** `ai_artifact.status`
-- **State lives in:** match_analyses.status, match_prep_analyses.status, tournament_reports.status (absent = no row)
+- **State lives in:** match_analyses.status, match_prep_analyses.status, tournament_reports.status, phase_reports.status, phase_match_analyses.status, phase_match_prep_analyses.status (absent = no row)
 - **Module doc:** `docs/ai.md`
 - **States:** `absent`, `pending`, `completed`, `failed`
 - **Actors:** `player`, `admin`, `system`
@@ -237,15 +237,15 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `start` | `absent` | `pending` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/supabase/queries/match-analyses.ts`<br>`src/lib/supabase/queries/match-prep-analyses.ts`<br>`src/lib/supabase/queries/tournament-reports.ts` | A request (or the round trigger) inserts a pending row; the unique key allows one per scope. |
-| `complete` | `pending` | `completed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts` |  |
-| `fail` | `pending` | `failed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts` | The generation failed, or a request found the pending row older than AI_ANALYSIS_STALE_MS. |
-| `discard` | `pending`, `completed`, `failed` | `absent` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/match/reopen.ts`<br>`src/lib/pkmn/game-pipeline.ts` | Regenerate (force, retry after failure, stale pending) deletes the row before the new insert; a match reset or result change deletes its analyses. |
+| `start` | `absent` | `pending` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/ai/phase-analysis.ts`<br>`src/lib/ai/phase-report-generator.ts`<br>`src/lib/supabase/queries/match-analyses.ts`<br>`src/lib/supabase/queries/match-prep-analyses.ts`<br>`src/lib/supabase/queries/tournament-reports.ts`<br>`src/lib/supabase/queries/phase-reports.ts`<br>`src/lib/supabase/queries/phase-ai-artifacts.ts` | A request (or the round trigger) inserts a pending row; the unique key allows one per scope. |
+| `complete` | `pending` | `completed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/lib/supabase/queries/phase-reports.ts`<br>`src/lib/supabase/queries/phase-ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/ai/phase-analysis.ts`<br>`src/lib/ai/phase-report-generator.ts` |  |
+| `fail` | `pending` | `failed` | system | `src/lib/supabase/queries/ai-artifacts.ts`<br>`src/lib/supabase/queries/phase-reports.ts`<br>`src/lib/supabase/queries/phase-ai-artifacts.ts`<br>`src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/ai/phase-analysis.ts`<br>`src/lib/ai/phase-report-generator.ts` | The generation failed, or a request found the pending row older than AI_ANALYSIS_STALE_MS. |
+| `discard` | `pending`, `completed`, `failed` | `absent` | player, admin, system | `src/app/api/ai/match-analysis/route.ts`<br>`src/app/api/ai/match-prep-analysis/route.ts`<br>`src/app/api/ai/tournament-report/route.ts`<br>`src/app/api/ai/agent/analyze-match/route.ts`<br>`src/lib/ai/tournament-report-generator.ts`<br>`src/lib/ai/phase-analysis.ts`<br>`src/lib/ai/phase-report-generator.ts`<br>`src/lib/match/reopen.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-reports.ts`<br>`src/lib/supabase/queries/phase-ai-artifacts.ts` | Regenerate (force, retry after failure, stale pending) deletes the row before the new insert; a match reset or result change deletes its analyses. |
 
 ## Cast session
 
 - **Id:** `cast_session`
-- **State lives in:** cast_sessions.status (CHECK cast_sessions_status_check)
+- **State lives in:** cast_sessions.status, phase_cast_sessions.status (CHECK constraints)
 - **Module doc:** `docs/cast-studio.md`
 - **States:** `draft`, `live`, `archived`
 - **Actors:** `owner`, `admin`
@@ -264,10 +264,10 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `go_live` | `draft` | `live` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The cast starts. |
-| `end_live` | `live` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The cast ends and the session stays in use. |
-| `archive` | `draft`, `live` | `archived` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | The session is put away; the dashboard no longer reuses it for its match. |
-| `unarchive` | `archived` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts` | An archived session comes back as a draft; it goes live from there. |
+| `go_live` | `draft` | `live` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts`<br>`src/lib/broadcast/phase-session-services.ts`<br>`src/lib/supabase/queries/phase-cast-sessions.ts` | The cast starts. |
+| `end_live` | `live` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts`<br>`src/lib/broadcast/phase-session-services.ts`<br>`src/lib/supabase/queries/phase-cast-sessions.ts` | The cast ends and the session stays in use. |
+| `archive` | `draft`, `live` | `archived` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts`<br>`src/lib/broadcast/phase-session-services.ts`<br>`src/lib/supabase/queries/phase-cast-sessions.ts` | The session is put away; the dashboard no longer reuses it for its match. |
+| `unarchive` | `archived` | `draft` | owner, admin | `src/app/api/cast-sessions/[id]/route.ts`<br>`src/lib/broadcast/phase-session-services.ts`<br>`src/lib/supabase/queries/phase-cast-sessions.ts` | An archived session comes back as a draft; it goes live from there. |
 
 ## Cast Studio autosave
 
@@ -1621,7 +1621,7 @@ stateDiagram-v2
 ## Team library publication
 
 - **Id:** `team.library`
-- **State lives in:** teams.library_published_at (published = set) + library_title, library_description, library_tags
+- **State lives in:** teams / phase_teams library_published_at (published = set) + library_title, library_description, library_tags
 - **Module doc:** `docs/teambuilder-reference.md`
 - **States:** `unpublished`, `published`
 - **Actors:** `owner`, `admin`
@@ -1639,14 +1639,14 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `publish` | `unpublished` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` |  |
-| `republish` | `published` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` | Rewrites the metadata and the timestamp. |
-| `unpublish` | `published`, `unpublished` | `unpublished` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts` | DELETE /api/teams/library clears the timestamp and the metadata. |
+| `publish` | `unpublished` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` |  |
+| `republish` | `published` | `published` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | Rewrites the metadata and the timestamp. |
+| `unpublish` | `published`, `unpublished` | `unpublished` | owner, admin | `src/app/api/teams/library/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | DELETE /api/teams/library clears the timestamp and the metadata. |
 
 ## Team roster write locks
 
 - **Id:** `team.roster`
-- **State lives in:** derived: teams.locked, teams.match_id -> matches.status, teams.tournament_id -> tournaments.status/archived -> seasons.status/archived
+- **State lives in:** derived: teams / phase_teams locked and match pointers -> matches / phase_matches status; tournament / phase and parent season status/archived
 - **Module doc:** `docs/teambuilder-reference.md`
 - **States:** `open`, `match_completed`, `closed`, `closed_planned`, `locked`, `deleted`
 - **Actors:** `owner`, `participant`, `admin`
@@ -1674,17 +1674,17 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `edit` | `open` | `open` | owner, participant, admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`src/lib/supabase/queries/teams.ts` | The UPDATE is guarded with locked = false; a row locked or deleted in between answers 409 team_changed. |
-| `correct` | `match_completed` | `match_completed` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | Only an admin correction passes the teams_completed_match_lock trigger; the owner gets 409 team_match_completed, a participant 409 match_prep_match_completed. |
-| `edit_closed` | `closed` | `closed` | participant, admin | `src/app/api/match-prep/route.ts`<br>`src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | The owner gets 403 with the closure code; match prep does not read the closure, so a participant may still save the team of a match that is not completed. |
-| `correct_planned` | `closed_planned` | `closed_planned` | admin | `src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update` | A planned team (no match) of a closed tournament or league; the owner gets 403 with the closure code. |
-| `delete` | `open`, `closed_planned` | `deleted` | owner, admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete` | The owner may delete a planned team nobody played with even in a closed tournament; the DELETE is guarded with locked = false. |
-| `force_delete` | `match_completed`, `closed`, `locked` | `deleted` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete` | A site admin deletes any team as a correction. |
+| `edit` | `open` | `open` | owner, participant, admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | The UPDATE is guarded with locked = false; a row locked or deleted in between answers 409 team_changed. |
+| `correct` | `match_completed` | `match_completed` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/app/api/match-prep/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | Only an admin correction passes the teams_completed_match_lock trigger; the owner gets 409 team_match_completed, a participant 409 match_prep_match_completed. |
+| `edit_closed` | `closed` | `closed` | participant, admin | `src/app/api/match-prep/route.ts`<br>`src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | The owner gets 403 with the closure code; match prep does not read the closure, so a participant may still save the team of a match that is not completed. |
+| `correct_planned` | `closed_planned` | `closed_planned` | admin | `src/app/api/teams/[id]/route.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_update`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | A planned team (no match) of a closed tournament or league; the owner gets 403 with the closure code. |
+| `delete` | `open`, `closed_planned` | `deleted` | owner, admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | The owner may delete a planned team nobody played with even in a closed tournament; the DELETE is guarded with locked = false. |
+| `force_delete` | `match_completed`, `closed`, `locked` | `deleted` | admin | `src/app/api/teams/[id]/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`supabase/migrations/20261019120000_teams_completed_match_lock.sql#team_correct_delete`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | A site admin deletes any team as a correction. |
 
 ## Team share link
 
 - **Id:** `team.share`
-- **State lives in:** teams.share_token + teams.share_enabled_at (on = both set)
+- **State lives in:** teams / phase_teams share_token + share_enabled_at (on = both set)
 - **Module doc:** `docs/teambuilder-reference.md`
 - **States:** `off`, `on`
 - **Actors:** `owner`, `admin`
@@ -1702,9 +1702,9 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `enable` | `off` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | POST /api/teams/share: a fresh UUID token and share_enabled_at = now(). |
-| `rotate` | `on` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | The editor's Generate link button POSTs again: a new token replaces the old one. |
-| `disable` | `on`, `off` | `off` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts` | DELETE /api/teams/share clears both columns; on a row without a link it changes nothing and answers 200. |
+| `enable` | `off` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | POST /api/teams/share: a fresh UUID token and share_enabled_at = now(). |
+| `rotate` | `on` | `on` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | The editor's Generate link button POSTs again: a new token replaces the old one. |
+| `disable` | `on`, `off` | `off` | owner, admin | `src/app/api/teams/share/route.ts`<br>`src/lib/supabase/queries/teams.ts`<br>`src/lib/team/phase-services.ts`<br>`src/lib/supabase/queries/phase-teams.ts`<br>`supabase/migrations/20261117130000_phase_team_services.sql` | DELETE /api/teams/share clears both columns; on a row without a link it changes nothing and answers 200. |
 
 ## Teambuilder save
 
@@ -1769,7 +1769,7 @@ stateDiagram-v2
 ## Wiki note report
 
 - **Id:** `wiki_note_report.status`
-- **State lives in:** wiki_note_reports.status
+- **State lives in:** wiki_note_reports.status, phase_wiki_note_reports.status
 - **Module doc:** `docs/wiki.md`
 - **States:** `open`, `reviewed`, `dismissed`
 - **Actors:** `reporter`, `admin`
@@ -1790,14 +1790,14 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `report` | `open`, `reviewed`, `dismissed` | `open` | reporter | `src/app/api/wiki/notes/[id]/report/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The reporter reports the note again: the report reopens with the new reason. |
-| `review` | `open`, `reviewed` | `reviewed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The moderator acted on the report (for example unpublished the note). |
-| `dismiss` | `open`, `dismissed` | `dismissed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |
+| `report` | `open`, `reviewed`, `dismissed` | `open` | reporter | `src/app/api/wiki/notes/[id]/report/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts`<br>`supabase/migrations/20261117140000_phase_wiki_services.sql#phase_wiki_report_submit` | The reporter reports the note again: the report reopens with the new reason. |
+| `review` | `open`, `reviewed` | `reviewed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` | The moderator acted on the report (for example unpublished the note). |
+| `dismiss` | `open`, `dismissed` | `dismissed` | admin | `src/app/api/admin/wiki/reports/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` |  |
 
 ## Wiki note moderation
 
 - **Id:** `wiki_note.moderation`
-- **State lives in:** wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)
+- **State lives in:** wiki_notes / phase_wiki_notes approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)
 - **Module doc:** `docs/wiki.md`
 - **States:** `pending`, `approved`, `rejected`, `blocked`
 - **Actors:** `author`, `admin`, `superadmin`
@@ -1821,9 +1821,9 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `resubmit` | `pending`, `approved`, `rejected` | `pending` | author | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | The author edits the text: the note goes back to the queue until a moderator sees it. A blocked note refuses it (wiki_note_resubmission_blocked). |
-| `approve` | `pending`, `rejected`, `blocked` | `approved` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Publishes the note; approving a blocked note clears the block. |
-| `reject` | `pending` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |
-| `unpublish` | `approved` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Takes a live note out of public view, usually in answer to a report. |
-| `block` | `rejected` | `blocked` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` | Closes a rejected note for resubmission; it stays rejected. |
-| `unblock` | `blocked` | `rejected` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts` |  |
+| `resubmit` | `pending`, `approved`, `rejected` | `pending` | author | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` | The author edits the text: the note goes back to the queue until a moderator sees it. A blocked note refuses it (wiki_note_resubmission_blocked). |
+| `approve` | `pending`, `rejected`, `blocked` | `approved` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` | Publishes the note; approving a blocked note clears the block. |
+| `reject` | `pending` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` |  |
+| `unpublish` | `approved` | `rejected` | admin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` | Takes a live note out of public view, usually in answer to a report. |
+| `block` | `rejected` | `blocked` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` | Closes a rejected note for resubmission; it stays rejected. |
+| `unblock` | `blocked` | `rejected` | superadmin | `src/app/api/wiki/notes/[id]/route.ts`<br>`src/lib/supabase/queries/wiki-notes.ts`<br>`src/lib/wiki/phase-services.ts`<br>`src/lib/supabase/queries/phase-wiki-notes.ts` |  |

@@ -13,11 +13,16 @@ src/lib/discord/
 ├── notify.ts  # Webhook dispatch/event fan-out
 ├── webhook-test.ts  # Server-side test post for one stored webhook
 ├── webhook-view.ts  # Masked webhook shape the admin API returns
+├── phase-webhook-view.ts  # Masked native phase webhook projection
 ├── draft-embeds.ts  # Discord embeds of the draft tool
 └── matchers.ts  # Which webhook receives an event, shared by the sender and the admin preview
 ```
 
 ## Core Functions/Classes
+
+### Native phase webhook storage (dormant)
+
+`phase-discord-webhooks.ts` keeps phase-owned URLs, filters and options in their own table. Its resolver reads the actual phase's parent and combines enabled phase hooks with paged global/league hooks only; it never treats a phase id as a tournament id. Updates/deletes are scoped to the captured phase and configuration version. `toPhaseWebhookView` explicitly copies the admin-visible fields and a masked URL hint, never the URL. Existing routes/dispatch retain their legacy defaults; these new storage adapters alone send no event and add no native-table read to a legacy request.
 
 ### Notification Fan-Out
 - **File**: `notify.ts`

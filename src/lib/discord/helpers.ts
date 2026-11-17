@@ -43,10 +43,10 @@ export function computePokemonScoreFromGameStats(
  * @param statsByGame - Battle stats grouped by game ID (from getBattleStatsByMatch)
  */
 export function buildGamePokemonStats(
-  match: MatchWithPlayers,
+  match: Pick<MatchWithPlayers, 'games' | 'player_1_id' | 'player_2_id' | 'player_1_name' | 'player_2_name'>,
   statsByGame: Record<string, BattleStat[]>,
 ): GamePokemonStats[] {
-  return match.games
+  return [...match.games]
     .sort((a, b) => a.game_number - b.game_number)
     .map((game) => {
       const stats = statsByGame[game.id] ?? [];

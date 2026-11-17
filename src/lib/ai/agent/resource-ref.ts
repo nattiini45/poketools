@@ -2,16 +2,16 @@ import { z } from 'zod';
 
 const uuid = z.uuid().transform((id) => id.toLowerCase());
 
-export const competitionRefSchema = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('tournament'), tournamentId: uuid }),
-  z.strictObject({ kind: z.literal('phase'), seasonId: uuid, phaseId: uuid }),
-]);
+const tournamentCompetitionRefSchema = z.strictObject({ kind: z.literal('tournament'), tournamentId: uuid });
+export const phaseCompetitionRefSchema = z.strictObject({ kind: z.literal('phase'), seasonId: uuid, phaseId: uuid });
+export const competitionRefSchema = z.discriminatedUnion('kind', [tournamentCompetitionRefSchema, phaseCompetitionRefSchema]);
 export type CompetitionRef = z.output<typeof competitionRefSchema>;
 
+export const matchResourceRefSchema = z.strictObject({ resource: z.literal('match'), owner: competitionRefSchema, id: uuid });
 export const agentResourceRefSchema = z.discriminatedUnion('resource', [
   z.strictObject({ resource: z.literal('competition'), owner: competitionRefSchema }),
   z.strictObject({ resource: z.literal('round'), owner: competitionRefSchema, id: uuid }),
-  z.strictObject({ resource: z.literal('match'), owner: competitionRefSchema, id: uuid }),
+  matchResourceRefSchema,
   z.strictObject({ resource: z.literal('game'), owner: competitionRefSchema, id: uuid }),
 ]);
 export type AgentResourceRef = z.output<typeof agentResourceRefSchema>;

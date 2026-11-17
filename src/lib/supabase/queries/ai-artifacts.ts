@@ -3,7 +3,8 @@ import type { TablesUpdate } from '@/types/database';
 import { logger } from '@/lib/logger';
 import { aiArtifactMachine } from '@/lib/ai/artifact-state';
 
-export type AiArtifactTable = 'match_analyses' | 'match_prep_analyses' | 'tournament_reports';
+export type AiArtifactTable = 'match_analyses' | 'match_prep_analyses' | 'tournament_reports'
+  | 'phase_reports' | 'phase_match_analyses' | 'phase_match_prep_analyses';
 
 /** The columns a settle writes: the shared result columns plus each table's own payload column. */
 export type AiArtifactSettleValues = Omit<

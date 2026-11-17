@@ -1,23 +1,9 @@
 import { supabase } from '../client';
 import { readAllPages } from '../read-all-pages';
-import type { Database } from '@/types/database';
-import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PhaseWikiNote, PhaseWikiNoteChanges, PhaseWikiNoteInput, PhaseWikiReport } from '@/types/phase-wiki';
 import type { WikiEntityType, WikiNoteReportStatus } from '@/types/wiki';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import wikiErrors from '@/i18n/messages/errors/stats/en';
-
-type WikiRpcDatabase = Omit<Database, 'public'> & {
-  public: Omit<Database['public'], 'Functions'> & {
-    Functions: Database['public']['Functions'] & {
-      phase_wiki_report_submit: {
-        Args: { p_phase_id: string; p_note_id: string; p_reporter_id: string; p_reason: string;
-          p_details: string | null; p_note_updated_at: string; p_report_updated_at: string | null };
-        Returns: PhaseWikiReport;
-      };
-    };
-  };
-};
 
 function noteGuard(note: PhaseWikiNote) {
   return { approved: note.approved, rejected_at: note.rejected_at, resubmission_blocked_at: note.resubmission_blocked_at };
@@ -77,10 +63,11 @@ export const phaseWikiStorage = {
     return rows.map(({ phase_wiki_notes: _owner, ...report }) => report);
   },
   async submitReport(note: PhaseWikiNote, reporterId: string, reason: string, details: string | null, previous: PhaseWikiReport | null): Promise<PhaseWikiReport> {
-    const client = supabase as unknown as SupabaseClient<WikiRpcDatabase>;
-    const { data, error } = await client.rpc('phase_wiki_report_submit', {
+    const { data, error } = await supabase.rpc('phase_wiki_report_submit', {
       p_phase_id: note.phase_id, p_note_id: note.id, p_reporter_id: reporterId, p_reason: reason,
-      p_details: details, p_note_updated_at: note.updated_at, p_report_updated_at: previous?.updated_at ?? null,
+      p_note_updated_at: note.updated_at,
+      ...(details !== null ? { p_details: details } : {}),
+      ...(previous !== null ? { p_report_updated_at: previous.updated_at } : {}),
     });
     if (error) {
       if (error.code === 'P0001') {

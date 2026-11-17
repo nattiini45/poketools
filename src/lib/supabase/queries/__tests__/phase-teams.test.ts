@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: { from: query.from, rpc } })
 import { PHASE_TEAM_COLUMNS, getPhaseTeamById, getPlayerPhaseTeamForMatch, setPhaseTeamShareToken,
   writePhaseTeam, publishPhaseTeam, releasePhaseTeamsFromMatches, listPhaseTeamsForPinImpact, listPhaseTeams,
   forkPhaseTeamToLibrary } from '../phase-teams';
+import { PhaseTeamRowConflictError } from '../phase-teams';
 
 beforeEach(() => {
   for (const mock of Object.values(query)) mock.mockClear();
@@ -22,6 +23,10 @@ beforeEach(() => {
 });
 
 describe('native phase team persistence', () => {
+  it('classifies conflicting native roster rows for the post-match audit without masking the cause', async () => {
+    settle.mockReturnValue({ data: [phaseTeam({ id: 'one', match_id: 'match' }), phaseTeam({ id: 'two', match_id: 'match' })], error: null });
+    await expect(getPlayerPhaseTeamForMatch('owner', { id: 'match', phase_id: 'phase' })).rejects.toBeInstanceOf(PhaseTeamRowConflictError);
+  });
   it('never selects share capabilities on ordinary reads and maps phase identity', async () => {
     query.maybeSingle.mockResolvedValue({ data: { ...phaseTeam(), share_token: 'secret' }, error: null });
     const result = await getPhaseTeamById('id');
@@ -76,8 +81,9 @@ describe('native phase team persistence', () => {
 
   it('guards library publication against the read revision', async () => {
     query.maybeSingle.mockResolvedValue({ data: null, error: null });
-    await expect(publishPhaseTeam(phaseTeam({ library_published_at: 'before' }), {})).rejects.toMatchObject({ code: 'team_changed' });
-    expect(query.eq).toHaveBeenCalledWith('library_published_at', 'before');
+    await expect(publishPhaseTeam(phaseTeam({ library_published_at: '2099-01-01T00:00:00.000Z' }), {})).rejects.toMatchObject({ code: 'team_changed' });
+    expect(query.eq).toHaveBeenCalledWith('library_published_at', '2099-01-01T00:00:00.000Z');
+    expect(query.update).toHaveBeenCalledWith(expect.objectContaining({ library_published_at: '2099-01-01T00:00:00.001Z' }));
   });
 
   it('retains the native fork pointer in a personal library row', async () => {

@@ -17,6 +17,8 @@ import type { PhaseReportType } from '@/types/phase-report';
 export interface PhaseReportStandingsInput extends Awaited<ReturnType<typeof loadPhaseRoundScope>> {
   matches: PhaseMatchWithRoundNumber[];
   reportType: PhaseReportType;
+  participants: Awaited<ReturnType<typeof getPhaseAiParticipants>>;
+  leagueParticipants: Awaited<ReturnType<typeof getPublicSeasonParticipants>>;
 }
 
 export type PhaseReportStandings = (input: PhaseReportStandingsInput) => Promise<{
@@ -34,7 +36,7 @@ async function load(phaseId: string, roundId: string, reportType: PhaseReportTyp
   ]);
   if (matches.some(m => m.phase_id !== phaseId)) throw new Error('Match does not belong to phase');
   if (matches.some(m => m.round_number === undefined)) throw new Error('Native match round number missing');
-  const table = await standings({ ...scope, matches, reportType });
+  const table = await standings({ ...scope, matches, reportType, participants, leagueParticipants });
   const gymTypes = Object.fromEntries(leagueParticipants.map(p => [p.id, p.gym_type]));
   const participantNames = Object.fromEntries(participants.map(p => [p.id, p.name]));
   const avatars = Object.fromEntries(participants.map(p => [p.id, p.avatar_url]));

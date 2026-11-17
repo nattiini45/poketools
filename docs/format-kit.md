@@ -616,6 +616,8 @@ The **audit** runs after every completed match of a kit league (from `onMatchCom
 
 ### Live format routes
 
+The dormant native phase team audit is `createNativePhaseTeamAudit(invalidate)` in `src/lib/league-phase/team-audit.ts`. It supplies native phase/round/match/game/team reads and the immutable phase pin to `auditMatchTeamsWithStorage`; the existing `auditMatchTeams` signature keeps its legacy storage and call arity. Both use the same constraints, before-completion state, generation keys, duplicate-row diagnosis and bounded retry policy. The native adapter validates the real league and child chain, adds `owner_kind: 'phase'` and `match_kind: 'phase_match'` to new check subjects, and requires explicit invalidation. It reads nothing for a stage without audit rules and does not activate any route or cron.
+
 Under `src/app/api/seasons/[id]/format/`. Every write reads its body in the order guard, `rejectInvalidPathId` for a uuid and `keySchema` for an action key, `assertSeasonOpenForPlay` (player writes), rate limit, bounded body (8 KiB; 256 KiB for an adjustment), strict zod (an unknown member such as an `actor_id` is a 400), library call, audit (`logAuditEvent`, not awaited). Season-scoped everywhere: the league comes from the URL, a challenge or check id of another league is `*_not_found`, and the actor of a player route is always the session player. Reads answer `Cache-Control: private, no-store`. Player writes are refused in a completed or archived league (409 `format_season_closed`); the reads and the admin routes stay open there so history can be corrected. A reason longer than 500 characters is a 400 `validation_failed` at the route.
 
 | Route | Who | Limit | Body or query | Answer |

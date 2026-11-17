@@ -1,4 +1,3 @@
-import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '../client';
 import { readAllPages } from '../read-all-pages';
 import { readBoundedPages } from '../read-bounded-pages';
@@ -6,7 +5,7 @@ import { ilikeAnyOf, postgrestQuoted } from '../postgrest-filter';
 import { TEAM_COLUMNS, type TeamVisibilityFacts, type PinImpactTeam } from './teams';
 import { TeamChangedError, throwTeamWriteError } from '@/lib/team/completed-match-lock';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import type { Database, Json, Tables } from '@/types/database';
+import type { Json, Tables } from '@/types/database';
 import type { PhaseTeam, PhaseTeamFormData, PhaseMatchPrepTeam } from '@/types/phase-team';
 import type { Team, TeamLibraryListParams, TeamShareLink } from '@/types/team';
 import { canWriteTeam, teamLockState, type TeamRosterActor } from '@/lib/team/team-roster-state';
@@ -28,13 +27,6 @@ type RosterArgs = {
   p_name?: string;
   p_actor: TeamRosterActor;
 };
-type PhaseTeamDatabase = Omit<Database, 'public'> & { public: Omit<Database['public'], 'Functions'> & {
-  Functions: Database['public']['Functions'] & {
-    phase_team_roster_write: { Args: RosterArgs; Returns: Tables<'phase_teams'>[] };
-    phase_teams_release_matches: { Args: { p_match_ids: string[] }; Returns: number };
-  };
-} };
-const native = supabase as unknown as SupabaseClient<PhaseTeamDatabase>;
 
 function toTeam(row: Row): PhaseTeam {
   return {
@@ -68,6 +60,13 @@ export async function getPlannedPhaseTeam(playerId: string, phaseId: string): Pr
   return data ? toTeam(data) : null;
 }
 
+export class PhaseTeamRowConflictError extends Error {
+  constructor() {
+    super('Conflicting phase team rows');
+    this.name = 'PhaseTeamRowConflictError';
+  }
+}
+
 export async function getPlayerPhaseTeamForMatch(playerId: string, match: { id: string; phase_id: string }): Promise<PhaseTeam | null> {
   const { data, error } = await supabase.from('phase_teams').select(PHASE_TEAM_COLUMNS)
     .eq('player_id', playerId).eq('phase_id', match.phase_id)
@@ -75,7 +74,7 @@ export async function getPlayerPhaseTeamForMatch(playerId: string, match: { id: 
   if (error) throw error;
   const linked = (data ?? []).filter((row) => row.match_id === match.id);
   const planned = (data ?? []).filter((row) => row.match_id === null);
-  if (linked.length > 1 || (!linked.length && planned.length > 1)) throw new Error('Conflicting phase team rows');
+  if (linked.length > 1 || (!linked.length && planned.length > 1)) throw new PhaseTeamRowConflictError();
   const row = linked[0] ?? planned[0];
   return row ? toTeam(row) : null;
 }
@@ -95,7 +94,7 @@ function writeError(error: unknown, operation: RosterArgs['p_operation']): never
 }
 
 export async function writePhaseTeam(args: RosterArgs): Promise<PhaseTeam | null> {
-  const { data, error } = await native.rpc('phase_team_roster_write', args).select(PHASE_TEAM_COLUMNS);
+  const { data, error } = await supabase.rpc('phase_team_roster_write', args).select(PHASE_TEAM_COLUMNS);
   if (error) writeError(error, args.p_operation);
   return data?.[0] ? toTeam(data[0]) : null;
 }
@@ -114,7 +113,7 @@ export async function getPhaseMatchPrepTeams(matchId: string): Promise<PhaseMatc
 }
 
 export async function releasePhaseTeamsFromMatches(matchIds: readonly string[]): Promise<number> {
-  const { data, error } = await native.rpc('phase_teams_release_matches', { p_match_ids: [...new Set(matchIds)] });
+  const { data, error } = await supabase.rpc('phase_teams_release_matches', { p_match_ids: [...new Set(matchIds)] });
   if (error) throw error;
   return data;
 }
@@ -159,7 +158,9 @@ export async function disablePhaseTeamShareToken(id: string): Promise<void> {
 
 export async function publishPhaseTeam(team: PhaseTeam, metadata: { title?: string; description?: string; tags?: string[] }, actor: TeamFlagActor = 'owner'): Promise<PhaseTeam> {
   teamLibraryMachine.assertTransition(team.library_published_at ? 'published' : 'unpublished', 'published', actor);
-  const update = supabase.from('phase_teams').update({ library_published_at: new Date().toISOString(),
+  const update = supabase.from('phase_teams').update({ library_published_at: new Date(Math.max(
+    Date.now(), team.library_published_at === null ? 0 : Date.parse(team.library_published_at) + 1,
+  )).toISOString(),
     library_title: metadata.title ?? null, library_description: metadata.description ?? null, library_tags: metadata.tags ?? [] }).eq('id', team.id);
   const { data, error } = await (team.library_published_at === null ? update.is('library_published_at', null) : update.eq('library_published_at', team.library_published_at))
     .select(PHASE_TEAM_COLUMNS).maybeSingle();

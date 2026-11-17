@@ -4,7 +4,7 @@ import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
 import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
 
 export function createNativeEnrollmentPersistence(
-  results: Pick<EnrollmentPersistence, 'getCompletedMatches' | 'computeStandings' | 'kitAdvancingPlayers'>,
+  results: Pick<EnrollmentPersistence, 'getCompletedMatches' | 'computeStandings' | 'computeSourceStandings' | 'kitAdvancingPlayers'>,
 ): EnrollmentPersistence {
   return {
     getPhase: getPhaseById,

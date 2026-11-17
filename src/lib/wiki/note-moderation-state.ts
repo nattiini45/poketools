@@ -9,10 +9,12 @@ import type { WikiNote } from '@/types/wiki';
 const ROUTE = 'src/app/api/wiki/notes/[id]/route.ts';
 const QUERIES = 'src/lib/supabase/queries/wiki-notes.ts';
 
+const PHASE_WRITERS = ['src/lib/wiki/phase-services.ts', 'src/lib/supabase/queries/phase-wiki-notes.ts'];
+
 export const noteModerationMachine = defineMachine({
   id: 'wiki_note.moderation',
   title: 'Wiki note moderation',
-  storage: 'wiki_notes.approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)',
+  storage: 'wiki_notes / phase_wiki_notes approved + rejected_at + resubmission_blocked_at (derived by noteModerationState)',
   summary:
     'A community note from submission to a moderator verdict. Only an approved note is public. A moderator approve or reject is compare-and-set against the state and the updated_at the moderator saw, so a verdict on text the author edited meanwhile is refused (wiki_note_changed). A site admin editing the text keeps the state (not a transition); deleting a note removes the row from any state.',
   doc: 'docs/wiki.md',
@@ -26,7 +28,7 @@ export const noteModerationMachine = defineMachine({
       from: ['pending', 'approved', 'rejected'],
       to: 'pending',
       actors: ['author'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
       note: 'The author edits the text: the note goes back to the queue until a moderator sees it. A blocked note refuses it (wiki_note_resubmission_blocked).',
     },
     {
@@ -34,7 +36,7 @@ export const noteModerationMachine = defineMachine({
       from: ['pending', 'rejected', 'blocked'],
       to: 'approved',
       actors: ['admin'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
       note: 'Publishes the note; approving a blocked note clears the block.',
     },
     {
@@ -42,14 +44,14 @@ export const noteModerationMachine = defineMachine({
       from: ['pending'],
       to: 'rejected',
       actors: ['admin'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
     },
     {
       event: 'unpublish',
       from: ['approved'],
       to: 'rejected',
       actors: ['admin'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
       note: 'Takes a live note out of public view, usually in answer to a report.',
     },
     {
@@ -57,7 +59,7 @@ export const noteModerationMachine = defineMachine({
       from: ['rejected'],
       to: 'blocked',
       actors: ['superadmin'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
       note: 'Closes a rejected note for resubmission; it stays rejected.',
     },
     {
@@ -65,7 +67,7 @@ export const noteModerationMachine = defineMachine({
       from: ['blocked'],
       to: 'rejected',
       actors: ['superadmin'],
-      writers: [ROUTE, QUERIES],
+      writers: [ROUTE, QUERIES, ...PHASE_WRITERS],
     },
   ],
 });
