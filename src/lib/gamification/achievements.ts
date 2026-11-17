@@ -22,7 +22,7 @@ interface MatchStatsSummary {
   lead_same_pokemon: number;
 }
 
-interface AchievementStatsContext {
+export interface AchievementStatsContext {
   matchStats: MatchStatsSummary;
   cumulativeStats: {
     total_wins: number;
@@ -69,7 +69,7 @@ function compareValue(actual: number, op: 'eq' | 'gte' | 'lte', target: number):
   return actual <= target;
 }
 
-function computeMatchStats(
+export function computeMatchStats(
   groupedMatchStats: Record<string, Array<{
     game_id: string;
     player_id: string;
@@ -117,7 +117,7 @@ function computeMatchStats(
   };
 }
 
-async function didPlayerWinTournamentFinal(
+export async function didPlayerWinTournamentFinal(
   playerId: string,
   tournamentId: string,
   bracketType: BracketType
@@ -282,18 +282,25 @@ export async function checkAchievements(
   playerId: string,
   matchContext: MatchContext
 ): Promise<EarnedAchievement[]> {
-  const [definitions, earnedKeys, stats] = await Promise.all([
-    listAchievementDefinitions(),
-    getPlayerAchievementKeys(playerId),
-    buildStatsContext(playerId, matchContext),
-  ]);
-
-  const unlocked: EarnedAchievement[] = [];
-  const context = {
+  return checkAchievementsWithStats(playerId, {
     match_id: matchContext.match_id,
     tournament_id: matchContext.tournament_id,
     season_id: matchContext.season_id ?? undefined,
-  };
+  }, () => buildStatsContext(playerId, matchContext));
+}
+
+export async function checkAchievementsWithStats(
+  playerId: string,
+  context: NonNullable<EarnedAchievement['context']>,
+  loadStats: () => Promise<AchievementStatsContext>
+): Promise<EarnedAchievement[]> {
+  const [definitions, earnedKeys, stats] = await Promise.all([
+    listAchievementDefinitions(),
+    getPlayerAchievementKeys(playerId),
+    loadStats(),
+  ]);
+
+  const unlocked: EarnedAchievement[] = [];
 
   for (const definition of definitions) {
     const hasEarned = earnedKeys.has(definition.key);

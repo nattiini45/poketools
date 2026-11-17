@@ -26,11 +26,8 @@ interface AdminAggregatePostBody {
   max_rounds?: number;
 }
 
-function parseScopeType(value: unknown): AggregateScope | null {
-  if (typeof value !== 'string') return null;
-  return VALID_SCOPE_TYPES.includes(value as AggregateScope)
-    ? (value as AggregateScope)
-    : null;
+function parseScopeType(value: unknown): (typeof VALID_SCOPE_TYPES)[number] | null {
+  return VALID_SCOPE_TYPES.find((scope) => scope === value) ?? null;
 }
 
 function parseAction(value: unknown): AdminAggregateAction | null {

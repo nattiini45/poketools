@@ -36,6 +36,7 @@ const TAG = 'format-engine/fire';
 const MAX_CASCADE = 3;
 
 export interface FireOptions {
+  port?: KitEventPort;
   /** Ops that belong to this event's transaction besides the planned effects. */
   ops?: readonly FormatOp[];
   /** The context the caller already loaded (it must be fresh). */
@@ -43,7 +44,14 @@ export interface FireOptions {
   /** Cascade depth, set by the call itself. */
   depth?: number;
   /** The completion this event belongs to (`FireFormatEventInput.matchFence`). */
-  matchFence?: { matchId: string; confirmedAt: string };
+  matchFence?: { matchId: string; confirmedAt: string | null; winnerId?: string };
+}
+
+export interface KitEventPort {
+  load(seasonId: string): Promise<KitContext | null>;
+  rows(ctx: KitContext, stage: string | undefined): Promise<Record<string, PlayerRow> | undefined>;
+  write: typeof fireFormatEvent;
+  invalidate(seasonId: string, phaseIds: readonly string[]): void;
 }
 
 export interface FireResult {
@@ -87,9 +95,9 @@ export function pendingLockEvents(ctx: Pick<KitContext, 'def' | 'state'>): strin
 export async function fireLockedActionEvents(
   seasonId: string,
   firedBy: string | null,
-  options: { context?: KitContext; depth?: number } = {},
+  options: { context?: KitContext; depth?: number; port?: KitEventPort } = {},
 ): Promise<string[]> {
-  const ctx = options.context ?? (await loadFreshKitContext(seasonId));
+  const ctx = options.context ?? (await (options.port ? options.port.load(seasonId) : loadFreshKitContext(seasonId)));
   if (ctx === null) return [];
   const fired: string[] = [];
   // The decision (this action is locked and its event has not fired) and the write go through ONE context: the first fire
@@ -100,13 +108,13 @@ export async function fireLockedActionEvents(
   let first = true;
   for (const action of pendingLockEvents(ctx)) {
     if (!first) {
-      const fresh = await loadFreshKitContext(seasonId);
+      const fresh = await (options.port ? options.port.load(seasonId) : loadFreshKitContext(seasonId));
       if (fresh === null) return fired;
       current = fresh;
       if (!pendingLockEvents(current).includes(action)) continue;
     }
     first = false;
-    const result = await fireEvent(seasonId, { event: 'action_locked', action }, firedBy, { context: current, depth: (options.depth ?? 0) + 1 });
+    const result = await fireEvent(seasonId, { event: 'action_locked', action }, firedBy, { context: current, depth: (options.depth ?? 0) + 1, ...(options.port ? { port: options.port } : {}) });
     if (result?.fired) fired.push(result.eventKey, ...result.cascaded);
   }
   return fired;
@@ -119,22 +127,22 @@ export async function fireEvent(
   firedBy: string | null,
   options: FireOptions = {},
 ): Promise<FireResult | null> {
-  const ctx = options.context ?? (await loadFreshKitContext(seasonId));
+  const ctx = options.context ?? (await (options.port ? options.port.load(seasonId) : loadFreshKitContext(seasonId)));
   if (ctx === null) return null;
   const key = eventKey(event);
   const empty: FireResult = { eventKey: key, fired: false, ops: [], notifications: [], issues: [], cascaded: [] };
   const depth = options.depth ?? 0;
   if (ctx.state.firedEventKeys.includes(key)) {
     // A retry of an event whose own transaction committed: its lock cascade may be what was lost.
-    if (depth < MAX_CASCADE) return { ...empty, cascaded: await fireLockedActionEvents(seasonId, firedBy, { context: ctx, depth }) };
+    if (depth < MAX_CASCADE) return { ...empty, cascaded: await fireLockedActionEvents(seasonId, firedBy, { context: ctx, depth, ...(options.port ? { port: options.port } : {}) }) };
     return empty;
   }
 
   // A `foreach_group` stage is several phases under one key: every group's table feeds the rows.
-  const rows: Record<string, PlayerRow> | undefined = eventNeedsRows(ctx.def, event) ? await loadStageRows(ctx, event.stage) : undefined;
+  const rows: Record<string, PlayerRow> | undefined = eventNeedsRows(ctx.def, event) ? await (options.port ? options.port.rows(ctx, event.stage) : loadStageRows(ctx, event.stage)) : undefined;
   const plan = planEffects(ctx.def, event, ctx.state, rosterOf(ctx, event.stage), ctx.seed, { rows });
   const ops = [...plan.ops, ...(options.ops ?? [])];
-  const fired = await fireFormatEvent({
+  const fired = await (options.port ? options.port.write : fireFormatEvent)({
     seasonId,
     eventKey: key,
     event: event.event,
@@ -147,7 +155,8 @@ export async function fireEvent(
   });
   if (!fired) return { ...empty, ops, notifications: plan.notifications, issues: plan.issues };
 
-  expireSeasonReads(seasonId, ctx.phases.map((phase) => phase.id));
+  if (options.port) options.port.invalidate(seasonId, ctx.phases.map((phase) => phase.id));
+  else expireSeasonReads(seasonId, ctx.phases.map((phase) => phase.id));
 
   const cascaded: string[] = [];
   if (depth < MAX_CASCADE && ops.some((op) => op.op === 'lock_action')) {
@@ -156,7 +165,7 @@ export async function fireEvent(
     // `action_locked` (`fireLockedActionEvents`). The cascade re-reads the league and fires only the locks the CURRENT format
     // has, so a format replaced since never gets an `action_locked` key burnt for a lock it does not have.
     try {
-      cascaded.push(...(await fireLockedActionEvents(seasonId, firedBy, { depth })));
+      cascaded.push(...(await fireLockedActionEvents(seasonId, firedBy, { depth, ...(options.port ? { port: options.port } : {}) })));
     } catch (error) {
       logger.error(TAG, 'the lock cascade of a fired event failed; the next cron pass fires the pending action_locked events', {
         seasonId,

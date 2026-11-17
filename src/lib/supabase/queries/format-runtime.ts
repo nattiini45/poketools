@@ -228,7 +228,30 @@ export interface FireFormatEventInput {
    * The completion a `match_completed` event belongs to: the database refuses the event (`format_context_stale`, nothing
    * written) unless the match is still completed with this `confirmed_at`, under a lock a reset waits for.
    */
-  matchFence?: { matchId: string; confirmedAt: string };
+  matchFence?: { matchId: string; confirmedAt: string | null; winnerId?: string };
+}
+
+export async function firePhaseFormatMatchEvent(input: FireFormatEventInput): Promise<boolean> {
+  if (input.matchFence === undefined) {
+    if (input.event === 'match_completed') throw new Error('native match completion requires a match fence');
+    return fireFormatEvent(input);
+  }
+  if (input.matchFence.winnerId === undefined) throw new Error('native match completion requires a winner fence');
+  const { data, error } = await supabase.rpc('phase_format_fire_match_event', {
+    p_season_id: input.seasonId,
+    p_event_key: input.eventKey,
+    p_event: input.event,
+    p_payload: input.payload,
+    p_ops: input.ops as unknown as Json,
+    p_fired_by: nullable(input.firedBy),
+    p_expected_revision: input.revision,
+    p_notifications: (input.notifications ?? []).filter((notice) => notice.players.length > 0) as unknown as Json,
+    p_match_id: input.matchFence.matchId,
+    p_confirmed_at: input.matchFence.confirmedAt ?? undefined,
+    p_winner_id: input.matchFence.winnerId,
+  });
+  if (error) throw mapFormatRuntimeDbError(error);
+  return data === true;
 }
 
 /**
@@ -246,7 +269,7 @@ export async function fireFormatEvent(input: FireFormatEventInput): Promise<bool
     p_fired_by: nullable(input.firedBy),
     p_expected_revision: input.revision,
     p_notifications: (input.notifications ?? []).filter((notice) => notice.players.length > 0) as unknown as Json,
-    ...(input.matchFence ? { p_fence_match: input.matchFence.matchId, p_fence_confirmed_at: input.matchFence.confirmedAt } : {}),
+    ...(input.matchFence ? { p_fence_match: input.matchFence.matchId, p_fence_confirmed_at: input.matchFence.confirmedAt ?? undefined } : {}),
   });
   if (error) throw mapFormatRuntimeDbError(error);
   return data === true;

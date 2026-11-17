@@ -38,7 +38,12 @@ function walkRouteFiles(dir, acc = []) {
   return acc;
 }
 
-const files = walkRouteFiles(API_DIR);
+const files = [
+  ...walkRouteFiles(API_DIR),
+  join('src', 'lib', 'match', 'auto-confirm.ts'),
+  join('src', 'lib', 'match', 'process-aggregates.ts'),
+  join('src', 'lib', 'match', 'match-decisions-core.ts'),
+];
 const offenders = [];
 
 for (const file of files) {
@@ -50,7 +55,7 @@ for (const file of files) {
 
 if (offenders.length === 0) {
   console.log(
-    `[safe-error-response] OK: no raw response returns inside catch blocks across ${files.length} route files.`
+    `[safe-error-response] OK: no raw response returns inside catch blocks across ${files.length} HTTP handler files.`
   );
   process.exit(0);
 }

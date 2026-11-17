@@ -41,6 +41,13 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
 - [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
 - [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
+- [Phase aggregate job](#phase-aggregate-job) — `phase_aggregate_jobs.status`
+- [Phase game aggregate marker](#phase-game-aggregate-marker) — `phase_games.aggregate_applied_at (NULL = uncounted)`
+- [Phase game edit lease](#phase-game-edit-lease) — `phase_games.edit_lease_token + phase_games.edit_lease_until`
+- [Phase game evolution credit marker](#phase-game-evolution-credit-marker) — `phase_games.evolution_applied_at + phase_games.evolution_credits`
+- [Phase game stats lock](#phase-game-stats-lock) — `phase_games.stats_locked`
+- [League phase match](#league-phase-match) — `phase_matches.status with confirmed_at, auto_confirm_at, date_played and finalized_at`
+- [League phase match outcome](#league-phase-match-outcome) — `phase_match_outcomes.kind with source = 'admin' (row absent = none)`
 - [League phase round](#league-phase-round) — `phase_rounds.status (enum round_status)`
 - [Phase storage generation](#phase-storage-generation) — `phase_storage_state.mode`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
@@ -818,9 +825,9 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `credit` | `uncredited` | `credited` | system | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_credit_game_kills`<br>`src/lib/supabase/queries/evolutions.ts`<br>`src/lib/match/evolution-match-evaluator.ts`<br>`src/lib/match/finalize.ts` | The finalize step epb_real_kills, once the match is completed (match_not_completed otherwise). |
 | `uncredit` | `credited`, `legacy_credited` | `uncredited` | admin | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_uncredit_game_kills`<br>`src/lib/supabase/queries/evolutions.ts`<br>`src/lib/match/evolution-match-evaluator.ts`<br>`src/lib/pkmn/game-pipeline.ts` | An admin game edit that moves a completed match out of completed; fenced on the expected marker. |
-| `sync_mark` | `uncredited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The season evolution rebuild marks the games of completed matches it credited. |
-| `sync_rewrite` | `credited`, `legacy_credited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild rewrites the ledger of a credited game (a legacy marker gets its ledger). |
-| `sync_clear` | `credited`, `legacy_credited` | `uncredited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild clears games of matches that are no longer completed. |
+| `sync_mark` | `uncredited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The season evolution rebuild marks the games of completed matches it credited. |
+| `sync_rewrite` | `credited`, `legacy_credited` | `credited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild rewrites the ledger of a credited game (a legacy marker gets its ledger). |
+| `sync_clear` | `credited`, `legacy_credited` | `uncredited` | rebuild | `supabase/migrations/20261021100100_epb_game_kill_credit_ledger.sql#epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit`<br>`src/lib/reconcile/evolution-rebuild.ts` | The rebuild clears games of matches that are no longer completed. |
 
 ## Game stats lock
 
@@ -961,14 +968,14 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `record_game` | `scheduled`, `in_progress` | `in_progress` | player, admin | `src/lib/pkmn/game-pipeline.ts` | A game is submitted and the series has no winner yet. |
 | `reach_threshold` | `in_progress` | `pending_confirmation` | player, admin | `src/lib/pkmn/game-pipeline.ts` | A game gives one player the wins the best-of needs; auto_confirm_at starts the deadline of the result source (24 h for a replay, 48 h for a screenshot, none for a manual result without one). |
-| `confirm` | `pending_confirmation` | `completed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/bulk-actions.ts` | The opponent (not the submitter) or an admin confirms the reported result. |
-| `auto_confirm` | `pending_confirmation` | `completed` | system | `src/app/api/cron/auto-confirm/route.ts` | The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person. |
-| `dispute` | `pending_confirmation` | `disputed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts` | A participant (or an admin) flags the reported result. |
-| `resolve_dispute` | `disputed` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts` |  |
+| `confirm` | `pending_confirmation` | `completed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/match-decisions-core.ts`<br>`src/lib/match/bulk-actions.ts` | The opponent (not the submitter) or an admin confirms the reported result. |
+| `auto_confirm` | `pending_confirmation` | `completed` | system | `src/app/api/cron/auto-confirm/route.ts`<br>`src/lib/match/auto-confirm.ts` | The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person. |
+| `dispute` | `pending_confirmation` | `disputed` | player, admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/match-decisions-core.ts` | A participant (or an admin) flags the reported result. |
+| `resolve_dispute` | `disputed` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/match-decisions-core.ts` |  |
 | `settle` | `scheduled` | `completed` | admin | `src/app/api/admin/matches/[id]/result/route.ts` | An admin records a result for a match that was never played (a no-show, a drop, a result agreed outside the app), with a reason; no confirmation step. |
-| `set_result` | `in_progress` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts` | An admin completes a running series directly; no confirmation step. |
+| `set_result` | `in_progress` | `completed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/match-decisions-core.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts` | An admin completes a running series directly; no confirmation step. |
 | `forfeit` | `scheduled`, `in_progress` | `completed` | system | `src/lib/format-engine/runtime/cron.ts`<br>`supabase/migrations/20261105090000_format_runtime.sql#format_forfeit_complete` | The format cron completes a match as a deadline forfeit when one side registered no team. |
-| `flag_dispute` | `in_progress` | `disputed` | admin | `src/app/api/confirm-match/[mid]/route.ts` | An admin marks a running series disputed. |
+| `flag_dispute` | `in_progress` | `disputed` | admin | `src/app/api/confirm-match/[mid]/route.ts`<br>`src/lib/match/match-decisions-core.ts` | An admin marks a running series disputed. |
 | `flag_tie` | `in_progress` | `disputed` | system | `src/lib/pkmn/game-pipeline.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie (no draws are scored). |
 | `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/match/reopen.ts` | Withdraws the result and keeps the games. |
 | `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/pkmn/game-pipeline.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
@@ -1028,13 +1035,13 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `record_played` | `none`, `played`, `unresolved` | `played` | system | `src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize of a completed match: the faint tally of its games (source replay or manual). |
-| `replace_admin_row` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `played` | admin | `src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize asked to replace an admin row (replaceAdminRow): a forced write of the played tally. |
-| `flag_unresolved` | `none`, `played`, `unresolved` | `unresolved` | system | `src/lib/pkmn/game-pipeline.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | A replay engine tie disputes the match; the row is never scored. |
-| `set_played` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `admin_played` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records the result as played, with a reason. |
-| `set_forfeit` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `forfeit` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/format-engine/runtime/cron.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records a forfeit, or the format cron a deadline forfeit. |
-| `set_no_show` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `no_show` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` |  |
-| `take_back` | `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `none` | system, admin | `src/lib/match/outcome-takeback.ts`<br>`src/lib/match/finalize.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/supabase/queries/match-outcomes.ts` | The match leaves completed or disputed (reset, reopen, a game change), or a staged admin row whose status write lost; deleted by its set_at. |
+| `record_played` | `none`, `played`, `unresolved` | `played` | system | `src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize of a completed match: the faint tally of its games (source replay or manual). |
+| `replace_admin_row` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `played` | admin | `src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | Finalize asked to replace an admin row (replaceAdminRow): a forced write of the played tally. |
+| `flag_unresolved` | `none`, `played`, `unresolved` | `unresolved` | system | `src/lib/pkmn/game-pipeline.ts`<br>`src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | A replay engine tie disputes the match; the row is never scored. |
+| `set_played` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `admin_played` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records the result as played, with a reason. |
+| `set_forfeit` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `forfeit` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/format-engine/runtime/cron.ts`<br>`src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` | An admin records a forfeit, or the format cron a deadline forfeit. |
+| `set_no_show` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `no_show` | admin | `src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`supabase/migrations/20261104090000_match_outcomes.sql#match_outcome_record` |  |
+| `take_back` | `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `none` | system, admin | `src/lib/match/outcome-takeback.ts`<br>`src/lib/match/finalize.ts`<br>`src/lib/match/finalization-core.ts`<br>`src/app/api/admin/matches/[id]/result/route.ts`<br>`src/lib/supabase/queries/match-outcomes.ts` | The match leaves completed or disputed (reset, reopen, a game change), or a staged admin row whose status write lost; deleted by its set_at. |
 
 ## Match proposal
 
@@ -1065,6 +1072,270 @@ stateDiagram-v2
 | `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
 | `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
 | `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
+
+## Phase aggregate job
+
+- **Id:** `phase_aggregate_job`
+- **State lives in:** phase_aggregate_jobs.status
+- **Module doc:** `docs/match.md`
+- **States:** `pending`, `processing`, `completed`, `failed`, `cancelled`
+- **Actors:** `queue`, `admin`
+
+A native phase game count. Claim, retry, failure and cancellation share the legacy queue rules. Apply commits phase and shared league/all-time counters, the phase game marker and completion together; no native game or job uses tournament storage.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  [*] --> processing
+  pending --> processing: claim (queue)
+  processing --> completed: complete
+  processing --> pending: retry (queue)
+  processing --> failed: fail (queue)
+  failed --> pending: requeue (admin)
+  pending --> cancelled: cancel (admin)
+  processing --> cancelled: cancel (admin)
+  completed --> [*]
+  cancelled --> [*]
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `claim` | `pending` | `processing` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#claim_phase_aggregate_jobs` |  |
+| `complete` | `processing` | `completed` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `retry` | `processing` | `pending` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#reclaim_stale_phase_aggregate_jobs`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `fail` | `processing` | `failed` | queue | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#reclaim_stale_phase_aggregate_jobs`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `requeue` | `failed` | `pending` | admin | `src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `cancel` | `pending`, `processing` | `cancelled` | admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#cancel_phase_aggregate_jobs_for_game` |  |
+
+## Phase game aggregate marker
+
+- **Id:** `phase_game.aggregate_applied_at`
+- **State lives in:** phase_games.aggregate_applied_at (NULL = uncounted)
+- **Module doc:** `docs/match.md`
+- **States:** `uncounted`, `counted`
+- **Actors:** `queue`, `admin`
+
+Whether native phase battle stats are counted. Apply and rollback hold the phase game row lock and atomically change the marker with phase, league and all-time projections. Rebuilds skip live jobs without changing markers.
+
+```mermaid
+stateDiagram-v2
+  [*] --> uncounted
+  uncounted --> counted: apply
+  counted --> uncounted: rollback (admin)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `apply` | `uncounted` | `counted` | queue, admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#apply_phase_aggregate_job`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+| `rollback` | `counted` | `uncounted` | admin | `supabase/migrations/20261117122000_phase_aggregate_pipeline.sql#rollback_phase_game_aggregates`<br>`src/lib/league-phase/phase-aggregate-storage.ts` |  |
+
+## Phase game edit lease
+
+- **Id:** `phase_game.edit_lease`
+- **State lives in:** phase_games.edit_lease_token + phase_games.edit_lease_until
+- **Module doc:** `docs/match.md`
+- **States:** `free`, `leased`, `expired`
+- **Actors:** `admin`, `clock`
+
+One admin edit of a game at a time. Only `editGame` takes the lease; game delete, match reset and winner edits rely on the aggregate marker fence instead. `expired` is a lease whose edit_lease_until has passed: free in effect, cleared lazily by the next claim or the release.
+
+```mermaid
+stateDiagram-v2
+  [*] --> free
+  free --> leased: claim (admin)
+  expired --> leased: claim (admin)
+  leased --> free: release (admin)
+  expired --> free: release (admin)
+  leased --> expired: lapse (clock)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `claim` | `free`, `expired` | `leased` | admin | `src/lib/supabase/queries/phase-games.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#claim_phase_game_edit_lease` | Together with the editor's version (updated_at): leased or stale otherwise (409 admin_game_edit_in_progress / admin_game_edit_stale). |
+| `release` | `leased`, `expired` | `free` | admin | `src/lib/supabase/queries/phase-games.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#release_phase_game_edit_lease` | The edit releases its own token in finally; another token releases nothing. |
+| `lapse` | `leased` | `expired` | clock | `src/lib/supabase/queries/phase-games.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql` | edit_lease_until passes (TTL 120 s), for example after a crashed edit. |
+
+## Phase game evolution credit marker
+
+- **Id:** `phase_game.evolution_applied_at`
+- **State lives in:** phase_games.evolution_applied_at + phase_games.evolution_credits
+- **Module doc:** `docs/evolution-point-buy.md`
+- **States:** `uncredited`, `credited`, `legacy_credited`
+- **Actors:** `system`, `admin`, `rebuild`
+
+Whether the real kills of an Evolution Point Buy game are credited to the trackers. `credited` holds the ledger of what was credited (evolution_credits); `legacy_credited` is a marker from before the ledger (evolution_credits NULL), debited from the caller's debits until the season is rebuilt once. Credit, uncredit and the season sync lock the game rows; the sync is fenced on the season epoch.
+
+```mermaid
+stateDiagram-v2
+  [*] --> uncredited
+  [*] --> legacy_credited
+  uncredited --> credited: credit (system)
+  credited --> uncredited: uncredit (admin)
+  legacy_credited --> uncredited: uncredit (admin)
+  uncredited --> credited: sync_mark (rebuild)
+  credited --> credited: sync_rewrite (rebuild)
+  legacy_credited --> credited: sync_rewrite (rebuild)
+  credited --> uncredited: sync_clear (rebuild)
+  legacy_credited --> uncredited: sync_clear (rebuild)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `credit` | `uncredited` | `credited` | system | `src/lib/league-phase/epb-storage.ts`<br>`src/lib/supabase/queries/phase-epb.ts`<br>`src/lib/supabase/queries/evolutions.ts`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#phase_epb_credit_game_kills` | The finalize step epb_real_kills, once the match is completed (match_not_completed otherwise). |
+| `uncredit` | `credited`, `legacy_credited` | `uncredited` | admin | `src/lib/league-phase/epb-storage.ts`<br>`src/lib/supabase/queries/phase-epb.ts`<br>`src/lib/supabase/queries/evolutions.ts`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#phase_epb_uncredit_game_kills` | An admin game edit that moves a completed match out of completed; fenced on the expected marker. |
+| `sync_mark` | `uncredited` | `credited` | rebuild | `src/lib/league-phase/epb-storage.ts`<br>`src/lib/supabase/queries/phase-epb.ts`<br>`src/lib/supabase/queries/evolutions.ts`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#phase_epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit` | The season evolution rebuild marks the games of completed matches it credited. |
+| `sync_rewrite` | `credited`, `legacy_credited` | `credited` | rebuild | `src/lib/league-phase/epb-storage.ts`<br>`src/lib/supabase/queries/phase-epb.ts`<br>`src/lib/supabase/queries/evolutions.ts`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#phase_epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit` | The rebuild rewrites the ledger of a credited game (a legacy marker gets its ledger). |
+| `sync_clear` | `credited`, `legacy_credited` | `uncredited` | rebuild | `src/lib/league-phase/epb-storage.ts`<br>`src/lib/supabase/queries/phase-epb.ts`<br>`src/lib/supabase/queries/evolutions.ts`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#phase_epb_sync_game_kill_credit`<br>`supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit` | The rebuild clears games of matches that are no longer completed. |
+
+## Phase game stats lock
+
+- **Id:** `phase_game.stats_locked`
+- **State lives in:** phase_games.stats_locked
+- **Module doc:** `docs/match.md`
+- **States:** `unlocked`, `locked`
+- **Actors:** `admin`
+
+An admin replaced the battle stats of a game by hand, so re-parse tooling (scripts/reparse-game.ts) leaves it alone unless forced. Advisory: no route checks it. One-way in the app; an unlock is a manual database edit.
+
+```mermaid
+stateDiagram-v2
+  [*] --> unlocked
+  unlocked --> locked: lock
+  locked --> locked: lock
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `lock` | `unlocked`, `locked` | `locked` | admin | `src/lib/supabase/queries/phase-games.ts` | An admin game edit that replaces the battle stats (not a winner-only edit), after the re-apply. |
+
+## League phase match
+
+- **Id:** `phase_match`
+- **State lives in:** phase_matches.status with confirmed_at, auto_confirm_at, date_played and finalized_at
+- **Module doc:** `docs/match.md`
+- **States:** `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed`
+- **Actors:** `player`, `admin`, `system`
+
+A pairing from scheduling to a confirmed result (spec Section 8). Every status write takes its timestamps from matchTimestampsFor: it clears finalized_at, a completion stamps confirmed_at and date_played and clears auto_confirm_at, a move into pending_confirmation starts the auto-confirm deadline of the result source, and a move back clears the result timestamps.
+
+```mermaid
+stateDiagram-v2
+  [*] --> scheduled
+  scheduled --> in_progress: record_game (player, admin)
+  in_progress --> in_progress: record_game (player, admin)
+  in_progress --> pending_confirmation: reach_threshold (player, admin)
+  pending_confirmation --> completed: confirm (player, admin)
+  pending_confirmation --> completed: auto_confirm (system)
+  pending_confirmation --> disputed: dispute (player, admin)
+  disputed --> completed: resolve_dispute (admin)
+  scheduled --> completed: settle (admin)
+  in_progress --> completed: set_result (admin)
+  scheduled --> completed: forfeit (system)
+  in_progress --> completed: forfeit (system)
+  in_progress --> disputed: flag_dispute (admin)
+  in_progress --> disputed: flag_tie (system)
+  pending_confirmation --> in_progress: reopen (admin)
+  completed --> in_progress: reopen (admin)
+  disputed --> in_progress: reopen (admin)
+  in_progress --> scheduled: reset (admin)
+  pending_confirmation --> scheduled: reset (admin)
+  completed --> scheduled: reset (admin)
+  disputed --> scheduled: reset (admin)
+  scheduled --> in_progress: recount (system)
+  in_progress --> in_progress: recount (system)
+  pending_confirmation --> in_progress: recount (system)
+  completed --> in_progress: recount (system)
+  disputed --> in_progress: recount (system)
+  scheduled --> pending_confirmation: recount (system)
+  in_progress --> pending_confirmation: recount (system)
+  pending_confirmation --> pending_confirmation: recount (system)
+  completed --> pending_confirmation: recount (system)
+  disputed --> pending_confirmation: recount (system)
+  scheduled --> scheduled: recount (system)
+  in_progress --> scheduled: recount (system)
+  pending_confirmation --> scheduled: recount (system)
+  completed --> scheduled: recount (system)
+  disputed --> scheduled: recount (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `record_game` | `scheduled`, `in_progress` | `in_progress` | player, admin | `src/lib/supabase/queries/phase-matches.ts` | A game is submitted and the series has no winner yet. |
+| `reach_threshold` | `in_progress` | `pending_confirmation` | player, admin | `src/lib/supabase/queries/phase-matches.ts` | A game gives one player the wins the best-of needs; auto_confirm_at starts the deadline of the result source (24 h for a replay, 48 h for a screenshot, none for a manual result without one). |
+| `confirm` | `pending_confirmation` | `completed` | player, admin | `src/lib/supabase/queries/phase-matches.ts` | The opponent (not the submitter) or an admin confirms the reported result. |
+| `auto_confirm` | `pending_confirmation` | `completed` | system | `src/lib/supabase/queries/phase-matches.ts` | The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person. |
+| `dispute` | `pending_confirmation` | `disputed` | player, admin | `src/lib/supabase/queries/phase-matches.ts` | A participant (or an admin) flags the reported result. |
+| `resolve_dispute` | `disputed` | `completed` | admin | `src/lib/supabase/queries/phase-matches.ts` |  |
+| `settle` | `scheduled` | `completed` | admin | `src/lib/supabase/queries/phase-matches.ts` | An admin records a result for a match that was never played (a no-show, a drop, a result agreed outside the app), with a reason; no confirmation step. |
+| `set_result` | `in_progress` | `completed` | admin | `src/lib/supabase/queries/phase-matches.ts` | An admin completes a running series directly; no confirmation step. |
+| `forfeit` | `scheduled`, `in_progress` | `completed` | system | `src/lib/supabase/queries/phase-matches.ts`<br>`supabase/migrations/20261117127000_phase_format_cron.sql#phase_format_forfeit_complete` | The format cron completes a match as a deadline forfeit when one side registered no team. |
+| `flag_dispute` | `in_progress` | `disputed` | admin | `src/lib/supabase/queries/phase-matches.ts` | An admin marks a running series disputed. |
+| `flag_tie` | `in_progress` | `disputed` | system | `src/lib/supabase/queries/phase-matches.ts` | The game pipeline, on the admins' behalf, when a replay is an engine tie (no draws are scored). |
+| `reopen` | `pending_confirmation`, `completed`, `disputed` | `in_progress` | admin | `src/lib/supabase/queries/phase-matches.ts` | Withdraws the result and keeps the games. |
+| `reset` | `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | admin | `src/lib/supabase/queries/phase-matches.ts` | resetMatch / resetRound: deletes the games and rolls their aggregates back. |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `in_progress` | system | `src/lib/supabase/queries/phase-matches.ts` | After an admin edits or deletes a game, the status follows the remaining games (reevaluateMatchStatus): games left, best-of not reached. |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `pending_confirmation` | system | `src/lib/supabase/queries/phase-matches.ts` | As above, best-of still reached: the result waits for a confirmation again, without an auto-confirm deadline (one already running is kept). |
+| `recount` | `scheduled`, `in_progress`, `pending_confirmation`, `completed`, `disputed` | `scheduled` | system | `src/lib/supabase/queries/phase-matches.ts` | As above, no game left. |
+
+## League phase match outcome
+
+- **Id:** `phase_match_outcome`
+- **State lives in:** phase_match_outcomes.kind with source = 'admin' (row absent = none)
+- **Module doc:** `docs/match.md`
+- **States:** `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show`
+- **Actors:** `system`, `admin`
+
+How a decided or unresolvable match ended, next to matches.winner_id. A system write never replaces an admin row (it is kept, the RPC answers kept); an admin result is staged before its status write and only while the match is not completed (p_open_only), and is taken back when that write loses. Standings score the outcome of a completed match only.
+
+```mermaid
+stateDiagram-v2
+  [*] --> none
+  none --> played: record_played (system)
+  played --> played: record_played (system)
+  unresolved --> played: record_played (system)
+  none --> played: replace_admin_row (admin)
+  played --> played: replace_admin_row (admin)
+  unresolved --> played: replace_admin_row (admin)
+  admin_played --> played: replace_admin_row (admin)
+  forfeit --> played: replace_admin_row (admin)
+  no_show --> played: replace_admin_row (admin)
+  none --> unresolved: flag_unresolved (system)
+  played --> unresolved: flag_unresolved (system)
+  unresolved --> unresolved: flag_unresolved (system)
+  none --> admin_played: set_played (admin)
+  played --> admin_played: set_played (admin)
+  unresolved --> admin_played: set_played (admin)
+  admin_played --> admin_played: set_played (admin)
+  forfeit --> admin_played: set_played (admin)
+  no_show --> admin_played: set_played (admin)
+  none --> forfeit: set_forfeit (admin)
+  played --> forfeit: set_forfeit (admin)
+  unresolved --> forfeit: set_forfeit (admin)
+  admin_played --> forfeit: set_forfeit (admin)
+  forfeit --> forfeit: set_forfeit (admin)
+  no_show --> forfeit: set_forfeit (admin)
+  none --> no_show: set_no_show (admin)
+  played --> no_show: set_no_show (admin)
+  unresolved --> no_show: set_no_show (admin)
+  admin_played --> no_show: set_no_show (admin)
+  forfeit --> no_show: set_no_show (admin)
+  no_show --> no_show: set_no_show (admin)
+  played --> none: take_back
+  unresolved --> none: take_back
+  admin_played --> none: take_back
+  forfeit --> none: take_back
+  no_show --> none: take_back
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `record_played` | `none`, `played`, `unresolved` | `played` | system | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` | Finalize of a completed match: the faint tally of its games (source replay or manual). |
+| `replace_admin_row` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `played` | admin | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` | Finalize asked to replace an admin row (replaceAdminRow): a forced write of the played tally. |
+| `flag_unresolved` | `none`, `played`, `unresolved` | `unresolved` | system | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` | A replay engine tie disputes the match; the row is never scored. |
+| `set_played` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `admin_played` | admin | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` | An admin records the result as played, with a reason. |
+| `set_forfeit` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `forfeit` | admin | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` | An admin records a forfeit, or the format cron a deadline forfeit. |
+| `set_no_show` | `none`, `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `no_show` | admin | `src/lib/match/finalization-core.ts`<br>`src/lib/pkmn/game-pipeline.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts`<br>`supabase/migrations/20261117120000_phase_match_game_pipeline.sql#phase_match_outcome_record` |  |
+| `take_back` | `played`, `unresolved`, `admin_played`, `forfeit`, `no_show` | `none` | system, admin | `src/lib/match/outcome-takeback.ts`<br>`src/lib/match/finalization-core.ts`<br>`src/lib/supabase/queries/phase-match-outcomes.ts` | The match leaves completed or disputed (reset, reopen, a game change), or a staged admin row whose status write lost; deleted by its set_at. |
 
 ## League phase round
 

@@ -32,6 +32,7 @@ export interface PlayerStreaksUpsertInput {
   current_flawless_streak: number;
   best_flawless_streak: number;
   last_match_id: string | null;
+  last_phase_match_id?: string | null;
   updated_at?: string;
 }
 

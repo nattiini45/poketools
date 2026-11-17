@@ -11,7 +11,7 @@ import { matchCountsForRatings, type RatingScope } from '@/lib/rating/rating-sco
 import type { MatchResult, MatchStats, StreakChanges, PlayerStreaks } from '@/types/streak';
 
 /** A player's streak numbers: the row without its ids. */
-export type StreakCounters = Omit<PlayerStreaks, 'id' | 'player_id'>;
+export type StreakCounters = Omit<PlayerStreaks, 'id' | 'player_id'> & { last_phase_match_id?: string | null };
 
 /** A match extends the KO streak from this many kills dealt. */
 const KO_STREAK_THRESHOLD = 3;
@@ -121,7 +121,8 @@ export async function updateStreaks(
 
 /** A completed match reduced to what the streak replay reads. */
 export interface StreakHistoryMatch extends ReplayOrderMatch {
-  tournament_id: string;
+  tournament_id?: string;
+  phase_id?: string;
   winner_id: string | null;
 }
 
@@ -159,6 +160,10 @@ export function computeStreaksFromHistory(
       statsByMatch.get(match.id) ?? null,
       match.id
     );
+    if (match.phase_id !== undefined) {
+      counters.last_match_id = null;
+      counters.last_phase_match_id = match.id;
+    }
   }
   return counters;
 }
@@ -175,23 +180,42 @@ export function computeStreaksFromHistory(
  * Returns the player's change (before and after the stored row) for the
  * announcements of a live finalize.
  */
-export async function recomputeStreaks(playerId: string): Promise<StreakChanges> {
+export interface StreakStoragePort {
+  loadScope: typeof loadRatingScope;
+  getCompletedMatches(playerId: string): Promise<StreakHistoryMatch[]>;
+  getPlayerStreaks: typeof getPlayerStreaks;
+  getStatTotals(playerId: string, matchIds: readonly string[], history: readonly StreakHistoryMatch[]): ReturnType<typeof getPlayerStatTotalsByMatch>;
+  replacePlayerStreaks(playerId: string, state: StreakCounters, expectedMatchIds: readonly string[], countedMatchIds: readonly string[]): Promise<void>;
+}
+
+export function recomputeStreaks(playerId: string): Promise<StreakChanges> {
+  return recomputeStreaksWithStorage(playerId, {
+    loadScope: loadRatingScope,
+    getCompletedMatches: getCompletedMatchesForRatingReplay,
+    getPlayerStreaks,
+    getStatTotals: (id, ids) => getPlayerStatTotalsByMatch(id, ids),
+    replacePlayerStreaks: (id, state, expected) => replacePlayerStreaks(id, state, expected),
+  });
+}
+
+export async function recomputeStreaksWithStorage(playerId: string, storage: StreakStoragePort): Promise<StreakChanges> {
   for (let attempt = 1; ; attempt++) {
     // The history is read first and the stats are read for exactly its match ids: a match that completes in
     // between is then in neither or in both, and the fence below catches the first case.
     const [scope, history, stored] = await Promise.all([
-      loadRatingScope(),
-      getCompletedMatchesForRatingReplay(playerId),
-      getPlayerStreaks(playerId),
+      storage.loadScope(),
+      storage.getCompletedMatches(playerId),
+      storage.getPlayerStreaks(playerId),
     ]);
-    const statTotals = await getPlayerStatTotalsByMatch(
+    const statTotals = await storage.getStatTotals(
       playerId,
-      history.map((match) => match.id)
+      history.map((match) => match.id),
+      history
     );
 
     const after = computeStreaksFromHistory(playerId, history, statTotals, scope);
     try {
-      await replacePlayerStreaks(playerId, after, history.map((match) => match.id));
+      await storage.replacePlayerStreaks(playerId, after, history.map((match) => match.id), history.filter((match) => matchCountsForRatings(match, scope)).map((match) => match.id));
     } catch (err) {
       if (err instanceof StreaksStaleError && attempt < REPLACE_ATTEMPTS) continue;
       throw err;

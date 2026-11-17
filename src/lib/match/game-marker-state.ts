@@ -85,7 +85,7 @@ export const gameEvolutionCreditMachine = defineMachine({
       from: ['uncredited'],
       to: 'credited',
       actors: ['rebuild'],
-      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'src/lib/reconcile/evolution-rebuild.ts'],
+      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit', 'src/lib/reconcile/evolution-rebuild.ts'],
       note: 'The season evolution rebuild marks the games of completed matches it credited.',
     },
     {
@@ -93,7 +93,7 @@ export const gameEvolutionCreditMachine = defineMachine({
       from: ['credited', 'legacy_credited'],
       to: 'credited',
       actors: ['rebuild'],
-      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'src/lib/reconcile/evolution-rebuild.ts'],
+      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit', 'src/lib/reconcile/evolution-rebuild.ts'],
       note: 'The rebuild rewrites the ledger of a credited game (a legacy marker gets its ledger).',
     },
     {
@@ -101,7 +101,7 @@ export const gameEvolutionCreditMachine = defineMachine({
       from: ['credited', 'legacy_credited'],
       to: 'uncredited',
       actors: ['rebuild'],
-      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'src/lib/reconcile/evolution-rebuild.ts'],
+      writers: [`${CREDIT_MIGRATION}#epb_sync_game_kill_credit`, 'supabase/migrations/20261117124000_phase_epb_game_credits.sql#epb_sync_mixed_game_kill_credit', 'src/lib/reconcile/evolution-rebuild.ts'],
       note: 'The rebuild clears games of matches that are no longer completed.',
     },
   ],

@@ -11,15 +11,24 @@ import {
   getNewestGameCreatedAt,
   listGamesForAggregateRebuild,
 } from '@/lib/supabase/queries/games';
-import { revalidateMatchPages, revalidatePublicPath } from '@/lib/revalidation';
+import { expireSeasonReads, revalidateMatchPages, revalidatePublicPath } from '@/lib/revalidation';
 import {
   getAggregateJobStats,
   listGameIdsWithLiveIncrementJobs,
   processAggregateJobs,
+  processAllAggregateJobs,
+  getAllAggregateJobStats,
   type AggregateJobStats,
   type ProcessAggregateJobsResult,
 } from '@/lib/match/aggregate-queue';
 import type { AggregateScope } from '@/types/game';
+import {
+  getPhaseAggregateJobStats, processPhaseAggregateJobs, getNewestPhaseGameCreatedAt,
+  listPhaseGameIdsWithLiveIncrementJobs, listPhaseGamesForAggregateRebuild,
+  getPhaseAggregateSeasonId,
+  type PhaseAggregateOwner,
+} from '@/lib/league-phase/phase-aggregate-storage';
+import { getPhaseBattleStatsByGame } from '@/lib/supabase/queries/phase-games';
 
 const DEFAULT_BATCH_SIZE = 50;
 const DEFAULT_MAX_ROUNDS = 100;
@@ -46,6 +55,25 @@ export async function drainPendingAggregateJobs(options?: {
   maxRounds?: number;
   deadline?: number;
 }): Promise<DrainAggregateJobsResult> {
+  return drainAggregateQueue(options, getAggregateJobStats, processAggregateJobs);
+}
+
+type DrainOptions = Parameters<typeof drainPendingAggregateJobs>[0];
+
+export async function drainAllPendingAggregateJobs(options?: DrainOptions,
+  onPhaseApplied?: (owner: PhaseAggregateOwner) => Promise<void>): Promise<DrainAggregateJobsResult> {
+  return drainAggregateQueue(options, getAllAggregateJobStats,
+    onPhaseApplied ? (limit) => processAllAggregateJobs(limit, onPhaseApplied) : processAllAggregateJobs);
+}
+
+export async function drainPendingPhaseAggregateJobs(options?: DrainOptions,
+  onApplied?: (owner: PhaseAggregateOwner) => Promise<void>): Promise<DrainAggregateJobsResult> {
+  return drainAggregateQueue(options, getPhaseAggregateJobStats,
+    onApplied ? (limit) => processPhaseAggregateJobs(limit, onApplied) : processPhaseAggregateJobs);
+}
+
+async function drainAggregateQueue(options: DrainOptions, stats: typeof getAggregateJobStats,
+  process: typeof processAggregateJobs): Promise<DrainAggregateJobsResult> {
   const batchSize = Math.min(Math.max(options?.batchSize ?? DEFAULT_BATCH_SIZE, 1), 100);
   const maxRounds = Math.min(Math.max(options?.maxRounds ?? DEFAULT_MAX_ROUNDS, 1), 500);
 
@@ -58,18 +86,18 @@ export async function drainPendingAggregateJobs(options?: {
 
   for (let round = 0; round < maxRounds; round++) {
     if (options?.deadline !== undefined && Date.now() >= options.deadline) break;
-    const statsBefore = await getAggregateJobStats();
+    const statsBefore = await stats();
     if (statsBefore.pending === 0 && statsBefore.processing === 0) {
       break;
     }
 
-    const result = await processAggregateJobs(batchSize);
+    const result = await process(batchSize);
     totals.processed += result.processed;
     totals.failed += result.failed;
     totals.reclaimed += result.reclaimed;
     rounds++;
 
-    const statsAfterRound = await getAggregateJobStats();
+    const statsAfterRound = await stats();
     if (statsAfterRound.pending === 0 && statsAfterRound.processing === 0) {
       break;
     }
@@ -78,7 +106,7 @@ export async function drainPendingAggregateJobs(options?: {
   return {
     ...totals,
     rounds,
-    statsAfter: await getAggregateJobStats(),
+    statsAfter: await stats(),
   };
 }
 
@@ -86,6 +114,7 @@ export async function rebuildAggregatesForScope(
   scopeType: AggregateScope,
   scopeId: string | null
 ): Promise<RebuildAggregatesForScopeResult> {
+  if (scopeType === 'phase') return rebuildMixedAggregatesForScope(scopeType, scopeId);
   if (scopeType !== 'all_time' && !scopeId) {
     throw new Error('scope_id required for tournament and league rebuilds');
   }
@@ -157,6 +186,59 @@ export async function rebuildAggregatesForScope(
   };
 }
 
+export async function rebuildMixedAggregatesForScope(
+  scopeType: AggregateScope, scopeId: string | null,
+  onPhaseRebuilt?: (phaseId: string, seasonId: string) => Promise<void>,
+): Promise<RebuildAggregatesForScopeResult> {
+  if (scopeType === 'tournament') return rebuildAggregatesForScope(scopeType, scopeId);
+  if (scopeType !== 'all_time' && !scopeId) throw new Error('scope_id required for phase and league rebuilds');
+  const cleared = await clearAggregatesForScope(scopeType, scopeId);
+  const [phaseLive, phaseBound, legacyLive, legacyBound] = await Promise.all([
+    listPhaseGameIdsWithLiveIncrementJobs(), getNewestPhaseGameCreatedAt(),
+    scopeType === 'phase' ? new Set<string>() : listGameIdsWithLiveIncrementJobs(),
+    scopeType === 'phase' ? null : getNewestGameCreatedAt(),
+  ]);
+  const seen = new Set<string>();
+  const phases = new Map<string, string>();
+  if (scopeType === 'phase' && scopeId) {
+    const seasonId = await getPhaseAggregateSeasonId(scopeId);
+    if (seasonId) phases.set(scopeId, seasonId);
+  }
+  const tournaments = new Set<string>();
+  let gamesProcessed = 0;
+  const maxPages = 1000;
+  for (const kind of scopeType === 'phase' ? ['phase'] as const : ['phase', 'tournament'] as const) {
+    let offset = 0;
+    for (let page = 0; ; page++) {
+      if (page === maxPages) throw new Error('Aggregate rebuild exceeded its bounded game read; rerun in smaller scopes');
+      const games = kind === 'phase'
+        ? await listPhaseGamesForAggregateRebuild(scopeType, scopeId, offset, REBUILD_PAGE_SIZE, phaseBound)
+        : await listGamesForAggregateRebuild(scopeType, scopeId, offset, REBUILD_PAGE_SIZE, legacyBound);
+      for (const game of games) {
+        if (seen.has(game.game_id)) continue;
+        seen.add(game.game_id);
+        if ('phase_id' in game) phases.set(game.phase_id, game.season_id);
+        if (game.live_increment_job || phaseLive.has(game.game_id) || legacyLive.has(game.game_id)) continue;
+        if (scopeType === 'all_time' && game.exclude_all_time) continue;
+        const native = 'phase_id' in game;
+        const stats = native ? await getPhaseBattleStatsByGame(game.game_id) : await getBattleStatsByGame(game.game_id);
+        if (stats.length === 0) continue;
+        await updateAggregatesForScope(stats, scopeType, scopeId);
+        gamesProcessed++;
+        if (!native) tournaments.add(game.tournament_id);
+      }
+      offset += games.length;
+      if (games.length < REBUILD_PAGE_SIZE) break;
+    }
+  }
+  for (const [phaseId, seasonId] of phases) {
+    expireSeasonReads(seasonId);
+    if (onPhaseRebuilt) await onPhaseRebuilt(phaseId, seasonId);
+  }
+  await revalidateAfterScopeRebuild(scopeType, scopeId, tournaments);
+  return { gamesProcessed, ...cleared };
+}
+
 /**
  * Pages and public read-cache tags of a rebuilt scope. Every path goes
  * through `revalidatePublicPath`, which also expires the path's cache tags
@@ -168,6 +250,9 @@ async function revalidateAfterScopeRebuild(
   tournamentIds: Set<string>
 ): Promise<void> {
   switch (scopeType) {
+    case 'phase':
+      revalidatePublicPath('/insights');
+      break;
     case 'tournament':
       if (scopeId) {
         await revalidateMatchPages(scopeId);

@@ -1,3 +1,5 @@
+import type { GamePipelineParticipant } from '@/lib/league-phase/game-pipeline-types';
+import type { Round } from '@/types/round';
 import type { BracketSide } from '@/types/match';
 import type { MatchWithPlayers } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
@@ -84,11 +86,11 @@ export function findSlotForMatch(
   );
 }
 
-export function findMatchForSlot(
-  matches: MatchWithPlayers[],
+export function findMatchForSlot<M extends Pick<MatchWithPlayers, 'round_id' | 'bracket_side' | 'bracket_pos'>>(
+  matches: M[],
   roundIdByGlobalNumber: Map<number, string>,
   slot: BracketSlotDef
-): MatchWithPlayers | undefined {
+): M | undefined {
   const roundId = roundIdByGlobalNumber.get(slot.global_round_number);
   if (!roundId) return undefined;
   return matches.find(
@@ -102,7 +104,7 @@ export function findMatchForSlot(
 /** Build resolutions from all completed matches in the bracket. */
 export function buildSlotResolutionsFromMatches(
   slots: BracketSlotDef[],
-  matches: MatchWithPlayers[],
+  matches: Pick<MatchWithPlayers, 'id' | 'round_id' | 'bracket_side' | 'bracket_pos' | 'status' | 'winner_id' | 'player_1_id' | 'player_2_id'>[],
   roundNumberById: Map<string, number>
 ): Map<string, SlotResolution> {
   const resolutions = new Map<string, SlotResolution>();
@@ -204,140 +206,14 @@ export function readyBracketSlots(
   }
   return ready;
 }
-
-/**
- * Materialize bracket slots whose feeders are fully resolved.
- * Skips bye-only advances; creates matches when both players are known.
- * Never rewrites a non-scheduled match or a match that already has games.
- * `createMatches` writes each new match; a bracket generate passes a collector instead, to write the whole bracket in one
- * locked transaction (`bracket-generate.ts`).
- */
-export async function materializeReadySlots(
-  tournamentId: string,
-  _tournament: Tournament,
-  participants: ParticipantWithSeed[],
-  structure: ReturnType<typeof buildBracketStructureForParticipants>,
-  roundIdByGlobalNumber: Map<number, string>,
-  existingMatches: MatchWithPlayers[],
-  slotResolutions: Map<string, SlotResolution>,
-  createMatches: typeof createMatchBatch = createMatchBatch
-): Promise<MatchWithPlayers[]> {
-  if (!structure) return [];
-
-  const created: MatchWithPlayers[] = [];
-  const matches = [...existingMatches];
-  for (const { slot, roundId, player1Id: p1, player2Id: p2 } of readyBracketSlots(participants, structure, roundIdByGlobalNumber, slotResolutions)) {
-    const existing = findMatchForSlot(matches, roundIdByGlobalNumber, slot);
-
-    if (existing) {
-      if (existing.player_1_id !== p1 || existing.player_2_id !== p2) {
-        if (existing.status !== 'scheduled' || existing.games.length !== 0) {
-          console.error({
-            message: 'Bracket materialize conflict: refusing to rewrite played/non-scheduled match',
-            tournamentId,
-            slotKey: slot.slotKey,
-            matchId: existing.id,
-            status: existing.status,
-          });
-          continue;
-        }
-        const updated = await updateMatchPlayers(existing.id, p1, p2);
-        const idx = matches.findIndex((m) => m.id === existing.id);
-        if (idx >= 0) {
-          matches[idx] = { ...matches[idx], ...updated };
-        }
-      }
-      continue;
-    }
-
-    const batch = await createMatches([
-      {
-        round_id: roundId,
-        tournament_id: tournamentId,
-        player_1_id: p1,
-        player_2_id: p2,
-        bracket_side: slot.bracket_side,
-        bracket_pos: slot.bracket_pos,
-      },
-    ]);
-    // createMatchBatch returns Match[] without player names — refetch not needed for propagation
-    const placeholder: MatchWithPlayers = {
-      ...batch[0],
-      player_1_name: '',
-      player_2_name: '',
-      player_1_avatar_url: null,
-      player_2_avatar_url: null,
-      winner_name: null,
-      round_status: 'pending',
-      games: [],
-    };
-    matches.push(placeholder);
-    created.push(placeholder);
-  }
-
-  return created;
+export async function materializeReadySlots(tournamentId: string, _tournament: Tournament, participants: ParticipantWithSeed[], structure: ReturnType<typeof buildBracketStructureForParticipants>, roundIdByGlobalNumber: Map<number, string>, existingMatches: MatchWithPlayers[], slotResolutions: Map<string, SlotResolution>, createMatches: typeof createMatchBatch = createMatchBatch): Promise<MatchWithPlayers[]> {
+ return createBracketPropagation(legacyBracketPropagationStorage(createMatches)).materializeReadySlots(tournamentId, _tournament, participants, structure, roundIdByGlobalNumber, existingMatches, slotResolutions);
 }
 
-function overlayCompletingMatch(
-  fetched: MatchWithPlayers[],
-  match: MatchWithPlayers,
-  winnerId: string
-): MatchWithPlayers[] {
-  const completed: MatchWithPlayers = {
-    ...match,
-    winner_id: winnerId,
-    status: 'completed',
-  };
-  if (fetched.some((m) => m.id === match.id)) {
-    return fetched.map((m) => (m.id === match.id ? { ...m, ...completed, games: m.games } : m));
-  }
-  return [...fetched, completed];
+export async function propagateBracketOnMatchComplete(match: MatchWithPlayers, tournament: Tournament, participants: GamePipelineParticipant[]): Promise<void> {
+ return createBracketPropagation(legacyBracketPropagationStorage()).propagateBracketOnMatchComplete(match, tournament, participants);
 }
 
-/**
- * After a match completes, propagate winners/losers into downstream slots.
- * Prefers the winner on the match object it receives so a stale DB row
- * (force-complete from in_progress) cannot no-op the advance.
- */
-export async function propagateBracketOnMatchComplete(
-  match: MatchWithPlayers,
-  tournament: Tournament,
-  participants: ParticipantWithSeed[]
-): Promise<void> {
-  if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
-    return;
-  }
-
-  const structure = buildBracketStructureForParticipants(
-    tournament.bracket_type,
-    participants,
-    bracketStructureOptionsOf(tournament)
-  );
-  const winnerId = match.winner_id;
-  if (!structure || !winnerId) return;
-
-  const rounds = await getRoundsByTournament(tournament.id);
-  const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
-  const roundIdByGlobalNumber = new Map(rounds.map((r) => [r.round_number, r.id]));
-
-  const fetched = await getMatchesByTournament(tournament.id);
-  const matches = overlayCompletingMatch(fetched, match, winnerId);
-  const slotResolutions = buildSlotResolutionsFromMatches(
-    structure.slots,
-    matches,
-    roundNumberById
-  );
-
-  await materializeReadySlots(
-    tournament.id,
-    tournament,
-    participants,
-    structure,
-    roundIdByGlobalNumber,
-    matches,
-    slotResolutions
-  );
-}
 
 export interface RepairBracketResult {
   slots_materialized: number;
@@ -543,64 +419,10 @@ export function findDownstreamSlotKeys(
   }
   return downstream;
 }
-
-/**
- * Delete downstream materialized matches with zero games after a reset.
- */
-export async function unpropagateBracketOnMatchReset(
-  match: MatchWithPlayers,
-  tournament: Tournament,
-  participants: ParticipantWithSeed[]
-): Promise<string[]> {
-  if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
-    return [];
-  }
-
-  const structure = buildBracketStructureForParticipants(
-    tournament.bracket_type,
-    participants,
-    bracketStructureOptionsOf(tournament)
-  );
-  if (!structure) return [];
-
-  const rounds = await getRoundsByTournament(tournament.id);
-  const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
-  const roundIdByGlobalNumber = new Map(rounds.map((r) => [r.round_number, r.id]));
-
-  const roundNumber = roundNumberById.get(match.round_id);
-  if (roundNumber === undefined) return [];
-
-  const originSlot = findSlotForMatch(
-    structure.slots,
-    roundNumber,
-    match.bracket_side,
-    match.bracket_pos
-  );
-  if (!originSlot) return [];
-
-  const downstreamKeys = findDownstreamSlotKeys(structure, originSlot.slotKey);
-  if (downstreamKeys.size === 0) return [];
-
-  const matches = await getMatchesByTournament(tournament.id);
-  const toDelete: string[] = [];
-
-  for (const slotKey of downstreamKeys) {
-    const slot = structure.slots.find((s) => s.slotKey === slotKey);
-    if (!slot) continue;
-    const m = findMatchForSlot(matches, roundIdByGlobalNumber, slot);
-    if (!m) continue;
-    const games = await getGamesByMatch(m.id);
-    if (games.length === 0 && m.status === 'scheduled') {
-      toDelete.push(m.id);
-    }
-  }
-
-  if (toDelete.length > 0) {
-    await deleteMatchesByIds(toDelete);
-  }
-
-  return toDelete;
+export async function unpropagateBracketOnMatchReset(match: MatchWithPlayers, tournament: Tournament, participants: GamePipelineParticipant[]): Promise<string[]> {
+ return createBracketPropagation(legacyBracketPropagationStorage()).unpropagateBracketOnMatchReset(match, tournament, participants);
 }
+
 
 export function getBracketSlotLabels(
   structure: ReturnType<typeof buildBracketStructureForParticipants>
@@ -617,4 +439,216 @@ export function getBracketSlotLabels(
     });
   }
   return labels;
+}
+export type BracketPropagationCompetition = Pick<Tournament, 'id' | 'bracket_type' | 'bracket_reset_enabled' | 'third_place_enabled'>;
+export type BracketPropagationMatch = Pick<MatchWithPlayers,
+  'id' | 'round_id' | 'player_1_id' | 'player_2_id' | 'winner_id' | 'status' | 'bracket_side' | 'bracket_pos' | 'games'>;
+export interface BracketPropagationStorage<M extends BracketPropagationMatch> {
+  getRounds(id: string): Promise<Pick<Round, 'id' | 'round_number'>[]>;
+  getMatches(id: string): Promise<M[]>;
+  getGames(id: string): Promise<readonly unknown[]>;
+  updatePlayers(id: string, player1Id: string, player2Id: string): Promise<Partial<M> | null>;
+  deleteMatches(ids: string[]): Promise<void>;
+  createMatches(inputs: { round_id: string; competition_id: string; player_1_id: string; player_2_id: string; bracket_side: BracketSide | null; bracket_pos: number | null }[]): Promise<M[]>;
+}
+
+function legacyBracketPropagationStorage(createMatches?: typeof createMatchBatch): BracketPropagationStorage<MatchWithPlayers> {
+  return {
+    getRounds: (id) => getRoundsByTournament(id),
+    getMatches: (id) => getMatchesByTournament(id),
+    getGames: (id) => getGamesByMatch(id),
+    updatePlayers: (id, p1, p2) => updateMatchPlayers(id, p1, p2),
+    deleteMatches: (ids) => deleteMatchesByIds(ids),
+    createMatches: async (inputs) => {
+      const rows = await (createMatches ?? createMatchBatch)(inputs.map(({ competition_id, ...input }) => ({ ...input, tournament_id: competition_id })));
+      return rows.map((row): MatchWithPlayers => ({ ...row, player_1_name: '', player_2_name: '', player_1_avatar_url: null, player_2_avatar_url: null, winner_name: null, round_status: 'pending', games: [] }));
+    },
+  };
+}
+
+export function createBracketPropagation<M extends BracketPropagationMatch>(storage: BracketPropagationStorage<M>) {
+  const { getRounds: getRoundsByTournament, getMatches: getMatchesByTournament, getGames: getGamesByMatch, updatePlayers: updateMatchPlayers, deleteMatches: deleteMatchesByIds, createMatches } = storage;
+
+
+  /**
+   * Materialize bracket slots whose feeders are fully resolved.
+   * Skips bye-only advances; creates matches when both players are known.
+   * Never rewrites a non-scheduled match or a match that already has games.
+   * `createMatches` writes each new match; a bracket generate passes a collector instead, to write the whole bracket in one
+   * locked transaction (`bracket-generate.ts`).
+   */
+  async function materializeReadySlots(
+    tournamentId: string,
+    _tournament: BracketPropagationCompetition,
+    participants: GamePipelineParticipant[],
+    structure: ReturnType<typeof buildBracketStructureForParticipants>,
+    roundIdByGlobalNumber: Map<number, string>,
+    existingMatches: M[],
+    slotResolutions: Map<string, SlotResolution>
+  ): Promise<M[]> {
+    if (!structure) return [];
+
+    const created: M[] = [];
+    const matches = [...existingMatches];
+    for (const { slot, roundId, player1Id: p1, player2Id: p2 } of readyBracketSlots(participants, structure, roundIdByGlobalNumber, slotResolutions)) {
+      const existing = findMatchForSlot(matches, roundIdByGlobalNumber, slot);
+
+      if (existing) {
+        if (existing.player_1_id !== p1 || existing.player_2_id !== p2) {
+          if (existing.status !== 'scheduled' || existing.games.length !== 0) {
+            console.error({
+              message: 'Bracket materialize conflict: refusing to rewrite played/non-scheduled match',
+              tournamentId,
+              slotKey: slot.slotKey,
+              matchId: existing.id,
+              status: existing.status,
+            });
+            continue;
+          }
+          const updated = await updateMatchPlayers(existing.id, p1, p2);
+          const idx = matches.findIndex((m) => m.id === existing.id);
+          if (idx >= 0) {
+            matches[idx] = { ...matches[idx], ...updated };
+          }
+        }
+        continue;
+      }
+
+      const batch = await createMatches([
+        {
+          round_id: roundId,
+          competition_id: tournamentId,
+          player_1_id: p1,
+          player_2_id: p2,
+          bracket_side: slot.bracket_side,
+          bracket_pos: slot.bracket_pos,
+        },
+      ]);
+      const placeholder = batch[0];
+      matches.push(placeholder);
+      created.push(placeholder);
+    }
+
+    return created;
+  }
+
+  function overlayCompletingMatch(
+    fetched: M[],
+    match: M,
+    winnerId: string
+  ): M[] {
+    const completed: M = {
+      ...match,
+      winner_id: winnerId,
+      status: 'completed',
+    };
+    if (fetched.some((m) => m.id === match.id)) {
+      return fetched.map((m) => (m.id === match.id ? { ...m, ...completed, games: m.games } : m));
+    }
+    return [...fetched, completed];
+  }
+
+  /**
+   * After a match completes, propagate winners/losers into downstream slots.
+   * Prefers the winner on the match object it receives so a stale DB row
+   * (force-complete from in_progress) cannot no-op the advance.
+   */
+  async function propagateBracketOnMatchComplete(
+    match: M,
+    tournament: BracketPropagationCompetition,
+    participants: GamePipelineParticipant[]
+  ): Promise<void> {
+    if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
+      return;
+    }
+
+    const structure = buildBracketStructureForParticipants(
+      tournament.bracket_type,
+      participants,
+      bracketStructureOptionsOf(tournament)
+    );
+    const winnerId = match.winner_id;
+    if (!structure || !winnerId) return;
+
+    const rounds = await getRoundsByTournament(tournament.id);
+    const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
+    const roundIdByGlobalNumber = new Map(rounds.map((r) => [r.round_number, r.id]));
+
+    const fetched = await getMatchesByTournament(tournament.id);
+    const matches = overlayCompletingMatch(fetched, match, winnerId);
+    const slotResolutions = buildSlotResolutionsFromMatches(
+      structure.slots,
+      matches,
+      roundNumberById
+    );
+
+    await materializeReadySlots(
+      tournament.id,
+      tournament,
+      participants,
+      structure,
+      roundIdByGlobalNumber,
+      matches,
+      slotResolutions
+    );
+  }
+
+  /**
+   * Delete downstream materialized matches with zero games after a reset.
+   */
+  async function unpropagateBracketOnMatchReset(
+    match: M,
+    tournament: BracketPropagationCompetition,
+    participants: GamePipelineParticipant[]
+  ): Promise<string[]> {
+    if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
+      return [];
+    }
+
+    const structure = buildBracketStructureForParticipants(
+      tournament.bracket_type,
+      participants,
+      bracketStructureOptionsOf(tournament)
+    );
+    if (!structure) return [];
+
+    const rounds = await getRoundsByTournament(tournament.id);
+    const roundNumberById = new Map(rounds.map((r) => [r.id, r.round_number]));
+    const roundIdByGlobalNumber = new Map(rounds.map((r) => [r.round_number, r.id]));
+
+    const roundNumber = roundNumberById.get(match.round_id);
+    if (roundNumber === undefined) return [];
+
+    const originSlot = findSlotForMatch(
+      structure.slots,
+      roundNumber,
+      match.bracket_side,
+      match.bracket_pos
+    );
+    if (!originSlot) return [];
+
+    const downstreamKeys = findDownstreamSlotKeys(structure, originSlot.slotKey);
+    if (downstreamKeys.size === 0) return [];
+
+    const matches = await getMatchesByTournament(tournament.id);
+    const toDelete: string[] = [];
+
+    for (const slotKey of downstreamKeys) {
+      const slot = structure.slots.find((s) => s.slotKey === slotKey);
+      if (!slot) continue;
+      const m = findMatchForSlot(matches, roundIdByGlobalNumber, slot);
+      if (!m) continue;
+      const games = await getGamesByMatch(m.id);
+      if (games.length === 0 && m.status === 'scheduled') {
+        toDelete.push(m.id);
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await deleteMatchesByIds(toDelete);
+    }
+
+    return toDelete;
+  }
+  return { materializeReadySlots, propagateBracketOnMatchComplete, unpropagateBracketOnMatchReset };
 }

@@ -28,7 +28,7 @@ export const matchOutcomeMachine = defineMachine({
       from: ['none', 'played', 'unresolved'],
       to: 'played',
       actors: ['system'],
-      writers: ['src/lib/match/finalize.ts', OUTCOME_SQL],
+      writers: ['src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts', OUTCOME_SQL],
       note: 'Finalize of a completed match: the faint tally of its games (source replay or manual).',
     },
     {
@@ -36,7 +36,7 @@ export const matchOutcomeMachine = defineMachine({
       from: ['none', 'played', 'unresolved', 'admin_played', 'forfeit', 'no_show'],
       to: 'played',
       actors: ['admin'],
-      writers: ['src/lib/match/finalize.ts', OUTCOME_SQL],
+      writers: ['src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts', OUTCOME_SQL],
       note: 'Finalize asked to replace an admin row (replaceAdminRow): a forced write of the played tally.',
     },
     {
@@ -44,7 +44,7 @@ export const matchOutcomeMachine = defineMachine({
       from: ['none', 'played', 'unresolved'],
       to: 'unresolved',
       actors: ['system'],
-      writers: ['src/lib/pkmn/game-pipeline.ts', 'src/lib/match/finalize.ts', OUTCOME_SQL],
+      writers: ['src/lib/pkmn/game-pipeline.ts', 'src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts', OUTCOME_SQL],
       note: 'A replay engine tie disputes the match; the row is never scored.',
     },
     {
@@ -52,7 +52,7 @@ export const matchOutcomeMachine = defineMachine({
       from: ['none', 'played', 'unresolved', 'admin_played', 'forfeit', 'no_show'],
       to: 'admin_played',
       actors: ['admin'],
-      writers: ['src/app/api/admin/matches/[id]/result/route.ts', 'src/lib/match/finalize.ts', OUTCOME_SQL],
+      writers: ['src/app/api/admin/matches/[id]/result/route.ts', 'src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts', OUTCOME_SQL],
       note: 'An admin records the result as played, with a reason.',
     },
     {
@@ -63,7 +63,7 @@ export const matchOutcomeMachine = defineMachine({
       writers: [
         'src/app/api/admin/matches/[id]/result/route.ts',
         'src/lib/format-engine/runtime/cron.ts',
-        'src/lib/match/finalize.ts',
+        'src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts',
         OUTCOME_SQL,
       ],
       note: 'An admin records a forfeit, or the format cron a deadline forfeit.',
@@ -73,7 +73,7 @@ export const matchOutcomeMachine = defineMachine({
       from: ['none', 'played', 'unresolved', 'admin_played', 'forfeit', 'no_show'],
       to: 'no_show',
       actors: ['admin'],
-      writers: ['src/app/api/admin/matches/[id]/result/route.ts', 'src/lib/match/finalize.ts', OUTCOME_SQL],
+      writers: ['src/app/api/admin/matches/[id]/result/route.ts', 'src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts', OUTCOME_SQL],
     },
     {
       event: 'take_back',
@@ -82,7 +82,7 @@ export const matchOutcomeMachine = defineMachine({
       actors: ['system', 'admin'],
       writers: [
         'src/lib/match/outcome-takeback.ts',
-        'src/lib/match/finalize.ts',
+        'src/lib/match/finalize.ts', 'src/lib/match/finalization-core.ts',
         'src/app/api/admin/matches/[id]/result/route.ts',
         'src/lib/supabase/queries/match-outcomes.ts',
       ],

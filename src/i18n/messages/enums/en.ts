@@ -44,7 +44,7 @@ export default {
   gameSource: { ps_replay: 'Showdown replay', manual: 'Manual', champions: 'Champions' },
   teamVisibility: { hidden_until_match: 'Hidden until the match', always_public: 'Always public' },
   teamImportSource: { pokepastes: 'PokePaste', manual: 'Manual', ps_text: 'Showdown text' },
-  aggregateScope: { tournament: 'Tournament', league: 'League', all_time: 'All time' },
+  aggregateScope: { tournament: 'Tournament', league: 'League', all_time: 'All time', phase: 'Phase' },
   ...P,
   teraRule: { any: 'Any Tera type', stab_only: 'STAB Tera types only', none: 'No Terastallization' },
 } as const satisfies {

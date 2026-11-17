@@ -24,7 +24,7 @@ vi.mock('@/lib/draft/progress-engine', () => ({ awardCosmoPoint: vi.fn(), checkE
 vi.mock('@/lib/draft/evolution-points-engine', () => ({ awardEvolutionPointForMatchday: vi.fn() }));
 vi.mock('@/lib/match/evolution-match-evaluator', () => ({ recheckEpbStages: vi.fn() }));
 
-import { runEpbMatchdayHooks } from '../epb-matchday';
+import { createEpbMatchdayRunner, runEpbMatchdayHooks } from '../epb-matchday';
 import { supabase } from '@/lib/supabase/client';
 import { clearExpiredSuspensions, getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
 import { getSeasonEvolutionEvents } from '@/lib/supabase/queries/evolution-events';
@@ -39,6 +39,36 @@ import type { EvolutionEventRecord, EvolutionTracker } from '@/types/evolution';
 import type { MatchWithPlayers } from '@/types/match';
 
 const MATCH = { id: 'match-1', player_1_id: 'p1', player_2_id: 'p2' } as MatchWithPlayers;
+
+describe('explicit native matchday persistence', () => {
+  it('reads native registration and writes native snapshots without invoking legacy queries', async () => {
+    const read = vi.fn().mockResolvedValue(new Map([['p1', ['Dratini']]]));
+    const insert = vi.fn().mockResolvedValue(undefined);
+    const remove = vi.fn().mockResolvedValue(undefined);
+    const run = createEpbMatchdayRunner({
+      getRegisteredSpeciesByMatch: read, insertMatchSnapshots: insert, deleteMatchSnapshots: remove,
+    });
+    await run({ match: MATCH, seasonId: 's1', matchday: 3, battleStats: [] });
+    expect(read).toHaveBeenCalledWith('match-1');
+    expect(insert).toHaveBeenCalledWith('match-1', [
+      expect.objectContaining({ tracker_id: 't-dratini', brought: true }),
+    ]);
+    expect(getRegisteredSpeciesByMatch).not.toHaveBeenCalled();
+    expect(insertMatchSnapshots).not.toHaveBeenCalled();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back after a native registration read failure', async () => {
+    const error = new Error('native registration unavailable');
+    const run = createEpbMatchdayRunner({
+      getRegisteredSpeciesByMatch: vi.fn().mockRejectedValue(error),
+      insertMatchSnapshots: vi.fn(), deleteMatchSnapshots: vi.fn(),
+    });
+    await expect(run({ match: MATCH, seasonId: 's1', matchday: 3, battleStats: [] })).rejects.toBe(error);
+    expect(getRegisteredSpeciesByMatch).not.toHaveBeenCalled();
+    expect(clearExpiredSuspensions).not.toHaveBeenCalled();
+  });
+});
 
 function tracker(overrides: Partial<EvolutionTracker> = {}): EvolutionTracker {
   return {

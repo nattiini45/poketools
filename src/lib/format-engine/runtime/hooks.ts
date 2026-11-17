@@ -25,7 +25,7 @@ import { planChecks, type CheckPlan } from './checks';
 import { openChecks, resolveCheck } from './checks-server';
 import { awaitsCompletionEffects, currentCompletionKeyOf, eventKey } from './events';
 import { isKitCandidate, type HookTournament } from '../kit-candidate';
-import { fireEvent } from './fire';
+import { fireEvent, type KitEventPort } from './fire';
 import { isFormatContextStale, type HookReport } from './stale';
 import { matchContext, playerContext } from './expr-env';
 import { currentHolder, holderOfLoggedSeat, revokesToCurrentHolders, SEAT_MOVED_EVENT, seatMovesOf } from './seat-succession';
@@ -139,6 +139,30 @@ async function seatHoldersNow(seasonId: string, firedKeys: readonly string[], pl
   return playerIds.map((id) => currentHolder(id, 0, moves));
 }
 
+export interface KitMatchScope { id: string; season_id: string }
+
+export interface KitMatchEffectsPort {
+  event: KitEventPort;
+  round(id: string): Promise<Pick<import('@/types/league-phase').PhaseRound, 'id' | 'phase_id' | 'round_number' | 'status'> | null>;
+  rounds(id: string): Promise<{ id: string; round_number: number; status: string }[]>;
+  matches(id: string): Promise<{ id: string; round_id: string; status: string; winner_id: string | null; player_1_id: string; player_2_id: string }[]>;
+  outcome: typeof getMatchOutcome;
+  match(id: string): Promise<{ status: string; player_1_id: string; player_2_id: string } | null>;
+  audit(input: KitMatchCompletedInput, generation: number, context: KitContext): Promise<void>;
+  endStage(scope: KitMatchScope, ctx: KitContext, phase: KitPhaseInfo, roundId: string, report?: HookReport, retry?: boolean): Promise<boolean>;
+}
+
+export interface KitMatchCompletedInput extends Omit<MatchCompletedInput, 'tournament' | 'confirmedAt'> {
+  phase: KitMatchScope;
+  confirmedAt?: string | null;
+}
+
+export interface KitMatchRevertedInput {
+  phase: KitMatchScope;
+  matchId: string;
+  report?: HookReport;
+}
+
 export interface MatchCompletedInput {
   tournament: HookTournament;
   matchId: string;
@@ -171,15 +195,19 @@ export interface MatchCompletedInput {
  * the audit bounds its own retries (`AUDIT_RETRY_WINDOW_MS`).
  */
 export async function onMatchCompleted(input: MatchCompletedInput): Promise<boolean> {
-  const { tournament } = input;
-  if (!isKitCandidate(tournament)) return true;
+  if (!isKitCandidate(input.tournament)) return true;
+  return runMatchCompleted({ ...input, phase: { id: input.tournament.id, season_id: input.tournament.season_id }, legacyTournament: input.tournament });
+}
+
+async function runMatchCompleted(input: KitMatchCompletedInput & { legacyTournament?: HookTournament & { season_id: string } }, port?: KitMatchEffectsPort): Promise<boolean> {
+  const tournament = input.phase;
   const loaded: { value: { ctx: KitContext; phase: KitPhaseInfo } | null } = { value: null };
   const applied = await guarded('match completed', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
-    const ctx = await loadFreshKitContext(tournament.season_id);
+    const ctx = await (port ? port.event.load(tournament.season_id) : loadFreshKitContext(tournament.season_id));
     const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
     if (ctx === null || phase === undefined) return;
     loaded.value = { ctx, phase };
-    const [round, outcome] = await Promise.all([getRoundById(input.roundId), getMatchOutcome(input.matchId)]);
+    const [round, outcome] = await Promise.all([port ? port.round(input.roundId) : getRoundById(input.roundId), port ? port.outcome(input.matchId) : getMatchOutcome(input.matchId)]);
     const roundNumber = round?.round_number ?? 0;
     const forfeit = outcome?.kind === 'forfeit' || outcome?.kind === 'no_show';
     const base = envBaseOf(ctx, `match:${input.matchId}`);
@@ -218,7 +246,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
         players: [holder1, holder2],
       },
       null,
-      { context: ctx, ops: tracks.ops, ...(input.confirmedAt !== undefined ? { matchFence: { matchId: input.matchId, confirmedAt: input.confirmedAt } } : {}) },
+      { context: ctx, ops: tracks.ops, ...(port ? { port: port.event } : {}), ...(input.confirmedAt !== undefined ? { matchFence: { matchId: input.matchId, confirmedAt: input.confirmedAt, ...(port ? { winnerId: input.winnerId } : {}) } } : {}) },
     );
     for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { matchId: input.matchId, ...issue });
 
@@ -248,8 +276,9 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
   if (ready !== null) {
     const generation = completionGeneration(ready.ctx.state.firedEventKeys, input.matchId);
     audited = await guarded('team audit', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
-      await auditMatchTeams({
-        tournament,
+      if (port) await port.audit(input, generation, ready.ctx);
+      else await auditMatchTeams({
+        tournament: input.legacyTournament!,
         matchId: input.matchId,
         roundId: input.roundId,
         player1Id: input.player1Id,
@@ -266,7 +295,7 @@ export async function onMatchCompleted(input: MatchCompletedInput): Promise<bool
   // phase completed and repeats the reaction, which is idempotent by event and check keys.
   let stageEnded = true;
   if (ready !== null && ready.phase.stage.end_when !== undefined) {
-    stageEnded = await endStageIfDone(tournament, ready.ctx, ready.phase, input.roundId, input.report);
+    stageEnded = await (port ? port.endStage(tournament, ready.ctx, ready.phase, input.roundId, input.report) : endStageIfDone(tournament, ready.ctx, ready.phase, input.roundId, input.report));
   }
   return applied && audited && stageEnded;
 }
@@ -416,10 +445,10 @@ async function assertNoAppliedCompletionOffKit(seasonId: string, matchId: string
  * A revert that finds the match disputed after a replay tie (an unresolved outcome) opens its dispute check under the new
  * generation: the dispute was opened while the revert was pending, under the generation the revert has just closed.
  */
-async function reopenDisputeCheck(seasonId: string, matchId: string, generation: number, ctx: KitContext): Promise<void> {
+async function reopenDisputeCheck(seasonId: string, matchId: string, generation: number, ctx: KitContext, port?: KitMatchEffectsPort): Promise<void> {
   try {
-    const { getMatchById } = await import('@/lib/supabase/queries/matches');
-    const [match, outcome] = await Promise.all([getMatchById(matchId), getMatchOutcome(matchId)]);
+    const matches = port ? null : await import('@/lib/supabase/queries/matches');
+    const [match, outcome] = await Promise.all([port ? port.match(matchId) : matches!.getMatchById(matchId), port ? port.outcome(matchId) : getMatchOutcome(matchId)]);
     if (match === null || match.status !== 'disputed' || outcome?.kind !== 'unresolved') return;
     const plan = planChecks(ctx.def, {
       source: 'unresolved_outcome',
@@ -459,11 +488,15 @@ async function reopenDisputeCheck(seasonId: string, matchId: string, generation:
  * and reset the match again, or let the cron heal it.
  */
 export async function onMatchReverted(input: MatchRevertedInput): Promise<boolean> {
-  const { tournament } = input;
-  if (!isKitCandidate(tournament)) return true;
+  if (!isKitCandidate(input.tournament)) return true;
+  return runMatchReverted({ ...input, phase: { id: input.tournament.id, season_id: input.tournament.season_id } });
+}
+
+async function runMatchReverted(input: KitMatchRevertedInput, port?: KitMatchEffectsPort): Promise<boolean> {
+  const tournament = input.phase;
   const auditsClosed = { value: true };
   const reverted = await guarded('match reverted', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
-    const ctx = await loadFreshKitContext(tournament.season_id);
+    const ctx = await (port ? port.event.load(tournament.season_id) : loadFreshKitContext(tournament.season_id));
     if (ctx === null) {
       await assertNoAppliedCompletionOffKit(tournament.season_id, input.matchId);
       return;
@@ -478,13 +511,13 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
       return;
     }
     const completedKey = eventKey({ event: 'match_completed', match_id: completionMatchId(input.matchId, generation) });
-    const { fireFormatEvent, getFormatRuntime } = await import('@/lib/supabase/queries/format-runtime');
+    const runtimeQueries = await import('@/lib/supabase/queries/format-runtime');
     if (!ctx.state.firedEventKeys.includes(completedKey)) {
       // The check keys of this generation exist (closed above, or decided by an admin), and a check opens once per key: the
       // next completion or dispute would be deduplicated against them and never shown. Advance the generation without
       // effects to take back. Without such a check nothing happened that a new completion could collide with.
       if (hasMatchChecks(ctx.state.checks, input.matchId, generation)) {
-        await fireFormatEvent({
+        await (port ? port.event.write : runtimeQueries.fireFormatEvent)({
           seasonId: tournament.season_id,
           eventKey: `match_reverted:${input.matchId}:${generation + 1}`,
           event: 'match_reverted',
@@ -493,18 +526,19 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
           firedBy: null,
           revision: ctx.revision,
         });
-        expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
-        await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx);
+        if (port) port.event.invalidate(tournament.season_id, ctx.phases.map((phase) => phase.id));
+        else expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
+        await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx, port);
       }
       return;
     }
-    const runtime = await getFormatRuntime(tournament.season_id);
+    const runtime = await runtimeQueries.getFormatRuntime(tournament.season_id);
     const logged = runtime.eventLog.find((row) => row.event_key === completedKey);
     const inverse = inverseOps(logged?.ops, logged?.payload);
     // A substitution after the completion moved the seat's items to the substitute (`seat-succession.ts`): the revokes land
     // on the player who holds the seat now. A seat move the log cannot place throws, so the caller sees a failed revert.
     const revokes = revokesToCurrentHolders(inverse.ops, logged, seatMovesOf(runtime.eventLog));
-    await fireFormatEvent({
+    await (port ? port.event.write : runtimeQueries.fireFormatEvent)({
       seasonId: tournament.season_id,
       eventKey: `match_reverted:${input.matchId}:${generation + 1}`,
       event: 'match_reverted',
@@ -513,8 +547,9 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
       firedBy: null,
       revision: ctx.revision,
     });
-    expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
-    await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx);
+    if (port) port.event.invalidate(tournament.season_id, ctx.phases.map((phase) => phase.id));
+    else expireSeasonReads(tournament.season_id, ctx.phases.map((phase) => phase.id));
+    await reopenDisputeCheck(tournament.season_id, input.matchId, generation + 1, ctx, port);
     if (inverse.irreversible.length > 0) {
       logger.warn(TAG, 'match_completed effects that cannot be taken back stay in place', {
         matchId: input.matchId,
@@ -536,7 +571,7 @@ export async function onMatchReverted(input: MatchRevertedInput): Promise<boolea
  * it) evaluates `end_when` again once its event is in.
  */
 async function endStageIfDone(
-  tournament: HookTournament & { season_id: string },
+  tournament: KitMatchScope,
   stale: KitContext,
   phase: KitPhaseInfo,
   roundId: string,
@@ -578,15 +613,15 @@ export interface RoundCompletedInput {
  * cron backfill fires it, and the cron's round-end sweep comes back), else `ready`. A peer without a round of that number
  * does not hold the event.
  */
-async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { id: string; round_number: number }): Promise<'ready' | 'waiting' | 'deferred'> {
-  const { getMatchesByTournament } = await import('@/lib/supabase/queries/matches');
+async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { id: string; round_number: number }, port?: KitMatchEffectsPort): Promise<'ready' | 'waiting' | 'deferred'> {
+  const matchesQuery = port ? null : await import('@/lib/supabase/queries/matches');
   const fired = new Set(ctx.state.firedEventKeys);
   const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
   let waiting = false;
   for (const peer of phasesOfStageKey(ctx, phase.stage.key)) {
     let roundId = round.id;
     if (peer.id !== phase.id) {
-      const peerRound = (await getRoundsByTournament(peer.id)).find((entry) => entry.round_number === round.round_number);
+      const peerRound = (await (port ? port.rounds(peer.id) : getRoundsByTournament(peer.id))).find((entry) => entry.round_number === round.round_number);
       if (peerRound === undefined) continue;
       if (peerRound.status !== 'completed') {
         waiting = true;
@@ -594,7 +629,7 @@ async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { 
       }
       roundId = peerRound.id;
     }
-    const matches = await getMatchesByTournament(peer.id);
+    const matches = await (port ? port.matches(peer.id) : matchesQuery!.getMatchesByTournament(peer.id));
     const awaiting = matches.some((match) => match.round_id === roundId && awaitsCompletionEffects(match, fired, keyOf));
     if (awaiting) return 'deferred';
   }
@@ -624,14 +659,18 @@ async function roundEndReadiness(ctx: KitContext, phase: KitPhaseInfo, round: { 
  * never skips the stage end.
  */
 export async function onRoundCompleted(input: RoundCompletedInput): Promise<boolean> {
-  const { tournament } = input;
-  if (!isKitCandidate(tournament)) return true;
+  if (!isKitCandidate(input.tournament)) return true;
+  return runRoundCompleted({ ...input, phase: { id: input.tournament.id, season_id: input.tournament.season_id } });
+}
+
+async function runRoundCompleted(input: { phase: KitMatchScope; roundId: string; report?: HookReport }, port?: KitMatchEffectsPort): Promise<boolean> {
+  const tournament = input.phase;
   const outcome: { phase: KitPhaseInfo | null; ctx: KitContext | null; deferred: boolean } = { phase: null, ctx: null, deferred: false };
   const applied = await guarded('round completed', { roundId: input.roundId, tournamentId: tournament.id }, async () => {
-    const [round, ctx] = await Promise.all([getRoundById(input.roundId), loadFreshKitContext(tournament.season_id)]);
+    const [round, ctx] = await Promise.all([port ? port.round(input.roundId) : getRoundById(input.roundId), port ? port.event.load(tournament.season_id) : loadFreshKitContext(tournament.season_id)]);
     const phase = ctx === null ? undefined : phaseById(ctx, tournament.id);
-    if (ctx === null || phase === undefined || round === null || round.tournament_id !== tournament.id || round.status !== 'completed') return;
-    const readiness = await roundEndReadiness(ctx, phase, round);
+    if (ctx === null || phase === undefined || round === null || ('phase_id' in round ? round.phase_id : round.tournament_id) !== tournament.id || round.status !== 'completed') return;
+    const readiness = await roundEndReadiness(ctx, phase, round, port);
     if (readiness === 'deferred') {
       outcome.deferred = true;
       logger.info(TAG, 'round_end deferred: a completed match of the round has not fired match_completed yet', { roundId: round.id, tournamentId: tournament.id });
@@ -641,14 +680,14 @@ export async function onRoundCompleted(input: RoundCompletedInput): Promise<bool
     outcome.ctx = ctx;
     // A peer group's round that is still open fires the event when it completes.
     if (readiness === 'waiting') return;
-    const fired = await fireEvent(tournament.season_id, { event: 'round_end', stage: phase.stage.key, round: round.round_number }, null, { context: ctx });
+    const fired = await fireEvent(tournament.season_id, { event: 'round_end', stage: phase.stage.key, round: round.round_number }, null, { context: ctx, ...(port ? { port: port.event } : {}) });
     for (const issue of fired?.issues ?? []) logger.warn(TAG, 'event effect skipped', { roundId: round.id, tournamentId: tournament.id, ...issue });
   }, input.report);
   let stageEnded = true;
   const { phase, ctx } = outcome;
   if (applied && phase !== null && ctx !== null && phase.stage.end_when !== undefined) {
     // Nothing repeats this step later (the event key is used up), so it is tried twice here.
-    stageEnded = await endStageIfDone(tournament, ctx, phase, input.roundId, input.report, true);
+    stageEnded = await (port ? port.endStage(tournament, ctx, phase, input.roundId, input.report, true) : endStageIfDone(tournament, ctx, phase, input.roundId, input.report, true));
     if (!stageEnded) {
       logger.error(TAG, 'the stage end after a completed round did not apply: the next completed match or an admin completing the phase settles it', {
         roundId: input.roundId,
@@ -662,10 +701,23 @@ export async function onRoundCompleted(input: RoundCompletedInput): Promise<bool
 
 /** A replay ended in an engine tie and the match was disputed: open the `unresolved_outcome` checks. */
 export async function onMatchUnresolved(input: { tournament: HookTournament; matchId: string; player1Id: string; player2Id: string }): Promise<void> {
-  const { tournament } = input;
-  if (!isKitCandidate(tournament)) return;
+  if (!isKitCandidate(input.tournament)) return;
+  return runMatchUnresolved({ ...input, phase: { id: input.tournament.id, season_id: input.tournament.season_id } });
+}
+
+export function createKitMatchEffects(port: KitMatchEffectsPort) {
+  return {
+    completed: (input: KitMatchCompletedInput) => runMatchCompleted(input, port),
+    reverted: (input: KitMatchRevertedInput) => runMatchReverted(input, port),
+    roundCompleted: (input: { phase: KitMatchScope; roundId: string; report?: HookReport }) => runRoundCompleted(input, port),
+    unresolved: (input: { phase: KitMatchScope; matchId: string; player1Id: string; player2Id: string }) => runMatchUnresolved(input, port),
+  };
+}
+
+async function runMatchUnresolved(input: { phase: KitMatchScope; matchId: string; player1Id: string; player2Id: string }, port?: KitMatchEffectsPort): Promise<void> {
+  const tournament = input.phase;
   await guarded('match unresolved', { matchId: input.matchId, tournamentId: tournament.id }, async () => {
-    const ctx = await loadFreshKitContext(tournament.season_id);
+    const ctx = await (port ? port.event.load(tournament.season_id) : loadFreshKitContext(tournament.season_id));
     if (ctx === null) return;
     const generation = completionGeneration(ctx.state.firedEventKeys, input.matchId);
     const plan = planChecks(ctx.def, {

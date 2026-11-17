@@ -58,7 +58,7 @@ export async function GET(
   const pokemonName = resolved.entity.name;
 
   const { searchParams } = new URL(request.url);
-  const scopeType = (searchParams.get('scope') ?? 'all_time') as AggregateScope | 'archive';
+  const scopeType = (searchParams.get('scope') ?? 'all_time') as Exclude<AggregateScope, 'phase'> | 'archive';
   const scopeId = searchParams.get('scope_id') || null;
   const playerId = searchParams.get('player_id') || undefined;
 

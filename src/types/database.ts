@@ -8529,7 +8529,24 @@ export type Database = {
         }
         Returns: string
       }
+      apply_phase_aggregate_job: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_game_id: string
+          p_job_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
       batch_decrement_aggregates: {
+        Args: { p_deltas: Json }
+        Returns: undefined
+      }
+      batch_decrement_phase_aggregates: {
+        Args: { p_deltas: Json }
+        Returns: undefined
+      }
+      batch_decrement_phase_player_aggregates: {
         Args: { p_deltas: Json }
         Returns: undefined
       }
@@ -8542,6 +8559,14 @@ export type Database = {
         Returns: undefined
       }
       batch_upsert_aggregates: { Args: { p_deltas: Json }; Returns: undefined }
+      batch_upsert_phase_aggregates: {
+        Args: { p_deltas: Json }
+        Returns: undefined
+      }
+      batch_upsert_phase_player_aggregates: {
+        Args: { p_deltas: Json }
+        Returns: undefined
+      }
       batch_upsert_player_aggregates: {
         Args: { p_deltas: Json }
         Returns: undefined
@@ -8559,6 +8584,10 @@ export type Database = {
         Returns: Json
       }
       cancel_aggregate_jobs_for_game: {
+        Args: { p_game_id: string }
+        Returns: number
+      }
+      cancel_phase_aggregate_jobs_for_game: {
         Args: { p_game_id: string }
         Returns: number
       }
@@ -8641,6 +8670,39 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      claim_phase_aggregate_jobs: {
+        Args: { p_limit?: number }
+        Returns: {
+          attempts: number
+          created_at: string
+          game_id: string
+          id: string
+          last_error: string | null
+          match_id: string
+          max_attempts: number
+          operation: string
+          phase_id: string
+          processed_at: string | null
+          season_id: string
+          status: string
+          updated_at: string
+        }[]
+        SetofOptions: {
+          from: "*"
+          to: "phase_aggregate_jobs"
+          isOneToOne: false
+          isSetofReturn: true
+        }
+      }
+      claim_phase_game_edit_lease: {
+        Args: {
+          p_expected_updated_at: string
+          p_game_id: string
+          p_token: string
+          p_ttl_seconds: number
+        }
+        Returns: string
       }
       competition_create_from_format: {
         Args: {
@@ -8976,6 +9038,15 @@ export type Database = {
         }
         Returns: Json
       }
+      enqueue_phase_aggregate_job: {
+        Args: {
+          p_game_id: string
+          p_phase_id: string
+          p_processing?: boolean
+          p_season_id: string
+        }
+        Returns: string
+      }
       epb__lock_kill_credit_epoch: {
         Args: { p_season_id: string }
         Returns: number
@@ -9087,6 +9158,17 @@ export type Database = {
           p_credited_match_ids: string[]
           p_expected_epoch: number
           p_game_credits: Json
+          p_season_id: string
+        }
+        Returns: Json
+      }
+      epb_sync_mixed_game_kill_credit: {
+        Args: {
+          p_expected_epoch: number
+          p_legacy_game_credits: Json
+          p_legacy_match_ids: string[]
+          p_phase_game_credits: Json
+          p_phase_match_ids: string[]
           p_season_id: string
         }
         Returns: Json
@@ -9480,6 +9562,13 @@ export type Database = {
           uses: number
         }[]
       }
+      get_total_games_in_mixed_scope: {
+        Args: {
+          p_scope_id: string
+          p_scope_type: Database["public"]["Enums"]["aggregate_scope"]
+        }
+        Returns: number
+      }
       get_total_games_in_scope: {
         Args: {
           p_scope_id: string
@@ -9546,6 +9635,7 @@ export type Database = {
         Args: { p_step: number; p_trash_id: string }
         Returns: number
       }
+      league_trash__insert_guards: { Args: never; Returns: string[] }
       league_trash__insert_rows: {
         Args: {
           p_defer: string[]
@@ -9634,6 +9724,24 @@ export type Database = {
         Returns: Json
       }
       phase__lock: { Args: { p_phase_id: string }; Returns: string }
+      phase_aggregate_deltas: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_exclude_all_time: boolean
+          p_phase_id: string
+          p_player_deltas: Json
+          p_rollback?: boolean
+          p_season_id: string
+        }
+        Returns: undefined
+      }
+      phase_aggregate_job_health: {
+        Args: never
+        Returns: {
+          stale_processing: number
+          stranded_pending: number
+        }[]
+      }
       phase_bracket_write: {
         Args: {
           p_current_round: number
@@ -9674,6 +9782,31 @@ export type Database = {
         }
         Returns: boolean
       }
+      phase_epb_credit_game_kills: {
+        Args: { p_credits: Json; p_game_id: string }
+        Returns: string
+      }
+      phase_epb_replace_match_snapshots: {
+        Args: { p_match_id: string; p_snapshots: Json }
+        Returns: undefined
+      }
+      phase_epb_sync_game_kill_credit: {
+        Args: {
+          p_credited_match_ids: string[]
+          p_expected_epoch: number
+          p_game_credits: Json
+          p_season_id: string
+        }
+        Returns: Json
+      }
+      phase_epb_uncredit_game_kills: {
+        Args: {
+          p_debits: Json
+          p_expected_applied_at: string
+          p_game_id: string
+        }
+        Returns: string
+      }
       phase_format__lock_phases: {
         Args: { p_season_id: string }
         Returns: undefined
@@ -9704,6 +9837,34 @@ export type Database = {
           p_season_id: string
         }
         Returns: Json
+      }
+      phase_format_fire_match_event: {
+        Args: {
+          p_confirmed_at?: string
+          p_event: string
+          p_event_key: string
+          p_expected_revision: number
+          p_fired_by: string
+          p_match_id: string
+          p_notifications: Json
+          p_ops: Json
+          p_payload: Json
+          p_season_id: string
+          p_winner_id: string
+        }
+        Returns: boolean
+      }
+      phase_format_forfeit_complete: {
+        Args: {
+          p_expected_revision: number
+          p_expected_status: Database["public"]["Enums"]["match_status"]
+          p_match_id: string
+          p_player_1_id: string
+          p_player_2_id: string
+          p_season_id: string
+          p_winner_id: string
+        }
+        Returns: boolean
       }
       phase_format_season_started: {
         Args: { p_season_id: string }
@@ -9736,6 +9897,28 @@ export type Database = {
         Args: { p_operation: string; p_phase_id: string; p_rows: Json }
         Returns: Json
       }
+      phase_match_in_test_season: {
+        Args: { p_match_id: string }
+        Returns: boolean
+      }
+      phase_match_outcome_record: {
+        Args: {
+          p_force: boolean
+          p_kind: string
+          p_match_id: string
+          p_open_only?: boolean
+          p_p1_faints?: number
+          p_p2_faints?: number
+          p_reason?: string
+          p_set_by?: string
+          p_source: string
+        }
+        Returns: string
+      }
+      phase_matches_delete_scheduled: {
+        Args: { p_match_ids: string[] }
+        Returns: number
+      }
       phase_participant_edit: {
         Args: { p_add: boolean; p_phase_id: string; p_player_id: string }
         Returns: undefined
@@ -9751,6 +9934,10 @@ export type Database = {
       phase_participants_replace: {
         Args: { p_entries: Json; p_phase_id: string }
         Returns: undefined
+      }
+      phase_rating_apply_match_result: {
+        Args: { p_match_id: string; p_players: Json }
+        Returns: string
       }
       phase_round_complete: {
         Args: { p_force: boolean; p_round_id: string }
@@ -9806,7 +9993,17 @@ export type Database = {
         }
         Returns: number
       }
+      rating_replace_player_streams: {
+        Args: {
+          p_expected_history_match_ids: string[]
+          p_history: Json
+          p_player_id: string
+          p_state: Json
+        }
+        Returns: number
+      }
       reclaim_stale_aggregate_jobs: { Args: never; Returns: number }
+      reclaim_stale_phase_aggregate_jobs: { Args: never; Returns: number }
       redraft__publish_locked: {
         Args: {
           p_actor_id: string
@@ -9848,7 +10045,20 @@ export type Database = {
         Args: { p_game_id: string; p_token: string }
         Returns: boolean
       }
+      release_phase_game_edit_lease: {
+        Args: { p_game_id: string; p_token: string }
+        Returns: boolean
+      }
       rollback_game_aggregates: {
+        Args: {
+          p_aggregate_deltas: Json
+          p_expected_applied_at: string
+          p_game_id: string
+          p_player_deltas: Json
+        }
+        Returns: string
+      }
+      rollback_phase_game_aggregates: {
         Args: {
           p_aggregate_deltas: Json
           p_expected_applied_at: string
@@ -9925,6 +10135,14 @@ export type Database = {
         }
         Returns: undefined
       }
+      streaks_replace_player_streams: {
+        Args: {
+          p_expected_match_ids: string[]
+          p_player_id: string
+          p_state: Json
+        }
+        Returns: undefined
+      }
       subtract_move_counts: {
         Args: { existing: Json; removed: Json }
         Returns: Json
@@ -9988,7 +10206,7 @@ export type Database = {
       }
     }
     Enums: {
-      aggregate_scope: "tournament" | "league" | "all_time"
+      aggregate_scope: "tournament" | "league" | "all_time" | "phase" | "phase" | "phase" | "phase" | "phase" | "phase"
       bracket_type: "single_elim" | "double_elim" | "round_robin" | "swiss"
       draft_pool_status: "pending" | "in_progress" | "complete"
       draft_type: "snake" | "auction" | "budget"
@@ -10144,7 +10362,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      aggregate_scope: ["tournament", "league", "all_time"],
+      aggregate_scope: ["tournament", "league", "all_time", "phase"],
       bracket_type: ["single_elim", "double_elim", "round_robin", "swiss"],
       draft_pool_status: ["pending", "in_progress", "complete"],
       draft_type: ["snake", "auction", "budget"],

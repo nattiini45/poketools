@@ -43,7 +43,7 @@ function isStatsView(value: string): value is StatsView {
 // Pokémon that used it. `move` is ignored by the other views.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const scopeType = (searchParams.get('scope') ?? 'tournament') as AggregateScope | 'archive';
+  const scopeType = (searchParams.get('scope') ?? 'tournament') as Exclude<AggregateScope, 'phase'> | 'archive';
   const scopeId = searchParams.get('scope_id') ?? null;
   const view = searchParams.get('view') ?? 'usage';
   const rawMove = searchParams.get('move');

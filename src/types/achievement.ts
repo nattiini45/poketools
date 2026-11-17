@@ -19,7 +19,7 @@ export interface PlayerAchievement {
   player_id: string;
   achievement_id: string;
   earned_at: string;
-  context: { match_id?: string; tournament_id?: string; season_id?: string } | null;
+  context: { match_id?: string; tournament_id?: string; season_id?: string; phase_id?: string; phase_match_id?: string } | null;
   times_earned: number;
 }
 

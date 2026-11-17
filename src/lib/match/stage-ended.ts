@@ -11,13 +11,18 @@ import type { StageEndedAdvance, StageEndedWarning } from './stage-ended-warning
 
 type EndedPhase = Pick<Tournament, 'id' | 'name' | 'status' | 'season_id' | 'season_format_type'>;
 
+export interface StageEndedStorage {
+  stages(seasonId: string): Promise<{ id: string; name: string; enrollment_source: import('@/types/season').EnrollmentSource | null }[]>;
+  participants(ids: string[]): Promise<Map<string, { id: string; name: string }[]>>;
+}
+
 /**
  * What a phase moved into each next phase, from the next phases' enrollment records: a kit phase fed by several
  * sources keeps one block per source (`enrollment_source.contributions`), any other phase fed by this one took the
  * source's whole selection. A player an admin removed from the next phase since is no longer advanced and is left out.
  */
-async function advancedFrom(phase: EndedPhase & { season_id: string }): Promise<StageEndedAdvance[]> {
-  const stages = await getStagesBySeasonId(phase.season_id);
+async function advancedFrom(phase: EndedPhase & { season_id: string }, storage?: StageEndedStorage): Promise<StageEndedAdvance[]> {
+  const stages = await (storage ? storage.stages(phase.season_id) : getStagesBySeasonId(phase.season_id));
   const fed: { phase: (typeof stages)[number]; playerIds: string[] | null }[] = [];
   for (const stage of stages) {
     if (stage.id === phase.id) continue;
@@ -32,7 +37,7 @@ async function advancedFrom(phase: EndedPhase & { season_id: string }): Promise<
   }
   if (fed.length === 0) return [];
 
-  const rosters = await getParticipantsBatch(fed.map((entry) => entry.phase.id));
+  const rosters = await (storage ? storage.participants(fed.map((entry) => entry.phase.id)) : getParticipantsBatch(fed.map((entry) => entry.phase.id)));
   const advanced: StageEndedAdvance[] = [];
   for (const { phase: target, playerIds } of fed) {
     const roster = rosters.get(target.id) ?? [];
@@ -57,11 +62,12 @@ async function advancedFrom(phase: EndedPhase & { season_id: string }): Promise<
 export async function loadStageEndedWarning(
   phase: EndedPhase,
   resultTakenBack: boolean,
+  storage?: StageEndedStorage,
 ): Promise<StageEndedWarning | null> {
   if (!resultTakenBack || phase.status !== 'completed' || !isKitCandidate(phase)) return null;
   const base = { phase_id: phase.id, phase_name: phase.name };
   try {
-    return { ...base, advanced: await advancedFrom(phase) };
+    return { ...base, advanced: await advancedFrom(phase, storage) };
   } catch (error) {
     logger.error('match/stage-ended', 'could not read which players advanced from a completed phase', {
       phaseId: phase.id,

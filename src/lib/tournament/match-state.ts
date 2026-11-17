@@ -284,7 +284,7 @@ export const matchMachine = defineMachine({
       from: ['pending_confirmation'],
       to: 'completed',
       actors: ['player', 'admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/bulk-actions.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/match-decisions-core.ts', 'src/lib/match/bulk-actions.ts'],
       note: 'The opponent (not the submitter) or an admin confirms the reported result.',
     },
     {
@@ -292,7 +292,7 @@ export const matchMachine = defineMachine({
       from: ['pending_confirmation'],
       to: 'completed',
       actors: ['system'],
-      writers: ['src/app/api/cron/auto-confirm/route.ts'],
+      writers: ['src/app/api/cron/auto-confirm/route.ts', 'src/lib/match/auto-confirm.ts'],
       note: 'The auto-confirm cron, once auto_confirm_at has passed; a result without a deadline waits for a person.',
     },
     {
@@ -300,7 +300,7 @@ export const matchMachine = defineMachine({
       from: ['pending_confirmation'],
       to: 'disputed',
       actors: ['player', 'admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/match-decisions-core.ts'],
       note: 'A participant (or an admin) flags the reported result.',
     },
     {
@@ -308,7 +308,7 @@ export const matchMachine = defineMachine({
       from: ['disputed'],
       to: 'completed',
       actors: ['admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/match-decisions-core.ts'],
     },
     {
       event: 'settle',
@@ -323,7 +323,7 @@ export const matchMachine = defineMachine({
       from: ['in_progress'],
       to: 'completed',
       actors: ['admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/app/api/admin/matches/[id]/result/route.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/match-decisions-core.ts', 'src/app/api/admin/matches/[id]/result/route.ts'],
       note: 'An admin completes a running series directly; no confirmation step.',
     },
     {
@@ -342,7 +342,7 @@ export const matchMachine = defineMachine({
       from: ['in_progress'],
       to: 'disputed',
       actors: ['admin'],
-      writers: ['src/app/api/confirm-match/[mid]/route.ts'],
+      writers: ['src/app/api/confirm-match/[mid]/route.ts', 'src/lib/match/match-decisions-core.ts'],
       note: 'An admin marks a running series disputed.',
     },
     {

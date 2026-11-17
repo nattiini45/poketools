@@ -26,6 +26,7 @@
 export interface RatingScope {
   /** Ids of the tournaments (league phases) that belong to a test league. */
   readonly testSeasonTournamentIds: ReadonlySet<string>;
+  readonly testSeasonPhaseIds?: ReadonlySet<string>;
 }
 
 export function createRatingScope(testSeasonTournamentIds: Iterable<string>): RatingScope {
@@ -34,8 +35,12 @@ export function createRatingScope(testSeasonTournamentIds: Iterable<string>): Ra
 
 /** True when the match counts toward player ratings (its tournament is not part of a test league). */
 export function matchCountsForRatings(
-  match: { readonly tournament_id: string },
+  match: { readonly tournament_id?: string; readonly phase_id?: string },
   scope: RatingScope
 ): boolean {
-  return !scope.testSeasonTournamentIds.has(match.tournament_id);
+  if (match.phase_id !== undefined) {
+    if (scope.testSeasonPhaseIds === undefined) throw new Error('Phase rating scope is missing');
+    return !scope.testSeasonPhaseIds.has(match.phase_id);
+  }
+  return match.tournament_id !== undefined && !scope.testSeasonTournamentIds.has(match.tournament_id);
 }

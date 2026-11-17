@@ -56,6 +56,7 @@ vi.mock('@/lib/draft/epb-thresholds', () => ({
 // ── Import after mocks ─────────────────────────────────────────────
 import {
   buildGameKillCredits,
+  createEpbKillEvaluator,
   creditMatchRealKills,
   uncreditGameRealKills,
 } from '../evolution-match-evaluator';
@@ -107,6 +108,31 @@ beforeEach(() => {
   // insertEvolutionEvents is non-fatal in the apply path; default to success.
   mockInsertEvolutionEvents.mockResolvedValue(undefined);
   mockUpdateTracker.mockResolvedValue(undefined);
+});
+
+describe('explicit native kill persistence', () => {
+  it('credits and debits through the supplied port while sharing the tracker algorithm', async () => {
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker()]);
+    mockGetSeasonLineThresholds.mockResolvedValue([charLine()]);
+    const credit = vi.fn().mockResolvedValue('applied');
+    const debit = vi.fn().mockResolvedValue('rolled_back');
+    const evaluator = createEpbKillEvaluator({ creditGameKills: credit, uncreditGameKills: debit });
+    const stats = [{ player_id: 'p1', pokemon_name: 'Charmander', kos_dealt: 2 }];
+    const result = await evaluator.creditMatchRealKills({
+      seasonId: 's1', matchday: 1, playerIds: ['p1', 'p2'],
+      gameIds: ['native-game'], statsByGame: { 'native-game': stats },
+    });
+    expect(result.applied).toEqual(['native-game']);
+    expect(credit).toHaveBeenCalledWith('native-game', [{ tracker_id: 't-char', amount: 2 }]);
+    await evaluator.uncreditGameRealKills(
+      's1', { id: 'native-game', evolution_applied_at: '2026-11-17T10:00:00Z' }, stats,
+    );
+    expect(debit).toHaveBeenCalledWith('native-game', '2026-11-17T10:00:00Z', [
+      { tracker_id: 't-char', amount: 2 },
+    ]);
+    expect(mockCreditGameKills).not.toHaveBeenCalled();
+    expect(mockUncreditGameKills).not.toHaveBeenCalled();
+  });
 });
 
 

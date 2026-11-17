@@ -267,6 +267,10 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
     'phase_matches.trg_phase_storage_guard',
     'phase_match_outcomes.trg_phase_storage_guard',
     'phase_games.trg_phase_storage_guard',
+    'games.trg_games_global_replay_lock',
+    'games.trg_games_global_replay_check',
+    'phase_games.trg_phase_games_global_replay_lock',
+    'phase_games.trg_phase_games_global_replay_check',
     'phase_battle_stats.trg_phase_storage_guard',
     'phase_match_analyses.trg_phase_storage_guard',
     'phase_match_prep_analyses.trg_phase_storage_guard',
@@ -287,6 +291,10 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
   it('are exactly the reviewed ones', () => {
     const onInsert = [...replayTriggers().entries()].filter(([, t]) => OWNED.has(t.table) && t.events.includes('INSERT')).map(([key]) => key);
     expect(sorted(onInsert)).toEqual(sorted(REVIEWED));
+    const declared = [...lastFunctionBody('league_trash__insert_guards').matchAll(/'([a-z_]+\.[a-z_]+)'/g)].map((match) => match[1]);
+    expect(sorted(declared)).toEqual(sorted(REVIEWED));
+    expect(lastFunctionBody('league_trash__assert_inventory')).toContain('public.league_trash__insert_guards()');
+    expect(lastFunctionBody('league_trash__assert_inventory')).toContain('LEAGUE_TRASH_INSERT_GUARD_UNREVIEWED');
   });
 
   it('the parser sees triggers (sanity)', () => {
@@ -294,6 +302,8 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
     expect(all.get('teams.trg_teams_completed_match_lock')?.events).toEqual(['UPDATE', 'DELETE']);
     expect(all.get('matches.trg_matches_updated')?.events).toEqual(['UPDATE']);
     expect(all.get('rounds.trg_rounds_league_groups_guard')?.events).toEqual(['INSERT']);
+    expect(all.get('games.trg_games_global_replay_check')?.events).toEqual(['INSERT', 'UPDATE']);
+    expect(all.get('phase_games.trg_phase_games_global_replay_check')?.events).toEqual(['INSERT', 'UPDATE']);
   });
 });
 

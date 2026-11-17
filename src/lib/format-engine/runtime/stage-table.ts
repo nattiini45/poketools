@@ -21,19 +21,27 @@ import { phaseById, phasesOfStageKey, type KitContext } from './load';
 import { stageMetricsFor } from './metrics';
 import { coinFlipDraws, computeStageStandings, kitOutcomesByMatch, stageCountsKills, type KitStanding } from '../standings';
 import type { PlayerRow } from './types';
+import type { KitStoragePort } from '@/lib/league-phase/kit-storage';
 
-export async function loadStageTable(ctx: KitContext, phaseId: string): Promise<KitStanding[] | null> {
+export interface StageTablePort {
+  storage: KitStoragePort;
+  matches: typeof getCompletedMatchRecords;
+  rounds(id: string): Promise<{ round_number: number; bye_player_ids: readonly string[] }[]>;
+  groups(id: string): Promise<{ id: string; members: readonly { player_id: string }[] }[]>;
+}
+
+export async function loadStageTable(ctx: KitContext, phaseId: string, port?: StageTablePort): Promise<KitStanding[] | null> {
   const phase = phaseById(ctx, phaseId);
   if (phase === undefined) return null;
   const [matches, rounds, outcomeRows, gameCounts, kills, groups, seedsAndRatings] = await Promise.all([
-    getCompletedMatchRecords(phaseId),
-    getRoundsByTournament(phaseId),
-    getOutcomesByPhases([phaseId]),
-    getPhaseGameCounts([phaseId]),
+    port ? port.matches(phaseId) : getCompletedMatchRecords(phaseId),
+    port ? port.rounds(phaseId) : getRoundsByTournament(phaseId),
+    port ? port.storage.outcomes([phaseId]) : getOutcomesByPhases([phaseId]),
+    port ? port.storage.gameCounts([phaseId]) : getPhaseGameCounts([phaseId]),
     // Kills count in a round robin stage only, like the public table.
-    stageCountsKills(phase.stage) ? getPhaseKillTallies([phaseId]) : Promise.resolve({}),
-    getGroupsByTournament(phaseId),
-    loadSeedsAndRatings([{ phaseId, stage: phase.stage, playerIds: phase.members }]),
+    stageCountsKills(phase.stage) ? (port ? port.storage.kills([phaseId]) : getPhaseKillTallies([phaseId])) : Promise.resolve({}),
+    port ? port.groups(phaseId) : getGroupsByTournament(phaseId),
+    port ? loadSeedsAndRatings([{ phaseId, stage: phase.stage, playerIds: phase.members }], port.storage) : loadSeedsAndRatings([{ phaseId, stage: phase.stage, playerIds: phase.members }]),
   ]);
   const { adjustments, manualOrder } = standingAdjustments(ctx.state.adjustments, new Map([[phase.stage.key, phaseId]]));
   const metrics = stageMetricsFor(ctx.def, ctx.state, ctx.seed, phase.stage.key, phase.members);

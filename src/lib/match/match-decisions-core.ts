@@ -1,0 +1,270 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { requirePlayer } from '@/lib/auth/helpers';
+import { safeErrorResponse } from '@/lib/api/error-response';
+import { validateTransition } from '@/lib/tournament/match-state';
+import { confirmMatchSchema, formatZodErrors } from '@/lib/validation';
+import { logAuditEvent } from '@/lib/audit/log';
+import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import type { ApiResult } from '@/types/api';
+import type { Match, MatchWithPlayers, MatchStatus } from '@/types/match';
+import type { FinalizeMatchCompletionResult } from './finalization-core';
+
+export interface MatchDecisionRouteParams {
+  params: Promise<{ mid: string }>;
+}
+
+export type MatchDecisionPlayer = Awaited<ReturnType<typeof requirePlayer>>;
+export type MatchDecisionRow = Omit<Match, 'tournament_id'>;
+export type DecisionMatch = Omit<MatchWithPlayers, 'tournament_id'>;
+
+export interface MatchDecisionStorage<M extends DecisionMatch> {
+  competitionId(match: M): string;
+  getMatchById(id: string): Promise<M | null>;
+  canAdminister(player: MatchDecisionPlayer, competitionId: string): Promise<boolean>;
+  updateMatchStatus(id: string, status: 'completed' | 'disputed', winnerId: string | null | undefined,
+    submitterId: string | undefined, notes: string | undefined, expectedStatus: MatchStatus,
+    asAdmin: boolean): Promise<MatchDecisionRow | null>;
+  finalizeMatchCompletion(input: { match: M; winnerId: string; previousStatus: MatchStatus }): Promise<FinalizeMatchCompletionResult>;
+  resourceType: 'match' | 'phase_match';
+  auditOwner(match: M): { tournament_id: string } | { phase_id: string };
+  revalidate(competitionId: string, matchId: string): Promise<void>;
+  announceDispute(input: { match: M; player: MatchDecisionPlayer }): Promise<void>;
+}
+
+export function createMatchDecisionHandler<M extends DecisionMatch>(storage: MatchDecisionStorage<M>) {
+  return async function handleMatchDecision(request: NextRequest, { params }: MatchDecisionRouteParams, authenticatedPlayer?: MatchDecisionPlayer) {
+    try {
+      const player = authenticatedPlayer ?? await requirePlayer();
+      const { mid } = await params;
+      const invalidMid = rejectInvalidPathId(mid, 'INVALID_MATCH_ID');
+      if (invalidMid) return invalidMid;
+
+      const rateResult = await checkRateLimit('confirm-match', player.playerId, { limit: 30, windowSeconds: 60 * 60 });
+      if (!rateResult.allowed) return rateLimitedResponse(rateResult.retryAfterSeconds);
+
+      const rawBody = await request.json();
+      const parsedBody = confirmMatchSchema.safeParse(rawBody);
+      if (!parsedBody.success) {
+        const issues = formatZodErrors(parsedBody.error);
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: issues, code: 'validation_failed', params: { issues } },
+          { status: 400 }
+        );
+      }
+      const { action, winner_id: requestedWinnerId, notes, reason } = parsedBody.data;
+
+      const match = await storage.getMatchById(mid);
+
+      if (!match) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Match not found', code: 'match_not_found' },
+          { status: 404 }
+        );
+      }
+
+      const targetStatus = action === 'confirm' ? 'completed' as const : 'disputed' as const;
+
+      // Site admins or resource admins for this tournament can act as admin
+      const hasAdminAccess = await storage.canAdminister(player, storage.competitionId(match));
+
+      if ((requestedWinnerId || notes) && !hasAdminAccess) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Only admins can override match winner or notes', code: 'match_override_admin_only' },
+          { status: 403 }
+        );
+      }
+
+      const winnerId = targetStatus === 'completed'
+        ? requestedWinnerId ?? match.winner_id
+        : undefined;
+
+      if (targetStatus === 'completed' && winnerId !== match.player_1_id && winnerId !== match.player_2_id) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Winner must be one of the match participants', code: 'match_winner_not_participant' },
+          { status: 400 }
+        );
+      }
+
+      const result = validateTransition(match.status, targetStatus, {
+        actor_id: player.playerId,
+        is_admin: hasAdminAccess,
+        winner_id: winnerId ?? undefined,
+        player_1_id: match.player_1_id,
+        player_2_id: match.player_2_id,
+      });
+
+      if (!result.valid) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: result.error ?? 'Invalid transition', code: result.code, params: result.params },
+          { status: 400 }
+        );
+      }
+
+      // An unplayed match is settled through the dedicated route only: it requires the reason and writes the
+      // match.admin_result audit event, which this route does not.
+      if (match.status === 'scheduled' && targetStatus === 'completed') {
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: 'A match that has not started is settled with the record-result action, which asks for a reason',
+            code: 'match_settle_use_result_route',
+          },
+          { status: 409 }
+        );
+      }
+
+      // The confirmer should not be the submitter (unless admin)
+      if (action === 'confirm' && match.submitter_id === player.playerId && !hasAdminAccess) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Cannot confirm your own submission', code: 'match_confirm_own_submission' },
+          { status: 400 }
+        );
+      }
+
+      const previousStatus = match.status;
+      // The original reporter stays the submitter whoever acts now. Only a
+      // reported or confirmed result fills an empty slot: a dispute (by a
+      // participant or an admin) never sets the submitter, so a match with no
+      // result keeps showing no reporter. The disputer is recorded in the
+      // match.dispute audit event instead.
+      const submitterId = targetStatus === 'completed'
+        ? match.submitter_id ?? player.playerId
+        : match.submitter_id ?? undefined;
+      const updated = await storage.updateMatchStatus(
+        mid,
+        targetStatus,
+        targetStatus === 'completed' ? winnerId : undefined,
+        submitterId,
+        notes,
+        previousStatus,
+        hasAdminAccess
+      );
+
+      if (!updated) {
+        // The compare-and-set missed: the match left `previousStatus` meanwhile.
+        const current = await storage.getMatchById(mid);
+        if (!current) {
+          return NextResponse.json<ApiResult<never>>(
+            { success: false, error: 'Match not found', code: 'match_not_found' },
+            { status: 404 }
+          );
+        }
+        // Report success only when the match already is what this request asked
+        // for: same status, same winner (or a dispute), and no admin note lost.
+        const sameOutcome = current.status === targetStatus
+          && (targetStatus === 'disputed' || current.winner_id === winnerId)
+          && !(hasAdminAccess && notes);
+        if (sameOutcome) {
+          return NextResponse.json<ApiResult<MatchDecisionRow>>({ success: true, data: current });
+        }
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `The match changed to ${current.status} while you were editing it. Review it and try again.`,
+            code: 'match_state_changed',
+            params: { status: current.status },
+          },
+          { status: 409 }
+        );
+      }
+
+      // Every dispute is audited (`match.dispute`), by a player or an admin. An
+      // admin confirm is audited as `match.override` when it sets a winner or
+      // note or resolves a dispute. A participant's own confirm writes no event.
+      if (targetStatus === 'disputed') {
+        // The dispute reason is audit data, never match.notes. A player gives it
+        // as `reason`; an admin may give it as `reason` or as the notes text.
+        const disputeReason = reason ?? (hasAdminAccess ? notes || undefined : undefined);
+        logAuditEvent({
+          actor_id: player.playerId,
+          actor_name: player.name,
+          action: 'match.dispute',
+          resource_type: storage.resourceType,
+          resource_id: mid,
+          resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+          changes: {
+            status: { before: previousStatus, after: 'disputed' },
+          },
+          metadata: {
+            ...storage.auditOwner(match),
+            ...(disputeReason ? { reason: disputeReason } : {}),
+            by_admin: hasAdminAccess,
+          },
+        });
+      }
+
+      if (
+        targetStatus === 'completed' &&
+        hasAdminAccess &&
+        (requestedWinnerId || notes || match.status === 'disputed')
+      ) {
+        logAuditEvent({
+          actor_id: player.playerId,
+          actor_name: player.name,
+          action: 'match.override',
+          resource_type: storage.resourceType,
+          resource_id: mid,
+          resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+          changes: {
+            status: { before: previousStatus, after: targetStatus },
+            winner_id: { before: match.winner_id, after: targetStatus === 'completed' ? winnerId : match.winner_id },
+            notes: { before: match.notes, after: notes ?? match.notes },
+          },
+        });
+      }
+
+      if (targetStatus === 'completed' && winnerId) {
+        const finalize = await storage.finalizeMatchCompletion({
+          match: { ...match, winner_id: winnerId, status: 'completed' },
+          winnerId,
+          previousStatus,
+        });
+        if (!finalize.finalized && finalize.reason === 'match_changed') {
+          // Another request reset or reopened the match after the status flip above; it owns the cleanup, nothing is left to finalize.
+          const status = finalize.current_status ?? 'removed';
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `The match changed to ${status} while you were editing it. Review it and try again.`,
+              code: 'match_state_changed',
+              params: { status },
+            },
+            { status: 409 }
+          );
+        }
+        if (!finalize.finalized) {
+          // Unreachable after the checks above (winner is a participant, the
+          // transition left a non-completed status); surface it as a 500.
+          throw new Error(`Finalize did not run for match ${mid}: ${finalize.reason ?? 'unknown'}`);
+        }
+        const failedSteps = finalize.failed_steps ?? [];
+        if (failedSteps.length > 0) {
+          // The completion itself is committed and stays; finalize already logged
+          // each step's error and wrote match.finalize_failed for admins. The
+          // caller still learns that the confirm did not fully succeed (code
+          // review C2; same shape as the cron's auto_confirm_partial_failure).
+          return NextResponse.json<ApiResult<never>>(
+            {
+              success: false,
+              error: `The result was confirmed, but ${failedSteps.length} follow-up step${failedSteps.length === 1 ? '' : 's'} failed.`,
+              code: 'match_finalize_incomplete',
+              params: { count: failedSteps.length },
+            },
+            { status: 500 }
+          );
+        }
+      } else {
+        await storage.revalidate(storage.competitionId(match), match.id);
+        await storage.announceDispute({ match, player });
+      }
+
+      return NextResponse.json<ApiResult<MatchDecisionRow>>({
+        success: true,
+        data: updated,
+      });
+    } catch (err) {
+      return safeErrorResponse(err, 'Failed to update match');
+    }
+  };
+}

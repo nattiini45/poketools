@@ -774,8 +774,86 @@ import {
   diffEvolutionState,
   repairSeasonEvolution,
   applyComputedEvolutionState,
+  createEpbEvolutionRebuilder,
+  type EpbRebuildStorage,
   StaleKillCreditError,
 } from '../evolution-rebuild';
+
+describe('explicit mixed EPB rebuild persistence', () => {
+  beforeEach(async () => {
+    vi.clearAllMocks();
+    mockRpc.mockImplementation(rpcSynced);
+    mockGetSeasonTrackers.mockResolvedValue([makeTracker({ draft_tokens: 2, transferred_evo_progress: 1 })]);
+    const { getSeasonLineThresholds } = await import('@/lib/draft/epb-thresholds');
+    vi.mocked(getSeasonLineThresholds).mockResolvedValue([dreepyLine]);
+    mockRecalculateEvolutionPoints.mockResolvedValue({ players_updated: 1, points_awarded: 1 });
+  });
+
+  function mixedStorage(): EpbRebuildStorage {
+    const { tournament_id: _owner, ...native } = makeMatch({ id: 'phase-match' });
+    return {
+      loadMatches: vi.fn().mockResolvedValue([
+        {
+          match: { ...native, phase_id: 'phase-1' }, source: 'phase',
+          matchday: 2, gameIds: ['phase-game'],
+          battleStats: [stat('player-1', 'Dreepy', 2, 'phase-game')],
+        },
+        {
+          match: makeMatch(), source: 'tournament',
+          matchday: 1, gameIds: ['legacy-game'],
+          battleStats: [stat('player-1', 'Dreepy', 1, 'legacy-game')],
+        },
+      ]),
+      getSnapshots: vi.fn().mockResolvedValue([]),
+      syncCredits: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  it('replays both sources once and splits the two marker ledgers without erasing non-match sources', async () => {
+    const storage = mixedStorage();
+    const state = await createEpbEvolutionRebuilder(storage).computeSeasonEvolutionState('season-1');
+    expect(state.computedTrackers[0]).toMatchObject({
+      real_kills: 3, draft_tokens: 2, transferred_evo_progress: 1, total_kos: 6,
+    });
+    expect(state.creditedMatchIds).toEqual(['match-1']);
+    expect(state.phaseCreditedMatchIds).toEqual(['phase-match']);
+    expect(Object.keys(state.creditsByGame ?? {})).toEqual(['legacy-game']);
+    expect(Object.keys(state.phaseCreditsByGame ?? {})).toEqual(['phase-game']);
+    expect(storage.getSnapshots).toHaveBeenCalledTimes(2);
+  });
+
+  it('passes one fenced state containing both ledgers to the mixed sync', async () => {
+    const storage = mixedStorage();
+    await createEpbEvolutionRebuilder(storage).repairSeasonEvolution('season-1');
+    expect(storage.syncCredits).toHaveBeenCalledWith('season-1', 7, expect.objectContaining({
+      creditedMatchIds: ['match-1'], phaseCreditedMatchIds: ['phase-match'],
+      creditsByGame: { 'legacy-game': [{ tracker_id: 'tracker-1', amount: 1 }] },
+      phaseCreditsByGame: { 'phase-game': [{ tracker_id: 'tracker-1', amount: 2 }] },
+    }));
+    expect(mockRpc.mock.calls.map(([name]) => name)).toEqual(['epb_kill_credit_epoch']);
+  });
+
+  it('refuses duplicate preserved identities before applying tracker writes', async () => {
+    const storage = mixedStorage();
+    vi.mocked(storage.loadMatches).mockResolvedValue([
+      { match: makeMatch(), matchday: 1, battleStats: [] },
+      { match: makeMatch(), source: 'phase', matchday: 1, battleStats: [] },
+    ]);
+    await expect(createEpbEvolutionRebuilder(storage).repairSeasonEvolution('season-1'))
+      .rejects.toThrow('duplicate match identity');
+    expect(mockUpdateTracker).not.toHaveBeenCalled();
+    expect(storage.syncCredits).not.toHaveBeenCalled();
+  });
+
+  it('recomputes both sources after a stale fence and reports repeated refusal', async () => {
+    const storage = mixedStorage();
+    vi.mocked(storage.syncCredits).mockRejectedValue(new StaleKillCreditError('match_changed'));
+    await expect(createEpbEvolutionRebuilder(storage).repairSeasonEvolution('season-1'))
+      .rejects.toBeInstanceOf(StaleKillCreditError);
+    expect(storage.loadMatches).toHaveBeenCalledTimes(3);
+    expect(storage.syncCredits).toHaveBeenCalledTimes(3);
+  });
+});
 
 describe('diffEvolutionState', () => {
   beforeEach(() => {
