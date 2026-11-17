@@ -16,11 +16,14 @@ import { loadFonts } from './fonts';
 import { homeSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import { avatarStoragePathFromUrl, supabasePublicOrigin } from '@/lib/avatar/thumbnail-path';
 import { parseShowdownTrainerSpriteUrl } from '@/lib/avatar/showdown-sprite';
+import type { PhaseNotificationData } from '@/types/phase-events';
 import type { MatchConfirmedData } from '@/types/discord';
 import type { Locale } from '@/i18n/config';
 import { createTranslator, type Translator } from '@/i18n/core';
 import { outboundDiscordMessages } from '@/i18n/messages/outbound/discord';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
+
+type MatchCardData = MatchConfirmedData | Extract<PhaseNotificationData, { kind: 'match_confirmed' }>;
 
 type CardT = Translator<typeof outboundDiscordMessages.en>;
 
@@ -123,7 +126,7 @@ interface PlayerSummary {
 
 // ── Data aggregation ─────────────────────────────────────────────────
 
-function aggregatePlayerData(data: MatchConfirmedData): {
+function aggregatePlayerData(data: MatchCardData): {
   player1: PlayerSummary;
   player2: PlayerSummary;
 } {
@@ -373,7 +376,7 @@ function RosterColumn({ player, t, lang }: { player: PlayerSummary; t: CardT; la
 // ── Main card JSX ────────────────────────────────────────────────────
 
 /** The card tree for satori. Exported for tests (text assertions without rasterising). */
-export function MatchCard({ data, lang }: { data: MatchConfirmedData; lang: Locale }) {
+export function MatchCard({ data, lang }: { data: MatchCardData; lang: Locale }) {
   const t = createTranslator(outboundDiscordMessages, lang);
   const { player1, player2 } = aggregatePlayerData(data);
   const hasPokemon = player1.pokemon.length > 0 || player2.pokemon.length > 0;
@@ -439,7 +442,7 @@ export function MatchCard({ data, lang }: { data: MatchConfirmedData; lang: Loca
             letterSpacing: '0.1em',
           }}
         >
-          {data.tournament_name}
+          {'phase_name' in data ? data.phase_name : data.tournament_name}
         </span>
         <Badge bg="rgba(34,197,94,0.2)" color="#4ade80">{t('matchCard.confirmed')}</Badge>
       </div>
@@ -649,7 +652,7 @@ export function MatchCard({ data, lang }: { data: MatchConfirmedData; lang: Loca
  * `lang` (the webhook's language, resolved by `emitAsync`; i18n-core §6.2).
  */
 export async function generateMatchCardImage(
-  data: MatchConfirmedData,
+  data: MatchCardData,
   lang: Locale,
 ): Promise<Buffer> {
   const [fonts, player1Avatar, player2Avatar] = await Promise.all([
@@ -658,7 +661,7 @@ export async function generateMatchCardImage(
     avatarPngDataUri(data.player_2_avatar_url),
   ]);
   // satori gets PNG data URIs only, never a Storage URL it would fetch itself.
-  const cardData: MatchConfirmedData = {
+  const cardData: MatchCardData = {
     ...data,
     player_1_avatar_url: player1Avatar,
     player_2_avatar_url: player2Avatar,

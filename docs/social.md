@@ -74,6 +74,16 @@ import { emitSocialEvent } from '@/lib/social/notify';
 void emitSocialEvent(payload);
 ```
 
+## Dormant native phase notifications
+
+`emitPhaseSocialEvent(payload): void` in `src/lib/social/notify.ts` accepts `PhaseSocialEventPayload` from `src/types/phase-events.ts`: the same version-1, phase-owned discriminated union as [Discord](./discord.md#dormant-native-phase-notifications), plus optional `imageUrl`. It is not bound to a route/finalizer yet. Existing `emitSocialEvent` signatures, legacy payloads and tournament resolution remain unchanged.
+
+The emitter verifies `owner.season_id` against the phase, calls `resolvePhaseSocialIntegrations(owner.phase_id)` and uses only the verified league for content language. Recipient resolution derives actual league inheritance server-side. It does not pass a phase id to a tournament resolver. Stored status filters retain the Discord compatibility mapping (`phase_started` → `tournament_started`, `phase_completed` → `tournament_completed`).
+
+`formatPhaseSocialPost` and the legacy formatter share flattening, replay/hashtag options and provider limits (X 280, Threads 500, Bluesky 300). Phase data reaches the common pure embed renderer directly; no tournament payload is constructed. Provider dispatch still receives the optional image unchanged. Stored encrypted credentials are passed unchanged to decryption at delivery time, never rewritten or re-encrypted. Decryption/provider failures are isolated per target and logs contain identifiers and safe failure classes, not credential bytes, tokens or arbitrary error messages. All native dispatch failures are swallowed outside the primary write path.
+
+Mocked native tests cover ownership, recipient filters, exact encrypted-byte handoff, language, image/options, provider limits, failure isolation and legacy formatting parity. No real provider, model, Storage or database request is made.
+
 ## Testing
 - **Test Files**:
   - `src/app/api/social-integrations/__tests__/route.test.ts`

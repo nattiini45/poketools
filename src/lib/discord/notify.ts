@@ -1,11 +1,15 @@
+import { resolvePhaseWebhooks } from '@/lib/supabase/queries/phase-discord-webhooks';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import type { PhaseDiscordEventPayload } from '@/types/phase-events';
+import type { PhaseDiscordWebhook } from '@/types/phase-integrations';
 import { resolveWebhooks } from '@/lib/supabase/queries/discord-webhooks';
 import { DISCORD_TIMEOUT_MS, outboundFetch } from '@/lib/outbound-fetch';
 import { discordWebhookUrlSchema } from '@/lib/validation';
 import { resolveContentLocale } from '@/i18n/content-locale';
 import { DEFAULT_CONTENT_LOCALE, type Locale } from '@/i18n/config';
-import { buildEmbed } from './embeds';
+import { buildEmbed, buildNotificationEmbed } from './embeds';
 import { generateMatchCardImage } from './match-card-image';
-import { matchesFilter, matchesFormatOptions } from './matchers';
+import { matchesFilter, matchesFormatOptions, notificationFilterType } from './matchers';
 import type { DiscordEventPayload, DiscordWebhook, WebhookLanguage } from '@/types/discord';
 
 /**
@@ -35,57 +39,90 @@ interface WebhookAttachment {
 
 // ── Core emit logic ─────────────────────────────────────────────────
 
+export function emitPhaseDiscordEvent(payload: PhaseDiscordEventPayload): void {
+  void emitPhaseAsync(payload).catch((err: unknown) => {
+    console.error('[Discord] Failed to emit phase event:', payload.event_type, err instanceof Error ? err.name : 'unknown');
+  });
+}
+
+async function emitPhaseAsync(payload: PhaseDiscordEventPayload): Promise<void> {
+  const phase = await getPhaseById(payload.owner.phase_id);
+  if (!phase) {
+    console.error('[Discord] Phase notification owner not found:', payload.owner.phase_id);
+    return;
+  }
+  if (phase.season_id !== payload.owner.season_id) {
+    console.error('[Discord] Phase notification league ownership mismatch:', phase.id);
+    return;
+  }
+  const webhooks = await resolvePhaseWebhooks(phase.id);
+  await deliverDiscordEvent(payload, webhooks, { seasonId: phase.season_id });
+}
+
 async function emitAsync(payload: DiscordEventPayload): Promise<void> {
   try {
     const webhooks = await resolveWebhooks(payload.tournament_id, payload.season_id);
 
-    const matching = webhooks
-      .filter((w) => matchesFilter(w, payload.event_type))
-      .filter((w) => matchesFormatOptions(w, payload));
-    if (matching.length === 0) return;
-
-    // The league's content language (i18n-core §6.2), read once per event and
-    // only when a webhook follows it. A failed read falls back to the default
-    // inside resolveContentLocale, so the embeds still go out.
-    const contentLocale = matching.some((w) => followsLeague(w.format_options.language))
-      ? await resolveContentLocale({ seasonId: payload.season_id, tournamentId: payload.tournament_id })
-      : null;
-    const langFor = (w: DiscordWebhook): Locale =>
-      webhookLanguage(w.format_options.language, contentLocale);
-
-    // Generate match card image for confirmed matches (spoiler attachment),
-    // once per language that a webhook wanting the card posts in.
-    const attachments = new Map<Locale, WebhookAttachment>();
-    const matchData = payload.data.kind === 'match_confirmed' ? payload.data : null;
-    if (matchData) {
-      const cardLangs = new Set(matching.filter((w) => w.format_options.attach_match_card).map(langFor));
-      for (const lang of cardLangs) {
-        try {
-          const imageBuffer = await generateMatchCardImage(matchData, lang);
-          attachments.set(lang, {
-            filename: 'SPOILER_match-highlight.png',
-            buffer: imageBuffer,
-            contentType: 'image/png',
-          });
-        } catch (err) {
-          // Image generation failure should not prevent the text embed from sending
-          console.error('[Discord] Failed to generate match card image:', err);
-        }
-      }
-    }
-
-    // Build per-webhook embeds — each webhook may have different format_options and language
-    await Promise.allSettled(
-      matching.map((w) => {
-        const lang = langFor(w);
-        const { embed, content } = buildEmbed(payload, w.format_options, lang);
-        const attachment = w.format_options.attach_match_card ? attachments.get(lang) : undefined;
-        return postToWebhook(w, embed, content, attachment ? [attachment] : undefined);
-      })
-    );
+    await deliverDiscordEvent(payload, webhooks, { seasonId: payload.season_id, tournamentId: payload.tournament_id });
   } catch (err) {
     console.error('[Discord] Failed to emit event:', payload.event_type, err);
   }
+}
+
+async function deliverDiscordEvent(
+  payload: DiscordEventPayload | PhaseDiscordEventPayload,
+  webhooks: Array<DiscordWebhook | PhaseDiscordWebhook>,
+  contentRef: Parameters<typeof resolveContentLocale>[0],
+): Promise<void> {
+  const filterEvent = notificationFilterType(payload.event_type);
+  const matching = webhooks
+    .filter((w) => matchesFilter(w, filterEvent))
+    .filter((w) => matchesFormatOptions(w, payload));
+  if (matching.length === 0) return;
+
+  // The league's content language (i18n-core §6.2), read once per event and
+  // only when a webhook follows it. A failed read falls back to the default
+  // inside resolveContentLocale, so the embeds still go out.
+  const contentLocale = matching.some((w) => followsLeague(w.format_options.language))
+    ? await resolveContentLocale(contentRef)
+    : null;
+  const langFor = (w: DiscordWebhook | PhaseDiscordWebhook): Locale =>
+    webhookLanguage(w.format_options.language, contentLocale);
+
+  // Generate match card image for confirmed matches (spoiler attachment),
+  // once per language that a webhook wanting the card posts in.
+  const attachments = new Map<Locale, WebhookAttachment>();
+  const matchData = payload.data.kind === 'match_confirmed' ? payload.data : null;
+  if (matchData) {
+    const cardLangs = new Set(matching.filter((w) => w.format_options.attach_match_card).map(langFor));
+    for (const lang of cardLangs) {
+      try {
+        const imageBuffer = await generateMatchCardImage(matchData, lang);
+        attachments.set(lang, {
+          filename: 'SPOILER_match-highlight.png',
+          buffer: imageBuffer,
+          contentType: 'image/png',
+        });
+      } catch (err) {
+        // Image generation failure should not prevent the text embed from sending
+        console.error('[Discord] Failed to generate match card image:', 'owner' in payload
+          ? err instanceof Error ? err.name : 'unknown'
+          : err);
+      }
+    }
+  }
+
+  // Build per-webhook embeds — each webhook may have different format_options and language
+  await Promise.allSettled(
+    matching.map((w) => {
+      const lang = langFor(w);
+      const { embed, content } = 'owner' in payload
+        ? buildNotificationEmbed(payload, w.format_options, lang)
+        : buildEmbed(payload, w.format_options, lang);
+      const attachment = w.format_options.attach_match_card ? attachments.get(lang) : undefined;
+      return postToWebhook(w, embed, content, attachment ? [attachment] : undefined);
+    })
+  );
 }
 
 function followsLeague(language: WebhookLanguage | undefined): boolean {
