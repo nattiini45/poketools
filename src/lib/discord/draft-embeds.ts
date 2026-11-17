@@ -116,7 +116,7 @@ function turnFields(data: DraftTurnData | DraftTurnReminderData, lang: Locale) {
  * `draft_pick` that carries `line`. Throws for any other event (a caller bug).
  */
 export function buildDraftEmbed(
-  payload: DiscordEventPayload,
+  payload: Pick<DiscordEventPayload, 'data'>,
   options: WebhookFormatOptions | undefined,
   lang: Locale,
 ): BuildEmbedResult {

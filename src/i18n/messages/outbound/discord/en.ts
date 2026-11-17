@@ -33,6 +33,14 @@ export default {
     },
     pairing: '• {player1} vs {player2}',
   },
+  phaseStarted: {
+    title: 'Phase Started — {phase}',
+    description: '**{phase}** is now underway!',
+  },
+  phaseCompleted: {
+    title: 'Phase Completed — {phase}',
+    description: '**{phase}** has concluded. Check the site for final standings!',
+  },
   tournamentStarted: {
     title: 'Tournament Started — {tournament}',
     description: '**{tournament}** is now underway!',
