@@ -274,6 +274,11 @@ describe('the recheck after the claim consumes the proposal', () => {
     await expectConsumed(world.approve(), 'proposal_stale', 'registry_version_changed');
   });
 
+  it('consumes a legacy proposal without dispatch when native ownership is explicitly activated', async () => {
+    const input = await world.input();
+    await expectConsumed(executeProposal({ ...world.deps, storageGeneration: 'native-phase-v1' }, input), 'proposal_stale', 'registry_version_changed');
+  });
+
   it('an op whose phase is above ADMIN_AGENT_MAX_PHASE is proposal_stale', async () => {
     world.bindingOverrides.league_create = { phase: 2 };
     await expectConsumed(world.approve(), 'proposal_stale', 'phase_above_cap:league_create');
@@ -749,6 +754,18 @@ describe('the deadline and resume', () => {
     await world.approve();
     world.registryVersion = 'deployed-since';
     expect(await refusal(world.resume())).toMatchObject({ code: 'proposal_stale', reason: 'registry_version_changed' });
+    expect(world.row.status).toBe('stale');
+  });
+
+  it('does not resume remaining legacy steps after native ownership activation', async () => {
+    world.script.league_create = (call) => {
+      world.clock.ms += STEP_DEADLINE_MS + 1000;
+      return okReply('league_create', call);
+    };
+    await world.approve();
+    const result = executeProposal({ ...world.deps, storageGeneration: 'native-phase-v1' }, await world.resumeInput());
+    expect(await refusal(result)).toMatchObject({ code: 'proposal_stale', reason: 'registry_version_changed' });
+    expect(world.calledOps()).toEqual(['league_create']);
     expect(world.row.status).toBe('stale');
   });
 

@@ -35,6 +35,7 @@ import { DEFAULT_ROUTE_TIMEOUT_MS, checkCall, harnessError, invokeRoute, isUnkno
 import type { BindingRegistry, DispatchContext, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyContext, VerifyResult } from '../dispatch';
 import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
+import { ownershipRegistryVersion, type AgentStorageGeneration } from './ownership-contract';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
 import { PLAN_OPS, type PlanOp } from '../plans/ops';
 import { UNDO_MAX_STEPS } from '../plans/undo';
@@ -118,6 +119,7 @@ export interface ExecutorStore {
 }
 
 export interface ExecutorDeps {
+  readonly storageGeneration?: AgentStorageGeneration;
   readonly store: ExecutorStore;
   /** The in-code bindings; the only source of what a step may call (`_ops/g`). */
   readonly bindings: BindingRegistry;
@@ -383,7 +385,7 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
 
   const conversation = await deps.store.conversations.getConversation(input.adminId, proposal.conversation_id);
   if (conversation === null) return { code: 'proposal_stale', reason: 'conversation_gone' };
-  if (deps.registryVersion(conversation.tool_set) !== proposal.tool_registry_version) return { code: 'proposal_stale', reason: 'registry_version_changed' };
+  if (ownershipRegistryVersion(deps.registryVersion(conversation.tool_set), deps.storageGeneration ?? 'legacy') !== proposal.tool_registry_version) return { code: 'proposal_stale', reason: 'registry_version_changed' };
 
   if (proposal.kind === 'undo' && (proposal.class !== 'G' || steps.length > UNDO_MAX_STEPS)) return { code: 'proposal_stale', reason: 'undo_shape' };
 
