@@ -7,22 +7,10 @@
  */
 import 'server-only';
 
-import {
-  getKitPhases,
-  getOutcomesByPhases,
-  getPhaseGameCounts,
-  getPhaseMatchIds,
-  getPhaseMembers,
-  getSeasonKitHead,
-  getStandingAdjustments,
-  type KitPhaseRow,
-  type StandingAdjustmentRow,
-} from '@/lib/supabase/queries/format-engine';
-import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
-import { getPhaseKillTallies } from '@/lib/supabase/queries/games';
-import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
-import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
-import { getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+
+import type { KitPhaseRow, StandingAdjustmentRow } from '@/lib/supabase/queries/format-engine';
+import type { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
 import { BUILTIN_METRICS } from '@/lib/format-kit/engine/runtime-names';
 import type { Json } from '@/types/database';
 import type { Stage } from '@/lib/format-kit/types';
@@ -81,20 +69,20 @@ export interface KitPhase {
 }
 
 /** The kit phase `phaseId` of a custom league, or null when the format does not run it (none, `legacy`, not a phase of it). */
-export async function loadKitPhase(seasonId: string, phaseId: string): Promise<KitPhase | null> {
-  const head = await getSeasonKitHead(seasonId);
+export async function loadKitPhase(seasonId: string, phaseId: string, storage: KitStoragePort = legacyKitStorage): Promise<KitPhase | null> {
+  const head = await storage.head(seasonId);
   if (head === null || head.engine === 'legacy') return null;
-  const phase = (await getKitPhases(seasonId)).find((row) => row.id === phaseId);
+  const phase = (await storage.phases(seasonId)).find((row) => row.id === phaseId);
   if (!phase) return null;
-  const [stage, outcomeRows] = await Promise.all([stageOf(phase), getOutcomesByPhases([phaseId])]);
-  const members = await getPhaseMembers([phaseId]);
+  const [stage, outcomeRows] = await Promise.all([stageOf(phase), storage.outcomes([phaseId])]);
+  const members = await storage.members([phaseId]);
   const tableExtras = await loadStageTableExtras({
     seasonId,
     phase,
     stage,
     seed: head.seed,
     playerIds: members.map((member) => member.player_id),
-  });
+  }, storage);
   return { engine: head.engine, seed: head.seed, revision: head.revision, stage, outcomes: kitOutcomesByMatch(outcomeRows), tableExtras };
 }
 
@@ -117,13 +105,13 @@ export interface StageTableExtrasInput {
  * a threshold or metric on it sees the real count). Reads the format and the runtime rows only when a metric of the
  * format applies to the stage, and seeds and ratings only when the stage ranks by or shows `seed` / `rating`.
  */
-export async function loadStageTableExtras(input: StageTableExtrasInput): Promise<StageTableExtras> {
+export async function loadStageTableExtras(input: StageTableExtrasInput, storage: KitStoragePort = legacyKitStorage): Promise<StageTableExtras> {
   const { phase, stage, playerIds } = input;
   const [adjustmentRows, gameCounts, kills] = await Promise.all([
-    input.adjustmentRows ?? getStandingAdjustments(input.seasonId),
-    getPhaseGameCounts([phase.id]),
+    input.adjustmentRows ?? storage.adjustments(input.seasonId),
+    storage.gameCounts([phase.id]),
     // Kills count in a round robin stage only, like the public table.
-    stageCountsKills(stage) ? getPhaseKillTallies([phase.id]) : Promise.resolve({}),
+    stageCountsKills(stage) ? storage.kills([phase.id]) : Promise.resolve({}),
   ]);
   const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, new Map([[stage.key, phase.id]]));
   const out: StageTableExtras = {
@@ -133,9 +121,9 @@ export async function loadStageTableExtras(input: StageTableExtrasInput): Promis
     ...(manualOrder[phase.id] !== undefined ? { manualOrder: manualOrder[phase.id] } : {}),
   };
 
-  const format = input.format !== undefined ? input.format : await getSeasonFormat(input.seasonId);
+  const format = input.format !== undefined ? input.format : await storage.format(input.seasonId);
   if (format !== null && stageHasCustomMetrics(format.spec, stage.key)) {
-    const runtime = await getFormatRuntime(input.seasonId);
+    const runtime = await storage.runtime(input.seasonId);
     const { state } = buildRuntimeState(format.spec, runtime, {
       tunables: format.tunables as Json,
       amendments: format.amendments as Json,
@@ -149,7 +137,7 @@ export async function loadStageTableExtras(input: StageTableExtrasInput): Promis
     }
   }
 
-  const seedsAndRatings = await loadSeedsAndRatings([{ phaseId: phase.id, stage, playerIds }]);
+  const seedsAndRatings = await loadSeedsAndRatings([{ phaseId: phase.id, stage, playerIds }], storage);
   if (seedsAndRatings.seeds?.[phase.id] !== undefined) out.seeds = seedsAndRatings.seeds[phase.id];
   if (seedsAndRatings.ratings !== undefined) out.ratings = seedsAndRatings.ratings;
   return out;
@@ -170,13 +158,14 @@ const RATING_CHUNK = 100;
  */
 export async function loadSeedsAndRatings(
   entries: readonly { phaseId: string; stage: Pick<Stage, 'rank' | 'columns'>; playerIds: readonly string[] }[],
+  storage: KitStoragePort = legacyKitStorage,
 ): Promise<{ seeds?: Record<string, Record<string, number>>; ratings?: Record<string, number> }> {
   const seeded = entries.filter((entry) => stageUsesMetric(entry.stage, 'seed'));
   const rated = entries.filter((entry) => stageUsesMetric(entry.stage, 'rating'));
   const out: { seeds?: Record<string, Record<string, number>>; ratings?: Record<string, number> } = {};
 
   if (seeded.length > 0) {
-    const byPhase = await getParticipantsBatch(seeded.map((entry) => entry.phaseId));
+    const byPhase = await storage.seeds(seeded.map((entry) => entry.phaseId));
     const seeds: Record<string, Record<string, number>> = {};
     for (const entry of seeded) {
       const bySeed: Record<string, number> = {};
@@ -192,7 +181,7 @@ export async function loadSeedsAndRatings(
     const ids = [...new Set(rated.flatMap((entry) => entry.playerIds))];
     const ratings: Record<string, number> = {};
     for (let i = 0; i < ids.length; i += RATING_CHUNK) {
-      for (const [playerId, rating] of await getPlayerRatingsBatch(ids.slice(i, i + RATING_CHUNK))) ratings[playerId] = rating.rating;
+      for (const [playerId, rating] of await storage.ratings(ids.slice(i, i + RATING_CHUNK))) ratings[playerId] = rating.rating;
     }
     out.ratings = ratings;
   }
@@ -202,6 +191,7 @@ export async function loadSeedsAndRatings(
 export interface LoadKitOptions {
   /** Load a `legacy` league too, as `shadow` (the admin diff compares before the switch). */
   includeLegacy?: boolean;
+  storage?: KitStoragePort;
 }
 
 /**
@@ -212,10 +202,11 @@ export async function loadKitStandingsData(
   seasonId: string,
   options: LoadKitOptions = {},
 ): Promise<KitStandingsData | undefined> {
-  const head = await getSeasonKitHead(seasonId);
+  const storage = options.storage ?? legacyKitStorage;
+  const head = await storage.head(seasonId);
   if (head === null || (head.engine === 'legacy' && options.includeLegacy !== true)) return undefined;
   const engine = head.engine === 'kit' ? 'kit' : 'shadow';
-  const phases = await getKitPhases(seasonId);
+  const phases = await storage.phases(seasonId);
   const ids = phases.map((phase) => phase.id);
   // The stage of each phase is parsed first: only a round robin stage counts kills, and nothing is read for the others.
   const stages: Record<string, KitStageRules> = {};
@@ -227,23 +218,23 @@ export async function loadKitStandingsData(
   }
   const killPhaseIds = phases.filter((_, i) => stageCountsKills(full[i])).map((phase) => phase.id);
   const [matchRows, outcomeRows, members, adjustmentRows, gameCounts, kills] = await Promise.all([
-    getPhaseMatchIds(ids),
-    getOutcomesByPhases(ids),
-    getPhaseMembers(ids),
-    getStandingAdjustments(seasonId),
-    getPhaseGameCounts(ids),
-    killPhaseIds.length > 0 ? getPhaseKillTallies(killPhaseIds) : Promise.resolve({}),
+    storage.matchIds(ids),
+    storage.outcomes(ids),
+    storage.members(ids),
+    storage.adjustments(seasonId),
+    storage.gameCounts(ids),
+    killPhaseIds.length > 0 ? storage.kills(killPhaseIds) : Promise.resolve({}),
   ]);
 
   const stageOfMatch: Record<string, string> = {};
-  for (const row of matchRows) stageOfMatch[row.id] = row.tournament_id;
+  for (const row of matchRows) stageOfMatch[row.id] = row.phase_id;
   const outcomes = kitOutcomesByMatch(outcomeRows);
 
   const playersOf = new Map<string, string[]>();
   for (const member of members) {
-    const list = playersOf.get(member.tournament_id) ?? [];
+    const list = playersOf.get(member.phase_id) ?? [];
     list.push(member.player_id);
-    playersOf.set(member.tournament_id, list);
+    playersOf.set(member.phase_id, list);
   }
   const coinFlips: Record<string, Record<string, number>> = {};
   for (const phase of phases) {
@@ -255,9 +246,10 @@ export async function loadKitStandingsData(
   phases.forEach((phase, i) => phasesOfStage.set(full[i].key, [...(phasesOfStage.get(full[i].key) ?? []), phase.id]));
   const memberSets = new Map([...playersOf].map(([phaseId, ids]) => [phaseId, new Set(ids)]));
   const { adjustments, manualOrder } = standingAdjustments(adjustmentRows, phasesOfStage, memberSets);
-  const metrics = full.some(usesCustomMetric) ? await loadStageMetrics(seasonId, head.seed, phases, full, playersOf) : undefined;
+  const metrics = full.some(usesCustomMetric) ? await loadStageMetrics(seasonId, head.seed, phases, full, playersOf, storage) : undefined;
   const seedsAndRatings = await loadSeedsAndRatings(
     phases.map((phase, i) => ({ phaseId: phase.id, stage: full[i], playerIds: playersOf.get(phase.id) ?? [] })),
+    storage,
   );
 
   return {
@@ -294,8 +286,9 @@ async function loadStageMetrics(
   phases: readonly KitPhaseRow[],
   stages: readonly Stage[],
   playersOf: ReadonlyMap<string, string[]>,
+  storage: KitStoragePort,
 ): Promise<Record<string, KitStageMetrics> | undefined> {
-  const [format, runtime] = await Promise.all([getSeasonFormat(seasonId), getFormatRuntime(seasonId)]);
+  const [format, runtime] = await Promise.all([storage.format(seasonId), storage.runtime(seasonId)]);
   if (format === null) return undefined;
   const { state } = buildRuntimeState(format.spec, runtime, {
     tunables: format.tunables as Json,

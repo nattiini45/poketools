@@ -14,12 +14,10 @@
  */
 import 'server-only';
 
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logger } from '@/lib/logger';
-import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
-import { getKitPhases } from '@/lib/supabase/queries/format-engine';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 
 const TAG = 'format-engine/auto-advance';
 
@@ -54,10 +52,10 @@ export class AutoAdvanceError extends Error {
 }
 
 /** The phases the `auto` edges of a kit league lead into from `sourcePhaseId`; empty for any other league. */
-export async function autoAdvanceTargets(seasonId: string, sourcePhaseId: string): Promise<string[]> {
-  const format = await getSeasonFormat(seasonId);
+export async function autoAdvanceTargets(seasonId: string, sourcePhaseId: string, storage: KitStoragePort = legacyKitStorage): Promise<string[]> {
+  const format = await storage.format(seasonId);
   if (format === null || format.engine !== 'kit') return [];
-  const phases = await getKitPhases(seasonId);
+  const phases = await storage.phases(seasonId);
   const source = phases.find((phase) => phase.id === sourcePhaseId);
   if (!source) return [];
   return format.spec.edges
@@ -73,14 +71,17 @@ export async function autoAdvanceTargets(seasonId: string, sourcePhaseId: string
  * targets by hand (a `manual_list` edge always needs the admin's list). Errors before the first target (the format
  * or the phases cannot be read) propagate unchanged.
  */
-export async function runAutoAdvance(seasonId: string, sourcePhaseId: string): Promise<AutoAdvanceResult[]> {
+export async function runAutoAdvance(seasonId: string, sourcePhaseId: string, storage: KitStoragePort = legacyKitStorage): Promise<AutoAdvanceResult[]> {
   const out: AutoAdvanceResult[] = [];
   const failures: AutoAdvanceTargetFailure[] = [];
-  for (const targetId of await autoAdvanceTargets(seasonId, sourcePhaseId)) {
+  const targets = storage === legacyKitStorage
+    ? await autoAdvanceTargets(seasonId, sourcePhaseId)
+    : await autoAdvanceTargets(seasonId, sourcePhaseId, storage);
+  for (const targetId of targets) {
     try {
-      const target = await getTournamentById(targetId);
+      const target = await storage.phase(targetId);
       if (!target || target.status !== 'upcoming') continue;
-      const result = await syncStandingsEnrollment(seasonId, targetId, { source_phase_id: sourcePhaseId });
+      const result = await storage.enroll(seasonId, targetId, sourcePhaseId);
       out.push({ target_phase_id: targetId, enrolled_count: result.enrolled_count });
     } catch (error) {
       logger.error(TAG, 'auto advance failed for a target phase', { seasonId, sourcePhaseId, targetId, error });

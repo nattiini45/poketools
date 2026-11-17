@@ -19,17 +19,7 @@ import 'server-only';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Stage } from '@/lib/format-kit/types';
-import { expireTournamentReads } from '@/lib/revalidation';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
-import { seasonHasGroups } from '@/lib/supabase/queries/season-groups';
-import {
-  addGroupMembersBatch,
-  createGroupBatch,
-  deleteGroup,
-  deleteGroupsByTournament,
-  getGroupsByTournament,
-} from '@/lib/supabase/queries/tournament-groups';
-import { getParticipants } from '@/lib/supabase/queries/tournaments';
+import { legacyKitGroups, type KitGroup, type KitGroupsStorage } from '@/lib/league-phase/kit-groups-storage';
 import { groupLabel } from '@/lib/tournament/serpentine';
 import type { TournamentGroupWithMembers } from '@/types/season';
 import { formKitGroups } from './pairing';
@@ -43,21 +33,23 @@ export interface KitGroupsInput {
 }
 
 /** The phase's groups after forming them when the stage asks for groups and the phase has none yet. */
-export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<TournamentGroupWithMembers[]> {
-  const existing = await getGroupsByTournament(input.phaseId);
+export function ensureKitPhaseGroups(input: KitGroupsInput): Promise<TournamentGroupWithMembers[]>;
+export function ensureKitPhaseGroups<G extends KitGroup>(input: KitGroupsInput, storage: KitGroupsStorage<G>): Promise<G[]>;
+export async function ensureKitPhaseGroups(input: KitGroupsInput, storage: KitGroupsStorage = legacyKitGroups): Promise<KitGroup[]> {
+  const existing = await storage.groups(input.phaseId);
   const spec = input.stage.groups;
   if (existing.length > 0) assertKitGroupsFormed(existing, input.stage);
   if (spec === undefined || spec.method === 'manual') return existing;
   const [leagueGroups, rounds, participants] = await Promise.all([
-    seasonHasGroups(input.seasonId),
-    getRoundsByTournament(input.phaseId),
-    getParticipants(input.phaseId),
+    storage.leagueGroups(input.seasonId),
+    storage.rounds(input.phaseId),
+    storage.participants(input.phaseId),
   ]);
   if (leagueGroups || rounds.length > 0) return existing;
   if (existing.length > 0) {
     if (groupsHoldRoster(existing, participants.map((participant) => participant.id))) return existing;
     // Stale groups of an earlier roster (or empty ones nobody filled): form them again from the enrolled players.
-    await deleteGroupsByTournament(input.phaseId);
+    await storage.deleteAll(input.phaseId);
   }
 
   // Seed order (unseeded players last, in enrollment order): serpentine and straight deal by it.
@@ -68,11 +60,10 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
   const formed = formKitGroups(ordered, spec, { seed: input.seed, stageKey: input.stage.key });
   if (formed.length === 0) return existing.length > 0 ? [] : existing;
 
-  let created: Awaited<ReturnType<typeof createGroupBatch>>;
+  let created: { id: string; group_number: number }[];
   try {
-    created = await createGroupBatch(
+    created = await storage.create(input.seasonId, input.phaseId,
       formed.map((group) => ({
-        tournament_id: input.phaseId,
         name: `Group ${groupLabel(group.group_number - 1)}`,
         group_number: group.group_number,
       })),
@@ -81,10 +72,10 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
     throw mapGroupWriteConflict(error);
   }
   const mine = new Set(created.map((group) => group.id));
-  if (await settleGroups(input.phaseId, mine)) throw formingInProgress();
+  if (await settleGroups(input.phaseId, mine, storage)) throw formingInProgress();
   const idByNumber = new Map(created.map((group) => [group.group_number, group.id]));
   try {
-    await addGroupMembersBatch(
+    await storage.addMembers(input.phaseId,
       formed.flatMap((group) =>
         group.members.map((member) => ({
           group_id: idByNumber.get(group.group_number)!,
@@ -97,13 +88,13 @@ export async function ensureKitPhaseGroups(input: KitGroupsInput): Promise<Tourn
     throw mapGroupWriteConflict(error);
   }
   // The other call may have inserted after the first check: settle again once the members are in.
-  if (await settleGroups(input.phaseId, mine)) throw formingInProgress();
-  expireTournamentReads(input.phaseId, input.seasonId);
-  return getGroupsByTournament(input.phaseId);
+  if (await settleGroups(input.phaseId, mine, storage)) throw formingInProgress();
+  storage.invalidate(input.seasonId, [input.phaseId]);
+  return storage.groups(input.phaseId);
 }
 
 /** Whether the groups hold exactly the enrolled players, each in one group. */
-function groupsHoldRoster(groups: readonly Pick<TournamentGroupWithMembers, 'members'>[], enrolledIds: readonly string[]): boolean {
+function groupsHoldRoster(groups: readonly Pick<KitGroup, 'members'>[], enrolledIds: readonly string[]): boolean {
   const grouped = groups.flatMap((group) => group.members.map((member) => member.player_id));
   const enrolled = new Set(enrolledIds);
   return grouped.length === enrolled.size && new Set(grouped).size === grouped.length && grouped.every((id) => enrolled.has(id));
@@ -119,7 +110,7 @@ export const KIT_GROUPS_FORMING_WINDOW_MS = 2 * 60_000;
  * them, or the winner died) are left to the caller, as a `manual` spec's empty groups always are.
  */
 export function assertKitGroupsFormed(
-  groups: readonly Pick<TournamentGroupWithMembers, 'created_at' | 'members'>[],
+  groups: readonly Pick<KitGroup, 'created_at' | 'members'>[],
   stage: Pick<Stage, 'groups'>,
   now: number = Date.now(),
 ): void {
@@ -153,9 +144,9 @@ function formingInProgress(): UserFacingError<'groups_forming_in_progress'> {
  * Removes the groups of `mine` that another call inserted earlier for the same group number (earliest `created_at`,
  * then lowest id, wins). True when it removed some: this call lost the race and must stop.
  */
-async function settleGroups(phaseId: string, mine: ReadonlySet<string>): Promise<boolean> {
-  const all = await getGroupsByTournament(phaseId);
-  const first = new Map<number, TournamentGroupWithMembers>();
+async function settleGroups(phaseId: string, mine: ReadonlySet<string>, storage: KitGroupsStorage): Promise<boolean> {
+  const all = await storage.groups(phaseId);
+  const first = new Map<number, KitGroup>();
   for (const group of all) {
     const current = first.get(group.group_number);
     if (current === undefined || group.created_at < current.created_at || (group.created_at === current.created_at && group.id < current.id)) {
@@ -163,6 +154,6 @@ async function settleGroups(phaseId: string, mine: ReadonlySet<string>): Promise
     }
   }
   const losers = all.filter((group) => mine.has(group.id) && first.get(group.group_number)?.id !== group.id);
-  for (const group of losers) await deleteGroup(group.id);
+  for (const group of losers) await storage.delete(phaseId, group.id);
   return losers.length > 0;
 }

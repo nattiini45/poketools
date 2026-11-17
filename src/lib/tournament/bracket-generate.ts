@@ -1,11 +1,8 @@
-import type { Tournament } from '@/types/tournament';
+import type { BracketType, BoOverrides, TournamentStatus } from '@/types/tournament';
 import type { ParticipantWithSeed } from '@/types/tournament';
-import type { Match, MatchWithPlayers } from '@/types/match';
+import type { MatchWithPlayers } from '@/types/match';
 import { bracketStructureOptionsOf, buildBracketStructureForParticipants } from './bracket-structure';
-import {
-  buildSlotResolutionsFromMatches,
-  materializeReadySlots,
-} from './bracket-propagation';
+import { readyBracketSlots } from './bracket-propagation';
 import {
   getRoundsByTournament,
   updateRoundStatus,
@@ -17,6 +14,43 @@ import { getMatchById, getMatchesByTournament } from '@/lib/supabase/queries/mat
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { tournamentMachine } from './tournament-state';
+
+export interface BracketCompetition {
+  id: string;
+  bracket_type: BracketType;
+  status: TournamentStatus;
+  best_of_default: number;
+  bo_overrides: BoOverrides;
+  bracket_reset_enabled?: boolean;
+  third_place_enabled?: boolean;
+}
+
+export interface BracketPersistence {
+  getRounds(id: string): Promise<readonly { id: string }[]>;
+  getMatches(id: string): Promise<Pick<MatchWithPlayers, 'id' | 'status' | 'games'>[]>;
+  getMatch(id: string): Promise<{ id: string; status: MatchWithPlayers['status'] } | null>;
+  resetMatch(id: string, actorId: string, force: boolean): Promise<{ format_revert_failed?: boolean } | undefined>;
+  updateRoundStatus(id: string, status: 'pending' | 'active' | 'completed', from: 'pending' | 'active' | 'completed'): Promise<unknown>;
+  write(input: {
+    competition_id: string;
+    expected_status: TournamentStatus;
+    replace: boolean;
+    rounds: readonly BracketRoundInput[];
+    matches: readonly BracketMatchInput[];
+    current_round: number;
+  }): Promise<unknown>;
+  machine: Pick<typeof tournamentMachine, 'assertTransition'>;
+}
+
+export const legacyBracketPersistence: BracketPersistence = {
+  getRounds: getRoundsByTournament,
+  getMatches: getMatchesByTournament,
+  getMatch: getMatchById,
+  resetMatch,
+  updateRoundStatus,
+  write: ({ competition_id, ...input }) => writeBracket({ tournament_id: competition_id, ...input }),
+  machine: tournamentMachine,
+};
 
 export interface GenerateBracketResult {
   rounds_created: number;
@@ -47,71 +81,30 @@ interface BracketPlan {
  * players are known now (the materializer runs with a collector instead of the match insert). Refuses a tournament that
  * is not elimination or has too few participants, before anything is written.
  */
-async function planBracket(tournament: Tournament, participants: ParticipantWithSeed[]): Promise<BracketPlan> {
+export function planEliminationBracket(tournament: BracketCompetition, participants: ParticipantWithSeed[]): BracketPlan {
   if (tournament.bracket_type !== 'single_elim' && tournament.bracket_type !== 'double_elim') {
     throw new Error('Full bracket generation only applies to elimination formats');
   }
-  const structure = buildBracketStructureForParticipants(
-    tournament.bracket_type,
-    participants,
-    bracketStructureOptionsOf(tournament)
-  );
+  const structure = buildBracketStructureForParticipants(tournament.bracket_type, participants, bracketStructureOptionsOf(tournament));
   if (!structure) {
-    throw new UserFacingError('Need at least 2 participants', {
-      code: 'tournament_participants_too_few',
-      status: 400,
-    });
+    throw new UserFacingError('Need at least 2 participants', { code: 'tournament_participants_too_few', status: 400 });
   }
-
-  const rounds: BracketRoundInput[] = structure.rounds.map((roundDef) => ({
+  const rounds: BracketRoundInput[] = structure.rounds.map((round) => ({
     id: crypto.randomUUID(),
-    name: roundDef.name,
-    round_number: roundDef.round_number,
-    best_of: tournament.bo_overrides[roundDef.name] ?? tournament.best_of_default,
-    bracket_side: roundDef.bracket_side ?? null,
+    name: round.name,
+    round_number: round.round_number,
+    best_of: tournament.bo_overrides[round.name] ?? tournament.best_of_default,
+    bracket_side: round.bracket_side ?? null,
   }));
-  const roundIdByGlobalNumber = new Map(rounds.map((round) => [round.round_number, round.id]));
-
-  const matches: BracketMatchInput[] = [];
-  const now = new Date().toISOString();
-  await materializeReadySlots(
-    tournament.id,
-    tournament,
-    participants,
-    structure,
-    roundIdByGlobalNumber,
-    [],
-    buildSlotResolutionsFromMatches(structure.slots, [], new Map()),
-    async (inputs) =>
-      inputs.map((input): Match => {
-        const planned: BracketMatchInput = {
-          id: crypto.randomUUID(),
-          round_id: input.round_id,
-          player_1_id: input.player_1_id,
-          player_2_id: input.player_2_id,
-          bracket_side: input.bracket_side ?? null,
-          bracket_pos: input.bracket_pos ?? null,
-        };
-        matches.push(planned);
-        return {
-          ...planned,
-          tournament_id: tournament.id,
-          bracket_side: (input.bracket_side as Match['bracket_side']) ?? null,
-          winner_id: null,
-          status: 'scheduled',
-          submitter_id: null,
-          date_played: null,
-          scheduled_at: null,
-          auto_confirm_at: null,
-          confirmed_at: null,
-          notes: '',
-          social_image_url: null,
-          created_at: now,
-          updated_at: now,
-        };
-      })
-  );
-
+  const roundIds = new Map(rounds.map((round) => [round.round_number, round.id]));
+  const matches: BracketMatchInput[] = readyBracketSlots(participants, structure, roundIds, new Map()).map((ready) => ({
+    id: crypto.randomUUID(),
+    round_id: ready.roundId,
+    player_1_id: ready.player1Id,
+    player_2_id: ready.player2Id,
+    bracket_side: ready.slot.bracket_side,
+    bracket_pos: ready.slot.bracket_pos,
+  }));
   return { rounds, matches, firstRoundNumber: structure.rounds[0]?.round_number ?? 1 };
 }
 
@@ -123,14 +116,15 @@ async function planBracket(tournament: Tournament, participants: ParticipantWith
  * Then the first round is started when asked (best effort: a round that is still pending shows the Start banner).
  */
 async function writePlannedBracket(
-  tournament: Tournament,
+  tournament: BracketCompetition,
   plan: BracketPlan,
   replace: boolean,
-  options: GenerateBracketOptions
+  options: GenerateBracketOptions,
+  storage: BracketPersistence,
 ): Promise<GenerateBracketResult> {
-  if (tournament.status !== 'active') tournamentMachine.assertTransition(tournament.status, 'active', 'system');
-  await writeBracket({
-    tournament_id: tournament.id,
+  if (tournament.status !== 'active') storage.machine.assertTransition(tournament.status, 'active', 'system');
+  await storage.write({
+    competition_id: tournament.id,
     expected_status: tournament.status,
     replace,
     rounds: plan.rounds,
@@ -145,7 +139,7 @@ async function writePlannedBracket(
   const firstRoundId = plan.rounds.find((round) => round.round_number === plan.firstRoundNumber)?.id;
   if (options.startFirstRound && firstRoundId) {
     try {
-      await updateRoundStatus(firstRoundId, 'active', 'pending');
+      await storage.updateRoundStatus(firstRoundId, 'active', 'pending');
       result.started_round_id = firstRoundId;
     } catch (startErr) {
       console.error('[generate-bracket] Failed to start the first round:', startErr);
@@ -158,19 +152,20 @@ async function writePlannedBracket(
  * Generate the full elimination bracket: all round rows + initial match materialization, in one locked write.
  */
 export async function generateEliminationBracket(
-  tournament: Tournament,
+  tournament: BracketCompetition,
   participants: ParticipantWithSeed[],
-  options: GenerateBracketOptions = {}
+  options: GenerateBracketOptions = {},
+  storage: BracketPersistence = legacyBracketPersistence,
 ): Promise<GenerateBracketResult> {
-  const existingRounds = await getRoundsByTournament(tournament.id);
+  const existingRounds = await storage.getRounds(tournament.id);
   if (existingRounds.length > 0) {
     throw new UserFacingError('Bracket already generated', {
       code: 'bracket_already_generated',
       status: 409,
     });
   }
-  const plan = await planBracket(tournament, participants);
-  return writePlannedBracket(tournament, plan, false, options);
+  const plan = planEliminationBracket(tournament, participants);
+  return writePlannedBracket(tournament, plan, false, options, storage);
 }
 
 export function isPlayedBracketMatch(
@@ -192,12 +187,13 @@ export interface RegenerateBracketOptions extends GenerateBracketOptions {
  * the status nor the bracket (only the resets it was asked for stand).
  */
 export async function regenerateEliminationBracket(
-  tournament: Tournament,
+  tournament: BracketCompetition,
   participants: ParticipantWithSeed[],
-  options: RegenerateBracketOptions = {}
+  options: RegenerateBracketOptions = {},
+  storage: BracketPersistence = legacyBracketPersistence,
 ): Promise<GenerateBracketResult> {
-  const rounds = await getRoundsByTournament(tournament.id);
-  const matches = rounds.length > 0 ? await getMatchesByTournament(tournament.id) : [];
+  const rounds = await storage.getRounds(tournament.id);
+  const matches = rounds.length > 0 ? await storage.getMatches(tournament.id) : [];
   const played = matches.filter(isPlayedBracketMatch);
   if (played.length > 0 && (!options.cascade || !options.adminId)) {
     throw new UserFacingError(
@@ -206,16 +202,16 @@ export async function regenerateEliminationBracket(
     );
   }
 
-  const plan = await planBracket(tournament, participants);
+  const plan = planEliminationBracket(tournament, participants);
 
   let formatRevertFailed = false;
   for (const match of played) {
-    const latest = await getMatchById(match.id);
+    const latest = await storage.getMatch(match.id);
     if (!latest || latest.status === 'scheduled') continue;
-    const reset = await resetMatch(match.id, options.adminId!, true);
+    const reset = await storage.resetMatch(match.id, options.adminId!, true);
     if (reset?.format_revert_failed) formatRevertFailed = true;
   }
 
-  const generated = await writePlannedBracket(tournament, plan, true, options);
+  const generated = await writePlannedBracket(tournament, plan, true, options, storage);
   return formatRevertFailed ? { ...generated, format_revert_failed: true } : generated;
 }

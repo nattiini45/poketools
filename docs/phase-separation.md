@@ -34,6 +34,16 @@ The inventory contains 86 owned tables, eight derived tables and the same two ke
 
 Old captured snapshots are not converted by an expand migration. Their schema-aware conversion, inverse transfer and protection-junction parity belong to the separately invoked cutover package. A live migration must preserve phase and child UUIDs, ruleset pins, deadlines, credentials and capability keys, and prove parity before deleting the legacy copy.
 
+## Dormant lifecycle persistence
+
+The lifecycle layer adds `phase_lifecycle` and `phase_format_materialisation` migrations after the foundation. They implement native enrollment, groups, rounds, bracket writes, participant substitution, phase ordering and format attachment without enabling the generation fence. `Phase`, `PhaseRound` and phase group types describe native rows; no native persistence adapter constructs a tournament mechanics row.
+
+The existing handlers explicitly retain legacy persistence. Default requests neither read the generation singleton nor call a new native RPC, so this application layer remains deployable before its two migrations are applied. Native persistence requires those migrations and operator-enabled phase mode; applying SQL alone does not select it. Production application and activation remain separate approvals.
+
+The native phase and round machines share pure transition definitions with their legacy counterparts but have separate registry entries and writer paths. Enrollment uses the source timestamp as a compare-and-set and retains frozen-state and existing-round refusal guards; bracket generation freezes enrollment atomically. Native round and bracket RPCs lock the league and phase before writing children; competing status changes cannot leave a partial bracket. Creating an empty round alone leaves phase status and its round counter unchanged, while the pairing writer starts the phase. The first round refuses an incomplete league-group mirror. Participant swaps preserve seed and starting bracket and move the group slot through the native enrollment foreign key's update cascade.
+
+Format materialisation, kit context, advancement, group formation, classic creation and substitution expose explicit persistence ports. Native status reactions use native context and pure event/check planners, with a required revision/idempotency-aware event writer and invalidation callback. Native paths that need match results, standings, aggregate counts, repair or notifications require explicit callbacks from their owning later layers; they never silently load legacy results. These dormant adapters are not authorization to enable native traffic before those consumers ship.
+
 ## Delivery and verification
 
 The database lifecycle suite explicitly opts into native fixture rows; route and admin-agent fixtures retain legacy storage until their native consumers and aggregate worker ship. Known generated columns are recomputed, not reported as removed-column schema drift.
@@ -45,3 +55,7 @@ The sequence is additive schema/security/trash, lifecycle/pairing persistence, m
 Before enabling phase writes, prove global replay binding across both games stores, capability-token uniqueness, state/CAS races, phase and combined aggregate idempotency, cache invalidation and bounded queries. Existing phase URLs will receive 308 redirects under their league only when the canonical surfaces are ready. The foundation changes no public URLs or UI.
 
 The database CI job replays migrations and runs the synthetic phase foundation rehearsal on its own ephemeral stack. Agents must not apply these files to a hosted project or use a shared development stack for a reset. Production preflight, migration application and cutover each require PawCommit Studio's separate approval after rehearsal. No merge authorizes them.
+
+`src/lib/league-phase/__tests__/lifecycle.local.test.ts` exercises native enrollment and status contention, first-round uniqueness, group-mirror refusal, substitution and atomic bracket/status contention through PostgREST. It belongs only to the loopback-guarded `db` project and requires phase mode on a disposable stack, as does the native trash fixture. Unit port tests prohibit legacy persistence on native paths; they do not substitute for the database rehearsal.
+
+`native-format.local.test.ts` uses the same disposable phase-mode gate to exercise native format creation, attachment, replacement, detachment, preset pins and cleanup. Its runtime-clear confirmation, started-round refusal and failed-materialisation rollback checks run through the real RPCs, not the mocked unit adapters.

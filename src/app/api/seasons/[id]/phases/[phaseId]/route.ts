@@ -9,14 +9,7 @@ import {
 } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
-import {
-  getTournamentById,
-  getTournamentWithDetails,
-  getStagesBySeasonId,
-  deleteTournament,
-  getParticipants,
-} from '@/lib/supabase/queries/tournaments';
-import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { newEvenBestOfIssues } from '@/lib/tournament/best-of';
 import { buildLeaguePhase,assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import {
@@ -40,6 +33,8 @@ import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { statusEffectsAuditMetadata, updateTournamentWithStatus } from '@/lib/tournament/tournament-transition';
+
+const { getById: getTournamentById, getWithDetails: getTournamentWithDetails, listBySeason: getStagesBySeasonId, remove: deleteTournament, participants: getParticipants, rounds: getRoundsByTournament } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;

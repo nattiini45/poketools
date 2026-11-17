@@ -36,10 +36,12 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [Game edit lease](#game-edit-lease) — `games.edit_lease_token + games.edit_lease_until (both NULL or both set)`
 - [Game evolution credit marker](#game-evolution-credit-marker) — `games.evolution_applied_at + games.evolution_credits`
 - [Game stats lock](#game-stats-lock) — `games.stats_locked`
+- [League phase](#league-phase) — `league_phases.status (enum phase_status)`
 - [League recycle bin](#league-recycle-bin) — `derived: seasons row + league_trash (rebuild_pending, purge_after) + league_trash_restore_rebuilds`
 - [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
 - [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
 - [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
+- [League phase round](#league-phase-round) — `phase_rounds.status (enum round_status)`
 - [Phase storage generation](#phase-storage-generation) — `phase_storage_state.mode`
 - [Player moderation status](#player-moderation-status) — `players.status (CHECK active | suspended | banned), suspended_until, ban_reason, sessions_valid_after`
 - [Push device (this browser)](#push-device-this-browser) — `client: NotifyState in usePushAlerts (browser permission + PushManager subscription)`
@@ -841,6 +843,34 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `lock` | `unlocked`, `locked` | `locked` | admin | `src/lib/supabase/queries/games.ts`<br>`src/lib/pkmn/game-pipeline.ts` | An admin game edit that replaces the battle stats (not a winner-only edit), after the re-apply. |
 
+## League phase
+
+- **Id:** `league_phase`
+- **State lives in:** league_phases.status (enum phase_status)
+- **Module doc:** `docs/phase-separation.md`
+- **States:** `upcoming`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A phase-owned competition starts, completes and reopens through the same pure lifecycle rules as a standalone tournament. Its writers use only phase-owned persistence; the native path stays dormant until cutover.
+
+```mermaid
+stateDiagram-v2
+  [*] --> upcoming
+  upcoming --> active: start
+  active --> completed: complete
+  upcoming --> completed: complete (admin)
+  completed --> active: reopen (admin)
+  completed --> active: regenerate_bracket (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `upcoming` | `active` | admin, system | `src/lib/supabase/queries/league-phases.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native writer checks the expected current state under the phase lock; no tournament mechanics row is used. |
+| `complete` | `active` | `completed` | admin, system | `src/lib/supabase/queries/league-phases.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native writer checks the expected current state under the phase lock; no tournament mechanics row is used. |
+| `complete` | `upcoming` | `completed` | admin | `src/lib/supabase/queries/league-phases.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native writer checks the expected current state under the phase lock; no tournament mechanics row is used. |
+| `reopen` | `completed` | `active` | admin | `src/lib/supabase/queries/league-phases.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native writer checks the expected current state under the phase lock; no tournament mechanics row is used. |
+| `regenerate_bracket` | `completed` | `active` | system | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql#phase_bracket_write` | The native writer checks the expected current state under the phase lock; no tournament mechanics row is used. |
+
 ## League recycle bin
 
 - **Id:** `league_trash`
@@ -1035,6 +1065,35 @@ stateDiagram-v2
 | `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
 | `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
 | `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
+
+## League phase round
+
+- **Id:** `phase_round`
+- **State lives in:** phase_rounds.status (enum round_status)
+- **Module doc:** `docs/phase-separation.md`
+- **States:** `pending`, `active`, `completed`
+- **Actors:** `admin`, `system`
+
+A native phase round shares the pure pending, active and completed transition rules with a tournament round. Completion checks the phase-owned matches under the round lock; every update compares the current state.
+
+```mermaid
+stateDiagram-v2
+  [*] --> pending
+  pending --> active: start
+  active --> completed: complete (admin)
+  pending --> completed: complete_unstarted (admin)
+  active --> pending: reset (admin)
+  completed --> pending: reset (admin)
+  completed --> active: revert (system)
+```
+
+| Event | From | To | Actors | Writers | Note |
+| --- | --- | --- | --- | --- | --- |
+| `start` | `pending` | `active` | admin, system | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
+| `complete` | `active` | `completed` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
+| `complete_unstarted` | `pending` | `completed` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
+| `reset` | `active`, `completed` | `pending` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
+| `revert` | `completed` | `active` | system | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
 
 ## Phase storage generation
 

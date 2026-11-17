@@ -23,12 +23,74 @@ import {
   type GroupSchedulePlan,
   type PlannedWeek,
 } from './group-schedule';
-import { mirrorsLeagueGroups, toScheduleGroups } from './phase-week-plan';
+import { mirrorsLeagueGroups, toScheduleGroups, type SchedulePhaseGroup } from './phase-week-plan';
+import { getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
+import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import {
+  getGroupsByPhase, deleteGroupsByPhase, createPhaseGroupBatch, addPhaseGroupMembersBatch,
+} from '@/lib/supabase/queries/phase-groups';
+import type { PhaseGroupWithMembers, PhaseRound } from '@/types/league-phase';
+import type { SeasonStandingsContext } from './season-standings';
 import type { MatchRecord, Pairing } from './types';
 import type { Round } from '@/types/round';
 import type { TournamentGroupWithMembers } from '@/types/season';
 import type { BracketType } from '@/types/tournament';
 import type { MatchWithPlayers } from '@/types/match';
+
+
+export type SchedulePhaseRound = Pick<Round, 'id' | 'round_number'>;
+export type SchedulePhaseMatch = Pick<MatchWithPlayers,
+  'id' | 'round_id' | 'status' | 'player_1_id' | 'player_2_id' | 'winner_id'
+>;
+
+export interface GroupRoundPersistence<
+  Group extends SchedulePhaseGroup = SchedulePhaseGroup,
+  PhaseRoundRow extends SchedulePhaseRound = SchedulePhaseRound,
+> {
+  getGroups(phaseId: string): Promise<Group[]>;
+  getRounds(phaseId: string): Promise<PhaseRoundRow[]>;
+  getParticipants(phaseId: string): Promise<{ id: string }[]>;
+  getMatches(phaseId: string): Promise<SchedulePhaseMatch[]>;
+  loadStandingsContext(seasonId: string | null): Promise<SeasonStandingsContext>;
+  deleteGroups(phaseId: string): Promise<void>;
+  createGroups(seasonId: string, phaseId: string, groups: Array<{
+    name: string; group_number: number; season_group_id: string;
+  }>): Promise<Array<{ id: string; season_group_id?: string | null }>>;
+  addMembers(phaseId: string, members: Array<{ group_id: string; player_id: string; seed: number }>): Promise<void>;
+  expireReads(phaseId: string, seasonId: string): void;
+}
+
+export const legacyGroupRoundPersistence: GroupRoundPersistence<TournamentGroupWithMembers, Round> = {
+  getGroups: getGroupsByTournament,
+  getRounds: getRoundsByTournament,
+  getParticipants,
+  getMatches: getMatchesByTournament,
+  loadStandingsContext: loadSeasonStandingsContext,
+  deleteGroups: deleteGroupsByTournament,
+  createGroups: (_seasonId, phaseId, groups) => createGroupBatch(groups.map(group => ({
+    ...group, tournament_id: phaseId,
+  }))),
+  addMembers: (_phaseId, members) => addGroupMembersBatch(members),
+  expireReads: expireTournamentReads,
+};
+
+export function createNativeGroupRoundPersistence(
+  callbacks: Pick<GroupRoundPersistence, 'getMatches' | 'loadStandingsContext' | 'expireReads'>,
+): GroupRoundPersistence<PhaseGroupWithMembers, PhaseRound> {
+  return {
+    getGroups: getGroupsByPhase,
+    getRounds: getRoundsByPhase,
+    getParticipants: getPhaseParticipants,
+    deleteGroups: deleteGroupsByPhase,
+    createGroups: (seasonId, phaseId, groups) => createPhaseGroupBatch(groups.map(group => ({
+      ...group, phase_id: phaseId, season_id: seasonId,
+    }))),
+    addMembers: (phaseId, members) => addPhaseGroupMembersBatch(members.map(member => ({
+      ...member, phase_id: phaseId,
+    }))),
+    ...callbacks,
+  };
+}
 
 /**
  * League groups in a phase's schedule (server side of `group-schedule.ts`):
@@ -54,7 +116,7 @@ interface DesiredGroup {
   memberIds: string[];
 }
 
-function sameGroups(existing: readonly TournamentGroupWithMembers[], desired: readonly DesiredGroup[]): boolean {
+function sameGroups(existing: readonly SchedulePhaseGroup[], desired: readonly DesiredGroup[]): boolean {
   const current = [...existing].sort((a, b) => a.group_number - b.group_number);
   if (current.length !== desired.length) return false;
   return current.every((group, index) => {
@@ -83,17 +145,27 @@ function sameGroups(existing: readonly TournamentGroupWithMembers[], desired: re
  * The rebuild is a delete and two inserts (the same writes as the phase editor's regenerate); a failure between
  * them leaves the phase without groups, and the next call rebuilds them.
  */
+export function ensurePhaseGroupsFromLeague(
+  seasonId: string,
+  phase: { id: string; bracket_type: BracketType },
+): Promise<TournamentGroupWithMembers[]>;
+export function ensurePhaseGroupsFromLeague<Group extends SchedulePhaseGroup>(
+  seasonId: string,
+  phase: { id: string; bracket_type: BracketType },
+  persistence: GroupRoundPersistence<Group>,
+): Promise<Group[]>;
 export async function ensurePhaseGroupsFromLeague(
   seasonId: string,
   phase: { id: string; bracket_type: BracketType },
-): Promise<TournamentGroupWithMembers[]> {
-  const [leagueGroups, existing] = await Promise.all([getSeasonGroups(seasonId), getGroupsByTournament(phase.id)]);
+  persistence: GroupRoundPersistence = legacyGroupRoundPersistence,
+): Promise<SchedulePhaseGroup[]> {
+  const [leagueGroups, existing] = await Promise.all([getSeasonGroups(seasonId), persistence.getGroups(phase.id)]);
   if (leagueGroups.length === 0 || !isTablePhase(phase.bracket_type)) return existing;
 
-  const rounds = await getRoundsByTournament(phase.id);
+  const rounds = await persistence.getRounds(phase.id);
   if (rounds.length > 0) return existing;
 
-  const enrollment = await getParticipants(phase.id);
+  const enrollment = await persistence.getParticipants(phase.id);
   const groupOf = new Map<string, string>();
   for (const group of leagueGroups) for (const playerId of group.player_ids) groupOf.set(playerId, group.id);
   const ungrouped = enrollment.filter((participant) => !groupOf.has(participant.id));
@@ -130,17 +202,19 @@ export async function ensurePhaseGroupsFromLeague(
   // refuses the second insert, and a member insert can lose its group to the other's delete. Both answer the retryable
   // 409 `groups_forming_in_progress` the kit forming answers (`mapGroupWriteConflict`), not a 500.
   try {
-    await deleteGroupsByTournament(phase.id);
-    const created = await createGroupBatch(
+    await persistence.deleteGroups(phase.id);
+    const created = await persistence.createGroups(
+      seasonId,
+      phase.id,
       desired.map((group, index) => ({
-        tournament_id: phase.id,
         name: group.name,
         group_number: index + 1,
         season_group_id: group.season_group_id,
       })),
     );
     const idBySeasonGroup = new Map(created.map((group) => [group.season_group_id, group.id]));
-    await addGroupMembersBatch(
+    await persistence.addMembers(
+      phase.id,
       desired.flatMap((group) =>
         group.memberIds.map((playerId, index) => ({
           group_id: idBySeasonGroup.get(group.season_group_id)!,
@@ -152,8 +226,8 @@ export async function ensurePhaseGroupsFromLeague(
   } catch (error) {
     throw mapGroupWriteConflict(error);
   }
-  expireTournamentReads(phase.id, seasonId);
-  return getGroupsByTournament(phase.id);
+  persistence.expireReads(phase.id, seasonId);
+  return persistence.getGroups(phase.id);
 }
 
 /**
@@ -186,23 +260,33 @@ function scheduleRefusal(err: GroupScheduleError): UserFacingError {
 }
 
 /** What a grouped round robin phase's weeks are built from: its groups, rounds and matches. */
-export interface PhaseWeekContext {
-  groups: TournamentGroupWithMembers[];
-  rounds: Round[];
+export interface PhaseWeekContext<PhaseRoundRow extends SchedulePhaseRound = SchedulePhaseRound> {
+  groups: readonly SchedulePhaseGroup[];
+  rounds: readonly PhaseRoundRow[];
   /** Every match of the phase (any status). */
-  matches: MatchWithPlayers[];
+  matches: readonly SchedulePhaseMatch[];
 }
 
 /** Load the rounds and matches a grouped phase's plan needs (its groups are passed in). */
+export function loadPhaseWeekContext(
+  phaseId: string,
+  groups: readonly SchedulePhaseGroup[],
+): Promise<PhaseWeekContext<Round>>;
+export function loadPhaseWeekContext<PhaseRoundRow extends SchedulePhaseRound>(
+  phaseId: string,
+  groups: readonly SchedulePhaseGroup[],
+  persistence: Pick<GroupRoundPersistence<SchedulePhaseGroup, PhaseRoundRow>, 'getRounds' | 'getMatches'>,
+): Promise<PhaseWeekContext<PhaseRoundRow>>;
 export async function loadPhaseWeekContext(
-  tournamentId: string,
-  groups: TournamentGroupWithMembers[],
+  phaseId: string,
+  groups: readonly SchedulePhaseGroup[],
+  persistence: Pick<GroupRoundPersistence, 'getRounds' | 'getMatches'> = legacyGroupRoundPersistence,
 ): Promise<PhaseWeekContext> {
-  const [rounds, matches] = await Promise.all([getRoundsByTournament(tournamentId), getMatchesByTournament(tournamentId)]);
+  const [rounds, matches] = await Promise.all([persistence.getRounds(phaseId), persistence.getMatches(phaseId)]);
   return { groups, rounds, matches };
 }
 
-function matchesOfWeek(context: PhaseWeekContext, week: number): MatchWithPlayers[] {
+function matchesOfWeek(context: PhaseWeekContext, week: number): SchedulePhaseMatch[] {
   const roundIds = new Set(context.rounds.filter((round) => round.round_number === week).map((round) => round.id));
   return context.matches.filter((match) => roundIds.has(match.round_id));
 }
@@ -247,6 +331,7 @@ async function placementPairings(
   seasonId: string | null,
   context: PhaseWeekContext,
   week: number,
+  persistence: Pick<GroupRoundPersistence, 'loadStandingsContext'>,
 ): Promise<Pairing[]> {
   const roundNumber = new Map(context.rounds.map((round) => [round.id, round.round_number]));
   const earlier = context.matches.filter((match) => (roundNumber.get(match.round_id) ?? 0) < week);
@@ -257,7 +342,7 @@ async function placementPairings(
       params: { week },
     });
   }
-  const standingsContext = await loadSeasonStandingsContext(seasonId);
+  const standingsContext = await persistence.loadStandingsContext(seasonId);
   const names: Record<string, string> = {};
   for (const group of context.groups) for (const member of group.members) names[member.player_id] = member.player_name;
   const records: MatchRecord[] = earlier.map((match) => ({
@@ -287,9 +372,11 @@ async function placementPairings(
  * week always has): what an interrupted write leaves (the round and its matches are two writes). Keyed by week.
  * Generation fills these rounds instead of skipping them, so no week of the plan stays empty.
  */
-export function roundsAwaitingMatches(context: PhaseWeekContext, plan: GroupSchedulePlan): Map<number, Round> {
+export function roundsAwaitingMatches<PhaseRoundRow extends SchedulePhaseRound>(
+  context: PhaseWeekContext<PhaseRoundRow>, plan: GroupSchedulePlan,
+): Map<number, PhaseRoundRow> {
   const withMatches = new Set(context.matches.map((match) => match.round_id));
-  const awaiting = new Map<number, Round>();
+  const awaiting = new Map<number, PhaseRoundRow>();
   for (const round of context.rounds) {
     if (withMatches.has(round.id)) continue;
     const week = plan.weeks.find((w) => w.week === round.round_number);
@@ -328,13 +415,14 @@ export async function resolveWeekPairings(
   seasonId: string | null,
   context: PhaseWeekContext,
   weeks: readonly number[],
+  persistence: Pick<GroupRoundPersistence, 'loadStandingsContext'> = legacyGroupRoundPersistence,
 ): Promise<{ plan: GroupSchedulePlan; resolved: ResolvedWeek[] }> {
   const extra = new Map<number, Pairing[]>();
   let plan = planPhaseWeeks(context);
   for (const number of weeks) {
     const week = plan.weeks.find((w) => w.week === number);
     if (week?.awaitingTables) {
-      extra.set(number, await placementPairings(seasonId, context, number));
+      extra.set(number, await placementPairings(seasonId, context, number, persistence));
       plan = planPhaseWeeks(context, extra);
     }
   }

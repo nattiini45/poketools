@@ -14,6 +14,9 @@ import { expireSeasonReads } from '@/lib/revalidation';
 import { getMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { getRoundById, getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
+import { fireNativeKitStatusEvent, type NativeKitStatusPort } from '@/lib/league-phase/kit-events';
+import type { Phase } from '@/types/league-phase';
 import type { Json } from '@/types/database';
 import type { FormatOp } from '@/lib/supabase/queries/format-runtime';
 import type { Tournament } from '@/types/tournament';
@@ -726,10 +729,10 @@ export async function onRoundGenerated(input: RoundGeneratedInput): Promise<void
 }
 
 /** Whether every phase of the stage is completed: always for an ordinary stage, the phase itself being completed. */
-export async function stageEnded(ctx: KitContext, phase: KitPhaseInfo): Promise<boolean> {
+export async function stageEnded(ctx: KitContext, phase: KitPhaseInfo, storage: KitStoragePort = legacyKitStorage): Promise<boolean> {
   if (phase.stage.foreach_group === undefined) return true;
   const siblings = ctx.phases.filter((other) => other.stage.key === phase.stage.key && other.id !== phase.id);
-  const rows = await Promise.all(siblings.map((sibling) => getTournamentById(sibling.id)));
+  const rows = await Promise.all(siblings.map((sibling) => storage.phase(sibling.id)));
   return rows.every((row) => row === null || row.status === 'completed');
 }
 
@@ -778,6 +781,72 @@ export async function onPhaseStatusChanged(input: PhaseStatusInput): Promise<boo
     for (const issue of players.issues) logger.warn(TAG, 'check expression failed', { tournamentId: tournament.id, ...issue });
     await open(tournament.season_id, [...ties.checks, ...players.checks], ctx.revision);
   }, undefined, true);
+}
+
+export interface NativePhaseStatusInput {
+  phase: Pick<Phase, 'id' | 'season_id'>;
+  from: Phase['status'];
+  to: Phase['status'];
+  retry?: boolean;
+}
+
+export async function onNativePhaseStatusChanged(input: NativePhaseStatusInput, port: NativeKitStatusPort): Promise<{
+  applied: boolean;
+  held: boolean;
+  advance: import('./stage-end-advance').StageEndAdvance;
+}> {
+  const started = input.from === 'upcoming' && input.to === 'active';
+  const completed = input.to === 'completed' && (input.from !== 'completed' || input.retry === true);
+  const empty = { ran: false, results: [], error: null };
+  if (!started && !completed) return { applied: true, held: false, advance: empty };
+  let held = false;
+  let repeated = input.retry === true;
+  const applied = await guarded('native phase status', { phaseId: input.phase.id, from: input.from, to: input.to }, async () => {
+    held = false;
+    let ctx = await loadFreshKitContext(input.phase.season_id, port.storage);
+    const phase = ctx === null ? undefined : phaseById(ctx, input.phase.id);
+    if (ctx === null || phase === undefined) return;
+    if (completed && !(await port.settled(ctx, phase.id))) {
+      held = true;
+      return;
+    }
+    const stage = phase.stage.key;
+    repeated ||= completed && ctx.state.firedEventKeys.includes(eventKey({ event: 'stage_end', stage }));
+    if (started || (await stageEnded(ctx, phase, port.storage))) {
+      if (completed) {
+        for (const sibling of phasesOfStageKey(ctx, stage)) {
+          if (sibling.id === phase.id) continue;
+          if (!(await port.settled(ctx, sibling.id))) {
+            held = true;
+            return;
+          }
+        }
+      }
+      await fireNativeKitStatusEvent(ctx, { event: started ? 'stage_start' : 'stage_end', stage }, port);
+    }
+    if (!completed) return;
+    ctx = await loadFreshKitContext(input.phase.season_id, port.storage);
+    if (ctx === null) return;
+    const table = await port.table(ctx, phase.id);
+    if (table === null) return;
+    const ties = planChecks(ctx.def, { source: 'standings_tie', stage, table });
+    const base = envBaseOf(ctx, `stage_end:${stage}`);
+    const rows = playerRowsOf(table);
+    const players = planChecks(ctx.def, {
+      source: 'expr', of: 'player',
+      subjects: table.map((row) => ({ id: row.player_id, ctx: playerContext(base, row.player_id, rows[row.player_id], table.length) })),
+    });
+    for (const issue of players.issues) logger.warn(TAG, 'native check expression failed', { phaseId: phase.id, ...issue });
+    await open(ctx.seasonId, [...ties.checks, ...players.checks], ctx.revision);
+  }, undefined, true);
+  if (!completed || held) return { applied: applied && !held, held, advance: empty };
+  const { advanceAfterStageEnd, nativeStageEndAdvance, stageEndFired } = await import('./stage-end-advance');
+  const advancePort = { ...nativeStageEndAdvance(port.storage), invalidate: port.invalidate };
+  if (!applied && !(await stageEndFired(input.phase.season_id, input.phase.id, advancePort))) {
+    return { applied, held: true, advance: empty };
+  }
+  const advance = await advanceAfterStageEnd({ seasonId: input.phase.season_id, phaseId: input.phase.id, retry: repeated }, advancePort);
+  return { applied, held: false, advance };
 }
 
 /**

@@ -33,16 +33,13 @@ import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getFormatDefinitionMeta, getFormatVersion, getLatestPublishedVersion } from '@/lib/supabase/queries/format-definitions';
 import { resolveNamedRulesets } from '@/lib/supabase/queries/ruleset-definitions';
 import {
-  attachSeasonFormat,
-  detachSeasonFormat,
+  type attachSeasonFormat,
   getSeasonFormatSummary,
   getSeasonPresetRulesets,
-  getSeasonManualPhaseCount,
   getSeasonStartSignals,
   type RuntimeCleared,
 } from '@/lib/supabase/queries/season-formats';
 import { isSeasonStarted } from '@/lib/season/season-started';
-import { expireSeasonReads } from '@/lib/revalidation';
 import type { SessionPlayer } from '@/types/auth';
 import type { BracketType } from '@/types/tournament';
 import type { SeasonFormatType } from '@/types/season';
@@ -52,6 +49,7 @@ import type { EngineGap, SeasonFormatSummary } from './library-types';
 import { engineGaps, planStages } from './materialise';
 import { canUseDefinitions } from '@/lib/ruleset-studio/guards';
 import { discardMaterialised, ensurePresetRulesets } from '@/lib/ruleset-studio/materialise';
+import { legacyFormatStorage, type FormatStoragePort } from '@/lib/league-phase/format-storage';
 
 export interface AttachInput {
   actor: SessionPlayer;
@@ -103,7 +101,7 @@ function hashMatches(spec: FormatDefinition, stored: string): boolean {
   }
 }
 
-export async function attachFormatToSeason(input: AttachInput): Promise<AttachOutcome> {
+export async function attachFormatToSeason(input: AttachInput, storage: FormatStoragePort = legacyFormatStorage): Promise<AttachOutcome> {
   const { actor, seasonId, definitionId } = input;
 
   // 1. The league exists and uses a custom format.
@@ -112,7 +110,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   if (season.format_type !== 'custom') throw new FormatStudioError('format_season_not_custom');
 
   // 2. It has not started (the RPC repeats this under a row lock).
-  const signals = await getSeasonStartSignals(seasonId);
+  const signals = await storage.startSignals(seasonId);
   if (signals === null) throw seasonNotFound();
   if (isSeasonStarted(signals)) throw new FormatStudioError('format_season_started');
 
@@ -159,7 +157,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   }
 
   // 7. No hand-made phase (the RPC repeats this under the row lock).
-  const manual = await getSeasonManualPhaseCount(seasonId);
+  const manual = await storage.manualPhaseCount(seasonId);
   if (manual > 0) throw new FormatStudioError('format_attach_manual_phases', { count: manual });
 
   // 8. Each rule preset the stages name gets a ruleset row (reused from the league's previous attach), then
@@ -185,7 +183,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
       seasonLanguage: season.language,
       specHash: version.content_hash,
     });
-    result = await attachSeasonFormat({
+    result = await storage.attach({
       seasonId,
       definitionId,
       versionNo: version.version_no,
@@ -207,7 +205,7 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
   // The attach is committed: expire the league's reads now, before the summary read below (which can throw) and with the
   // ids only this function knows. The route expires again after it, which costs nothing.
   const touched = [...result.stages.map((s) => s.id), ...result.removed_stage_ids];
-  expireSeasonReads(seasonId, touched);
+  storage.invalidate(seasonId, touched);
 
   const rowByKey = new Map(planned.stages.map((row) => [row.key, row]));
   const stages: AttachedStage[] = [];
@@ -244,8 +242,9 @@ export async function attachFormatToSeason(input: AttachInput): Promise<AttachOu
 export async function detachFormatFromSeason(
   seasonId: string,
   options: { confirmClear?: boolean; confirmedCounts?: RuntimeCleared | null } = {},
+  storage: FormatStoragePort = legacyFormatStorage,
 ): Promise<{ removed_stage_ids: string[]; removed_ruleset_ids: string[]; cleared: RuntimeCleared | null }> {
-  const result = await detachSeasonFormat(seasonId, options.confirmClear === true, options.confirmedCounts ?? null);
+  const result = await storage.detach(seasonId, options.confirmClear === true, options.confirmedCounts ?? null);
   return {
     removed_stage_ids: result.removed_stage_ids,
     removed_ruleset_ids: result.removed_ruleset_ids,

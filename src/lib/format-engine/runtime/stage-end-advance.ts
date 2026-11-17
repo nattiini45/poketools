@@ -8,12 +8,32 @@ import 'server-only';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logger } from '@/lib/logger';
-import { expireTournamentReads } from '@/lib/revalidation';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { expireSeasonReads, expireTournamentReads } from '@/lib/revalidation';
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
 import { AutoAdvanceError, autoAdvanceTargets, runAutoAdvance, type AutoAdvanceResult } from '../auto-advance';
 import { eventKey } from './events';
 import { stageEnded } from './hooks';
 import { loadFreshKitContext, phaseById } from './load';
+
+export interface StageEndAdvancePort {
+  storage: KitStoragePort;
+  loadContext: typeof loadFreshKitContext;
+  invalidate(seasonId: string, phaseIds: readonly string[]): void;
+}
+
+const legacyStageEndAdvance: StageEndAdvancePort = {
+  storage: legacyKitStorage,
+  loadContext: (id) => loadFreshKitContext(id),
+  invalidate: (seasonId, ids) => { for (const id of ids) expireTournamentReads(id, seasonId); },
+};
+
+export function nativeStageEndAdvance(storage: KitStoragePort): StageEndAdvancePort {
+  return {
+    storage,
+    loadContext: (id) => loadFreshKitContext(id, storage),
+    invalidate: (id) => expireSeasonReads(id),
+  };
+}
 
 const TAG = 'format-engine/stage-end-advance';
 
@@ -41,7 +61,7 @@ export interface StageEndAdvanceInput {
 }
 
 /** Whether the target's enrollment already holds the block this phase contributed (`enrollment_source.contributions`). */
-function holdsBlockOf(phaseId: string, target: Awaited<ReturnType<typeof getTournamentById>>): boolean {
+function holdsBlockOf(phaseId: string, target: Awaited<ReturnType<KitStoragePort['phase']>>): boolean {
   const source = target?.enrollment_source;
   return source?.contributions?.some((block) => block.source_phase_id === phaseId) === true;
 }
@@ -50,9 +70,9 @@ function holdsBlockOf(phaseId: string, target: Awaited<ReturnType<typeof getTour
  * Whether the phase's `stage_end` event fired. A reaction can fail after it did (the tie and expression checks run later): the
  * points it adjusts are in the standings then, so that failure is no reason to hold the advance. A failed read answers false.
  */
-export async function stageEndFired(seasonId: string, phaseId: string): Promise<boolean> {
+export async function stageEndFired(seasonId: string, phaseId: string, port: StageEndAdvancePort = legacyStageEndAdvance): Promise<boolean> {
   try {
-    const ctx = await loadFreshKitContext(seasonId);
+    const ctx = await port.loadContext(seasonId);
     const phase = ctx === null ? undefined : phaseById(ctx, phaseId);
     return ctx !== null && phase !== undefined && ctx.state.firedEventKeys.includes(eventKey({ event: 'stage_end', stage: phase.stage.key }));
   } catch (error) {
@@ -72,26 +92,31 @@ function failureCode(error: unknown): string {
  * that is no failure), and the last group runs them all. An earlier group never advanced, so `retry: true` is right for it:
  * it runs unless a target already holds its players (an admin pressed Advance meanwhile).
  */
-async function advanceRuns(seasonId: string, phaseId: string, retry: boolean): Promise<{ phaseId: string; retry: boolean }[]> {
-  const ctx = await loadFreshKitContext(seasonId);
+async function advanceRuns(seasonId: string, phaseId: string, retry: boolean, port: StageEndAdvancePort): Promise<{ phaseId: string; retry: boolean }[]> {
+  const ctx = await port.loadContext(seasonId);
   const phase = ctx === null ? undefined : phaseById(ctx, phaseId);
   if (ctx === null || phase === undefined || phase.stage.foreach_group === undefined) return [{ phaseId, retry }];
-  if (!(await stageEnded(ctx, phase))) return [];
+  const ended = port === legacyStageEndAdvance ? await stageEnded(ctx, phase) : await stageEnded(ctx, phase, port.storage);
+  if (!ended) return [];
   const others = ctx.phases.filter((other) => other.stage.key === phase.stage.key && other.id !== phaseId);
   return [{ phaseId, retry }, ...others.map((other) => ({ phaseId: other.id, retry: true }))];
 }
 
 /** One phase's edges. False when nothing was attempted (see `StageEndAdvance.ran`). */
-async function runOne(seasonId: string, phaseId: string, retry: boolean): Promise<AutoAdvanceResult[] | null> {
+async function runOne(seasonId: string, phaseId: string, retry: boolean, port: StageEndAdvancePort): Promise<AutoAdvanceResult[] | null> {
   if (retry) {
-    const targets = await autoAdvanceTargets(seasonId, phaseId);
-    const rows = await Promise.all(targets.map((targetId) => getTournamentById(targetId)));
+    const targets = port === legacyStageEndAdvance
+      ? await autoAdvanceTargets(seasonId, phaseId)
+      : await autoAdvanceTargets(seasonId, phaseId, port.storage);
+    const rows = await Promise.all(targets.map((targetId) => port.storage.phase(targetId)));
     if (targets.length === 0 || rows.some((row) => holdsBlockOf(phaseId, row))) {
       if (targets.length > 0) logger.info(TAG, 'auto advance not repeated: a target already holds the players of this phase', { phaseId });
       return null;
     }
   }
-  return runAutoAdvance(seasonId, phaseId);
+  return port === legacyStageEndAdvance
+    ? runAutoAdvance(seasonId, phaseId)
+    : runAutoAdvance(seasonId, phaseId, port.storage);
 }
 
 /**
@@ -99,7 +124,7 @@ async function runOne(seasonId: string, phaseId: string, retry: boolean): Promis
  * logged with its original error and returned as a code, because the status change that led here stands and the admin's
  * Advance button remains.
  */
-export async function advanceAfterStageEnd(input: StageEndAdvanceInput): Promise<StageEndAdvance> {
+export async function advanceAfterStageEnd(input: StageEndAdvanceInput, port: StageEndAdvancePort = legacyStageEndAdvance): Promise<StageEndAdvance> {
   const results: AutoAdvanceResult[] = [];
   let error: string | null = null;
   let ran = false;
@@ -111,13 +136,13 @@ export async function advanceAfterStageEnd(input: StageEndAdvanceInput): Promise
   };
   let runs: { phaseId: string; retry: boolean }[] = [];
   try {
-    runs = await advanceRuns(input.seasonId, input.phaseId, input.retry);
+    runs = await advanceRuns(input.seasonId, input.phaseId, input.retry, port);
   } catch (err) {
     fail(input.phaseId, err);
   }
   for (const run of runs) {
     try {
-      const done = await runOne(input.seasonId, run.phaseId, run.retry);
+      const done = await runOne(input.seasonId, run.phaseId, run.retry, port);
       if (done !== null) {
         ran = true;
         results.push(...done);
@@ -127,6 +152,6 @@ export async function advanceAfterStageEnd(input: StageEndAdvanceInput): Promise
       fail(run.phaseId, err);
     }
   }
-  for (const entry of results) expireTournamentReads(entry.target_phase_id, input.seasonId);
+  port.invalidate(input.seasonId, results.map((entry) => entry.target_phase_id));
   return { ran, results, error };
 }

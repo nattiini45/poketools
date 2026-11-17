@@ -10,6 +10,7 @@ import {
   seedToParticipantId,
   sortParticipantsBySeed,
   type BracketSlotDef,
+  type BracketStructureParticipant,
   type FeederDef,
 } from './bracket-structure';
 import {
@@ -33,7 +34,7 @@ type FeederSettlement =
   | { state: 'pending' }
   | { state: 'settled'; playerId: string | null };
 
-function participantIdsInSeedOrder(participants: ParticipantWithSeed[]): string[] {
+function participantIdsInSeedOrder(participants: readonly (BracketStructureParticipant & { id: string })[]): string[] {
   return sortParticipantsBySeed(participants).map((p) => p.id);
 }
 
@@ -170,6 +171,40 @@ function resolveByeChains(
   }
 }
 
+export interface ReadyBracketSlot {
+  slot: BracketSlotDef;
+  roundId: string;
+  player1Id: string;
+  player2Id: string;
+}
+
+export function readyBracketSlots(
+  participants: readonly (BracketStructureParticipant & { id: string })[],
+  structure: ReturnType<typeof buildBracketStructureForParticipants>,
+  roundIdByGlobalNumber: Map<number, string>,
+  slotResolutions: Map<string, SlotResolution>,
+): ReadyBracketSlot[] {
+  if (!structure) return [];
+  const seedOrderedIds = participantIdsInSeedOrder(participants);
+  resolveByeChains(structure.slots, seedOrderedIds, slotResolutions);
+  const ready: ReadyBracketSlot[] = [];
+  for (const slot of structure.slots) {
+    if (slot.isBracketReset) {
+      const gfSlot = structure.slots.find((candidate) => candidate.slotKey === slot.feeder1.slotKey);
+      if (!gfSlot) continue;
+      const gfResult = slotResolutions.get(gfSlot.slotKey);
+      const winnersResult = gfSlot.feeder1.slotKey ? slotResolutions.get(gfSlot.feeder1.slotKey) : undefined;
+      if (!gfResult?.winnerId || !winnersResult?.winnerId || gfResult.winnerId === winnersResult.winnerId) continue;
+    }
+    const first = settleFeeder(slot.feeder1, seedOrderedIds, slotResolutions);
+    const second = settleFeeder(slot.feeder2, seedOrderedIds, slotResolutions);
+    if (first.state === 'pending' || second.state === 'pending' || !first.playerId || !second.playerId) continue;
+    const roundId = roundIdByGlobalNumber.get(slot.global_round_number);
+    if (roundId) ready.push({ slot, roundId, player1Id: first.playerId, player2Id: second.playerId });
+  }
+  return ready;
+}
+
 /**
  * Materialize bracket slots whose feeders are fully resolved.
  * Skips bye-only advances; creates matches when both players are known.
@@ -189,39 +224,10 @@ export async function materializeReadySlots(
 ): Promise<MatchWithPlayers[]> {
   if (!structure) return [];
 
-  const seedOrderedIds = participantIdsInSeedOrder(participants);
-  resolveByeChains(structure.slots, seedOrderedIds, slotResolutions);
-
   const created: MatchWithPlayers[] = [];
   const matches = [...existingMatches];
-
-  for (const slot of structure.slots) {
-    // Bracket reset only materializes when the Losers Bracket champion wins
-    // the Grand Finals (i.e. the GF winner is not the WB final winner).
-    if (slot.isBracketReset) {
-      const gfSlotKey = slot.feeder1.slotKey;
-      const gfSlot = gfSlotKey
-        ? structure.slots.find((s) => s.slotKey === gfSlotKey)
-        : undefined;
-      if (!gfSlot) continue;
-      const wbFinalKey = gfSlot.feeder1.slotKey;
-      const gfRes = slotResolutions.get(gfSlot.slotKey);
-      const wbRes = wbFinalKey ? slotResolutions.get(wbFinalKey) : undefined;
-      if (!gfRes?.winnerId || !wbRes?.winnerId) continue;
-      if (gfRes.winnerId === wbRes.winnerId) continue;
-    }
-
+  for (const { slot, roundId, player1Id: p1, player2Id: p2 } of readyBracketSlots(participants, structure, roundIdByGlobalNumber, slotResolutions)) {
     const existing = findMatchForSlot(matches, roundIdByGlobalNumber, slot);
-    const s1 = settleFeeder(slot.feeder1, seedOrderedIds, slotResolutions);
-    const s2 = settleFeeder(slot.feeder2, seedOrderedIds, slotResolutions);
-    if (s1.state === 'pending' || s2.state === 'pending') continue;
-
-    const p1 = s1.playerId;
-    const p2 = s2.playerId;
-    if (!p1 || !p2) continue;
-
-    const roundId = roundIdByGlobalNumber.get(slot.global_round_number);
-    if (!roundId) continue;
 
     if (existing) {
       if (existing.player_1_id !== p1 || existing.player_2_id !== p2) {

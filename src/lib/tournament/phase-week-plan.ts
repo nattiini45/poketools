@@ -2,7 +2,13 @@ import 'server-only';
 
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { planGroupSchedule, type ScheduleGroup } from './group-schedule';
-import type { TournamentGroupWithMembers } from '@/types/season';
+export interface SchedulePhaseGroup {
+  id: string;
+  name: string;
+  group_number: number;
+  season_group_id?: string | null;
+  members: readonly { player_id: string; player_name: string; seed: number }[];
+}
 
 /**
  * The planned weeks of a phase whose groups mirror league groups (league groups design, point 5).
@@ -14,12 +20,12 @@ import type { TournamentGroupWithMembers } from '@/types/season';
  */
 
 /** Whether a phase's groups mirror league groups (every group carries a `season_group_id`). */
-export function mirrorsLeagueGroups(groups: readonly TournamentGroupWithMembers[]): boolean {
+export function mirrorsLeagueGroups(groups: readonly SchedulePhaseGroup[]): boolean {
   return groups.length > 0 && groups.every((group) => Boolean(group.season_group_id));
 }
 
 /** The plan's view of a phase's groups: group order, members in seed order. */
-export function toScheduleGroups(groups: readonly TournamentGroupWithMembers[]): ScheduleGroup[] {
+export function toScheduleGroups(groups: readonly SchedulePhaseGroup[]): ScheduleGroup[] {
   return [...groups]
     .sort((a, b) => a.group_number - b.group_number)
     .map((group) => ({

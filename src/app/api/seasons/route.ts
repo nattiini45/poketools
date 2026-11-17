@@ -11,8 +11,8 @@ import {
   listSeasons,
   listArchivedSeasons,
   listSeasonsByIds,
-  createSeason,
 } from '@/lib/supabase/queries/seasons';
+import { createClassicLeague } from '@/lib/league-phase/classic-storage';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -209,7 +209,7 @@ export async function POST(request: NextRequest) {
 
     // `language` (the league's content language, i18n-core §6.1) passes
     // through with the rest; omitted, the column default ('de') applies.
-    const season = await createSeason(seasonInput);
+    const season = await createClassicLeague(seasonInput);
 
     // From here on a clone undoes the new league if anything fails. Without
     // `clone_from` there is no tracker and the error passes through unchanged.

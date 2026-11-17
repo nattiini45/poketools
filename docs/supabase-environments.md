@@ -67,6 +67,7 @@ npm run test:db -- src/lib/supabase # extra arguments go to Vitest
 - On CI a real-DB suite is off unless `LOCAL_STACK_CI=1` is set. Only the advisory `database` and `e2e` jobs set it, after starting their own ephemeral stack on the runner (no Supabase secret, nothing hosted). Those jobs are not required checks; they replay every migration on an empty database, run `npm run db:types:check` and then `npm run test:db`.
 - Run one file with `npm run test:db -- <path>`. The shared `LOCAL_STACK=1` opens every suite's own flag (`LOCAL_RULESETS`, `LOCAL_LEAGUE_TRASH`, ...); the `db` project exists only for that script.
 - `ruleset-conversion.local.test.ts` keeps its own gate (`RULESET_REHEARSAL_DIR`) and the timing-only league-trash `huge` case stays opt-in (`LOCAL_LEAGUE_TRASH_HUGE=1`).
+- The native phase lifecycle and format suites (`LOCAL_LEAGUE_PHASE=1` / `LOCAL_PHASE_FORMAT=1`, or the shared switch) additionally require operator-enabled `phase` storage mode. CI enables it only on its disposable stack after the dormant-fence rehearsal. Do not change a shared development or hosted stack's mode for these suites; see [Phase-owned storage](./phase-separation.md).
 ## Option B: hosted project
 
 1. Create a project in the [Supabase dashboard](https://supabase.com/dashboard).

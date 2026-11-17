@@ -32,7 +32,7 @@ import {
 } from '@/lib/supabase/queries/tournament-groups';
 import type { ApiError } from '@/types/api';
 import type { MatchWithPlayers } from '@/types/match';
-import type { ParticipantWithSeed, TournamentStatus } from '@/types/tournament';
+import type { TournamentStatus } from '@/types/tournament';
 import { isSeasonClosed } from './season-state';
 
 export interface SubstituteAffectedMatch {
@@ -45,6 +45,41 @@ export interface SubstituteAffectedMatch {
   player_1_name: string;
   player_2_name: string;
 }
+
+export type NativeSubstituteAffectedMatch = Omit<SubstituteAffectedMatch, 'tournament_id' | 'tournament_name'> & {
+  phase_id: string;
+  phase_name: string;
+};
+
+type AffectedMatch = SubstituteAffectedMatch | NativeSubstituteAffectedMatch;
+
+interface SubstitutionOperations {
+  stages: (seasonId: string) => Promise<Array<{ id: string; name: string; status: TournamentStatus }>>;
+  participants: (phaseId: string) => Promise<Array<{ id: string; seed: number | null }>>;
+  memberships: typeof getGroupMembershipsInTournament;
+  swapEnrollment: typeof swapTournamentParticipant;
+  cancelProposals: (matchId: string) => Promise<readonly unknown[]>;
+  repairMatch: typeof repairScheduledMatchPairing;
+  moveSeat: typeof moveFormatSeat;
+}
+
+export type SubstitutionStoragePort = SubstitutionOperations & (
+  | { kind: 'legacy'; swapGroup: typeof swapGroupMemberInTournament; matches: (phases: Array<{ id: string; name: string }>, playerId: string) => Promise<SubstituteAffectedMatch[]> }
+  | { kind: 'phase'; matches: (phases: Array<{ id: string; name: string }>, playerId: string) => Promise<NativeSubstituteAffectedMatch[]> }
+);
+
+export const legacySubstitutionStorage: SubstitutionStoragePort = {
+  kind: 'legacy',
+  stages: (seasonId) => getStagesBySeasonId(seasonId),
+  participants: (phaseId) => getParticipants(phaseId),
+  memberships: (phaseId, playerIds) => getGroupMembershipsInTournament(phaseId, playerIds),
+  swapEnrollment: (phaseId, outPlayerId, inPlayerId) => swapTournamentParticipant(phaseId, outPlayerId, inPlayerId),
+  swapGroup: (phaseId, outPlayerId, inPlayerId) => swapGroupMemberInTournament(phaseId, outPlayerId, inPlayerId),
+  matches: (phases, playerId) => findRepairableMatches(phases, playerId),
+  cancelProposals: (matchId) => cancelPendingMatchProposalsForMatch(matchId),
+  repairMatch: (matchId, expected, next) => repairScheduledMatchPairing(matchId, expected, next),
+  moveSeat: (input) => moveFormatSeat(input),
+};
 
 /**
  * A planned match the apply left as it was: by the time its repair ran, a
@@ -84,13 +119,13 @@ export interface SubstituteWarning {
   params: { phases: string };
 }
 
-export interface SubstituteSummary {
+export interface SubstituteSummary<M extends AffectedMatch = SubstituteAffectedMatch> {
   roster_swapped: boolean;
   phases: SubstitutePhaseUpdate[];
-  affected_matches: SubstituteAffectedMatch[];
+  affected_matches: M[];
   matches_repaired: number;
   /** Planned matches the apply did not repair (always empty in a dry run). */
-  matches_skipped: SubstituteSkippedMatch[];
+  matches_skipped: Array<M & { reason: 'has_games' | 'changed' }>;
   /** Present only in a league with an attached custom format (see `SubstituteFormatMove`). */
   format?: SubstituteFormatMove;
   /** Present only when there is one. */
@@ -236,8 +271,8 @@ function toAffectedMatch(
 }
 
 /** The league's stages, and the ones this substitution can reach (not completed, in scope). */
-async function resolveTargetPhases(seasonId: string, scope: 'league' | string) {
-  const stages = await getStagesBySeasonId(seasonId);
+async function resolveTargetPhases(seasonId: string, scope: 'league' | string, storage: SubstitutionStoragePort) {
+  const stages = await storage.stages(seasonId);
   return {
     stages,
     targets: stages.filter(
@@ -385,10 +420,11 @@ async function swapEnrollment(
   phase: SubstitutePhaseUpdate,
   outPlayerId: string,
   inPlayerId: string,
+  storage: SubstitutionStoragePort,
 ): Promise<void> {
   let result: TournamentParticipantSwap;
   try {
-    result = await swapTournamentParticipant(phase.phase_id, outPlayerId, inPlayerId);
+    result = await storage.swapEnrollment(phase.phase_id, outPlayerId, inPlayerId);
   } catch (err) {
     if ((err as { code?: unknown } | null)?.code === UNIQUE_VIOLATION) {
       console.error('[substitute] enrollment swap conflict:', err);
@@ -402,7 +438,10 @@ async function swapEnrollment(
   if (!result.swapped) throw enrollmentChanged(phase);
 }
 
-export async function substituteParticipant(input: SubstituteInput): Promise<SubstituteSummary> {
+export function substituteParticipant(input: SubstituteInput): Promise<SubstituteSummary>;
+export function substituteParticipant(input: SubstituteInput, storage: Extract<SubstitutionStoragePort, { kind: 'phase' }>): Promise<SubstituteSummary<NativeSubstituteAffectedMatch>>;
+export function substituteParticipant(input: SubstituteInput, storage: SubstitutionStoragePort): Promise<SubstituteSummary<AffectedMatch>>;
+export async function substituteParticipant(input: SubstituteInput, storage: SubstitutionStoragePort = legacySubstitutionStorage): Promise<SubstituteSummary<AffectedMatch>> {
   const { seasonId, outPlayerId, inPlayerId, scope, dryRun, log } = input;
   const isLeagueScope = scope === 'league';
 
@@ -425,9 +464,9 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     throw new UserFacingError('Incoming player not found', { code: 'IN_PLAYER_NOT_FOUND' });
   }
 
-  const { stages, targets: targetPhases } = await resolveTargetPhases(seasonId, scope);
+  const { stages, targets: targetPhases } = await resolveTargetPhases(seasonId, scope, storage);
   /** Each target phase's enrollment, read once. */
-  const enrollment = new Map<string, ParticipantWithSeed[]>();
+  const enrollment = new Map<string, Array<{ id: string; seed: number | null }>>();
 
   if (isLeagueScope) {
     // League scope moves the roster row, so both sides are checked on it.
@@ -457,7 +496,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
         code: 'PHASE_NOT_ELIGIBLE',
       });
     }
-    const phaseParticipants = await getParticipants(scope);
+    const phaseParticipants = await storage.participants(scope);
     enrollment.set(scope, phaseParticipants);
     if (phaseParticipants.some((p) => p.id === inPlayerId)) {
       // `targetPhases` is exactly the scoped phase here (filtered by id).
@@ -477,7 +516,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
   const enrolledPhases: Array<{ id: string; name: string }> = [];
 
   for (const phase of targetPhases) {
-    const participants = enrollment.get(phase.id) ?? (await getParticipants(phase.id));
+    const participants = enrollment.get(phase.id) ?? (await storage.participants(phase.id));
     const outEntry = participants.find((p) => p.id === outPlayerId);
     // League scope only: a phase the outgoing player is not (or no longer,
     // after an interrupted run) enrolled in has nothing to move.
@@ -496,7 +535,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     // The group the incoming player ends in, as swapGroupMemberInTournament
     // decides it: the outgoing player's slot, else (a re-run after the slot
     // already moved) the row the incoming player holds.
-    const memberships = await getGroupMembershipsInTournament(phase.id, [outPlayerId, inPlayerId]);
+    const memberships = await storage.memberships(phase.id, [outPlayerId, inPlayerId]);
     const group =
       memberships.find((row) => row.player_id === outPlayerId) ??
       memberships.find((row) => row.player_id === inPlayerId);
@@ -513,9 +552,9 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     enrolledPhases.push({ id: phase.id, name: phase.name });
   }
 
-  const affectedMatches = await findRepairableMatches(enrolledPhases, outPlayerId);
+  const affectedMatches = await storage.matches(enrolledPhases, outPlayerId);
 
-  const summary: SubstituteSummary = {
+  const summary: SubstituteSummary<AffectedMatch> = {
     roster_swapped: isLeagueScope,
     phases: phaseUpdates,
     affected_matches: affectedMatches,
@@ -525,7 +564,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
 
   const handedOverPhaseIds = phaseUpdates.map((phase) => phase.phase_id);
   const moveSeat = (dry: boolean) =>
-    moveFormatSeat({
+    storage.moveSeat({
       seasonId,
       outPlayerId,
       inPlayerId,
@@ -579,18 +618,18 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
   if (seat.moved && seat.total > 0) applyLog.format_moved = { total: seat.total, rows: seat.rows };
 
   for (const phase of phaseUpdates) {
-    for (const match of affectedMatches.filter((m) => m.tournament_id === phase.phase_id)) {
+    for (const match of affectedMatches.filter((m) => ('phase_id' in m ? m.phase_id : m.tournament_id) === phase.phase_id)) {
       const next = {
         player_1_id: match.player_1_id === outPlayerId ? inPlayerId : match.player_1_id,
         player_2_id: match.player_2_id === outPlayerId ? inPlayerId : match.player_2_id,
       };
 
       at('proposals', phase.phase_id, match.match_id);
-      const cancelled = await cancelPendingMatchProposalsForMatch(match.match_id);
+      const cancelled = await storage.cancelProposals(match.match_id);
       if (cancelled.length > 0) applyLog.proposals_cancelled.push(match.match_id);
 
       at('match', phase.phase_id, match.match_id);
-      const outcome = await repairScheduledMatchPairing(
+      const outcome = await storage.repairMatch(
         match.match_id,
         { player_1_id: match.player_1_id, player_2_id: match.player_2_id },
         next,
@@ -608,6 +647,14 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     // Recorded only when the step wrote (the slot moved, or stale rows of the
     // incoming player were deleted), as the step itself reports it; a step
     // that failed after deleting a stale row is recorded too, holding no group.
+    if (storage.kind === 'phase') {
+      at('enrollment', phase.phase_id);
+      await swapEnrollment(phase, outPlayerId, inPlayerId, storage);
+      applyLog.enrollments_swapped.push(phase.phase_id);
+      if (phase.group) applyLog.groups_handed_over.push({ phase_id: phase.phase_id, group_id: phase.group.id });
+      touch(phase.phase_id);
+      continue;
+    }
     at('group', phase.phase_id);
     const handOver = (groupId: string | null) => {
       applyLog.groups_handed_over.push({ phase_id: phase.phase_id, group_id: groupId });
@@ -615,7 +662,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     };
     let group: GroupMemberSwap;
     try {
-      group = await swapGroupMemberInTournament(phase.phase_id, outPlayerId, inPlayerId);
+      group = await storage.swapGroup(phase.phase_id, outPlayerId, inPlayerId);
     } catch (err) {
       if (groupSwapWroteBeforeFailure(err)) handOver(null);
       throw err;
@@ -623,7 +670,7 @@ export async function substituteParticipant(input: SubstituteInput): Promise<Sub
     if (group.written) handOver(group.held?.group_id ?? null);
 
     at('enrollment', phase.phase_id);
-    await swapEnrollment(phase, outPlayerId, inPlayerId);
+    await swapEnrollment(phase, outPlayerId, inPlayerId, storage);
     applyLog.enrollments_swapped.push(phase.phase_id);
     touch(phase.phase_id);
   }

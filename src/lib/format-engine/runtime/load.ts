@@ -9,9 +9,7 @@ import 'server-only';
 
 import { cache } from 'react';
 import type { FormatDefinition, Stage } from '@/lib/format-kit/types';
-import { getKitPhases, getPhaseMembers } from '@/lib/supabase/queries/format-engine';
-import { getFormatRuntime } from '@/lib/supabase/queries/format-runtime';
-import { getSeasonFormat } from '@/lib/supabase/queries/season-formats';
+import { legacyKitStorage, type KitStoragePort } from '@/lib/league-phase/kit-storage';
 import type { Json } from '@/types/database';
 import { stageOf } from '../load';
 import type { EnvBase } from './expr-env';
@@ -62,13 +60,13 @@ export function envBaseOf(ctx: Pick<KitContext, 'def' | 'state' | 'seed'>, scope
 }
 
 /** The context of a league whose attached format runs on the `kit` engine, or null (no format, or another engine). */
-export async function loadFreshKitContext(seasonId: string): Promise<KitContext | null> {
-  const format = await getSeasonFormat(seasonId);
+export async function loadFreshKitContext(seasonId: string, storage: KitStoragePort = legacyKitStorage): Promise<KitContext | null> {
+  const format = await storage.format(seasonId);
   if (format === null || format.engine !== 'kit') return null;
-  const [phaseRows, runtime] = await Promise.all([getKitPhases(seasonId), getFormatRuntime(seasonId)]);
+  const [phaseRows, runtime] = await Promise.all([storage.phases(seasonId), storage.runtime(seasonId)]);
   const [stages, members] = await Promise.all([
     Promise.all(phaseRows.map((row) => stageOf(row))),
-    getPhaseMembers(phaseRows.map((row) => row.id)),
+    storage.members(phaseRows.map((row) => row.id)),
   ]);
   const { state, tunableIssues } = buildRuntimeState(format.spec, runtime, {
     tunables: format.tunables as Json,
@@ -77,7 +75,7 @@ export async function loadFreshKitContext(seasonId: string): Promise<KitContext 
   const phases = phaseRows.map((row, i) => ({
     id: row.id,
     stage: stages[i],
-    members: members.filter((m) => m.tournament_id === row.id).map((m) => m.player_id).sort(),
+    members: members.filter((m) => m.phase_id === row.id).map((m) => m.player_id).sort(),
   }));
   return { seasonId, seed: format.seed, revision: format.revision, def: format.spec, state, tunableIssues, phases };
 }
@@ -90,11 +88,11 @@ export const loadKitContext = cache(loadFreshKitContext);
  * an engine switch, so a read of them must still know who plays and which relations are hidden: otherwise switching the
  * engine would lift the masks without the audited unmask.
  */
-export async function loadMaskContext(seasonId: string): Promise<MaskContext | null> {
-  const format = await getSeasonFormat(seasonId);
+export async function loadMaskContext(seasonId: string, storage: KitStoragePort = legacyKitStorage): Promise<MaskContext | null> {
+  const format = await storage.format(seasonId);
   if (format === null) return null;
-  const [phaseRows, runtime] = await Promise.all([getKitPhases(seasonId), getFormatRuntime(seasonId)]);
-  const members = await getPhaseMembers(phaseRows.map((row) => row.id));
+  const [phaseRows, runtime] = await Promise.all([storage.phases(seasonId), storage.runtime(seasonId)]);
+  const members = await storage.members(phaseRows.map((row) => row.id));
   const { state } = buildRuntimeState(format.spec, runtime, { tunables: format.tunables as Json, amendments: format.amendments as Json });
-  return { def: format.spec, state, phases: phaseRows.map((row) => ({ members: members.filter((m) => m.tournament_id === row.id).map((m) => m.player_id) })) };
+  return { def: format.spec, state, phases: phaseRows.map((row) => ({ members: members.filter((m) => m.phase_id === row.id).map((m) => m.player_id) })) };
 }

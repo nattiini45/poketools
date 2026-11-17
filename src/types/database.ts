@@ -9523,6 +9523,10 @@ export type Database = {
           isSetofReturn: false
         }
       }
+      league_phase_complete_at_stage_end: {
+        Args: { p_known_unfinished: string[]; p_phase_id: string }
+        Returns: Json
+      }
       league_trash__archive_tables: { Args: never; Returns: string[] }
       league_trash__assert_inventory: { Args: never; Returns: undefined }
       league_trash__capture: {
@@ -9629,9 +9633,152 @@ export type Database = {
         Args: { existing: Json; incoming: Json }
         Returns: Json
       }
+      phase__lock: { Args: { p_phase_id: string }; Returns: string }
+      phase_bracket_write: {
+        Args: {
+          p_current_round: number
+          p_expected_status: Database["public"]["Enums"]["phase_status"]
+          p_matches: Json
+          p_phase_id: string
+          p_replace: boolean
+          p_rounds: Json
+        }
+        Returns: Json
+      }
+      phase_competition_create_from_format: {
+        Args: {
+          p_actor: string
+          p_format: Json
+          p_grant_creator: boolean
+          p_rulesets: Json
+          p_season: Json
+          p_stages: Json
+        }
+        Returns: Json
+      }
       phase_complete_at_stage_end: {
         Args: { p_known_unfinished: string[]; p_phase_id: string }
         Returns: Json
+      }
+      phase_enrollment_freeze: {
+        Args: { p_phase_id: string }
+        Returns: boolean
+      }
+      phase_enrollment_replace: {
+        Args: {
+          p_entries: Json
+          p_expected_synced_at: string
+          p_force?: boolean
+          p_phase_id: string
+          p_source: Json
+        }
+        Returns: boolean
+      }
+      phase_format__lock_phases: {
+        Args: { p_season_id: string }
+        Returns: undefined
+      }
+      phase_format_attach_season: {
+        Args: {
+          p_confirm_clear?: boolean
+          p_confirmed_counts?: Json
+          p_definition_id: string
+          p_preset_rulesets?: Json
+          p_season_id: string
+          p_seed: string
+          p_spec: Json
+          p_spec_hash: string
+          p_stages: Json
+          p_version_no: number
+        }
+        Returns: Json
+      }
+      phase_format_delete_unused_preset_rulesets: {
+        Args: { p_kept: Json; p_recorded: Json }
+        Returns: string[]
+      }
+      phase_format_detach_season: {
+        Args: {
+          p_confirm_clear?: boolean
+          p_confirmed_counts?: Json
+          p_season_id: string
+        }
+        Returns: Json
+      }
+      phase_format_season_started: {
+        Args: { p_season_id: string }
+        Returns: boolean
+      }
+      phase_group_member_move: {
+        Args: {
+          p_from_group: string
+          p_phase_id: string
+          p_player_id: string
+          p_seed: number
+          p_to_group: string
+        }
+        Returns: undefined
+      }
+      phase_group_member_swap: {
+        Args: { p_in: string; p_out: string; p_phase_id: string }
+        Returns: Json
+      }
+      phase_group_row_handover: {
+        Args: {
+          p_group_id: string
+          p_in: string
+          p_out: string
+          p_phase_id: string
+        }
+        Returns: Json
+      }
+      phase_group_write: {
+        Args: { p_operation: string; p_phase_id: string; p_rows: Json }
+        Returns: Json
+      }
+      phase_participant_edit: {
+        Args: { p_add: boolean; p_phase_id: string; p_player_id: string }
+        Returns: undefined
+      }
+      phase_participant_seeds: {
+        Args: { p_phase_id: string; p_seeds: Json }
+        Returns: undefined
+      }
+      phase_participant_swap: {
+        Args: { p_in: string; p_out: string; p_phase_id: string }
+        Returns: Json
+      }
+      phase_participants_replace: {
+        Args: { p_entries: Json; p_phase_id: string }
+        Returns: undefined
+      }
+      phase_round_complete: {
+        Args: { p_force: boolean; p_round_id: string }
+        Returns: Json
+      }
+      phase_round_delete: { Args: { p_round_id: string }; Returns: Json }
+      phase_round_write: {
+        Args: {
+          p_best_of: number
+          p_bracket_side?: string
+          p_bye_player_ids: string[]
+          p_expected_revision?: number
+          p_matches: Json
+          p_name: string
+          p_phase_id: string
+          p_round_id: string
+          p_round_number: number
+          p_start_phase?: boolean
+        }
+        Returns: Json
+      }
+      phase_stage_orders_reorder: {
+        Args: { p_phase_ids: string[]; p_season_id: string }
+        Returns: undefined
+      }
+      phase_stage_orders_shift: {
+        Args: { p_delta: number; p_from_order: number; p_season_id: string }
+        Returns: undefined
       }
       phase_storage_mode: { Args: never; Returns: string }
       phase_storage_transition: {
