@@ -315,6 +315,54 @@ describe('native game pipeline', () => {
     expect(forbidden).not.toHaveBeenCalled();
   });
 
+  it('previews the played downstream chain and resets it only with cascade confirmation', async () => {
+    const { pipeline, effects, aggregates } = fixture();
+    const { origin, sibling, downstream } = bracketFixture();
+    const finalGame = { ...game, id: 'final-game', match_id: downstream.id };
+    const byId = new Map([origin, sibling, downstream].map((row) => [row.id, row]));
+    const gamesByMatch = new Map([[origin.id, [game]], [downstream.id, [finalGame]]]);
+    vi.mocked(matches.getPhaseMatchById).mockImplementation(async (id) => byId.get(id) ?? null);
+    vi.mocked(matches.getMatchesByPhase).mockImplementation(async () => [...byId.values()]);
+    vi.mocked(matches.resetPhaseMatchFields).mockImplementation(async (id, expectedStatus) => {
+      const current = byId.get(id);
+      if (!current || current.status !== expectedStatus) return null;
+      const next = { ...current, status: 'scheduled', winner_id: null } as const;
+      byId.set(id, next);
+      return next;
+    });
+    vi.mocked(games.getPhaseGameById).mockImplementation(async (id) => id === game.id ? game : finalGame);
+    vi.mocked(games.getPhaseGamesByMatch).mockImplementation(async (id) => gamesByMatch.get(id) ?? []);
+    vi.mocked(games.deleteUncountedPhaseGameRow).mockImplementation(async (id) => {
+      gamesByMatch.delete(id === game.id ? origin.id : downstream.id);
+      return 'deleted';
+    });
+
+    const preview = await pipeline.previewMatchReset(origin.id);
+    expect(preview).toMatchObject({ was_completed: true, downstream: [{ id: downstream.id, round_name: 'Round 2' }] });
+    await expect(pipeline.resetMatch(origin.id, 'admin')).rejects.toMatchObject({
+      code: 'DOWNSTREAM_PLAYED', params: { count: 1 },
+    });
+    expect(aggregates.cancelAggregateJobsForGame).not.toHaveBeenCalled();
+    expect(cleanPhaseMatchChildren).not.toHaveBeenCalled();
+    expect(matches.resetPhaseMatchFields).not.toHaveBeenCalled();
+
+    await expect(pipeline.resetMatch(origin.id, 'admin', true)).resolves.toMatchObject({
+      games_deleted: 1, has_downstream_matches: true,
+    });
+    for (const [index, row, battle] of [[1, downstream, finalGame], [2, origin, game]] as const) {
+      expect(aggregates.cancelAggregateJobsForGame).toHaveBeenNthCalledWith(index, battle.id);
+      expect(aggregates.rollbackGameAggregates).toHaveBeenNthCalledWith(index, battle.id, 'marker', expect.anything(), {
+        kind: 'phase', phase_id: 'phase', season_id: 'league',
+      });
+      expect(games.deleteUncountedPhaseGameRow).toHaveBeenNthCalledWith(index, battle.id);
+      expect(cleanPhaseMatchChildren).toHaveBeenNthCalledWith(index, row.id, effects);
+      expect(matches.resetPhaseMatchFields).toHaveBeenNthCalledWith(index, row.id, 'completed');
+      expect(effects.takeBackMarkedOutcome).toHaveBeenNthCalledWith(index, row.id, 'outcome-mark');
+      expect(effects.revertFormatCompletion).toHaveBeenNthCalledWith(index, row, expect.objectContaining({ id: 'phase' }), 'completed', 'scheduled');
+    }
+    expect(matches.deletePhaseMatchesByIds).toHaveBeenCalledExactlyOnceWith([downstream.id], effects);
+  });
+
   it('refuses played native downstream matches before claiming an edit lease', async () => {
     const { pipeline, effects } = fixture();
     bracketFixture();
