@@ -20,6 +20,12 @@ export async function POST(
       ?? rejectInvalidPathId(matchId, 'INVALID_MATCH_ID');
     if (invalid) return invalid;
 
+    const as = request.nextUrl.searchParams.get('as');
+    if (as !== null && as !== 'admin') {
+      const issues = 'as: Expected admin';
+      throw new UserFacingError(issues, { code: 'validation_failed', status: 400, params: { issues } });
+    }
+
     const mid = matchId.toLowerCase();
     const owner = await requireOpenPhaseRouteMode() === 'phase'
       ? await findNativePhaseAliasOwner({ phaseId: phaseId.toLowerCase(), matchId: mid })
@@ -33,7 +39,12 @@ export async function POST(
       invalidateSeason: (season, phaseIds) => expireSeasonReads(season, { phaseIds }),
       invalidateWiki: (phase) => revalidatePhaseMatchPages(phase),
     });
-    return await matches.decide(request, { params: Promise.resolve({ mid }) }, player);
+    return await matches.decide(
+      request,
+      { params: Promise.resolve({ mid }) },
+      player,
+      as === 'admin',
+    );
   } catch (error) {
     return safeErrorResponse(error, 'Failed to update match');
   }

@@ -25,6 +25,7 @@ const game = (n: number): GameSummary => ({
 
 beforeEach(() => {
   fetchMock.mockReset();
+  router.refresh.mockClear();
   vi.stubGlobal('fetch', fetchMock);
 });
 
@@ -33,7 +34,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function ui(status: MatchStatus, games: GameSummary[], correctionsOnly = false) {
+function ui(status: MatchStatus, games: GameSummary[], native = false) {
   return withI18n(
     <AdminMatchActions
       matchId="m1"
@@ -42,7 +43,7 @@ function ui(status: MatchStatus, games: GameSummary[], correctionsOnly = false) 
       player2={{ id: 'p2', name: 'Gary' }}
       currentWinnerId="p1"
       games={games}
-      correctionsOnly={correctionsOnly}
+      phaseOwner={native ? { season_id: 's1', phase_id: 'ph1' } : undefined}
       bestOf={3}
       isSiteAdmin
     />,
@@ -50,7 +51,46 @@ function ui(status: MatchStatus, games: GameSummary[], correctionsOnly = false) 
 }
 
 describe('AdminMatchActions action phase', () => {
-  it('offers only native corrections and refreshes the reset preview before an approved cascade', async () => {
+  it('posts an admin dispute with its note only to the owning phase decision route', async () => {
+    fetchMock.mockResolvedValue({ json: async () => ({ success: true, data: {} }) });
+    const user = userEvent.setup();
+    render(ui('pending_confirmation', [game(1)], true));
+    await user.type(screen.getByRole('textbox', { name: 'Notes (optional)' }), 'Replay differs');
+    await user.click(screen.getByRole('button', { name: 'Mark Disputed' }));
+    expect(fetchMock).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Mark disputed' }));
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/seasons/s1/phases/ph1/matches/m1/decision?as=admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'dispute', notes: 'Replay differs' }),
+    });
+  });
+
+  it('resolves a native dispute and refreshes an already saved result when finalization is incomplete', async () => {
+    fetchMock.mockResolvedValue({ json: async () => ({ success: false, code: 'match_finalize_incomplete' }) });
+    const user = userEvent.setup();
+    render(ui('disputed', [game(1)], true));
+    expect(screen.queryByRole('button', { name: 'Mark Disputed' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Complete Match' }));
+    const dialog = screen.getByRole('dialog', { name: 'Complete this match?' });
+    expect(within(dialog).getByRole('button', { name: 'Complete match' })).toHaveProperty('disabled', true);
+    await user.click(within(dialog).getByRole('checkbox'));
+    await user.click(within(dialog).getByRole('button', { name: 'Complete match' }));
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/seasons/s1/phases/ph1/matches/m1/decision?as=admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'confirm', winner_id: 'p1' }),
+    });
+    expect(await screen.findByText(/Result recorded, but some follow-up steps failed/)).toBeTruthy();
+    expect(router.refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps a scheduled native match out of the override and legacy settlement flows', () => {
+    render(ui('scheduled', [], true));
+    expect(screen.queryByRole('button', { name: /Complete Match|Mark Disputed|Record result/ })).toBeNull();
+  });
+
+  it('keeps native reset preview and cascade approval alongside override controls', async () => {
     fetchMock
       .mockResolvedValueOnce({ json: async () => ({
         success: true, data: { games_to_delete: 1, was_completed: false, downstream: [] },
@@ -60,7 +100,9 @@ describe('AdminMatchActions action phase', () => {
     const user = userEvent.setup();
     render(ui('pending_confirmation', [game(1)], true));
 
-    expect(screen.queryByRole('button', { name: /Complete Match|Mark Disputed|Record result/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Complete Match' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Mark Disputed' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Record result' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Edit' }).getAttribute('href')).toBe('/admin/matches/m1/games/g1/edit');
     await user.click(screen.getByRole('button', { name: 'Reset Match' }));
     let dialog = screen.getByRole('dialog', { name: 'Reset Match' });

@@ -239,7 +239,7 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
               player2={{ id: match.player_2_id, name: match.player_2_name }}
               currentWinnerId={match.winner_id}
               games={match.games}
-              correctionsOnly={native}
+              phaseOwner={native ? target.owner : undefined}
               bestOf={context.best_of}
               isSiteAdmin={isSiteAdmin}
               backSuffix={backSuffix}

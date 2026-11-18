@@ -240,7 +240,7 @@ describe('native admin match detail', () => {
       publicHref: `${phaseUrl}/matches/${MATCH_ID}`, listHref: `${phaseUrl}?tab=rounds`,
       context: { league_name: 'Sample League', phase_name: 'Groups', best_of: 5 },
     });
-    expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: true, bestOf: 5, isSiteAdmin: false, backSuffix: '' });
+    expect(props.get(AdminMatchActions)).toMatchObject({ phaseOwner: { kind: 'phase', season_id: SEASON_ID, phase_id: PHASE_ID }, bestOf: 5, isSiteAdmin: false, backSuffix: '' });
     expect(props.get(MatchReopenSection)).toMatchObject({ native: true });
     for (const panel of [MatchHistoryPanel, MatchDisputePanel]) expect(types).toContain(panel);
     expect(mocks.listMatchAuditEvents).toHaveBeenCalledExactlyOnceWith(MATCH_ID, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }, 'phase');
@@ -339,7 +339,7 @@ describe('native admin match detail', () => {
     const { props, types } = await renderPage();
     expect(mocks.standaloneMatchAliasExists).toHaveBeenCalledWith(MATCH_ID, TOURNAMENT_ID);
     expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('viewer-1', 'tournament', TOURNAMENT_ID);
-    expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: false });
+    expect(props.get(AdminMatchActions)).toMatchObject({ phaseOwner: undefined });
     expect(types).toContain(MatchHistoryPanel);
     expect(mocks.isPhaseAdminFor).not.toHaveBeenCalled();
 

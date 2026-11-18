@@ -33,7 +33,12 @@ export interface MatchDecisionStorage<M extends DecisionMatch> {
 }
 
 export function createMatchDecisionHandler<M extends DecisionMatch>(storage: MatchDecisionStorage<M>) {
-  return async function handleMatchDecision(request: NextRequest, { params }: MatchDecisionRouteParams, authenticatedPlayer?: MatchDecisionPlayer) {
+  return async function handleMatchDecision(
+    request: NextRequest,
+    { params }: MatchDecisionRouteParams,
+    authenticatedPlayer?: MatchDecisionPlayer,
+    adminOnly = false,
+  ) {
     try {
       const player = authenticatedPlayer ?? await requirePlayer();
       const { mid } = await params;
@@ -67,6 +72,13 @@ export function createMatchDecisionHandler<M extends DecisionMatch>(storage: Mat
 
       // Site admins or resource admins for this tournament can act as admin
       const hasAdminAccess = await storage.canAdminister(player, storage.competitionId(match));
+
+      if (adminOnly && !hasAdminAccess) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Admin access required', code: 'forbidden' },
+          { status: 403 },
+        );
+      }
 
       if ((requestedWinnerId || notes) && !hasAdminAccess) {
         return NextResponse.json<ApiResult<never>>(
