@@ -998,6 +998,13 @@ POST /api/manual-result         Write manually entered match result + stats to d
                                 update Aggregates
 
 POST /api/confirm-match/[mid]   Player B confirms result → set match to completed
+POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/decision   Confirm or dispute a match in the native phase generation
+POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/manual-result
+                                 Record a manual game in the native phase generation. Body match_id must match
+                                 the route match ID; the tracker keeps the moments_saved and warning contract.
+POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/parse-replay
+                                 Record a bound Showdown replay for a verified native phase match. Auth and
+                                 participant checks precede fetch; body match_id must match the route match ID.
 
 POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; continues legacy per-round elim).
                                 Returns 400 BRACKET_V2_MANAGED when structure elim rounds exist, 400
@@ -1059,6 +1066,13 @@ PATCH .../groups/members                    Manual group membership moves
 POST .../groups/repair                      Hand group rows left by pre-handover substitutions to the
                                             enrolled substitute (`dry_run` required; audit log, else fixtures;
                                             an apply names the reviewed `moves`, 409 PLAN_CHANGED if they differ)
+GET .../rounds, GET .../rounds/[rid]          Native phase rounds and round details with public matches
+POST .../rounds/manual                       Native manual round with participant and format readiness checks
+POST .../rounds/generate                     Native next Swiss or round-robin round; first group mirror and fixtures commit together
+PATCH .../rounds/[rid]                       Native round deadline, best-of and status (pending-only best-of)
+DELETE .../rounds/[rid]                      Native confirmed delete of the latest eligible game-free round with only
+                                            scheduled, unlinked fixtures; rejects played, managed or dependent rounds
+POST .../generate-bracket                    Initial native single- or double-elimination bracket; refuses a stale plan
 POST /api/seasons/[id]/participants/substitute  League (`scope: 'league'`) or phase (`scope: <phaseId>`) substitute
 POST /api/seasons/[id]/advance              Advance to next phase (optional `force`; same guards as sync)
 GET/POST/DELETE /api/seasons/[id]/format    Custom format league: state (`not_custom` | `unattached` | `attached`,
@@ -1196,14 +1210,16 @@ GET  /api/cron/draft-ticks      Cron (10 min): slow-draft timeouts, redraft auto
 GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation matches (compare-and-set),
                                 then heals completed matches whose finalize did not finish
                                 (finalized_at IS NULL, older than 10 min; replay-safe steps only).
-                                500 auto_confirm_partial_failure when any match failed
+                                In phase mode runs separate bounded phase and standalone worklists; frozen
+                                modes run neither (503). 500 auto_confirm_partial_failure when any match failed.
 GET  /api/cron/format-engine    Cron (15 min): fires due format calendar events, applies match/team/action deadline
                                 policies, expires challenges, fires lost action_locked events and backfills missed
                                 match_completed events (at most 100 leagues per run in a window that moves on each slot,
                                 stops starting leagues after 240 s); one league's failure is logged and skipped, with
                                 500 format_cron_partial_failure when any league failed
 GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggregate jobs; 500 on a
-                                failed claim or queue write, or when jobs are stranded
+                                failed claim or queue write, or when jobs are stranded. Drains both queues
+                                in phase mode, the original queue in legacy mode, and neither during maintenance (503).
 GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one
                                 audit event per player)
 GET  /api/cron/refresh-usage-stats  Cron (monthly): re-imports Smogon usage stats and current-gen sample sets

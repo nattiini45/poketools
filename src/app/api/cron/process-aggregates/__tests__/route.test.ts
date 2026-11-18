@@ -1,31 +1,39 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextResponse } from 'next/server';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/match/aggregate-queue', () => ({
   processAggregateJobs: vi.fn(),
   getAggregateJobHealth: vi.fn(),
   countFailedAggregateJobs: vi.fn(),
+  processAllAggregateJobs: vi.fn(),
+  getAllAggregateJobHealth: vi.fn(),
+  countAllFailedAggregateJobs: vi.fn(),
   AggregateQueueClaimError: class AggregateQueueClaimError extends Error {},
   AggregateQueueRunError: class AggregateQueueRunError extends Error {},
 }));
 
-vi.mock('@/lib/api/error-response', () => ({
-  safeErrorResponse: vi.fn((_err: unknown, fallback: string, status = 500, code?: string) =>
-    NextResponse.json({ success: false, error: fallback, code }, { status })
-  ),
-}));
+vi.mock('@/lib/api/error-response', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/error-response')>();
+  return { ...actual, safeErrorResponse: vi.fn(actual.safeErrorResponse) };
+});
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/revalidation', () => ({ revalidatePhaseMatchPages: vi.fn() }));
 
 import { GET, POST, maxDuration } from '@/app/api/cron/process-aggregates/route';
 import {
   AggregateQueueClaimError,
   AggregateQueueRunError,
+  countAllFailedAggregateJobs,
   countFailedAggregateJobs,
+  getAllAggregateJobHealth,
   getAggregateJobHealth,
+  processAllAggregateJobs,
   processAggregateJobs,
 } from '@/lib/match/aggregate-queue';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logger } from '@/lib/logger';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { revalidatePhaseMatchPages } from '@/lib/revalidation';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -52,9 +60,11 @@ describe('POST /api/cron/process-aggregates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.CRON_SECRET = 'test-secret';
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined);
     vi.mocked(getAggregateJobHealth).mockResolvedValue({ strandedPending: 0, staleProcessing: 0 });
     vi.mocked(countFailedAggregateJobs).mockResolvedValue(0);
   });
+  afterEach(() => vi.unstubAllEnvs());
 
   it('processes aggregate jobs with valid Bearer token', async () => {
     vi.mocked(processAggregateJobs).mockResolvedValueOnce({
@@ -71,6 +81,41 @@ describe('POST /api/cron/process-aggregates', () => {
     expect(body).toEqual({ success: true, data: { processed: 5, failed: 1, reclaimed: 2, failedJobs: 0 } });
     expect(processAggregateJobs).toHaveBeenCalledWith(20);
     expect(getAggregateJobHealth).toHaveBeenCalledTimes(1);
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(processAllAggregateJobs).not.toHaveBeenCalled();
+  });
+
+  it('processes both queues and invalidates the applied phase in phase mode', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(getAllAggregateJobHealth).mockResolvedValueOnce({ strandedPending: 0, staleProcessing: 0 });
+    vi.mocked(countAllFailedAggregateJobs).mockResolvedValueOnce(0);
+    vi.mocked(processAllAggregateJobs).mockImplementationOnce(async (_limit, invalidate) => {
+      await invalidate?.({ kind: 'phase', phase_id: 'phase-id', season_id: 'league-id' });
+      return { processed: 2, failed: 0, reclaimed: 1 };
+    });
+
+    const response = await GET(makeCronRequest(`${URL_BASE}?limit=7`, { method: 'GET', headers: AUTH }));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: { processed: 2, failed: 0, reclaimed: 1, failedJobs: 0 } });
+    expect(readPhaseStorageMode).toHaveBeenCalledTimes(1);
+    expect(processAllAggregateJobs).toHaveBeenCalledWith(7, expect.any(Function));
+    expect(getAllAggregateJobHealth).toHaveBeenCalledTimes(1);
+    expect(countAllFailedAggregateJobs).toHaveBeenCalledTimes(1);
+    expect(processAggregateJobs).not.toHaveBeenCalled();
+    expect(revalidatePhaseMatchPages).toHaveBeenCalledWith('phase-id', undefined, 'league-id');
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('refuses %s without reclaiming or claiming either queue', async (mode) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    const response = await POST(makeCronRequest(URL_BASE, { headers: AUTH }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(processAggregateJobs).not.toHaveBeenCalled();
+    expect(processAllAggregateJobs).not.toHaveBeenCalled();
+    expect(getAggregateJobHealth).not.toHaveBeenCalled();
+    expect(getAllAggregateJobHealth).not.toHaveBeenCalled();
   });
 
   it('serves GET (Vercel Cron) with the same handler', async () => {
@@ -86,6 +131,7 @@ describe('POST /api/cron/process-aggregates', () => {
   });
 
   it('returns 401 when Authorization header is missing', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
     const response = await POST(makeCronRequest(URL_BASE));
     const body = await response.json();
 
@@ -94,6 +140,7 @@ describe('POST /api/cron/process-aggregates', () => {
     expect(body.error).toBe('Unauthorized');
     expect(body.code).toBe('cron_unauthorized');
     expect(processAggregateJobs).not.toHaveBeenCalled();
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
   });
 
   it('returns 401 when Bearer token is invalid', async () => {

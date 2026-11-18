@@ -76,11 +76,11 @@ interface LeagueScopeOutcome {
 }
 
 export interface EntityDeleteRebuildSummary {
-  scope: 'tournament' | 'season';
+  scope: 'tournament' | 'phase' | 'season';
   playerIds: string[];
   ratingsRebuilt: number;
   streaksRebuilt: number;
-  /** The tournament's own scope; for a season delete the sum over all of the league's phases (null without phases). */
+  /** The competition's own scope; for a season delete the sum over all of the league's phases (null without phases). */
   tournamentScopeCleared: ScopeClear | null;
   leagueScope: LeagueScopeOutcome | null;
   allTime: ScopeClear & { gamesProcessed: number };
@@ -149,22 +149,18 @@ export function createEntityDeleteRebuilder(storage: EntityRebuildStorage) {
     });
   }
 
-  /**
-   * Rebuild derived data after a tournament hard-delete. Call AFTER the delete
-   * committed; `playerIds` must be the tournament's participants captured
-   * BEFORE the delete (the cascade removes the participant rows).
-   */
-  async function rebuildAfterTournamentDelete(input: {
-    tournamentId: string;
-    /** Parent season id, null for standalone tournaments. */
+  async function rebuildAfterCompetitionDelete(input: {
+    scope: 'tournament' | 'phase';
+    id: string;
     seasonId: string | null;
     playerIds: string[];
   }): Promise<EntityDeleteRebuildSummary> {
-    const { tournamentId, seasonId, playerIds } = input;
+    const { scope, id, seasonId, playerIds } = input;
 
     const { tournamentScopeCleared, leagueScope, allTime } = await step('aggregates', async () => {
-      // 1. The tournament's own aggregate scope is now orphaned — clear it.
-      const tournamentScopeCleared = await storage.clearAggregatesForScope('tournament', tournamentId);
+      const tournamentScopeCleared = scope === 'phase'
+        ? await storage.clearPhaseAggregates(id)
+        : await storage.clearAggregatesForScope('tournament', id);
 
       // 2. League scope: rebuild when the season survives (its remaining
       //    tournaments still feed it); clear when the season is gone too
@@ -206,7 +202,7 @@ export function createEntityDeleteRebuilder(storage: EntityRebuildStorage) {
     const evolutionRepair = seasonId ? await maybeRepairEvolution(seasonId) : null;
 
     return {
-      scope: 'tournament',
+      scope,
       ...players,
       tournamentScopeCleared,
       leagueScope,
@@ -338,7 +334,14 @@ export function createEntityDeleteRebuilder(storage: EntityRebuildStorage) {
       evolutionRepair,
     };
   }
-  return { rebuildAfterTournamentDelete, rebuildAfterSeasonDelete, rebuildAfterSeasonRestore };
+  return {
+    rebuildAfterTournamentDelete: ({ tournamentId, ...input }: { tournamentId: string; seasonId: string | null; playerIds: string[] }) =>
+      rebuildAfterCompetitionDelete({ ...input, scope: 'tournament', id: tournamentId }),
+    rebuildAfterPhaseDelete: ({ phaseId, ...input }: { phaseId: string; seasonId: string; playerIds: string[] }) =>
+      rebuildAfterCompetitionDelete({ ...input, scope: 'phase', id: phaseId }),
+    rebuildAfterSeasonDelete,
+    rebuildAfterSeasonRestore,
+  };
 }
 
 function legacyEntityRebuildStorage(): EntityRebuildStorage {

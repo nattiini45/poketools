@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { recordNativeManualResult } from '@/lib/league-phase/manual-result';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { revalidatePhaseMatchPages } from '@/lib/revalidation';
 import { logger } from '@/lib/logger';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -12,6 +16,8 @@ import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { MOMENTS_NOT_SAVED_WARNING, type ManualResultMomentsOutcome } from '@/lib/broadcast/moment-limits';
 import type { ApiResult } from '@/types/api';
 import type { BattleStatInsert } from '@/types/game';
+
+export const maxDuration = 300;
 
 export async function POST(request: NextRequest) {
   try {
@@ -30,6 +36,12 @@ export async function POST(request: NextRequest) {
       );
     }
     const body = parsed.data;
+    const owner = await resolveIdOnlyMatchRoute(body.match_id.toLowerCase());
+    if (!owner) throw new UserFacingError('Match not found', { code: 'match_not_found', status: 404 });
+    if (owner.kind === 'phase') {
+      const data = await recordNativeManualResult(owner, player, body, revalidatePhaseMatchPages);
+      return NextResponse.json<ApiResult<typeof data>>({ success: true, data });
+    }
 
     // Validate match exists and winner is a participant
     const match = await getMatchById(body.match_id);

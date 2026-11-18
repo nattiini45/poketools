@@ -28,7 +28,7 @@ import {
 import {
   getRoundsByPhase, getByeRoundsByPhaseIds, listRoundStatusesByPhaseIds,
   createPhaseRound, createPhaseRoundWithMatches, addMatchesToPhaseRound,
-  writePhaseBracket, completePhaseRound, updatePhaseRoundStatus, deletePhaseRound,
+  writePhaseBracket, completePhaseRound, updatePhaseRoundStatus, deletePhaseRound, deleteAdminPhaseRound,
 } from '@/lib/supabase/queries/phase-rounds';
 import {
   getGroupsByPhase, createPhaseGroupBatch, addPhaseGroupMembersBatch,
@@ -133,6 +133,13 @@ describe('native lifecycle and enrollment writes', () => {
     expect(calls('eq')).toContainEqual(['status', 'active']);
   });
 
+  it('scopes an admin config edit to its league and captured status even with no status change', async () => {
+    ok({ ...phase, name: 'Renamed phase' });
+    await expect(updatePhase(phase.id, { name: 'Renamed phase' }, { from: 'active', seasonId: phase.season_id }))
+      .resolves.toMatchObject({ name: 'Renamed phase' });
+    expect(calls('eq')).toEqual([['id', phase.id], ['status', 'active'], ['season_id', phase.season_id]]);
+  });
+
   it('uses a distinct native stage-end completion and explicit phase result', async () => {
     ok({ outcome: 'completed', phase: { ...phase, status: 'completed' } });
     expect(await completePhaseIfActive(phase.id, ['match-known'])).toMatchObject({ outcome: 'completed', phase: { id: phase.id, status: 'completed' } });
@@ -232,6 +239,42 @@ describe('native round and bracket writes', () => {
     expect(await completePhaseRound(round.id, { force: true })).toMatchObject({ outcome: 'completed', unfinished: 2 });
     await deletePhaseRound(round.id);
     expect(calls('rpc').map(args => args[0])).toEqual(['phase_round_complete', 'phase_round_complete', 'phase_round_delete']);
+  });
+
+  it('uses one scoped RPC for admin deletion and reads the committed audit metadata', async () => {
+    const deleted = { name: round.name, round_number: round.round_number, matches: 2 };
+    ok(deleted);
+    await expect(deleteAdminPhaseRound(phase.season_id, phase.id, round.id, round.updated_at, true)).resolves.toEqual(deleted);
+    expect(h.calls).toEqual([{ method: 'rpc', args: ['phase_admin_round_delete', {
+      p_season_id: phase.season_id, p_phase_id: phase.id, p_round_id: round.id,
+      p_expected_updated_at: round.updated_at, p_confirm: true,
+    }] }]);
+  });
+
+  it.each([
+    ['P0001', 'round_not_found', 'round_not_found', 404],
+    ['P0001', 'PHASE_NOT_FOUND', 'PHASE_NOT_FOUND', 404],
+    ['P0001', 'season_not_found', 'season_not_found', 404],
+    ['P0001', 'STRUCTURE_ELIM_ROUND_DELETE', 'STRUCTURE_ELIM_ROUND_DELETE', 400],
+    ['P0001', 'phase_round_delete_confirm_required', 'phase_round_delete_confirm_required', 400],
+    ['P0001', 'phase_round_delete_changed', 'phase_round_delete_changed', 409],
+    ['P0001', 'phase_round_delete_locked', 'phase_round_delete_locked', 409],
+    ['P0001', 'phase_round_delete_dependent', 'phase_round_delete_dependent', 409],
+    ['P0001', 'phase_round_delete_results', 'phase_round_delete_results', 409],
+    ['P0001', 'phase_round_delete_teams', 'phase_round_delete_teams', 409],
+    ['P0001', 'phase_round_delete_linked', 'phase_round_delete_linked', 409],
+    ['55P03', 'lock unavailable', 'phase_round_delete_changed', 409],
+    ['40P01', 'deadlock detected', 'phase_round_delete_changed', 409],
+  ])('maps admin round deletion refusal %s / %s', async (sqlCode, signal, code, statusCode) => {
+    fail(signal, sqlCode);
+    await expect(deleteAdminPhaseRound(phase.season_id, phase.id, round.id, round.updated_at, true))
+      .rejects.toMatchObject({ code, statusCode, cause: { code: sqlCode, message: signal } });
+  });
+
+  it('does not report an unexpected delete response as success', async () => {
+    ok(null);
+    await expect(deleteAdminPhaseRound(phase.season_id, phase.id, round.id, round.updated_at, true))
+      .rejects.toThrow('Native round deletion returned an invalid result');
   });
 
   it('does not overwrite a round whose state moved on', async () => {

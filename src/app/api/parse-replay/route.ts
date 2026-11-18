@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { prepareReplayGame } from '@/lib/pkmn/replay-submission';
+import { revalidatePhaseMatchPages } from '@/lib/revalidation';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
-import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { assertMayRecordResult } from '@/lib/auth/match-access';
 import { parseReplayReference } from '@/lib/pkmn/replay-reference';
@@ -35,6 +37,13 @@ export async function POST(request: NextRequest) {
     //    from the replay.
     parseReplayReference(body.replay_url);
 
+    const owner = await resolveIdOnlyMatchRoute(body.match_id.toLowerCase());
+    if (!owner) throw new UserFacingError('Match not found', { code: 'match_not_found', status: 404 });
+    if (owner.kind === 'phase') {
+      const { submitNativeReplay } = await import('@/lib/league-phase/replay-result');
+      return await submitNativeReplay(owner, player, body, revalidatePhaseMatchPages);
+    }
+
     const match = await getMatchById(body.match_id);
     if (!match) {
       return NextResponse.json<ApiResult<never>>(
@@ -44,69 +53,17 @@ export async function POST(request: NextRequest) {
     }
     const { asAdmin } = await assertMayRecordResult(player, match);
 
-    // 2. Fetch the replay once, hash it and parse it: the recorded winner and
-    //    stats come from this bound replay and its hash goes on the game row.
-    const replay = await fetchBoundReplay(body.replay_url);
-    const parsed = replay.parsed;
-
-    // 3. Match PS usernames → Player IDs
-    const playerMap = new Map<string, string>(); // ps_username → player_id
-
-    for (const parsedPlayer of parsed.players) {
-      const dbPlayer = await getPlayerByPsUsername(parsedPlayer.ps_username);
-      if (!dbPlayer) {
-        // Legibility check failed. Clients (admins) can fall back to the
-        // manual-assign import flow — surface a stable code so they can detect
-        // this specific failure without string matching.
-        return NextResponse.json<ApiResult<never>>(
-          {
-            success: false,
-            code: 'name_mismatch',
-            params: { username: parsedPlayer.ps_username },
-            error: `Could not match PS username "${parsedPlayer.ps_username}" to a registered player. ` +
-              `Players must set their PS username in their profile.`,
-            ps_usernames: parsed.players.map((p) => p.ps_username),
-          },
-          { status: 400 }
-        );
-      }
-
-      // Verify this player is actually in the match.
-      // Dedicated `replay_player_not_in_match` code (params: username = PS name,
-      // player = registered display name). ReplaySubmitForm treats it like
-      // `name_mismatch` and still offers the admin manual-assign fallback, so
-      // `ps_usernames` stays on the payload.
-      if (dbPlayer.id !== match.player_1_id && dbPlayer.id !== match.player_2_id) {
-        return NextResponse.json<ApiResult<never>>(
-          {
-            success: false,
-            code: 'replay_player_not_in_match',
-            params: { username: parsedPlayer.ps_username, player: dbPlayer.name },
-            error: `Player "${parsedPlayer.ps_username}" (${dbPlayer.name}) is not a participant in this match`,
-            ps_usernames: parsed.players.map((p) => p.ps_username),
-          },
-          { status: 400 }
-        );
-      }
-
-      playerMap.set(parsedPlayer.ps_username, dbPlayer.id);
-    }
-
-    // 4. Run the shared game pipeline. Winner and stats are read from the
-    //    bound replay there (400 `replay_winner_unknown` when the log names no
-    //    side as the winner); a battle already recorded for any game is 409
-    //    `replay_already_recorded`.
-    const sidePlayerIds = parsed.players.map((p) => playerMap.get(p.ps_username) ?? '');
+    const input = await prepareReplayGame(body.replay_url, match);
+    if (input instanceof NextResponse) return input;
     const result = await recordGameResult({
+      ...input,
       match_id: body.match_id,
       source: 'ps_replay',
-      replay,
-      side_player_ids: [sidePlayerIds[0] ?? '', sidePlayerIds[1] ?? ''],
       submitter_id: player.playerId,
       is_admin: asAdmin,
     });
 
-    // 5. Shared post-record side effects (revalidate, notify, AI, aggregates)
+    // Shared post-record side effects (revalidate, notify, AI, aggregates)
     await emitMatchResultEffects(body.match_id, {
       boReached: result.bo_reached,
       requestCookie: request.headers.get('cookie'),

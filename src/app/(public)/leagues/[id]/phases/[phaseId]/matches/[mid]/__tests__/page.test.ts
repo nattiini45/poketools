@@ -21,6 +21,7 @@ const mock = vi.hoisted(() => ({
   contentLocale: vi.fn(),
   streaks: vi.fn(),
   access: vi.fn(),
+  phaseAdmin: vi.fn(),
   privateMatch: vi.fn(),
   proposals: vi.fn(),
   snapshots: vi.fn(),
@@ -59,6 +60,7 @@ vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: mock
 vi.mock('@/lib/supabase/queries/match-proposals', () => ({ listPhaseMatchProposals: mock.proposals }));
 vi.mock('@/lib/supabase/queries/streaks', () => ({ getPlayerStreaks: mock.streaks }));
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mock.access }));
+vi.mock('@/lib/auth/phase-access', () => ({ canAdministerPhaseAccess: mock.phaseAdmin }));
 vi.mock('@/lib/supabase/queries/phase-epb-animation-views', () => ({ hasViewedPhaseEpbReplay: mock.replayViewed }));
 vi.mock('@/lib/supabase/queries/phase-match-snapshots', () => ({ getPhaseMatchSnapshots: mock.snapshots }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: mock.season }));
@@ -118,6 +120,7 @@ beforeEach(() => {
   mock.analysis.mockResolvedValue(null);
   mock.streaks.mockResolvedValue(null);
   mock.access.mockResolvedValue(null);
+  mock.phaseAdmin.mockResolvedValue(false);
   mock.proposals.mockResolvedValue([]);
   mock.snapshots.mockResolvedValue([]);
   mock.season.mockResolvedValue(null);
@@ -207,10 +210,22 @@ describe('canonical league phase match', () => {
     if (status === 'active') expect(mock.proposals).toHaveBeenCalledWith(MATCH, NATIVE_MATCH.player_1_id);
     else expect(mock.proposals).not.toHaveBeenCalled();
     expect(mock.privateMatch).not.toHaveBeenCalled();
-    expect(items.some(el => typeof el.props.href === 'string' && el.props.href.startsWith('/dashboard/'))).toBe(false);
+    expect(items.filter(el => typeof el.props.href === 'string' && el.props.href.startsWith('/dashboard/')).map(el => el.props.href))
+      .toEqual(status === 'active' ? [`/dashboard/submit/${MATCH}`] : []);
   });
 
-  it('reads native EPB snapshots and viewed state but supplies no legacy write endpoint', async () => {
+  it.each([true, false])('offers native result submission to an active non-participant only with phase admin access (%s)', async allowed => {
+    const player = { playerId: 'viewer', status: 'active' };
+    mock.access.mockResolvedValue({ player, isSiteAdmin: false });
+    mock.phaseAdmin.mockResolvedValue(allowed);
+    mock.nativeMatch.mockResolvedValue({ ...NATIVE_MATCH, status: 'in_progress' });
+    const items = elements(await Page(params()));
+    expect(mock.phaseAdmin).toHaveBeenCalledWith(player, PHASE);
+    expect(items.some(el => el.props.href === `/dashboard/submit/${MATCH}`)).toBe(allowed);
+    expect(mock.proposals).not.toHaveBeenCalled();
+  });
+
+  it('reads native EPB snapshots and points the replay viewer at the phase-scoped write endpoint', async () => {
     mock.phase.mockResolvedValue({ ...NATIVE_PHASE, season_format_type: 'evolution_point_buy' });
     mock.access.mockResolvedValue({ player: { playerId: 'viewer', status: 'active' } });
     mock.snapshots.mockResolvedValue([{ id: 'snapshot', player_id: NATIVE_MATCH.player_1_id, evolution_triggered: true }]);
@@ -219,7 +234,8 @@ describe('canonical league phase match', () => {
     expect(mock.snapshots).toHaveBeenCalledWith(MATCH);
     expect(mock.replayViewed).toHaveBeenCalledWith('viewer', MATCH);
     expect(items.find(el => el.type === MatchEvolutionReplay)?.props).toMatchObject({
-      viewedEndpoint: undefined, initialViewed: true, isAuthenticated: true,
+      viewedEndpoint: `/api/seasons/${LEAGUE}/phases/${PHASE}/matches/${MATCH}/epb-replay-viewed`,
+      initialViewed: true, isAuthenticated: true,
     });
   });
 

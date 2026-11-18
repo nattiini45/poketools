@@ -72,8 +72,10 @@ interface MatchDetailProps {
   viewerId?: string;
   notes?: string;
   contentLocale?: Locale;
-  epb?: { snapshots: MatchEvolutionSnapshot[]; entries: PointBuyListEntry[]; replayViewed: boolean };
+  epb?: { snapshots: MatchEvolutionSnapshot[]; entries: PointBuyListEntry[]; replayViewed: boolean; viewedEndpoint?: string };
   proposals: MatchProposalWithPlayers[];
+  nativeConfirmHref?: string;
+  nativeSubmitHref?: string;
   legacyActions?: {
     isSiteAdmin?: boolean;
     canEditGames: boolean;
@@ -83,7 +85,7 @@ interface MatchDetailProps {
 
 export default async function MatchDetail({
   match, competition, round, battleStatsByGame, analysis, standings, player1Streaks, player2Streaks,
-  back, viewerId, notes, contentLocale, epb, proposals, legacyActions,
+  back, viewerId, notes, contentLocale, epb, proposals, nativeConfirmHref, nativeSubmitHref, legacyActions,
 }: MatchDetailProps) {
   function extractStanding(playerId: string): PlayerStanding | null {
     const idx = standings.findIndex((s) => s.player_id === playerId);
@@ -101,6 +103,9 @@ export default async function MatchDetail({
   const canEditGames = legacyActions?.canEditGames ?? false;
   const isSiteAdmin = legacyActions?.isSiteAdmin;
   const mid = match.id;
+  const canUseLegacyActions = legacyActions !== undefined && (isParticipant || isSiteAdmin);
+  const confirmHref = canConfirm ? (canUseLegacyActions ? `/dashboard/confirm/${mid}` : nativeConfirmHref) : undefined;
+  const submitHref = canAct ? (canUseLegacyActions ? `/dashboard/submit/${mid}` : nativeSubmitHref) : undefined;
 
   // Pokémon score: sum of surviving (brought but not KO'd) mons across all games
   const { p1Score: score1, p2Score: score2 } = Object.keys(battleStatsByGame).length > 0
@@ -256,24 +261,24 @@ export default async function MatchDetail({
           </Link>
         </div>
         {/* Participant / Admin actions */}
-        {legacyActions && (isParticipant || isSiteAdmin) && (canAct || canConfirm) && (
+        {((canUseLegacyActions && canAct) || submitHref || confirmHref) && (
           <div className="flex flex-wrap gap-x-4 gap-y-3">
-            {canAct && isParticipant && (
+            {canUseLegacyActions && canAct && isParticipant && (
               <Link href={`/dashboard/match-prep/${mid}`} className="inline-flex rounded-[3px] text-body">
                 <SkewPlate variant="button" tone="secondary">
                   {t('detail.planTeam')}
                 </SkewPlate>
               </Link>
             )}
-            {canAct && (
-              <Link href={`/dashboard/submit/${mid}`} className="inline-flex rounded-[3px] text-body">
+            {submitHref && (
+              <Link href={submitHref} className="inline-flex rounded-[3px] text-body">
                 <SkewPlate variant="button" tone="primary">
                   {t('detail.submitResult')}
                 </SkewPlate>
               </Link>
             )}
-            {canConfirm && (
-              <Link href={`/dashboard/confirm/${mid}`} className="inline-flex rounded-[3px] text-body">
+            {confirmHref && (
+              <Link href={confirmHref} className="inline-flex rounded-[3px] text-body">
                 <SkewPlate variant="button" tone="primary">
                   {t('detail.confirmResult')}
                 </SkewPlate>
@@ -326,7 +331,7 @@ export default async function MatchDetail({
           {/* Crystal XP animation replay — driven by stored snapshots;
               targets resolved server-side per evolution (stage crossed) */}
           <MatchEvolutionReplay
-            viewedEndpoint={legacyActions ? `/api/matches/${mid}/epb-replay-viewed` : undefined}
+            viewedEndpoint={epb?.viewedEndpoint ?? (legacyActions ? `/api/matches/${mid}/epb-replay-viewed` : undefined)}
             initialViewed={epb?.replayViewed ?? false}
             isAuthenticated={Boolean(viewerId)}
             evolutionSnapshots={epbSnapshots.filter((s) => s.evolution_triggered)}

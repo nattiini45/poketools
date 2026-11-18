@@ -4,6 +4,9 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { phaseGroupsCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseById, getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
+import { getGroupsByPhase, replaceAdminPhaseGroups } from '@/lib/supabase/queries/phase-groups';
 import { getTournamentById, getParticipants } from '@/lib/supabase/queries/tournaments';
 import {
   getGroupsByTournament,
@@ -13,23 +16,27 @@ import {
 } from '@/lib/supabase/queries/tournament-groups';
 import { assertPhaseGroupsEditable } from '@/lib/tournament/group-rounds';
 import { assignSerpentine, groupLabel } from '@/lib/tournament/serpentine';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expirePhaseReads, expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import type { TournamentGroupWithMembers } from '@/types/season';
+import type { PhaseGroupWithMembers } from '@/types/league-phase';
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;
 }
 
-async function assertPhaseInSeason(seasonId: string, phaseId: string) {
-  const phase = await getTournamentById(phaseId);
+async function assertPhaseInSeason(id: string, requestedPhaseId: string) {
+  const native = await requireOpenPhaseRouteMode() === 'phase';
+  const phaseId = native ? requestedPhaseId.toLowerCase() : requestedPhaseId;
+  const seasonId = native ? id.toLowerCase() : id;
+  const phase = native ? await getPhaseById(phaseId) : await getTournamentById(phaseId);
   if (!phase || phase.season_id !== seasonId) {
     throw new UserFacingError('Phase not found in this league', {
       code: 'PHASE_NOT_FOUND',
       status: 404,
     });
   }
-  return phase;
+  return { native, phaseId, seasonId };
 }
 
 /**
@@ -40,14 +47,14 @@ async function assertPhaseInSeason(seasonId: string, phaseId: string) {
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   // Public: no auth required
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    await assertPhaseInSeason(id, phaseId);
-    const groups = await getGroupsByTournament(phaseId);
-    return NextResponse.json<ApiResult<TournamentGroupWithMembers[]>>({
+    const { native, phaseId } = await assertPhaseInSeason(id, requestedPhaseId);
+    const groups = await (native ? getGroupsByPhase(phaseId) : getGroupsByTournament(phaseId));
+    return NextResponse.json<ApiResult<TournamentGroupWithMembers[] | PhaseGroupWithMembers[]>>({
       success: true,
       data: groups,
     });
@@ -58,13 +65,13 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
 
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
+    await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    await requireResourceAdmin('season', id);
-    await assertPhaseInSeason(id, phaseId);
+    const { native, phaseId, seasonId } = await assertPhaseInSeason(id, requestedPhaseId);
 
     const rawBody = await request.json();
     const parsed = phaseGroupsCreateSchema.safeParse(rawBody);
@@ -76,10 +83,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     // A league with groups: its phases mirror them (league groups editor), nothing is regenerated here.
-    await assertPhaseGroupsEditable(id);
+    await assertPhaseGroupsEditable(seasonId);
 
     const { group_count: groupCount, serpentine } = parsed.data;
-    const participants = await getParticipants(phaseId);
+    const participants = await (native ? getPhaseParticipants(phaseId) : getParticipants(phaseId));
     const seeded = participants
       .filter((p) => p.seed !== null)
       .map((p) => ({ player_id: p.id, seed: p.seed! }));
@@ -91,17 +98,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const names = Array.from({ length: groupCount }, (_, i) => `Group ${groupLabel(i)}`);
+    const buckets = serpentine ? assignSerpentine(seeded, groupCount) : new Map<number, string[]>();
+    if (native) {
+      await replaceAdminPhaseGroups(seasonId, phaseId, names.map((name, index) => ({ name, members: buckets.get(index) ?? [] })), seeded);
+      expirePhaseReads(phaseId, seasonId);
+      const groups = await getGroupsByPhase(phaseId);
+      return NextResponse.json<ApiResult<PhaseGroupWithMembers[]>>({ success: true, data: groups }, { status: 201 });
+    }
+
     await deleteGroupsByTournament(phaseId);
-
-    const groupRows = Array.from({ length: groupCount }, (_, i) => ({
-      tournament_id: phaseId,
-      name: `Group ${groupLabel(i)}`,
-      group_number: i + 1,
-    }));
-    const created = await createGroupBatch(groupRows);
-
+    const created = await createGroupBatch(names.map((name, index) => ({
+      tournament_id: phaseId, name, group_number: index + 1,
+    })));
     if (serpentine) {
-      const buckets = assignSerpentine(seeded, groupCount);
       const members: { group_id: string; player_id: string; seed: number }[] = [];
       for (const [groupIndex, playerIds] of buckets.entries()) {
         const groupId = created[groupIndex].id;
@@ -111,7 +121,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       }
       await addGroupMembersBatch(members);
     }
-    expireTournamentReads(phaseId, id);
+    expireTournamentReads(phaseId, seasonId);
 
     const groups = await getGroupsByTournament(phaseId);
     return NextResponse.json<ApiResult<TournamentGroupWithMembers[]>>(
@@ -125,16 +135,21 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
+    await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    await requireResourceAdmin('season', id);
-    await assertPhaseInSeason(id, phaseId);
-    await assertPhaseGroupsEditable(id);
-    await deleteGroupsByTournament(phaseId);
-    expireTournamentReads(phaseId, id);
+    const { native, phaseId, seasonId } = await assertPhaseInSeason(id, requestedPhaseId);
+    await assertPhaseGroupsEditable(seasonId);
+    if (native) {
+      await replaceAdminPhaseGroups(seasonId, phaseId, [], []);
+      expirePhaseReads(phaseId, seasonId);
+    } else {
+      await deleteGroupsByTournament(phaseId);
+      expireTournamentReads(phaseId, seasonId);
+    }
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to delete phase groups');

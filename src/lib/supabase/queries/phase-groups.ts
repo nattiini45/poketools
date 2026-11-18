@@ -1,5 +1,7 @@
 import { supabase } from '../client';
 import { readBoundedPages } from '../read-bounded-pages';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import seasonErrors from '@/i18n/messages/errors/seasons/en';
 import type { PhaseGroup, PhaseGroupWithMembers } from '@/types/league-phase';
 import type { Json } from '@/types/database';
 
@@ -18,6 +20,28 @@ export async function getGroupsByPhase(phaseId: string): Promise<PhaseGroupWithM
 }
 
 export type PhaseGroupInput = Pick<PhaseGroup, 'phase_id' | 'season_id' | 'name' | 'group_number'> & { season_group_id?: string | null };
+
+export async function replaceAdminPhaseGroups(
+  seasonId: string,
+  phaseId: string,
+  groups: { name: string; members: string[] }[],
+  expectedSeeds: { player_id: string; seed: number }[],
+): Promise<void> {
+  const { error } = await supabase.rpc('phase_admin_replace_groups', {
+    p_season_id: seasonId, p_phase_id: phaseId, p_groups: groups, p_expected_seeds: expectedSeeds,
+  });
+  if (error) {
+    if (error.code === 'P0001') {
+      const code = error.message;
+      if (code === 'PHASE_NOT_FOUND' || code === 'PHASE_GROUPS_LEAGUE_MANAGED'
+        || code === 'GROUP_SLOT_CHANGED' || code === 'PHASE_GROUPS_INSUFFICIENT_SEEDS') {
+        const status = code === 'PHASE_NOT_FOUND' ? 404 : code === 'PHASE_GROUPS_INSUFFICIENT_SEEDS' ? 400 : 409;
+        throw new UserFacingError(seasonErrors[code], { code, status });
+      }
+    }
+    throw error;
+  }
+}
 
 async function writeGroups(phaseId: string, operation: string, rows: Json): Promise<PhaseGroup[]> {
   const { data, error } = await supabase.rpc('phase_group_write', { p_phase_id: phaseId, p_operation: operation, p_rows: rows });
@@ -72,6 +96,9 @@ export async function movePhaseGroupMember(phaseId: string, fromGroupId: string,
   const { error } = await supabase.rpc('phase_group_member_move', {
     p_phase_id: phaseId, p_from_group: fromGroupId, p_to_group: toGroupId, p_player_id: playerId, p_seed: seed,
   });
+  if (error?.code === 'P0001' && error.message === 'GROUP_SLOT_CHANGED') {
+    throw new UserFacingError(seasonErrors.GROUP_SLOT_CHANGED, { code: 'GROUP_SLOT_CHANGED', status: 409 });
+  }
   if (error) throw error;
 }
 

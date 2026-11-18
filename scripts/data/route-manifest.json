@@ -35,7 +35,7 @@
       "expires": ["expireSeasonReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "b905f72b5381b0f9",
+      "importFingerprint": "31baddc82b368c47",
       "importFiles": 100,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -43,7 +43,7 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/players/public-player.ts": { "names": ["toAdminSeasonParticipant", "toPublicSeasonParticipant"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/players/roster-access.ts": { "names": ["canViewAdminRoster"], "closure": "03a5d5c0904354de", "files": 82 },
-        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/season-groups.ts": { "names": ["removeLeagueParticipant", "toRosterAddError"], "closure": "25925c9f4306c3ef", "files": 16 },
         "src/lib/supabase/queries/seasons.ts": {
           "names": ["addSeasonParticipant", "getPublicSeasonParticipants", "getSeasonParticipants", "updateParticipantCoreTypes", "updateParticipantGymType"],
@@ -66,7 +66,7 @@
       "expires": ["expireTournamentReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "83255646cf5eb02b",
+      "importFingerprint": "52068cf0d482ae27",
       "importFiles": 106,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -82,7 +82,7 @@
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
         "src/lib/players/public-player.ts": { "names": ["toAdminTournamentParticipant", "toPublicTournamentParticipant"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/players/roster-access.ts": { "names": ["canViewAdminRoster"], "closure": "03a5d5c0904354de", "files": 82 },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": {
           "names": ["addParticipant", "getParticipants", "getTournamentById", "removeParticipant", "updateParticipantSeeds"],
@@ -106,7 +106,7 @@
       "expires": ["expireSeasonReads"],
       "audit": ["season.bind_point_buy_list", "season.set_test_flag", "season.update"],
       "emits": [],
-      "importFingerprint": "1e1161a4d19feae4",
+      "importFingerprint": "770a7367ca4a8532",
       "importFiles": 297,
       "imports": {
         "src/lib/api/delete-rebuild-warning.ts": { "names": ["testFlagRebuildUnsettledWarning", "toTestFlagRebuildWarning"], "closure": "1aded7404bcdef25", "files": 2 },
@@ -115,12 +115,12 @@
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/audit/log.ts": { "names": ["diffField", "logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAdmin", "requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/format-studio/attach.ts": { "names": ["assertFormatTypeChangeAllowed"], "closure": "d816999fcaae7d60", "files": 237 },
+        "src/lib/format-studio/attach.ts": { "names": ["assertFormatTypeChangeAllowed"], "closure": "fdbae55940e98fe7", "files": 237 },
         "src/lib/league-trash/errors.ts": { "names": ["toLeagueTrashError"], "closure": "6ff105536466cb1b", "files": 18 },
-        "src/lib/league-trash/service.ts": { "names": ["finishLeagueDeleteRebuild", "trashLeague"], "closure": "5302f43de5bf5df2", "files": 129 },
+        "src/lib/league-trash/service.ts": { "names": ["finishLeagueDeleteRebuild", "trashLeague"], "closure": "ee4922539a119529", "files": 129 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/rating/test-league-rebuild.ts": { "names": ["rebuildRatingsAfterTestFlagChange"], "closure": "2d1a21f508054cc4", "files": 37 },
-        "src/lib/revalidation.ts": { "names": ["expirePublicTags", "expireRatingReads", "expireSeasonReads", "publicTags"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/rating/test-league-rebuild.ts": { "names": ["rebuildRatingsAfterTestFlagChange"], "closure": "0693504267c65b5b", "files": 50 },
+        "src/lib/revalidation.ts": { "names": ["expirePublicTags", "expireRatingReads", "expireSeasonReads", "publicTags"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetChangeAllowed"], "closure": "20c204f93a71f355", "files": 89 },
         "src/lib/season/season-started.ts": { "names": ["isSeasonStarted"], "closure": "22107e832fff4993", "files": 4 },
         "src/lib/season/season-state.ts": { "names": ["seasonMachine"], "closure": "d2299edcd2524ed6", "files": 3 },
@@ -141,7 +141,7 @@
       "expires": ["expireTournamentReads"],
       "audit": ["tournament.update"],
       "emits": [],
-      "importFingerprint": "4a1a22fe21f302ce",
+      "importFingerprint": "ebf92b0eab13c54b",
       "importFiles": 334,
       "imports": {
         "src/lib/api/delete-rebuild-warning.ts": { "names": ["toDeleteRebuildWarning"], "closure": "1aded7404bcdef25", "files": 2 },
@@ -152,8 +152,8 @@
         "src/lib/auth/helpers.ts": { "names": ["requireAdmin", "requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertFormatPhaseDeletable", "assertFormatPhaseUnchanged"], "closure": "956cc87761631496", "files": 50 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/reconcile/entity-delete-rebuild.ts": { "names": ["rebuildAfterTournamentDelete"], "closure": "05d10f21da19c7f3", "files": 128 },
-        "src/lib/revalidation.ts": { "names": ["expireRatingReads", "expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/reconcile/entity-delete-rebuild.ts": { "names": ["rebuildAfterTournamentDelete"], "closure": "dd38374361543e0e", "files": 128 },
+        "src/lib/revalidation.ts": { "names": ["expireRatingReads", "expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetChangeAllowed"], "closure": "20c204f93a71f355", "files": 89 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": {
@@ -170,7 +170,7 @@
         },
         "src/lib/tournament/tournament-transition.ts": {
           "names": ["statusEffectsAuditMetadata", "updateTournamentWithStatus"],
-          "closure": "02dfe821d9953ab7",
+          "closure": "1339fa6883c7ff94",
           "files": 273
         },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "tournamentUpdateSchema"], "closure": "549662de2f15c47a", "files": 25 }
@@ -185,7 +185,7 @@
       "expires": ["expireTournamentReads"],
       "audit": ["tournament.seeds.update"],
       "emits": [],
-      "importFingerprint": "83255646cf5eb02b",
+      "importFingerprint": "52068cf0d482ae27",
       "importFiles": 106,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -201,7 +201,7 @@
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
         "src/lib/players/public-player.ts": { "names": ["toAdminTournamentParticipant", "toPublicTournamentParticipant"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/players/roster-access.ts": { "names": ["canViewAdminRoster"], "closure": "03a5d5c0904354de", "files": 82 },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": {
           "names": ["addParticipant", "getParticipants", "getTournamentById", "removeParticipant", "updateParticipantSeeds"],
@@ -225,13 +225,13 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.create"],
       "emits": [],
-      "importFingerprint": "3ccc32159c1ce452",
+      "importFingerprint": "1c61909a9acf16a6",
       "importFiles": 209,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/cache/format-reads.ts": { "names": ["formatReads"], "closure": "e87ce3bc5739fc57", "files": 35 },
+        "src/lib/cache/format-reads.ts": { "names": ["formatReads"], "closure": "5d61861b56f8d867", "files": 35 },
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": {
           "names": ["formatCreateSchema", "formatListQuerySchema", "validationFailedResponse"],
@@ -239,7 +239,7 @@
           "files": 46
         },
         "src/lib/format-studio/library.ts": { "names": ["createFromBody", "toActor"], "closure": "8aaa2b2a504e3ffb", "files": 138 },
-        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/format-definitions.ts": { "names": ["listFormatDefinitions"], "closure": "cc434e53693bbfb7", "files": 21 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
@@ -253,7 +253,7 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "df4ffbbaaf957b0f",
+      "importFingerprint": "a915cdfa62bdf920",
       "importFiles": 206,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -262,7 +262,7 @@
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": { "names": ["formatForkSchema", "validationFailedResponse"], "closure": "d519455a8bfb6ceb", "files": 46 },
         "src/lib/format-studio/library.ts": { "names": ["forkDefinition"], "closure": "8aaa2b2a504e3ffb", "files": 138 },
-        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/server"]
@@ -275,7 +275,7 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": ["format.fork"],
       "emits": [],
-      "importFingerprint": "da3522f1bcf52f97",
+      "importFingerprint": "d339e84e971af90b",
       "importFiles": 206,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -284,7 +284,7 @@
         "src/lib/format-studio/api-body.ts": { "names": ["readBoundedJsonOrEmpty"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": { "names": ["presetForkSchema", "validationFailedResponse"], "closure": "d519455a8bfb6ceb", "files": 46 },
         "src/lib/format-studio/library.ts": { "names": ["forkPreset"], "closure": "8aaa2b2a504e3ffb", "files": 138 },
-        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/server"]
@@ -297,19 +297,19 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "5e0efade3b43f5f6",
+      "importFingerprint": "c948aeb79f77b095",
       "importFiles": 435,
       "imports": {
-        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "51c64c6bf7a0a091", "files": 227 },
+        "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "903f8bb31b4c7c6e", "files": 227 },
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
         "src/lib/api/user-facing-error.ts": { "names": ["UserFacingError"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "1b1f8a27fe30d641", "files": 81 },
+        "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "e73fc12c17898fc5", "files": 89 },
         "src/lib/feature-flags.ts": { "names": ["ENABLE_KALE_CABBAGE"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/format-engine/groups.ts": { "names": ["ensureKitPhaseGroups"], "closure": "c2f9f5d2d9dacc5c", "files": 77 },
-        "src/lib/format-engine/pairing-server.ts": { "names": ["loadPairingAids"], "closure": "62c8bd3ba67c1e68", "files": 134 },
+        "src/lib/format-engine/groups.ts": { "names": ["ensureKitPhaseGroups"], "closure": "04746d1b7ac842ac", "files": 86 },
+        "src/lib/format-engine/pairing-server.ts": { "names": ["loadPairingAids"], "closure": "4cc0fe777f3148ad", "files": 134 },
         "src/lib/format-engine/pairing.ts": { "names": ["kitPairsRounds", "legRoundRange", "pairNextRound", "roundRobinOf"], "closure": "9dc0e2300edd4fa3", "files": 46 },
         "src/lib/format-engine/route-guards.ts": {
           "names": [
@@ -323,14 +323,14 @@
             "loadKitPhaseOfTournament",
             "wantsForcedStart"
           ],
-          "closure": "3fc4933d8043a2cb",
+          "closure": "ce93bb51e2d03257",
           "files": 380
         },
         "src/lib/format-engine/write-fence.ts": { "names": ["kitWriteFence"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/season/start-season.ts": { "names": ["startSeasonIfUpcoming"], "closure": "46512df70c2c5086", "files": 31 },
-        "src/lib/social/notify.ts": { "names": ["emitSocialEvent"], "closure": "e860ae3b6879430a", "files": 68 },
+        "src/lib/social/notify.ts": { "names": ["emitSocialEvent"], "closure": "078b0e8406ec64db", "files": 76 },
         "src/lib/supabase/queries/matches.ts": {
           "names": ["getCompletedMatchRecords", "getMatchesByTournament", "getPairedMatchRecords"],
           "closure": "1890fe00da0d952b",
@@ -348,8 +348,8 @@
         "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 },
         "src/lib/tournament/group-rounds.ts": {
           "names": ["ensurePhaseGroupsFromLeague", "pendingWeeks", "planPhaseWeeks", "resolveWeekPairings", "roundsAwaitingMatches"],
-          "closure": "411e7792bbf9e615",
-          "files": 145
+          "closure": "0a19dd1e9d3eb42e",
+          "files": 146
         },
         "src/lib/tournament/index.ts": { "names": ["generateRound"], "closure": "5ba04a630385ffcc", "files": 47 },
         "src/lib/tournament/phase-week-plan.ts": { "names": ["mirrorsLeagueGroups"], "closure": "f707b56cf123bb0f", "files": 10 },
@@ -415,12 +415,12 @@
       "expires": ["expireSeasonReads", "expireTournamentReads", "revalidatePath"],
       "audit": ["ruleset.pin"],
       "emits": [],
-      "importFingerprint": "7d64df62d5480af9",
+      "importFingerprint": "d83f378ae113612b",
       "importFiles": 122,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
-        "src/lib/revalidation.ts": { "names": ["expireSeasonReads", "expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireSeasonReads", "expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/api-body.ts": { "names": ["readBoundedJson"], "closure": "30a24c6e69a82d8c", "files": 20 },
         "src/lib/ruleset-studio/api-schemas.ts": { "names": ["rulesetPinsSchema", "validationFailedResponse"], "closure": "b95ec64d25316ee6", "files": 35 },
         "src/lib/ruleset-studio/guards.ts": { "names": ["requireRulesetViewer"], "closure": "a83266a9d64affa5", "files": 88 },
@@ -499,7 +499,7 @@
       "expires": ["expireFormatLibraryReads", "expireSeasonReads", "revalidatePath"],
       "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create", "season.create_from_format"],
       "emits": [],
-      "importFingerprint": "d75d88daaecf6531",
+      "importFingerprint": "b9c59c3a9c4885d2",
       "importFiles": 318,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -507,14 +507,14 @@
         "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/api-schemas.ts": { "names": ["seasonCreateWithFormatSchema"], "closure": "d519455a8bfb6ceb", "files": 46 },
-        "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "9a667e10d979de0f", "files": 247 },
+        "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "773baa8a502a0c94", "files": 247 },
         "src/lib/league-phase/classic-storage.ts": { "names": ["createClassicLeague"], "closure": "7a1a5c7432c9d9e5", "files": 28 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads", "expireSeasonReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads", "expireSeasonReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "20c204f93a71f355", "files": 89 },
         "src/lib/season/clone.ts": {
           "names": ["assertCloneAllowed", "copyLeagueStructure", "createCloneTracker", "rollbackClonedLeague"],
-          "closure": "05812b896f9a27b1",
+          "closure": "226c602b1e06ad5b",
           "files": 137
         },
         "src/lib/season/format-rules-defaults.ts": { "names": ["initializeEpbFormatRules"], "closure": "f3189f4845dd1cb6", "files": 27 },
@@ -537,7 +537,7 @@
       "expires": ["expireSeasonReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "b905f72b5381b0f9",
+      "importFingerprint": "31baddc82b368c47",
       "importFiles": 100,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -545,7 +545,7 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/players/public-player.ts": { "names": ["toAdminSeasonParticipant", "toPublicSeasonParticipant"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/players/roster-access.ts": { "names": ["canViewAdminRoster"], "closure": "03a5d5c0904354de", "files": 82 },
-        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/season-groups.ts": { "names": ["removeLeagueParticipant", "toRosterAddError"], "closure": "25925c9f4306c3ef", "files": 16 },
         "src/lib/supabase/queries/seasons.ts": {
           "names": ["addSeasonParticipant", "getPublicSeasonParticipants", "getSeasonParticipants", "updateParticipantCoreTypes", "updateParticipantGymType"],
@@ -568,8 +568,8 @@
       "expires": ["expireSeasonReads"],
       "audit": ["phase.create"],
       "emits": [],
-      "importFingerprint": "82e009c6b7fa1f0f",
-      "importFiles": 184,
+      "importFingerprint": "6116b791e830abb0",
+      "importFiles": 193,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
@@ -577,16 +577,18 @@
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertSeasonPhasesFree"], "closure": "956cc87761631496", "files": 50 },
-        "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["legacyPhasePersistence"], "closure": "6413f5fb76b2ca6d", "files": 20 },
+        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "1eec46014c4e786e", "files": 141 },
+        "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["legacyPhasePersistence", "nativePhasePersistence"], "closure": "4b5d4089efb76445", "files": 34 },
         "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireSeasonReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "20c204f93a71f355", "files": 89 },
-        "src/lib/supabase/queries/league-phases.ts": { "names": ["getPhasesBySeasonId"], "closure": "2638576f40343f71", "files": 13 },
-        "src/lib/supabase/queries/phase-rounds.ts": { "names": ["listRoundStatusesByPhaseIds"], "closure": "4e468a0215b1394c", "files": 12 },
+        "src/lib/supabase/queries/league-phases.ts": { "names": ["getPhasesBySeasonId", "insertAdminPhase"], "closure": "a7d1bb7f49e20117", "files": 26 },
+        "src/lib/supabase/queries/phase-admins.ts": { "names": ["addPhaseAdmin"], "closure": "0b84394ae5c52e4f", "files": 6 },
+        "src/lib/supabase/queries/phase-rounds.ts": { "names": ["listRoundStatusesByPhaseIds"], "closure": "2d5134213ddab09c", "files": 16 },
         "src/lib/supabase/queries/resource-admins.ts": { "names": ["addResourceAdmin"], "closure": "cc4c4d91097d36a0", "files": 5 },
         "src/lib/supabase/queries/seasons.ts": { "names": ["getSeasonById"], "closure": "7a8f3e45a6e4f3d7", "files": 27 },
-        "src/lib/tournament/enrollment-sync.ts": { "names": ["syncStandingsEnrollment"], "closure": "9f6abd0eb71f5b1b", "files": 129 },
+        "src/lib/tournament/enrollment-sync.ts": { "names": ["syncStandingsEnrollment"], "closure": "15bd65f76d7ba498", "files": 129 },
         "src/lib/tournament/league-phase.ts": { "names": ["assertPhaseNameFree", "buildLeaguePhase"], "closure": "d097811eb6cd44d9", "files": 2 },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "phaseCreateSchema"], "closure": "549662de2f15c47a", "files": 25 }
       },
@@ -600,8 +602,8 @@
       "expires": ["expirePhaseReads", "expireTournamentReads"],
       "audit": ["phase.enrollment.sync"],
       "emits": [],
-      "importFingerprint": "797b52cbfca0f1b7",
-      "importFiles": 184,
+      "importFingerprint": "bbd4025517653643",
+      "importFiles": 185,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
@@ -610,12 +612,12 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertFormatPhaseRosterOpen"], "closure": "956cc87761631496", "files": 50 },
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
-        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "ccdf7b528a643ef6", "files": 140 },
-        "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["nativePhasePersistence"], "closure": "6413f5fb76b2ca6d", "files": 20 },
+        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "1eec46014c4e786e", "files": 141 },
+        "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["nativePhasePersistence"], "closure": "4b5d4089efb76445", "files": 34 },
         "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
-        "src/lib/revalidation.ts": { "names": ["expirePhaseReads", "expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expirePhaseReads", "expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/tournaments.ts": { "names": ["getTournamentById"], "closure": "dc70eb64e7d8de0e", "files": 10 },
-        "src/lib/tournament/enrollment-sync.ts": { "names": ["syncStandingsEnrollment"], "closure": "9f6abd0eb71f5b1b", "files": 129 },
+        "src/lib/tournament/enrollment-sync.ts": { "names": ["syncStandingsEnrollment"], "closure": "15bd65f76d7ba498", "files": 129 },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "syncStandingsSchema"], "closure": "549662de2f15c47a", "files": 25 }
       },
       "packages": ["next/server"]
@@ -628,7 +630,7 @@
       "expires": ["expireTournamentReads"],
       "audit": ["tournament.create"],
       "emits": [],
-      "importFingerprint": "b1f6ebb9f75e971f",
+      "importFingerprint": "3bbc1254d77ac348",
       "importFiles": 104,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -636,7 +638,7 @@
         "src/lib/auth/admin-scope.ts": { "names": ["getAdminScope"], "closure": "3492b9aa53182351", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireAnyAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "20c204f93a71f355", "files": 89 },
         "src/lib/supabase/queries/resource-admins.ts": { "names": ["addResourceAdmin"], "closure": "cc4c4d91097d36a0", "files": 5 },
         "src/lib/supabase/queries/tournaments.ts": {
@@ -656,25 +658,25 @@
       "expires": ["expireTournamentReads"],
       "audit": ["bracket.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitSocialEvent(round_generated)"],
-      "importFingerprint": "870d5d7cff0669ce",
+      "importFingerprint": "45d662199827579c",
       "importFiles": 445,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
-        "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "1b1f8a27fe30d641", "files": 81 },
+        "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "e73fc12c17898fc5", "files": 89 },
         "src/lib/format-engine/route-guards.ts": {
           "names": ["announceKitRound", "assertPhaseReadyForFirstRound", "isKitEnginePhase", "loadKitPhaseOfTournament", "wantsForcedStart"],
-          "closure": "3fc4933d8043a2cb",
+          "closure": "ce93bb51e2d03257",
           "files": 380
         },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/season/start-season.ts": { "names": ["startSeasonIfUpcoming"], "closure": "46512df70c2c5086", "files": 31 },
-        "src/lib/social/notify.ts": { "names": ["emitSocialEvent"], "closure": "e860ae3b6879430a", "files": 68 },
+        "src/lib/social/notify.ts": { "names": ["emitSocialEvent"], "closure": "078b0e8406ec64db", "files": 76 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": { "names": ["getParticipants", "getTournamentById"], "closure": "dc70eb64e7d8de0e", "files": 10 },
-        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "f1f996db2e616503", "files": 332 },
+        "src/lib/tournament/bracket-generate.ts": { "names": ["generateEliminationBracket"], "closure": "4c1e18725359ed1b", "files": 332 },
         "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 }
       },
       "packages": ["next/server"]
@@ -687,7 +689,7 @@
       "expires": ["expireTournamentReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "83255646cf5eb02b",
+      "importFingerprint": "52068cf0d482ae27",
       "importFiles": 106,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -703,7 +705,7 @@
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
         "src/lib/players/public-player.ts": { "names": ["toAdminTournamentParticipant", "toPublicTournamentParticipant"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/players/roster-access.ts": { "names": ["canViewAdminRoster"], "closure": "03a5d5c0904354de", "files": 82 },
-        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/rounds.ts": { "names": ["getRoundsByTournament"], "closure": "15b8f20d9a0bba3a", "files": 7 },
         "src/lib/supabase/queries/tournaments.ts": {
           "names": ["addParticipant", "getParticipants", "getTournamentById", "removeParticipant", "updateParticipantSeeds"],
@@ -727,7 +729,7 @@
       "expires": ["expireFormatLibraryReads"],
       "audit": [],
       "emits": [],
-      "importFingerprint": "526e0f4fe04a47ff",
+      "importFingerprint": "81979f2017acf4fb",
       "importFiles": 204,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -735,7 +737,7 @@
         "src/lib/format-studio/api-body.ts": { "names": ["assertEnvelopeDocument", "readBoundedJson"], "closure": "346eae17a35a9a2d", "files": 20 },
         "src/lib/format-studio/api-schemas.ts": { "names": ["formatDraftSchema", "validationFailedResponse"], "closure": "d519455a8bfb6ceb", "files": 46 },
         "src/lib/format-studio/library.ts": { "names": ["assertCanEditDraft", "saveDraft"], "closure": "8aaa2b2a504e3ffb", "files": 138 },
-        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "c65c01beabb9a71d", "files": 16 },
+        "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/utils/rate-limit.ts": { "names": ["checkRateLimit", "rateLimitedResponse"], "closure": "7458684f369e8e60", "files": 6 }
       },
       "packages": ["next/server"]

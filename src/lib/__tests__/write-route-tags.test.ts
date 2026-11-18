@@ -76,6 +76,8 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
  * `<route file relative to src/app/api>#<METHOD>`. Each needs its reason.
  */
 const EXEMPT: Record<string, string> = {
+  'seasons/[id]/phases/[phaseId]/matches/[matchId]/epb-replay-viewed/route.ts#POST':
+    'stores the viewer’s replay preference; no cached public read includes replay views',
   'drafts/[id]/replay-events/route.ts#POST':
     'appends a draft replay event for the replay viewer; no cached public read includes replay events',
   'seasons/[id]/redraft/route.ts#POST':

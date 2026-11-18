@@ -59,7 +59,7 @@ const processAggregatesQuerySchema = z.object({
 });
 
 export function createProcessAggregatesHandler(
-  storage: AggregateMaintenanceStorage,
+  storageSource: AggregateMaintenanceStorage | (() => Promise<AggregateMaintenanceStorage>),
   getCronSecret: () => string | undefined = () => process.env.CRON_SECRET,
 ) {
   return async function handle(request: Request) {
@@ -93,6 +93,7 @@ export function createProcessAggregatesHandler(
         );
       }
 
+      const storage = typeof storageSource === 'function' ? await storageSource() : storageSource;
       let result: ProcessAggregateJobsResult;
       try {
         result = await storage.process(parsed.data.limit ?? DEFAULT_LIMIT);
@@ -149,17 +150,14 @@ export function createProcessAggregatesHandler(
         data: { ...result, failedJobs },
       });
     } catch (err) {
-      // Only the request parsing above can land here.
       return safeErrorResponse(err, 'Failed to process aggregate jobs', 500, 'aggregate_queue_failed');
     }
   }
 
 }
 
-export function createLegacyProcessAggregatesHandler(getCronSecret?: () => string | undefined) {
-  return createProcessAggregatesHandler({
-    process: (...args) => processAggregateJobs(...args),
-    health: (...args) => getAggregateJobHealth(...args),
-    countFailed: (...args) => countFailedAggregateJobs(...args),
-  }, getCronSecret);
-}
+export const legacyAggregateMaintenanceStorage: AggregateMaintenanceStorage = {
+  process: (limit) => processAggregateJobs(limit),
+  health: () => getAggregateJobHealth(),
+  countFailed: () => countFailedAggregateJobs(),
+};

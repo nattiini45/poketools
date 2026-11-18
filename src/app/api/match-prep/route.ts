@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logger } from '@/lib/logger';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { isValidUuid } from '@/lib/utils/uuid';
+import matchErrors from '@/i18n/messages/errors/matches/en';
 import { matchPrepSchema, formatZodErrors } from '@/lib/validation';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -33,7 +37,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const prep = await getMatchPrepTeam(matchId, player.playerId);
+    const owner = isValidUuid(matchId) ? await resolveIdOnlyMatchRoute(matchId.toLowerCase()) : null;
+    if (!owner) throw new UserFacingError(matchErrors.match_not_found, { code: 'match_not_found', status: 404 });
+    let prep;
+    if (owner.kind === 'phase') {
+      const { getNativeMatchPrep } = await import('@/lib/league-phase/match-prep');
+      prep = await getNativeMatchPrep(owner, matchId.toLowerCase(), player);
+    } else {
+      prep = await getMatchPrepTeam(matchId, player.playerId);
+    }
     return NextResponse.json<ApiResult<MatchPrepTeam | null>>({
       success: true,
       data: prep,
@@ -59,6 +71,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body = zodResult.data;
+    const owner = await resolveIdOnlyMatchRoute(body.match_id.toLowerCase());
+    if (!owner) throw new UserFacingError(matchErrors.match_not_found, { code: 'match_not_found', status: 404 });
+    if (owner.kind === 'phase') {
+      const { saveNativeMatchPrep } = await import('@/lib/league-phase/match-prep');
+      const { prep, ...advisory } = await saveNativeMatchPrep(owner, player, body);
+      return NextResponse.json<ApiResult<MatchPrepTeam>>({ success: true, data: prep, ...advisory });
+    }
+
     const pokemon = body.pokemon as PokemonSet[];
 
     // Verify player is a participant in this match

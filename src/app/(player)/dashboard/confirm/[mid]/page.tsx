@@ -2,6 +2,9 @@ import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { phaseMatchHref } from '@/lib/league-phase/paths';
 import GameList from '@/components/match/GameList';
 import MatchPageBackLink from '@/components/match/MatchPageBackLink';
 import MatchVersusHeader from '@/components/match/MatchVersusHeader';
@@ -25,8 +28,16 @@ export default async function ConfirmMatchPage({ params }: PageProps) {
   const { player } = await requireLiveIdentityOrSignIn();
   if (!player) redirect('/');
 
-  const match = await getMatchById(mid);
+  const owner = await resolveIdOnlyMatchRoute(mid.toLowerCase());
+  if (!owner) notFound();
+  const phaseMatch = owner.kind === 'phase' ? await getPhaseMatchById(mid.toLowerCase()) : null;
+  if (owner.kind === 'phase' && phaseMatch?.phase_id !== owner.phase_id) notFound();
+  const standaloneOrLegacy = owner.kind === 'legacy' ? await getMatchById(mid) : null;
+  const match = phaseMatch ?? standaloneOrLegacy;
   if (!match) notFound();
+  const matchHref = standaloneOrLegacy
+    ? `/tournaments/${standaloneOrLegacy.tournament_id}/matches/${mid}`
+    : owner.kind === 'phase' ? phaseMatchHref(owner, match.id) : notFound();
 
   const isParticipant =
     player.playerId === match.player_1_id ||
@@ -45,7 +56,6 @@ export default async function ConfirmMatchPage({ params }: PageProps) {
 
   const [tForms, tEnum] = await Promise.all([getT(matchFormsMessages), getT(enumMessages)]);
 
-  const matchHref = `/tournaments/${match.tournament_id}/matches/${mid}`;
   const score: [number, number] | null =
     match.games.length > 0
       ? [

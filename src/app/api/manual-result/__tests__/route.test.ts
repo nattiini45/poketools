@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 // --------------- mocks ---------------
@@ -14,21 +14,13 @@ vi.mock('@/lib/auth/helpers', () => ({
   },
 }));
 
-vi.mock('@/lib/api/error-response', async () => {
-  const { AuthError } = await import('@/lib/auth/helpers');
-  const { NextResponse } = await import('next/server');
-  return {
-    safeErrorResponse: vi.fn((err: unknown, fallback: string) => {
-      if (err instanceof AuthError) {
-        return NextResponse.json(
-          { success: false, error: (err as InstanceType<typeof AuthError>).message },
-          { status: (err as InstanceType<typeof AuthError>).statusCode }
-        );
-      }
-      return NextResponse.json({ success: false, error: fallback }, { status: 500 });
-    }),
-  };
-});
+vi.mock('@/lib/league-phase/manual-result', () => ({ recordNativeManualResult: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findLegacyPhaseAliasOwner: vi.fn(),
+  findNativePhaseAliasOwner: vi.fn(),
+  standaloneMatchAliasExists: vi.fn(),
+}));
 
 vi.mock('@/lib/pkmn/game-pipeline', () => ({
   recordGameResult: vi.fn(),
@@ -60,6 +52,7 @@ vi.mock('@/lib/supabase/queries/broadcast-moments', () => ({
 
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
+  revalidatePhaseMatchPages: vi.fn(),
 }));
 
 vi.mock('@/lib/discord/notify', () => ({
@@ -103,6 +96,11 @@ import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { triggerMatchAnalysis } from '@/lib/ai/trigger';
 import { createMomentsBatch } from '@/lib/supabase/queries/broadcast-moments';
 import { logger } from '@/lib/logger';
+import { recordNativeManualResult } from '@/lib/league-phase/manual-result';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { findLegacyPhaseAliasOwner, findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { manualResultSchema } from '@/lib/validation';
+import { revalidatePhaseMatchPages } from '@/lib/revalidation';
 
 // --------------- helpers ---------------
 
@@ -154,6 +152,9 @@ const validBody = {
 
 // --------------- tests ---------------
 
+beforeEach(() => vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined));
+afterEach(() => vi.unstubAllEnvs());
+
 describe('POST /api/manual-result', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -163,6 +164,75 @@ describe('POST /api/manual-result', () => {
       name: 'Alice',
       isAdmin: false,
     } as never);
+  });
+
+  it('preserves the tracker response and records against a verified native owner with one rate limit check', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    const owner = { kind: 'phase', phase_id: TOURNAMENT_ID, season_id: P2_ID } as const;
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(owner);
+    const result = {
+      game_id: ROUND_ID, game_winner_id: P1_ID, match_status: 'in_progress' as const, match_winner_id: null,
+      bo_reached: false, evolution_events: [], moments_saved: 1,
+    };
+    vi.mocked(recordNativeManualResult).mockResolvedValueOnce(result);
+
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({ success: true, data: result });
+    expect(findNativePhaseAliasOwner).toHaveBeenCalledWith({ matchId: MATCH_ID });
+    expect(recordNativeManualResult).toHaveBeenCalledWith(
+      owner, expect.objectContaining({ playerId: P1_ID }), manualResultSchema.parse(validBody), revalidatePhaseMatchPages,
+    );
+    expect(checkRateLimit).toHaveBeenCalledTimes(1);
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(recordGameResult).not.toHaveBeenCalled();
+  });
+
+  it('refuses a phase match during maintenance before reaching either game writer', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('frozen_legacy');
+    vi.mocked(findLegacyPhaseAliasOwner).mockResolvedValueOnce({ tournament_id: TOURNAMENT_ID, season_id: P2_ID });
+
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(recordNativeManualResult).not.toHaveBeenCalled();
+    expect(recordGameResult).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to legacy when no owner is verified in phase mode', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(null);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(false);
+
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(404);
+    expect(await response.json()).toMatchObject({ code: 'match_not_found' });
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(recordNativeManualResult).not.toHaveBeenCalled();
+    expect(recordGameResult).not.toHaveBeenCalled();
+  });
+
+  it('keeps verified standalone results on the legacy writer in phase mode', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(null);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(true);
+    vi.mocked(getMatchById).mockResolvedValueOnce(match as never);
+    vi.mocked(recordGameResult).mockResolvedValueOnce({
+      game_id: ROUND_ID, game_winner_id: P1_ID, match_status: 'in_progress', match_winner_id: null,
+      bo_reached: false, evolution_events: [],
+    });
+
+    const response = await POST(makeRequest(validBody));
+    expect(response.status).toBe(200);
+    expect(standaloneMatchAliasExists).toHaveBeenCalledWith(MATCH_ID);
+    expect(recordGameResult).toHaveBeenCalledWith(expect.objectContaining({ match_id: MATCH_ID, submitter_id: P1_ID }));
+    expect(recordNativeManualResult).not.toHaveBeenCalled();
   });
 
   // ---- who may submit (admin authority is decided live, per match) ----

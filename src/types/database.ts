@@ -9724,6 +9724,33 @@ export type Database = {
         Returns: Json
       }
       phase__lock: { Args: { p_phase_id: string }; Returns: string }
+      phase_admin_delete: {
+        Args: { p_confirm: boolean; p_phase_id: string; p_season_id: string }
+        Returns: Json
+      }
+      phase_admin_insert: {
+        Args: { p_fields: Json; p_insert_at?: number; p_season_id: string }
+        Returns: Json
+      }
+      phase_admin_replace_groups: {
+        Args: {
+          p_expected_seeds: Json
+          p_groups: Json
+          p_phase_id: string
+          p_season_id: string
+        }
+        Returns: undefined
+      }
+      phase_admin_round_delete: {
+        Args: {
+          p_confirm: boolean
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_round_id: string
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_aggregate_deltas: {
         Args: {
           p_aggregate_deltas: Json
@@ -9746,6 +9773,20 @@ export type Database = {
         Args: {
           p_current_round: number
           p_expected_status: Database["public"]["Enums"]["phase_status"]
+          p_matches: Json
+          p_phase_id: string
+          p_replace: boolean
+          p_rounds: Json
+        }
+        Returns: Json
+      }
+      phase_bracket_write_guarded: {
+        Args: {
+          p_current_round: number
+          p_expected_revision?: number
+          p_expected_seeds: Json
+          p_expected_status: Database["public"]["Enums"]["phase_status"]
+          p_expected_updated_at: string
           p_matches: Json
           p_phase_id: string
           p_replace: boolean
@@ -9948,6 +9989,24 @@ export type Database = {
         Returns: Json
       }
       phase_round_delete: { Args: { p_round_id: string }; Returns: Json }
+      phase_round_generate: {
+        Args: {
+          p_best_of: number
+          p_bye_player_ids: string[]
+          p_deadline: string
+          p_expected_revision?: number
+          p_expected_updated_at: string
+          p_inputs: Json
+          p_matches: Json
+          p_name: string
+          p_phase_id: string
+          p_replacement_groups?: Json
+          p_round_id: string
+          p_round_number: number
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_round_write: {
         Args: {
           p_best_of: number

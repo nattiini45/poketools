@@ -2,7 +2,7 @@ import { createNativeGamePipeline } from './game-pipeline-storage';
 import { createNativeEpbGameEditRechecker } from './epb-game-edit';
 import { createPhaseMatchFinalizer, type PhaseFinalizationEffects } from './finalization';
 import { createNativeMatchReopener, createNativeOutcomeTakeback } from './reopen';
-import { createPhaseAutoConfirmHandler } from './match-maintenance';
+import { createPhaseAutoConfirmRunner } from './match-maintenance';
 import { createNativeMatchDecisionHandler, type NativeMatchDecisionEffects } from './match-decisions';
 import { createNativeKitMatchEffects, type NativeKitMatchCallbacks } from './kit-match-effects';
 import { createMixedRatingStorage, mixedStreakStorage } from './rating-streak-streams';
@@ -131,7 +131,7 @@ export function createPhaseMatchServices(effects: PhaseMatchServiceEffects) {
     ...finalizer,
     kit,
     reopenMatch,
-    autoConfirm: createPhaseAutoConfirmHandler(finalizer),
+    autoConfirm: createPhaseAutoConfirmRunner(finalizer),
     decide: createNativeMatchDecisionHandler({
       finalizer,
       canAdminister: (...args) => effects.canAdminister(...args),

@@ -11,6 +11,8 @@ export default defineDe<typeof en>()({
   PHASE_COMPLETED_LOCKED: 'Abgeschlossene Phasen sind gesperrt. Setze die Phase zuerst wieder auf aktiv.',
   PHASE_NAME_TAKEN: 'Eine andere Phase dieser Liga hat schon diesen Namen.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Eine Phase mit Runden lässt sich nur mit confirm: true löschen.',
+  PHASE_DELETE_TEAMS_LINKED: 'Entferne oder verschiebe die Teams dieser Phase, bevor du sie löschst.',
+  PHASE_DELETE_ENROLLMENT_SOURCE: 'Aus dieser Phase wurden Teilnehmende für eine andere Phase übernommen. Ändere zuerst die Teilnehmerliste der anderen Phase.',
   PHASE_STAGE_ORDER_LOCKED: 'Die Reihenfolge lässt sich nach dem Start der Phase nicht mehr ändern.',
   PHASE_BRACKET_LOCKED: 'Der Turniermodus lässt sich nach dem Start der Phase nicht mehr ändern.',
   PHASE_PARTICIPANTS_LOCKED: 'Bei einer abgeschlossenen Phase lassen sich die Teilnehmer nicht mehr ändern.',

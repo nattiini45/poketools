@@ -22,6 +22,8 @@ export default {
   PHASE_COMPLETED_LOCKED: 'Completed phases are locked. Reopen to active first.',
   PHASE_NAME_TAKEN: 'Another phase of this league already has this name.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Deleting a phase with rounds requires confirm: true',
+  PHASE_DELETE_TEAMS_LINKED: 'Remove or move the teams linked to this phase before deleting it.',
+  PHASE_DELETE_ENROLLMENT_SOURCE: 'This phase is the enrollment source for another phase. Change the other phase’s enrollment first.',
   PHASE_STAGE_ORDER_LOCKED: 'Stage order cannot be changed once the phase has started',
   PHASE_BRACKET_LOCKED: 'Bracket type cannot be changed once the phase has started',
   PHASE_PARTICIPANTS_LOCKED: 'Participants cannot be changed on a completed phase',

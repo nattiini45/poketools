@@ -72,6 +72,18 @@ vi.mock('@/lib/team/item-usage-cache', () => ({
   expireItemUsageReads: vi.fn(),
 }));
 
+vi.mock('@/lib/league-phase/route-mode', () => ({
+  getPhaseRouteMode: vi.fn().mockResolvedValue('legacy'),
+}));
+
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: vi.fn(), findLegacyPhaseAliasOwner: vi.fn(), standaloneMatchAliasExists: vi.fn(),
+}));
+
+vi.mock('@/lib/league-phase/match-prep', () => ({
+  getNativeMatchPrep: vi.fn(), saveNativeMatchPrep: vi.fn(),
+}));
+
 vi.mock('@/lib/format-engine/runtime/team-server', () => ({
   evaluateTeam: vi.fn(),
   currentPhaseRound: vi.fn(),

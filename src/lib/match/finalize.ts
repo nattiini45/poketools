@@ -16,18 +16,19 @@ import { getRatingHistoryByMatch, getRatingHistoryByMatches, loadRatingScope } f
 import { matchCountsForRatings } from '@/lib/rating/rating-scope';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { runEpbMatchdayHooks } from '@/lib/match/epb-matchday';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { creditMatchRealKills } from '@/lib/match/evolution-match-evaluator';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { buildFinalizationNotifications } from './finalization-notifications';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
-import { recomputeStreaks } from '@/lib/gamification/streaks';
-import { updateRatings } from '@/lib/rating/updateRatings';
+import { recomputeStreaks, recomputeStreaksWithStorage } from '@/lib/gamification/streaks';
+import { updateRatings, updateRatingsWithStorage } from '@/lib/rating/updateRatings';
 import type { MatchWithPlayers } from '@/types/match';
 import type { BattleStat } from '@/types/game';
 import type { Tournament } from '@/types/tournament';
 
-import { createMatchFinalizer, type FinalizationAnnouncements } from './finalization-core';
+import { createMatchFinalizer, type FinalizationAchievementContext, type FinalizationAnnouncements, type MatchFinalizationStorage } from './finalization-core';
 import type { AdminMatchOutcome, StagedAdminOutcome, FinalizeMatchCompletionInput, FinalizeMatchCompletionResult, HealMatchFinalizationResult, NeedsAdminReason } from './finalization-core';
 export { FINALIZE_STEPS, FINALIZE_HEAL_POLICY } from './finalization-core';
 export type { AdminMatchOutcome, StagedAdminOutcome, FinalizeStep, FinalizeMatchCompletionResult, HealMatchFinalizationResult, NeedsAdminReason } from './finalization-core';
@@ -141,7 +142,18 @@ function emitAnnouncements(input: Omit<FinalizationAnnouncements<MatchWithPlayer
   }
 }
 
-const finalizer = createMatchFinalizer<MatchWithPlayers, Tournament>({
+function achievementContext({ match, competition, winnerId, loserId }: FinalizationAchievementContext<MatchWithPlayers, Tournament>) {
+  return {
+    match_id: match.id,
+    tournament_id: match.tournament_id,
+    season_id: competition.season_id ?? null,
+    winner_id: winnerId,
+    loser_id: loserId,
+    is_draw: false,
+  };
+}
+
+const legacyStorage: MatchFinalizationStorage<MatchWithPlayers, Tournament> = {
   competitionId: (match) => match.tournament_id,
   auditOwner: (match) => ({ tournament_id: match.tournament_id }),
   resourceType: 'match',
@@ -168,23 +180,46 @@ const finalizer = createMatchFinalizer<MatchWithPlayers, Tournament>({
   matchCountsForRatings: (...args) => matchCountsForRatings(...args),
   getRatingHistoryByMatch: (...args) => getRatingHistoryByMatch(...args),
   getRatingHistoryByMatches: (...args) => getRatingHistoryByMatches(...args),
-  checkAchievements: (id, { match, competition, winnerId, loserId }) => checkAchievements(id, {
-    match_id: match.id,
-    tournament_id: match.tournament_id,
-    season_id: competition.season_id ?? null,
-    winner_id: winnerId,
-    loser_id: loserId,
-    is_draw: false,
-  }),
+  checkAchievements: (id, input) => checkAchievements(id, achievementContext(input)),
   emitAnnouncements: ({ competition, ...input }) => emitAnnouncements({ ...input, tournament: competition }),
-});
+};
+const finalizer = createMatchFinalizer(legacyStorage);
+
+async function standaloneFinalizer(tournamentId: string) {
+  const tournament = await loadTournament(tournamentId);
+  if (tournament.season_id !== null) throw new Error('Active phase storage only accepts standalone tournament finalization here');
+  const [streams, achievements] = await Promise.all([
+    import('@/lib/league-phase/rating-streak-streams'),
+    import('@/lib/league-phase/achievement-streams'),
+  ]);
+  const ratings = streams.createMixedRatingStorage('tournament');
+  return createMatchFinalizer<MatchWithPlayers, Tournament>({
+    ...legacyStorage,
+    loadCompetition: async () => tournament,
+    updateRatings: (...args) => updateRatingsWithStorage(...args, ratings),
+    recomputeStreaks: (id) => recomputeStreaksWithStorage(id, streams.mixedStreakStorage),
+    checkAchievements: (id, input) => achievements.checkMixedTournamentAchievements(id, achievementContext(input)),
+  });
+}
 
 export async function finalizeMatchCompletion(input: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
-  return finalizer.finalizeMatchCompletion(input);
+  return await requireOpenPhaseRouteMode() === 'phase'
+    ? finalizeStandaloneMatchCompletion(input)
+    : finalizer.finalizeMatchCompletion(input);
 }
 
 export async function healMatchFinalization(match: MatchWithPlayers): Promise<HealMatchFinalizationResult> {
-  return finalizer.healMatchFinalization(match);
+  return await requireOpenPhaseRouteMode() === 'phase'
+    ? healStandaloneMatchFinalization(match)
+    : finalizer.healMatchFinalization(match);
+}
+
+export async function finalizeStandaloneMatchCompletion(input: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
+  return (await standaloneFinalizer(input.match.tournament_id)).finalizeMatchCompletion(input);
+}
+
+export async function healStandaloneMatchFinalization(match: MatchWithPlayers): Promise<HealMatchFinalizationResult> {
+  return (await standaloneFinalizer(match.tournament_id)).healMatchFinalization(match);
 }
 
 export async function stageAdminOutcome(matchId: string, outcome: AdminMatchOutcome): Promise<StagedAdminOutcome | null> {

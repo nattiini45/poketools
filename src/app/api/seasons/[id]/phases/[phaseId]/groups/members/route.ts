@@ -4,9 +4,12 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { phaseGroupMemberMoveSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { getGroupsByPhase, movePhaseGroupMember } from '@/lib/supabase/queries/phase-groups';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getGroupsByTournament, moveGroupMember } from '@/lib/supabase/queries/tournament-groups';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { expirePhaseReads, expireTournamentReads } from '@/lib/revalidation';
 import { assertPhaseGroupsEditable } from '@/lib/tournament/group-rounds';
 import type { ApiResult } from '@/types/api';
 
@@ -17,15 +20,18 @@ interface RouteParams {
 /** PATCH /api/seasons/[id]/phases/[phaseId]/groups/members */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
+    await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    await requireResourceAdmin('season', id);
 
-    const phase = await getTournamentById(phaseId);
-    if (!phase || phase.season_id !== id) {
+    const native = await requireOpenPhaseRouteMode() === 'phase';
+    const phaseId = native ? requestedPhaseId.toLowerCase() : requestedPhaseId;
+    const seasonId = native ? id.toLowerCase() : id;
+    const phase = native ? await getPhaseById(phaseId) : await getTournamentById(phaseId);
+    if (!phase || phase.season_id !== seasonId) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
         { status: 404 }
@@ -43,10 +49,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // A league with groups moves trainers in the league groups editor; its phases follow.
-    await assertPhaseGroupsEditable(id);
+    await assertPhaseGroupsEditable(seasonId);
 
-    const { player_id, from_group_id, to_group_id, seed } = parsed.data;
-    const groups = await getGroupsByTournament(phaseId);
+    const player_id = native ? parsed.data.player_id.toLowerCase() : parsed.data.player_id;
+    const from_group_id = native ? parsed.data.from_group_id.toLowerCase() : parsed.data.from_group_id;
+    const to_group_id = native ? parsed.data.to_group_id.toLowerCase() : parsed.data.to_group_id;
+    const groups = await (native ? getGroupsByPhase(phaseId) : getGroupsByTournament(phaseId));
     const groupIds = new Set(groups.map((g) => g.id));
     if (!groupIds.has(from_group_id) || !groupIds.has(to_group_id)) {
       throw new UserFacingError('Invalid group for this phase', {
@@ -70,9 +78,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         status: 400,
       });
     }
-    const nextSeed = seed ?? toGroup.members.length + 1;
-    await moveGroupMember(from_group_id, to_group_id, player_id, nextSeed);
-    expireTournamentReads(phaseId, id);
+    const nextSeed = parsed.data.seed ?? toGroup.members.length + 1;
+    if (native) {
+      await movePhaseGroupMember(phaseId, from_group_id, to_group_id, player_id, nextSeed);
+      expirePhaseReads(phaseId, seasonId);
+    } else {
+      await moveGroupMember(from_group_id, to_group_id, player_id, nextSeed);
+      expireTournamentReads(phaseId, seasonId);
+    }
 
     return NextResponse.json<ApiResult<null>>({ success: true, data: null });
   } catch (err) {

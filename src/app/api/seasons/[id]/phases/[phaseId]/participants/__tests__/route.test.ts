@@ -40,9 +40,11 @@ vi.mock('@/lib/supabase/queries/league-phases', () => ({
   updatePhaseParticipantSeeds: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn() }));
+vi.mock('@/lib/supabase/queries/ratings', () => ({ getPlayerRatingsBatch: vi.fn() }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 import { DELETE, GET, PATCH, POST } from '../route';
+import { POST as seedByRating } from '../seed-by-rating/route';
 import { revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -50,6 +52,7 @@ import { addParticipant, getParticipants, getTournamentById, removeParticipant, 
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { addPhaseParticipant, getPhaseById, getPhaseParticipants, removePhaseParticipant, updatePhaseParticipantSeeds } from '@/lib/supabase/queries/league-phases';
 import { getKitPhases } from '@/lib/supabase/queries/format-engine';
+import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { expectNoPrivatePlayerData, fullPlayerRow } from '@/lib/players/__tests__/private-player-fields';
@@ -279,6 +282,26 @@ describe('phase roster writes', () => {
     expect(request.json).not.toHaveBeenCalled();
     expect(removePhaseParticipant).not.toHaveBeenCalled();
     expect(revalidateTag).not.toHaveBeenCalled();
+  });
+
+  it('seeds the verified native roster by rating without reading or writing a legacy row', async () => {
+    nativeMode();
+    vi.mocked(getPhaseParticipants).mockResolvedValue(fullRows);
+    vi.mocked(getPlayerRatingsBatch).mockResolvedValue(new Map([
+      ['p2', {
+        id: 'rating-p2', player_id: 'p2', rating: 1600, rd: 100, volatility: 0.06, peak_rating: 1600,
+        peak_date: null, wins: 0, losses: 0, draws: 0, last_match_at: null,
+      }],
+    ]));
+    const response = await seedByRating(req(), args(SEASON.toUpperCase(), PHASE.toUpperCase()));
+    expect(response.status).toBe(200);
+    expect(updatePhaseParticipantSeeds).toHaveBeenCalledExactlyOnceWith(PHASE, [
+      { player_id: 'p2', seed: 1 }, { player_id: 'p1', seed: 2 },
+    ]);
+    expect(getPlayerRatingsBatch).toHaveBeenCalledExactlyOnceWith(['p1', 'p2']);
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expect(updateParticipantSeeds).not.toHaveBeenCalled();
+    expect(revalidateTag).toHaveBeenCalledWith(`phase:${PHASE}`, { expire: 0 });
   });
 
   it('expires legacy tournament tags even when seeds only partially commit', async () => {
