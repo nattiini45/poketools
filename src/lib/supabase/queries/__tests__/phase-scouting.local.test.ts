@@ -8,8 +8,8 @@ import type { Database } from '@/types/database';
 const optedIn = localStackOptIn('LOCAL_PHASE_SCOUTING');
 
 describe.skipIf(!optedIn)('native scouting claims on the disposable database', () => {
-  const [rulesetId, seasonId, phaseId, roundId, deniedMatch, raceMatch, firstMatch, playerId, opponentId] =
-    Array.from({ length: 9 }, () => randomUUID());
+  const [rulesetId, seasonId, phaseId, otherPhaseId, roundId, deniedMatch, raceMatch, firstMatch, playerId, opponentId, outsiderId] =
+    Array.from({ length: 11 }, () => randomUUID());
   let admin: SupabaseClient<Database>;
 
   beforeAll(async () => {
@@ -18,15 +18,15 @@ describe.skipIf(!optedIn)('native scouting claims on the disposable database', (
     admin = createClient<Database>(url, requireLocalKey('SUPABASE_SERVICE_ROLE_KEY'), { auth: { persistSession: false } });
     expect((await admin.from('phase_storage_state').select('mode').single()).data?.mode).toBe('phase');
     expect((await insertLocalRuleset(admin, { id: rulesetId, name: 'Scouting fixture' })).error).toBeNull();
-    expect((await admin.from('players').insert([playerId, opponentId].map(id => ({
+    expect((await admin.from('players').insert([playerId, opponentId, outsiderId].map(id => ({
       id, name: `Fixture ${id}`, is_guest: true,
     })))).error).toBeNull();
     expect((await admin.from('seasons').insert({
       id: seasonId, name: 'Scouting fixture', format_type: 'singles', ruleset_id: rulesetId,
     })).error).toBeNull();
-    expect((await admin.from('league_phases').insert({
-      id: phaseId, season_id: seasonId, name: 'Scouting phase', bracket_type: 'round_robin', ruleset_id: rulesetId,
-    })).error).toBeNull();
+    expect((await admin.from('league_phases').insert([phaseId, otherPhaseId].map((id, index) => ({
+      id, season_id: seasonId, name: `Scouting phase ${index + 1}`, bracket_type: 'round_robin' as const, ruleset_id: rulesetId,
+    })))).error).toBeNull();
     expect((await admin.from('phase_participants').insert([playerId, opponentId].map(id => ({
       phase_id: phaseId, player_id: id,
     })))).error).toBeNull();
@@ -40,16 +40,16 @@ describe.skipIf(!optedIn)('native scouting claims on the disposable database', (
 
   afterAll(async () => {
     if (!admin) return;
-    expect((await admin.from('ai_generations').delete().eq('player_id', playerId)).error).toBeNull();
+    expect((await admin.from('ai_generations').delete().in('player_id', [playerId, opponentId, outsiderId])).error).toBeNull();
     expect((await admin.from('phase_matches').delete().eq('phase_id', phaseId)).error).toBeNull();
-    expect((await admin.from('league_phases').delete().eq('id', phaseId)).error).toBeNull();
+    expect((await admin.from('league_phases').delete().in('id', [phaseId, otherPhaseId])).error).toBeNull();
     expect((await admin.from('seasons').delete().eq('id', seasonId)).error).toBeNull();
-    expect((await admin.from('players').delete().in('id', [playerId, opponentId])).error).toBeNull();
+    expect((await admin.from('players').delete().in('id', [playerId, opponentId, outsiderId])).error).toBeNull();
     expect((await deleteLocalRuleset(admin, rulesetId)).error).toBeNull();
   }, 60_000);
 
-  const claim = (matchId: string, limit: number, expectedId?: string) => admin.rpc('phase_scouting_claim', {
-    p_phase_id: phaseId, p_match_id: matchId, p_player_id: playerId, p_model_id: 'new-model',
+  const claim = (matchId: string, limit: number, expectedId?: string, claimantId = playerId, ownerId = phaseId) => admin.rpc('phase_scouting_claim', {
+    p_phase_id: ownerId, p_match_id: matchId, p_player_id: claimantId, p_model_id: 'new-model',
     p_has_user_team: true, p_daily_limit: limit,
     ...(expectedId && { p_expected_id: expectedId, p_expected_status: 'completed' }),
   });
@@ -63,9 +63,9 @@ describe.skipIf(!optedIn)('native scouting claims on the disposable database', (
     return data;
   }
 
-  async function charges() {
+  async function charges(claimantId = playerId) {
     const { error, count } = await admin.from('ai_generations').select('id', { count: 'exact', head: true })
-      .eq('player_id', playerId).eq('endpoint', 'match-prep-analysis');
+      .eq('player_id', claimantId).eq('endpoint', 'match-prep-analysis');
     if (error) throw error;
     if (count === null) throw new Error('Missing scouting generation count');
     return count;
@@ -98,5 +98,34 @@ describe.skipIf(!optedIn)('native scouting claims on the disposable database', (
       expect.objectContaining({ kind: 'claimed', artifact: expect.objectContaining({ id: stored.data?.id }) }),
     ]));
     expect(await charges()).toBe(before + 1);
+  });
+
+  it('serializes a player’s first two quota claims even on different matches', async () => {
+    expect(await charges(opponentId)).toBe(0);
+    const results = await Promise.all([
+      claim(raceMatch, 1, undefined, opponentId),
+      claim(firstMatch, 1, undefined, opponentId),
+    ]);
+    for (const result of results) expect(result.error).toBeNull();
+    expect(results.map(result => result.data)).toEqual(expect.arrayContaining([
+      { kind: 'limited', limit: 1 },
+      expect.objectContaining({ kind: 'claimed' }),
+    ]));
+    expect(await charges(opponentId)).toBe(1);
+    const stored = await admin.from('phase_match_prep_analyses').select('id').eq('player_id', opponentId);
+    expect(stored.error).toBeNull();
+    expect(stored.data).toHaveLength(1);
+  });
+
+  it('refuses a mismatched phase and a non-participant without charging either player', async () => {
+    const before = await charges();
+    const wrongPhase = await claim(deniedMatch, 10, undefined, playerId, otherPhaseId);
+    const outsider = await claim(deniedMatch, 10, undefined, outsiderId);
+    expect(wrongPhase.error).toBeNull();
+    expect(wrongPhase.data).toEqual({ kind: 'match_not_found' });
+    expect(outsider.error).toBeNull();
+    expect(outsider.data).toEqual({ kind: 'not_participant' });
+    expect(await charges()).toBe(before);
+    expect(await charges(outsiderId)).toBe(0);
   });
 });
