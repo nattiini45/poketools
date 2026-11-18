@@ -168,6 +168,10 @@ export default {
   phase_round_delete_results: 'This round cannot be deleted while one of its matches has games or result data.',
   phase_round_delete_teams: 'This round cannot be deleted while one of its matches has linked teams.',
   phase_round_delete_linked: 'This round cannot be deleted while it or one of its matches has linked records or scheduling details.',
+  phase_round_reset_archived: 'Archived phase is read-only',
+  phase_round_reset_scheduled_games: 'A scheduled match has saved games. Resolve or remove those games before resetting this round.',
+  phase_round_reset_games_remaining: 'A match still has result data, so the round was not moved to pending. Reload and review the matches before trying again.',
+  phase_round_reset_evolution_recheck_failed: 'The round was reset, but evolution progress could not be checked again. The failure was logged. Review the affected players’ evolution progress before relying on it.',
   // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
   rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
   // The status of the tournament or phase moved (another admin, a round written, a stage end) between the read and the guarded write; nothing was written (409).

@@ -276,6 +276,43 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     ]));
   });
 
+  it('does not mark a reset round pending when a game or a downstream result remains', async () => {
+    const phase = await create('round_robin');
+    await enroll(phase.id);
+    const writeRound = (number: number) => rounds.createPhaseRoundWithMatches({
+      phase_id: phase.id, name: `Round ${number}`, round_number: number, best_of: 3,
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] }],
+    });
+    const first = await writeRound(1);
+    const second = await writeRound(2);
+    const active = await rounds.updatePhaseRoundStatus(first.id, 'active', 'pending');
+    const { data: matches, error } = await admin.from('phase_matches').select('id,round_id').eq('phase_id', phase.id);
+    expect(error).toBeNull();
+    const own = matches?.find(match => match.round_id === first.id)?.id;
+    const next = matches?.find(match => match.round_id === second.id)?.id;
+    if (!own || !next) throw new Error('Missing reset fixtures');
+    const gameId = randomUUID();
+    expect((await admin.from('phase_games').insert({
+      id: gameId, match_id: own, game_number: 1, source: 'manual', winner_id: playerIds[0],
+    })).error).toBeNull();
+    await expect(rounds.finishPhaseRoundReset(seasonId, phase.id, active, []))
+      .rejects.toMatchObject({ code: 'phase_round_reset_games_remaining', statusCode: 409 });
+    expect((await rounds.getPhaseRoundById(first.id))?.status).toBe('active');
+    expect((await admin.from('phase_games').delete().eq('id', gameId)).error).toBeNull();
+
+    expect((await admin.from('phase_matches').update({ status: 'in_progress' }).eq('id', next)).error).toBeNull();
+    await expect(rounds.finishPhaseRoundReset(seasonId, phase.id, active, [next]))
+      .rejects.toMatchObject({ code: 'phase_round_reset_games_remaining', statusCode: 409 });
+    expect((await admin.from('phase_matches').update({ status: 'scheduled' }).eq('id', next)).error).toBeNull();
+    const changed = await rounds.updatePhaseRoundDeadline(first.id, '2030-01-08T00:00:00.000Z');
+    await expect(rounds.finishPhaseRoundReset(seasonId, phase.id, active, [next]))
+      .rejects.toMatchObject({ code: 'round_status_changed', statusCode: 409 });
+    const reset = await rounds.finishPhaseRoundReset(seasonId, phase.id, changed, [next]);
+    expect(reset).toMatchObject({ id: first.id, status: 'pending', best_of: 3 });
+    expect(reset.deadline).toBe(changed.deadline);
+    expect((await rounds.getPhaseRoundById(second.id))?.status).toBe('pending');
+  });
+
   it('serializes manual appends and inserts without shifting an already started phase', async () => {
     const prefix = `Placement ${randomUUID()}`;
     const input = {

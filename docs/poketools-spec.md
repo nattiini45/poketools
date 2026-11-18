@@ -1072,6 +1072,8 @@ POST .../rounds/generate                     Native next Swiss or round-robin ro
 POST .../rounds/generate-all                 Native remaining round-robin rounds, stopping before the next unresolved placement week;
                                             commits the ready batch together; optional start applies only to its first round
 PATCH .../rounds/[rid]                       Native round deadline, best-of and status (pending-only best-of)
+POST .../rounds/[rid]/reset                  Roll back played matches with the native result pipeline, then return the round to pending
+                                            only if no results remain; downstream played matches require explicit cascade
 DELETE .../rounds/[rid]                      Native confirmed delete of the latest eligible game-free round with only
                                             scheduled, unlinked fixtures; rejects played, managed or dependent rounds
 POST .../generate-bracket                    Initial native single- or double-elimination bracket; refuses a stale plan

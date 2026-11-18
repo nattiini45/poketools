@@ -10031,6 +10031,17 @@ export type Database = {
         }
         Returns: Json
       }
+      phase_round_reset_finish: {
+        Args: {
+          p_downstream_ids: string[]
+          p_expected_status: Database["public"]["Enums"]["round_status"]
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_round_id: string
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_round_write: {
         Args: {
           p_best_of: number

@@ -215,7 +215,7 @@ export default defineDe<typeof en>()({
       confirm: 'Runde zurücksetzen',
       cascadeTitle: 'Nachfolgende Spiele zurücksetzen',
       cascadeMessage:
-        'Spätere Spiele im Turnierbaum haben schon Ergebnisse. Wenn du diese Runde zurücksetzt, werden auch diese Ergebnisse, die Ratings und die Statistiken zurückgesetzt. Das lässt sich nicht rückgängig machen.',
+        'Spätere Spiele im Turnierbaum laufen bereits oder haben Ergebnisse. Wenn du diese Runde zurücksetzt, werden auch diese Spiele, ihre Ergebnisse, die Ratings und die Statistiken zurückgesetzt. Das lässt sich nicht rückgängig machen.',
       cascadeConfirm: 'Inklusive Folgespielen zurücksetzen',
     },
   },

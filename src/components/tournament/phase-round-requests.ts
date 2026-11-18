@@ -2,6 +2,7 @@ import type { PublicPhaseMatch } from '@/lib/cache/phase-public-reads';
 import type { LeaguePhaseAddress } from '@/lib/league-phase/paths';
 import type { ManualRoundInput } from '@/lib/validation/schemas';
 import type { ApiResult } from '@/types/api';
+import type { ResetRoundResult } from '@/types/game';
 import type { PhaseRound } from '@/types/league-phase';
 
 export type PhaseRoundDetail = PhaseRound & { matches: PublicPhaseMatch[] };
@@ -34,5 +35,6 @@ export function phaseRoundRequests({ season_id, phase_id }: LeaguePhaseAddress) 
     ),
     update: (id: string, edit: PhaseRoundEdit) => json<PhaseRound>(detail(id), write('PATCH', edit)),
     remove: (id: string) => json<{ deleted: true }>(detail(id), write('DELETE', { confirm: true })),
+    reset: (id: string, cascade: boolean) => json<ResetRoundResult>(`${detail(id)}/reset`, write('POST', { cascade })),
   };
 }

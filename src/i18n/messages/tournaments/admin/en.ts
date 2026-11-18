@@ -220,7 +220,7 @@ export default {
       confirm: 'Reset Round',
       cascadeTitle: 'Reset Downstream Matches',
       cascadeMessage:
-        'Downstream bracket matches have results. Resetting this round will also reset those downstream results, ratings, and aggregates. This cannot be undone.',
+        'Later bracket matches have results or are in progress. Resetting this round will also reset those matches, their results, ratings, and aggregates. This cannot be undone.',
       cascadeConfirm: 'Reset Including Downstream',
     },
   },

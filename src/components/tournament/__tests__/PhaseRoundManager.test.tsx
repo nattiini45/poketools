@@ -59,6 +59,44 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('native phase round manager', () => {
+  it('requires separate approval for downstream resets and only writes to the native round', async () => {
+    const user = userEvent.setup();
+    const round = { ...pending, status: 'completed' } as const;
+    const phase = { ...props.phase, status: 'completed' } as const;
+    const reveal = success({ ...round, matches: [{ ...fixture, status: 'completed' }] });
+    const downstream = () => Response.json({
+      success: false, error: 'Downstream matches have results', code: 'DOWNSTREAM_PLAYED', params: { count: 1 },
+    }, { status: 409 });
+    fetchMock.mockResolvedValueOnce(reveal).mockResolvedValueOnce(downstream()).mockResolvedValueOnce(downstream())
+      .mockResolvedValueOnce(success({ matches_reset: 1, total_games_deleted: 1, evolution_events: [], evolution_recheck_failed: true }))
+      .mockResolvedValueOnce(success({ ...pending, matches: [fixture] }));
+    const view = render(withI18n(<PhaseRoundManager {...props} rounds={[round]} phase={phase} />));
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /Round 1/ }));
+    await user.click(await screen.findByRole('button', { name: 'Reset' }));
+    const first = screen.getByRole('alertdialog', { name: 'Reset Round' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(within(first).getByRole('button', { name: 'Reset Round' }));
+    const cascade = await screen.findByRole('alertdialog', { name: 'Reset Downstream Matches' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await user.click(within(cascade).getByRole('button', { name: 'Cancel' }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    await user.click(screen.getByRole('button', { name: 'Reset' }));
+    await user.click(within(screen.getByRole('alertdialog', { name: 'Reset Round' })).getByRole('button', { name: 'Reset Round' }));
+    const second = await screen.findByRole('alertdialog', { name: 'Reset Downstream Matches' });
+    await user.click(within(second).getByRole('button', { name: 'Reset Including Downstream' }));
+    await waitFor(() => expect(fetchMock.mock.calls.filter(([, init]) => init?.method === 'POST')
+      .map(([url, init]) => [url, init?.body])).toEqual([
+      [`${base}/rounds/round-1/reset`, '{"cascade":false}'],
+      [`${base}/rounds/round-1/reset`, '{"cascade":false}'],
+      [`${base}/rounds/round-1/reset`, '{"cascade":true}'],
+    ]));
+    expect(await screen.findByText(/The round was reset, but evolution progress could not be checked again/)).toBeTruthy();
+    expect(screen.queryByRole('link', { name: /Record Reconciliation/i })).toBeNull();
+    view.rerender(withI18n(<PhaseRoundManager {...props} rounds={[round]} phase={{ ...phase, archived: true }} />));
+    expect(screen.queryByRole('button', { name: 'Reset' })).toBeNull();
+  });
+
   it('loads only the expanded round, distinguishes errors from empty rounds, and links its public matches', async () => {
     const user = userEvent.setup();
     fetchMock.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(success({ ...pending, matches: [fixture] }));
