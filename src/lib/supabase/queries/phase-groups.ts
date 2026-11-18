@@ -34,7 +34,7 @@ export async function replaceAdminPhaseGroups(
     if (error.code === 'P0001') {
       const code = error.message;
       if (code === 'PHASE_NOT_FOUND' || code === 'PHASE_GROUPS_LEAGUE_MANAGED'
-        || code === 'GROUP_SLOT_CHANGED' || code === 'PHASE_GROUPS_INSUFFICIENT_SEEDS') {
+        || code === 'GROUP_SLOT_CHANGED' || code === 'PHASE_GROUPS_INSUFFICIENT_SEEDS' || code === 'PHASE_GROUPS_ROUNDS_EXIST') {
         const status = code === 'PHASE_NOT_FOUND' ? 404 : code === 'PHASE_GROUPS_INSUFFICIENT_SEEDS' ? 400 : 409;
         throw new UserFacingError(seasonErrors[code], { code, status });
       }
@@ -96,8 +96,11 @@ export async function movePhaseGroupMember(phaseId: string, fromGroupId: string,
   const { error } = await supabase.rpc('phase_group_member_move', {
     p_phase_id: phaseId, p_from_group: fromGroupId, p_to_group: toGroupId, p_player_id: playerId, p_seed: seed,
   });
-  if (error?.code === 'P0001' && error.message === 'GROUP_SLOT_CHANGED') {
-    throw new UserFacingError(seasonErrors.GROUP_SLOT_CHANGED, { code: 'GROUP_SLOT_CHANGED', status: 409 });
+  if (error?.code === 'P0001') {
+    const code = error.message;
+    if (code === 'GROUP_SLOT_CHANGED' || code === 'PHASE_GROUPS_ROUNDS_EXIST' || code === 'PHASE_GROUPS_LEAGUE_MANAGED') {
+      throw new UserFacingError(seasonErrors[code], { code, status: 409 });
+    }
   }
   if (error) throw error;
 }

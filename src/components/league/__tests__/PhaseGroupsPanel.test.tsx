@@ -15,6 +15,7 @@ import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 import { redrawNeedsConfirm } from '@/lib/league-admin/phase-controls';
 
 vi.mock('next/link', () => ({ default: ({ children }: { children?: unknown }) => children ?? null }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const { default: PhaseGroupsPanel, GroupCountSelect, EmptyGroupsNote } = await import('../PhaseGroupsPanel');
 
@@ -28,6 +29,20 @@ describe('PhaseGroupsPanel', () => {
 
     expect(html).toContain('role="status"');
     expect(html).toContain('Loading groups...');
+  });
+
+  it('shows native group controls without a loading state, but not on archived or mirrored phases', () => {
+    const open = renderWithI18n(<PhaseGroupsPanel seasonId="s1" phaseId="p1" native={{ groups: [], archived: false, hasRounds: false }} />);
+    expect(open).toContain('Group count');
+    expect(open).not.toContain('Loading groups');
+    const archived = renderWithI18n(<PhaseGroupsPanel seasonId="s1" phaseId="p1" native={{ groups: [], archived: true, hasRounds: false }} />);
+    expect(archived).not.toContain('Group count');
+    const mirrored = renderWithI18n(<PhaseGroupsPanel seasonId="s1" phaseId="p1" leagueManaged native={{ groups: [], archived: false, hasRounds: false }} />);
+    expect(mirrored).not.toContain('Group count');
+    expect(mirrored).toContain('stops before each placement week');
+    const scheduled = renderWithI18n(<PhaseGroupsPanel seasonId="s1" phaseId="p1" native={{ groups: [], archived: false, hasRounds: true }} />, { locale: 'de' });
+    expect(scheduled).not.toContain('Anzahl der Gruppen');
+    expect(scheduled).toContain('Sobald die Phase Runden hat');
   });
 });
 

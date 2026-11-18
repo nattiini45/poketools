@@ -6,6 +6,8 @@ import { syncStandingsSchema, formatZodErrors } from '@/lib/validation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { assertNativePhaseNotArchived } from '@/lib/league-phase/admin-locks';
+import { assertPhaseEditable } from '@/lib/tournament/league-phase';
 import { createNativePhaseEnrollment } from '@/lib/league-phase/enrollment-services';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { expirePhaseReads, expireTournamentReads } from '@/lib/revalidation';
@@ -39,6 +41,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         code: 'PHASE_NOT_FOUND',
         status: 404,
       });
+    }
+
+    if (nativePhase) {
+      assertNativePhaseNotArchived(nativePhase);
+      assertPhaseEditable(nativePhase, 'participants');
     }
 
     const rawBody = request.headers.get('content-length') === '0'

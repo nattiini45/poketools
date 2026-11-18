@@ -358,7 +358,7 @@ export default defineDe<typeof en>()({
     groups: 'Gruppen',
     rounds: 'Runden',
     sectionsNav: 'Abschnitte dieser Phase',
-    readOnly: 'Der Kader und die Gruppen sind hier weiterhin schreibgeschützt. Du kannst hier keinen Rundenabschluss erzwingen.',
+    readOnly: 'Du kannst hier keinen Rundenabschluss erzwingen.',
     roundsReadOnly: 'Runden in archivierten Phasen kannst du nicht bearbeiten.',
     completedRoundsReadOnly: 'In abgeschlossenen Phasen kannst du Runden zurücksetzen, aber nicht anderweitig bearbeiten. Dadurch wird die Phase nicht wieder geöffnet.',
     noRounds: 'Keine Runden.',

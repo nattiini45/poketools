@@ -6,6 +6,7 @@ import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { phaseGroupsRepairSchema, formatZodErrors } from '@/lib/validation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { repairPhaseGroups, type GroupRepairApplyLog } from '@/lib/season/repair-phase-groups';
 import { logAuditEvent, type AuditLogEntry } from '@/lib/audit/log';
 import { expireTournamentReads } from '@/lib/revalidation';
@@ -75,6 +76,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
     const admin = await requireResourceAdmin('season', seasonId);
+    if (await requireOpenPhaseRouteMode() === 'phase') {
+      throw new UserFacingError('Group repair is not available for native phases', { code: 'PHASE_GROUP_REPAIR_UNAVAILABLE', status: 409 });
+    }
 
     const rawBody = await request.json().catch(() => null);
     const parsed = phaseGroupsRepairSchema.safeParse(rawBody);

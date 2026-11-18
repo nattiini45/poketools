@@ -44,6 +44,20 @@ it('reads only the verified native groups', async () => {
   expect(h.groups).toHaveBeenCalledTimes(1);
 });
 
+it('keeps archived groups visible but refuses assign or clear', async () => {
+  h.phase.mockResolvedValue({ id: phaseId, season_id: id, archived: true });
+  expect((await GET(req('GET'), params)).status).toBe(200);
+  for (const result of [
+    await POST(req('POST', { group_count: 2 }), params),
+    await DELETE(req('DELETE'), params),
+  ]) {
+    expect(result.status).toBe(409);
+    expect(await result.json()).toMatchObject({ code: 'phase_bracket_archived' });
+  }
+  expect(h.replace).not.toHaveBeenCalled();
+  expect(h.expire).not.toHaveBeenCalled();
+});
+
 it('applies one native replacement with the serpentine plan and expected seeds', async () => {
   expect((await POST(req('POST', { group_count: 2 }), params)).status).toBe(201);
   expect(h.replace).toHaveBeenCalledExactlyOnceWith(id, phaseId, [

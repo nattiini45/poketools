@@ -5,7 +5,7 @@
  * `discord_id` / `auth_user_id`, so moderation and admin columns went out.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { NextRequest } from 'next/server';
+import { NextRequest } from 'next/server';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
 vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
@@ -47,6 +47,7 @@ import { DELETE, GET, PATCH, POST } from '../route';
 import { POST as seedByRating } from '../seed-by-rating/route';
 import { revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { addParticipant, getParticipants, getTournamentById, removeParticipant, updateParticipantSeeds } from '@/lib/supabase/queries/tournaments';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
@@ -86,6 +87,31 @@ function nativeMode() {
   vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
 }
 
+it('does not let even a forced native roster edit change an archived phase', async () => {
+  nativeMode();
+  vi.mocked(getPhaseById).mockResolvedValue({ id: PHASE, season_id: SEASON, status: 'active', archived: true } as never);
+  const result = await DELETE(req({ player_id: PLAYER, force: true, reason: 'Roster correction' }), routeArgs);
+  expect(result.status).toBe(409);
+  expect(await result.json()).toMatchObject({ code: 'phase_bracket_archived' });
+  expect(removePhaseParticipant).not.toHaveBeenCalled();
+});
+
+it('keeps the seat count of a generated native elimination bracket fixed', async () => {
+  nativeMode();
+  vi.mocked(getPhaseById).mockResolvedValue({
+    id: PHASE, season_id: SEASON, status: 'active', bracket_type: 'double_elim', format_stage_key: 'finals',
+  } as never);
+  vi.mocked(addPhaseParticipant).mockRejectedValueOnce(new UserFacingError('Use a substitution.', {
+    code: 'PHASE_ELIMINATION_ROSTER_LOCKED', status: 409,
+  }));
+  const result = await POST(req({ player_id: PLAYER, force: true, reason: 'Late entrant' }), routeArgs);
+  expect(result.status).toBe(409);
+  expect(await result.json()).toMatchObject({ code: 'PHASE_ELIMINATION_ROSTER_LOCKED' });
+  expect(addPhaseParticipant).toHaveBeenCalledExactlyOnceWith(PHASE, PLAYER);
+  expect(logAuditEvent).not.toHaveBeenCalled();
+  expect(revalidateTag).not.toHaveBeenCalled();
+});
+
 describe('GET /api/seasons/[id]/phases/[phaseId]/participants', () => {
   it('returns only { id, name, avatar_url, seed, starting_bracket } per participant', async () => {
     vi.mocked(getParticipants).mockResolvedValue(fullRows);
@@ -109,6 +135,24 @@ describe('GET /api/seasons/[id]/phases/[phaseId]/participants', () => {
     const res = await GET({} as NextRequest, routeArgs);
 
     expectNoPrivatePlayerData(await res.json());
+  });
+
+  it('only a live league admin can ask for the native guest flags', async () => {
+    nativeMode();
+    vi.mocked(getPhaseParticipants).mockResolvedValue([{ ...fullRows[0], is_guest: true }]);
+    const request = new NextRequest('http://localhost?view=admin');
+    vi.mocked(requireResourceAdmin).mockRejectedValueOnce(new AuthError('Forbidden', 403));
+    expect((await GET(request, routeArgs)).status).toBe(403);
+    expect(getPhaseById).not.toHaveBeenCalled();
+    expect(getPhaseParticipants).not.toHaveBeenCalled();
+    const result = await GET(request, routeArgs);
+    expect(result.headers.get('Cache-Control')).toBe('private, no-store');
+    expect(await result.json()).toEqual({
+      success: true,
+      data: [{ id: 'p1', name: 'Ash', avatar_url: fullRows[0].avatar_url, seed: 1, starting_bracket: 'winners', is_guest: true }],
+    });
+    expect(requireResourceAdmin).toHaveBeenCalledWith('season', SEASON);
+    expect(getParticipants).not.toHaveBeenCalled();
   });
 
   it('a phase of another league is a 404, not a participant list', async () => {

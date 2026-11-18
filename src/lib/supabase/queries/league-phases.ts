@@ -457,14 +457,13 @@ export async function freezePhaseEnrollment(phaseId: string): Promise<void> {
 
 export async function addPhaseParticipant(phaseId: string, playerId: string): Promise<void> {
   const { error } = await supabase.rpc('phase_participant_edit', { p_phase_id: phaseId, p_player_id: playerId, p_add: true });
-  if (error) throw error;
+  if (error) throwPhaseRosterError(error);
 }
 
 function throwPhaseRosterError(error: { code: string; message: string }): never {
-  if (error.code === 'P0001' && error.message === 'PHASE_GROUP_ROSTER_SCHEDULED') {
-    throw new UserFacingError('A player in a group cannot be removed once the phase has rounds. Use a substitution instead.', {
-      code: 'PHASE_GROUP_ROSTER_SCHEDULED', status: 409,
-    });
+  const code = error.message;
+  if (error.code === 'P0001' && (code === 'PHASE_GROUP_ROSTER_SCHEDULED' || code === 'PHASE_ELIMINATION_ROSTER_LOCKED')) {
+    throw new UserFacingError(seasonErrors[code], { code, status: 409 });
   }
   throw error;
 }

@@ -608,8 +608,8 @@
       "expires": ["expirePhaseReads", "expireTournamentReads"],
       "audit": ["phase.enrollment.sync"],
       "emits": [],
-      "importFingerprint": "bbd4025517653643",
-      "importFiles": 185,
+      "importFingerprint": "5336e848fb13e8ac",
+      "importFiles": 187,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
         "src/lib/api/invalid-path-id.ts": { "names": ["rejectInvalidPathId"], "closure": "b77d948c2af27d9a", "files": 2 },
@@ -618,12 +618,14 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertFormatPhaseRosterOpen"], "closure": "956cc87761631496", "files": 50 },
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
+        "src/lib/league-phase/admin-locks.ts": { "names": ["assertNativePhaseNotArchived"], "closure": "8e76046559cd6401", "files": 2 },
         "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "1eec46014c4e786e", "files": 141 },
         "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["nativePhasePersistence"], "closure": "4b5d4089efb76445", "files": 34 },
         "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
         "src/lib/revalidation.ts": { "names": ["expirePhaseReads", "expireTournamentReads"], "closure": "067371bc100272fc", "files": 29 },
         "src/lib/supabase/queries/tournaments.ts": { "names": ["getTournamentById"], "closure": "dc70eb64e7d8de0e", "files": 10 },
         "src/lib/tournament/enrollment-sync.ts": { "names": ["syncStandingsEnrollment"], "closure": "15bd65f76d7ba498", "files": 129 },
+        "src/lib/tournament/league-phase.ts": { "names": ["assertPhaseEditable"], "closure": "d097811eb6cd44d9", "files": 2 },
         "src/lib/validation/index.ts": { "names": ["formatZodErrors", "syncStandingsSchema"], "closure": "549662de2f15c47a", "files": 25 }
       },
       "packages": ["next/server"]
