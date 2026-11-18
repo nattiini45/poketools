@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getOpponentBattleStatsInTournament } from '@/lib/supabase/queries/games';
+import { getOpponentBattleStatsInPhase, getPhaseScoutingMatch } from '@/lib/supabase/queries/phase-opponent-summary';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { buildThreatEntry } from '@/lib/pkmn/threat-list';
+import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
 import type { ApiResult } from '@/types/api';
 import type { ThreatEntry } from '@/types/calc';
 
@@ -28,7 +32,7 @@ interface OpponentSummaryResponse {
   opponent_id: string;
   opponent_name: string;
   pokemon: OpponentPokemonSummary[];
-  data_scope: 'tournament' | 'season';
+  data_scope: 'tournament' | 'season' | 'phase';
   total_games: number;
 }
 
@@ -51,7 +55,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const match = await getMatchById(matchId);
+    const nativeMatchId = matchId.toLowerCase();
+    const owner = await resolveIdOnlyMatchRoute(nativeMatchId);
+    const match = owner?.kind === 'phase'
+      ? await getPhaseScoutingMatch(nativeMatchId, owner)
+      : owner?.kind === 'legacy' ? await getMatchById(matchId) : null;
     if (!match) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
@@ -74,23 +82,37 @@ export async function GET(request: NextRequest) {
     const opponentName =
       match.player_1_id === player.playerId ? match.player_2_name : match.player_1_name;
 
-    const stats = await getOpponentBattleStatsInTournament(
-      opponentId,
-      match.tournament_id,
-    );
+    let stats: Awaited<ReturnType<typeof getOpponentBattleStatsInPhase>>;
+    let baseFormat: string;
+    let dataScope: OpponentSummaryResponse['data_scope'];
+    if ('phase_id' in match) {
+      const ruleset = await getRulesetById(match.ruleset_id);
+      if (!ruleset || ruleset.id !== match.ruleset_id) {
+        throw new UserFacingError(tournamentErrors.ruleset_not_found, { code: 'ruleset_not_found', status: 404 });
+      }
+      stats = await getOpponentBattleStatsInPhase(opponentId, match.phase_id);
+      baseFormat = ruleset.base_format;
+      dataScope = 'phase';
+    } else {
+      stats = await getOpponentBattleStatsInTournament(opponentId, match.tournament_id);
+      const tournament = await getTournamentById(match.tournament_id);
+      const ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
+      baseFormat = ruleset?.base_format ?? 'gen9ou';
+      dataScope = 'tournament';
+    }
 
     // Aggregate per Pokémon
     const totalGames = new Set(stats.map((s) => s.game_id)).size;
 
     const bySpecies = new Map<
       string,
-      { brought: number; lead: number; kos: number; koed: number; won: number; moves: Set<string>; games: Set<string> }
+      { brought: number; lead: number; kos: number; won: number; moves: Set<string>; games: Set<string> }
     >();
 
     for (const stat of stats) {
       if (!bySpecies.has(stat.pokemon_name)) {
         bySpecies.set(stat.pokemon_name, {
-          brought: 0, lead: 0, kos: 0, koed: 0, won: 0,
+          brought: 0, lead: 0, kos: 0, won: 0,
           moves: new Set(), games: new Set(),
         });
       }
@@ -99,15 +121,9 @@ export async function GET(request: NextRequest) {
       if (stat.was_brought) entry.brought++;
       if (stat.was_lead) entry.lead++;
       entry.kos += stat.kos_dealt;
-      if (stat.was_koed) entry.koed++;
       if (stat.match_won) entry.won++;
       for (const move of stat.moves_used ?? []) entry.moves.add(move);
     }
-
-    // Resolve the tournament's format so calc-ready sets use the right meta
-    const tournament = await getTournamentById(match.tournament_id);
-    const ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
-    const baseFormat = ruleset?.base_format ?? 'gen9ou';
 
     const pokemon: OpponentPokemonSummary[] = await Promise.all(
       [...bySpecies.entries()].map(async ([species, e]) => {
@@ -133,7 +149,7 @@ export async function GET(request: NextRequest) {
       opponent_id: opponentId,
       opponent_name: opponentName,
       pokemon,
-      data_scope: 'tournament',
+      data_scope: dataScope,
       total_games: totalGames,
     };
 
