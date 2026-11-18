@@ -75,6 +75,7 @@ interface MatchDetailProps {
   epb?: { snapshots: MatchEvolutionSnapshot[]; entries: PointBuyListEntry[]; replayViewed: boolean; viewedEndpoint?: string };
   proposals: MatchProposalWithPlayers[];
   nativeConfirmHref?: string;
+  nativeSubmitHref?: string;
   legacyActions?: {
     isSiteAdmin?: boolean;
     canEditGames: boolean;
@@ -84,7 +85,7 @@ interface MatchDetailProps {
 
 export default async function MatchDetail({
   match, competition, round, battleStatsByGame, analysis, standings, player1Streaks, player2Streaks,
-  back, viewerId, notes, contentLocale, epb, proposals, nativeConfirmHref, legacyActions,
+  back, viewerId, notes, contentLocale, epb, proposals, nativeConfirmHref, nativeSubmitHref, legacyActions,
 }: MatchDetailProps) {
   function extractStanding(playerId: string): PlayerStanding | null {
     const idx = standings.findIndex((s) => s.player_id === playerId);
@@ -104,6 +105,7 @@ export default async function MatchDetail({
   const mid = match.id;
   const canUseLegacyActions = legacyActions !== undefined && (isParticipant || isSiteAdmin);
   const confirmHref = canConfirm ? (canUseLegacyActions ? `/dashboard/confirm/${mid}` : nativeConfirmHref) : undefined;
+  const submitHref = canAct ? (canUseLegacyActions ? `/dashboard/submit/${mid}` : nativeSubmitHref) : undefined;
 
   // Pokémon score: sum of surviving (brought but not KO'd) mons across all games
   const { p1Score: score1, p2Score: score2 } = Object.keys(battleStatsByGame).length > 0
@@ -259,7 +261,7 @@ export default async function MatchDetail({
           </Link>
         </div>
         {/* Participant / Admin actions */}
-        {((canUseLegacyActions && canAct) || confirmHref !== undefined) && (
+        {((canUseLegacyActions && canAct) || submitHref || confirmHref) && (
           <div className="flex flex-wrap gap-x-4 gap-y-3">
             {canUseLegacyActions && canAct && isParticipant && (
               <Link href={`/dashboard/match-prep/${mid}`} className="inline-flex rounded-[3px] text-body">
@@ -268,8 +270,8 @@ export default async function MatchDetail({
                 </SkewPlate>
               </Link>
             )}
-            {canUseLegacyActions && canAct && (
-              <Link href={`/dashboard/submit/${mid}`} className="inline-flex rounded-[3px] text-body">
+            {submitHref && (
+              <Link href={submitHref} className="inline-flex rounded-[3px] text-body">
                 <SkewPlate variant="button" tone="primary">
                   {t('detail.submitResult')}
                 </SkewPlate>

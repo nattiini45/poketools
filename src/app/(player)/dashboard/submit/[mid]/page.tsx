@@ -2,8 +2,14 @@ import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import { getLiveAccess } from '@/lib/auth/helpers';
 import { canAdministerMatchAccess } from '@/lib/auth/match-access';
+import { canAdministerPhaseAccess } from '@/lib/auth/phase-access';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { phaseMatchHref } from '@/lib/league-phase/paths';
+import { getPhaseSubmitContext } from '@/lib/supabase/queries/league-phases';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getMatchPrepTeams } from '@/lib/supabase/queries/match-prep-teams';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseMatchPrepTeams } from '@/lib/supabase/queries/phase-teams';
 import { getTournamentSubmitContext } from '@/lib/supabase/queries/tournaments';
 import { selectVisibleMatchPrepRosters } from '@/lib/team/visibility';
 import MatchPageBackLink from '@/components/match/MatchPageBackLink';
@@ -30,7 +36,13 @@ export default async function SubmitResultPage({ params }: PageProps) {
   const access = await getLiveAccess();
   const player = access?.player;
   if (!access || !player) redirect('/');
-  const match = await getMatchById(mid);
+  if (!access.isSiteAdmin && (player.status === 'banned' || player.status === 'suspended')) redirect('/dashboard');
+  const owner = await resolveIdOnlyMatchRoute(mid.toLowerCase());
+  if (!owner) notFound();
+  const native = owner.kind === 'phase' ? await getPhaseMatchById(mid.toLowerCase()) : null;
+  if (owner.kind === 'phase' && native?.phase_id !== owner.phase_id) notFound();
+  const legacy = owner.kind === 'legacy' ? await getMatchById(mid) : null;
+  const match = native ?? legacy;
   if (!match) notFound();
 
   const isParticipant =
@@ -41,7 +53,9 @@ export default async function SubmitResultPage({ params }: PageProps) {
   // league (the league organizer). A player with no admin role costs no lookup.
   const canAdminister =
     access.isSiteAdmin ||
-    (access.isAnyAdmin && (await canAdministerMatchAccess(player, match.tournament_id)));
+    (owner.kind === 'phase'
+      ? await canAdministerPhaseAccess(player, owner.phase_id)
+      : Boolean(legacy && access.isAnyAdmin && await canAdministerMatchAccess(player, legacy.tournament_id)));
 
   if (!isParticipant && !canAdminister) {
     redirect('/dashboard');
@@ -49,12 +63,11 @@ export default async function SubmitResultPage({ params }: PageProps) {
 
   const canSubmit = availableMatchActions(match, { playerId: player.playerId, isAdmin: canAdminister }).has('record_game');
 
-  const [prepTeamRows, tournament] = await Promise.all([
-    getMatchPrepTeams(mid),
-    getTournamentSubmitContext(match.tournament_id),
-  ]);
-  const tournamentVisibility = tournament?.teamVisibility ?? null;
-  const generation = tournament?.generation ?? 9;
+  const [prepTeamRows, context] = await (owner.kind === 'phase'
+    ? Promise.all([getPhaseMatchPrepTeams(match.id), getPhaseSubmitContext(owner.phase_id, owner.season_id)])
+    : Promise.all([getMatchPrepTeams(mid), legacy ? getTournamentSubmitContext(legacy.tournament_id) : null]));
+  if (owner.kind === 'phase' && !context) notFound();
+  const generation = context?.generation ?? 9;
 
   // Spec §7 per side: a participant sees only their own planned roster until
   // the match is completed (or the tournament is always_public); admins see both.
@@ -62,14 +75,16 @@ export default async function SubmitResultPage({ params }: PageProps) {
     prepTeamRows,
     match,
     { viewerId: player.playerId, isAdmin: canAdminister },
-    tournamentVisibility
+    context?.teamVisibility ?? null
   );
 
   const isAdmin = canAdminister && !isParticipant;
 
   const [tForms, tEnum] = await Promise.all([getT(matchFormsMessages), getT(enumMessages)]);
   const strong = (chunks: React.ReactNode) => <strong className="font-[550]">{chunks}</strong>;
-  const matchHref = `/tournaments/${match.tournament_id}/matches/${mid}`;
+  const matchHref = legacy
+    ? `/tournaments/${legacy.tournament_id}/matches/${mid}`
+    : owner.kind === 'phase' ? phaseMatchHref(owner, match.id) : notFound();
 
   return (
     <AuthGuard>
@@ -104,7 +119,7 @@ export default async function SubmitResultPage({ params }: PageProps) {
         ) : (
           <SubmitResultClient
             key={mid}
-            matchId={mid}
+            matchId={match.id}
             players={[
               { id: match.player_1_id, name: match.player_1_name },
               { id: match.player_2_id, name: match.player_2_name },
@@ -112,7 +127,7 @@ export default async function SubmitResultPage({ params }: PageProps) {
             prepTeams={prepTeams}
             generation={generation}
             redirectTo={matchHref}
-            isAdmin={canAdminister}
+            isAdmin={owner.kind === 'legacy' && canAdminister}
           />
         )}
 

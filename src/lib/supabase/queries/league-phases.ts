@@ -350,6 +350,16 @@ function mapParticipantRow(
   };
 }
 
+export async function getPhaseSubmitContext(phaseId: string, seasonId: string) {
+  const { data, error } = await supabase.from('league_phases')
+    .select('team_visibility, ruleset:ruleset_definition_versions ( gen )')
+    .eq('id', phaseId)
+    .eq('season_id', seasonId)
+    .maybeSingle();
+  if (error) throw error;
+  return data && { teamVisibility: data.team_visibility, generation: data.ruleset?.gen ?? 9 };
+}
+
 export async function getPhaseParticipants(phaseId: string): Promise<PhaseParticipant[]> {
   const grouped = await getPhaseParticipantsBatch([phaseId]);
   return (grouped.get(phaseId) ?? []).sort((a, b) => {

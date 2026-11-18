@@ -18,6 +18,11 @@ const mocks = vi.hoisted(() => ({
   clientProps: [] as Record<string, unknown>[],
   tournamentSelect: vi.fn(),
   isResourceAdminFor: vi.fn(async (_playerId: string, _type: string, _id: string) => false),
+  resolveOwner: vi.fn(),
+  nativeMatch: vi.fn(),
+  nativePrep: vi.fn(),
+  nativeContext: vi.fn(),
+  nativeAdmin: vi.fn(),
 }));
 
 vi.mock('next/headers', () => ({
@@ -49,6 +54,11 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(async () => mocks.match),
 }));
+vi.mock('@/lib/league-phase/match-route-owner', () => ({ resolveIdOnlyMatchRoute: mocks.resolveOwner }));
+vi.mock('@/lib/auth/phase-access', () => ({ canAdministerPhaseAccess: mocks.nativeAdmin }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: mocks.nativeMatch }));
+vi.mock('@/lib/supabase/queries/phase-teams', () => ({ getPhaseMatchPrepTeams: mocks.nativePrep }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseSubmitContext: mocks.nativeContext }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({
   isResourceAdminFor: (playerId: string, type: string, id: string) => mocks.isResourceAdminFor(playerId, type, id),
 }));
@@ -139,10 +149,54 @@ beforeEach(() => {
     { id: 'r2', match_id: 'm-1', player_id: 'p2', pokemon: [set('Garchomp')] },
   ];
   mocks.prepError = null;
+  mocks.resolveOwner.mockResolvedValue({ kind: 'legacy' });
+  mocks.nativeAdmin.mockResolvedValue(false);
   mocks.tournament = {
     data: { team_visibility: 'hidden_until_match', ruleset: { gen: 8 } },
     error: null,
   };
+});
+
+describe('native phase result submission page', () => {
+  beforeEach(() => {
+    const { tournament_id: _legacyId, ...match } = matchWith('scheduled');
+    mocks.resolveOwner.mockResolvedValue({ kind: 'phase', phase_id: 'p-1', season_id: 's-1' });
+    mocks.nativeMatch.mockResolvedValue({ ...match, phase_id: 'p-1' });
+    mocks.nativePrep.mockResolvedValue(mocks.prepRows);
+    mocks.nativeContext.mockResolvedValue({ teamVisibility: 'hidden_until_match', generation: 7 });
+  });
+
+  it('loads only native phase data, keeps the other roster hidden and returns to the canonical match', async () => {
+    await render();
+    expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [] });
+    expect(mocks.clientProps[0]).toMatchObject({
+      matchId: 'm-1', generation: 7, redirectTo: '/leagues/s-1/phases/p-1/matches/m-1', isAdmin: false,
+    });
+    expect(mocks.nativeContext).toHaveBeenCalledWith('p-1', 's-1');
+    expect(mocks.tournamentSelect).not.toHaveBeenCalled();
+  });
+
+  it('lets a live phase-only admin see both sides without exposing the legacy manual replay import', async () => {
+    mocks.access = viewer('organizer');
+    mocks.nativeAdmin.mockResolvedValue(true);
+    await render();
+    expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [set('Garchomp')] });
+    expect(mocks.clientProps[0].isAdmin).toBe(false);
+  });
+
+  it('refuses an outsider before reading either team or ruleset', async () => {
+    mocks.access = viewer('outsider');
+    await expect(render()).rejects.toThrow('REDIRECT /dashboard');
+    expect(mocks.nativePrep).not.toHaveBeenCalled();
+    expect(mocks.nativeContext).not.toHaveBeenCalled();
+  });
+
+  it('refuses a match that no longer belongs to the verified phase', async () => {
+    mocks.nativeMatch.mockResolvedValue({ phase_id: 'another-phase' });
+    await expect(render()).rejects.toThrow('NOT_FOUND');
+    expect(mocks.nativePrep).not.toHaveBeenCalled();
+    expect(mocks.tournamentSelect).not.toHaveBeenCalled();
+  });
 });
 
 describe('submit page roster visibility (spec §7)', () => {
