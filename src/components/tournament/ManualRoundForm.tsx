@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
-import type { ParticipantWithSeed } from '@/types/tournament';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import type { LeaguePhaseAddress } from '@/lib/league-phase/paths';
+import type { PhaseRound } from '@/types/league-phase';
 import type { Round } from '@/types/round';
 import type { ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
@@ -17,6 +18,7 @@ import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import { apiFailure, type UiError } from './ui-error';
 import { formatNotReadyReasons, type FormatNotReadyReason } from './force-start';
+import { phaseRoundRequests } from './phase-round-requests';
 
 type ManualRoundErrorKey = 'manualRound.loadFailed' | 'manualRound.createFailed';
 
@@ -29,26 +31,34 @@ export function manualRoundEndpoint(tournamentId: string, force = false): string
   return force ? `${base}?force=true` : base;
 }
 
-interface ManualRoundFormProps {
-  tournamentId: string;
+type ManualRoundParticipant = { id: string; name: string; seed: number | null };
+
+type ManualRoundFormProps = {
   bestOfDefault: number;
-  onRoundCreated: (round: Round) => void;
   onCancel: () => void;
-}
+} & (
+  | { tournamentId: string; onRoundCreated: (round: Round) => void }
+  | { phase: LeaguePhaseAddress; participants: ManualRoundParticipant[]; onRoundCreated: (round: PhaseRound) => void }
+);
 
 interface MatchSlot {
   player_1_id: string;
   player_2_id: string;
 }
 
-export default function ManualRoundForm({
-  tournamentId,
-  bestOfDefault,
-  onRoundCreated,
-  onCancel,
-}: ManualRoundFormProps) {
-  const [participants, setParticipants] = useState<ParticipantWithSeed[]>([]);
-  const [loading, setLoading] = useState(true);
+function seedSlots(participants: ManualRoundParticipant[]): MatchSlot[] {
+  const count = Math.floor(participants.length / 2);
+  return count > 0 ? Array.from({ length: count }, (_, i) => ({
+    player_1_id: participants[i].id,
+    player_2_id: participants[participants.length - 1 - i].id,
+  })) : [{ player_1_id: '', player_2_id: '' }];
+}
+
+export default function ManualRoundForm(props: ManualRoundFormProps) {
+  const { bestOfDefault, onCancel } = props;
+  const tournamentId = 'tournamentId' in props ? props.tournamentId : null;
+  const [participants, setParticipants] = useState<ManualRoundParticipant[]>('phase' in props ? props.participants : []);
+  const [loading, setLoading] = useState(tournamentId !== null);
   const t = useT(tournamentsAdminMessages);
   const tCommon = useT(commonMessages);
   // errorsSeasons: the manual route of a grouped league's phase refuses with league-group codes (PHASE_PLAYER_WITHOUT_LEAGUE_GROUP,
@@ -56,31 +66,25 @@ export default function ManualRoundForm({
   const errorText = useApiErrorText(errorsTournaments, errorsSeasons);
   const [error, setError] = useState<UiError<ManualRoundErrorKey> | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const roundNameField = useRef<HTMLInputElement>(null);
   // Set when the server refused the first round with 409 `format_not_ready`: the dialog offers the audited force start.
   const [forceStart, setForceStart] = useState<FormatNotReadyReason[] | null>(null);
 
   const [roundName, setRoundName] = useState('');
   const [bestOf, setBestOf] = useState(bestOfDefault);
-  const [slots, setSlots] = useState<MatchSlot[]>([{ player_1_id: '', player_2_id: '' }]);
+  const [slots, setSlots] = useState(() => seedSlots(participants));
 
   useEffect(() => {
+    if (tournamentId === null) {
+      roundNameField.current?.focus();
+      return;
+    }
     fetch(`/api/tournaments/${tournamentId}/participants`)
       .then((r) => r.json())
-      .then((result: ApiResult<ParticipantWithSeed[]>) => {
+      .then((result: ApiResult<ManualRoundParticipant[]>) => {
         if (result.success) {
           setParticipants(result.data);
-          // Pre-fill match slots: pair participants in seed order
-          const count = Math.floor(result.data.length / 2);
-          if (count > 0) {
-            const prefilled: MatchSlot[] = [];
-            for (let i = 0; i < count; i++) {
-              prefilled.push({
-                player_1_id: result.data[i]?.id ?? '',
-                player_2_id: result.data[result.data.length - 1 - i]?.id ?? '',
-              });
-            }
-            setSlots(prefilled);
-          }
+          setSlots(seedSlots(result.data));
         }
       })
       .catch(() => setError({ key: 'manualRound.loadFailed' }))
@@ -127,32 +131,31 @@ export default function ManualRoundForm({
 
   /** `force`: start anyway after the admin confirmed a 409 `format_not_ready` (audited by the server). */
   async function handleSubmit(force = false) {
+    if (!canSubmit || submitting) return;
     setError(null);
     setSubmitting(true);
 
     try {
-      const res = await fetch(manualRoundEndpoint(tournamentId, force), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: roundName.trim() || undefined,
-          best_of: bestOf,
-          pairings: slots.map((s) => ({
-            player_1_id: s.player_1_id,
-            player_2_id: s.player_2_id,
-          })),
-        }),
-      });
-      const result: ApiResult<Round> = await res.json();
-
-      if (!result.success) {
+      const input = { name: roundName.trim() || undefined, best_of: bestOf, pairings: slots };
+      const handleFailure = (result: Extract<ApiResult<unknown>, { success: false }>) => {
         const reasons = formatNotReadyReasons(result);
         if (reasons !== null && !force) setForceStart(reasons);
         setError(apiFailure(result));
-        return;
+      };
+      if ('phase' in props) {
+        const result = await phaseRoundRequests(props.phase).createManual(input, force);
+        if (result.success) props.onRoundCreated(result.data);
+        else handleFailure(result);
+      } else {
+        const res = await fetch(manualRoundEndpoint(props.tournamentId, force), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input),
+        });
+        const result: ApiResult<Round> = await res.json();
+        if (result.success) props.onRoundCreated(result.data);
+        else handleFailure(result);
       }
-
-      onRoundCreated(result.data);
     } catch {
       setError({ key: 'manualRound.createFailed' });
     } finally {
@@ -167,21 +170,27 @@ export default function ManualRoundForm({
   }
 
   return (
-    <div className="flex flex-col gap-4 rounded-poke-lg border border-hairline-strong bg-surface p-4">
+    <form method="post" aria-label={t('rounds.createManual')} onSubmit={(event) => {
+      event.preventDefault();
+      void handleSubmit();
+    }} className="flex flex-col gap-4 rounded-poke-lg border border-hairline-strong bg-surface p-4">
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
 
       <div className="flex flex-wrap items-end gap-4">
         <div className="min-w-48 flex-1">
           <Input
+            ref={roundNameField}
             label={t('manualRound.roundName')}
             type="text"
+            name="name"
+            maxLength={100}
             value={roundName}
             onChange={(e) => setRoundName(e.target.value)}
             placeholder={t('manualRound.roundNamePlaceholder')}
           />
         </div>
         <div className="w-36 shrink-0">
-          <Select label={t('manualRound.bestOf')} value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))}>
+          <Select label={t('manualRound.bestOf')} name="best_of" value={bestOf} onChange={(e) => setBestOf(Number(e.target.value))}>
             {bestOfChoices(bestOfDefault).map((bo) => (
               <option key={bo} value={bo}>
                 {tCommon('bestOf', { count: bo })}
@@ -213,6 +222,8 @@ export default function ManualRoundForm({
             <div key={i} className="flex flex-wrap items-center gap-2">
               <div className="min-w-40 flex-1">
               <Select
+                name={`pairings[${i}].player_1_id`}
+                aria-label={t('manualRound.playerOne', { count: i + 1 })}
                 value={slot.player_1_id}
                 onChange={(e) => updateSlot(i, 'player_1_id', e.target.value)}
                 className="h-11 py-1.5 sm:h-10"
@@ -230,6 +241,8 @@ export default function ManualRoundForm({
 
               <div className="min-w-40 flex-1">
               <Select
+                name={`pairings[${i}].player_2_id`}
+                aria-label={t('manualRound.playerTwo', { count: i + 1 })}
                 value={slot.player_2_id}
                 onChange={(e) => updateSlot(i, 'player_2_id', e.target.value)}
                 className="h-11 py-1.5 sm:h-10"
@@ -257,7 +270,7 @@ export default function ManualRoundForm({
         </div>
 
         {usedPlayerIds.size < participants.length - 1 && (
-          <Button variant="ghost" size="sm" onClick={addSlot} className="mt-2">
+          <Button type="button" variant="ghost" size="sm" onClick={addSlot} className="mt-2">
             {t('manualRound.addMatch')}
           </Button>
         )}
@@ -265,15 +278,15 @@ export default function ManualRoundForm({
 
       <div className="flex items-center gap-2 border-t border-hairline pt-4">
         <Button
+          type="submit"
           variant="secondary"
           size="sm"
-          onClick={() => void handleSubmit()}
           disabled={!canSubmit}
           loading={submitting}
         >
           {t('manualRound.create')}
         </Button>
-        <Button variant="ghost" size="sm" onClick={onCancel}>
+        <Button type="button" variant="ghost" size="sm" disabled={submitting} onClick={onCancel}>
           {t('manualRound.cancel')}
         </Button>
       </div>
@@ -294,6 +307,6 @@ export default function ManualRoundForm({
         confirmLabel={t('rounds.forceStart.confirm')}
         confirmVariant="primary"
       />
-    </div>
+    </form>
   );
 }

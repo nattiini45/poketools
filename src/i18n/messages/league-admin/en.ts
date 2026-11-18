@@ -407,6 +407,9 @@ export default {
     rounds: 'Rounds',
     /** Names the strip of in-page links to these sections. */
     sectionsNav: 'Sections of this phase',
-    readOnly: 'This view shows the phase roster, groups and rounds. Editing controls aren’t available here yet.',
+    readOnly: 'Phase settings, the roster and groups are still read-only here. Batch generation, bracket repair and regeneration, resetting played rounds and forcing round completion are not available here.',
+    roundsReadOnly: 'Rounds in completed or archived phases are read-only here.',
+    noRounds: 'No rounds.',
+    deleteRoundWarning: 'This deletes the round and its unplayed matches. The server refuses if the round has results, dependencies, or linked records.',
   },
 } as const;

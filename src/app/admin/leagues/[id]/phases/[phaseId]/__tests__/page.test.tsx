@@ -18,6 +18,12 @@ const mocks = vi.hoisted(() => ({
   getGroupsByTournament: vi.fn(),
   listRulesetOptionsFor: vi.fn(),
   getRulesetPinInfo: vi.fn(),
+  requireOpenPhaseRouteMode: vi.fn(),
+  getPhaseWithDetails: vi.fn(),
+  getPhasesBySeasonId: vi.fn(),
+  getPhaseParticipants: vi.fn(),
+  getRoundsByPhase: vi.fn(),
+  getGroupsByPhase: vi.fn(),
 }));
 
 function stub(name: string) {
@@ -50,6 +56,14 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getStagesBySeasonId: mocks.getStagesBySeasonId,
 }));
 vi.mock('@/lib/supabase/queries/rounds', () => ({ getRoundsByTournament: mocks.getRoundsByTournament }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: mocks.requireOpenPhaseRouteMode }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({
+  getPhaseWithDetails: mocks.getPhaseWithDetails,
+  getPhasesBySeasonId: mocks.getPhasesBySeasonId,
+  getPhaseParticipants: mocks.getPhaseParticipants,
+}));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getRoundsByPhase: mocks.getRoundsByPhase }));
+vi.mock('@/lib/supabase/queries/phase-groups', () => ({ getGroupsByPhase: mocks.getGroupsByPhase }));
 vi.mock('@/lib/supabase/queries/season-groups', () => ({
   seasonHasGroups: mocks.seasonHasGroups,
   getSeasonGroupMembership: mocks.getSeasonGroupMembership,
@@ -66,6 +80,7 @@ vi.mock('@/components/league/PhaseOverviewEditor', () => stub('PhaseOverviewEdit
 vi.mock('@/components/tournament/ParticipantManager', () => stub('ParticipantManager'));
 vi.mock('@/components/league/PhaseGroupsPanel', () => stub('PhaseGroupsPanel'));
 vi.mock('@/components/tournament/RoundManager', () => stub('RoundManager'));
+vi.mock('@/components/tournament/PhaseRoundManager', () => stub('PhaseRoundManager'));
 vi.mock('@/components/tournament/TournamentLifecycleActions', () => stub('TournamentLifecycleActions'));
 vi.mock('@/components/shared/EditableDescription', () => stub('EditableDescription'));
 
@@ -74,6 +89,7 @@ import AdminGuard from '@/components/shared/AdminGuard';
 import Section from '@/components/ui/Section';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import RoundManager from '@/components/tournament/RoundManager';
+import PhaseRoundManager from '@/components/tournament/PhaseRoundManager';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
@@ -138,6 +154,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.locale = 'en';
   mocks.getLiveAccess.mockResolvedValue(liveAccess());
+  mocks.requireOpenPhaseRouteMode.mockResolvedValue('legacy');
   mocks.isResourceAdminFor.mockResolvedValue(true);
   mocks.getStagesBySeasonId.mockResolvedValue([]);
   mocks.getSeasonById.mockResolvedValue({ id: S1, name: 'Summer League S3' });
@@ -169,6 +186,8 @@ describe('admin league phase page: per-league access', () => {
     const tree = await render();
     expect(findByType(tree, ParticipantManager)).toHaveLength(1);
     expect(findByType(tree, RoundManager)).toHaveLength(1);
+    expect(findByType(tree, PhaseRoundManager)).toHaveLength(0);
+    expect(mocks.getPhaseWithDetails).not.toHaveBeenCalled();
     expect(findByType(tree, PhaseOverviewEditor)).toHaveLength(1);
     expect(findByType(tree, TournamentLifecycleActions)[0].props.canDelete).toBe(true);
     expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
@@ -255,6 +274,55 @@ describe('admin league phase page: per-league access', () => {
   it('the page source no longer reads the session copy', () => {
     const src = readFileSync(path.join(__dirname, '..', 'page.tsx'), 'utf8');
     expect(src).not.toMatch(/\bisAdmin\(|getSession\(/);
+  });
+});
+
+describe('native phase round workspace', () => {
+  beforeEach(() => {
+    mocks.requireOpenPhaseRouteMode.mockResolvedValue('phase');
+    mocks.getPhaseWithDetails.mockResolvedValue({
+      id: T1, season_id: S1, season_name: 'Summer League', name: 'Group stage', stage_order: 1,
+      bracket_type: 'round_robin', best_of_default: 3, current_round: 0, status: 'upcoming',
+      archived: false, format_stage_key: null, stage_spec: null,
+    });
+    mocks.getPhasesBySeasonId.mockResolvedValue([
+      { id: T1, stage_order: 1 },
+      { id: 'later', stage_order: 2, enrollment_source: { contributions: [{ source_phase_id: T1 }] } },
+    ]);
+    mocks.getRoundsByPhase.mockResolvedValue([]);
+    mocks.getGroupsByPhase.mockResolvedValue([]);
+    mocks.getPhaseParticipants.mockResolvedValue([{ id: 'p1', name: 'Jade', seed: 1, ban_reason: 'not serialized' }]);
+  });
+
+  it('passes the bound owner and narrow roster without tournament reads and retains the read-only warning', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    const tree = await render();
+    const [manager] = findByType(tree, PhaseRoundManager);
+    expect(manager.props).toMatchObject({
+      address: { season_id: S1, phase_id: T1 },
+      participants: [{ id: 'p1', name: 'Jade', seed: 1 }],
+      phaseAllowsDeletion: false,
+      leagueHasGroups: false,
+    });
+    expect(manager.props.participants).toEqual([{ id: 'p1', name: 'Jade', seed: 1 }]);
+    expect(findByType(tree, RoundManager)).toHaveLength(0);
+    expect(text(tree)).toContain('Phase settings, the roster and groups are still read-only here.');
+    expect(mocks.getPhaseWithDetails).toHaveBeenCalledExactlyOnceWith(T1, S1);
+    expect(mocks.getRoundsByPhase).toHaveBeenCalledExactlyOnceWith(T1);
+    expect(phaseReads()).toEqual(['seasonHasGroups']);
+    expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('u1', 'season', S1);
+  });
+
+  it('does not read rounds after the league gate or native owner check fails', async () => {
+    mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    mocks.isResourceAdminFor.mockResolvedValue(false);
+    expect(findByType(await render(), PhaseRoundManager)).toHaveLength(0);
+    expect(mocks.requireOpenPhaseRouteMode).not.toHaveBeenCalled();
+    expect(mocks.getPhaseWithDetails).not.toHaveBeenCalled();
+    mocks.isResourceAdminFor.mockResolvedValue(true);
+    mocks.getPhaseWithDetails.mockResolvedValue({ id: T1, season_id: 'other' });
+    await expect(render()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(mocks.getRoundsByPhase).not.toHaveBeenCalled();
   });
 });
 

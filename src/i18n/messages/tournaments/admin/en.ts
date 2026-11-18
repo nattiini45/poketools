@@ -91,6 +91,8 @@ export default {
     unpaired: { one: '{count} player unpaired', other: '{count} players unpaired' },
     bye: '1 player has a bye',
     selectPlayer: 'Select player...',
+    playerOne: 'First player in match {count}',
+    playerTwo: 'Second player in match {count}',
     versus: 'vs',
     remove: 'Remove',
     addMatch: '+ Add Match',

@@ -165,15 +165,17 @@ interface RoundMatchesPanelProps {
   error: string | null;
   /** The failed load's API error code, when the server sent one. */
   errorCode?: string | null;
-  matches: PublicMatch[] | undefined;
+  errorParams?: ApiErrorLike['params'];
+  matches: readonly Pick<PublicMatch, 'id' | 'player_1_id' | 'player_2_id' | 'player_1_name' | 'player_2_name' | 'winner_id' | 'status'>[] | undefined;
   onRetry: () => void;
+  matchHref?: (id: string) => string;
 }
 
 /** The expanded round's match list: loading, a failed load with retry, empty, or the matches. */
-export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry }: RoundMatchesPanelProps) {
+export function RoundMatchesPanel({ loading, error, errorCode, errorParams, matches, onRetry, matchHref }: RoundMatchesPanelProps) {
   const t = useT(tournamentsAdminMessages);
   const tEnum = useT(enumMessages);
-  const errorText = useApiErrorText(errorsTournaments);
+  const errorText = useApiErrorText(errorsTournaments, errorsSeasons);
   if (loading) {
     return <p className="text-caption text-fg-muted">{t('rounds.loadingMatches')}</p>;
   }
@@ -181,7 +183,7 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
     const message =
       !errorCode && error === ROUND_MATCHES_LOAD_FAILED
         ? t('rounds.loadMatchesFailed')
-        : errorText({ error, code: errorCode });
+        : errorText({ error, code: errorCode, params: errorParams });
     return (
       <Alert variant="error" className="flex items-center justify-between gap-3">
         <span>{t('rounds.matchesError', { error: message })}</span>
@@ -199,7 +201,8 @@ export function RoundMatchesPanel({ loading, error, errorCode, matches, onRetry 
       {matches.map((m) => (
         <li key={m.id}>
         <Link
-          href={`/admin/matches/${m.id}`}
+          href={matchHref ? matchHref(m.id) : `/admin/matches/${m.id}`}
+          prefetch={matchHref ? false : undefined}
           className="flex min-h-11 items-center justify-between gap-3 bg-surface px-3 py-2 text-body motion-safe:transition-colors motion-safe:duration-80 hover:bg-hover sm:min-h-0"
         >
           <div className="flex items-center gap-2 text-fg">
@@ -260,6 +263,40 @@ export const ROUND_ROW_TITLE_CLASS = 'text-left min-w-0 basis-full sm:basis-0 sm
 export const ROUND_ROW_HEADING_CLASS = 'text-subtitle font-[550] text-fg break-words';
 export const ROUND_ROW_ACTIONS_CLASS = 'flex flex-wrap items-center gap-2 min-w-0 max-w-full';
 
+export function RoundDisclosure({ round, panelId, expanded, onToggle, heading: Heading = 'h4' }: {
+  round: Pick<Round, 'name' | 'best_of' | 'status'>;
+  panelId: string;
+  expanded: boolean;
+  onToggle: () => void;
+  heading?: 'h3' | 'h4';
+}) {
+  const locale = useLocale();
+  const tCommon = useT(commonMessages);
+  const tEnum = useT(enumMessages);
+  return (
+    <Heading className={ROUND_ROW_TITLE_CLASS}>
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        aria-controls={panelId}
+        className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-poke-sm text-left max-sm:min-h-11 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
+      >
+        <ChevronRight
+          aria-hidden="true"
+          className={cn(
+            'h-4 w-4 shrink-0 text-fg-muted motion-safe:transition-transform motion-safe:duration-80',
+            expanded && 'rotate-90',
+          )}
+        />
+        <span className={ROUND_ROW_HEADING_CLASS}>{translateEngineLabel('round', round.name, locale)}</span>
+        <span className="text-caption font-normal text-fg-muted">{tCommon('bestOf', { count: round.best_of })}</span>
+        <SkewChip tone={roundTone(round.status)}>{enumLabel(tEnum, 'roundStatus', round.status)}</SkewChip>
+      </button>
+    </Heading>
+  );
+}
+
 /** "Bye: <name>" for a round that gave one or more byes; nothing otherwise. */
 export function RoundByeNotice({ playerIds, names, settled }: RoundByeNoticeProps) {
   const t = useT(tournamentsAdminMessages);
@@ -303,7 +340,7 @@ interface RoundDeadlineRowProps {
   /** The `datetime-local` input's value while editing. */
   draft: string;
   saving: boolean;
-  onEdit: () => void;
+  onEdit?: () => void;
   onDraftChange: (value: string) => void;
   onSave: () => void;
   onClear: () => void;
@@ -368,9 +405,11 @@ export function RoundDeadlineRow({
           {t('rounds.deadline.overdue')}
         </Badge>
       )}
-      <Button variant="ghost" size="sm" onClick={onEdit}>
-        {round.deadline ? t('rounds.deadline.edit') : t('rounds.deadline.set')}
-      </Button>
+      {onEdit && (
+        <Button variant="ghost" size="sm" onClick={onEdit} disabled={saving}>
+          {round.deadline ? t('rounds.deadline.edit') : t('rounds.deadline.set')}
+        </Button>
+      )}
     </div>
   );
 }
@@ -1150,28 +1189,12 @@ export default function RoundManager({
             return (
               <Card key={round.id} variant="muted" padding="none" className="overflow-hidden">
                 <div className={ROUND_ROW_HEADER_CLASS}>
-                  <h4 className={ROUND_ROW_TITLE_CLASS}>
-                    <button
-                      type="button"
-                      onClick={() => toggleRoundMatches(round.id)}
-                      aria-expanded={isExpanded}
-                      aria-controls={`${startNowHintId}-round-${round.id}`}
-                      className="flex w-full min-w-0 flex-wrap items-center gap-x-2 gap-y-1 rounded-poke-sm text-left max-sm:min-h-11 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
-                    >
-                      <ChevronRight
-                        aria-hidden="true"
-                        className={cn(
-                          'h-4 w-4 shrink-0 text-fg-muted motion-safe:transition-transform motion-safe:duration-80',
-                          isExpanded && 'rotate-90',
-                        )}
-                      />
-                      <span className={ROUND_ROW_HEADING_CLASS}>{translateEngineLabel('round', round.name, locale)}</span>
-                      <span className="text-caption font-normal text-fg-muted">
-                        {tCommon('bestOf', { count: round.best_of })}
-                      </span>
-                      <SkewChip tone={roundTone(round.status)}>{enumLabel(tEnum, 'roundStatus', round.status)}</SkewChip>
-                    </button>
-                  </h4>
+                  <RoundDisclosure
+                    round={round}
+                    panelId={`${startNowHintId}-round-${round.id}`}
+                    expanded={isExpanded}
+                    onToggle={() => void toggleRoundMatches(round.id)}
+                  />
                   <div className={ROUND_ROW_ACTIONS_CLASS}>
                     {round.status === 'pending' && (
                       <>
