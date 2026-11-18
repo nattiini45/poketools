@@ -75,6 +75,15 @@ const RUN_PRIVATE_PACK = runPrivatePack();
 const RUN_LOCAL_STACK_DB = process.env.LOCAL_STACK_DB === '1';
 /** Suites that talk to a real local stack (docs/supabase-environments.md, "Local-stack suites"): the `db` project only. */
 const LOCAL_STACK_SUITES = ['src/**/__tests__/**/*.local.test.{ts,tsx}', 'src/**/__tests__/**/*.live-db.test.{ts,tsx}'];
+const LEGACY_FORMAT_SUITES = [
+  'src/lib/format-studio/__tests__/create-league.local.test.ts',
+  'src/lib/supabase/queries/__tests__/format-fences.local.test.ts',
+  'src/lib/supabase/queries/__tests__/format-runtime-attach.local.test.ts',
+];
+const FROZEN_FORMAT_SUITES = ['src/lib/league-phase/__tests__/legacy-format-freeze.local.test.ts'];
+const dbPass = process.env.LOCAL_STACK_FORMAT_TEST_PASS;
+const dbSuites = dbPass === 'legacy' ? LEGACY_FORMAT_SUITES : dbPass === 'frozen_legacy' ? FROZEN_FORMAT_SUITES : LOCAL_STACK_SUITES;
+const dbExcluded = dbPass === 'phase' ? [...LEGACY_FORMAT_SUITES, ...FROZEN_FORMAT_SUITES] : [];
 /** Script tests spawn CLIs (node, bash, git) per case; 5 s is too tight on a cold or loaded runner. */
 const SCRIPT_TEST_TIMEOUT_MS = 60_000;
 
@@ -141,8 +150,8 @@ export default defineConfig({
               resolve: { alias: { '@format-pack': EXAMPLE_PACK, '@pack-extensions': EXAMPLE_EXTENSIONS, '@pack-format-providers': EXAMPLE_FORMAT_PROVIDERS } },
               test: {
                 name: 'db',
-                include: LOCAL_STACK_SUITES,
-                exclude: ['src/format-packs/private/**', ...configDefaults.exclude],
+                include: dbSuites,
+                exclude: ['src/format-packs/private/**', ...dbExcluded, ...configDefaults.exclude],
                 setupFiles: ['./src/test/dom-setup.ts', './src/test/local-stack-setup.ts'],
                 // One database: suites that count rows or truncate tables must not overlap.
                 fileParallelism: false,
