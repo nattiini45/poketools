@@ -1,5 +1,6 @@
 import type { MatchStatus } from '@/types/match';
 import { matchMachine, type MatchEvent } from '@/lib/tournament/match-state';
+import { phaseMatchMachine } from '@/lib/league-phase/phase-match-state';
 
 /** What `availableMatchActions` needs of a match. */
 export interface MatchActionSubject {
@@ -22,12 +23,13 @@ export interface MatchActionViewer {
  * top of the table (a player acts only on their own match, and confirms only a result they did not report). The server
  * decides again on every write; this only chooses which actions a screen offers.
  */
-export function availableMatchActions(match: MatchActionSubject, viewer: MatchActionViewer): ReadonlySet<MatchEvent> {
+export function availableMatchActions(match: MatchActionSubject, viewer: MatchActionViewer, scope: 'phase' | 'tournament' = 'tournament'): ReadonlySet<MatchEvent> {
   const isParticipant =
     viewer.playerId !== null && (viewer.playerId === match.player_1_id || viewer.playerId === match.player_2_id);
   if (!viewer.isAdmin && !isParticipant) return new Set();
   const actions = new Set<MatchEvent>();
-  for (const transition of matchMachine.transitionsFrom(match.status, viewer.isAdmin ? 'admin' : 'player')) {
+  const machine = scope === 'phase' ? phaseMatchMachine : matchMachine;
+  for (const transition of machine.transitionsFrom(match.status, viewer.isAdmin ? 'admin' : 'player')) {
     if (transition.event === 'confirm' && !viewer.isAdmin && match.submitter_id === viewer.playerId) continue;
     actions.add(transition.event);
   }

@@ -7,12 +7,14 @@ import { getSeasonsByPlayer, listSeasonsByIds } from '@/lib/supabase/queries/sea
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerScopeUsage } from '@/lib/supabase/queries/aggregates';
-import { getPlayerFormatFacts, listActiveDraftTurns, listPlayerTeamSlots } from '@/lib/supabase/queries/dashboard-now';
+import { getPlayerFormatFacts, listActiveDraftTurns, listDashboardPhaseMatches, listPlayerPhaseTeamSlots, listPlayerTeamSlots, listStandaloneDashboardMatches } from '@/lib/supabase/queries/dashboard-now';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { publicReads } from '@/lib/cache/public-reads';
 import { FULL_STANDINGS_LIMIT, playerStandingFromRows } from '@/lib/stats/standings-preview';
 import DashboardContent from './DashboardContent';
 import { buildTeamsUsed, teamsUsedScopeIds } from './teams-used';
-import { buildDraftTurns, buildFormatActions, teamlessMatchIds } from './now-queue';
+import { buildDraftTurns, buildFormatActions, mergeDashboardMatches, teamlessMatchIds, teamlessPhaseMatchIds } from './now-queue';
 import Alert from '@/components/ui/Alert';
 import PageContainer from '@/components/ui/PageContainer';
 import { getT } from '@/i18n/server';
@@ -38,11 +40,14 @@ export default async function DashboardPage() {
   }
 
   const playerId = livePlayer.playerId;
+  const mode = await getPhaseRouteMode();
+  const native = mode === 'phase' || mode === 'frozen_phase';
 
-  const [player, matches, tournaments, leagues, rating, streaks, scopeUsage, draftTurnRows] = await Promise.all([
+  const [player, legacyMatches, phaseMatches, tournaments, leagues, rating, streaks, scopeUsage, draftTurnRows] = await Promise.all([
     getPlayerById(playerId),
-    getMatchesByPlayer(playerId),
-    getTournamentsByPlayer(playerId),
+    native ? listStandaloneDashboardMatches(playerId) : getMatchesByPlayer(playerId),
+    native ? listDashboardPhaseMatches(playerId) : [],
+    native ? getTournamentsByPlayer(playerId, { standaloneOnly: true }) : getTournamentsByPlayer(playerId),
     getSeasonsByPlayer(playerId),
     getPlayerRating(playerId),
     getPlayerStreaks(playerId),
@@ -57,14 +62,17 @@ export default async function DashboardPage() {
   const knownTournamentIds = new Set(tournaments.map((t) => t.id));
   // The "Now" queue beyond matches: the team slots of the upcoming matches' tournaments, and the open business in the
   // running custom leagues (no request when the player has neither).
-  const upcomingMatches = matches.filter((m) => m.status === 'scheduled' || m.status === 'in_progress');
+  const upcomingMatches = legacyMatches.filter((m) => m.status === 'scheduled' || m.status === 'in_progress');
+  const upcomingPhaseMatches = phaseMatches.filter((m) => m.status === 'scheduled' || m.status === 'in_progress');
   const runningCustomLeagues = leagues.filter((l) => l.format_type === 'custom' && l.status === 'active' && !l.archived);
-  const [leagueStandings, extraLeagues, extraTournaments, teamSlots, formatFacts] = await Promise.all([
+  const [leagueStandings, extraLeagues, extraTournaments, teamSlots, phaseTeamSlots, formatFacts] = await Promise.all([
     // Completed leagues never change, so the shared cached table is read
     // instead of recomputing every league's standings per dashboard load.
     Promise.all(
       leagues.map(async (league) => {
-        const rows = await publicReads.standingsPreview('league', league.id, FULL_STANDINGS_LIMIT);
+        const rows = native
+          ? await phasePublicReads.seasonStandingsPreview(league.id, FULL_STANDINGS_LIMIT)
+          : await publicReads.standingsPreview('league', league.id, FULL_STANDINGS_LIMIT);
         return {
           leagueId: league.id,
           leagueName: league.name,
@@ -80,6 +88,7 @@ export default async function DashboardPage() {
     listSeasonsByIds(leagueIds.filter((id) => !knownLeagueIds.has(id))),
     listTournamentsByIds(tournamentIds.filter((id) => !knownTournamentIds.has(id))),
     listPlayerTeamSlots(playerId, [...new Set(upcomingMatches.map((m) => m.tournament_id))]),
+    listPlayerPhaseTeamSlots(playerId, upcomingPhaseMatches.map((m) => m.phase_id)),
     getPlayerFormatFacts(playerId, runningCustomLeagues.map((l) => l.id)),
   ]);
 
@@ -103,7 +112,7 @@ export default async function DashboardPage() {
       avatarUrl={session?.user?.image || undefined}
       customAvatarUrl={livePlayer.avatarUrl || undefined}
       initialPlayer={player}
-      initialMatches={matches}
+      initialMatches={native ? mergeDashboardMatches(legacyMatches, phaseMatches) : legacyMatches}
       initialTournaments={tournaments}
       playerRating={rating}
       playerStreaks={streaks}
@@ -111,7 +120,7 @@ export default async function DashboardPage() {
       teamsUsed={teamsUsed}
       draftTurns={buildDraftTurns(draftTurnRows)}
       formatActions={buildFormatActions(runningCustomLeagues, formatFacts)}
-      teamlessMatchIds={teamlessMatchIds(upcomingMatches, teamSlots)}
+      teamlessMatchIds={[...teamlessMatchIds(upcomingMatches, teamSlots), ...teamlessPhaseMatchIds(upcomingPhaseMatches, phaseTeamSlots)]}
     />
     </PageContainer>
   );

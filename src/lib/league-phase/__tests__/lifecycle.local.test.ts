@@ -68,6 +68,70 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }, null)).toBe(true);
   }
 
+  it('reads dashboard matches, slots and rankings from the live owner without retired league rows', async () => {
+    const { listDashboardPhaseMatches, listPlayerPhaseTeamSlots, listStandaloneDashboardMatches } = await import('@/lib/supabase/queries/dashboard-now');
+    const { getMatchesByPlayer } = await import('@/lib/supabase/queries/matches');
+    const { getTournamentsByPlayer } = await import('@/lib/supabase/queries/tournaments');
+    const { getNativeLeagueStandingsPreview } = await import('@/lib/stats/standings-preview');
+    const [player, opponent, otherPlayer, byePlayer] = playerIds;
+    const phase = await create('swiss');
+    const other = await create('swiss');
+    for (const id of [phase.id, other.id]) await enroll(id);
+    const nativeRound = randomUUID();
+    const nativeMatch = randomUUID();
+    const queueMatch = randomUUID();
+    const foreignMatch = randomUUID();
+    const standaloneId = randomUUID();
+    const retiredId = randomUUID();
+    try {
+      expect((await admin.from('phase_rounds').insert({ id: nativeRound, phase_id: phase.id,
+        name: 'Dashboard fixture', round_number: 1, best_of: 1, status: 'active', bye_player_ids: [byePlayer] })).error).toBeNull();
+      expect((await admin.from('phase_matches').insert([
+        { id: nativeMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: player, player_2_id: opponent,
+          status: 'completed', winner_id: player, date_played: '2026-11-18T00:00:00Z', notes: 'private fixture note' },
+        { id: queueMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: player, player_2_id: otherPlayer },
+        { id: foreignMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: opponent, player_2_id: otherPlayer },
+      ])).error).toBeNull();
+      expect((await admin.from('phase_teams').insert([
+        { phase_id: phase.id, season_id: seasonId, player_id: player, match_id: queueMatch, name: 'Exact fixture team' },
+        { phase_id: other.id, season_id: seasonId, player_id: player, name: 'Other phase fixture team' },
+        { phase_id: phase.id, season_id: seasonId, player_id: opponent, name: 'Other player fixture team' },
+      ])).error).toBeNull();
+      const legacyMatchIds = [];
+      for (const [id, season_id] of [[standaloneId, null], [retiredId, seasonId]] as const) {
+        const round_id = randomUUID();
+        const match_id = randomUUID();
+        legacyMatchIds.push(match_id);
+        expect((await admin.from('tournaments').insert({ id, season_id, ruleset_id: rulesetId,
+          name: 'Legacy fixture', bracket_type: 'swiss' })).error).toBeNull();
+        expect((await admin.from('tournament_participants').insert({ tournament_id: id, player_id: player })).error).toBeNull();
+        expect((await admin.from('rounds').insert({ id: round_id, tournament_id: id,
+          name: 'Legacy fixture round', round_number: 1, best_of: 1 })).error).toBeNull();
+        expect((await admin.from('matches').insert({ id: match_id, round_id, tournament_id: id,
+          player_1_id: player, player_2_id: opponent })).error).toBeNull();
+      }
+      const matches = await listDashboardPhaseMatches(player);
+      expect(matches.map(({ id }) => id)).toEqual([nativeMatch, queueMatch]);
+      expect(matches[0]).toMatchObject({ phase_id: phase.id, season_id: seasonId,
+        season_name: 'Native lifecycle fixture', round_status: 'active' });
+      expect(matches[0]).not.toHaveProperty('notes');
+      expect(await listPlayerPhaseTeamSlots(player, [phase.id])).toEqual([{ phase_id: phase.id, match_id: queueMatch }]);
+      const [standaloneMatchId, retiredMatchId] = legacyMatchIds;
+      expect((await getMatchesByPlayer(player)).map(({ id }) => id)).toEqual(expect.arrayContaining([standaloneMatchId, retiredMatchId]));
+      expect((await listStandaloneDashboardMatches(player)).map(({ id }) => id)).toEqual([standaloneMatchId]);
+      expect((await getTournamentsByPlayer(player, { standaloneOnly: true })).map(({ id }) => id)).toEqual([standaloneId]);
+      const standings = await getNativeLeagueStandingsPreview(seasonId, 1000);
+      expect(standings.find(({ player_id }) => player_id === player)).toMatchObject({ wins: 1, losses: 0 });
+      expect(standings.find(({ player_id }) => player_id === opponent)).toMatchObject({ wins: 0, losses: 1 });
+      expect(standings.find(({ player_id }) => player_id === byePlayer)).toMatchObject({ wins: 1, losses: 0 });
+    } finally {
+      expect((await admin.from('tournaments').delete().in('id', [standaloneId, retiredId])).error).toBeNull();
+      expect((await admin.from('phase_teams').delete().in('phase_id', [phase.id, other.id])).error).toBeNull();
+      expect((await admin.from('phase_matches').delete().in('id', [nativeMatch, queueMatch, foreignMatch])).error).toBeNull();
+      expect((await admin.from('phase_rounds').delete().eq('id', nativeRound)).error).toBeNull();
+    }
+  });
+
   it('checks native starts and cascades archive and restore only to the owning phases', async () => {
     const { isNativeSeasonStarted } = await import('@/lib/supabase/queries/season-start');
     const { updateSeason } = await import('@/lib/supabase/queries/seasons');

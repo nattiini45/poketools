@@ -8,7 +8,14 @@
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const db = vi.hoisted(() => ({ calls: [] as string[], tables: {} as Record<string, Record<string, unknown>[]> }));
+const db = vi.hoisted(() => ({
+  calls: [] as string[],
+  tables: {} as Record<string, Record<string, unknown>[]>,
+  mode: 'legacy',
+  ownershipFilters: [] as string[],
+}));
+
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: async () => db.mode }));
 
 vi.mock('@/lib/supabase/client', () => {
   function builder(table: string) {
@@ -18,6 +25,10 @@ vi.mock('@/lib/supabase/client', () => {
       return single ? { data: rows[0] ?? null, error: null, count: rows.length } : { data: rows, error: null, count: rows.length };
     };
     const chain: Record<string, unknown> = {
+      is: (column: string) => {
+        db.ownershipFilters.push(`${table}:${column}`);
+        return proxy;
+      },
       maybeSingle: () => {
         single = true;
         return proxy;
@@ -55,7 +66,9 @@ const NOW_TABLES = ['draft_slots', 'teams', 'season_formats', 'format_flags', 'f
 
 beforeEach(() => {
   db.calls.length = 0;
+  db.ownershipFilters.length = 0;
   db.tables = {};
+  db.mode = 'legacy';
 });
 
 describe('dashboard query budget', () => {
@@ -63,6 +76,22 @@ describe('dashboard query budget', () => {
     await DashboardPage();
     expect(db.calls.filter((table) => NOW_TABLES.includes(table))).toEqual(['draft_slots']);
     expect(db.calls).toEqual(['players', 'matches', 'tournament_participants', 'season_participants', 'player_ratings', 'player_streaks', 'player_aggregates', 'draft_slots']);
+    expect(db.ownershipFilters).toEqual([]);
+  });
+
+  it.each(['phase', 'frozen_phase'])('reads native matches and only standalone legacy rows in %s mode', async (mode) => {
+    db.mode = mode;
+    await DashboardPage();
+    expect(db.calls).toContain('phase_matches');
+    expect(db.calls).not.toContain('phase_teams');
+    expect(db.ownershipFilters).toEqual(['matches:owner.season_id', 'tournament_participants:owner.season_id']);
+  });
+
+  it('keeps frozen legacy reads on the legacy store', async () => {
+    db.mode = 'frozen_legacy';
+    await DashboardPage();
+    expect(db.calls).not.toContain('phase_matches');
+    expect(db.ownershipFilters).toEqual([]);
   });
 
   it('the queue reads are one request for the draft turns, one for the team slots and five for the format facts', async () => {

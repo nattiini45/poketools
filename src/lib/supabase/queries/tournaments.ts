@@ -482,11 +482,14 @@ export async function deleteTournament(id: string): Promise<void> {
 /**
  * Get all tournaments a player is participating in (standalone + league stages).
  */
-export async function getTournamentsByPlayer(playerId: string): Promise<TournamentWithDetails[]> {
-  const { data, error } = await supabase
-    .from('tournament_participants')
-    .select('tournament_id')
-    .eq('player_id', playerId);
+export async function getTournamentsByPlayer(
+  playerId: string,
+  { standaloneOnly = false }: { standaloneOnly?: boolean } = {},
+): Promise<TournamentWithDetails[]> {
+  const memberships = supabase.from('tournament_participants');
+  const { data, error } = await (standaloneOnly
+    ? memberships.select('tournament_id, owner:tournaments!tournament_participants_tournament_id_fkey!inner(season_id)').is('owner.season_id', null)
+    : memberships.select('tournament_id')).eq('player_id', playerId);
 
   if (error) throw error;
   if (!data.length) return [];

@@ -3,7 +3,9 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import type { Player } from '@/types/player';
-import type { MatchStatus, MatchWithPlayers } from '@/types/match';
+import type { MatchStatus } from '@/types/match';
+import { phaseMatchHref } from '@/lib/league-phase/paths';
+import type { DashboardMatch } from './now-queue';
 import type { TournamentWithDetails } from '@/types/tournament';
 import type { SeasonFormatType, SeasonStatus } from '@/types/season';
 import type { PlayerStandingSnapshot } from '@/lib/stats/standings-preview';
@@ -58,7 +60,7 @@ interface Props {
   avatarUrl?: string;
   customAvatarUrl?: string;
   initialPlayer: Player | null;
-  initialMatches: MatchWithPlayers[];
+  initialMatches: DashboardMatch[];
   initialTournaments: TournamentWithDetails[];
   playerRating: PlayerRating | null;
   playerStreaks: PlayerStreaks | null;
@@ -113,6 +115,10 @@ const NAME_LINK = 'min-w-0 truncate text-body font-[550] text-fg transition-colo
 
 /** scheduled_at ASC with unscheduled matches last — mirrors getUpcomingMatches */
 const compareScheduledAt = compareMatchesByScheduledAt;
+
+function matchHref(match: DashboardMatch): string {
+  return 'phase_id' in match ? phaseMatchHref(match, match.id) : `/tournaments/${match.tournament_id}/matches/${match.id}`;
+}
 
 /** History's "Teams used": the Pokémon brought per league and standalone tournament. */
 export function TeamsUsedList({ teamsUsed }: { teamsUsed: TeamUsed[] }) {
@@ -371,13 +377,13 @@ export default function DashboardContent({
               const isP1 = m.player_1_id === playerId;
               const opponentName = isP1 ? m.player_2_name : m.player_1_name;
               const isUpcomingRound = m.round_status === 'pending';
-              const actions = availableMatchActions(m, viewer);
+              const actions = availableMatchActions(m, viewer, 'phase_id' in m ? 'phase' : 'tournament');
               const canAct = !isUpcomingRound && actions.has('record_game');
               const canConfirm = actions.has('confirm');
               const needsViewer = canAct || canConfirm;
               const teamMissing = teamlessMatchIds.includes(m.id);
               const scheduledLabel = m.scheduled_at ? formatter.instant(m.scheduled_at, 'dateTime') : null;
-              const competition = competitionName(m.tournament_id);
+              const competition = 'phase_id' in m ? m.season_name : competitionName(m.tournament_id);
               return (
                 <li
                   key={m.id}
@@ -385,7 +391,7 @@ export default function DashboardContent({
                 >
                   <div className={cn('flex items-center justify-between gap-3 px-4 py-2.5', needsViewer ? 'bg-accent-subtle' : 'bg-elevated')}>
                     <Link
-                      href={`/tournaments/${m.tournament_id}/matches/${m.id}`}
+                      href={matchHref(m)}
                       className="min-w-0 truncate font-heading text-title text-fg underline-offset-4 hover:underline"
                     >
                       {t('now.versus', { name: opponentName ?? '' })}
@@ -587,7 +593,7 @@ export default function DashboardContent({
                     return (
                       <Link
                         key={m.id}
-                        href={`/tournaments/${m.tournament_id}/matches/${m.id}`}
+                        href={matchHref(m)}
                         className="flex min-h-11 items-center gap-2.5 rounded-poke-md px-2 text-body transition-colors duration-80 ease-out hover:bg-hover"
                       >
                         {won && <SkewChip tone="win">{tc('record.winShort')}</SkewChip>}

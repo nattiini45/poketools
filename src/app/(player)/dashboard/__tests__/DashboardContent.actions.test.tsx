@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { renderWithI18n } from '@/test/i18n';
 import type { MatchWithPlayers } from '@/types/match';
+import type { DashboardPhaseMatch } from '@/lib/supabase/queries/dashboard-now';
 import type { Player } from '@/types/player';
 import DashboardContent from '../DashboardContent';
 
@@ -25,7 +26,7 @@ function match(status: string, extra: Partial<MatchWithPlayers> = {}): MatchWith
   } as unknown as MatchWithPlayers;
 }
 
-function render(m: MatchWithPlayers, player: Partial<Player> | null = null): string {
+function render(m: MatchWithPlayers | DashboardPhaseMatch, player: Partial<Player> | null = null): string {
   return renderWithI18n(
     <DashboardContent
       playerId="p1"
@@ -44,6 +45,22 @@ function render(m: MatchWithPlayers, player: Partial<Player> | null = null): str
 
 const SUBMIT = '/dashboard/submit/m1';
 const CONFIRM = '/dashboard/confirm/m1';
+
+it('links native queue matches canonically without changing submit or confirm routes', () => {
+  const phaseMatch: DashboardPhaseMatch = {
+    id: 'm1', phase_id: 'phase', season_id: 'league', season_name: 'Fixture League',
+    status: 'scheduled', round_status: 'active', created_at: '2026-11-18T00:00:00Z', date_played: null,
+    scheduled_at: null, player_1_id: 'p1', player_2_id: 'p2', player_1_name: 'Misty', player_2_name: 'Ash',
+    winner_id: null, submitter_id: null,
+  };
+  const href = 'href="/leagues/league/phases/phase/matches/m1"';
+  const now = render(phaseMatch);
+  expect(now).toContain(href);
+  expect(now).toContain('Fixture League');
+  expect(now).toContain(SUBMIT);
+  expect(render({ ...phaseMatch, status: 'pending_confirmation', submitter_id: 'p2' })).toContain(CONFIRM);
+  expect(render(match('scheduled'))).toContain('href="/tournaments/t1/matches/m1"');
+});
 
 describe('DashboardContent: a player without a league, tournament or match', () => {
   const empty = (locale: 'en' | 'de') =>
