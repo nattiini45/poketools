@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { GET, POST } from '../route';
+import { POST as validate } from '../../validate-team/route';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { makeRuleset } from '@/test/ruleset-fixtures';
 import { makeSet } from '@/test/team-fixtures';
@@ -18,6 +19,7 @@ const mock = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/auth/helpers', () => ({ requirePlayer: mock.requirePlayer }));
+vi.mock('@/lib/utils/rate-limit', () => ({ checkRateLimit: vi.fn(async () => ({ allowed: true })) }));
 vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: mock.getPhaseRouteMode }));
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => mock);
 vi.mock('@/lib/supabase/queries/phase-matches', () => mock);
@@ -45,9 +47,9 @@ const matchId = 'ab000000-0000-4000-8000-000000000001';
 const playerId = 'ab000000-0000-4000-8000-000000000002';
 const opponentId = 'ab000000-0000-4000-8000-000000000003';
 const outsider = 'ab000000-0000-4000-8000-000000000004';
-const owner = { kind: 'phase', phase_id: 'native-phase', season_id: 'league' };
+const owner = { kind: 'phase', phase_id: 'ab000000-0000-4000-8000-000000000005', season_id: 'league' };
 const match = { id: matchId, phase_id: owner.phase_id, round_id: 'round', player_1_id: playerId, player_2_id: opponentId, status: 'scheduled' };
-const pin = makeRuleset({ id: 'pinned-version' });
+const pin = makeRuleset({ id: 'ab000000-0000-4000-8000-000000000006' });
 const phase = { id: owner.phase_id, season_id: owner.season_id, ruleset_id: pin.id, current_round: 8, format_stage_key: null };
 const round = { id: match.round_id, phase_id: phase.id, round_number: 3 };
 const pokemon = [makeSet('Pikachu')];
@@ -58,6 +60,10 @@ const get = () => GET(new NextRequest(`http://localhost/api/match-prep?match_id=
 const post = (extra: Record<string, unknown> = {}) => POST(new NextRequest('http://localhost/api/match-prep', {
   method: 'POST',
   body: JSON.stringify({ match_id: matchId.toUpperCase(), pokemon, ...extra }),
+}));
+const validatePrep = (extra: Record<string, unknown> = {}) => validate(new NextRequest('http://localhost/api/validate-team', {
+  method: 'POST',
+  body: JSON.stringify({ match_id: matchId.toUpperCase(), phase_id: owner.phase_id.toUpperCase(), ruleset_id: outsider, pokemon, ...extra }),
 }));
 
 beforeEach(() => {
@@ -124,7 +130,7 @@ describe('ID-only phase match preparation', () => {
     expect(mock.checkTeam).not.toHaveBeenCalled();
     expect(mock.getFormatRuntime).not.toHaveBeenCalled();
     expect(mock.expirePublicTags).toHaveBeenCalledExactlyOnceWith([
-      'aggregates:phase:native-phase', 'aggregates:league:league', 'aggregates:all_time',
+      `aggregates:phase:${owner.phase_id}`, 'aggregates:league:league', 'aggregates:all_time',
     ]);
   });
 
@@ -188,6 +194,11 @@ describe('ID-only phase match preparation', () => {
     expect(mock.writePhaseTeam).toHaveBeenCalled();
 
     mock.writePhaseTeam.mockClear();
+    expect(await (await validatePrep({ round_number: 50 })).json()).toMatchObject({
+      success: true, data: { team_issue_details: [{ code: 'kit_roster_size' }] },
+    });
+    expect(mock.writePhaseTeam).not.toHaveBeenCalled();
+
     mock.getFormatRuntime.mockRejectedValueOnce(new Error('Fixture Kit verdict unavailable'));
     const unavailable = await post();
     expect(unavailable.status).toBe(200);
@@ -253,5 +264,46 @@ describe('ID-only phase match preparation', () => {
     expect(mock.findLegacyPhaseAliasOwner).not.toHaveBeenCalled();
     expect(mock.standaloneMatchAliasExists).not.toHaveBeenCalled();
     expect(mock.getMatchById).not.toHaveBeenCalled();
+  });
+});
+
+describe('Live validation for a phase match', () => {
+  it('checks the immutable match pin and persisted league, ignoring client-supplied ruleset and season', async () => {
+    expect(await (await validatePrep({ season_id: outsider, round_number: 50 })).json()).toEqual({ success: true, data: clean });
+    expect(mock.getRulesetById).toHaveBeenCalledExactlyOnceWith(pin.id);
+    expect(mock.getPhaseRoundById).toHaveBeenCalledExactlyOnceWith(match.round_id, phase.id);
+    expect(mock.checkTeam).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ ruleset: pin, seasonId: owner.season_id, playerId }));
+    expect(mock.getTournamentById).not.toHaveBeenCalled();
+    expect(mock.writePhaseTeam).not.toHaveBeenCalled();
+  });
+
+  it('refuses inconsistent locators without checking either store', async () => {
+    expect((await validatePrep({ tournament_id: outsider })).status).toBe(400);
+    expect((await validatePrep({ match_id: undefined })).status).toBe(400);
+    expect(mock.getPhaseRouteMode).not.toHaveBeenCalled();
+  });
+
+  it('refuses the wrong owner and disabled native storage without a tournament fallback', async () => {
+    expect((await validatePrep({ phase_id: outsider })).status).toBe(404);
+    mock.getPhaseRouteMode.mockResolvedValue('legacy');
+    expect((await validatePrep()).status).toBe(404);
+    expect(mock.getPhaseMatchById).not.toHaveBeenCalled();
+    expect(mock.getTournamentById).not.toHaveBeenCalled();
+  });
+
+  it('preserves the frozen refusal without a native validation read', async () => {
+    mock.getPhaseRouteMode.mockResolvedValue('frozen_phase');
+    expect(await (await validatePrep()).json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(mock.getPhaseById).not.toHaveBeenCalled();
+    expect(mock.checkTeam).not.toHaveBeenCalled();
+  });
+
+  it('disallows unenrolled players and withholds league policy from a non-playing site admin', async () => {
+    mock.isPlayerPhaseParticipant.mockResolvedValue(false);
+    expect((await validatePrep()).status).toBe(403);
+    mock.requirePlayer.mockResolvedValue({ playerId: outsider, isAdmin: true });
+    expect((await validatePrep()).status).toBe(200);
+    expect(mock.checkTeam).toHaveBeenCalledExactlyOnceWith({ ruleset: pin, pokemon });
+    expect(mock.getFormatRuntime).not.toHaveBeenCalled();
   });
 });
