@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import type { PlayerFormatFacts } from '@/lib/supabase/queries/dashboard-now';
-import { buildDraftTurns, buildFormatActions, teamlessMatchIds } from '../now-queue';
+import { buildDraftTurns, buildFormatActions, teamlessMatchIds, teamlessPhaseMatchIds } from '../now-queue';
 
 const turn = (extra: Partial<Parameters<typeof buildDraftTurns>[0][number]> = {}) => ({
   pool_id: 'pool1',
@@ -96,4 +96,18 @@ describe('teamlessMatchIds', () => {
     expect(teamlessMatchIds(matches, [{ tournament_id: 't1', match_id: null }, { tournament_id: 't2', match_id: 'm2' }])).toEqual([]);
     expect(teamlessMatchIds(matches, [{ tournament_id: 't1', match_id: 'm9' }, { tournament_id: 't2', match_id: null }])).toEqual(['m1']);
   });
+});
+
+it('only counts a native team in the same phase on this match or a planned slot', () => {
+  const matches = [
+    { id: 'linked', phase_id: 'first', status: 'scheduled' },
+    { id: 'missing', phase_id: 'first', status: 'in_progress' },
+    { id: 'planned', phase_id: 'second', status: 'scheduled' },
+    { id: 'done', phase_id: 'first', status: 'completed' },
+  ] as const;
+  expect(teamlessPhaseMatchIds(matches, [
+    { phase_id: 'first', match_id: 'linked' },
+    { phase_id: 'second', match_id: null },
+    { phase_id: 'third', match_id: 'missing' },
+  ])).toEqual(['missing']);
 });

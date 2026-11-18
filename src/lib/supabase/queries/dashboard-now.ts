@@ -7,7 +7,91 @@ import 'server-only';
 
 import type { FormatDefinition } from '@/lib/format-kit/types';
 import type { Json } from '@/types/database';
+import type { MatchWithPlayers } from '@/types/match';
+import { assertValidUuid } from '@/lib/utils/uuid';
+import { readAllPages } from '../read-all-pages';
 import { supabase } from '../client';
+
+type DashboardMatchFields = Pick<MatchWithPlayers,
+  'id' | 'created_at' | 'date_played' | 'scheduled_at' | 'status' | 'winner_id' | 'submitter_id' |
+  'player_1_id' | 'player_2_id' | 'player_1_name' | 'player_2_name' | 'round_status'>;
+
+export type DashboardTournamentMatch = DashboardMatchFields & { tournament_id: string };
+
+export type DashboardPhaseMatch = DashboardMatchFields & {
+  phase_id: string;
+  season_id: string;
+  season_name: string;
+};
+
+const MATCH_FIELDS = 'id, created_at, date_played, scheduled_at, status, winner_id, submitter_id, player_1_id, player_2_id';
+
+export async function listStandaloneDashboardMatches(playerId: string): Promise<DashboardTournamentMatch[]> {
+  assertValidUuid(playerId, 'playerId');
+  const { data, error } = await supabase.from('matches')
+    .select(`
+      ${MATCH_FIELDS}, tournament_id,
+      player_1:players!matches_player_1_id_fkey (name),
+      player_2:players!matches_player_2_id_fkey (name),
+      round:rounds!matches_round_id_fkey (status),
+      owner:tournaments!matches_tournament_id_fkey!inner (season_id)
+    `)
+    .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`)
+    .is('owner.season_id', null)
+    .order('date_played', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return data.map(({ owner: _owner, round, player_1, player_2, ...row }) => ({
+    ...row,
+    round_status: round?.status ?? 'pending',
+    player_1_name: player_1.name,
+    player_2_name: player_2.name,
+  }));
+}
+
+export async function listDashboardPhaseMatches(playerId: string): Promise<DashboardPhaseMatch[]> {
+  assertValidUuid(playerId, 'playerId');
+  const { data, error } = await supabase.from('phase_matches')
+    .select(`
+      ${MATCH_FIELDS}, phase_id,
+      player_1:players!phase_matches_player_1_id_fkey (name),
+      player_2:players!phase_matches_player_2_id_fkey (name),
+      round:phase_rounds!phase_matches_phase_round_fkey (status),
+      phase:league_phases!phase_matches_phase_id_fkey!inner (season_id, season:seasons!inner (name))
+    `)
+    .or(`player_1_id.eq.${playerId},player_2_id.eq.${playerId}`)
+    .order('date_played', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return data.map(({ phase, round, player_1, player_2, ...row }) => ({
+    ...row,
+    season_id: phase.season_id,
+    season_name: phase.season.name,
+    round_status: round.status,
+    player_1_name: player_1.name,
+    player_2_name: player_2.name,
+  }));
+}
+
+export interface PlayerPhaseTeamSlot {
+  phase_id: string;
+  match_id: string | null;
+}
+
+export async function listPlayerPhaseTeamSlots(playerId: string, phaseIds: readonly string[]): Promise<PlayerPhaseTeamSlot[]> {
+  const unique = [...new Set(phaseIds)];
+  const rows: PlayerPhaseTeamSlot[] = [];
+  for (let offset = 0; offset < unique.length; offset += 50) {
+    rows.push(...await readAllPages((from, to) => supabase.from('phase_teams')
+      .select('phase_id, match_id').eq('player_id', playerId).in('phase_id', unique.slice(offset, offset + 50))
+      .order('id').range(from, to)));
+  }
+  return rows;
+}
 
 /** A queue-engine draft slot that is running for the player: they are on the clock in that pool. */
 export interface ActiveDraftTurnRow {

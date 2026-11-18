@@ -4,6 +4,7 @@ import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 import { toPublicPhaseReport, type PublicPhaseReport } from '@/lib/league-phase/public-report';
 import { loadNativeKitStandingsData } from '@/lib/league-phase/standings-context';
+import { getNativeLeagueStandingsPreview } from '@/lib/stats/standings-preview';
 import type { PublicMatch } from '@/lib/match/public-match';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { publicTags } from '@/lib/revalidation';
@@ -197,6 +198,12 @@ const seasonKitStandings = cache((seasonId: string) =>
   ),
 );
 
+const seasonStandingsPreview = cache((seasonId: string, limit: number) =>
+  cachedRead('season-standings-preview', [seasonId, String(limit)], [publicTags.season(seasonId), publicTags.players, publicTags.ratings], () =>
+    getNativeLeagueStandingsPreview(seasonId, limit),
+  ),
+);
+
 export const phasePublicReads = {
-  detail, bySeasonIds, rounds, matches, match, headToHead, participants, groups, reports, battleStats, seasonKitStandings,
+  detail, bySeasonIds, rounds, matches, match, headToHead, participants, groups, reports, battleStats, seasonKitStandings, seasonStandingsPreview,
 } as const;

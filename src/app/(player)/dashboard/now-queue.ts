@@ -5,8 +5,22 @@
  */
 import { countOwedActions } from '@/lib/format-engine/runtime/owed-actions';
 import { leagueDraftHref } from '@/lib/season/format-utils';
-import type { ActiveDraftTurnRow, PlayerFormatFacts, PlayerTeamSlotRow } from '@/lib/supabase/queries/dashboard-now';
+import type { ActiveDraftTurnRow, DashboardPhaseMatch, DashboardTournamentMatch, PlayerFormatFacts, PlayerPhaseTeamSlot, PlayerTeamSlotRow } from '@/lib/supabase/queries/dashboard-now';
 import type { Json } from '@/types/database';
+
+export type DashboardMatch = DashboardTournamentMatch | DashboardPhaseMatch;
+
+export function mergeDashboardMatches(
+  standalone: readonly DashboardTournamentMatch[],
+  phases: readonly DashboardPhaseMatch[],
+): DashboardMatch[] {
+  return [...standalone, ...phases].sort((a, b) => {
+    if (a.date_played === null && b.date_played !== null) return 1;
+    if (a.date_played !== null && b.date_played === null) return -1;
+    return (a.date_played && b.date_played ? Date.parse(b.date_played) - Date.parse(a.date_played) : 0)
+      || Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id);
+  }).slice(0, 500);
+}
 
 export interface NowDraftTurn {
   poolId: string;
@@ -76,5 +90,15 @@ export function teamlessMatchIds(
   return matches
     .filter((match) => match.status === 'scheduled' || match.status === 'in_progress')
     .filter((match) => !slots.some((slot) => slot.tournament_id === match.tournament_id && (slot.match_id === match.id || slot.match_id === null)))
+    .map((match) => match.id);
+}
+
+export function teamlessPhaseMatchIds(
+  matches: readonly Pick<DashboardPhaseMatch, 'id' | 'phase_id' | 'status'>[],
+  slots: readonly PlayerPhaseTeamSlot[],
+): string[] {
+  return matches
+    .filter((match) => match.status === 'scheduled' || match.status === 'in_progress')
+    .filter((match) => !slots.some((slot) => slot.phase_id === match.phase_id && (slot.match_id === match.id || slot.match_id === null)))
     .map((match) => match.id);
 }

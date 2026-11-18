@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import type { Tables, TablesInsert, Json } from '@/types/database';
 import type { PlayerStatus } from '@/types/player';
 import { readBoundedPages } from '../read-bounded-pages';
+import { readAllPages } from '../read-all-pages';
 import type { Phase, PhaseWithDetails, PhaseFormData, PhaseStatus, PhaseParticipant } from '@/types/league-phase';
 import { phaseMachine } from '@/lib/league-phase/phase-state';
 import { parseAdvancementRule, parseBoOverrides, parseEnrollmentSource } from '@/types/tournament';
@@ -120,6 +121,17 @@ function throwPhaseOrderingError(error: { code: string; message: string }): neve
 
 export async function getPhasesBySeasonId(seasonId: string): Promise<PhaseWithDetails[]> {
   return (await getPhasesBySeasonIds([seasonId])).get(seasonId) ?? [];
+}
+
+export async function getPhaseRankingStages(seasonId: string) {
+  const rows = await readAllPages((from, to) => supabase.from('league_phases')
+    .select('id, bracket_type, third_place_enabled, bracket_reset_enabled, phase_participants(count), phase_groups!phase_groups_phase_id_fkey(count)')
+    .eq('season_id', seasonId).order('stage_order').order('id').range(from, to));
+  return rows.map(({ phase_participants, phase_groups, ...stage }) => ({
+    ...stage,
+    participant_count: embeddedCount(phase_participants),
+    hasGroups: embeddedCount(phase_groups) > 0,
+  }));
 }
 
 const STAGE_BATCH_IDS = 50;

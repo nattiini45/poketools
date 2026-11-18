@@ -12,8 +12,10 @@ const queries = vi.hoisted(() => ({
   getPhaseParticipants: vi.fn(),
   getGroupsByPhase: vi.fn(),
   getPhaseReports: vi.fn(),
+  getNativeLeagueStandingsPreview: vi.fn(),
 }));
 
+vi.mock('@/lib/stats/standings-preview', () => ({ getNativeLeagueStandingsPreview: queries.getNativeLeagueStandingsPreview }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({
   getPhaseWithDetails: queries.getPhaseWithDetails,
   getPhasesBySeasonIds: queries.getPhasesBySeasonIds,
@@ -98,6 +100,18 @@ it('shares the pair cache entry across seat order and expires it on a phase writ
   expirePhaseReads('p1', 's1');
   await phasePublicReads.headToHead('p1', 'u1', 'u2');
   expect(queries.getPhaseHeadToHead).toHaveBeenCalledTimes(2);
+});
+
+it('expires the native league standings preview on a phase write', async () => {
+  const rows = [{ rank: 1, player_id: 'u1', player_name: 'Sample One', wins: 1, losses: 0 }];
+  queries.getNativeLeagueStandingsPreview.mockResolvedValue(rows);
+  await expect(phasePublicReads.seasonStandingsPreview('s1', 1000)).resolves.toEqual(rows);
+  await expect(phasePublicReads.seasonStandingsPreview('s1', 1000)).resolves.toEqual(rows);
+  expect(queries.getNativeLeagueStandingsPreview).toHaveBeenCalledExactlyOnceWith('s1', 1000);
+  expect(fakeNextCache.reads[0].tags).toEqual([publicTags.season('s1'), publicTags.players, publicTags.ratings]);
+  expirePhaseReads('p1', 's1');
+  await phasePublicReads.seasonStandingsPreview('s1', 1000);
+  expect(queries.getNativeLeagueStandingsPreview).toHaveBeenCalledTimes(2);
 });
 
 it('caches native phase detail by league and phase and refuses a different league', async () => {

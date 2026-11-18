@@ -3,10 +3,15 @@ import { getCompletedMatchRecords, getCompletedMatchRecordsBatch } from '@/lib/s
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
-import { getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
-import { loadRankingContext } from '@/lib/tournament/season-standings';
+import { getPublicSeasonParticipants, getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
+import { loadRankingContext, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
+import { getPhaseRankingStages } from '@/lib/supabase/queries/league-phases';
+import { getCompletedPhaseMatchRecordsBatch } from '@/lib/supabase/queries/phase-format-runtime';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
+import type { ByeRecord, MatchRecord } from '@/lib/tournament/types';
 import type { StandingsRow } from '@/types/game';
-import { finalLeaguePlacings, groupStageIds, groupStageRanking, isPlayoffStage } from '@/lib/tournament/league-placings';
+import { finalLeaguePlacings, groupStageIds, groupStageRanking, isPlayoffStage, type LeagueRankingStage } from '@/lib/tournament/league-placings';
 
 export interface StandingsPreviewRow {
   rank: number;
@@ -42,9 +47,20 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
     readsByes ? loadSeasonSwissByeRounds(seasonId) : undefined,
     formatType ? loadRankingContext(seasonId, formatType) : undefined,
   ]);
-  const matchRecords = (stages ? groupStageIds(stages) : stageIds).flatMap((id) => recordsMap.get(id) ?? []);
-  // The loader holds Swiss stages only.
   const byes = scoringByeRecords('swiss', [...(byeRoundsByStage?.values() ?? [])].flat());
+  return leaguePreviewTable(parts, recordsMap, byes, ranking, stageIds, stages, hasGroups);
+}
+
+function leaguePreviewTable(
+  parts: readonly Pick<Awaited<ReturnType<typeof getSeasonParticipants>>[number], 'id' | 'name' | 'avatar_url' | 'gym_type'>[],
+  recordsMap: ReadonlyMap<string, MatchRecord[]>,
+  byes: readonly ByeRecord[],
+  ranking: SeasonStandingsContext | undefined,
+  stageIds: readonly string[],
+  stages?: readonly LeagueRankingStage[],
+  hasGroups?: boolean,
+): StandingsRow[] {
+  const matchRecords = (stages ? groupStageIds(stages) : stageIds).flatMap((id) => recordsMap.get(id) ?? []);
   const table = buildStandingsRowsFromMatchRecords(
     parts.map((p) => ({
       id: p.id,
@@ -59,6 +75,21 @@ async function loadLeagueStandings(seasonId: string): Promise<StandingsRow[]> {
     hasGroups && stages?.some(isPlayoffStage),
   );
   return stages ? finalLeaguePlacings(table, stages, recordsMap) ?? table : table;
+}
+
+export async function getNativeLeagueStandingsPreview(seasonId: string, limit: number): Promise<StandingsPreviewRow[]> {
+  const [parts, stages] = await Promise.all([getPublicSeasonParticipants(seasonId), getPhaseRankingStages(seasonId)]);
+  const ids = stages.map((stage) => stage.id);
+  const [records, ranking] = await Promise.all([
+    getCompletedPhaseMatchRecordsBatch(ids),
+    stages.length ? loadNativeSeasonStandingsContext(seasonId) : undefined,
+  ]);
+  const swissIds = ranking && formatScoresByes(ranking.formatType)
+    ? stages.filter((stage) => stage.bracket_type === 'swiss').map((stage) => stage.id)
+    : [];
+  const byeRounds = await getByeRoundsByPhaseIds(swissIds);
+  const byes = scoringByeRecords('swiss', [...byeRounds.values()].flat());
+  return toPreviewRows(leaguePreviewTable(parts, records, byes, ranking, ids, stages, stages.some((stage) => stage.hasGroups)), limit);
 }
 
 /**
