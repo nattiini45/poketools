@@ -26,11 +26,12 @@ import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getTierLimits } from '@/lib/supabase/queries/draft-tier-limits';
 import { getLeagueGroupCounts, getSeasonTypeAssignmentCounts, getStageGroupCounts } from '@/lib/supabase/queries/format-studio';
 import { getStagesBySeasonIds } from '@/lib/supabase/queries/tournaments';
+import { getPhasesBySeasonIds } from '@/lib/supabase/queries/league-phases';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import type { SeasonFormatType, SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
 import { describeLegacy } from './legacy/describe-legacy';
 import type { LegacyFacts } from './legacy/types';
-import { toLegacyInput } from './legacy-input';
+import { toLegacyInput, type DescriptorStage } from './legacy-input';
 import { legacyCompileEnv, toFormatView, type FormatView } from './view';
 
 export type EditorAdapter = 'epb' | 'legacy_draft' | 'core_liga';
@@ -59,7 +60,7 @@ export interface LeagueFormatSummary {
  * names the VERSION ids its league and phases pin (`describeLegacy`), and these are keyed by the same ids, so there is no
  * definition or legacy id to resolve here (`loadRulesetChoices` does that for a stored format document).
  */
-function rulesetNames(league: SeasonWithDetails, stages: readonly TournamentWithDetails[]): { id: string; name: string }[] {
+function rulesetNames(league: SeasonWithDetails, stages: readonly DescriptorStage[]): { id: string; name: string }[] {
   const byId = new Map<string, string>();
   if (league.ruleset_id && league.ruleset_name) byId.set(league.ruleset_id, league.ruleset_name);
   for (const stage of stages) {
@@ -107,9 +108,11 @@ function readFacts(league: SeasonWithDetails): Promise<Partial<LegacyFacts>> {
  * design, and its schema diagnostics are not for the owner to read.
  */
 export async function loadLeagueFormat(league: SeasonWithDetails): Promise<LeagueFormatResult> {
+  const mode = await getPhaseRouteMode();
+  const native = mode === 'phase' || mode === 'frozen_phase';
   const [stagesBySeason, stageGroupCounts, leagueGroupCounts, facts] = await Promise.all([
-    getStagesBySeasonIds([league.id]),
-    getStageGroupCounts([league.id]),
+    native ? getPhasesBySeasonIds([league.id]) : getStagesBySeasonIds([league.id]),
+    native ? getStageGroupCounts([league.id], 'native') : getStageGroupCounts([league.id]),
     getLeagueGroupCounts([league.id]),
     readFacts(league),
   ]);
@@ -169,9 +172,11 @@ function needsTypeAssignments(league: SeasonWithDetails): boolean {
 export async function loadLeagueFormatSummaries(leagues: readonly SeasonWithDetails[]): Promise<LeagueFormatSummary[]> {
   if (leagues.length === 0) return [];
   const ids = leagues.map((l) => l.id);
+  const mode = await getPhaseRouteMode();
+  const native = mode === 'phase' || mode === 'frozen_phase';
   const [stagesBySeason, stageGroupCounts, leagueGroupCounts, assignments] = await Promise.all([
-    getStagesBySeasonIds(ids),
-    getStageGroupCounts(ids),
+    native ? getPhasesBySeasonIds(ids) : getStagesBySeasonIds(ids),
+    native ? getStageGroupCounts(ids, 'native') : getStageGroupCounts(ids),
     getLeagueGroupCounts(ids),
     Promise.all(leagues.map((l) => (needsTypeAssignments(l) ? getSeasonTypeAssignmentCounts(l.id) : null))),
   ]);
