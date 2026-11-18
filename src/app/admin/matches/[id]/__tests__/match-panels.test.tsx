@@ -39,8 +39,7 @@ const CONTEXT: AdminMatchContext = {
 function header(over: Partial<ComponentProps<typeof MatchContextHeader>> = {}) {
   return (
     <MatchContextHeader
-      matchId="m1"
-      tournamentId="t1"
+      publicHref="/tournaments/t1/matches/m1"
       status="in_progress"
       scheduledAt="2026-10-25T17:00:00.000Z"
       autoConfirmAt={null}

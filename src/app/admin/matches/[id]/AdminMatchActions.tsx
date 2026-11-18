@@ -34,6 +34,7 @@ import { computeSeriesTally } from '@/lib/match/series-tally';
 import type { MatchResetPreview } from '@/lib/admin/match-detail';
 import { hasReachedBoThreshold } from '@/lib/tournament/match-state';
 import { availableMatchActions } from '@/lib/match/match-actions';
+import { phaseMatchMachine } from '@/lib/league-phase/phase-match-state';
 import ConfirmResultDialog, { SeriesTallyLine, type ConfirmResultKind } from './ConfirmResultDialog';
 
 interface PlayerInfo {
@@ -48,7 +49,7 @@ interface AdminMatchActionsProps {
   player2: PlayerInfo;
   currentWinnerId: string | null;
   games: GameSummary[];
-  tournamentId: string;
+  correctionsOnly?: boolean;
   /**
    * The round's best-of (null when the round could not be read): it drives the
    * series tally and tells what a deleted game leaves behind.
@@ -179,6 +180,7 @@ export default function AdminMatchActions({
   player2,
   currentWinnerId,
   games,
+  correctionsOnly = false,
   bestOf,
   isSiteAdmin,
   backSuffix = '',
@@ -229,16 +231,19 @@ export default function AdminMatchActions({
   const settled = () => setPhase((current) => (current.kind === 'running' ? IDLE : current));
 
   // The actions come from the match machine (admin actor); the routes decide again on every write.
-  const actions = availableMatchActions(
-    { status: currentStatus, player_1_id: player1.id, player_2_id: player2.id, submitter_id: null },
-    { playerId: null, isAdmin: true },
-  );
+  const actions = correctionsOnly
+    ? new Set(phaseMatchMachine.transitionsFrom(currentStatus, 'admin').map(({ event }) => event))
+    : availableMatchActions(
+        { status: currentStatus, player_1_id: player1.id, player_2_id: player2.id, submitter_id: null },
+        { playerId: null, isAdmin: true },
+      );
   const canReset = actions.has('reset');
-  const canComplete = actions.has('confirm') || actions.has('resolve_dispute') || actions.has('set_result');
+  const permitsCompletion = actions.has('confirm') || actions.has('resolve_dispute') || actions.has('set_result');
+  const canComplete = !correctionsOnly && permitsCompletion;
   const canMarkDisputed = actions.has('dispute') || actions.has('flag_dispute');
-  const canSettle = actions.has('settle');
+  const canSettle = !correctionsOnly && actions.has('settle');
   /** A match nothing completes any more (completed): its reset sits in its own card. */
-  const resetInCard = canReset && !canComplete;
+  const resetInCard = canReset && !permitsCompletion;
   const tally = useMemo(
     () => computeSeriesTally(games, player1.id, player2.id, bestOf),
     [games, player1.id, player2.id, bestOf],
@@ -257,7 +262,7 @@ export default function AdminMatchActions({
     const controller = new AbortController();
     (async () => {
       try {
-        const res = await fetch(`/api/admin/matches/${matchId}/reset-preview`, { signal: controller.signal });
+        const res = await fetch(`/api/admin/matches/${matchId}/reset-preview`, { signal: controller.signal, cache: 'no-store' });
         const json = await res.json();
         if (controller.signal.aborted) return;
         setResetPreview(
@@ -523,7 +528,7 @@ export default function AdminMatchActions({
   return (
     <>
       {/* Reset Match Controls — shown for every match that can be reset */}
-      {canReset && !(resetInCard && games.length === 0) && (
+      {((canReset && !resetInCard) || ((canReset || correctionsOnly) && games.length > 0)) && (
         <Section title={t('actions.resetSection')} icon="dubious-disc" collapsible keepMounted>
           <div className="flex flex-col items-start gap-4">
             {/* Per-game actions */}
@@ -546,6 +551,7 @@ export default function AdminMatchActions({
                       <div className="flex items-center gap-4">
                         <Link
                           href={`/admin/matches/${matchId}/games/${game.id}/edit${backSuffix}`}
+                          prefetch={false}
                           className={cn('inline-flex items-center text-caption', TEXT_LINK, TOUCH)}
                         >
                           {t('actions.edit')}
@@ -570,8 +576,8 @@ export default function AdminMatchActions({
             )}
 
             {/* Reset entire match. A completed match has its reset in the Admin Actions card below. */}
-            {!resetInCard && (
-              <Button variant="secondary" size="sm" onClick={openResetDialog} disabled={busy} className={cn(DANGER_OUTLINE, TOUCH)}>
+            {canReset && !resetInCard && (
+              <Button type="button" variant="secondary" size="sm" onClick={openResetDialog} disabled={busy} className={cn(DANGER_OUTLINE, TOUCH)}>
                 {t('actions.resetMatch')}
               </Button>
             )}
@@ -690,7 +696,7 @@ export default function AdminMatchActions({
         <Section title={t('actions.adminActions')} icon="everstone" collapsible keepMounted>
           <div className="flex flex-col items-start gap-3">
             <p className="text-body text-fg-muted">{t('actions.completedHint')}</p>
-            <Button variant="secondary" size="sm" disabled={busy} onClick={openResetDialog} className={cn(DANGER_OUTLINE, TOUCH)}>
+            <Button type="button" variant="secondary" size="sm" disabled={busy} onClick={openResetDialog} className={cn(DANGER_OUTLINE, TOUCH)}>
               {t('actions.resetMatch')}
             </Button>
           </div>
@@ -709,7 +715,12 @@ export default function AdminMatchActions({
           for a game left uncounted) and the warnings of a saved change. */}
       {((error && 'api' in error) || warnings.length > 0) && (
         <div>
-          <GameChangeAlerts error={error && 'api' in error ? error.api : null} warnings={warnings} isSiteAdmin={isSiteAdmin} />
+          <GameChangeAlerts
+            error={error && 'api' in error ? error.api : null}
+            warnings={warnings}
+            isSiteAdmin={isSiteAdmin}
+            allowDataToolsRecovery={!correctionsOnly}
+          />
         </div>
       )}
       {success && (

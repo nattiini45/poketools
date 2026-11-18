@@ -17,8 +17,7 @@ import { buildMatchListSearch, EMPTY_MATCH_LIST_STATE } from '@/lib/admin/match-
 import type { MatchStatus } from '@/types/match';
 
 interface MatchContextHeaderProps {
-  matchId: string;
-  tournamentId: string;
+  publicHref: string;
   status: MatchStatus;
   scheduledAt: string | null;
   autoConfirmAt: string | null;
@@ -54,8 +53,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 
 /** Where the match sits (league, phase, round), its timing and who reported it, plus the links around it. */
 export default function MatchContextHeader({
-  matchId,
-  tournamentId,
+  publicHref,
   status,
   scheduledAt,
   autoConfirmAt,
@@ -122,7 +120,7 @@ export default function MatchContextHeader({
       </dl>
       <p className="mt-4 text-caption text-fg-muted">{t('header.timeZoneHint', { zone: formatter.timeZone })}</p>
       <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 border-t border-hairline pt-3 text-body">
-        <Link href={`/tournaments/${tournamentId}/matches/${matchId}`} className={cn('inline-flex items-center', TEXT_LINK, TOUCH)}>
+        <Link href={publicHref} className={cn('inline-flex items-center', TEXT_LINK, TOUCH)}>
           {t('header.publicPage')}
         </Link>
         <Link

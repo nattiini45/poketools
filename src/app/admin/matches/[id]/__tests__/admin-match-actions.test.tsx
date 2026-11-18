@@ -41,7 +41,6 @@ function ui(status: 'in_progress' | 'completed', backSuffix?: string) {
       player2={P2}
       currentWinnerId={null}
       games={[game(1, 'p1'), game(2, null)]}
-      tournamentId="t1"
       bestOf={3}
       isSiteAdmin
       backSuffix={backSuffix}
@@ -112,7 +111,6 @@ describe('AdminMatchActions i18n', () => {
         player2={P2}
         currentWinnerId={null}
         games={[]}
-        tournamentId="t1"
         bestOf={3}
         isSiteAdmin
       />

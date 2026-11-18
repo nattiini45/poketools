@@ -13,6 +13,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { adminMatchMessages } from '@/i18n/messages/admin-match';
 import { errorsMatches } from '@/i18n/messages/errors';
 import { canReopenMatch } from '@/lib/tournament/match-state';
+import { phaseMatchMachine } from '@/lib/league-phase/phase-match-state';
 import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { stageEndedApiWarning } from '@/lib/match/stage-ended-warning';
 import { errorNeedsRefresh } from './AdminMatchActions';
@@ -21,6 +22,7 @@ import type { MatchStatus } from '@/types/match';
 interface MatchReopenSectionProps {
   matchId: string;
   status: MatchStatus;
+  native?: boolean;
 }
 
 /** An API failure (translated by its code) or the local failure; never translated text. */
@@ -43,7 +45,7 @@ export function reopenFailureKind(code: string | null | undefined): 'incomplete'
 }
 
 /** Takes a completed, awaiting or disputed match back to in progress without resetting it. */
-export default function MatchReopenSection({ matchId, status }: MatchReopenSectionProps) {
+export default function MatchReopenSection({ matchId, status, native = false }: MatchReopenSectionProps) {
   const router = useRouter();
   const t = useT(adminMatchMessages);
   const errorText = useApiErrorText(errorsMatches);
@@ -86,7 +88,10 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
     }
   }
 
-  if (!canReopenMatch(status)) {
+  const canReopen = native
+    ? phaseMatchMachine.transitionsFrom(status, 'admin').some(({ event }) => event === 'reopen')
+    : canReopenMatch(status);
+  if (!canReopen) {
     // After a reopen the page refreshes to in progress: keep the outcome, drop the controls.
     if (!outcome) return null;
     return (
@@ -113,8 +118,9 @@ export default function MatchReopenSection({ matchId, status }: MatchReopenSecti
     <Section title={t('reopen.title')} icon="rare-candy">
       <div className="flex flex-col items-start gap-3 text-body text-fg-muted">
         <p>{t('reopen.intro')}</p>
-        <p>{t('reopen.finishHint')}</p>
+        {!native && <p>{t('reopen.finishHint')}</p>}
         <Button
+          type="button"
           variant="secondary"
           size="sm"
           className={TOUCH}

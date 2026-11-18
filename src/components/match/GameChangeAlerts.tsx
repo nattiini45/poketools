@@ -22,6 +22,7 @@ interface GameChangeAlertsProps {
    * tools would refuse them.
    */
   isSiteAdmin: boolean;
+  allowDataToolsRecovery?: boolean;
 }
 
 /**
@@ -32,14 +33,14 @@ interface GameChangeAlertsProps {
  * edit form seeds its fields from the server props once, so only a reload
  * shows the current game.
  */
-export default function GameChangeAlerts({ error, warnings = [], isSiteAdmin }: GameChangeAlertsProps) {
+export default function GameChangeAlerts({ error, warnings = [], isSiteAdmin, allowDataToolsRecovery = true }: GameChangeAlertsProps) {
   const t = useT(adminCoreMessages);
   const errorText = useApiErrorText(errorsMatches, errorsAdmin);
   if (!error && warnings.length === 0) return null;
 
   const hints = gameChangeFailureHints(error);
   // Only the warnings that name a repair point to the data tools; the stage-ended notice needs the admin's attention, not a tool.
-  const dataTools = hints.dataTools || warnings.some(warningNeedsDataTools);
+  const dataTools = allowDataToolsRecovery && (hints.dataTools || warnings.some(warningNeedsDataTools));
 
   return (
     <div className="space-y-2">
