@@ -24,6 +24,8 @@ const mocks = vi.hoisted(() => ({
   getListEntries: vi.fn(),
   loadPublishRefusals: vi.fn(),
   getSeasonPhaseStartSignals: vi.fn(),
+  isNativeSeasonStarted: vi.fn(),
+  getPhaseRouteMode: vi.fn(),
   loadLeagueFormat: vi.fn(),
   loadLeagueFormatState: vi.fn(),
   loadAttachCandidates: vi.fn(),
@@ -67,7 +69,9 @@ vi.mock('@/lib/ruleset-studio/pin-info.server', () => ({ getRulesetPinInfo: mock
 vi.mock('@/components/ruleset/RulesetPinCard', () => ({ default: function RulesetPinCard() { return null; } }));
 vi.mock('@/lib/supabase/queries/season-start', () => ({
   getSeasonPhaseStartSignals: mocks.getSeasonPhaseStartSignals,
+  isNativeSeasonStarted: mocks.isNativeSeasonStarted,
 }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: mocks.getPhaseRouteMode }));
 vi.mock('@/lib/supabase/queries/drafts', () => ({
   getDraftPoolBySeason: mocks.getDraftPoolBySeason,
   getDraftPoolsBySeason: mocks.getDraftPoolsBySeason,
@@ -318,6 +322,8 @@ beforeEach(() => {
   mocks.getListEntries.mockResolvedValue([]);
   mocks.loadPublishRefusals.mockResolvedValue({});
   mocks.getSeasonPhaseStartSignals.mockResolvedValue([]);
+  mocks.isNativeSeasonStarted.mockResolvedValue(false);
+  mocks.getPhaseRouteMode.mockResolvedValue('legacy');
   // The Format tab loads its descriptor through one call; a league without phases is the cheapest result.
   mocks.loadLeagueFormat.mockResolvedValue({ kind: 'no_phases' });
   // A custom league: nothing attached, no hand-made phase, not started; no format to pick from.
@@ -771,6 +777,16 @@ describe('settings tab', () => {
     expect(findByType(await render('settings'), RulesetPinCard)).toHaveLength(0);
   });
 
+  it.each(['phase', 'frozen_phase'])('locks both selects from the native start in %s', async (mode) => {
+    mocks.getPhaseRouteMode.mockResolvedValue(mode);
+    mocks.isNativeSeasonStarted.mockResolvedValue(true);
+    mocks.getSeasonWithDetails.mockResolvedValue(season({ format_type: 'singles', status: 'upcoming', ruleset_id: 'rs-1' }));
+    const [form] = findByType(await render('settings'), LeagueSettingsForm);
+    expect(form.props).toMatchObject({ formatLock: 'started', rulesetLocked: true });
+    expect(mocks.isNativeSeasonStarted).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(mocks.getSeasonPhaseStartSignals).not.toHaveBeenCalled();
+  });
+
   it('maps unset ruleset and dates to empty form values', async () => {
     mocks.getSeasonWithDetails.mockResolvedValue(
       season({ format_type: 'singles', status: 'upcoming', ruleset_id: null, start_date: null, end_date: null }),
@@ -864,6 +880,15 @@ describe('settings tab', () => {
 // ─── Rules tab: format rules editor ─────────────────────────────────
 
 describe('rules tab: format rules editor', () => {
+  it('passes the native start to the existing confirmation flow', async () => {
+    mocks.getPhaseRouteMode.mockResolvedValue('phase');
+    mocks.isNativeSeasonStarted.mockResolvedValue(true);
+    const [editor] = findByType(await render('rules'), FormatRulesEditor);
+    expect(editor.props).toEqual({ seasonId: S1, seasonStarted: true });
+    expect(mocks.isNativeSeasonStarted).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(mocks.getSeasonPhaseStartSignals).not.toHaveBeenCalled();
+  });
+
   it.each<[string, Record<string, unknown>, unknown[], boolean]>([
     ['an active league', { status: 'active' }, [], true],
     ['a completed league', { status: 'completed' }, [], true],

@@ -28,8 +28,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: vi.fn() }));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getSeasonFormat: vi.fn(),
   getSeasonFormatSummary: vi.fn(),
-  getSeasonStartSignals: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/season-start', () => ({ getSeasonPhaseStartSignals: vi.fn(), isNativeSeasonStarted: vi.fn() }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
@@ -39,7 +40,9 @@ import { attachFormatToSeason, detachFormatFromSeason, type AttachOutcome } from
 import { FormatStudioError } from '@/lib/format-studio/errors';
 import type { SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import { PRESETS } from '@/lib/format-kit';
-import { getSeasonFormat, getSeasonFormatSummary, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
+import { getSeasonFormat, getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
+import { getSeasonPhaseStartSignals, isNativeSeasonStarted } from '@/lib/supabase/queries/season-start';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -111,7 +114,8 @@ beforeEach(() => {
   vi.mocked(requireResourceAdmin).mockResolvedValue(admin);
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 29, retryAfterSeconds: 0 });
   vi.mocked(getSeasonById).mockResolvedValue(season());
-  vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [] });
+  vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([]);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
 });
 
@@ -178,9 +182,24 @@ describe('GET /api/seasons/[id]/format', () => {
   });
 
   it('tells a started league', async () => {
-    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [{ status: 'active', rounds_total: 0 }] });
+    vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([{ status: 'active', rounds_total: 0 }]);
     const body = await (await GET(get(), params())).json();
     expect(body.data.started).toBe(true);
+  });
+
+  it.each([
+    ['phase', true],
+    ['phase', false],
+    ['frozen_phase', true],
+  ] as const)('reports only the native start %s → %s', async (mode, started) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(isNativeSeasonStarted).mockResolvedValue(started);
+    vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([{ status: started ? 'upcoming' : 'active', rounds_total: 0 }]);
+    const response = await GET(get(), params());
+    expect(response.status).toBe(200);
+    expect((await response.json()).data.started).toBe(started);
+    expect(isNativeSeasonStarted).toHaveBeenCalledExactlyOnceWith(SEASON_ID);
+    expect(getSeasonPhaseStartSignals).not.toHaveBeenCalled();
   });
 
   it('adds the frozen spec on ?include=spec, never the seed', async () => {

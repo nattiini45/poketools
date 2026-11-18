@@ -1,6 +1,5 @@
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { SeasonFormatType } from '@/types/season';
-import { isSeasonStarted, type SeasonStartSignals } from './season-state';
 
 /**
  * Guards for editing a league's settings (PATCH /api/seasons/[id]). Pure and
@@ -21,10 +20,10 @@ export { isSeasonStarted, type SeasonStartSignals } from './season-state';
  */
 export function formatChangeLock(
   current: SeasonFormatType,
-  signals: SeasonStartSignals
+  started: boolean
 ): FormatLockReason | null {
   if (current === 'evolution_point_buy') return 'point_buy';
-  if (isSeasonStarted(signals)) return 'started';
+  if (started) return 'started';
   return null;
 }
 
@@ -34,8 +33,8 @@ export function formatChangeLock(
  * on the ruleset only moves to another version of the SAME ruleset, through the pin card and its confirmation. A league
  * without a ruleset can still be given one after it started.
  */
-export function isRulesetPinLocked(rulesetId: string | null, signals: SeasonStartSignals): boolean {
-  return rulesetId !== null && isSeasonStarted(signals);
+export function isRulesetPinLocked(rulesetId: string | null, started: boolean): boolean {
+  return rulesetId !== null && started;
 }
 
 /** The league types a settings form offers for a league currently of type `current`. */
