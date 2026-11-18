@@ -83,7 +83,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect(a.shiftedIds).toEqual([]);
     expect(b.shiftedIds).toEqual([]);
     await expect(phases.insertAdminPhase({ ...input, name: later.name.toUpperCase() }))
-      .rejects.toMatchObject({ code: 'PHASE_NAME_TAKEN' });
+      .rejects.toMatchObject({ code: 'PHASE_NAME_TAKEN', statusCode: 409 });
 
     const beforeIds = (await phases.getPhasesBySeasonId(seasonId)).map(phase => phase.id);
     const inserted = await phases.insertAdminPhase({ ...input, name: `${prefix} Inserted` }, later.stage_order);
@@ -98,6 +98,46 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       .rejects.toMatchObject({ code: 'PHASE_INSERT_LOCKED' });
     expect((await phases.getPhaseById(inserted.phase.id))?.stage_order).toBe(inserted.phase.stage_order);
     expect((await phases.getPhaseById(later.id))?.stage_order).toBe(later.stage_order + 1);
+  });
+
+  it('confirms rounds under the delete lock, protects dependent enrollment and keeps independent cast sessions', async () => {
+    const source = await create();
+    const dependent = await create();
+    await enroll(source.id);
+    expect(await phases.replacePhaseEnrollment(dependent.id, [{ player_id: playerIds[0], seed: 1 }], {
+      type: 'standings', source_phase_id: source.id, synced_at: '2026-11-17T01:00:00Z', frozen: true,
+    }, null)).toBe(true);
+    await expect(phases.deleteAdminPhase(randomUUID(), source.id, true))
+      .rejects.toMatchObject({ code: 'PHASE_NOT_FOUND', statusCode: 404 });
+    await expect(phases.deleteAdminPhase(seasonId, source.id, true))
+      .rejects.toMatchObject({ code: 'PHASE_DELETE_ENROLLMENT_SOURCE', statusCode: 409 });
+    await phases.deleteAdminPhase(seasonId, dependent.id, false);
+
+    const teamId = randomUUID();
+    expect((await admin.from('phase_teams').insert({ id: teamId, phase_id: source.id, season_id: seasonId, player_id: playerIds[0] })).error).toBeNull();
+    await expect(phases.deleteAdminPhase(seasonId, source.id, true))
+      .rejects.toMatchObject({ code: 'PHASE_DELETE_TEAMS_LINKED', statusCode: 409 });
+    expect((await admin.from('phase_teams').delete().eq('id', teamId)).error).toBeNull();
+
+    const externalSession = randomUUID();
+    const ownedSession = randomUUID();
+    const cast = { owner_id: playerIds[0], phase_id: source.id, season_id: seasonId };
+    expect((await admin.from('cast_sessions').insert({ ...cast, id: externalSession })).error).toBeNull();
+    expect((await admin.from('phase_cast_sessions').insert({ ...cast, id: ownedSession })).error).toBeNull();
+    try {
+      await rounds.createPhaseRound({ phase_id: source.id, name: 'Native delete round', round_number: 1, best_of: 3 });
+      await expect(phases.deleteAdminPhase(seasonId, source.id, false))
+        .rejects.toMatchObject({ code: 'PHASE_DELETE_CONFIRM_REQUIRED', statusCode: 400 });
+      expect((await admin.from('phase_cast_sessions').select('id').eq('id', ownedSession).single()).data).toEqual({ id: ownedSession });
+      await expect(phases.deleteAdminPhase(seasonId, source.id, true))
+        .resolves.toEqual({ name: source.name, playerIds: [...playerIds.slice(0, 4)].sort() });
+      expect(await phases.getPhaseById(source.id)).toBeNull();
+      expect((await admin.from('phase_cast_sessions').select('id').eq('id', ownedSession).maybeSingle()).data).toBeNull();
+      expect((await admin.from('cast_sessions').select('phase_id,phase_match_id').eq('id', externalSession).single()).data)
+        .toEqual({ phase_id: null, phase_match_id: null });
+    } finally {
+      expect((await admin.from('cast_sessions').delete().eq('id', externalSession)).error).toBeNull();
+    }
   });
 
   it('serializes enrollment CAS and changes seeds atomically without tournament rows', async () => {

@@ -107,7 +107,10 @@ function throwPhaseOrderingError(error: { code: string; message: string }): neve
   if (error.code === 'P0001') {
     const code = error.message;
     if (code === 'format_phase_owned') throw new FormatStudioError(code);
-    if (code === 'PHASE_INSERT_INVALID' || code === 'PHASE_INSERT_LOCKED' || code === 'PHASE_NAME_TAKEN'
+    if (code === 'PHASE_NAME_TAKEN') {
+      throw new UserFacingError('Another phase of this league already has this name', { code, status: 409 });
+    }
+    if (code === 'PHASE_INSERT_INVALID' || code === 'PHASE_INSERT_LOCKED'
       || code === 'PHASE_REORDER_LOCKED' || code === 'PHASE_REORDER_INCOMPLETE' || code === 'SEASON_NOT_FOUND') {
       throw new UserFacingError(seasonErrors[code], { code, status: code === 'SEASON_NOT_FOUND' ? 404 : 400 });
     }
@@ -287,6 +290,29 @@ export async function deletePhase(id: string): Promise<void> {
     .eq('id', id);
 
   if (error) throw error;
+}
+
+export async function deleteAdminPhase(seasonId: string, phaseId: string, confirm: boolean): Promise<{ name: string; playerIds: string[] }> {
+  const { data, error } = await supabase.rpc('phase_admin_delete', {
+    p_season_id: seasonId, p_phase_id: phaseId, p_confirm: confirm,
+  });
+  if (error) {
+    if (error.code === 'P0001') {
+      const code = error.message;
+      if (code === 'format_phase_owned') throw new FormatStudioError(code);
+      if (code === 'PHASE_NOT_FOUND') throw new UserFacingError('Phase not found', { code, status: 404 });
+      if (code === 'PHASE_DELETE_CONFIRM_REQUIRED') throw new UserFacingError(seasonErrors[code], { code, status: 400 });
+      if (code === 'PHASE_DELETE_TEAMS_LINKED' || code === 'PHASE_DELETE_ENROLLMENT_SOURCE') {
+        throw new UserFacingError(seasonErrors[code], { code, status: 409 });
+      }
+    }
+    throw error;
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data) || typeof data.name !== 'string'
+    || !Array.isArray(data.player_ids) || !data.player_ids.every(id => typeof id === 'string')) {
+    throw new Error('Invalid native phase deletion result');
+  }
+  return { name: data.name, playerIds: data.player_ids };
 }
 
 type StartingBracket = PhaseParticipant['starting_bracket'];

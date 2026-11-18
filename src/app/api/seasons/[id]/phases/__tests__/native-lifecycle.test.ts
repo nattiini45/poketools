@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   sync: vi.fn(), assign: vi.fn(), legacyList: vi.fn(), legacyCreate: vi.fn(), legacyDetail: vi.fn(), legacyRead: vi.fn(),
   legacyUpdate: vi.fn(), legacyRemove: vi.fn(), legacyRounds: vi.fn(), legacySync: vi.fn(), legacyAssign: vi.fn(),
   createPin: vi.fn(), changePin: vi.fn(), expire: vi.fn(), announce: vi.fn(), audit: vi.fn(), react: vi.fn(), enroll: vi.fn(),
+  rebuild: vi.fn(),
 }));
 
 vi.mock('@/lib/auth/helpers', () => ({ requireResourceAdmin: h.requireAdmin }));
@@ -19,8 +20,9 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: h.season }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({ getSeasonKitHead: h.format, getKitPhases: h.legacyFormatPhases }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({
   getPhasesBySeasonId: h.list, insertAdminPhase: h.create, shiftPhaseStageOrders: h.shift, getPhaseWithDetails: h.detail,
-  updatePhase: h.update, deletePhase: h.remove,
+  updatePhase: h.update, deleteAdminPhase: h.remove,
 }));
+vi.mock('@/lib/league-phase/entity-rebuild', () => ({ createMixedEntityDeleteRebuilder: () => ({ rebuildAfterPhaseDelete: h.rebuild }) }));
 vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getRoundsByPhase: vi.fn(), listRoundStatusesByPhaseIds: h.rounds }));
 vi.mock('@/lib/league-phase/enrollment-services', () => ({ createNativePhaseEnrollment: () => ({ sync: h.sync, enroll: h.enroll }) }));
 vi.mock('@/lib/supabase/queries/phase-admins', () => ({ addPhaseAdmin: h.assign }));
@@ -203,11 +205,8 @@ describe('native phase update', () => {
   });
 });
 
-it('does not fall back to legacy deletion when native deletion is unavailable', async () => {
+it('refuses wrong-owner or format-owned deletion without calling either store’s writer', async () => {
   const remove = () => DELETE(req('DELETE', { confirm: true }), args);
-  const response = await remove();
-  expect(response.status).toBe(503);
-  expect(await response.json()).toMatchObject({ code: 'phase_delete_unavailable' });
   h.detail.mockResolvedValueOnce({ ...ROW, season_id: OTHER });
   expect((await remove()).status).toBe(404);
   h.detail.mockResolvedValueOnce({ ...ROW, format_stage_key: 'qualifiers' });
@@ -216,6 +215,34 @@ it('does not fall back to legacy deletion when native deletion is unavailable', 
   expect(h.legacyRemove).not.toHaveBeenCalled();
   expect(h.remove).not.toHaveBeenCalled();
   expect(h.expire).not.toHaveBeenCalled();
+});
+
+it('checks round confirmation inside the native delete and rebuilds only after it commits', async () => {
+  h.remove.mockRejectedValueOnce(new UserFacingError('Deleting a phase with rounds requires confirm: true', {
+    code: 'PHASE_DELETE_CONFIRM_REQUIRED', status: 400,
+  })).mockResolvedValueOnce({ name: ROW.name, playerIds: [OTHER] });
+  const unconfirmed = await DELETE(req('DELETE'), args);
+  expect(unconfirmed.status).toBe(400);
+  expect(h.remove).toHaveBeenCalledWith(SEASON, PHASE, false);
+  expect(h.rebuild).not.toHaveBeenCalled();
+  expect(h.expire).not.toHaveBeenCalled();
+
+  const confirmed = await DELETE(req('DELETE', { confirm: true }), args);
+  expect(confirmed.status).toBe(200);
+  expect(await confirmed.json()).toMatchObject({ data: { rebuild_warning: null } });
+  expect(h.remove).toHaveBeenLastCalledWith(SEASON, PHASE, true);
+  expect(h.legacyRemove).not.toHaveBeenCalled();
+  expect(h.rebuild).toHaveBeenCalledExactlyOnceWith({ phaseId: PHASE, seasonId: SEASON, playerIds: [OTHER] });
+  expect(h.expire).toHaveBeenCalledWith(`phase:${PHASE}`, { expire: 0 });
+  expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({ action: 'phase.delete', resource_type: 'phase', resource_id: PHASE }));
+});
+
+it('returns a rebuild warning without reporting a committed native delete as failed', async () => {
+  h.remove.mockResolvedValue({ name: ROW.name, playerIds: [] });
+  h.rebuild.mockRejectedValue(new Error('rebuild failed'));
+  const response = await DELETE(req('DELETE', { confirm: true }), args);
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ data: { rebuild_warning: { code: 'derived_data_rebuild_failed' } } });
 });
 
 it('refuses all lifecycle writes while the storage generation is frozen', async () => {

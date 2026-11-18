@@ -12,7 +12,8 @@ import { logAuditEvent, diffField } from '@/lib/audit/log';
 import { legacyPhasePersistence, nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { updateAdminPhase } from '@/lib/league-phase/admin-transition';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
-import { getPhaseWithDetails } from '@/lib/supabase/queries/league-phases';
+import { deleteAdminPhase, getPhaseWithDetails } from '@/lib/supabase/queries/league-phases';
+import { createMixedEntityDeleteRebuilder } from '@/lib/league-phase/entity-rebuild';
 import { listRoundStatusesByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
 import { newEvenBestOfIssues } from '@/lib/tournament/best-of';
 import { buildLeaguePhase, assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
@@ -20,7 +21,7 @@ import {
   rebuildAfterTournamentDelete,
   type EntityDeleteRebuildSummary,
 } from '@/lib/reconcile/entity-delete-rebuild';
-import { expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
+import { expirePhaseReads, expireRatingReads, expireTournamentReads } from '@/lib/revalidation';
 import { readJsonBody } from '@/lib/api/json-body';
 import {
   toDeleteRebuildWarning,
@@ -199,29 +200,19 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
 export async function DELETE(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
     const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
 
-    if ((await requireOpenPhaseRouteMode()) === 'phase') {
-      const phase = await getPhaseWithDetails(phaseId, id);
-      if (!phase || phase.season_id !== id.toLowerCase()) {
-        return NextResponse.json<ApiResult<never>>(
-          { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
-          { status: 404 }
-        );
-      }
-      await assertFormatPhaseDeletable(phase.season_id, phase.id, phase.format_stage_key !== null);
-      throw new UserFacingError('Deleting a native league phase is not available yet.', {
-        code: 'phase_delete_unavailable', status: 503,
-      });
-    }
-
-    const tournament = await getTournamentById(phaseId);
-    if (!tournament || tournament.season_id !== id.toLowerCase()) {
+    const native = (await requireOpenPhaseRouteMode()) === 'phase';
+    const seasonId = native ? id.toLowerCase() : id;
+    const phaseId = native ? requestedPhaseId.toLowerCase() : requestedPhaseId;
+    const nativePhase = native ? await getPhaseWithDetails(phaseId, seasonId) : null;
+    const target = native ? nativePhase : await getTournamentById(phaseId);
+    if (!target || target.season_id !== seasonId.toLowerCase()) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
         { status: 404 }
@@ -229,10 +220,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     }
 
     // The phase of an attached format is removed by replacing or detaching the format, never one by one (409 format_phase_owned).
-    await assertFormatPhaseDeletable(id, phaseId);
+    if (nativePhase) await assertFormatPhaseDeletable(seasonId, phaseId, nativePhase.format_stage_key !== null);
+    else await assertFormatPhaseDeletable(seasonId, phaseId);
 
-    const rounds = await getRoundsByTournament(phaseId);
-    if (rounds.length > 0) {
+    let confirmed = false;
+    if (native || (await getRoundsByTournament(phaseId)).length > 0) {
       // An empty body is "no confirmation"; a malformed one is 400 invalid_json.
       const text = await request.text();
       let rawBody: unknown = {};
@@ -241,8 +233,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         if (!body.ok) return body.response;
         rawBody = body.value;
       }
-      const parsed = phaseDeleteSchema.safeParse(rawBody);
-      if (!parsed.success) {
+      confirmed = phaseDeleteSchema.safeParse(rawBody).success;
+      if (!native && !confirmed) {
         throw new UserFacingError(
           'Deleting a phase with rounds requires confirm: true',
           { code: 'PHASE_DELETE_CONFIRM_REQUIRED', status: 400 }
@@ -250,23 +242,31 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       }
     }
 
-    const participants = await getParticipants(phaseId);
-    await deleteTournament(phaseId);
-    expireTournamentReads(phaseId, id);
+    let playerIds: string[];
+    let deletedName = target.name;
+    if (native) {
+      const deleted = await deleteAdminPhase(seasonId, phaseId, confirmed);
+      deletedName = deleted.name;
+      playerIds = deleted.playerIds;
+      expirePhaseReads(phaseId, seasonId);
+    } else {
+      playerIds = (await getParticipants(phaseId)).map(p => p.id);
+      await deleteTournament(phaseId);
+      expireTournamentReads(phaseId, seasonId);
+    }
 
     // The delete has committed: a rebuild failure is reported in the response
     // (`rebuild_warning`), not as a failed delete.
     let rebuild: EntityDeleteRebuildSummary | null = null;
     let rebuildWarning: DeleteRebuildWarning | null = null;
     try {
-      rebuild = await rebuildAfterTournamentDelete({
-        tournamentId: phaseId,
-        seasonId: id,
-        playerIds: participants.map((p) => p.id),
-      });
+      rebuild = native
+        ? await createMixedEntityDeleteRebuilder(async owner => expirePhaseReads(owner.phase_id, owner.season_id))
+          .rebuildAfterPhaseDelete({ phaseId, seasonId, playerIds })
+        : await rebuildAfterTournamentDelete({ tournamentId: phaseId, seasonId, playerIds });
     } catch (err) {
       logger.error('api/seasons', 'phase delete derived-data rebuild failed', {
-        seasonId: id,
+        seasonId,
         phaseId,
         error: err,
       });
@@ -275,16 +275,16 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       rebuildWarning = toDeleteRebuildWarning(err);
     }
     // The rebuild rewrote ratings and streaks after the expiry above, so the rating reads of the players expire again now.
-    expireRatingReads(participants.map((p) => p.id));
+    expireRatingReads(playerIds);
 
     logAuditEvent({
       action: 'phase.delete',
       actor_id: admin.playerId,
       actor_name: admin.name,
-      resource_type: 'tournament',
+      resource_type: native ? 'phase' : 'tournament',
       resource_id: phaseId,
-      resource_name: tournament.name,
-      metadata: { season_id: id, rebuild, rebuild_error: rebuildWarning?.code ?? null },
+      resource_name: deletedName,
+      metadata: { season_id: seasonId, rebuild, rebuild_error: rebuildWarning?.code ?? null },
     });
 
     return NextResponse.json<ApiResult<EntityDeleteResult>>({
