@@ -1,11 +1,13 @@
 import 'server-only';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { isValidUuid } from '@/lib/utils/uuid';
 import { findLegacyPhaseAliasOwner, findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
 import { getPhaseRouteMode } from './route-mode';
 
 export async function resolveIdOnlyMatchRoute(matchId: string) {
   const mode = await getPhaseRouteMode();
   if (mode === 'legacy') return { kind: 'legacy' as const };
+  if (!isValidUuid(matchId)) return null;
 
   const target = { matchId };
   if (mode === 'phase') {

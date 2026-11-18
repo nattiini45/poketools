@@ -87,6 +87,7 @@ export async function renderNativeMatchDetail(seasonId: string, match: PublicPha
     contentLocale,
     epb,
     proposals,
+    nativeConfirmHref: isParticipant || (viewerId && access?.isSiteAdmin) ? `/dashboard/confirm/${match.id}` : undefined,
   });
 }
 

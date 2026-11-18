@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => ({
   player: null as unknown,
   match: null as unknown,
   clientProps: [] as Record<string, unknown>[],
+  nativeMatch: vi.fn(),
+  legacyMatch: vi.fn(),
+  selectOwner: vi.fn(),
 }));
 
 vi.mock('next/headers', () => ({
@@ -37,8 +40,10 @@ vi.mock('@/lib/auth/redirect-to-sign-in', () => ({
   requireLiveIdentityOrSignIn: vi.fn(async () => ({ player: mocks.player })),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({
-  getMatchById: vi.fn(async () => mocks.match),
+  getMatchById: mocks.legacyMatch,
 }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: mocks.nativeMatch }));
+vi.mock('@/lib/league-phase/match-route-owner', () => ({ resolveIdOnlyMatchRoute: mocks.selectOwner }));
 vi.mock('../ConfirmMatchClient', () => ({
   default: (props: Record<string, unknown>) => {
     mocks.clientProps.push(props);
@@ -72,6 +77,9 @@ async function render(viewer: { playerId: string; isAdmin: boolean }, status: st
 
 beforeEach(() => {
   mocks.clientProps = [];
+  mocks.selectOwner.mockReset().mockResolvedValue({ kind: 'legacy' });
+  mocks.nativeMatch.mockReset();
+  mocks.legacyMatch.mockReset().mockImplementation(async () => mocks.match);
 });
 
 describe('confirm page: the actions it offers', () => {
@@ -103,5 +111,20 @@ describe('confirm page: the actions it offers', () => {
 
   it('a player outside the match is sent to the dashboard', async () => {
     await expect(render({ playerId: 'x', isAdmin: false }, 'pending_confirmation', 'p1')).rejects.toThrow('REDIRECT /dashboard');
+  });
+
+  it('shows a native pending result and returns the viewer to its canonical match page', async () => {
+    mocks.selectOwner.mockResolvedValue({ kind: 'phase', season_id: 'league-1', phase_id: 'phase-1' });
+    mocks.nativeMatch.mockResolvedValue({ ...match('pending_confirmation', 'p1'), phase_id: 'phase-1' });
+    await render({ playerId: 'p2', isAdmin: false }, 'pending_confirmation', 'p1');
+    expect(mocks.clientProps[0]).toMatchObject({ canConfirm: true, canDispute: true, redirectTo: '/leagues/league-1/phases/phase-1/matches/m1' });
+    expect(mocks.legacyMatch).not.toHaveBeenCalled();
+  });
+
+  it('does not load a legacy match after the selected native owner no longer matches', async () => {
+    mocks.selectOwner.mockResolvedValue({ kind: 'phase', season_id: 'league-1', phase_id: 'phase-1' });
+    mocks.nativeMatch.mockResolvedValue({ ...match('pending_confirmation', 'p1'), phase_id: 'phase-2' });
+    await expect(render({ playerId: 'p2', isAdmin: false }, 'pending_confirmation', 'p1')).rejects.toThrow('NOT_FOUND');
+    expect(mocks.legacyMatch).not.toHaveBeenCalled();
   });
 });
