@@ -9732,6 +9732,15 @@ export type Database = {
         Args: { p_fields: Json; p_insert_at?: number; p_season_id: string }
         Returns: Json
       }
+      phase_admin_replace_groups: {
+        Args: {
+          p_expected_seeds: Json
+          p_groups: Json
+          p_phase_id: string
+          p_season_id: string
+        }
+        Returns: undefined
+      }
       phase_aggregate_deltas: {
         Args: {
           p_aggregate_deltas: Json

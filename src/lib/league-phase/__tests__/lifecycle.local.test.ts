@@ -140,6 +140,39 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }
   });
 
+  it('replaces native groups atomically and keeps the old groups when the seed snapshot changes', async () => {
+    const ungrouped = randomUUID();
+    expect((await admin.from('seasons').insert({
+      id: ungrouped, name: 'Ungrouped fixture', format_type: 'singles', ruleset_id: rulesetId,
+    })).error).toBeNull();
+    let phaseId: string | undefined;
+    try {
+      const phase = await phases.createPhase({
+        season_id: ungrouped, name: 'Native group fixture', bracket_type: 'round_robin',
+        ruleset_id: rulesetId, best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match',
+      });
+      phaseId = phase.id;
+      await enroll(phaseId);
+      const snapshot = playerIds.slice(0, 4).map((player_id, i) => ({ player_id, seed: i + 1 }));
+      const plan = [
+        { name: 'Group A', members: [playerIds[0], playerIds[3]] },
+        { name: 'Group B', members: [playerIds[1], playerIds[2]] },
+      ];
+      await groups.replaceAdminPhaseGroups(ungrouped, phaseId, plan, snapshot);
+      const saved = await groups.getGroupsByPhase(phaseId);
+      expect(saved.map(({ name, members }) => ({ name, members: members.map(m => m.player_id) }))).toEqual(plan);
+      await phases.updatePhaseParticipantSeeds(phaseId, [{ player_id: playerIds[0], seed: 5 }]);
+      await expect(groups.replaceAdminPhaseGroups(ungrouped, phaseId, plan, snapshot))
+        .rejects.toMatchObject({ code: 'GROUP_SLOT_CHANGED', statusCode: 409 });
+      expect((await groups.getGroupsByPhase(phaseId)).map(group => group.id)).toEqual(saved.map(group => group.id));
+      await groups.replaceAdminPhaseGroups(ungrouped, phaseId, [], []);
+      expect(await groups.getGroupsByPhase(phaseId)).toEqual([]);
+    } finally {
+      if (phaseId) await phases.deleteAdminPhase(ungrouped, phaseId, false);
+      expect((await admin.from('seasons').delete().eq('id', ungrouped)).error).toBeNull();
+    }
+  });
+
   it('serializes enrollment CAS and changes seeds atomically without tournament rows', async () => {
     const phase = await create();
     const attempts = await Promise.all([0, 1].map((i) => phases.replacePhaseEnrollment(phase.id,
