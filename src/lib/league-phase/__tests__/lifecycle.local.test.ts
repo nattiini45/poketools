@@ -91,12 +91,12 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
           status: 'completed', winner_id: player, date_played: '2026-11-18T00:00:00Z', notes: 'private fixture note' },
         { id: queueMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: player, player_2_id: otherPlayer },
         { id: foreignMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: opponent, player_2_id: otherPlayer },
-      ])).error).toBeNull();
+      ], { defaultToNull: false })).error).toBeNull();
       expect((await admin.from('phase_teams').insert([
         { phase_id: phase.id, season_id: seasonId, player_id: player, match_id: queueMatch, name: 'Exact fixture team' },
         { phase_id: other.id, season_id: seasonId, player_id: player, name: 'Other phase fixture team' },
         { phase_id: phase.id, season_id: seasonId, player_id: opponent, name: 'Other player fixture team' },
-      ])).error).toBeNull();
+      ], { defaultToNull: false })).error).toBeNull();
       const legacyMatchIds = [];
       for (const [id, season_id] of [[standaloneId, null], [retiredId, seasonId]] as const) {
         const round_id = randomUUID();
