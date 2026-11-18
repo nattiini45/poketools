@@ -30,6 +30,10 @@ export interface AiRateLimitResult {
   limit: number;
 }
 
+export function getAiDailyLimit(endpoint: AiEndpoint): number {
+  return ENDPOINT_DAILY_LIMIT[endpoint] ?? AI_DAILY_LIMIT;
+}
+
 /**
  * Atomically check whether a player can use an AI endpoint
  * and record the usage if allowed.
@@ -41,7 +45,7 @@ export async function checkAndRecordAiGeneration(
   const { data, error } = await supabase.rpc('check_and_record_ai_generation', {
     p_player_id: playerId,
     p_endpoint: endpoint,
-    p_daily_limit: ENDPOINT_DAILY_LIMIT[endpoint] ?? AI_DAILY_LIMIT,
+    p_daily_limit: getAiDailyLimit(endpoint),
   });
 
   if (error) throw error;
