@@ -185,6 +185,57 @@ it('preserves both earlier Swiss byes and records unfinished pairings without sc
   expect(write.inputs.matches).toEqual(played);
 });
 
+it('continues a flat single-elimination bracket with the ordered winners and no league group mirror', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 1, bo_overrides: { Finals: 5 } });
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
+  m.participants.mockResolvedValue(players.slice(0, 4).map(player => ({ ...player, starting_bracket: 'winners' })));
+  m.leagueGroups.mockResolvedValue([{ id: 'league-group', name: 'Group A', sort_order: 1, player_ids: ['a', 'b'] }]);
+  const previous = [match(1, 'c', 'd'), match(1, 'a', 'b')];
+  m.matches.mockResolvedValue(previous);
+  expect((await run()).status).toBe(201);
+  expect(m.matches).toHaveBeenCalledExactlyOnceWith(phaseId, true);
+  expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    round_number: 2, name: 'Finals', best_of: 5, bye_player_ids: [],
+    replacement_groups: undefined, matches: [{ player_1_id: 'c', player_2_id: 'a' }],
+    inputs: expect.objectContaining({ matches: [...previous].reverse(), participants: expect.arrayContaining([
+      expect.objectContaining({ id: 'a', starting_bracket: 'winners' }),
+    ]) }),
+  }));
+  expect(m.start).not.toHaveBeenCalled();
+  expect(m.expire).toHaveBeenCalledExactlyOnceWith(phaseId, leagueId);
+});
+
+it('respects nominal losers-bracket starts in an existing flat double-elimination phase', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'double_elim', status: 'active', current_round: 1 });
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
+  m.participants.mockResolvedValue(players.slice(0, 3).map(player => ({
+    ...player, starting_bracket: player.id === 'c' ? 'losers' : 'winners',
+  })));
+  m.matches.mockResolvedValue([match(1, 'a', 'b')]);
+  expect((await run()).status).toBe(201);
+  expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    bye_player_ids: [], matches: [{ player_1_id: 'b', player_2_id: 'c' }],
+  }));
+});
+
+it('refuses a new, managed or unsettled flat elimination bracket without a write', async () => {
+  const elimination = { ...phase, bracket_type: 'single_elim' };
+  m.phase.mockResolvedValueOnce(elimination);
+  expect(await (await run()).json()).toMatchObject({ code: 'BRACKET_V2_REQUIRED' });
+  m.phase.mockResolvedValue({ ...elimination, status: 'active', current_round: 1 });
+  m.rounds.mockResolvedValueOnce([{ ...round(1), bracket_side: 'winners' }]);
+  expect(await (await run()).json()).toMatchObject({ code: 'BRACKET_V2_MANAGED' });
+  expect(m.matches).not.toHaveBeenCalled();
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
+  m.matches.mockResolvedValue([match(1, 'a', 'b', 'scheduled')]);
+  const unsettled = await run();
+  expect(unsettled.status).toBe(409);
+  expect(await unsettled.json()).toMatchObject({ code: 'rounds_previous_matches_unfinished', params: { round: 'Round 1', count: 1 } });
+  expect(m.write).not.toHaveBeenCalled();
+  expect(m.audit).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+});
+
 it('plans the league mirror in group and enrollment order and sends it with the fixtures in one write', async () => {
   m.phase.mockResolvedValue({ ...phase, bracket_type: 'round_robin' });
   m.participants.mockResolvedValue(players);

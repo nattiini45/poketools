@@ -5,7 +5,7 @@ import seasonErrors from '@/i18n/messages/errors/seasons/en';
 import { isUniqueViolationOf } from '../unique-violation';
 import type { Json, Tables } from '@/types/database';
 import type { RoundStatus } from '@/types/round';
-import type { Phase, PhaseRound, PhaseStatus } from '@/types/league-phase';
+import type { Phase, PhaseParticipant, PhaseRound, PhaseStatus } from '@/types/league-phase';
 import type { Season } from '@/types/season';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
 import { phaseMachine } from '@/lib/league-phase/phase-state';
@@ -236,7 +236,7 @@ interface GeneratedPhaseScope {
   inputs: {
     phase: Pick<Phase, 'status' | 'current_round' | 'bracket_type' | 'stage_spec' | 'name' | 'bo_overrides' | 'best_of_default'>;
     season: Pick<Season, 'start_date' | 'format_type'>;
-    participants: { id: string; name: string; seed: number | null }[];
+    participants: { id: string; name: string; seed: number | null; starting_bracket?: PhaseParticipant['starting_bracket'] }[];
     rounds: Pick<PhaseRound, 'id' | 'round_number' | 'status' | 'bye_player_ids' | 'pairings_generated' | 'bracket_side'>[];
     matches: Pick<Tables<'phase_matches'>, 'id' | 'round_id' | 'status' | 'winner_id' | 'player_1_id' | 'player_2_id'>[];
     groups: (PhaseRoundGroupLayout & { id: string })[];
@@ -295,6 +295,16 @@ export async function writeGeneratedPhaseRoundBatch(input: GeneratedPhaseScope, 
 }
 
 function mapGeneratedRoundError(error: { code?: string; message?: string }, name: string, tag: string): unknown {
+  if (isRoundWriteSignal(error, 'BRACKET_V2_MANAGED')) {
+    return Object.assign(new UserFacingError('This tournament bracket is managed by the bracket engine. Use Generate Bracket or Regenerate Bracket instead.', {
+      code: 'BRACKET_V2_MANAGED',
+    }), { cause: error });
+  }
+  if (isRoundWriteSignal(error, 'phase_bracket_archived')) {
+    return Object.assign(new UserFacingError(tournamentErrors.phase_bracket_archived, {
+      code: 'phase_bracket_archived', status: 409,
+    }), { cause: error });
+  }
   if (error.code === '55P03') {
     return Object.assign(new UserFacingError('Another operation is changing this phase. No round was written. Try again.', {
       code: 'round_status_changed', status: 409,

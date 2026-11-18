@@ -79,9 +79,9 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const names = Object.fromEntries(participants.map(({ id, name }) => [id, name]));
   const isElimination = phase.bracket_type === 'single_elim' || phase.bracket_type === 'double_elim';
   const hasStructure = rounds.some(round => round.bracket_side !== null);
-  const swissBlocked = phase.bracket_type === 'swiss' && current !== undefined && current.status !== 'completed';
+  const previousRoundBlocked = phase.bracket_type !== 'round_robin' && current !== undefined && current.status !== 'completed';
   const groupedManualBlocked = phase.bracket_type === 'round_robin' && leagueHasGroups;
-  const canGenerateNext = !isElimination && !hasStructure;
+  const canGenerateNext = !hasStructure && (!isElimination || (phase.current_round > 0 && current !== undefined));
   const canGenerateAll = canGenerateNext && phase.bracket_type === 'round_robin';
   const canGenerateBracket = isElimination && rounds.length === 0;
   const canRepairBracket = isElimination && hasStructure;
@@ -236,7 +236,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
               </AlertDialog>
             )}
             {canGenerateNext && (
-              <Button type="button" size="sm" disabled={busy || manualOpen || participants.length < 2 || swissBlocked} loading={writing === 'rounds.errors.generateRound'}
+              <Button type="button" size="sm" disabled={busy || manualOpen || participants.length < 2 || previousRoundBlocked} loading={writing === 'rounds.errors.generateRound'}
                 onClick={() => void write(requests.generate, 'rounds.errors.generateRound')}>
                 {t('rounds.generateNext')}
               </Button>
@@ -249,7 +249,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
               </ActionButton>
             )}
             {canCreateManual && (
-              <Button type="button" ref={manualTrigger} variant="secondary" size="sm" disabled={busy || manualOpen || participants.length < 2 || swissBlocked}
+              <Button type="button" ref={manualTrigger} variant="secondary" size="sm" disabled={busy || manualOpen || participants.length < 2 || previousRoundBlocked}
                 onClick={() => { setDeadline(null); setManualOpen(true); }}>
                 {t('rounds.createManual')}
               </Button>
@@ -258,7 +258,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
           {participants.length < 2 && (
             <p className="text-caption text-fg-muted">{errorText({ code: 'tournament_participants_too_few' })}</p>
           )}
-          {swissBlocked && (
+          {canGenerateNext && previousRoundBlocked && (
             <p className="text-caption text-fg-muted">
               {errorText({ code: 'tournament_current_round_incomplete', params: { round: translateEngineLabel('round', current.name, locale) } })}
             </p>

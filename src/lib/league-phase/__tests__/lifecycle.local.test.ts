@@ -193,6 +193,59 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect((await phases.getPhaseById(live.id))?.status).toBe('active');
   });
 
+  it('continues a flat elimination only from settled native history and matching seeds', async () => {
+    const phase = await create('single_elim');
+    await enroll(phase.id);
+    const previous = await rounds.createPhaseRoundWithMatches({
+      phase_id: phase.id, name: 'Semifinals', round_number: 1, best_of: 3,
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] },
+        { player_1_id: playerIds[2], player_2_id: playerIds[3] }],
+    });
+    expect(await rounds.completePhaseRound(previous.id, { force: true })).toMatchObject({ outcome: 'completed' });
+    const { getSeasonGroups } = await import('@/lib/supabase/queries/season-groups');
+    const { getNativeKitMatchFacts } = await import('@/lib/supabase/queries/phase-format-runtime');
+    const [live, roster, leagueGroups, history] = await Promise.all([
+      phases.getPhaseById(phase.id), phases.getPhaseParticipants(phase.id), getSeasonGroups(seasonId), rounds.getRoundsByPhase(phase.id),
+    ]);
+    if (!live) throw new Error('Flat elimination fixture missing');
+    const input: Parameters<typeof rounds.writeGeneratedPhaseRound>[0] = {
+      phase_id: live.id, season_id: seasonId, phase_status: live.status, expected_updated_at: live.updated_at,
+      round_id: null, name: 'Finals', round_number: 2, best_of: 5, bye_player_ids: [], deadline: null,
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[2] }],
+      inputs: {
+        phase: {
+          status: live.status, current_round: live.current_round, bracket_type: live.bracket_type,
+          stage_spec: live.stage_spec, name: live.name, bo_overrides: live.bo_overrides, best_of_default: live.best_of_default,
+        },
+        season: { start_date: null, format_type: 'singles' },
+        rounds: history.map(({ id, round_number, status, bye_player_ids, pairings_generated, bracket_side }) =>
+          ({ id, round_number, status, bye_player_ids, pairings_generated, bracket_side })),
+        matches: await getNativeKitMatchFacts(live.id),
+        participants: roster.map(({ id, name, seed, starting_bracket }) => ({ id, name, seed, starting_bracket }))
+          .sort((a, b) => a.id.localeCompare(b.id)),
+        groups: [],
+        league_groups: leagueGroups.map(({ id, name, sort_order, player_ids }) => ({ id, name, sort_order, player_ids: [...player_ids].sort() })),
+      },
+    };
+    const assertRefused = (plan = input) => expect(rounds.writeGeneratedPhaseRound(plan))
+      .rejects.toMatchObject({ code: 'round_status_changed', statusCode: 409 });
+    await assertRefused();
+    for (const match of input.inputs.matches) {
+      expect((await admin.from('phase_matches').update({ status: 'completed', winner_id: match.player_1_id })
+        .eq('id', match.id)).error).toBeNull();
+    }
+    await assertRefused();
+    input.inputs.matches = await getNativeKitMatchFacts(live.id);
+    await assertRefused({ ...input, inputs: { ...input.inputs, participants: input.inputs.participants
+      .map((participant, index) => index === 0 ? { ...participant, starting_bracket: 'losers' } : participant) } });
+    expect((await rounds.getRoundsByPhase(phase.id)).map(round => round.id)).toEqual([previous.id]);
+    const final = await rounds.writeGeneratedPhaseRound(input);
+    expect(final).toMatchObject({ round_number: 2, name: 'Finals', best_of: 5, status: 'pending', bracket_side: null, bye_player_ids: [] });
+    expect((await getNativeKitMatchFacts(live.id)).filter(match => match.round_id === final.id))
+      .toEqual([expect.objectContaining({ status: 'scheduled', ...input.matches[0] })]);
+    expect((await phases.getPhaseById(live.id))?.current_round).toBe(2);
+  });
+
   it('rolls the entire batch back if its second write fails and commits only one concurrent batch', async () => {
     const { input, live, leagueGroups } = await firstGeneratedRoundPlan();
     const second = {
