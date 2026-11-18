@@ -16,11 +16,13 @@ export default defineDe<typeof en>()({
   PHASE_STAGE_ORDER_LOCKED: 'Die Reihenfolge lässt sich nach dem Start der Phase nicht mehr ändern.',
   PHASE_BRACKET_LOCKED: 'Der Turniermodus lässt sich nach dem Start der Phase nicht mehr ändern.',
   PHASE_PARTICIPANTS_LOCKED: 'Bei einer abgeschlossenen Phase lassen sich die Teilnehmer nicht mehr ändern.',
+  PHASE_ELIMINATION_ROSTER_LOCKED: 'Die K.-o.-Runden stehen schon fest. Setze einen Ersatzspieler ein, wenn du jemanden austauschen willst.',
   PHASE_ROSTER_REQUIRED: 'Alle Teilnehmer müssen im Kader der Liga stehen.',
   PHASE_GROUP_INVALID: 'Ungültige Gruppe für diese Phase.',
   PHASE_GROUP_REPAIR_UNAVAILABLE: 'Für native Phasen ist keine Gruppenreparatur verfügbar.',
   PHASE_GROUP_MEMBER_NOT_FOUND: 'Der Spieler ist nicht in der Ausgangsgruppe.',
   PHASE_GROUPS_INSUFFICIENT_SEEDS: 'Es braucht mindestens so viele gesetzte Teilnehmer wie Gruppen.',
+  PHASE_GROUPS_ROUNDS_EXIST: 'Sobald die Phase Runden hat, kannst du Gruppen weder neu auslosen noch leeren oder Spieler verschieben. Setze bei Bedarf einen Ersatzspieler ein.',
   PHASE_GROUPS_LEAGUE_MANAGED:
     'Diese Liga hat Gruppen, ihre Phasen folgen ihnen. Ändere die Gruppen im Tab „Teilnehmer“ der Liga.',
   PHASE_PLAYER_WITHOUT_LEAGUE_GROUP: {

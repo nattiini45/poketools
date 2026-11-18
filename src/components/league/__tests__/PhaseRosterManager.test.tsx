@@ -16,9 +16,10 @@ const river: AdminTournamentParticipant = {
   id: 'river', name: 'River', avatar_url: null, seed: null, starting_bracket: 'winners', is_guest: false,
 };
 const url = '/api/seasons/league/phases/phase/participants';
-const mount = (editable = true) => render(withI18n(
+const mount = (editable = true, rosterSeatsLocked = false) => render(withI18n(
   <PhaseRosterManager
     seasonId="league" phaseId="phase" bracketType="double_elim" editable={editable} startedFormatPhase={false}
+    rosterSeatsLocked={rosterSeatsLocked}
     initialParticipants={[alice]} candidates={[alice, river]} ratings={{}} initialEnrollment={null} sourcePhaseName={null}
   />,
 ));
@@ -75,4 +76,13 @@ it('does not offer enrollment or enable seeds on a read-only phase', () => {
   expect(screen.queryByRole('combobox')).toBeNull();
   expect(screen.getByText('This phase’s roster and seeds are read-only.')).toBeTruthy();
   expect((screen.getByRole('button', { name: 'Seed by rating' }) as HTMLButtonElement).disabled).toBe(true);
+});
+
+it('explains the elimination seat lock and leaves same-roster re-import available', () => {
+  mount(true, true);
+  expect(screen.queryByRole('combobox')).toBeNull();
+  expect(screen.getByText('The elimination rounds are already set. To change who plays, use a substitution.')).toBeTruthy();
+  expect(screen.getByText('Re-importing standings can update seeds, but cannot add or remove players.')).toBeTruthy();
+  expect((screen.getByRole('button', { name: 'Remove' }) as HTMLButtonElement).disabled).toBe(true);
+  expect((screen.getByRole('button', { name: 'Re-import from table' }) as HTMLButtonElement).disabled).toBe(false);
 });

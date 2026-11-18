@@ -36,7 +36,7 @@ export type SeedingTableProps<P extends AdminTournamentParticipant = AdminTourna
   seasonId: string | null;
   phase?: never;
 } | {
-  phase: { seasonId: string; phaseId: string };
+  phase: { seasonId: string; phaseId: string; rosterSeatsLocked: boolean };
   tournamentId?: never;
   seasonId?: never;
 }) & {
@@ -451,6 +451,10 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         <p className="text-caption text-fg-muted">{t('seeding.startedFormatPhase')}</p>
       )}
 
+      {editable && phase?.rosterSeatsLocked && (
+        <p className="text-caption text-fg-muted">{t('seeding.sameRosterImport')}</p>
+      )}
+
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <h3 className="text-subtitle font-[550] text-fg">
           {t('seeding.heading', { count: orderedParticipants.length })}
@@ -581,7 +585,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
                 <button
                   type="button"
                   onClick={() => onRemovePlayer(p.id)}
-                  disabled={!editable}
+                  disabled={!editable || phase?.rosterSeatsLocked}
                   className="inline-flex min-h-11 items-center rounded-poke-sm px-1 text-caption font-[550] text-loss hover:underline disabled:opacity-50 disabled:no-underline sm:min-h-0 focus-visible:outline-2 focus-visible:outline-solid focus-visible:outline-offset-2 focus-visible:outline-[var(--focus-ring)]"
                 >
                   {t('seeding.remove')}

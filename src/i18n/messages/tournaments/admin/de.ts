@@ -299,6 +299,7 @@ export default defineDe<typeof en>()({
     seedByRatingFailed: 'Das Setzen nach Rating ist fehlgeschlagen.',
     locked: 'Nach dem Erstellen des Turnierbaums ist die Setzliste gesperrt.',
     phaseLocked: 'Kader und Setzliste dieser Phase sind schreibgeschützt.',
+    sameRosterImport: 'Beim erneuten Import kannst du die Setzliste aktualisieren, aber keine Spieler hinzufügen oder entfernen.',
     removeFailed: 'Der Spieler konnte nicht aus dieser Phase entfernt werden.',
     heading: 'Teilnehmer ({count})',
     reimport: 'Aus der Tabelle neu importieren',

@@ -240,6 +240,8 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
   ]);
   const summary = buildLeaguePhase(phase, rounds);
   const { participants, ratings } = roster;
+  const hasRounds = rounds.length > 0;
+  const rosterSeatsLocked = hasRounds && (phase.bracket_type === 'single_elim' || phase.bracket_type === 'double_elim');
   const hasDependentPhase = stages.some(stage => stage.id !== phaseId && (
     stage.enrollment_source?.source_phase_id === phaseId
       || stage.enrollment_source?.contributions?.some(source => source.source_phase_id === phaseId)
@@ -279,6 +281,7 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
             bracketType={phase.bracket_type}
             editable={rosterEditable}
             startedFormatPhase={startedFormatPhase}
+            rosterSeatsLocked={rosterSeatsLocked}
             initialParticipants={participants}
             initialEnrollment={phase.enrollment_source}
             sourcePhaseName={stages.find(stage => stage.id === phase.enrollment_source?.source_phase_id)?.name ?? null}
@@ -287,7 +290,7 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
           />
         </Section>
         <Section id="tournament-groups" title={t('phasePage.groups')}>
-          <PhaseGroupsPanel seasonId={seasonId} phaseId={phaseId} leagueManaged={leagueHasGroups} native={{ groups, archived: phase.archived }} />
+          <PhaseGroupsPanel seasonId={seasonId} phaseId={phaseId} leagueManaged={leagueHasGroups} native={{ groups, archived: phase.archived, hasRounds }} />
         </Section>
         <Section id="tournament-rounds" title={t('phasePage.rounds')}>
           <PhaseRoundManager

@@ -63,7 +63,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const { mode, phase, phaseId, seasonId, persistence, assertRosterOpen, assertRosterSeatsMutable } = await loadPhaseRosterScope(id, requestedPhaseId);
+    const { mode, phase, phaseId, seasonId, persistence, assertRosterOpen } = await loadPhaseRosterScope(id, requestedPhaseId);
     assertPhaseEditable(phase, 'participants');
     const expire = () => mode === 'phase'
       ? expirePhaseReads(phaseId, seasonId)
@@ -75,7 +75,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const override = await assertRosterOpen(rawBody);
     const bulkParsed = phaseParticipantBulkSchema.safeParse(rawBody);
     if (bulkParsed.success) {
-      await assertRosterSeatsMutable();
       const roster = await getSeasonParticipants(seasonId);
       const playerIds = bulkParsed.data.enroll_all_roster
         ? roster.map((p) => p.id)
@@ -117,7 +116,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     await assertSeasonRosterMembers(seasonId, [singleParsed.data.player_id]);
-    await assertRosterSeatsMutable();
     await persistence.addParticipant(phaseId, singleParsed.data.player_id);
     expire();
     if (override) auditRosterOverride(admin, seasonId, phase, override, 'add', { player_id: singleParsed.data.player_id });
@@ -138,7 +136,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const { mode, phase, phaseId, seasonId, persistence, assertRosterOpen, assertRosterSeatsMutable } = await loadPhaseRosterScope(id, requestedPhaseId);
+    const { mode, phase, phaseId, seasonId, persistence, assertRosterOpen } = await loadPhaseRosterScope(id, requestedPhaseId);
     assertPhaseEditable(phase, 'participants');
 
     const rawBody = await request.json();
@@ -153,7 +151,6 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await assertRosterSeatsMutable();
     await persistence.removeParticipant(phaseId, parsed.data.player_id);
     if (mode === 'phase') expirePhaseReads(phaseId, seasonId);
     else expireTournamentReads(phaseId, seasonId);

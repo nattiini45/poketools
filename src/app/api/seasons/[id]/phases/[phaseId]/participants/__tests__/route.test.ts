@@ -41,20 +41,19 @@ vi.mock('@/lib/supabase/queries/league-phases', () => ({
 }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({ getKitPhases: vi.fn() }));
 vi.mock('@/lib/supabase/queries/ratings', () => ({ getPlayerRatingsBatch: vi.fn() }));
-vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getRoundsByPhase: vi.fn() }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 
 import { DELETE, GET, PATCH, POST } from '../route';
 import { POST as seedByRating } from '../seed-by-rating/route';
 import { revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { addParticipant, getParticipants, getTournamentById, removeParticipant, updateParticipantSeeds } from '@/lib/supabase/queries/tournaments';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import { addPhaseParticipant, getPhaseById, getPhaseParticipants, removePhaseParticipant, updatePhaseParticipantSeeds } from '@/lib/supabase/queries/league-phases';
 import { getKitPhases } from '@/lib/supabase/queries/format-engine';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
-import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
 import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { expectNoPrivatePlayerData, fullPlayerRow } from '@/lib/players/__tests__/private-player-fields';
@@ -102,11 +101,15 @@ it('keeps the seat count of a generated native elimination bracket fixed', async
   vi.mocked(getPhaseById).mockResolvedValue({
     id: PHASE, season_id: SEASON, status: 'active', bracket_type: 'double_elim', format_stage_key: 'finals',
   } as never);
-  vi.mocked(getRoundsByPhase).mockResolvedValue([{ id: 'round' }] as never);
+  vi.mocked(addPhaseParticipant).mockRejectedValueOnce(new UserFacingError('Use a substitution.', {
+    code: 'PHASE_ELIMINATION_ROSTER_LOCKED', status: 409,
+  }));
   const result = await POST(req({ player_id: PLAYER, force: true, reason: 'Late entrant' }), routeArgs);
-  expect(await result.json()).toMatchObject({ code: 'BRACKET_LOCKED_USE_SUBSTITUTE' });
-  expect(getRoundsByPhase).toHaveBeenCalledExactlyOnceWith(PHASE);
-  expect(addPhaseParticipant).not.toHaveBeenCalled();
+  expect(result.status).toBe(409);
+  expect(await result.json()).toMatchObject({ code: 'PHASE_ELIMINATION_ROSTER_LOCKED' });
+  expect(addPhaseParticipant).toHaveBeenCalledExactlyOnceWith(PHASE, PLAYER);
+  expect(logAuditEvent).not.toHaveBeenCalled();
+  expect(revalidateTag).not.toHaveBeenCalled();
 });
 
 describe('GET /api/seasons/[id]/phases/[phaseId]/participants', () => {

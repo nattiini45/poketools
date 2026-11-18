@@ -6,6 +6,7 @@ import { phaseRoundMachine } from '../phase-round-state';
 
 const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261117110000_phase_lifecycle.sql'), 'utf8');
 const rosterSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118090000_phase_roster_group_integrity.sql'), 'utf8');
+const adminLocksSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118115000_phase_admin_roster_group_locks.sql'), 'utf8');
 const orderSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118100000_phase_admin_insert.sql'), 'utf8');
 const deleteSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118101000_phase_admin_delete.sql'), 'utf8');
 const definitions = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(([\s\S]*?)END \$\$;|CREATE OR REPLACE FUNCTION public\.(season_group__league_scheduled)\(([\s\S]*?)\$\$;/g)];
@@ -58,6 +59,23 @@ describe('native lifecycle SQL', () => {
     expect(edit.indexOf('public.phase__lock')).toBeLessThan(edit.indexOf('PHASE_GROUP_ROSTER_SCHEDULED'));
     expect(edit.indexOf('PHASE_GROUP_ROSTER_SCHEDULED')).toBeLessThan(edit.indexOf('public.phase_enrollment_freeze'));
     expect(rosterSql).not.toMatch(/ALTER TABLE|phase_storage_transition|DISABLE TRIGGER|SECURITY DEFINER/i);
+  });
+
+  it('checks roster and group locks inside the native writers, before changing rows', () => {
+    for (const [name, lock, refusal, write] of [
+      ['phase_participants_replace', 'public.phase__lock', 'PHASE_ELIMINATION_ROSTER_LOCKED', 'DELETE FROM public.phase_participants'],
+      ['phase_participant_edit', 'public.phase__lock', 'PHASE_ELIMINATION_ROSTER_LOCKED', 'public.phase_enrollment_freeze'],
+      ['phase_admin_replace_groups', 'FOR NO KEY UPDATE', 'PHASE_GROUPS_ROUNDS_EXIST', 'DELETE FROM public.phase_groups'],
+      ['phase_group_member_move', 'public.phase__lock', 'PHASE_GROUPS_ROUNDS_EXIST', 'UPDATE public.phase_group_members'],
+    ]) {
+      const start = adminLocksSql.indexOf(`FUNCTION public.${name}(`);
+      const fn = adminLocksSql.slice(start, adminLocksSql.indexOf('$$;', start) + 3);
+      expect(fn).toContain(lock);
+      expect(fn).toContain(refusal);
+      expect(fn.indexOf(lock)).toBeLessThan(fn.indexOf(refusal));
+      expect(fn.indexOf(refusal)).toBeLessThan(fn.indexOf(write));
+    }
+    expect(adminLocksSql).not.toMatch(/ALTER TABLE|phase_storage_transition|DISABLE TRIGGER|SECURITY DEFINER/i);
   });
 
   it('is additive and leaves native activation to the operator fence', () => {

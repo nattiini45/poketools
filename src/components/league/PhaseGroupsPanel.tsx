@@ -31,7 +31,7 @@ interface PhaseGroupsPanelProps {
    * league groups editor and explains the placement-week pause of "Generate All Rounds".
    */
   leagueManaged?: boolean;
-  native?: { groups: PhaseGroupWithMembers[]; archived: boolean };
+  native?: { groups: PhaseGroupWithMembers[]; archived: boolean; hasRounds: boolean };
 }
 
 /** Selects and buttons reach 44px on phones (touch targets), the compact size from `sm` up. */
@@ -80,7 +80,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
   const errorText = useApiErrorText(errorsSeasons, errorsTournaments);
   const [legacyGroups, setGroups] = useState<TournamentGroupWithMembers[] | PhaseGroupWithMembers[]>([]);
   const groups = native?.groups ?? legacyGroups;
-  const editable = !leagueManaged && !native?.archived;
+  const editable = !leagueManaged && !native?.archived && !native?.hasRounds;
   const nativeMode = native !== undefined;
   const [groupCount, setGroupCount] = useState(2);
   const [loading, setLoading] = useState(!nativeMode);
@@ -226,6 +226,8 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
           <Alert variant="info" className={INFO_CALLOUT}>{t.rich('groups.leagueManaged', { link: participantsLink })}</Alert>
           <p className="text-caption text-fg-muted">{t('groups.placementPause')}</p>
         </>
+      ) : native?.hasRounds ? (
+        <Alert variant="info" className={INFO_CALLOUT}>{errorText({ code: 'PHASE_GROUPS_ROUNDS_EXIST' })}</Alert>
       ) : editable ? (
       <div className="flex flex-wrap items-end gap-3">
         <GroupCountSelect value={groupCount} onChange={setGroupCount} />
@@ -247,7 +249,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
       ) : null}
 
       <ConfirmDialog
-        open={redrawCount !== null}
+        open={editable && redrawCount !== null}
         onClose={() => setRedrawCount(null)}
         onConfirm={() => void confirmAssign()}
         title={t('groups.redrawTitle')}

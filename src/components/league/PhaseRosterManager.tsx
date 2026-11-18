@@ -22,6 +22,7 @@ interface PhaseRosterManagerProps {
   bracketType: BracketType;
   editable: boolean;
   startedFormatPhase: boolean;
+  rosterSeatsLocked: boolean;
   initialParticipants: AdminTournamentParticipant[];
   initialEnrollment: EnrollmentSource | null;
   sourcePhaseName: string | null;
@@ -30,7 +31,7 @@ interface PhaseRosterManagerProps {
 }
 
 export default function PhaseRosterManager({
-  seasonId, phaseId, bracketType, editable, startedFormatPhase,
+  seasonId, phaseId, bracketType, editable, startedFormatPhase, rosterSeatsLocked,
   initialParticipants, initialEnrollment, sourcePhaseName, candidates, ratings,
 }: PhaseRosterManagerProps) {
   const router = useRouter();
@@ -51,7 +52,7 @@ export default function PhaseRosterManager({
   }
 
   async function editRoster(method: 'POST' | 'DELETE', playerId: string, reason?: string) {
-    if (!editable || pending) return;
+    if (!editable || rosterSeatsLocked || pending) return;
     setPending(true);
     setError(null);
     let committed = false;
@@ -90,8 +91,9 @@ export default function PhaseRosterManager({
     <div className="space-y-4" aria-busy={pending}>
       {dialog}
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
+      {rosterSeatsLocked && <Alert variant="info">{errorText({ code: 'PHASE_ELIMINATION_ROSTER_LOCKED' })}</Alert>}
       <SeedingTable
-        phase={{ seasonId, phaseId }}
+        phase={{ seasonId, phaseId, rosterSeatsLocked }}
         participants={participants}
         enrollmentSource={enrollment}
         sourcePhaseName={sourcePhaseName}
@@ -105,7 +107,7 @@ export default function PhaseRosterManager({
         editable={editable}
         startedFormatPhase={startedFormatPhase}
       />
-      {editable && options.length > 0 && (
+      {editable && !rosterSeatsLocked && options.length > 0 && (
         <Combobox
           mode="static"
           label={t('seeding.addPlayer')}

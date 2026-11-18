@@ -27,11 +27,13 @@ export default {
   PHASE_STAGE_ORDER_LOCKED: 'Stage order cannot be changed once the phase has started',
   PHASE_BRACKET_LOCKED: 'Bracket type cannot be changed once the phase has started',
   PHASE_PARTICIPANTS_LOCKED: 'Participants cannot be changed on a completed phase',
+  PHASE_ELIMINATION_ROSTER_LOCKED: 'The elimination rounds are already set. To change who plays, use a substitution.',
   PHASE_ROSTER_REQUIRED: 'All enrollees must be league roster members',
   PHASE_GROUP_INVALID: 'Invalid group for this phase',
   PHASE_GROUP_REPAIR_UNAVAILABLE: 'Group repair is not available for native phases',
   PHASE_GROUP_MEMBER_NOT_FOUND: 'Player is not in the source group',
   PHASE_GROUPS_INSUFFICIENT_SEEDS: 'Need at least as many seeded participants as groups',
+  PHASE_GROUPS_ROUNDS_EXIST: 'You can’t redraw, clear, or move groups once the phase has rounds. Use a substitution to replace a player.',
   // League groups: a grouped league's phases mirror its groups (league groups editor, Participants tab)
   PHASE_GROUPS_LEAGUE_MANAGED:
     "This league has groups, so its phases follow them. Change the groups in the league's Participants tab.",

@@ -448,7 +448,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }
   });
 
-  it('replaces native groups atomically and keeps the old groups when the seed snapshot changes', async () => {
+  it('replaces native groups atomically and freezes them once the first round exists', async () => {
     const ungrouped = randomUUID();
     expect((await admin.from('seasons').insert({
       id: ungrouped, name: 'Ungrouped fixture', format_type: 'singles', ruleset_id: rulesetId,
@@ -475,10 +475,48 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       expect((await groups.getGroupsByPhase(phaseId)).map(group => group.id)).toEqual(saved.map(group => group.id));
       await groups.replaceAdminPhaseGroups(ungrouped, phaseId, [], []);
       expect(await groups.getGroupsByPhase(phaseId)).toEqual([]);
+      const current = snapshot.map(row => row.player_id === playerIds[0] ? { ...row, seed: 5 } : row);
+      await groups.replaceAdminPhaseGroups(ungrouped, phaseId, plan, current);
+      const before = await groups.getGroupsByPhase(phaseId);
+      await rounds.createPhaseRound({ phase_id: phaseId, name: 'Round 1', round_number: 1, best_of: 3 });
+      await expect(groups.replaceAdminPhaseGroups(ungrouped, phaseId, plan, current))
+        .rejects.toMatchObject({ code: 'PHASE_GROUPS_ROUNDS_EXIST', statusCode: 409 });
+      await expect(groups.replaceAdminPhaseGroups(ungrouped, phaseId, [], []))
+        .rejects.toMatchObject({ code: 'PHASE_GROUPS_ROUNDS_EXIST', statusCode: 409 });
+      await expect(groups.movePhaseGroupMember(phaseId, before[0].id, before[1].id, playerIds[0], 3))
+        .rejects.toMatchObject({ code: 'PHASE_GROUPS_ROUNDS_EXIST', statusCode: 409 });
+      expect(await groups.getGroupsByPhase(phaseId)).toEqual(before);
     } finally {
-      if (phaseId) await phases.deleteAdminPhase(ungrouped, phaseId, false);
+      if (phaseId) await phases.deleteAdminPhase(ungrouped, phaseId, true);
       expect((await admin.from('seasons').delete().eq('id', ungrouped)).error).toBeNull();
     }
+  });
+
+  it('refuses changes to generated elimination seats, keeps same-roster sync and allows substitution', async () => {
+    const phase = await create('single_elim');
+    await enroll(phase.id);
+    const [{ generateEliminationBracket }, { createNativeBracketPersistence }] = await Promise.all([
+      import('@/lib/tournament/bracket-generate'), import('../bracket-persistence'),
+    ]);
+    const current = (await phases.getPhaseById(phase.id))!;
+    const roster = await phases.getPhaseParticipants(phase.id);
+    await generateEliminationBracket(current, roster, {}, createNativeBracketPersistence(undefined, {
+      updatedAt: current.updated_at,
+      seeds: roster.map(({ id: player_id, seed, starting_bracket }) => ({ player_id, seed, starting_bracket })),
+    }));
+    const before = (await phases.getPhaseById(phase.id))!.enrollment_source!;
+    const source = { ...before, synced_at: '2026-11-17T00:01:00Z' };
+    const same = playerIds.slice(0, 4).reverse().map((player_id, i) => ({ player_id, seed: i + 1 }));
+    const changed = same.map((row, i) => i === 0 ? { ...row, player_id: playerIds[4] } : row);
+    const locked = { code: 'PHASE_ELIMINATION_ROSTER_LOCKED', statusCode: 409 };
+    await expect(phases.addPhaseParticipant(phase.id, playerIds[4])).rejects.toMatchObject(locked);
+    await expect(phases.removePhaseParticipant(phase.id, playerIds[0])).rejects.toMatchObject(locked);
+    await expect(phases.replacePhaseEnrollment(phase.id, changed, source, before.synced_at, true)).rejects.toMatchObject(locked);
+    expect((await phases.getPhaseById(phase.id))?.enrollment_source).toEqual(before);
+    expect(await phases.getPhaseParticipants(phase.id)).toEqual(roster);
+    expect(await phases.replacePhaseEnrollment(phase.id, same, source, before.synced_at, true)).toBe(true);
+    expect((await phases.getPhaseParticipants(phase.id)).map(({ id, seed }) => ({ player_id: id, seed }))).toEqual(same);
+    await expect(phases.swapPhaseParticipant(phase.id, playerIds[0], playerIds[4])).resolves.toMatchObject({ swapped: true });
   });
 
   it('serializes enrollment CAS and changes seeds atomically without tournament rows', async () => {

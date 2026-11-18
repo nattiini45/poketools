@@ -327,7 +327,7 @@ describe('native phase round workspace', () => {
     expect(roster.initialParticipants).toEqual([{ id: 'p1', name: 'Jade', seed: 1, avatar_url: null, starting_bracket: 'winners', is_guest: true }]);
     expect(roster.candidates).toEqual([{ id: 'p2', name: 'River' }]);
     expect(findByType(tree, PhaseGroupsPanel)[0]?.props).toMatchObject({
-      seasonId: S1, phaseId: T1, leagueManaged: false, native: { groups: [], archived: false },
+      seasonId: S1, phaseId: T1, leagueManaged: false, native: { groups: [], archived: false, hasRounds: false },
     });
     expect(findByType(tree, TournamentLifecycleActions)).toHaveLength(0);
     expect(findByType(tree, PhaseLifecycleActions)[0]?.props).toMatchObject({

@@ -23,13 +23,5 @@ export async function loadPhaseRosterScope(id: string, requestedPhaseId: string)
       ? assertFormatPhaseRosterOpen(seasonId, nativePhase, request, nativePhase.format_stage_key !== null)
       : assertFormatPhaseRosterOpen(seasonId, phase, request);
   };
-  async function assertRosterSeatsMutable() {
-    if (!nativePhase || (nativePhase.bracket_type !== 'single_elim' && nativePhase.bracket_type !== 'double_elim')) return;
-    if ((await nativePhasePersistence.rounds(phaseId)).length > 0) {
-      throw new UserFacingError('Bracket seat count is fixed after generation — use substitute or regenerate bracket.', {
-        code: 'BRACKET_LOCKED_USE_SUBSTITUTE',
-      });
-    }
-  }
-  return { mode, phase, phaseId, seasonId, persistence, assertRosterOpen, assertRosterSeatsMutable };
+  return { mode, phase, phaseId, seasonId, persistence, assertRosterOpen };
 }
