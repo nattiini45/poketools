@@ -10,7 +10,8 @@ import { getSeasonWithDetails, updateSeason, getSeasonById } from '@/lib/supabas
 import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
-import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
+import { getSeasonPhaseStartSignals, isNativeSeasonStarted } from '@/lib/supabase/queries/season-start';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { assertFormatChangeAllowed, assertSeasonDateRange } from '@/lib/season/settings-guards';
 import { isSeasonStarted } from '@/lib/season/season-started';
 import { seasonMachine } from '@/lib/season/season-state';
@@ -98,11 +99,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // `language` (the league's content language, i18n-core §6.1) passes
     // through to `updateSeason` with the other settings.
     const body = zodResult.data;
+    const mode = await requireOpenPhaseRouteMode();
+    let started: Promise<boolean> | undefined;
+    const readNativeStarted = () => started ??= isNativeSeasonStarted(id);
 
     // A switch to or from the custom type is refused once a format is attached or the league has started. A change
     // between the legacy types takes no extra read and no new refusal.
     if (body.format_type !== undefined) {
-      await assertFormatTypeChangeAllowed(id, body.format_type);
+      await assertFormatTypeChangeAllowed(id, body.format_type, mode === 'phase' ? readNativeStarted : undefined);
     }
 
     // The test-league flag is site-admin only (checked before any write): it
@@ -125,6 +129,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
+    const readStarted = () => mode === 'phase'
+      ? readNativeStarted()
+      : started ??= getSeasonPhaseStartSignals(id).then(phases => isSeasonStarted({ status: before.status, phases }));
 
     // Date order is checked against the stored date when only one of the two
     // is sent (null clears one). A request that sends neither is not held to
@@ -141,23 +148,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // stored type passes, so the start signals are only read for a real change.
     // Nothing is written when a guard throws.
     if (body.format_type !== undefined && body.format_type !== before.format_type) {
-      const phases = await getSeasonPhaseStartSignals(id);
-      assertFormatChangeAllowed(before.format_type, body.format_type, {
-        status: before.status,
-        phases,
-      });
+      assertFormatChangeAllowed(before.format_type, body.format_type, await readStarted());
     }
 
     // The league's default ruleset is a pin to an immutable version: a new value must be a ruleset the caller may use, and
     // once the league has started it moves only through the pin route (which asks for a confirmation). Resending the stored
     // value passes. Nothing is written when the guard throws.
     if (body.ruleset_id !== undefined && body.ruleset_id !== before.ruleset_id) {
-      const phases = await getSeasonPhaseStartSignals(id);
       await assertRulesetChangeAllowed({
         player: admin,
         current: before.ruleset_id,
         requested: body.ruleset_id,
-        started: isSeasonStarted({ status: before.status, phases }),
+        started: await readStarted(),
       });
     }
 
@@ -184,12 +186,13 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
     const season =
       body.status === undefined ? await updateSeason(id, body) : await updateSeason(id, body, { from: before.status });
-    if (body.archived !== undefined) {
+    if (mode === 'legacy' && body.archived !== undefined) {
       await archiveTournamentsBySeason(id, body.archived);
     }
     // Expires the league's own reads and the season list, so a flipped
     // test flag shows (or hides the league) on the next public view.
-    expireSeasonReads(id);
+    if (mode === 'phase') expireSeasonReads(id, { phaseIds: [] });
+    else expireSeasonReads(id);
 
     // General settings audit. The test flag and the point-buy list binding
     // log their own events; the description is never copied into the row

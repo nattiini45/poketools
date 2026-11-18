@@ -52,7 +52,7 @@ export function editableFormatTypes(current: SeasonFormatType): readonly SeasonF
 export function assertFormatChangeAllowed(
   current: SeasonFormatType,
   next: SeasonFormatType,
-  signals: SeasonStartSignals
+  started: boolean
 ): void {
   if (next === current) return;
   if (current === 'evolution_point_buy' || next === 'evolution_point_buy') {
@@ -61,7 +61,7 @@ export function assertFormatChangeAllowed(
       { code: 'SEASON_FORMAT_POINT_BUY_LOCKED', status: 409 }
     );
   }
-  if (isSeasonStarted(signals)) {
+  if (started) {
     throw new UserFacingError('The league type cannot be changed once the league has started', {
       code: 'SEASON_FORMAT_LOCKED',
       status: 409,

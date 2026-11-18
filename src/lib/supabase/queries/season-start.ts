@@ -19,3 +19,10 @@ export async function getSeasonPhaseStartSignals(
     return { status: row.status, rounds_total: embed?.[0]?.count ?? 0 };
   });
 }
+
+export async function isNativeSeasonStarted(seasonId: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc('phase_format_season_started', { p_season_id: seasonId });
+  if (error) throw error;
+  if (data === null) throw new Error('phase_format_season_started returned no answer');
+  return data;
+}

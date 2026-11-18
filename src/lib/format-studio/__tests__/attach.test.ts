@@ -622,6 +622,14 @@ describe('assertSeasonFormatAttached', () => {
 });
 
 describe('assertFormatTypeChangeAllowed', () => {
+  it('uses the supplied native started check instead of legacy phase reads when switching to custom', async () => {
+    vi.mocked(getSeasonById).mockResolvedValue(season({ format_type: 'singles' }));
+    vi.mocked(getSeasonFormatSummary).mockResolvedValue(null);
+    const started = vi.fn(async () => true);
+    expect(codeOf(await failure(assertFormatTypeChangeAllowed(SEASON_ID, 'custom', started)))).toBe('season_format_type_locked');
+    expect(started).toHaveBeenCalledTimes(1);
+    expect(getSeasonStartSignals).not.toHaveBeenCalled();
+  });
   it('reads nothing but the league for a change between legacy types', async () => {
     vi.mocked(getSeasonById).mockResolvedValue(season({ format_type: 'singles' }));
     await expect(assertFormatTypeChangeAllowed(SEASON_ID, 'doubles')).resolves.toBeUndefined();

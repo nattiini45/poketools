@@ -68,6 +68,39 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }, null)).toBe(true);
   }
 
+  it('checks native starts and cascades archive and restore only to the owning phases', async () => {
+    const { isNativeSeasonStarted } = await import('@/lib/supabase/queries/season-start');
+    const { updateSeason } = await import('@/lib/supabase/queries/seasons');
+    const first = await create('swiss');
+    const second = await create('swiss');
+    const standalone = randomUUID();
+    expect((await admin.from('tournaments').insert({
+      id: standalone, name: 'Fixture standalone', bracket_type: 'round_robin', ruleset_id: rulesetId,
+    })).error).toBeNull();
+    try {
+      await expect(isNativeSeasonStarted(seasonId)).resolves.toBe(false);
+      expect((await admin.from('phase_rounds').insert({
+        phase_id: first.id, name: 'Fixture start signal', round_number: 1, best_of: 3,
+      })).error).toBeNull();
+      expect((await admin.from('seasons').select('status').eq('id', seasonId).single()).data?.status).toBe('upcoming');
+      await expect(isNativeSeasonStarted(seasonId)).resolves.toBe(true);
+
+      await expect(updateSeason(seasonId, { archived: true })).resolves.toMatchObject({ archived: true });
+      for (const phase of [first, second]) {
+        expect(await phases.getPhaseById(phase.id)).toMatchObject({ archived: true, status: 'upcoming' });
+      }
+      expect((await admin.from('tournaments').select('archived').eq('id', standalone).single()).data).toEqual({ archived: false });
+
+      await expect(updateSeason(seasonId, { archived: false })).resolves.toMatchObject({ archived: false });
+      for (const phase of [first, second]) {
+        expect(await phases.getPhaseById(phase.id)).toMatchObject({ archived: false, status: 'upcoming' });
+      }
+      expect((await admin.from('phase_rounds').select('id').eq('phase_id', first.id)).data).toHaveLength(1);
+    } finally {
+      expect((await admin.from('tournaments').delete().eq('id', standalone)).error).toBeNull();
+    }
+  });
+
   it('atomically deletes only the latest confirmed unplayed round and rewinds its current-round pointer', async () => {
     const phase = await create('swiss');
     const previous = await rounds.createPhaseRound({ phase_id: phase.id, name: 'Previous fixture round', round_number: 1, best_of: 1 });
