@@ -123,8 +123,11 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
     expect(stored).toMatchObject({
       status: 'completed', winner_id: choices[i].winner_id, submitter_id: players[1],
       notes: 'Original note', games: [{ id: gameId }], date_played: expect.any(String),
-      confirmed_at: wins[i], auto_confirm_at: null, finalized_at: null,
+      confirmed_at: wins[i], auto_confirm_at: null,
     });
+    const marker = await admin.from('phase_matches').select('finalized_at').eq('id', id).single();
+    expect(marker.error).toBeNull();
+    expect(marker.data).toEqual({ finalized_at: null });
     expect(await outcomes.getPhaseMatchOutcome(id)).toMatchObject({
       source: 'admin', kind: choices[i].outcome, reason: choices[i].reason, set_by: players[i],
       p1_faints: i === 1 ? 1 : null, p2_faints: i === 1 ? 0 : null,
