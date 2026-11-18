@@ -13,6 +13,7 @@ import type { Database } from '@/types/database';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_FORMAT');
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
+vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/auth', () => ({
   auth: () => { throw new Error('This fixture supplies its actor explicitly'); },
   loadSessionPlayer: () => { throw new Error('This fixture supplies its actor explicitly'); },

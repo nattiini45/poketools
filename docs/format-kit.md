@@ -494,7 +494,7 @@ The Format tab of a **custom** league (`FormatPanel`) shows, in order, the readi
 
 ### Database and API
 
-Format attach, re-attach, detach and create-from-format select the active phase store. In native mode the existing `phase_format_attach_season`, `phase_format_detach_season` and `phase_competition_create_from_format` transactions materialise rows in `league_phases`, not in `tournaments`. Re-attach still preserves unchanged stage ids and requires the same confirmation before clearing runtime data. These writes refuse both frozen modes. Cache expiry targets the league and changed native phase ids without expiring standalone tournament scopes.
+Format attach, re-attach, detach and create-from-format select the active phase store. In native mode the existing `phase_format_attach_season`, `phase_format_detach_season` and `phase_competition_create_from_format` transactions materialise rows in `league_phases`, not in `tournaments`. Re-attach still preserves unchanged stage ids and requires the same confirmation before clearing runtime data. These routes refuse both frozen modes. The native and legacy RPC transactions also lock the mode row before writing, so they either finish before a racing freeze or refuse with the same maintenance error. This transaction fence does not replace draining requests and workers, including the preset ruleset preparation before attach. Cache expiry targets the league and changed native phase ids without expiring standalone tournament scopes.
 
 Three migrations add the storage layer. Apply them in this order, before the code is deployed (the first must commit on its own, because a new enum value cannot be used in the transaction that adds it):
 

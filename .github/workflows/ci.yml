@@ -171,12 +171,21 @@ jobs:
 
       - name: Local-stack suites
         run: |
+          legacy_suites=(
+            src/lib/format-studio/__tests__/create-league.local.test.ts
+            src/lib/supabase/queries/__tests__/format-fences.local.test.ts
+            src/lib/supabase/queries/__tests__/format-runtime-attach.local.test.ts
+          )
+          npm run test:db -- "${legacy_suites[@]}"
+          bash scripts/phase-separation/legacy-format-fence.sh supabase_db_poketools
+          npm run test:db -- legacy-format-freeze.local.test.ts
           docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT public.phase_storage_transition('legacy', 'frozen_legacy');
           SELECT public.phase_storage_transition('frozen_legacy', 'frozen_phase');
           SELECT public.phase_storage_transition('frozen_phase', 'phase');
           SQL
-          npm run test:db
+          exclude=()
+          for file in "${legacy_suites[@]}"; do exclude+=(--exclude "$file"); done
+          npm run test:db -- "${exclude[@]}" --exclude '**/legacy-format-freeze.local.test.ts'
         env:
           LOCAL_STACK_CI: '1'
 
