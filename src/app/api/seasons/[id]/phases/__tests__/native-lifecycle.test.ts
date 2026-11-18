@@ -206,6 +206,7 @@ describe('native phase update', () => {
 });
 
 it('refuses wrong-owner or format-owned deletion without calling either store’s writer', async () => {
+  h.requireAdmin.mockResolvedValue({ ...ADMIN, isAdmin: true });
   const remove = () => DELETE(req('DELETE', { confirm: true }), args);
   h.detail.mockResolvedValueOnce({ ...ROW, season_id: OTHER });
   expect((await remove()).status).toBe(404);
@@ -217,7 +218,16 @@ it('refuses wrong-owner or format-owned deletion without calling either store’
   expect(h.expire).not.toHaveBeenCalled();
 });
 
+it('refuses native phase deletion by a league-only admin before reading the phase', async () => {
+  const response = await DELETE(req('DELETE', { confirm: true }), args);
+  expect(response.status).toBe(403);
+  expect(await response.json()).toMatchObject({ code: 'forbidden' });
+  expect(h.detail).not.toHaveBeenCalled();
+  expect(h.remove).not.toHaveBeenCalled();
+});
+
 it('checks round confirmation inside the native delete and rebuilds only after it commits', async () => {
+  h.requireAdmin.mockResolvedValue({ ...ADMIN, isAdmin: true });
   h.remove.mockRejectedValueOnce(new UserFacingError('Deleting a phase with rounds requires confirm: true', {
     code: 'PHASE_DELETE_CONFIRM_REQUIRED', status: 400,
   })).mockResolvedValueOnce({ name: ROW.name, playerIds: [OTHER] });
@@ -238,6 +248,7 @@ it('checks round confirmation inside the native delete and rebuilds only after i
 });
 
 it('returns a rebuild warning without reporting a committed native delete as failed', async () => {
+  h.requireAdmin.mockResolvedValue({ ...ADMIN, isAdmin: true });
   h.remove.mockResolvedValue({ name: ROW.name, playerIds: [] });
   h.rebuild.mockRejectedValue(new Error('rebuild failed'));
   const response = await DELETE(req('DELETE', { confirm: true }), args);

@@ -1,5 +1,6 @@
 import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
 import { isUniqueViolationOf } from '../unique-violation';
 import type { Json, Tables } from '@/types/database';
 import type { RoundStatus } from '@/types/round';
@@ -242,6 +243,12 @@ function detailOf(error: { details?: string }): Record<string, unknown> {
   }
 }
 
+export interface PhaseBracketInputGuard {
+  updatedAt: string;
+  seeds: { player_id: string; seed: number | null; starting_bracket: 'winners' | 'losers' }[];
+  formatRevision?: number;
+}
+
 export async function writePhaseBracket(input: {
   phase_id: string;
   expected_status: PhaseStatus;
@@ -249,15 +256,22 @@ export async function writePhaseBracket(input: {
   rounds: readonly BracketRoundInput[];
   matches: readonly BracketMatchInput[];
   current_round: number;
+  guard?: PhaseBracketInputGuard;
 }): Promise<{ rounds: number; matches: number }> {
-  const { data, error } = await supabase.rpc('phase_bracket_write', {
+  const args = {
     p_phase_id: input.phase_id,
     p_expected_status: input.expected_status,
     p_replace: input.replace,
     p_rounds: input.rounds as unknown as Json,
     p_matches: input.matches as unknown as Json,
     p_current_round: input.current_round,
-  });
+  };
+  const { data, error } = input.guard
+    ? await supabase.rpc('phase_bracket_write_guarded', {
+      ...args, p_expected_updated_at: input.guard.updatedAt, p_expected_seeds: input.guard.seeds,
+      ...(input.guard.formatRevision !== undefined ? { p_expected_revision: input.guard.formatRevision } : {}),
+    })
+    : await supabase.rpc('phase_bracket_write', args);
   if (error) {
     if (isPhaseGroupsStale(error)) {
       throw phaseGroupsStaleError(error);
@@ -267,6 +281,14 @@ export async function writePhaseBracket(input: {
         code: 'tournament_status_changed',
         params: { from: input.expected_status },
         status: 409,
+      });
+    }
+    if (isRoundWriteSignal(error, 'phase_bracket_inputs_changed')) {
+      throw new UserFacingError(tournamentErrors.phase_bracket_inputs_changed, { code: 'phase_bracket_inputs_changed', status: 409 });
+    }
+    if (isRoundWriteSignal(error, 'format_context_stale')) {
+      throw new UserFacingError('The league format changed while the round was being generated, so no round was written. Generate it again.', {
+        code: 'format_context_stale', status: 409,
       });
     }
     if (isRoundWriteSignal(error, 'bracket_already_generated')) {

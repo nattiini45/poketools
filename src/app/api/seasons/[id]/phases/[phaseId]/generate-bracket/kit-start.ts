@@ -21,6 +21,7 @@ export async function loadNativeKitBracket(phase: Phase, seasonFormat: SeasonFor
   if (!isKitEnginePhase(loaded)) return null;
 
   return {
+    revision: loaded.revision,
     async prepareStart(request: Request, actor: SessionPlayer) {
       const context = await kit.eventPort.load(phase.season_id);
       const scoped = context && phaseById(context, phase.id);

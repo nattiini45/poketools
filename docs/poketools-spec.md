@@ -1060,6 +1060,10 @@ PATCH .../groups/members                    Manual group membership moves
 POST .../groups/repair                      Hand group rows left by pre-handover substitutions to the
                                             enrolled substitute (`dry_run` required; audit log, else fixtures;
                                             an apply names the reviewed `moves`, 409 PLAN_CHANGED if they differ)
+GET .../rounds, GET .../rounds/[rid]          Native phase rounds and round details with public matches
+POST .../rounds/manual                       Native manual round with participant and format readiness checks
+PATCH .../rounds/[rid]                       Native round deadline, best-of and status (pending-only best-of)
+POST .../generate-bracket                    Initial native single- or double-elimination bracket; refuses a stale plan
 POST /api/seasons/[id]/participants/substitute  League (`scope: 'league'`) or phase (`scope: <phaseId>`) substitute
 POST /api/seasons/[id]/advance              Advance to next phase (optional `force`; same guards as sync)
 GET/POST/DELETE /api/seasons/[id]/format    Custom format league: state (`not_custom` | `unattached` | `attached`,

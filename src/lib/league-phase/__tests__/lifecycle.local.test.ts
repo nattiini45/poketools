@@ -296,6 +296,32 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect(moved[0]).toMatchObject({ player_id: playerIds[4], group_id: created[0].id });
   });
 
+  it('refuses a bracket planned from stale settings or seeds before creating rounds', async () => {
+    const phase = await create();
+    await enroll(phase.id);
+    const snapshot = (await phases.getPhaseById(phase.id))!;
+    const participants = await phases.getPhaseParticipants(phase.id);
+    const [{ generateEliminationBracket }, { createNativeBracketPersistence }] = await Promise.all([
+      import('@/lib/tournament/bracket-generate'), import('../bracket-persistence'),
+    ]);
+    const planned = (updatedAt: string, roster = participants) => createNativeBracketPersistence(undefined, {
+      updatedAt, seeds: roster.map(({ id: player_id, seed, starting_bracket }) => ({ player_id, seed, starting_bracket })),
+    });
+    await phases.updatePhase(phase.id, { best_of_default: 5 }, { from: 'upcoming' });
+    await expect(generateEliminationBracket(snapshot, participants, {}, planned(snapshot.updated_at)))
+      .rejects.toMatchObject({ code: 'phase_bracket_inputs_changed', statusCode: 409 });
+
+    await phases.updatePhaseParticipantSeeds(phase.id, [{ player_id: playerIds[0], seed: 5 }]);
+    const current = (await phases.getPhaseById(phase.id))!;
+    await expect(generateEliminationBracket(current, participants, {}, planned(current.updated_at)))
+      .rejects.toMatchObject({ code: 'phase_bracket_inputs_changed', statusCode: 409 });
+    expect(await rounds.getRoundsByPhase(phase.id)).toEqual([]);
+    const roster = await phases.getPhaseParticipants(phase.id);
+    await expect(generateEliminationBracket(current, roster, {}, planned(current.updated_at, roster)))
+      .resolves.toMatchObject({ rounds_created: 2, matches_materialized: 2 });
+    expect((await rounds.getRoundsByPhase(phase.id)).every(round => round.best_of === 5)).toBe(true);
+  });
+
   it('commits either the whole native bracket or the competing completion', async () => {
     const phase = await create();
     await enroll(phase.id);

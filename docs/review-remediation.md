@@ -81,3 +81,9 @@ Record each completed remediation batch here: the date, the source (bot review, 
 The first pawcommit-review pass identified two valid findings: explicit unknown historical counters were presented as complete combined totals, and the public Pokémon filter lacked its own hidden-player check. Both were fixed in `a6a9e19a`, with regression coverage, concrete replies and resolved review threads. Unknown values now propagate through Usage, player breakdowns and profile totals; hidden identities are removed before name lookup.
 
 Private/example typechecks, lint, production build, 533 affected tests (one opt-in database case skipped), repository guards and the high-severity production dependency audit passed locally. All 12 CI checks on `a6a9e19a` passed, including build-and-test, visual and the next pawcommit-review pass. The separately reproduced, unchanged optional-overlay color fixture failure remains disclosed; production activation and deployed-data verification are outside this remediation episode.
+
+### 2026-11-18 — PR #263
+
+Both review findings were valid. Commit `9af5768d` preserves retained losers-side placement during enrollment re-sync and refuses legacy and native phase owners during a frozen native generation. The CI findings were also valid: sitemap tests did not mock the new storage selection, the match action-slot assertion still pointed to the old page, and the module tree omitted the two match render adapters. Those contracts were corrected without weakening the assertions.
+
+Both review threads were resolved and all 12 checks passed on `9af5768d` in run `44217582763`. Clean Linux coverage passed 35,472 tests with all configured floors met. Disposable CI replayed the roster migration, matched generated types, ran the forced enrollment fixture and passed 534 DB tests. Playwright passed 28 tests and 166 seeded frozen comparisons found no failures or errors. No storage generation was activated.

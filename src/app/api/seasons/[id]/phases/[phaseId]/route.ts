@@ -210,6 +210,9 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const native = (await requireOpenPhaseRouteMode()) === 'phase';
     const seasonId = native ? id.toLowerCase() : id;
     const phaseId = native ? requestedPhaseId.toLowerCase() : requestedPhaseId;
+    if (native && !admin.isAdmin) {
+      throw new UserFacingError('Admin access required', { status: 403, code: 'forbidden' });
+    }
     const nativePhase = native ? await getPhaseWithDetails(phaseId, seasonId) : null;
     const target = native ? nativePhase : await getTournamentById(phaseId);
     if (!target || target.season_id !== seasonId.toLowerCase()) {

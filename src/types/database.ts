@@ -9770,6 +9770,20 @@ export type Database = {
         }
         Returns: Json
       }
+      phase_bracket_write_guarded: {
+        Args: {
+          p_current_round: number
+          p_expected_revision?: number
+          p_expected_seeds: Json
+          p_expected_status: Database["public"]["Enums"]["phase_status"]
+          p_expected_updated_at: string
+          p_matches: Json
+          p_phase_id: string
+          p_replace: boolean
+          p_rounds: Json
+        }
+        Returns: Json
+      }
       phase_competition_create_from_format: {
         Args: {
           p_actor: string

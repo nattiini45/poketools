@@ -39,7 +39,11 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     const announceKit = await kit?.prepareStart(request, actor);
     const result = await generateEliminationBracket(phase, participants, {
       startFirstRound: options.startRound,
-    }, createNativeBracketPersistence());
+    }, createNativeBracketPersistence(undefined, {
+      updatedAt: phase.updated_at,
+      seeds: participants.map(({ id: player_id, seed, starting_bracket }) => ({ player_id, seed, starting_bracket })),
+      formatRevision: kit?.revision,
+    }));
 
     try {
       await startSeasonIfUpcoming(season.id);

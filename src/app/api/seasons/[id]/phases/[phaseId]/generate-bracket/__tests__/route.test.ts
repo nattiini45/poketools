@@ -52,6 +52,7 @@ const actor = { playerId: 'player-admin', name: 'Test Admin', isAdmin: false };
 const phase = {
   id: phaseId, season_id: id, name: 'Playoffs', bracket_type: 'single_elim', status: 'upcoming',
   current_round: 0, best_of_default: 3, bo_overrides: { Finals: 5 }, third_place_enabled: true,
+  updated_at: '2026-11-17T10:00:00Z',
 };
 const players = ['Alpha', 'Bravo', 'Charlie'].map((name, index) => ({
   id: `player-${index + 1}`, name, seed: index + 1, starting_bracket: 'winners',
@@ -96,8 +97,10 @@ it('plans a single-elimination bracket with a bye, writes one native RPC, and em
   expect(await response.json()).toEqual({ success: true, data: { rounds_created: 2, matches_materialized: 1 } });
   expect(m.allowed).toHaveBeenCalledExactlyOnceWith(actor, phaseId);
   expect(m.participants).toHaveBeenCalledExactlyOnceWith(phaseId);
-  expect(m.rpc).toHaveBeenCalledExactlyOnceWith('phase_bracket_write', {
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith('phase_bracket_write_guarded', {
     p_phase_id: phaseId, p_expected_status: 'upcoming', p_replace: false, p_current_round: 1,
+    p_expected_updated_at: phase.updated_at,
+    p_expected_seeds: players.map(({ id: player_id, seed, starting_bracket }) => ({ player_id, seed, starting_bracket })),
     p_rounds: [
       expect.objectContaining({ round_number: 1, name: 'Semifinals', best_of: 3, bracket_side: 'winners' }),
       expect.objectContaining({ round_number: 2, name: 'Finals', best_of: 5, bracket_side: 'winners' }),
@@ -212,6 +215,8 @@ it('refuses invalid flags, non-elimination, completed, undersized, and already g
 it.each([
   ['tournament_status_changed', 'tournament_status_changed', 409],
   ['bracket_already_generated', 'bracket_already_generated', 409],
+  ['phase_bracket_inputs_changed', 'phase_bracket_inputs_changed', 409],
+  ['format_context_stale', 'format_context_stale', 409],
   ['PHASE_GROUPS_STALE', 'PHASE_GROUPS_STALE', 409],
   ['phase_storage_not_ready', 'phase_storage_unavailable', 503],
 ])('preserves the %s RPC refusal with no start, invalidation, audit or fallback', async (message, code, status) => {
@@ -252,6 +257,7 @@ it('audits a force only after success and fires native stage and round start for
   m.rounds.mockResolvedValueOnce([]).mockResolvedValueOnce([{ round_number: 1 }, { round_number: 2 }]);
   const response = await POST(request(undefined, '?force=true'), ctx());
   expect(response.status).toBe(201);
+  expect(m.rpc).toHaveBeenCalledWith('phase_bracket_write_guarded', expect.objectContaining({ p_expected_revision: 4 }));
   expect(m.startRound).not.toHaveBeenCalled();
   expect(m.audit).toHaveBeenCalledWith(expect.objectContaining({
     action: 'season.format.round.force_start', resource_type: 'phase', resource_id: phaseId,

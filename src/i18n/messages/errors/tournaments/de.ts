@@ -104,6 +104,7 @@ export default defineDe<typeof en>()({
   // Elimination brackets
   bracket_generate_elim_only: 'Den kompletten Turnierbaum gibt es nur im K.-o.-System und im Doppel-K.-o.',
   bracket_already_generated: 'Der Turnierbaum wurde bereits erstellt.',
+  phase_bracket_inputs_changed: 'Die Phaseneinstellungen oder Setzplätze haben sich während der Planung geändert. Es wurde nichts gespeichert. Erstelle den Turnierbaum erneut.',
   bracket_regenerate_elim_only:
     'Den Turnierbaum neu erstellen geht nur im K.-o.-System und im Doppel-K.-o.',
   bracket_regenerate_phase_completed:

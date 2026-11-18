@@ -58,6 +58,8 @@ A native roster re-sync preserves the group slots of retained participants, even
 
 Manual native phase creation uses one season-scoped transaction for the name check, append position or explicit insertion, and any position shifts. The RPC locks the phase rows before validating their status and refuses to shift a started phase. Reordering takes the same locks and rejects a stale phase list or a changed pinned prefix. The insert response includes the shifted IDs for cache expiry. Enrollment and resource-admin assignment still run after creation, and a failed enrollment cannot prevent cache expiry for the committed phases.
 
+The initial native elimination bracket takes the phase lock before making any writes. A changed settings timestamp, roster seed, starting side, or expected format revision refuses the plan; nothing is materialized from those stale inputs. The guarded write delegates to the same atomic round/match/freeze transaction once the inputs match.
+
 Format materialisation, kit context, advancement, group formation, classic creation and substitution expose explicit persistence ports. Native status reactions use native context and pure event/check planners, with a required revision/idempotency-aware event writer and invalidation callback. Native paths that need match results, standings, aggregate counts, repair or notifications require explicit callbacks from their owning later layers; they never silently load legacy results. These dormant adapters are not authorization to enable native traffic before those consumers ship.
 
 ## Delivery and verification

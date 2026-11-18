@@ -117,6 +117,7 @@ export default {
   // Elimination brackets
   bracket_generate_elim_only: 'Full bracket generation only applies to elimination formats',
   bracket_already_generated: 'Bracket already generated',
+  phase_bracket_inputs_changed: 'The phase settings or seeds changed while the bracket was being planned. Nothing was written. Generate it again.',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
   // The phase of a custom league has already ended (completed): its bracket is not wiped and restarted; reopen the phase first (409, nothing written).
   bracket_regenerate_phase_completed:
