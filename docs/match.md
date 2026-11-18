@@ -188,6 +188,7 @@ A failure inside one item (it throws) becomes `match_bulk_item_failed` and the l
 - The same instant as the stored one is a no-op (`unchanged: true`): no write, no audit event, no proposal change.
 - A change (set, move or clear) cancels every pending time proposal of the match (`cancelPendingMatchProposalsForMatch`, status `cancelled`), so a stale proposal cannot reschedule the match later. The page warns before saving when open proposals exist. The cancel runs after the time is committed: if it fails, the time stays saved, the audit event and the revalidation still run, the answer carries `proposals_cancel_failed: true` and the page shows a warning.
 - Audited as `match.schedule` (see [Audit](./audit.md)). Unlike the proposal accept route, this write needs no participant: it is the organizer's override.
+- For a verified native match the same endpoint uses live phase authorization, fences the time update on the owning phase and open match status, and cancels only that match's pending native proposals. Native audits record the phase and league rather than a tournament.
 
 ### Reopen (without a reset)
 

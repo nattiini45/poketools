@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 const { query, settle, rpc } = vi.hoisted(() => {
   const settle = vi.fn();
   const query: Record<string, ReturnType<typeof vi.fn>> = {};
-  for (const key of ['from', 'select', 'insert', 'update', 'delete', 'eq', 'is', 'in', 'order', 'range', 'limit', 'not', 'lte', 'gt', 'or']) {
+  for (const key of ['from', 'select', 'insert', 'update', 'delete', 'eq', 'neq', 'is', 'in', 'order', 'range', 'limit', 'not', 'lte', 'gt', 'or']) {
     query[key] = vi.fn().mockReturnValue(query);
   }
   query.single = vi.fn();
@@ -18,7 +18,7 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
 
 import { createPhaseGame, findPhaseGameIdByReplayHash, deleteUncountedPhaseGameRow, claimPhaseGameEditLease, setPhaseGameStatsLocked } from '../phase-games';
 import { ReplayAlreadyRecordedError } from '../games';
-import { getPhaseHeadToHead, getPhaseMatchById, updatePhaseMatchStatus, markPhaseMatchFinalized, deletePhaseMatchesByIds, hasDownstreamPhaseMatches } from '../phase-matches';
+import { getPhaseHeadToHead, getPhaseMatchById, updatePhaseMatchStatus, markPhaseMatchFinalized, deletePhaseMatchesByIds, hasDownstreamPhaseMatches, updateOpenPhaseMatchSchedule } from '../phase-matches';
 import { cleanPhaseMatchChildren, deletePhaseMatchAnalyses, deletePhaseMatchPrepAnalyses } from '../phase-match-children';
 import { recordPhaseMatchOutcome, deletePhaseMatchOutcome } from '../phase-match-outcomes';
 import { insertPhaseMatchSnapshots } from '../phase-match-snapshots';
@@ -34,6 +34,18 @@ beforeEach(() => {
 });
 
 describe('native match and game persistence', () => {
+  it('sets the schedule only on the owned match while it remains open', async () => {
+    const phaseId = '22222222-2222-4222-8222-222222222222';
+    await expect(updateOpenPhaseMatchSchedule(id, null, 'invalid')).rejects.toThrow();
+    expect(query.from).not.toHaveBeenCalled();
+    query.maybeSingle.mockResolvedValue({ data: null, error: null });
+    expect(await updateOpenPhaseMatchSchedule(id, null, phaseId)).toBeNull();
+    expect(query.from).toHaveBeenCalledExactlyOnceWith('phase_matches');
+    expect(query.update).toHaveBeenCalledExactlyOnceWith({ scheduled_at: null });
+    expect(query.eq.mock.calls).toEqual([['id', id], ['phase_id', phaseId]]);
+    expect(query.neq).toHaveBeenCalledExactlyOnceWith('status', 'completed');
+  });
+
   it('pages only the completed matches in either seat order of a phase pair', async () => {
     const a = '22222222-2222-4222-8222-222222222222';
     const b = '33333333-3333-4333-8333-333333333333';

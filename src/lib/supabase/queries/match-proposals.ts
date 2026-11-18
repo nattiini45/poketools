@@ -209,6 +209,18 @@ export async function cancelPendingMatchProposalsForMatch(matchId: string): Prom
   return data.map(toMatchProposal);
 }
 
+export async function cancelPendingPhaseMatchProposals(matchId: string): Promise<number> {
+  assertValidUuid(matchId, 'match id');
+  matchProposalMachine.assertTransition(PENDING, 'cancelled', 'admin');
+  const { count, error } = await supabase
+    .from('phase_match_proposals')
+    .update({ status: 'cancelled', responded_at: new Date().toISOString() }, { count: 'exact' })
+    .eq('match_id', matchId)
+    .eq('status', PENDING);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 /**
  * Delete ALL proposals for a match (match-scoped). Used by the admin
  * match-reset cleanup: a reset returns the match to scheduled, so any

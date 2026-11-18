@@ -448,15 +448,19 @@ export async function updatePhaseMatchSchedule(
 
 export async function updateOpenPhaseMatchSchedule(
   id: string,
-  scheduledAt: string | null
+  scheduledAt: string | null,
+  phaseId?: string,
 ): Promise<PhaseMatchWithPlayers | null> {
   assertValidUuid(id, 'match id');
+  if (phaseId !== undefined) assertValidUuid(phaseId, 'phase id');
 
-  const { data, error } = await supabase
+  let update = supabase
     .from('phase_matches')
     .update({ scheduled_at: scheduledAt })
     .eq('id', id)
-    .neq('status', 'completed')
+    .neq('status', 'completed');
+  if (phaseId !== undefined) update = update.eq('phase_id', phaseId);
+  const { data, error } = await update
     .select(MATCH_WITH_PLAYERS_SELECT)
     .maybeSingle();
 

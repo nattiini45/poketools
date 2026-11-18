@@ -5,6 +5,7 @@ import type { NativePhaseInvalidation } from '@/lib/league-phase/services';
 import { POST as reset } from '../route';
 import { GET as preview } from '../../reset-preview/route';
 import { POST as reopen } from '../../reopen/route';
+import { PATCH as schedule } from '../../schedule/route';
 
 const h = vi.hoisted(() => ({
   player: vi.fn(), mode: vi.fn(), findOwner: vi.fn(), isStandalone: vi.fn(),
@@ -13,6 +14,7 @@ const h = vi.hoisted(() => ({
   phaseReset: vi.fn(), phasePreview: vi.fn(), phaseReopen: vi.fn(),
   tournamentReset: vi.fn(), tournamentPreview: vi.fn(), tournamentReopen: vi.fn(),
   tournament: vi.fn(), audit: vi.fn(), path: vi.fn(), tag: vi.fn(), rate: vi.fn(),
+  phaseSchedule: vi.fn(), tournamentSchedule: vi.fn(), phaseCancelProposals: vi.fn(), tournamentCancelProposals: vi.fn(),
   unexpectedIO: vi.fn(() => { throw new Error('Unexpected I/O'); }),
 }));
 
@@ -23,8 +25,11 @@ vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: h
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
   findNativePhaseAliasOwner: h.findOwner, standaloneMatchAliasExists: h.isStandalone,
 }));
-vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: h.phaseMatch }));
-vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: h.tournamentMatch }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: h.phaseMatch, updateOpenPhaseMatchSchedule: h.phaseSchedule }));
+vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: h.tournamentMatch, updateOpenMatchSchedule: h.tournamentSchedule }));
+vi.mock('@/lib/supabase/queries/match-proposals', () => ({
+  cancelPendingPhaseMatchProposals: h.phaseCancelProposals, cancelPendingMatchProposalsForMatch: h.tournamentCancelProposals,
+}));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: h.tournament }));
 vi.mock('@/lib/league-phase/services', () => ({ createNativePhaseServices: h.native }));
 vi.mock('@/lib/pkmn/game-pipeline', () => ({ resetMatch: h.tournamentReset, previewMatchReset: h.tournamentPreview }));
@@ -53,8 +58,8 @@ const previewResult = {
 };
 const reopenResult = { from_status: 'completed', ratings_rebuilt_players: 2, bracket_matches_removed: 1, failed_steps: [] };
 
-function send(route: typeof reset | typeof preview | typeof reopen, body: object = { reason: 'Correct result' }, matchId = id) {
-  const init = route === preview ? undefined : { method: 'POST', body: JSON.stringify(body) };
+function send(route: typeof reset | typeof preview | typeof reopen | typeof schedule, body: object = { reason: 'Correct result' }, matchId = id) {
+  const init = route === preview ? undefined : { method: route === schedule ? 'PATCH' : 'POST', body: JSON.stringify(body) };
   return route(new NextRequest('https://example.test/api/admin/matches', init), { params: Promise.resolve({ id: matchId }) });
 }
 
@@ -88,6 +93,54 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   expect(h.unexpectedIO).not.toHaveBeenCalled();
+});
+
+describe('Native admin scheduling', () => {
+  const oldTime = '2026-11-18T10:00:00Z';
+  const newTime = '2026-11-19T10:00:00Z';
+
+  it('sets the time under the phase owner, cancels native proposals and audits the native match', async () => {
+    h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'scheduled', scheduled_at: oldTime });
+    h.phaseSchedule.mockResolvedValueOnce({ ...match, scheduled_at: newTime });
+    h.phaseCancelProposals.mockResolvedValueOnce(5);
+
+    expect(await (await send(schedule, { scheduled_at: newTime }, id.toUpperCase())).json()).toEqual({
+      success: true, data: {
+        scheduled_at: newTime, previous_scheduled_at: oldTime,
+        proposals_cancelled: 5, proposals_cancel_failed: false, unchanged: false,
+      },
+    });
+    expect(h.phaseSchedule).toHaveBeenCalledExactlyOnceWith(id, newTime, owner.phase_id);
+    expect(h.phaseCancelProposals).toHaveBeenCalledExactlyOnceWith(id);
+    expect(h.tournamentSchedule).not.toHaveBeenCalled();
+    expect(h.tournamentCancelProposals).not.toHaveBeenCalled();
+    expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({
+      action: 'match.schedule', resource_type: 'phase_match',
+      metadata: expect.objectContaining({ phase_id: owner.phase_id, season_id: owner.season_id }),
+    }));
+    expect(h.tag).toHaveBeenCalledWith(`phase:${owner.phase_id}`, { expire: 0 });
+  });
+
+  it('keeps the committed time and expires the view even if proposal cancellation fails', async () => {
+    h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'disputed', scheduled_at: oldTime });
+    h.phaseSchedule.mockResolvedValueOnce({ ...match, scheduled_at: null });
+    h.phaseCancelProposals.mockRejectedValueOnce(new Error('Fixture cancellation failure'));
+    const response = await send(schedule, { scheduled_at: null });
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ data: { scheduled_at: null, proposals_cancel_failed: true } });
+    expect(h.audit).toHaveBeenCalledOnce();
+    expect(h.tag).toHaveBeenCalled();
+  });
+
+  it('does not cancel proposals when the match completes between authorization and the update', async () => {
+    h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'scheduled', scheduled_at: oldTime });
+    h.phaseSchedule.mockResolvedValueOnce(null);
+    const response = await send(schedule, { scheduled_at: newTime });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'match_schedule_completed' });
+    expect(h.phaseCancelProposals).not.toHaveBeenCalled();
+    expect(h.audit).not.toHaveBeenCalled();
+  });
 });
 
 describe('ID-only native match corrections', () => {

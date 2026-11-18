@@ -28,6 +28,7 @@ vi.mock('@/lib/utils/uuid', () => ({
 import {
   acceptMatchProposal,
   cancelPendingMatchProposalsForMatch,
+  cancelPendingPhaseMatchProposals,
   createMatchProposal,
   expireOverdueMatchProposals,
   listMatchProposals,
@@ -57,6 +58,15 @@ beforeEach(() => {
 });
 
 describe('queries/match-proposals', () => {
+  it('counts every cancelled native proposal without returning its rows', async () => {
+    mockBuilder.eq.mockReturnValueOnce(mockBuilder).mockResolvedValueOnce({ count: 1100, error: null });
+    expect(await cancelPendingPhaseMatchProposals('match-1')).toBe(1100);
+    expect(mockBuilder.from).toHaveBeenCalledExactlyOnceWith('phase_match_proposals');
+    expect(mockBuilder.eq.mock.calls).toEqual([['match_id', 'match-1'], ['status', 'pending']]);
+    expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'cancelled', responded_at: expect.any(String) }, { count: 'exact' });
+    expect(mockBuilder.select).not.toHaveBeenCalled();
+  });
+
   it('creates a match proposal', async () => {
     mockBuilder.single.mockResolvedValue({ data: proposalRow, error: null });
 
