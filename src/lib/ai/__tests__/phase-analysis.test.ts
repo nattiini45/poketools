@@ -1,17 +1,17 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({ auth: vi.fn(), admin: vi.fn(), superadmin: vi.fn(), scope: vi.fn(), prompt: vi.fn(),
-  get: vi.fn(), getPrep: vi.fn(), create: vi.fn(), createPrep: vi.fn(), update: vi.fn(), updatePrep: vi.fn(),
-  remove: vi.fn(), removePrep: vi.fn(), limit: vi.fn(), complete: vi.fn(), scoutingAccess: vi.fn(), enrolled: vi.fn() }));
+  get: vi.fn(), getPrep: vi.fn(), create: vi.fn(), claimPrep: vi.fn(), update: vi.fn(), updatePrep: vi.fn(),
+  remove: vi.fn(), limit: vi.fn(), complete: vi.fn(), scoutingAccess: vi.fn(), enrolled: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({ requireAuth: h.auth, isSuperadmin: h.superadmin,
   AuthError: class extends Error {} }));
 vi.mock('@/lib/auth/phase-access', () => ({ canAdministerPhaseAccess: h.admin }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({ isPlayerPhaseParticipant: h.enrolled }));
 vi.mock('../phase-context', () => ({ loadPhaseMatchScope: h.scope, buildPhaseMatchAnalysisPrompt: h.prompt, buildPhaseMatchPrepPrompt: h.prompt }));
 vi.mock('@/lib/supabase/queries/phase-ai-artifacts', () => ({ getPhaseMatchAnalysis: h.get, getPhaseMatchPrepAnalysis: h.getPrep,
-  createPhaseMatchAnalysis: h.create, createPhaseMatchPrepAnalysis: h.createPrep, updatePhaseMatchAnalysis: h.update,
-  updatePhaseMatchPrepAnalysis: h.updatePrep, deletePhaseMatchAnalysis: h.remove, deletePhaseMatchPrepAnalysis: h.removePrep,
-  getPhaseScoutingAccess: h.scoutingAccess }));
-vi.mock('../rate-limit', () => ({ checkAndRecordAiGeneration: h.limit }));
+  createPhaseMatchAnalysis: h.create, updatePhaseMatchAnalysis: h.update,
+  updatePhaseMatchPrepAnalysis: h.updatePrep, deletePhaseMatchAnalysis: h.remove,
+  getPhaseScoutingAccess: h.scoutingAccess, claimPhaseMatchPrepAnalysis: h.claimPrep }));
+vi.mock('../rate-limit', () => ({ checkAndRecordAiGeneration: h.limit, getAiDailyLimit: () => 10 }));
 vi.mock('../client', () => ({ complete: h.complete }));
 import { generatePhaseAnalysis } from '../phase-analysis';
 const input = { phaseId: 'phase', matchId: 'match', kind: 'post_match' as const };
@@ -24,8 +24,9 @@ beforeEach(() => {
   h.scoutingAccess.mockResolvedValue(scheduled); h.enrolled.mockResolvedValue(true);
   h.admin.mockResolvedValue(false); h.superadmin.mockReturnValue(false);
   h.get.mockResolvedValue(null); h.getPrep.mockResolvedValue(null); h.prompt.mockResolvedValue({ systemPrompt: 'system', userPrompt: 'user', hasUserTeam: true });
-  h.create.mockResolvedValue({ id: 'artifact', status: 'pending' }); h.createPrep.mockResolvedValue({ id: 'prep', status: 'pending', player_id: 'p1' });
-  h.update.mockResolvedValue(true); h.updatePrep.mockResolvedValue(true); h.remove.mockResolvedValue(true); h.removePrep.mockResolvedValue(true);
+  h.create.mockResolvedValue({ id: 'artifact', status: 'pending' });
+  h.claimPrep.mockResolvedValue({ kind: 'claimed', artifact: { id: 'prep', status: 'pending', player_id: 'p1' } });
+  h.update.mockResolvedValue(true); h.updatePrep.mockResolvedValue(true); h.remove.mockResolvedValue(true);
   h.limit.mockResolvedValue({ allowed: true });
   h.complete.mockResolvedValue({ content: JSON.stringify({ summary: 'Synthetic analysis', turning_point: 'Trade', mvp: { pokemon: 'SyntheticSpecies' }, game_breakdowns: [] }),
     model: 'actual-model', prompt_tokens: 4, completion_tokens: 5 });
@@ -116,24 +117,24 @@ describe('native phase analysis generation', () => {
     h.prompt.mockResolvedValueOnce({ systemPrompt: 'system', userPrompt: 'user', hasUserTeam: false });
     expect(await generatePhaseAnalysis({ ...scout, force: true })).toMatchObject({ kind: 'cached' });
     expect(h.limit).not.toHaveBeenCalled();
-    expect(h.removePrep).not.toHaveBeenCalled();
+    expect(h.claimPrep).not.toHaveBeenCalled();
   });
-  it.each([false, true])('charges and claims for force with an added team or playing admin (admin=%s)', async (isAdmin) => {
+  it.each([false, true])('preserves the completed report when a forced claim is quota-limited (admin=%s)', async (isAdmin) => {
     h.auth.mockResolvedValue({ player: { playerId: 'p1', isAdmin } });
     const old = { id: 'finished', status: 'completed', has_user_team: isAdmin };
     h.getPrep.mockResolvedValue(old);
-    h.limit.mockResolvedValueOnce({ allowed: false, limit: 10 });
+    h.claimPrep.mockResolvedValueOnce({ kind: 'limited', limit: 10 });
     expect(await generatePhaseAnalysis({ ...scout, force: true })).toEqual({ kind: 'limited', limit: 10 });
-    expect(h.removePrep).toHaveBeenCalledWith('phase', 'match', 'p1', old);
-    expect(h.createPrep).toHaveBeenCalledWith('phase', 'match', 'p1', expect.any(String), true);
-    expect(h.createPrep.mock.invocationCallOrder[0]).toBeLessThan(h.limit.mock.invocationCallOrder[0]);
-    expect(h.limit).toHaveBeenCalledWith('p1', 'match-prep-analysis');
+    expect(h.claimPrep).toHaveBeenCalledExactlyOnceWith('phase', 'match', 'p1', expect.any(String), true, old, 10);
+    expect(h.updatePrep).not.toHaveBeenCalled();
+    expect(h.limit).not.toHaveBeenCalled();
+    expect(await generatePhaseAnalysis(scout)).toEqual({ kind: 'cached', artifact: old });
     expect(h.complete).not.toHaveBeenCalled();
   });
   it('does not charge when a concurrent scouting request wins the unique key', async () => {
     const pending = { id: 'the-winner', status: 'pending', created_at: new Date().toISOString() };
     h.getPrep.mockResolvedValueOnce(null).mockResolvedValueOnce(pending);
-    h.createPrep.mockRejectedValueOnce({ code: '23505' });
+    h.claimPrep.mockResolvedValueOnce({ kind: 'lost' });
     expect(await generatePhaseAnalysis({ ...scout, force: true })).toEqual({ kind: 'pending', artifact: pending });
     expect(h.limit).not.toHaveBeenCalled();
     expect(h.complete).not.toHaveBeenCalled();
@@ -142,11 +143,20 @@ describe('native phase analysis generation', () => {
     const stale = { id: 'stale', status: 'pending', created_at: '2000-01-01T00:00:00Z' };
     const pending = { id: 'the-winner', status: 'pending', created_at: new Date().toISOString() };
     h.getPrep.mockResolvedValueOnce(stale).mockResolvedValueOnce(pending);
-    h.removePrep.mockResolvedValueOnce(false);
+    h.claimPrep.mockResolvedValueOnce({ kind: 'lost' });
     expect(await generatePhaseAnalysis({ ...scout, force: true })).toEqual({ kind: 'pending', artifact: pending });
-    expect(h.removePrep).toHaveBeenCalledWith('phase', 'match', 'p1', stale);
-    expect(h.createPrep).not.toHaveBeenCalled();
+    expect(h.claimPrep).toHaveBeenCalledExactlyOnceWith('phase', 'match', 'p1', expect.any(String), true, stale, 10);
     expect(h.limit).not.toHaveBeenCalled();
+  });
+  it.each([
+    [{ kind: 'match_not_found' }, 404, 'match_not_found'],
+    [{ kind: 'not_participant' }, 403, 'ai_scouting_participants_only'],
+    [{ kind: 'unscheduled', status: 'completed' }, 400, 'ai_scouting_scheduled_only'],
+  ])('fails closed without rereading a report if access changes during the claim (%j)', async (result, statusCode, code) => {
+    h.claimPrep.mockResolvedValueOnce(result);
+    await expect(generatePhaseAnalysis(scout)).rejects.toMatchObject({ statusCode, code });
+    expect(h.getPrep).toHaveBeenCalledTimes(1);
+    expect(h.complete).not.toHaveBeenCalled();
   });
   it('does not spend a slot for a failed claim or a failed prompt read', async () => {
     h.create.mockRejectedValueOnce(new Error('Unique scope conflict'));
