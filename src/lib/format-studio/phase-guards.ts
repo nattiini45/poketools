@@ -93,13 +93,15 @@ export async function isFormatManagedPhase(seasonId: string, phaseId: string): P
  * unless the request forces it. A forced request needs a reason (400 `PHASE_ROSTER_REASON_REQUIRED` without one) and
  * the guard returns it, so the route can audit it once the change is made. `null`: nothing was overridden (an upcoming
  * phase, or a phase the format does not own).
+ * Native callers pass ownership from their verified phase row; legacy callers omit it.
  */
 export async function assertFormatPhaseRosterOpen(
   seasonId: string,
   phase: { id: string; status: string },
   request: RosterOverrideRequest = { force: false },
+  formatManaged?: boolean,
 ): Promise<RosterOverride | null> {
-  if (phase.status === 'upcoming' || !(await isFormatPhase(seasonId, phase.id))) return null;
+  if (phase.status === 'upcoming' || !(formatManaged ?? await isFormatPhase(seasonId, phase.id))) return null;
   // A force is for a phase in play. A completed phase stays closed: its standings and who advanced from it are history.
   if (!request.force || phase.status === 'completed') throw new FormatStudioError('format_phase_owned');
   const reason = reasonSchema.safeParse(request.reason);

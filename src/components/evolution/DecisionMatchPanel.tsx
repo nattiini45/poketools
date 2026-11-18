@@ -10,7 +10,8 @@ import type { EvolutionStanding } from '@/lib/tournament/evolution-standings';
 
 interface DecisionMatchPanelProps {
   tiedPlayers: EvolutionStanding[];
-  tournamentId: string;
+  tournamentId?: string;
+  roundsHref?: string;
   seasonId?: string;
   /** When true, show admin schedule links (server/session-derived). */
   isAdmin?: boolean;
@@ -23,6 +24,7 @@ interface DecisionMatchPanelProps {
 export default function DecisionMatchPanel({
   tiedPlayers,
   tournamentId,
+  roundsHref,
   seasonId,
   isAdmin = false,
 }: DecisionMatchPanelProps) {
@@ -55,10 +57,10 @@ export default function DecisionMatchPanel({
           <p className="text-xs">
             {t('decision.hint')}
           </p>
-          {isAdmin && (
+          {isAdmin && (roundsHref || tournamentId) && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Link
-                href={`/admin/tournaments/${tournamentId}/rounds`}
+                href={roundsHref ?? `/admin/tournaments/${tournamentId}/rounds`}
                 className="rounded-lg border border-[rgb(217_119_6/0.5)] bg-[rgb(120_53_15/0.3)] px-3 py-1.5 text-xs font-medium text-accent-ink hover:bg-[rgb(120_53_15/0.5)]"
               >
                 {t('decision.enter')}

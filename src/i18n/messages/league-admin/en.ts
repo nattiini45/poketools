@@ -407,5 +407,6 @@ export default {
     rounds: 'Rounds',
     /** Names the strip of in-page links to these sections. */
     sectionsNav: 'Sections of this phase',
+    readOnly: 'This view shows the phase roster, groups and rounds. Editing controls aren’t available here yet.',
   },
 } as const;

@@ -33,6 +33,8 @@ export const publicTags = {
   season: (seasonId: string) => `season:${seasonId}`,
   /** Everything read for one tournament (or league stage). */
   tournament: (tournamentId: string) => `tournament:${tournamentId}`,
+  /** Everything read for one native league phase. */
+  phase: (phaseId: string) => `phase:${phaseId}`,
   /** One player's profile and rating history. */
   player: (playerId: string) => `player:${playerId}`,
   /** One point-buy list version's entries. */
@@ -51,6 +53,7 @@ export const publicTags = {
 export const EXPIRE_NOW = { expire: 0 } as const;
 
 const LEAGUE_PATH = /^\/leagues\/([^/]+)(?:\/(stats|teams|matchup))?$/;
+const PHASE_PATH = /^\/leagues\/([^/]+)\/phases\/([^/]+)(?:\/(stats|matches\/[^/]+))?$/;
 const TOURNAMENT_PATH = /^\/tournaments\/([^/]+)(\/stats)?$/;
 const PLAYER_PATH = /^\/players\/([^/]+)$/;
 
@@ -100,6 +103,14 @@ export function tagsForPath(path: string): string[] {
       : [publicTags.tournament(tournamentId)];
   }
 
+  const phase = PHASE_PATH.exec(path);
+  if (phase) {
+    const [, seasonId, phaseId, sub] = phase;
+    const tags = [publicTags.phase(phaseId), publicTags.season(seasonId)];
+    if (sub === 'stats') tags.push(publicTags.aggregates('phase', phaseId));
+    return tags;
+  }
+
   const player = PLAYER_PATH.exec(path);
   if (player) return [publicTags.player(player[1])];
 
@@ -136,20 +147,29 @@ export function tournamentWriteTags(tournamentId: string, seasonId?: string | nu
   return tags;
 }
 
+type SeasonWriteTargets = readonly string[] | { phaseIds: readonly string[] };
+
 /**
  * Tags a league write changes: its settings, status, phases, participants,
- * cores, tokens, format rules, progress, redraft or evolution points. That is
- * the league's reads, the season list, the tournament list (a league's phases
- * are tournaments), every player profile and the reads of each phase in
- * `stageIds` (the phases the write touched, when the route knows them).
+ * cores, tokens, format rules, progress, redraft or evolution points.
+ * A legacy ID array expires tournament reads; an explicit `phaseIds` object
+ * expires native phase reads without touching standalone tournaments.
  */
-export function seasonWriteTags(seasonId: string, stageIds: readonly string[] = []): string[] {
+export function seasonWriteTags(seasonId: string, targets: SeasonWriteTargets = []): string[] {
+  if ('phaseIds' in targets) {
+    return [
+      publicTags.season(seasonId),
+      publicTags.seasons,
+      publicTags.playerProfiles,
+      ...targets.phaseIds.map(publicTags.phase),
+    ];
+  }
   return [
     publicTags.season(seasonId),
     publicTags.seasons,
     publicTags.tournaments,
     publicTags.playerProfiles,
-    ...stageIds.map((stageId) => publicTags.tournament(stageId)),
+    ...targets.map(publicTags.tournament),
   ];
 }
 
@@ -167,8 +187,12 @@ export function expireTournamentReads(tournamentId: string, seasonId?: string | 
 }
 
 /** Expire the public reads a league write changed (see `seasonWriteTags`). */
-export function expireSeasonReads(seasonId: string, stageIds: readonly string[] = []): void {
-  expirePublicTags(seasonWriteTags(seasonId, stageIds));
+export function expireSeasonReads(seasonId: string, targets?: SeasonWriteTargets): void {
+  expirePublicTags(seasonWriteTags(seasonId, targets));
+}
+
+export function expirePhaseReads(phaseId: string, seasonId: string): void {
+  expireSeasonReads(seasonId, { phaseIds: [phaseId] });
 }
 
 /**
@@ -312,5 +336,42 @@ export async function revalidateMatchPages(tournamentId: string, matchId?: strin
 
   // No path names them, but every involved player's profile (record, form,
   // spotlight, trophies) is derived from match results.
+  pass.tags([publicTags.playerProfiles]);
+}
+
+export async function revalidatePhaseMatchPages(phaseId: string, matchId?: string, knownSeasonId?: string): Promise<void> {
+  const pass = publicRevalidationPass();
+  pass.tags([publicTags.phase(phaseId), publicTags.aggregates('phase', phaseId)]);
+
+  let seasonId = knownSeasonId;
+  if (!seasonId) {
+    try {
+      const { getPhaseById } = await import('@/lib/supabase/queries/league-phases');
+      seasonId = (await getPhaseById(phaseId))?.season_id;
+    } catch (error) {
+      logger.error('revalidation', 'could not read the phase for the league paths', { phaseId, error });
+    }
+  }
+
+  if (seasonId) {
+    const leaguePath = `/leagues/${seasonId}`;
+    const phasePath = `${leaguePath}/phases/${phaseId}`;
+    pass.path(phasePath);
+    pass.path(`${phasePath}/stats`);
+    if (matchId) pass.path(`${phasePath}/matches/${matchId}`);
+    pass.path(leaguePath);
+    pass.path(`${leaguePath}/stats`);
+    pass.path(`${leaguePath}/teams`);
+    pass.path(`${leaguePath}/matchup`);
+    pass.path('/leagues');
+  }
+
+  pass.path('/teams');
+  pass.path('/teams/library');
+  pass.path('/admin/matches');
+  if (matchId) pass.path(`/admin/matches/${matchId}`);
+  pass.path('/insights');
+  pass.path('/leaderboard');
+  pass.path('/pokemon', 'layout');
   pass.tags([publicTags.playerProfiles]);
 }

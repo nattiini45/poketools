@@ -26,6 +26,7 @@ interface TournamentHeroProps {
   league: { id: string; name: string } | null;
   roundCount: number;
   view: TournamentHeroView;
+  matchHref?: string;
   locale: Locale;
 }
 
@@ -34,7 +35,7 @@ interface TournamentHeroProps {
  * status and round on the arena sand; on the versus slab the match in progress, else the next kickoff, else the
  * top of the table. It is the page's `h1`. Server component; it renders from what the page already read.
  */
-export default function TournamentHero({ tournament, league, roundCount, view, locale }: TournamentHeroProps) {
+export default function TournamentHero({ tournament, league, roundCount, view, matchHref, locale }: TournamentHeroProps) {
   const t = createTranslator(tournamentsMessages, locale);
   const tl = createTranslator(leaguesMessages, locale);
   const tc = createTranslator(commonMessages, locale);
@@ -104,7 +105,7 @@ export default function TournamentHero({ tournament, league, roundCount, view, l
             <HeroFighter side={match.away} standing={standing(match.away)} tier="bg-tier-3" align="right" />
           </div>
           <div className="mt-4 flex justify-center">
-            <Link href={`/tournaments/${tournament.id}/matches/${match.matchId}`} className="inline-flex rounded-[3px] text-body">
+            <Link href={matchHref ?? `/tournaments/${tournament.id}/matches/${match.matchId}`} className="inline-flex rounded-[3px] text-body">
               <SkewPlate variant="button" tone="secondary">
                 {tl('hero.actions.open')}
               </SkewPlate>

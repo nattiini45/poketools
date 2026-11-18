@@ -11,12 +11,16 @@ export async function loadNativeSeasonStandingsContext(seasonId: string): Promis
   if (!season) throw new Error('Native standings league not found');
   if (isEvolutionPointBuy(season.format_type)) return loadEpbStandingsContext(seasonId, season.format_type);
   if (season.format_type !== 'custom') return { formatType: season.format_type };
+  const kit = await loadNativeKitStandingsData(seasonId);
+  return kit ? { formatType: season.format_type, kit } : { formatType: season.format_type };
+}
+
+export function loadNativeKitStandingsData(seasonId: string) {
   const storage = nativeKitReadStorage({
     outcomes: (...args) => getNativeKitOutcomes(...args),
     matchIds: (...args) => getNativeKitMatchIds(...args),
     gameCounts: (...args) => getNativeKitGameCounts(...args),
     kills: (...args) => getNativeKitKills(...args),
   });
-  const kit = await loadKitStandingsData(seasonId, { storage });
-  return kit ? { formatType: season.format_type, kit } : { formatType: season.format_type };
+  return loadKitStandingsData(seasonId, { storage });
 }

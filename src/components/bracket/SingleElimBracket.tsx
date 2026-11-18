@@ -2,17 +2,15 @@
 
 import { useLocale } from '@/i18n/client';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
-import type { PublicMatch } from '@/lib/match/public-match';
-import type { Round } from '@/types/round';
 import type { BracketSlotDef } from '@/lib/tournament/bracket-structure';
-import BracketMatchCard from './BracketMatchCard';
+import BracketMatchCard, { type BracketMatch, type BracketMatchLink } from './BracketMatchCard';
 import BracketSkeletonCard from './BracketSkeletonCard';
 import { bracketLabelsFor, type BracketLabels } from './labels';
+import type { BracketRound } from './legacy';
 
-interface SingleElimBracketProps {
-  rounds: Round[];
-  matchesByRound: Record<string, PublicMatch[]>;
-  tournamentId: string;
+type SingleElimBracketProps = BracketMatchLink & {
+  rounds: readonly BracketRound[];
+  matchesByRound: Record<string, readonly BracketMatch[]>;
   structureSlots?: BracketSlotDef[];
   slotLabels?: Map<string, { label1: string; label2: string }>;
   slotIndexByKey?: Map<string, number>;
@@ -20,7 +18,7 @@ interface SingleElimBracketProps {
   legacyMode?: boolean;
   /** The renderer's words; the viewer's language by default. */
   labels?: BracketLabels;
-}
+};
 
 /**
  * Single Elimination bracket renderer using CSS Grid.
@@ -32,12 +30,12 @@ interface SingleElimBracketProps {
 export default function SingleElimBracket({
   rounds,
   matchesByRound,
-  tournamentId,
   structureSlots,
   slotLabels,
   slotIndexByKey,
   legacyMode = false,
   labels: labelsOverride,
+  ...matchLink
 }: SingleElimBracketProps) {
   const locale = useLocale();
   const labels = labelsOverride ?? bracketLabelsFor(locale);
@@ -73,7 +71,7 @@ export default function SingleElimBracket({
                         <BracketMatchCard
                           key={match.id}
                           match={match}
-                          tournamentId={tournamentId}
+                          {...matchLink}
                           statusLabels={labels.matchStatus}
                         />
                       ) : (
@@ -99,7 +97,7 @@ export default function SingleElimBracket({
                       <BracketMatchCard
                         key={match.id}
                         match={match}
-                        tournamentId={tournamentId}
+                        {...matchLink}
                         statusLabels={labels.matchStatus}
                       />
                     ))}

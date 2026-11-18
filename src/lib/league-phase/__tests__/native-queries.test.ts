@@ -22,6 +22,7 @@ vi.mock('@/lib/supabase/client', () => ({ supabase: h.builder }));
 import {
   getPhaseById, getPhaseWithDetails, getPhasesBySeasonIds, getPhaseParticipantsBatch,
   updatePhase, completePhaseIfActive, freezePhaseEnrollment, replacePhaseEnrollment,
+  addPhaseParticipant, removePhaseParticipant, replacePhaseParticipants,
   updatePhaseParticipantSeeds, swapPhaseParticipant, reorderPhases, shiftPhaseStageOrders,
 } from '@/lib/supabase/queries/league-phases';
 import {
@@ -163,6 +164,24 @@ describe('native lifecycle and enrollment writes', () => {
     expect(calls('rpc').map(args => args[0])).toEqual(['phase_participant_seeds', 'phase_stage_orders_reorder', 'phase_stage_orders_shift']);
     fail('SEED_CONFLICT', 'P0001', '{"seed":2}');
     await expect(updatePhaseParticipantSeeds(phase.id, [{ player_id: 'player-a', seed: 2 }])).rejects.toMatchObject({ code: 'SEED_CONFLICT' });
+  });
+
+  it('keeps a refusal distinct and delegates freezing to the atomic roster edit', async () => {
+    await addPhaseParticipant(phase.id, 'player-a');
+    fail('PHASE_GROUP_ROSTER_SCHEDULED');
+    await expect(removePhaseParticipant(phase.id, 'player-a')).rejects.toMatchObject({
+      code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409,
+    });
+    expect(calls('rpc')).toEqual([
+      ['phase_participant_edit', { p_phase_id: phase.id, p_player_id: 'player-a', p_add: true }],
+      ['phase_participant_edit', { p_phase_id: phase.id, p_player_id: 'player-a', p_add: false }],
+    ]);
+    fail('PHASE_GROUP_ROSTER_SCHEDULED');
+    await expect(replacePhaseParticipants(phase.id, [])).rejects.toMatchObject({ code: 'PHASE_GROUP_ROSTER_SCHEDULED' });
+    fail('PHASE_GROUP_ROSTER_SCHEDULED');
+    await expect(replacePhaseEnrollment(phase.id, [], source, null, true)).rejects.toMatchObject({
+      code: 'PHASE_GROUP_ROSTER_SCHEDULED',
+    });
   });
 
   it('hands enrollment and the cascading group slot over through one locked swap', async () => {

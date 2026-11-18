@@ -9,6 +9,9 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { CACHE } from '@/lib/api/cache';
 import { getMoveNatDex } from '@/lib/pkmn/dex';
 import { isValidUuid } from '@/lib/utils/uuid';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { resolveLeaguePhaseRoute } from '@/lib/supabase/queries/phase-route-owners';
 import type { ApiResult } from '@/types/api';
 import type {
   Aggregate,
@@ -43,7 +46,7 @@ function isStatsView(value: string): value is StatsView {
 // Pokémon that used it. `move` is ignored by the other views.
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const scopeType = (searchParams.get('scope') ?? 'tournament') as Exclude<AggregateScope, 'phase'> | 'archive';
+  const scopeType = searchParams.get('scope') ?? 'tournament';
   const scopeId = searchParams.get('scope_id') ?? null;
   const view = searchParams.get('view') ?? 'usage';
   const rawMove = searchParams.get('move');
@@ -68,7 +71,7 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  if (!['tournament', 'league', 'all_time', 'archive'].includes(scopeType)) {
+  if (scopeType !== 'tournament' && scopeType !== 'league' && scopeType !== 'all_time' && scopeType !== 'archive' && scopeType !== 'phase') {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'scope must be tournament, league, or all_time', code: 'stats_scope_invalid' },
       { status: 400 }
@@ -95,11 +98,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const scopedId = scopeType === 'all_time' ? null : scopeId;
+    let aggregateScope: AggregateScope | 'archive' = scopeType;
+    if (scopeType === 'phase') {
+      const seasonId = searchParams.get('season_id');
+      if (!seasonId || !isValidUuid(seasonId) || !scopedId) {
+        throw new UserFacingError('League not found', { code: 'INVALID_SEASON_ID', status: 404 });
+      }
+      const owner = await resolveLeaguePhaseRoute(seasonId, scopedId, await requireOpenPhaseRouteMode());
+      if (!owner) throw new UserFacingError('Phase not found', { code: 'PHASE_NOT_FOUND', status: 404 });
+      aggregateScope = owner.kind;
+    }
     const [aggregates, historical] = await Promise.all([
-      scopeType === 'archive' ? Promise.resolve([]) : getAggregates(scopeType, scopedId),
+      aggregateScope === 'archive' ? Promise.resolve([]) : getAggregates(aggregateScope, scopedId),
       readHistoricalUsage({ scopeType, scopeId: scopedId }),
     ]);
-    const headers = packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS;
+    const headers = scopeType === 'phase' || packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS;
     const provenance = historical.history.state === 'absent' ? {} : { history: historical.history };
 
     if (view === 'raw') {
@@ -168,7 +181,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Default: usage view with computed percentages
-    const totalGames = scopeType === 'archive' ? 0 : await getTotalGamesInScope(scopeType, scopedId);
+    const totalGames = aggregateScope === 'archive' ? 0 : await getTotalGamesInScope(aggregateScope, scopedId);
 
     const usageRows = historical.data
       ? combinePokemonUsage(aggregates, totalGames, historical.data)

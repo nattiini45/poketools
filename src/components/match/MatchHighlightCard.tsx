@@ -75,7 +75,7 @@ interface MatchHighlightCardProps {
   roundName: string | null;
   player1Team: AggregatedPokemon[];
   player2Team: AggregatedPokemon[];
-  analysis: MatchAnalysis | null;
+  analysis: Pick<MatchAnalysis, 'analysis' | 'status'> | null;
   quickStats: QuickStats | null;
   bestOf: number;
   games: GameSummary[];
@@ -377,7 +377,7 @@ function MatchNarrative({
   quickStats,
   aiLang,
 }: {
-  analysis: MatchAnalysis | null;
+  analysis: Pick<MatchAnalysis, 'analysis' | 'status'> | null;
   player1Team: AggregatedPokemon[];
   player2Team: AggregatedPokemon[];
   player1Name: string;

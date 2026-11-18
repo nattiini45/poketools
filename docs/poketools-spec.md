@@ -138,6 +138,8 @@ ADR 0005 fixes the target as full separation. The additive phase-owned schema is
 
 The dormant lifecycle layer supplies native phase/enrollment/group/round/bracket persistence and format materialisation behind explicit storage ports. Existing handlers remain legacy-bound, with no generation lookup or native schema dependency added to their default requests. Native status reactions, advancement and substitution take explicit result/effect callbacks rather than falling back to tournament storage; their activation waits for the later match, ancillary and route layers.
 
+The canonical phase identity is `/leagues/<league>/phases/<phase>`. Route readiness follows the operator-owned phase generation once the server opts into its installed schema. In pre-cutover legacy mode, the canonical scope resolves only a tournament row actually owned by that league; in phase mode it resolves only the native phase owned by that league. A standalone tournament, wrong league or missing phase is not a canonical phase. Old links may redirect permanently only once the phase generation is ready.
+
 | Field | Type | Notes |
 |---|---|---|
 | name | Title | Clean phase name (no "{League} - " prefix stored) |

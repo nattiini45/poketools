@@ -92,7 +92,7 @@ describe('PageContainer title row', () => {
 
 describe('Match page action group', () => {
   const source = readFileSync(
-    join(__dirname, '..', '..', '..', 'app', '(public)', 'tournaments', '[id]', 'matches', '[mid]', 'page.tsx'),
+    join(__dirname, '..', '..', 'match', 'MatchDetail.tsx'),
     'utf8',
   );
 

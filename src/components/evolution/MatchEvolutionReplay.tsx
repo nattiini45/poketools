@@ -25,7 +25,7 @@ interface ReplayStep {
 }
 
 interface MatchEvolutionReplayProps {
-  matchId: string;
+  viewedEndpoint?: string;
   /** Whether the current viewer already viewed this replay (from server) */
   initialViewed: boolean;
   /** Whether the viewer is logged in (controls auto-play) */
@@ -43,7 +43,7 @@ interface MatchEvolutionReplayProps {
  * Viewed state persisted server-side per player (not localStorage).
  */
 export default function MatchEvolutionReplay({
-  matchId,
+  viewedEndpoint,
   initialViewed,
   isAuthenticated,
   evolutionSnapshots,
@@ -84,14 +84,16 @@ export default function MatchEvolutionReplay({
     if (!isAuthenticated || viewed) return;
     // The replay counts as viewed for this session either way; a failed write is logged (the server keeps
     // offering the replay expanded on the next visit), never hidden.
-    try {
-      const res = await fetch(`/api/matches/${matchId}/epb-replay-viewed`, { method: 'POST' });
-      if (!res.ok) console.error(`[MatchEvolutionReplay] marking match ${matchId} viewed failed: HTTP ${res.status}`);
-    } catch (err) {
-      console.error(`[MatchEvolutionReplay] marking match ${matchId} viewed failed`, err);
+    if (viewedEndpoint) {
+      try {
+        const res = await fetch(viewedEndpoint, { method: 'POST' });
+        if (!res.ok) console.error(`[MatchEvolutionReplay] marking replay viewed failed: HTTP ${res.status}`);
+      } catch (err) {
+        console.error('[MatchEvolutionReplay] marking replay viewed failed', err);
+      }
     }
     setViewed(true);
-  }, [isAuthenticated, viewed, matchId]);
+  }, [isAuthenticated, viewed, viewedEndpoint]);
 
   if (evolutionSnapshots.length === 0) return null;
 

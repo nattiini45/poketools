@@ -57,6 +57,7 @@ export const DEFAULT_MOVE_USAGE_LABELS: MoveUsageTableLabels = { ...statsMessage
 interface MoveUsageTableProps {
   scopeType: string;
   scopeId: string | null;
+  seasonId?: string;
   labels?: MoveUsageTableLabels;
 }
 
@@ -112,6 +113,7 @@ export function filterMoveUsageRows(
 export default function MoveUsageTable({
   scopeType,
   scopeId,
+  seasonId,
   labels: labelsOverride,
 }: MoveUsageTableProps) {
   const localized = useMessages(statsMessages).moves;
@@ -138,6 +140,7 @@ export default function MoveUsageTable({
       setError(null);
       try {
         const params = new URLSearchParams({ scope: scopeType, view: 'moves' });
+        if (seasonId && scopeType === 'phase') params.set('season_id', seasonId);
         if (scopeId) params.set('scope_id', scopeId);
 
         const res = await fetch(`/api/stats?${params}`);
@@ -164,7 +167,7 @@ export default function MoveUsageTable({
     return () => {
       active = false;
     };
-  }, [scopeType, scopeId]);
+  }, [scopeType, scopeId, seasonId]);
 
   const pokemonTotalsMap = useMemo(() => {
     const map = new Map<string, MovePokemonTotals>();

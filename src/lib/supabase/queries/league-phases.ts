@@ -354,10 +354,12 @@ export async function getPhaseById(id: string): Promise<Phase | null> {
   return data ? { ...toPhase(data), season_format_type: (data.seasons as { format_type: SeasonFormatType } | null)?.format_type ?? null } : null;
 }
 
-export async function getPhaseWithDetails(id: string): Promise<PhaseWithDetails | null> {
-  const { data, error } = await supabase.from('league_phases')
+export async function getPhaseWithDetails(id: string, seasonId?: string): Promise<PhaseWithDetails | null> {
+  let query = supabase.from('league_phases')
     .select('*, rulesets:ruleset_definition_versions ( name:name_text ), seasons ( name, format_type ), phase_participants ( count )')
-    .eq('id', id).maybeSingle();
+    .eq('id', id);
+  if (seasonId !== undefined) query = query.eq('season_id', seasonId);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data ? {
     ...toPhase(data),
@@ -374,15 +376,22 @@ export async function freezePhaseEnrollment(phaseId: string): Promise<void> {
 }
 
 export async function addPhaseParticipant(phaseId: string, playerId: string): Promise<void> {
-  await freezePhaseEnrollment(phaseId);
   const { error } = await supabase.rpc('phase_participant_edit', { p_phase_id: phaseId, p_player_id: playerId, p_add: true });
   if (error) throw error;
 }
 
+function throwPhaseRosterError(error: { code: string; message: string }): never {
+  if (error.code === 'P0001' && error.message === 'PHASE_GROUP_ROSTER_SCHEDULED') {
+    throw new UserFacingError('A player in a group cannot be removed once the phase has rounds. Use a substitution instead.', {
+      code: 'PHASE_GROUP_ROSTER_SCHEDULED', status: 409,
+    });
+  }
+  throw error;
+}
+
 export async function removePhaseParticipant(phaseId: string, playerId: string): Promise<void> {
-  await freezePhaseEnrollment(phaseId);
   const { error } = await supabase.rpc('phase_participant_edit', { p_phase_id: phaseId, p_player_id: playerId, p_add: false });
-  if (error) throw error;
+  if (error) throwPhaseRosterError(error);
 }
 
 export interface PhaseParticipantSwap { swapped: boolean; seed: number | null }
@@ -416,7 +425,7 @@ export async function updatePhaseParticipantSeeds(phaseId: string, seeds: Array<
 
 export async function replacePhaseParticipants(phaseId: string, entries: Array<{ player_id: string; seed: number }>): Promise<void> {
   const { error } = await supabase.rpc('phase_participants_replace', { p_phase_id: phaseId, p_entries: entries as unknown as Json });
-  if (error) throw error;
+  if (error) throwPhaseRosterError(error);
 }
 
 export async function replacePhaseEnrollment(phaseId: string, entries: Array<{ player_id: string; seed: number }>, source: EnrollmentSource, expectedSyncedAt: string | null, force = false): Promise<boolean> {
@@ -427,7 +436,7 @@ export async function replacePhaseEnrollment(phaseId: string, entries: Array<{ p
   if (error) {
     if (error.code === 'P0001' && error.message === 'enrollment_frozen') throw new UserFacingError('Enrollment is frozen. Confirm to overwrite imported standings.', { code: 'ENROLLMENT_FROZEN' });
     if (error.code === 'P0001' && error.message === 'enrollment_rounds_exist') throw new UserFacingError('Enrollment cannot be re-synced while rounds exist. Confirm to overwrite.', { code: 'ENROLLMENT_ROUNDS_EXIST' });
-    throw error;
+    throwPhaseRosterError(error);
   }
   return data === true;
 }

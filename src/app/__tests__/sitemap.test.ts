@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   seasonList: vi.fn(),
   tournamentList: vi.fn(),
+  phaseMode: vi.fn(),
+  nativePhases: vi.fn(),
+  legacyPhases: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -10,6 +13,9 @@ vi.mock('@/lib/site-url', () => ({ siteUrl: () => new URL('https://poketools.exa
 vi.mock('@/lib/cache/public-reads', () => ({
   publicReads: { seasonList: mocks.seasonList, tournamentList: mocks.tournamentList },
 }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: mocks.phaseMode }));
+vi.mock('@/lib/cache/phase-public-reads', () => ({ phasePublicReads: { bySeasonIds: mocks.nativePhases } }));
+vi.mock('@/lib/supabase/queries/tournaments', () => ({ getStagesBySeasonIds: mocks.legacyPhases }));
 vi.mock('@/lib/wiki/index-rows.server', () => ({
   getWikiIndexRows: (kind: string) =>
     ({
@@ -28,9 +34,12 @@ const TEST = '22222222-2222-4222-8222-222222222222';
 const ARCHIVED = '33333333-3333-4333-8333-333333333333';
 const CUP = '44444444-4444-4444-8444-444444444444';
 const OLD_CUP = '55555555-5555-4555-8555-555555555555';
+const PHASE = '66666666-6666-4666-8666-666666666666';
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.phaseMode.mockResolvedValue('legacy');
+  mocks.legacyPhases.mockResolvedValue(new Map());
   mocks.seasonList.mockResolvedValue([
     { id: LIVE, name: 'Live', is_test_season: false, archived: false },
     { id: TEST, name: 'Test', is_test_season: true, archived: false },
@@ -83,6 +92,16 @@ describe('sitemap()', () => {
   it('never lists a player profile', async () => {
     const urls = (await sitemap()).map((entry) => entry.url);
     expect(urls.filter((url) => url.includes('/players'))).toEqual([]);
+  });
+
+  it('lists native phases at canonical URLs without reading the legacy store', async () => {
+    mocks.phaseMode.mockResolvedValue('phase');
+    mocks.nativePhases.mockResolvedValue({ [LIVE]: [{ id: PHASE, season_id: LIVE, archived: false }] });
+    const urls = (await sitemap()).map((entry) => entry.url);
+    expect(urls).toContain(`https://poketools.example/leagues/${LIVE}/phases/${PHASE}`);
+    expect(urls).not.toContain(`https://poketools.example/tournaments/${PHASE}`);
+    expect(mocks.nativePhases).toHaveBeenCalledWith([LIVE]);
+    expect(mocks.legacyPhases).not.toHaveBeenCalled();
   });
 
   it('lets a failed read fail the request instead of serving a sitemap without leagues', async () => {

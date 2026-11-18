@@ -21,6 +21,7 @@ export default {
     noGames: 'No games played yet.',
     notes: 'Notes',
     backToTournament: 'Back to tournament',
+    backToPhase: 'Back to phase',
   },
   shared: {
     kos: { one: '{count} KO', other: '{count} KOs' },

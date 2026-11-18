@@ -46,8 +46,13 @@ export interface TournamentHeroView {
   leader: HeroSide | null;
 }
 
+type HeroMatchSource = Pick<PublicMatch,
+  'id' | 'status' | 'scheduled_at' | 'player_1_id' | 'player_2_id' |
+  'player_1_name' | 'player_2_name' | 'player_1_avatar_url' | 'player_2_avatar_url'
+>;
+
 export function buildTournamentHero(input: {
-  matches: readonly PublicMatch[];
+  matches: readonly HeroMatchSource[];
   /** The ranked table; empty for an elimination bracket. */
   standings: readonly Pick<Standing, 'player_id' | 'player_name' | 'player_avatar_url' | 'points'>[];
 }): TournamentHeroView {
@@ -56,7 +61,7 @@ export function buildTournamentHero(input: {
     const index = standings.findIndex((row) => row.player_id === playerId);
     return { playerId, name, avatarUrl, ace: null, rank: index >= 0 ? index + 1 : null, points: index >= 0 ? standings[index].points : null };
   };
-  const toMatch = (m: PublicMatch, kind: TournamentHeroMatch['kind']): TournamentHeroMatch => ({
+  const toMatch = (m: HeroMatchSource, kind: TournamentHeroMatch['kind']): TournamentHeroMatch => ({
     kind,
     matchId: m.id,
     scheduledAt: m.scheduled_at,

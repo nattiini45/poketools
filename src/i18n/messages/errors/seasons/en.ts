@@ -37,6 +37,7 @@ export default {
     other: '{count} trainers of this phase are in no league group. Place them in the Participants tab first.',
   },
   PHASE_GROUPS_STALE: 'The league groups changed while the round was being generated; generate it again',
+  PHASE_GROUP_ROSTER_SCHEDULED: 'A player in a group cannot be removed once the phase has rounds. Use a substitution instead.',
   PLAN_CHANGED: 'The group rows changed since they were checked; check them again',
   GROUP_SLOT_CHANGED: 'The groups changed in the meantime; check them again',
   phase_seed_duplicate: 'Duplicate seed values are not allowed',

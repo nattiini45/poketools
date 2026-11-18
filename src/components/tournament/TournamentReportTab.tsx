@@ -14,20 +14,23 @@ interface RoundInfo {
 }
 
 interface TournamentReportTabProps {
-  reports: TournamentReport[];
+  reports: (Pick<TournamentReport, 'id' | 'report_type' | 'content' | 'status'> & { round_id: string | null })[];
   rounds: RoundInfo[];
-  tournamentId: string;
+  tournamentId?: string;
+  matchHrefPrefix?: string;
 }
 
 export default function TournamentReportTab({
   reports,
   rounds,
   tournamentId,
+  matchHrefPrefix,
 }: TournamentReportTabProps) {
   const t = useT(tournamentsMessages);
   // Group reports by round_id
-  const reportsByRound = new Map<string, TournamentReport[]>();
+  const reportsByRound = new Map<string, TournamentReportTabProps['reports']>();
   for (const r of reports) {
+    if (r.round_id === null) continue;
     const list = reportsByRound.get(r.round_id) ?? [];
     list.push(r);
     reportsByRound.set(r.round_id, list);
@@ -81,6 +84,7 @@ export default function TournamentReportTab({
                     key={report.id}
                     report={report}
                     tournamentId={tournamentId}
+                    matchHrefPrefix={matchHrefPrefix}
                   />
                 ))}
             </div>

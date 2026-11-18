@@ -5,6 +5,7 @@ import { phaseMachine } from '../phase-state';
 import { phaseRoundMachine } from '../phase-round-state';
 
 const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261117110000_phase_lifecycle.sql'), 'utf8');
+const rosterSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118090000_phase_roster_group_integrity.sql'), 'utf8');
 const definitions = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(([\s\S]*?)END \$\$;|CREATE OR REPLACE FUNCTION public\.(season_group__league_scheduled)\(([\s\S]*?)\$\$;/g)];
 const body = (name: string) => {
   const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.' + name + '(');
@@ -14,6 +15,18 @@ const body = (name: string) => {
 };
 
 describe('native lifecycle SQL', () => {
+  it('preserves retained group rows and rejects scheduled removals before changing the roster or freeze flag', () => {
+    const replace = rosterSql.slice(0, rosterSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_enrollment_replace'));
+    expect(replace).toMatch(/DELETE FROM public\.phase_participants p WHERE p\.phase_id = p_phase_id\s+AND NOT EXISTS/);
+    expect(replace).toContain('ON CONFLICT (phase_id, player_id) DO UPDATE SET seed = EXCLUDED.seed;');
+    expect(replace.indexOf('public.phase__lock')).toBeLessThan(replace.indexOf('PHASE_GROUP_ROSTER_SCHEDULED'));
+    expect(replace.indexOf('PHASE_GROUP_ROSTER_SCHEDULED')).toBeLessThan(replace.indexOf('DELETE FROM'));
+    const edit = rosterSql.slice(rosterSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_participant_edit'));
+    expect(edit.indexOf('public.phase__lock')).toBeLessThan(edit.indexOf('PHASE_GROUP_ROSTER_SCHEDULED'));
+    expect(edit.indexOf('PHASE_GROUP_ROSTER_SCHEDULED')).toBeLessThan(edit.indexOf('public.phase_enrollment_freeze'));
+    expect(rosterSql).not.toMatch(/ALTER TABLE|phase_storage_transition|DISABLE TRIGGER|SECURITY DEFINER/i);
+  });
+
   it('is additive and leaves native activation to the operator fence', () => {
     expect(sql).toMatch(/^BEGIN;/);
     expect(sql.trim()).toMatch(/COMMIT;$/);

@@ -4,13 +4,12 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { phaseReorderSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
-import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { legacyPhasePersistence, nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
-
-const { listBySeason: getStagesBySeasonId, reorder: reorderPhases } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -34,15 +33,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
+    const mode = await requireOpenPhaseRouteMode();
+    const persistence = mode === 'phase' ? nativePhasePersistence : legacyPhasePersistence;
+    const seasonId = id.toLowerCase();
+    const requested = parsed.data.phase_ids.map((phaseId) => phaseId.toLowerCase());
     // A league with an attached format keeps the order its format gave the phases (409 format_phase_owned).
-    await assertSeasonPhasesFree(id);
+    await assertSeasonPhasesFree(seasonId);
 
-    const stages = await getStagesBySeasonId(id);
+    const stages = await persistence.listBySeason(seasonId);
     const upcoming = stages.filter((s) => s.status === 'upcoming');
     const upcomingIds = new Set(upcoming.map((s) => s.id));
     const pinned = stages.filter((s) => s.status !== 'upcoming');
 
-    for (const phaseId of parsed.data.phase_ids) {
+    for (const phaseId of requested) {
       if (!upcomingIds.has(phaseId)) {
         throw new UserFacingError(
           'Only upcoming phases can be reordered',
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const expectedUpcomingCount = upcoming.length;
-    if (parsed.data.phase_ids.length !== expectedUpcomingCount) {
+    if (requested.length !== expectedUpcomingCount || new Set(requested).size !== expectedUpcomingCount) {
       throw new UserFacingError(
         'phase_ids must include every upcoming phase exactly once',
         { code: 'PHASE_REORDER_INCOMPLETE', status: 400 }
@@ -62,18 +65,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const pinnedOrdered = [...pinned].sort((a, b) => a.stage_order - b.stage_order);
     const newOrder = [
       ...pinnedOrdered.map((p) => p.id),
-      ...parsed.data.phase_ids,
+      ...requested,
     ];
 
-    await reorderPhases(id, newOrder);
-    expireSeasonReads(id, newOrder);
+    await persistence.reorder(seasonId, newOrder);
+    expireSeasonReads(seasonId, mode === 'phase' ? { phaseIds: newOrder } : newOrder);
 
     logAuditEvent({
       action: 'phase.reorder',
       actor_id: admin.playerId,
       actor_name: admin.name,
       resource_type: 'season',
-      resource_id: id,
+      resource_id: seasonId,
       metadata: { phase_ids: newOrder },
     });
 

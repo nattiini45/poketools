@@ -18,7 +18,7 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn() } }));
 
 import { createPhaseGame, findPhaseGameIdByReplayHash, deleteUncountedPhaseGameRow, claimPhaseGameEditLease, setPhaseGameStatsLocked } from '../phase-games';
 import { ReplayAlreadyRecordedError } from '../games';
-import { getPhaseMatchById, updatePhaseMatchStatus, markPhaseMatchFinalized, deletePhaseMatchesByIds, hasDownstreamPhaseMatches } from '../phase-matches';
+import { getPhaseHeadToHead, getPhaseMatchById, updatePhaseMatchStatus, markPhaseMatchFinalized, deletePhaseMatchesByIds, hasDownstreamPhaseMatches } from '../phase-matches';
 import { cleanPhaseMatchChildren, deletePhaseMatchAnalyses, deletePhaseMatchPrepAnalyses } from '../phase-match-children';
 import { recordPhaseMatchOutcome, deletePhaseMatchOutcome } from '../phase-match-outcomes';
 import { insertPhaseMatchSnapshots } from '../phase-match-snapshots';
@@ -34,6 +34,28 @@ beforeEach(() => {
 });
 
 describe('native match and game persistence', () => {
+  it('pages only the completed matches in either seat order of a phase pair', async () => {
+    const a = '22222222-2222-4222-8222-222222222222';
+    const b = '33333333-3333-4333-8333-333333333333';
+    const row = { id: 'meeting', phase_id: id, winner_id: a, games: [{ winner_id: a }, { winner_id: null }] };
+    const page = Array.from({ length: 1000 }, (_, index) => ({ ...row, id: `meeting-${index}` }));
+    settle.mockReturnValueOnce({ data: page, error: null }).mockReturnValueOnce({ data: [row], error: null });
+    await expect(getPhaseHeadToHead(id, a, b)).resolves.toEqual([...page, row]);
+    expect(query.from.mock.calls).toEqual([['phase_matches'], ['phase_matches']]);
+    expect(query.select).toHaveBeenCalledWith('id, phase_id, winner_id, games:phase_games(winner_id)');
+    expect(query.eq.mock.calls).toEqual([['phase_id', id], ['status', 'completed'], ['phase_id', id], ['status', 'completed']]);
+    expect(query.or).toHaveBeenCalledWith(
+      `and(player_1_id.eq."${a}",player_2_id.eq."${b}"),and(player_1_id.eq."${b}",player_2_id.eq."${a}")`,
+    );
+    expect(query.order.mock.calls).toEqual([['created_at'], ['id'], ['created_at'], ['id']]);
+    expect(query.range.mock.calls).toEqual([[0, 999], [1000, 1999]]);
+  });
+
+  it('rejects malformed pair IDs before calling the database', async () => {
+    await expect(getPhaseHeadToHead(id, 'malformed', id)).rejects.toThrow();
+    expect(query.from).not.toHaveBeenCalled();
+  });
+
   it('maps phase identity and joined players without a tournament field', async () => {
     query.maybeSingle.mockResolvedValue({ data: {
       id, phase_id: 'phase', round_id: 'round', player_1_id: 'one', player_2_id: 'two', status: 'scheduled',

@@ -87,6 +87,7 @@ vi.mock('@/components/match/MatchAnalysisCard', () => ({ default: () => null }))
 vi.mock('@/components/match/MatchSchedulingPanel', () => ({ default: () => null }));
 
 import MatchDetailPage from '../page';
+import { renderLegacyMatchDetail } from '@/lib/match/render-legacy-match-detail';
 import CreateSocialImageButton from '@/components/match/CreateSocialImageButton';
 import EpbPokemonRow from '@/components/evolution/EpbPokemonRow';
 
@@ -279,6 +280,32 @@ function elementsOf(node: ReactNode, out: ReactElement<Record<string, unknown>>[
   }
   return out;
 }
+
+describe('MatchDetailPage: canonical legacy rendering', () => {
+  const seasonId = 'season-1';
+  const href = `/leagues/${seasonId}/phases/${TOURNAMENT_ID}`;
+
+  it('uses the canonical phase back link and preserves participant actions and legacy proposal reads', async () => {
+    const match = fullMatchRow({ id: MATCH_ID, tournament_id: TOURNAMENT_ID, status: 'scheduled', games: [] });
+    mocks.getMatchById.mockResolvedValue(match);
+    mocks.getTournamentWithDetails.mockResolvedValue({ ...STANDARD_TOURNAMENT, season_id: seasonId });
+    mocks.getSessionPlayer.mockResolvedValue({ playerId: match.player_1_id, isAdmin: false });
+    const tree = await renderLegacyMatchDetail(TOURNAMENT_ID, MATCH_ID, { seasonId, href, match });
+
+    expect(elementsOf(tree).map(el => el.props.href)).toEqual(expect.arrayContaining([
+      href, `/dashboard/match-prep/${MATCH_ID}`, `/dashboard/submit/${MATCH_ID}`,
+    ]));
+    expect(textsOf(tree)).toContain('Back to phase');
+    expect(mocks.listMatchProposals).toHaveBeenCalledWith(MATCH_ID);
+  });
+
+  it('rechecks the league before reading player-scoped or match child data', async () => {
+    const match = fullMatchRow({ id: MATCH_ID, tournament_id: TOURNAMENT_ID });
+    await expect(renderLegacyMatchDetail(TOURNAMENT_ID, MATCH_ID, { seasonId, href, match })).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(mocks.getSessionPlayer).not.toHaveBeenCalled();
+    expect(mocks.getMatchAnalysis).not.toHaveBeenCalled();
+  });
+});
 
 describe('MatchDetailPage: language', () => {
   it('renders its labels in the viewer language', async () => {

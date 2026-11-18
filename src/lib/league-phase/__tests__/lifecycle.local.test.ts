@@ -90,6 +90,54 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect(participants.find((p) => p.id === playerIds[1])?.seed).toBe(1);
   });
 
+  it('keeps retained group slots across enrollment sync and refuses removal after scheduling', async () => {
+    const phase = await create('double_elim');
+    await enroll(phase.id);
+    const [group] = await groups.createPhaseGroupBatch([{
+      phase_id: phase.id, season_id: seasonId, season_group_id: null, name: 'Example group', group_number: 1,
+    }]);
+    await groups.addPhaseGroupMembersBatch(playerIds.slice(0, 3).map((player_id, index) => ({
+      phase_id: phase.id, group_id: group.id, player_id, seed: index + 10,
+    })));
+    const nextSync = '2026-11-17T00:01:00Z';
+    const entries = [
+      { player_id: playerIds[0], seed: 2 },
+      { player_id: playerIds[1], seed: 1 },
+    ];
+    const slots = () => groups.getGroupMembershipsInPhase(phase.id, playerIds);
+    expect(await phases.replacePhaseEnrollment(phase.id, entries, {
+      type: 'roster', source_phase_id: null, synced_at: nextSync, frozen: false,
+    }, '2026-11-17T00:00:00Z')).toBe(true);
+    expect(await slots()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ player_id: playerIds[0], group_id: group.id, seed: 10 }),
+      expect.objectContaining({ player_id: playerIds[1], group_id: group.id, seed: 11 }),
+    ]));
+    expect(await slots()).toHaveLength(2);
+    expect((await phases.getPhaseParticipants(phase.id)).map(player => [player.id, player.seed]))
+      .toEqual([[playerIds[1], 1], [playerIds[0], 2]]);
+
+    await rounds.createPhaseRound({ phase_id: phase.id, name: 'Finals', round_number: 1, best_of: 3 });
+    const scheduledSlots = await slots();
+    const scheduled = await phases.getPhaseById(phase.id);
+    await phases.updatePhaseParticipantSeeds(phase.id, [{ player_id: playerIds[0], seed: 2, starting_bracket: 'losers' }]);
+    const forcedSync = '2026-11-17T00:02:00Z';
+    expect(await phases.replacePhaseEnrollment(phase.id, entries, {
+      type: 'roster', source_phase_id: null, synced_at: forcedSync, frozen: false,
+    }, nextSync, true)).toBe(true);
+    expect((await phases.getPhaseParticipants(phase.id)).find(player => player.id === playerIds[0]))
+      .toMatchObject({ seed: 2, starting_bracket: 'losers' });
+    await expect(phases.removePhaseParticipant(phase.id, playerIds[0])).rejects.toMatchObject({
+      code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409,
+    });
+    await expect(phases.replacePhaseEnrollment(phase.id, entries.slice(1), {
+      type: 'roster', source_phase_id: null, synced_at: '2026-11-17T00:03:00Z', frozen: false,
+    }, forcedSync, true)).rejects.toMatchObject({ code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409 });
+    expect(await slots()).toEqual(scheduledSlots);
+    expect((await phases.getPhaseById(phase.id))?.enrollment_source)
+      .toMatchObject({ ...scheduled?.enrollment_source, synced_at: forcedSync, frozen: true });
+    expect(await phases.getPhaseParticipants(phase.id)).toHaveLength(2);
+  });
+
   it('admits one competing first round and one competing status move', async () => {
     const phase = await create();
     await enroll(phase.id);

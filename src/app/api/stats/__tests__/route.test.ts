@@ -5,8 +5,12 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
   getTotalGamesInScope: vi.fn(),
 }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ resolveLeaguePhaseRoute: vi.fn() }));
 
 import { GET } from '@/app/api/stats/route';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { resolveLeaguePhaseRoute } from '@/lib/supabase/queries/phase-route-owners';
 import {
   getAggregates,
   getTotalGamesInScope,
@@ -21,6 +25,7 @@ function makeRequest(params: Record<string, string>): NextRequest {
 }
 
 const TOURNAMENT_ID = '11111111-2222-4333-8444-555555555555';
+const LEAGUE_ID = '22222222-2222-4222-8222-222222222222';
 
 const fakeAggregate = (name: string) => ({
   id: `agg-${name}`,
@@ -110,6 +115,25 @@ describe('GET /api/stats', () => {
   });
 
   // ── Raw view ──────────────────────────────────────────────
+
+  it('reads native aggregates only after verifying phase ownership', async () => {
+    vi.mocked(requireOpenPhaseRouteMode).mockResolvedValueOnce('phase');
+    vi.mocked(resolveLeaguePhaseRoute).mockResolvedValueOnce({ kind: 'phase', phase_id: TOURNAMENT_ID, season_id: LEAGUE_ID });
+    vi.mocked(getAggregates).mockResolvedValueOnce([]);
+    const res = await GET(makeRequest({ scope: 'phase', scope_id: TOURNAMENT_ID, season_id: LEAGUE_ID, view: 'moves' }));
+    expect(res.status).toBe(200);
+    expect(vi.mocked(resolveLeaguePhaseRoute)).toHaveBeenCalledExactlyOnceWith(LEAGUE_ID, TOURNAMENT_ID, 'phase');
+    expect(vi.mocked(getAggregates)).toHaveBeenCalledExactlyOnceWith('phase', TOURNAMENT_ID);
+  });
+
+  it('does not read phase statistics for a wrong league', async () => {
+    vi.mocked(requireOpenPhaseRouteMode).mockResolvedValueOnce('phase');
+    vi.mocked(resolveLeaguePhaseRoute).mockResolvedValueOnce(null);
+    const res = await GET(makeRequest({ scope: 'phase', scope_id: TOURNAMENT_ID, season_id: LEAGUE_ID, view: 'moves' }));
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('PHASE_NOT_FOUND');
+    expect(vi.mocked(getAggregates)).not.toHaveBeenCalled();
+  });
 
   it('returns raw aggregates when view=raw', async () => {
     const aggs = [fakeAggregate('Pikachu')];

@@ -24,6 +24,18 @@ Phase-table row writes and non-null phase pointers are fenced while mode is not 
 
 The four modes are `legacy`, `frozen_legacy`, `frozen_phase` and `phase`. Frozen modes record the maintenance boundary. **The foundation is not the full-site write freeze:** the cutover package must fence legacy writers, queues and scheduled callers before any live transfer and must not enable phase mode before the new application and integrations are ready. No operator should invoke these transitions merely because the foundation migration has been applied.
 
+## Route readiness
+
+The route layer reads the operator-owned singleton only when the server is configured with `READ_PHASE_STORAGE_STATE=true`. Unset or false keeps the pre-schema legacy path free of database mode reads. Set true only after the phase schema is installed; the flag does not change the database mode. Once enabled, failed or invalid mode reads propagate instead of silently selecting legacy storage. The mode is not cached across requests.
+
+A canonical league phase lookup requires both a league UUID and a phase UUID. It reads the league's tournament row in legacy mode or the native phase row in phase mode, never falling back to the other store. Frozen modes expose neither result through this lookup. The operator still controls the maintenance freeze, transfer, and reopening. Permanent redirects must wait for phase-ready mode and an actual resolved owner.
+
+The public phase detail, match, and stats pages live under `/leagues/[id]/phases/[phaseId]`. The default legacy generation serves them through a scoped adapter that keeps existing actions on their legacy endpoints. In native mode the proxy resolves old phase, match, stats and admin-rounds links before the old tournament existence check. It returns a 308 with repeated query keys intact only for a verified phase owner. Canonical children outside their league return a real 404; an unavailable storage generation returns 503, not an alias to the other store.
+
+This route layer is deployable without the new SQL when `READ_PHASE_STORAGE_STATE` remains unset or false. Do not enable native storage from this slice alone: the native match and admin pages do not yet expose legacy-only writes. A later integration must complete the native controls and remaining consumers before the cutover package can reopen traffic.
+
+`GET /api/seasons/[id]/phases/[phaseId]/matches/head-to-head` takes two distinct player UUIDs (`player_1_id` and `player_2_id`). After resolving the owning league and phase, it reads completed matches for that pair in either seat order. The response contains the match and phase IDs and the match and game winners, without replay data or administrative fields. The native cache shares one entry across seat orders and expires it on phase writes. This endpoint does not request supplementary historical records.
+
 ## League recycle bin
 
 The same-league enrollment-source FK is deferred `NO ACTION`: deleting the complete phase graph may remove its source and dependent phases together, but a committed dangling source is still rejected.
@@ -41,6 +53,8 @@ The lifecycle layer adds `phase_lifecycle` and `phase_format_materialisation` mi
 The existing handlers explicitly retain legacy persistence. Default requests neither read the generation singleton nor call a new native RPC, so this application layer remains deployable before its two migrations are applied. Native persistence requires those migrations and operator-enabled phase mode; applying SQL alone does not select it. Production application and activation remain separate approvals.
 
 The native phase and round machines share pure transition definitions with their legacy counterparts but have separate registry entries and writer paths. Enrollment uses the source timestamp as a compare-and-set and retains frozen-state and existing-round refusal guards; bracket generation freezes enrollment atomically. Native round and bracket RPCs lock the league and phase before writing children; competing status changes cannot leave a partial bracket. Creating an empty round alone leaves phase status and its round counter unchanged, while the pairing writer starts the phase. The first round refuses an incomplete league-group mirror. Participant swaps preserve seed and starting bracket and move the group slot through the native enrollment foreign key's update cascade.
+
+A native roster re-sync preserves the group slots of retained participants, even when their enrollment seeds change. Before the first round, removing an enrollee removes only that player's group slots. Once a phase has rounds, neither a manual removal nor a forced re-sync may remove a grouped player from its roster (`PHASE_GROUP_ROSTER_SCHEDULED`). Use substitution to preserve the slot and its results. This check and the roster writes take the same phase lock as round and group writers.
 
 Format materialisation, kit context, advancement, group formation, classic creation and substitution expose explicit persistence ports. Native status reactions use native context and pure event/check planners, with a required revision/idempotency-aware event writer and invalidation callback. Native paths that need match results, standings, aggregate counts, repair or notifications require explicit callbacks from their owning later layers; they never silently load legacy results. These dormant adapters are not authorization to enable native traffic before those consumers ship.
 

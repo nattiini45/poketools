@@ -60,6 +60,15 @@ describe('TournamentHero', () => {
     expect(html).toContain('href="/players/a"');
   });
 
+  it('uses a canonical phase match link without changing the hero presentation', () => {
+    const league = { id: 's-1', name: 'Example League' };
+    const legacy = render({ league });
+    const target = '/leagues/s-1/phases/t-1/matches/m-1';
+    expect(render({ league, matchHref: target })).toBe(
+      legacy.replace('/tournaments/t-1/matches/m-1', target),
+    );
+  });
+
   it('shows the champion of a finished tournament, in German too', () => {
     const view: TournamentHeroView = { matchesPlayed: 15, match: null, leader: side('a', 'Aria', 1, 12) };
     const html = render({ tournament: { ...TOURNAMENT, status: 'completed' }, view, locale: 'de' });

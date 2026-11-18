@@ -38,19 +38,21 @@ function KalePortrait({ size = KALE_SIZE }: { size?: number }) {
 }
 
 interface TournamentReportCardProps {
-  report: TournamentReport;
+  report: Pick<TournamentReport, 'report_type' | 'content' | 'status'> & { round_id: string | null };
   isAdmin?: boolean;
-  tournamentId: string;
+  tournamentId?: string;
+  matchHrefPrefix?: string;
 }
 
 export default function TournamentReportCard({
   report,
   isAdmin: isAdminProp,
   tournamentId,
+  matchHrefPrefix,
 }: TournamentReportCardProps) {
   const t = useT(tournamentsMessages);
   const { data: session } = useSession();
-  const isAdmin = isAdminProp ?? session?.player?.isAdmin ?? false;
+  const mayRegenerate = !!tournamentId && (isAdminProp ?? session?.player?.isAdmin ?? false);
   const [expanded, setExpanded] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
 
@@ -59,6 +61,7 @@ export default function TournamentReportCard({
   const headline = 'headline' in content ? content.headline : '';
 
   async function handleRegenerate() {
+    if (!tournamentId) return;
     setRegenerating(true);
     try {
       const res = await fetch('/api/ai/tournament-report', {
@@ -115,7 +118,7 @@ export default function TournamentReportCard({
             {t('report.failed')}
           </span>
         </div>
-        {isAdmin && (
+        {mayRegenerate && (
           <button onClick={handleRegenerate} disabled={regenerating} className="mt-2 text-xs text-poke-blue hover:underline disabled:opacity-50">
             {regenerating ? t('report.regenerating') : t('report.retry')}
           </button>
@@ -150,11 +153,14 @@ export default function TournamentReportCard({
       {expanded && (
         <div className="px-4 pb-4 space-y-4">
           {isRecap ? (
-            <RecapContent content={content as RoundRecapContent} tournamentId={tournamentId} />
+            <RecapContent
+              content={content as RoundRecapContent}
+              matchHrefPrefix={matchHrefPrefix ?? (tournamentId ? `/tournaments/${tournamentId}/matches` : undefined)}
+            />
           ) : (
             <ForecastContent content={content as RoundForecastContent} />
           )}
-          {isAdmin && (
+          {mayRegenerate && (
             <div className="pt-2 border-t border-poke-border">
               <button onClick={handleRegenerate} disabled={regenerating} className="text-xs text-poke-text-muted hover:text-poke-text-secondary disabled:opacity-50">
                 {regenerating ? t('report.regenerating') : t('report.regenerate')}
@@ -293,7 +299,7 @@ function EnrichedText({
 
 // ─── Recap Content ──────────────────────────────────────────────────
 
-function RecapContent({ content, tournamentId }: { content: RoundRecapContent; tournamentId: string }) {
+function RecapContent({ content, matchHrefPrefix }: { content: RoundRecapContent; matchHrefPrefix?: string }) {
   const t = useT(tournamentsMessages);
   const matchData = content.match_data ?? [];
   const pokemonTypes = content.pokemon_types ?? {};
@@ -326,7 +332,7 @@ function RecapContent({ content, tournamentId }: { content: RoundRecapContent; t
                   oneLiner={summary?.one_liner}
                   lindenMvpName={summary?.mvp_pokemon}
                   pokemonTypes={pokemonTypes}
-                  matchHref={md.match_id ? `/tournaments/${tournamentId}/matches/${md.match_id}` : undefined}
+                  matchHref={md.match_id && matchHrefPrefix ? `${matchHrefPrefix}/${md.match_id}` : undefined}
                 />
               );
             })}

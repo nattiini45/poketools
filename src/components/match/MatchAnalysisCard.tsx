@@ -22,8 +22,8 @@ const PROF_SIZE = 56;
 const STALE_AFTER_MS = 3 * 60 * 1000;
 
 interface MatchAnalysisCardProps {
-  analysis: MatchAnalysis | null;
-  matchId: string;
+  analysis: Pick<MatchAnalysis, 'analysis' | 'status' | 'created_at'> | null;
+  matchId?: string;
   isAdmin?: boolean;
   player1Name?: string;
   player2Name?: string;
@@ -84,7 +84,8 @@ export default function MatchAnalysisCard({
     : null;
   const profName = t('profName');
 
-  async function handleGenerate(id: string, force = false) {
+  async function handleGenerate(force = false) {
+    if (!matchId) return;
     setGenerating(true);
     setError(null);
     // Collapse to pending state so old analysis disappears immediately
@@ -97,8 +98,8 @@ export default function MatchAnalysisCard({
       ? '/api/ai/agent/analyze-match'
       : '/api/ai/match-analysis';
     const body = ENABLE_AGENT_POST_MATCH
-      ? { match_id: id, analysis_type: 'post_match', force }
-      : { match_id: id, force };
+      ? { match_id: matchId, analysis_type: 'post_match', force }
+      : { match_id: matchId, force };
 
     try {
       const response = await fetch(endpoint, {
@@ -161,6 +162,7 @@ export default function MatchAnalysisCard({
 
   // No analysis yet — show "Ask the Prof" button
   if (!analysis) {
+    if (!matchId) return null;
     return (
       <Card variant="outlined" padding="md">
         <div className="flex items-center justify-between">
@@ -179,7 +181,7 @@ export default function MatchAnalysisCard({
             </div>
           </div>
           <button
-            onClick={() => handleGenerate(matchId)}
+            onClick={() => handleGenerate()}
             disabled={generating}
             className={getButtonClasses('ghost', 'md')}
           >
@@ -222,9 +224,9 @@ export default function MatchAnalysisCard({
               </div>
             </div>
           </div>
-          {(isAdmin || isStale) && (
+          {matchId && (isAdmin || isStale) && (
             <button
-              onClick={() => handleGenerate(analysis.match_id, true)}
+              onClick={() => handleGenerate(true)}
               disabled={generating}
               className={getButtonClasses('ghost', 'md')}
             >
@@ -249,13 +251,15 @@ export default function MatchAnalysisCard({
               </span>
             </div>
           </div>
-          <button
-            onClick={() => handleGenerate(analysis.match_id, true)}
-            disabled={generating}
-            className={getButtonClasses('ghost', 'md')}
-          >
-            {generating ? t('analysis.consulting') : t('analysis.askAgain')}
-          </button>
+          {matchId && (
+            <button
+              onClick={() => handleGenerate(true)}
+              disabled={generating}
+              className={getButtonClasses('ghost', 'md')}
+            >
+              {generating ? t('analysis.consulting') : t('analysis.askAgain')}
+            </button>
+          )}
         </div>
       </Card>
     );
@@ -456,9 +460,9 @@ export default function MatchAnalysisCard({
             <span className="text-micro text-fg-muted italic">
               {t('analysis.disclaimer')}
             </span>
-            {isAdmin && (
+            {matchId && isAdmin && (
               <button
-                onClick={() => handleGenerate(analysis.match_id, true)}
+                onClick={() => handleGenerate(true)}
                 disabled={generating}
                 className="text-micro text-fg-muted hover:text-accent-ink transition-colors"
               >

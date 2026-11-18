@@ -18,6 +18,8 @@ src/lib/match/
 ├── match-decisions-core.ts  # Participant/admin decision workflow shared with native phases
 ├── reopen-core.ts  # Reopen orchestration shared by explicit competition adapters
 ├── public-match.ts  # PublicMatch shape + allowlist mapper (client, cache and public-response boundary)
+├── render-legacy-match-detail.ts  # Loads standalone and legacy phase matches for MatchDetail
+├── render-native-match-detail.ts  # Loads a match within its verified native phase for MatchDetail
 ├── aggregate-rebuild.ts  # Admin aggregate maintenance: drain jobs, rebuild scopes from battle_stats
 ├── schedule-aggregate-processing.ts  # Schedules aggregate processing after a write
 ├── bulk-actions.ts  # The bulk processor behind POST /api/admin/matches/batch
