@@ -64,7 +64,7 @@ export interface PublicPhaseMatch extends Omit<PublicMatch, 'tournament_id'> {
   round_number?: number;
 }
 
-function toPublicPhaseMatch(match: PhaseMatchWithRoundNumber): PublicPhaseMatch {
+export function toPublicPhaseMatch(match: PhaseMatchWithRoundNumber): PublicPhaseMatch {
   return {
     id: match.id,
     phase_id: match.phase_id,
