@@ -42,6 +42,8 @@ export interface BracketPersistence {
   machine: Pick<typeof tournamentMachine, 'assertTransition'>;
 }
 
+export type BracketGenerationPersistence = Omit<BracketPersistence, 'getMatches' | 'getMatch' | 'resetMatch'>;
+
 export const legacyBracketPersistence: BracketPersistence = {
   getRounds: getRoundsByTournament,
   getMatches: getMatchesByTournament,
@@ -120,7 +122,7 @@ async function writePlannedBracket(
   plan: BracketPlan,
   replace: boolean,
   options: GenerateBracketOptions,
-  storage: BracketPersistence,
+  storage: BracketGenerationPersistence,
 ): Promise<GenerateBracketResult> {
   if (tournament.status !== 'active') storage.machine.assertTransition(tournament.status, 'active', 'system');
   await storage.write({
@@ -155,7 +157,7 @@ export async function generateEliminationBracket(
   tournament: BracketCompetition,
   participants: ParticipantWithSeed[],
   options: GenerateBracketOptions = {},
-  storage: BracketPersistence = legacyBracketPersistence,
+  storage: BracketGenerationPersistence = legacyBracketPersistence,
 ): Promise<GenerateBracketResult> {
   const existingRounds = await storage.getRounds(tournament.id);
   if (existingRounds.length > 0) {
