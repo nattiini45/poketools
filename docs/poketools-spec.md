@@ -1057,6 +1057,8 @@ POST /api/seasons                           Create a league (any admin). Optiona
                                             At most 20 creates per admin and hour (429, `season-create`)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
+                                            Native PATCH accepts a separate { archived: boolean } change and requires
+                                            restoring an archived phase before editing its settings or status.
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)
 GET/POST/DELETE/PATCH /api/seasons/[id]/phases/[phaseId]/participants
 POST .../participants/sync-standings        Import/re-sync from prior phase table (optional `force`)
@@ -1140,6 +1142,7 @@ POST /api/ruleset-definitions/[id]/pins     Move leagues and phases (up to 50) t
 POST /api/ruleset-definitions/[id]/pins/impact  The question before a move: how many already-submitted teams would stop being
                                             valid under the target version (differential, at most 2000 teams per request,
                                             `truncated` says so). Writes nothing, no audit. ruleset-pin-impact 60 per hour
+                                            Both routes accept explicit `kind: 'phase'` only in open native phase mode.
 GET  /api/ruleset-definitions/[id]/versions/[no]  One published version with its document and frozen rules (diff, rebase)
 GET  /api/rulesets                          Public: the head version of every shared ruleset in the flat shape of the old API
                                             (names in `bans`, `additions`, `clauses`, plus `gen`, `universe`, `allow`, `version`);

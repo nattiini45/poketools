@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { logger } from '@/lib/logger';
@@ -40,6 +41,7 @@ import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { statusEffectsAuditMetadata, updateTournamentWithStatus } from '@/lib/tournament/tournament-transition';
 
 const { getById: getTournamentById, getWithDetails: getTournamentWithDetails, listBySeason: getStagesBySeasonId, remove: deleteTournament, participants: getParticipants, rounds: getRoundsByTournament } = legacyPhasePersistence;
+const nativePhaseUpdateSchema = phaseUpdateSchema.extend({ archived: z.boolean().optional() });
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;
@@ -94,8 +96,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const rawBody = await request.json();
-    const parsed = phaseUpdateSchema.safeParse(rawBody);
+    const json = await readJsonBody(request);
+    if (!json.ok) return json.response;
+    const parsed = (native ? nativePhaseUpdateSchema : phaseUpdateSchema).safeParse(json.value);
     if (!parsed.success) {
       const issues = formatZodErrors(parsed.error);
       return NextResponse.json<ApiResult<never>>(
@@ -104,8 +107,16 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const body = parsed.data;
+    const body: z.infer<typeof nativePhaseUpdateSchema> = parsed.data;
     const seasonId = before.season_id;
+    if (nativeBefore && body.archived !== undefined && Object.keys(body).length !== 1) {
+      throw new UserFacingError('Archive or restore the phase separately from other edits.', {
+        code: 'phase_archive_edit_separately', status: 400,
+      });
+    }
+    if (nativeBefore?.archived && body.archived === undefined) {
+      throw new UserFacingError('Archived phase is read-only', { code: 'phase_bracket_archived', status: 409 });
+    }
 
     // The schema takes a legacy even best-of so the form can send the stored record back;
     // only an even value the phase does not already hold is refused.
@@ -173,6 +184,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     diffField(changes, 'name', before.name, phase.name);
     diffField(changes, 'status', before.status, phase.status);
     diffField(changes, 'bracket_type', before.bracket_type, phase.bracket_type);
+    if (native) diffField(changes, 'archived', before.archived, phase.archived);
     if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'phase.update',

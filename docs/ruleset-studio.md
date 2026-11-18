@@ -37,7 +37,7 @@ src/lib/ruleset-studio/           Server orchestration and rules around the libr
 ├── pins.ts / pin-change.ts       listUsage, movePins (compare-and-set), the check every ruleset_id change runs
 ├── pin-impact.server.ts          How many submitted teams a pin move would invalidate
 ├── phase-pin-impact.server.ts    Native phase team impact of a pin move
-├── phase-pins.ts                 Dormant native phase pin moves
+├── phase-pins.ts                 Native phase pin moves and usage/exposure adapters
 ├── pin-move-core.ts              Shared pin move authorization and compare-and-set orchestration
 ├── pin-info.ts / pin-info.server.ts  What a league shows about its pin: the version, a newer one, the change counts
 ├── staleness.ts                  isCatalogStale: the version was computed from older catalog data than this build has
@@ -93,7 +93,7 @@ Entries are dex ids (`toID`: `tapukoko`, `stealthrock`), never display names. A 
 
 ### Pins and their moves
 
-The dormant native adapter is `phase-pins.ts`: `movePinsWithPhases`, `loadMoveTargetsWithPhases`, `listUsageWithPhases` and `readExposedRulesetWithPhases`. The legacy and native moves share `pin-move-core.ts`; legacy routes still call `movePins` and never query native tables. Native targets use kind `phase`, with the real parent league, live phase/league administration, immutable version ownership, started confirmation and completed/archived locks. The phase compare-and-set also guards the captured status and archive flag, so a concurrent phase closure refuses the move. Usage reports phase counts separately and preserves the league-name privacy rule. A private version is exposed only if an actual legacy or native pin exists. `computePinImpactWithPhases` (`phase-pin-impact.server.ts`) binds the shared bounded differential validator to native phase teams and their own match locks, while standalone/league targets retain their existing readers. These adapters do not activate routes or change the session role read.
+The two HTTP pin endpoints dispatch explicit `kind: 'phase'` targets to `movePinsWithPhases` and `computePinImpactWithPhases`. They refuse those targets while phase storage is disabled or frozen. Legacy-only requests keep their old dispatch and do not query native tables. The adapters share the move and impact logic, checking the native phase and its real parent league, live administration, immutable version ownership, started confirmation and completed/archived locks. A phase move compares the pin, status and archive flag; after each committed write it expires the native phase reads and audits the phase id. Impact uses the phase team's own match locks rather than the old tournament teams. Usage and private-version exposure adapters are separate and remain dormant.
 
 `movePins` (`pins.ts`):
 

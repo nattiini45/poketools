@@ -47,6 +47,7 @@ export default {
     heading: 'Ruleset',
     current: '{name}, version {version}',
     latest: 'This is the latest version.',
+    archivedPhase: 'Restore this phase before updating its ruleset.',
     available: 'Version {version} is available.',
     open: 'Open ruleset',
     update: 'Update to version {version}',

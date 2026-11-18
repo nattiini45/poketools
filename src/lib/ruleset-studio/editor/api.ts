@@ -100,9 +100,9 @@ export function forkPresetRequest(
   return request(f, 'POST', `${BASE}/presets/${enc(presetId)}/fork`, body);
 }
 
-/** A league (`season`) or a phase or standalone tournament (`tournament`) whose pin the caller moves. */
+/** A league, legacy tournament or native phase whose pin the caller moves. */
 export interface PinTargetRef {
-  kind: 'season' | 'tournament';
+  kind: 'season' | 'tournament' | 'phase';
   id: string;
 }
 

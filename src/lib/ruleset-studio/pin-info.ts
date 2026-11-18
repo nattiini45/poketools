@@ -102,7 +102,7 @@ export function pinTargetCompleted(status: string): boolean {
 
 /** One league or phase the pins route moved. */
 export interface MovedPin {
-  kind: 'season' | 'tournament';
+  kind: 'season' | 'tournament' | 'phase';
   id: string;
   name: string;
   /** For a phase: the league it belongs to (what the cache expiry needs); null for a league. */
@@ -124,8 +124,8 @@ export interface MovePinsOutcome {
 // ─── What moving a pin does to the teams already submitted ────────────────────────────────────────────
 
 /** One league or phase of a pin-impact answer. */
-export interface PinImpactTarget {
-  kind: 'season' | 'tournament';
+export interface PinImpactTarget<K extends string = MovedPin['kind']> {
+  kind: K;
   id: string;
   name: string;
   /** Teams that were checked: the target's teams that can still change. */
@@ -146,7 +146,7 @@ export interface PinImpactTarget {
  * invalid), and a team that can no longer change (locked, or linked to a completed match) is not checked. `truncated` says the
  * check stopped at its bound, so the counts cover only the first `checked` teams.
  */
-export interface PinImpact {
+export interface PinImpact<K extends string = MovedPin['kind']> {
   version_no: number;
   /** Sum of `checked` over the targets. */
   checked: number;
@@ -155,5 +155,5 @@ export interface PinImpact {
   /** Sum of `malformed` over the targets (absent means 0). */
   malformed?: number;
   truncated: boolean;
-  targets: PinImpactTarget[];
+  targets: PinImpactTarget<K>[];
 }
