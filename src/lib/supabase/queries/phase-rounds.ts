@@ -86,12 +86,13 @@ export async function getSwissByeRoundsBySeason(seasonId: string): Promise<ByeRo
   return rows.map(toByeRound);
 }
 
-export async function getPhaseRoundById(id: string): Promise<PhaseRound | null> {
-  const { data, error } = await supabase
+export async function getPhaseRoundById(id: string, phaseId?: string): Promise<PhaseRound | null> {
+  let query = supabase
     .from('phase_rounds')
     .select('*')
-    .eq('id', id)
-    .maybeSingle();
+    .eq('id', id);
+  if (phaseId !== undefined) query = query.eq('phase_id', phaseId);
+  const { data, error } = await query.maybeSingle();
 
   if (error) throw error;
   return data ? toRound(data) : null;
@@ -379,16 +380,24 @@ function parseRoundComplete(data: unknown): CompleteRoundResult | null {
 
 export async function updatePhaseRoundBestOf(
   id: string,
-  bestOf: number
+  bestOf: number,
 ): Promise<PhaseRound> {
   const { data, error } = await supabase
     .from('phase_rounds')
     .update({ best_of: bestOf })
     .eq('id', id)
+    .eq('status', 'pending')
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) throw error;
+  if (!data) {
+    throw new UserFacingError('This round changed its status in the meantime. Reload the page and try again.', {
+      code: 'round_status_changed',
+      params: { from: 'pending' },
+      status: 409,
+    });
+  }
   return toRound(data);
 }
 

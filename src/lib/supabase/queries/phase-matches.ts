@@ -86,13 +86,11 @@ const MATCH_WITH_PLAYERS_SELECT = `
 `;
 
 export async function getPhaseMatchesByRound(roundId: string): Promise<PhaseMatchWithPlayers[]> {
-  const { data, error } = await supabase
+  const rows = await readAllPages<MatchWithPlayersRow>((from, to) => supabase
     .from('phase_matches')
     .select(MATCH_WITH_PLAYERS_SELECT)
-    .eq('round_id', roundId);
-
-  if (error) throw error;
-  return data.map((row: MatchWithPlayersRow) => toMatchWithPlayers(row));
+    .eq('round_id', roundId).order('id').range(from, to));
+  return rows.map(toMatchWithPlayers);
 }
 
 export async function getPhaseMatchById(id: string): Promise<PhaseMatchWithPlayers | null> {
