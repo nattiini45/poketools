@@ -297,7 +297,7 @@
       "expires": ["expireTournamentReads"],
       "audit": ["round.generate"],
       "emits": ["emitDiscordEvent(round_generated)", "emitDiscordEvent(tournament_started)", "emitSocialEvent(round_generated)", "emitSocialEvent(tournament_started)"],
-      "importFingerprint": "5e0efade3b43f5f6",
+      "importFingerprint": "c3f24e71e7c373f6",
       "importFiles": 435,
       "imports": {
         "src/lib/ai/trigger.ts": { "names": ["triggerTournamentReport"], "closure": "51c64c6bf7a0a091", "files": 227 },
@@ -308,7 +308,7 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/discord/notify.ts": { "names": ["emitDiscordEvent"], "closure": "1b1f8a27fe30d641", "files": 81 },
         "src/lib/feature-flags.ts": { "names": ["ENABLE_KALE_CABBAGE"], "closure": "e3b0c44298fc1c14", "files": 1 },
-        "src/lib/format-engine/groups.ts": { "names": ["ensureKitPhaseGroups"], "closure": "c2f9f5d2d9dacc5c", "files": 77 },
+        "src/lib/format-engine/groups.ts": { "names": ["ensureKitPhaseGroups"], "closure": "222cd85409fc2618", "files": 78 },
         "src/lib/format-engine/pairing-server.ts": { "names": ["loadPairingAids"], "closure": "62c8bd3ba67c1e68", "files": 134 },
         "src/lib/format-engine/pairing.ts": { "names": ["kitPairsRounds", "legRoundRange", "pairNextRound", "roundRobinOf"], "closure": "9dc0e2300edd4fa3", "files": 46 },
         "src/lib/format-engine/route-guards.ts": {
@@ -348,7 +348,7 @@
         "src/lib/tournament/generate-options.ts": { "names": ["parseGenerateOptions"], "closure": "e2e0b97bc0940ef0", "files": 26 },
         "src/lib/tournament/group-rounds.ts": {
           "names": ["ensurePhaseGroupsFromLeague", "pendingWeeks", "planPhaseWeeks", "resolveWeekPairings", "roundsAwaitingMatches"],
-          "closure": "411e7792bbf9e615",
+          "closure": "a59d7f3fe73ce066",
           "files": 145
         },
         "src/lib/tournament/index.ts": { "names": ["generateRound"], "closure": "5ba04a630385ffcc", "files": 47 },
@@ -568,7 +568,7 @@
       "expires": ["expireSeasonReads"],
       "audit": ["phase.create"],
       "emits": [],
-      "importFingerprint": "d2c58e4df5cc7137",
+      "importFingerprint": "dcd3f1eee9505d89",
       "importFiles": 193,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -577,7 +577,7 @@
         "src/lib/audit/log.ts": { "names": ["logAuditEvent"], "closure": "a1b7040cd994e2de", "files": 6 },
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertSeasonPhasesFree"], "closure": "956cc87761631496", "files": 50 },
-        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "ccdf7b528a643ef6", "files": 140 },
+        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "24fc8f2b9dd76305", "files": 140 },
         "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["legacyPhasePersistence", "nativePhasePersistence"], "closure": "6413f5fb76b2ca6d", "files": 20 },
         "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
@@ -602,7 +602,7 @@
       "expires": ["expirePhaseReads", "expireTournamentReads"],
       "audit": ["phase.enrollment.sync"],
       "emits": [],
-      "importFingerprint": "797b52cbfca0f1b7",
+      "importFingerprint": "da376288962929a9",
       "importFiles": 184,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -612,7 +612,7 @@
         "src/lib/auth/helpers.ts": { "names": ["requireResourceAdmin"], "closure": "c9182c1621e41838", "files": 81 },
         "src/lib/format-studio/phase-guards.ts": { "names": ["assertFormatPhaseRosterOpen"], "closure": "956cc87761631496", "files": 50 },
         "src/lib/format-studio/roster-override.ts": { "names": ["auditRosterOverride", "rosterOverrideOf"], "closure": "a534785b60cecc97", "files": 7 },
-        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "ccdf7b528a643ef6", "files": 140 },
+        "src/lib/league-phase/enrollment-services.ts": { "names": ["createNativePhaseEnrollment"], "closure": "24fc8f2b9dd76305", "files": 140 },
         "src/lib/league-phase/lifecycle-persistence.ts": { "names": ["nativePhasePersistence"], "closure": "6413f5fb76b2ca6d", "files": 20 },
         "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
         "src/lib/revalidation.ts": { "names": ["expirePhaseReads", "expireTournamentReads"], "closure": "c65c01beabb9a71d", "files": 16 },
