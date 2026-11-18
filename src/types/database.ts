@@ -9741,6 +9741,16 @@ export type Database = {
         }
         Returns: undefined
       }
+      phase_admin_round_delete: {
+        Args: {
+          p_confirm: boolean
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_round_id: string
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_aggregate_deltas: {
         Args: {
           p_aggregate_deltas: Json

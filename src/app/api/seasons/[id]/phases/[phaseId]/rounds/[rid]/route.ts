@@ -7,8 +7,9 @@ import { toPublicPhaseMatch } from '@/lib/cache/phase-public-reads';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
 import { expirePhaseReads } from '@/lib/revalidation';
 import { getPhaseMatchesByRound } from '@/lib/supabase/queries/phase-matches';
-import { completePhaseRound, updatePhaseRoundBestOf, updatePhaseRoundDeadline, updatePhaseRoundStatus } from '@/lib/supabase/queries/phase-rounds';
-import { formatZodErrors, roundUpdateSchema } from '@/lib/validation';
+import { completePhaseRound, deleteAdminPhaseRound, updatePhaseRoundBestOf, updatePhaseRoundDeadline, updatePhaseRoundStatus } from '@/lib/supabase/queries/phase-rounds';
+import { formatZodErrors, phaseDeleteSchema, roundUpdateSchema } from '@/lib/validation';
+import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
 import type { ApiResult } from '@/types/api';
 import type { PhaseRound } from '@/types/league-phase';
 import { onPhaseRoundCompleted } from '../_lib/effects';
@@ -114,5 +115,35 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     return NextResponse.json<ApiResult<PhaseRound>>({ success: true, data: round });
   } catch (error) {
     return phaseRoundError(error, 'Failed to update round');
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: Promise<RoundParams> }) {
+  try {
+    const actor = await requirePlayer();
+    const path = await params;
+    const invalid = invalidPhaseRoundPath(path);
+    if (invalid) return invalid;
+    const { phase, season } = await loadRoundPhase(path, actor);
+    const round = await loadOwnedRound(phase.id, path.rid);
+    const text = await request.text();
+    const json = await readJsonBody({ json: async () => text.trim() ? JSON.parse(text) : null });
+    if (!json.ok) return json.response;
+    const confirmation = phaseDeleteSchema.safeParse(json.value);
+    if (!confirmation.success) {
+      throw new UserFacingError(tournamentErrors.phase_round_delete_confirm_required, {
+        code: 'phase_round_delete_confirm_required', status: 400,
+      });
+    }
+    const deleted = await deleteAdminPhaseRound(season.id, phase.id, round.id, round.updated_at, confirmation.data.confirm);
+    logAuditEvent({
+      actor_id: actor.playerId, actor_name: actor.name, action: 'round.delete',
+      resource_type: 'phase_round', resource_id: round.id, resource_name: deleted.name,
+      metadata: { season_id: season.id, phase_id: phase.id, round_number: deleted.round_number, deleted_matches: deleted.matches },
+    });
+    expirePhaseReads(phase.id, season.id);
+    return NextResponse.json<ApiResult<{ deleted: true }>>({ success: true, data: { deleted: true } });
+  } catch (error) {
+    return phaseRoundError(error, 'Failed to delete round');
   }
 }

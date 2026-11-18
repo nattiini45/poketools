@@ -140,6 +140,13 @@ export default defineDe<typeof en>()({
   format_reaction_failed:
     'Der Phasenstatus wurde gespeichert, aber die Reaktion des Ligaformats darauf (Stufenstart oder -ende, Gleichstand-Prüfungen) ist nicht gelaufen. Sende denselben Status erneut, um sie zu wiederholen.',
   round_changed: 'Ein Match dieser Runde hat sich geändert, während sie gelöscht wurde, deshalb wurde nichts gelöscht. Lade die Runde neu und versuche es erneut.',
+  phase_round_delete_confirm_required: 'Eine Runde lässt sich nur mit confirm: true löschen.',
+  phase_round_delete_changed: 'Die Runde oder eines ihrer Matches hat sich beim Löschen geändert. Lade die Runde neu und versuche es erneut.',
+  phase_round_delete_locked: 'Diese Runde oder ihre Phase ist abgeschlossen, archiviert oder wird vom Ligaformat verwaltet. Du kannst die Runde hier nicht löschen.',
+  phase_round_delete_dependent: 'Solange es eine spätere Runde gibt oder eine andere Phase ihre Teilnehmenden aus dieser Phase übernimmt, kannst du diese Runde nicht löschen.',
+  phase_round_delete_results: 'Solange ein Match dieser Runde Partien oder Ergebnisdaten enthält, kannst du die Runde nicht löschen.',
+  phase_round_delete_teams: 'Solange Teams mit einem Match dieser Runde verknüpft sind, kannst du die Runde nicht löschen.',
+  phase_round_delete_linked: 'Solange die Runde oder eines ihrer Matches verknüpfte Daten oder Termindetails enthält, kannst du die Runde nicht löschen.',
   rounds_round_completed: '{round} ist bereits abgeschlossen, deshalb wurden keine Matches hineingeschrieben. Lösche sie, um sie neu zu erzeugen.',
   tournament_status_changed: 'Der Status dieses Turniers oder dieser Phase hat sich inzwischen geändert. Lade die Seite neu und versuche es erneut.',
   round_status_changed: 'Der Status dieser Runde hat sich inzwischen geändert. Lade die Seite neu und versuche es erneut.',
