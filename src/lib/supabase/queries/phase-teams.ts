@@ -112,6 +112,13 @@ export async function getPhaseMatchPrepTeams(matchId: string): Promise<PhaseMatc
   return (data ?? []).map((row) => ({ ...row, pokemon: row.pokemon as unknown as PhaseTeam['pokemon'] }));
 }
 
+export async function getPlayerPhaseMatchPrep(matchId: string, playerId: string): Promise<PhaseMatchPrepTeam | null> {
+  const { data, error } = await supabase.from('phase_match_prep_teams').select(PREP_COLUMNS)
+    .eq('match_id', matchId).eq('player_id', playerId).maybeSingle();
+  if (error) throw error;
+  return data ? { ...data, pokemon: data.pokemon as unknown as PhaseTeam['pokemon'] } : null;
+}
+
 export async function releasePhaseTeamsFromMatches(matchIds: readonly string[]): Promise<number> {
   const { data, error } = await supabase.rpc('phase_teams_release_matches', { p_match_ids: [...new Set(matchIds)] });
   if (error) throw error;
