@@ -2,10 +2,11 @@ import { NextRequest } from 'next/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { POST } from '../route';
+import { POST as POST_BATCH } from '../../generate-all/route';
 
 const m = vi.hoisted(() => ({
   actor: vi.fn(), allowed: vi.fn(), mode: vi.fn(), season: vi.fn(), phase: vi.fn(), rounds: vi.fn(), matches: vi.fn(),
-  participants: vi.fn(), groups: vi.fn(), leagueGroups: vi.fn(), write: vi.fn(), start: vi.fn(), startSeason: vi.fn(),
+  participants: vi.fn(), groups: vi.fn(), leagueGroups: vi.fn(), write: vi.fn(), writeBatch: vi.fn(), start: vi.fn(), startSeason: vi.fn(),
   expire: vi.fn(), discord: vi.fn(), social: vi.fn(), audit: vi.fn(), forecast: vi.fn(), standings: vi.fn(),
   kitHead: vi.fn(), loadPhase: vi.fn(), loadContext: vi.fn(), attached: vi.fn(), event: vi.fn(),
 }));
@@ -25,7 +26,7 @@ vi.mock('@/lib/supabase/queries/phase-groups', () => ({ getGroupsByPhase: m.grou
 vi.mock('@/lib/supabase/queries/phase-format-runtime', () => ({ getNativeKitMatchFacts: m.matches }));
 vi.mock('@/lib/supabase/queries/phase-rounds', async importOriginal => ({
   ...await importOriginal<typeof import('@/lib/supabase/queries/phase-rounds')>(),
-  getRoundsByPhase: m.rounds, writeGeneratedPhaseRound: m.write, updatePhaseRoundStatus: m.start,
+  getRoundsByPhase: m.rounds, writeGeneratedPhaseRound: m.write, writeGeneratedPhaseRoundBatch: m.writeBatch, updatePhaseRoundStatus: m.start,
 }));
 vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: m.standings }));
 vi.mock('@/lib/revalidation', () => ({ expirePhaseReads: m.expire, expireTournamentReads: vi.fn() }));
@@ -57,6 +58,9 @@ const players = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, index) => ({ id, name: `
 const run = (body?: unknown) => POST(new NextRequest('http://localhost', { method: 'POST', body: JSON.stringify(body) }), {
   params: Promise.resolve({ id: leagueId.toUpperCase(), phaseId: phaseId.toUpperCase() }),
 });
+const runBatch = (body?: unknown) => POST_BATCH(new NextRequest('http://localhost', { method: 'POST', body: JSON.stringify(body) }), {
+  params: Promise.resolve({ id: leagueId, phaseId }),
+});
 const round = (number: number, byes: string[] = [], status = 'completed') => ({
   id: `r${number}`, round_number: number, name: `Round ${number}`, status, bye_player_ids: byes, pairings_generated: true,
 });
@@ -78,7 +82,59 @@ beforeEach(() => {
   m.leagueGroups.mockResolvedValue([]);
   m.participants.mockResolvedValue(players.slice(0, 5));
   m.write.mockImplementation(async ({ round_number: number, bye_player_ids: byes }) => round(number, byes, 'pending'));
+  m.writeBatch.mockImplementation(async (_scope, plans: { round_number: number; bye_player_ids: string[] }[]) =>
+    plans.map(plan => round(plan.round_number, plan.bye_player_ids, 'pending')));
   m.start.mockResolvedValue(round(1, [], 'active'));
+});
+
+it('writes a full round-robin batch atomically and starts only its first round after commit', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'round_robin' });
+  const response = await runBatch({ start_round: true });
+  expect(response.status).toBe(201);
+  expect((await response.json()).data.map((saved: { status: string }) => saved.status))
+    .toEqual(['active', 'pending', 'pending', 'pending', 'pending']);
+  expect(m.write).not.toHaveBeenCalled();
+  expect(m.writeBatch).toHaveBeenCalledTimes(1);
+  const [scope, plans] = m.writeBatch.mock.calls[0];
+  expect(scope).toMatchObject({ phase_id: phaseId, season_id: leagueId, expected_updated_at: phase.updated_at });
+  expect(plans.map((plan: { round_number: number }) => plan.round_number)).toEqual([1, 2, 3, 4, 5]);
+  expect(plans[0]).toMatchObject({ best_of: 3, bye_player_ids: ['a'] });
+  expect(m.start).toHaveBeenCalledExactlyOnceWith('r1', 'active', 'pending');
+  expect(m.start.mock.invocationCallOrder[0]).toBeGreaterThan(m.writeBatch.mock.invocationCallOrder[0]);
+  expect(m.expire).toHaveBeenCalledExactlyOnceWith(phaseId, leagueId);
+  expect(m.discord).not.toHaveBeenCalled();
+  expect(m.forecast).not.toHaveBeenCalled();
+});
+
+it('never reads or writes a native batch with disabled storage, wrong league, or Swiss format', async () => {
+  m.mode.mockResolvedValueOnce('legacy');
+  expect((await runBatch()).status).toBe(404);
+  expect(m.season).not.toHaveBeenCalled();
+  m.phase.mockResolvedValueOnce({ ...phase, season_id: 'other-league' });
+  expect((await runBatch()).status).toBe(404);
+  const swiss = await runBatch();
+  expect(swiss.status).toBe(400);
+  expect(await swiss.json()).toMatchObject({ code: 'rounds_round_robin_only' });
+  expect(m.rounds).not.toHaveBeenCalled();
+  expect(m.writeBatch).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+});
+
+it('writes only the ready weeks before the first standings-dependent placement', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'round_robin' });
+  m.participants.mockResolvedValue(players);
+  m.leagueGroups.mockResolvedValue([
+    { id: 'group-y', name: 'Group Y', sort_order: 1, player_ids: ['a', 'c', 'e'] },
+    { id: 'group-x', name: 'Group X', sort_order: 2, player_ids: ['b', 'd', 'f'] },
+  ]);
+  const response = await runBatch();
+  expect(response.status).toBe(201);
+  expect((await response.json()).data.map((saved: { round_number: number }) => saved.round_number)).toEqual([1, 2]);
+  expect(m.writeBatch).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ replacement_groups: expect.arrayContaining([expect.objectContaining({ season_group_id: 'group-y' })]) }),
+    [expect.objectContaining({ bye_player_ids: [] }), expect.objectContaining({ bye_player_ids: [] })],
+  );
+  expect(m.standings).not.toHaveBeenCalled();
 });
 
 it('requires live admin access and native storage before reading pairing data', async () => {
@@ -235,4 +291,29 @@ it('applies kit readiness, the revision and calendar, and native start effects',
   expect(await port.load(leagueId)).toBe(context);
   m.loadContext.mockResolvedValueOnce({ ...context, revision: 8 });
   expect(await port.load(leagueId)).toBeNull();
+});
+
+it('keeps kit legs, deadlines and the round cap, firing stage start only once per batch', async () => {
+  m.season.mockResolvedValue({ ...season, format_type: 'custom' });
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'round_robin', season_format_type: 'custom' });
+  m.participants.mockResolvedValue(players.slice(0, 2));
+  const stage = {
+    key: 'table', pairing: { kind: 'round_robin', legs: 3, mirror_legs: true }, end_when: { kind: 'rounds', rounds: 2 },
+    calendar: { start: { kind: 'season_start' }, cadence: 'weekly', every: 1, time: '18:00', round_window_hours: 24 },
+  };
+  m.kitHead.mockResolvedValue({ engine: 'kit', revision: 7, clockShiftSeconds: 0 });
+  m.loadPhase.mockResolvedValue({ engine: 'kit', revision: 7, stage, seed: 'test', tableExtras: {}, outcomes: {} });
+  m.loadContext.mockResolvedValue({
+    revision: 7, def: { rules: [] }, state: { checks: [], links: [], firedEventKeys: [] },
+    phases: [{ id: phaseId, stage, members: [] }],
+  });
+  expect((await runBatch()).status).toBe(201);
+  expect(m.writeBatch).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ expected_revision: 7 }), [
+    expect.objectContaining({ round_number: 1, deadline: '2026-11-19T17:00:00.000Z', matches: [{ player_1_id: 'a', player_2_id: 'b' }] }),
+    expect.objectContaining({ round_number: 2, deadline: '2026-11-26T17:00:00.000Z', matches: [{ player_1_id: 'b', player_2_id: 'a' }] }),
+  ]);
+  expect(m.event.mock.calls.map(([, event]) => event)).toEqual([
+    { event: 'stage_start', stage: 'table' }, { event: 'round_start', stage: 'table', round: 1 },
+    { event: 'round_start', stage: 'table', round: 2 },
+  ]);
 });

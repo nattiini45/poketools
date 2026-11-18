@@ -227,19 +227,12 @@ export interface PhaseRoundGroupLayout {
   members: { player_id: string; seed: number }[];
 }
 
-export async function writeGeneratedPhaseRound(input: {
+interface GeneratedPhaseScope {
   phase_id: string;
   season_id: string;
   phase_status: PhaseStatus;
   expected_updated_at: string;
   expected_revision?: number;
-  round_id: string | null;
-  name: string;
-  round_number: number;
-  best_of: number;
-  bye_player_ids: string[];
-  matches: readonly RoundMatchInput[];
-  deadline: string | null;
   inputs: {
     phase: Pick<Phase, 'status' | 'current_round' | 'bracket_type' | 'stage_spec' | 'name' | 'bo_overrides' | 'best_of_default'>;
     season: Pick<Season, 'start_date' | 'format_type'>;
@@ -250,11 +243,32 @@ export async function writeGeneratedPhaseRound(input: {
     league_groups: { id: string; name: string; sort_order: number; player_ids: string[] }[];
   };
   replacement_groups?: PhaseRoundGroupLayout[];
-}): Promise<PhaseRound> {
+}
+
+interface GeneratedPhaseRoundPlan {
+  round_id: string | null;
+  name: string;
+  round_number: number;
+  best_of: number;
+  bye_player_ids: string[];
+  matches: readonly RoundMatchInput[];
+  deadline: string | null;
+}
+
+function generatedScopeArgs(input: GeneratedPhaseScope) {
   if (input.phase_status === 'upcoming') phaseMachine.assertTransition('upcoming', 'active', 'admin');
+  return {
+    p_phase_id: input.phase_id, p_season_id: input.season_id,
+    p_expected_updated_at: input.expected_updated_at,
+    p_inputs: input.inputs as unknown as Json,
+    ...(input.replacement_groups === undefined ? {} : { p_replacement_groups: input.replacement_groups as unknown as Json }),
+    ...(input.expected_revision === undefined ? {} : { p_expected_revision: input.expected_revision }),
+  };
+}
+
+export async function writeGeneratedPhaseRound(input: GeneratedPhaseScope & GeneratedPhaseRoundPlan): Promise<PhaseRound> {
   const { data, error } = await supabase.rpc('phase_round_generate', {
-    p_phase_id: input.phase_id,
-    p_season_id: input.season_id,
+    ...generatedScopeArgs(input),
     p_round_id: (input.round_id ?? NULL_ARG) as string,
     p_name: input.name,
     p_round_number: input.round_number,
@@ -262,25 +276,36 @@ export async function writeGeneratedPhaseRound(input: {
     p_bye_player_ids: input.bye_player_ids,
     p_matches: roundMatchesJson(input.matches),
     p_deadline: (input.deadline ?? NULL_ARG) as string,
-    p_expected_updated_at: input.expected_updated_at,
-    p_inputs: input.inputs as unknown as Json,
-    ...(input.replacement_groups === undefined ? {} : { p_replacement_groups: input.replacement_groups as unknown as Json }),
-    ...(input.expected_revision === undefined ? {} : { p_expected_revision: input.expected_revision }),
   });
-  if (error) {
-    if (error.code === '55P03') {
-      throw Object.assign(new UserFacingError('Another operation is changing this phase. No round was written. Try again.', {
-        code: 'round_status_changed', status: 409,
-      }), { cause: error });
-    }
-    if (isRoundWriteSignal(error, 'phase_round_inputs_changed')) {
-      throw Object.assign(new UserFacingError('The phase or its pairing history changed while this round was being generated. No round was written. Generate it again.', {
-        code: 'round_status_changed', status: 409,
-      }), { cause: error });
-    }
-    throw mapRoundWriteError(error, input.name, 'writeGeneratedPhaseRound');
-  }
+  if (error) throw mapGeneratedRoundError(error, input.name, 'writeGeneratedPhaseRound');
   return parseRoundWrite(data);
+}
+
+export async function writeGeneratedPhaseRoundBatch(input: GeneratedPhaseScope, rounds: GeneratedPhaseRoundPlan[]): Promise<PhaseRound[]> {
+  if (rounds.length === 0) throw new Error('No phase rounds to write');
+  const { data, error } = await supabase.rpc('phase_round_generate_batch', {
+    ...generatedScopeArgs(input),
+    p_rounds: rounds.map(({ round_id, name, round_number, best_of, bye_player_ids, matches, deadline }) => ({
+      round_id, name, round_number, best_of, bye_player_ids, matches: roundMatchesJson(matches), deadline,
+    })),
+  });
+  if (error) throw mapGeneratedRoundError(error, rounds[0].name, 'writeGeneratedPhaseRoundBatch');
+  if (!Array.isArray(data) || data.length !== rounds.length) throw new Error('Unexpected phase round batch result');
+  return data.map(parseRoundWrite);
+}
+
+function mapGeneratedRoundError(error: { code?: string; message?: string }, name: string, tag: string): unknown {
+  if (error.code === '55P03') {
+    return Object.assign(new UserFacingError('Another operation is changing this phase. No round was written. Try again.', {
+      code: 'round_status_changed', status: 409,
+    }), { cause: error });
+  }
+  if (isRoundWriteSignal(error, 'phase_round_inputs_changed')) {
+    return Object.assign(new UserFacingError('The phase or its pairing history changed while this round was being generated. No round was written. Generate it again.', {
+      code: 'round_status_changed', status: 409,
+    }), { cause: error });
+  }
+  return mapRoundWriteError(error, name, tag);
 }
 
 export interface BracketRoundInput {

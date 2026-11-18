@@ -25,6 +25,7 @@ export function phaseRoundRequests({ season_id, phase_id }: LeaguePhaseAddress) 
   return {
     read: (id: string, signal: AbortSignal) => json<PhaseRoundDetail>(detail(id), { cache: 'no-store', signal }),
     generate: () => json<PhaseRound>(`${rounds}/generate`, { method: 'POST' }),
+    generateAll: () => json<PhaseRound[]>(`${rounds}/generate-all`, { method: 'POST' }),
     generateBracket: () => json<{ rounds_created: number; matches_materialized: number }>(`${phase}/generate-bracket`, { method: 'POST' }),
     createManual: (input: ManualRoundInput, force: boolean) => json<PhaseRound>(
       `${rounds}/manual${force ? '?force=true' : ''}`, write('POST', input),
