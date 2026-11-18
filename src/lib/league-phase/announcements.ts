@@ -8,6 +8,7 @@ import type { NativeMatchDecisionEffects } from './match-decisions';
 import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { NativeKitMatchCallbacks } from './kit-match-effects';
+import type { Phase } from '@/types/league-phase';
 
 export const announcePhaseMatchCompletion: PhaseFinalizationEffects['announcements'] = input => {
   const { match, competition: phase } = input;
@@ -59,11 +60,14 @@ export const announceNativeKitStageCompletion: NativeKitMatchCallbacks['stageCom
       ...(!retry ? { auto_advance_held: reaction.held } : {}),
     },
   });
-  if (retry) return;
+  if (!retry) announcePhaseCompletion(phase);
+};
+
+export function announcePhaseCompletion(phase: Phase): void {
   const payload: PhaseDiscordEventPayload = {
     version: 1, owner: { kind: 'phase', phase_id: phase.id, season_id: phase.season_id }, event_type: 'phase_completed',
     data: { kind: 'phase_status', phase_name: phase.name, new_status: 'completed' },
   };
   emitPhaseDiscordEvent(payload);
   emitPhaseSocialEvent(payload);
-};
+}

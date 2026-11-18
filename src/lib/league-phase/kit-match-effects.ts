@@ -33,24 +33,30 @@ export interface NativeKitMatchCallbacks {
   invalidate(seasonId: string, phaseIds: readonly string[]): void;
 }
 
-export function createNativeKitMatchEffects(callbacks: NativeKitMatchCallbacks) {
+export function createNativePhaseStatusPort({ enroll, invalidate }: Pick<NativeKitMatchCallbacks, 'enroll' | 'invalidate'>): NativeKitStatusPort {
   const storage = nativeKitStorage({
     outcomes: getNativeKitOutcomes,
     matchIds: getNativeKitMatchIds,
     gameCounts: getNativeKitGameCounts,
     kills: getNativeKitKills,
-    enroll: callbacks.enroll,
+    enroll,
   });
   const tablePort: StageTablePort = {
     storage, matches: getNativeKitCompletedRecords, rounds: getRoundsByPhase, groups: getGroupsByPhase,
   };
-  const load = (seasonId: string) => loadFreshKitContext(seasonId, storage);
   const table = (ctx: KitContext, id: string) => loadStageTable(ctx, id, tablePort);
   const settled: NativeKitStatusPort['settled'] = async (ctx, id) => {
     const fired = new Set(ctx.state.firedEventKeys);
     const keyOf = currentCompletionKeyOf(ctx.state.firedEventKeys);
     return !(await getNativeKitMatchFacts(id)).some((match) => awaitsCompletionEffects(match, fired, keyOf));
   };
+  return { storage, table, settled, writeEvent: (input) => firePhaseFormatMatchEvent(input), invalidate };
+}
+
+export function createNativeKitMatchEffects(callbacks: NativeKitMatchCallbacks) {
+  const statusPort = createNativePhaseStatusPort(callbacks);
+  const { storage, table } = statusPort;
+  const load = (seasonId: string) => loadFreshKitContext(seasonId, storage);
   const event: KitEventPort = {
     load,
     write: (input) => firePhaseFormatMatchEvent(input),
@@ -62,9 +68,6 @@ export function createNativeKitMatchEffects(callbacks: NativeKitMatchCallbacks) 
       for (const row of rows) if (row !== null) Object.assign(result, playerRowsOf(row));
       return result;
     },
-  };
-  const statusPort: NativeKitStatusPort = {
-    storage, table, settled, writeEvent: (input) => firePhaseFormatMatchEvent(input), invalidate: callbacks.invalidate,
   };
   async function completeStage(phaseId: string, reason: string, knownUnfinished: readonly string[]): Promise<'completed' | 'skipped' | 'reaction_failed'> {
     const before = await getPhaseById(phaseId);

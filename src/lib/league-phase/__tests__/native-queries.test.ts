@@ -133,6 +133,13 @@ describe('native lifecycle and enrollment writes', () => {
     expect(calls('eq')).toContainEqual(['status', 'active']);
   });
 
+  it('scopes an admin config edit to its league and captured status even with no status change', async () => {
+    ok({ ...phase, name: 'Renamed phase' });
+    await expect(updatePhase(phase.id, { name: 'Renamed phase' }, { from: 'active', seasonId: phase.season_id }))
+      .resolves.toMatchObject({ name: 'Renamed phase' });
+    expect(calls('eq')).toEqual([['id', phase.id], ['status', 'active'], ['season_id', phase.season_id]]);
+  });
+
   it('uses a distinct native stage-end completion and explicit phase result', async () => {
     ok({ outcome: 'completed', phase: { ...phase, status: 'completed' } });
     expect(await completePhaseIfActive(phase.id, ['match-known'])).toMatchObject({ outcome: 'completed', phase: { id: phase.id, status: 'completed' } });

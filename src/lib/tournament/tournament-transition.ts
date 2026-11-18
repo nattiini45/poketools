@@ -95,7 +95,7 @@ export async function updateTournamentWithStatus(
 }
 
 /** The audit metadata of the status effects; empty when none ran or failed. */
-export function statusEffectsAuditMetadata(outcome: TournamentUpdateOutcome): Record<string, unknown> {
+export function statusEffectsAuditMetadata(outcome: Omit<TournamentUpdateOutcome, 'tournament'>): Record<string, unknown> {
   return {
     ...(outcome.formatReactionFailed ? { format_reaction_error: 'phase_status_hook_failed' } : {}),
     ...(outcome.autoAdvanceHeld ? { auto_advance_held: true } : {}),

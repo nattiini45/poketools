@@ -57,8 +57,8 @@ export async function assertSeasonPhasesFree(seasonId: string): Promise<void> {
 }
 
 /** 409 `format_phase_owned` for the phase of an attached format's stage (a delete). A phase of no season passes. */
-export async function assertFormatPhaseDeletable(seasonId: string | null, phaseId: string): Promise<void> {
-  if (seasonId !== null && (await isFormatPhase(seasonId, phaseId))) throw new FormatStudioError('format_phase_owned');
+export async function assertFormatPhaseDeletable(seasonId: string | null, phaseId: string, formatManaged?: boolean): Promise<void> {
+  if (seasonId !== null && (formatManaged ?? await isFormatPhase(seasonId, phaseId))) throw new FormatStudioError('format_phase_owned');
 }
 
 /** 409 `format_phase_owned` when `body` changes a structural field of a format phase; unchanged values pass. */
@@ -66,10 +66,11 @@ export async function assertFormatPhaseUnchanged(
   seasonId: string | null,
   before: { id: string } & Partial<Record<(typeof FORMAT_STRUCTURAL_PHASE_FIELDS)[number], unknown>>,
   body: Partial<Record<(typeof FORMAT_STRUCTURAL_PHASE_FIELDS)[number], unknown>>,
+  formatManaged?: boolean,
 ): Promise<void> {
   if (seasonId === null) return;
   const changed = FORMAT_STRUCTURAL_PHASE_FIELDS.some((field) => body[field] !== undefined && !sameValue(body[field], before[field]));
-  if (changed && (await isFormatPhase(seasonId, before.id))) throw new FormatStudioError('format_phase_owned');
+  if (changed && (formatManaged ?? await isFormatPhase(seasonId, before.id))) throw new FormatStudioError('format_phase_owned');
 }
 
 /** 409 `format_phase_owned` when a request to the league's phase route changes the status of a format phase. */
@@ -77,8 +78,9 @@ export async function assertFormatPhaseStatusUnchanged(
   seasonId: string,
   phase: { id: string; status: string },
   nextStatus: string | undefined,
+  formatManaged?: boolean,
 ): Promise<void> {
-  if (nextStatus !== undefined && nextStatus !== phase.status && (await isFormatPhase(seasonId, phase.id))) {
+  if (nextStatus !== undefined && nextStatus !== phase.status && (formatManaged ?? await isFormatPhase(seasonId, phase.id))) {
     throw new FormatStudioError('format_phase_owned');
   }
 }

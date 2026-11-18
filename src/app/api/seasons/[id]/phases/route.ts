@@ -7,20 +7,22 @@ import { phaseCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { legacyPhasePersistence, nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { createNativePhaseEnrollment } from '@/lib/league-phase/enrollment-services';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
 import { listRoundStatusesByPhaseIds, type RoundStatusRow } from '@/lib/supabase/queries/phase-rounds';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
+import { addPhaseAdmin } from '@/lib/supabase/queries/phase-admins';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { assertRulesetUsableForCreate } from '@/lib/ruleset-studio/pin-change';
 import { assertSeasonPhasesFree } from '@/lib/format-studio/phase-guards';
 import type { ApiResult } from '@/types/api';
 import type { LeaguePhase } from '@/types/season';
 
-const { listBySeason: getStagesBySeasonId, create: createTournament, shiftOrders: shiftStageOrders, getWithDetails: getTournamentWithDetails, rounds: getRoundsByTournament } = legacyPhasePersistence;
+const { listBySeason: getStagesBySeasonId, rounds: getRoundsByTournament } = legacyPhasePersistence;
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -80,6 +82,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
+    const native = (await requireOpenPhaseRouteMode()) === 'phase';
+    const storage = native ? nativePhasePersistence : legacyPhasePersistence;
 
     const season = await getSeasonById(id);
     if (!season) {
@@ -103,7 +107,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = parsed.data;
-    const existing = await getStagesBySeasonId(id);
+    const seasonId = season.id;
+    const existing = await storage.listBySeason(seasonId);
 
     // Names are unique per league (API-only: the table has no constraint).
     // Checked before anything is shifted, so a refusal leaves the league as is.
@@ -125,28 +130,33 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    const wouldShift = existing.filter((phase) => phase.stage_order >= insertAt);
+    if (wouldShift.some((phase) => phase.status !== 'upcoming')) {
+      throw new UserFacingError(
+        'Cannot insert a phase before stages that have already started',
+        { code: 'PHASE_INSERT_LOCKED' }
+      );
+    }
+    if (native && wouldShift.length > 0) {
+      throw new UserFacingError('Inserting a phase before existing phases is not available yet.', {
+        code: 'phase_insert_unavailable', status: 503,
+      });
+    }
+
     // The shift, the insert and the enrollment sync commit one by one: the public reads expire in a finally, with the
     // phases whose order moved and the new phase, whichever step is the last to succeed.
     const touchedIds: string[] = [];
-    let tournament: Awaited<ReturnType<typeof createTournament>>;
+    let created: Awaited<ReturnType<typeof storage.create>>;
     try {
-      if (insertAt <= maxOrder) {
-        const wouldShift = existing.filter((phase) => phase.stage_order >= insertAt);
-        const locked = wouldShift.filter((phase) => phase.status !== 'upcoming');
-        if (locked.length > 0) {
-          throw new UserFacingError(
-            'Cannot insert a phase before stages that have already started',
-            { code: 'PHASE_INSERT_LOCKED' }
-          );
-        }
+      if (wouldShift.length > 0) {
         touchedIds.push(...wouldShift.map((phase) => phase.id));
-        await shiftStageOrders(id, insertAt, 1);
+        await legacyPhasePersistence.shiftOrders(seasonId, insertAt, 1);
       }
 
-      tournament = await createTournament({
+      created = await storage.create({
         name: body.name,
         description: body.description,
-        season_id: id,
+        season_id: seasonId,
         bracket_type: body.bracket_type,
         ruleset_id: body.ruleset_id,
         best_of_default: body.best_of_default,
@@ -156,28 +166,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         stage_order: insertAt,
         advancement_rule: body.advancement_rule ?? null,
       });
-      touchedIds.push(tournament.id);
+      touchedIds.push(created.id);
 
       if (!admin.isAdmin) {
         try {
-          await addResourceAdmin(admin.playerId, 'tournament', tournament.id);
+          if (native) await addPhaseAdmin(admin.playerId, created.id);
+          else await addResourceAdmin(admin.playerId, 'tournament', created.id);
         } catch (adminErr) {
           logger.error('api/seasons', 'Failed to assign resource admin', {
-            seasonId: id,
-            tournamentId: tournament.id,
+            seasonId,
+            ...(native ? { phaseId: created.id } : { tournamentId: created.id }),
             playerId: admin.playerId,
             error: adminErr,
           });
         }
       }
 
-      await syncStandingsEnrollment(id, tournament.id);
+      if (native) await createNativePhaseEnrollment().sync(seasonId, created.id);
+      else await syncStandingsEnrollment(seasonId, created.id);
     } finally {
-      expireSeasonReads(id, touchedIds);
+      expireSeasonReads(seasonId, native ? { phaseIds: touchedIds } : touchedIds);
     }
 
-    const withDetails = await getTournamentWithDetails(tournament.id);
-    const rounds = await getRoundsByTournament(tournament.id);
+    const withDetails = native
+      ? await nativePhasePersistence.getWithDetails(created.id, seasonId)
+      : await legacyPhasePersistence.getWithDetails(created.id);
+    const rounds = native ? await listRoundStatusesByPhaseIds([created.id]) : await getRoundsByTournament(created.id);
     const phase = buildLeaguePhase(withDetails!, rounds);
 
     logAuditEvent({
@@ -185,9 +199,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       actor_id: admin.playerId,
       actor_name: admin.name,
       resource_type: 'season',
-      resource_id: id,
+      resource_id: seasonId,
       resource_name: season.name,
-      metadata: { phase_id: tournament.id, phase_name: tournament.name },
+      metadata: { phase_id: created.id, phase_name: created.name },
     });
 
     return NextResponse.json<ApiResult<LeaguePhase>>(

@@ -9,12 +9,13 @@ import {
 } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
-import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { legacyPhasePersistence, nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { updateAdminPhase } from '@/lib/league-phase/admin-transition';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getPhaseWithDetails } from '@/lib/supabase/queries/league-phases';
 import { listRoundStatusesByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
 import { newEvenBestOfIssues } from '@/lib/tournament/best-of';
-import { buildLeaguePhase,assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
+import { buildLeaguePhase, assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import {
   rebuildAfterTournamentDelete,
   type EntityDeleteRebuildSummary,
@@ -81,8 +82,11 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
 
-    const before = await getTournamentById(phaseId);
-    if (!before || before.season_id !== id) {
+    const native = (await requireOpenPhaseRouteMode()) === 'phase';
+    const nativeBefore = native ? await getPhaseWithDetails(phaseId, id) : null;
+    const legacyBefore = native ? null : await getTournamentById(phaseId);
+    const before = nativeBefore ?? legacyBefore;
+    if (!before || before.season_id !== id.toLowerCase()) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
         { status: 404 }
@@ -100,6 +104,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const body = parsed.data;
+    const seasonId = before.season_id;
 
     // The schema takes a legacy even best-of so the form can send the stored record back;
     // only an even value the phase does not already hold is refused.
@@ -118,8 +123,14 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     // A phase the league's attached format created keeps its structure and moves its status through the tournament route,
     // which runs the format's reaction (409 format_phase_owned).
-    await assertFormatPhaseUnchanged(id, before, body);
-    await assertFormatPhaseStatusUnchanged(id, before, body.status);
+    if (nativeBefore) {
+      const formatManaged = nativeBefore.format_stage_key !== null;
+      await assertFormatPhaseUnchanged(seasonId, before, body, formatManaged);
+      await assertFormatPhaseStatusUnchanged(seasonId, before, body.status, formatManaged);
+    } else {
+      await assertFormatPhaseUnchanged(seasonId, before, body);
+      await assertFormatPhaseStatusUnchanged(seasonId, before, body.status);
+    }
 
     if (before.status === 'completed' && body.status !== 'active') {
       const lockedFields = ['name', 'bracket_type', 'ruleset_id', 'best_of_default', 'bo_overrides', 'is_doubles', 'team_visibility', 'advancement_rule'] as const;
@@ -145,35 +156,37 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     // A rename may not take another phase's name. Saving the unchanged name
     // passes, so a league that already holds duplicates stays editable.
     if (body.name !== undefined && body.name.toLowerCase() !== before.name.trim().toLowerCase()) {
-      assertPhaseNameFree(body.name, await getStagesBySeasonId(id), phaseId);
+      const phases = await (native ? nativePhasePersistence.listBySeason(seasonId) : getStagesBySeasonId(seasonId));
+      assertPhaseNameFree(body.name, phases, before.id);
     }
 
-    // The status moves through the tournament machine with the same effects as from the tournament route: the format
-    // reaction, the auto advance and the completion announcement.
-    const outcome = await updateTournamentWithStatus(before, body, { actor: 'admin' });
-    const { tournament, formatReactionFailed, autoAdvanceHeld, autoAdvanceRepeated } = outcome;
+    const outcome = legacyBefore
+      ? await updateTournamentWithStatus(legacyBefore, body, { actor: 'admin' })
+      : await updateAdminPhase(nativeBefore!, body);
+    const phase = 'phase' in outcome ? outcome.phase : outcome.tournament;
+    const { formatReactionFailed, autoAdvanceHeld, autoAdvanceRepeated } = outcome;
     const statusEffects = statusEffectsAuditMetadata(outcome);
-    expireTournamentReads(phaseId, id);
+    if (!native) expireTournamentReads(phase.id, seasonId);
 
     const changes: Record<string, { before: unknown; after: unknown }> = {};
-    diffField(changes, 'name', before.name, tournament.name);
-    diffField(changes, 'status', before.status, tournament.status);
-    diffField(changes, 'bracket_type', before.bracket_type, tournament.bracket_type);
+    diffField(changes, 'name', before.name, phase.name);
+    diffField(changes, 'status', before.status, phase.status);
+    diffField(changes, 'bracket_type', before.bracket_type, phase.bracket_type);
     if (Object.keys(changes).length > 0 || autoAdvanceRepeated || autoAdvanceHeld) {
       logAuditEvent({
         action: 'phase.update',
         actor_id: admin.playerId,
         actor_name: admin.name,
-        resource_type: 'tournament',
-        resource_id: phaseId,
-        resource_name: tournament.name,
+        resource_type: native ? 'phase' : 'tournament',
+        resource_id: phase.id,
+        resource_name: phase.name,
         changes,
         ...(Object.keys(statusEffects).length > 0 ? { metadata: statusEffects } : {}),
       });
     }
 
-    const withDetails = await getTournamentWithDetails(phaseId);
-    const rounds = await getRoundsByTournament(phaseId);
+    const withDetails = native ? await getPhaseWithDetails(phase.id, seasonId) : await getTournamentWithDetails(phase.id);
+    const rounds = native ? await listRoundStatusesByPhaseIds([phase.id]) : await getRoundsByTournament(phase.id);
     return NextResponse.json<ApiResult<LeaguePhase>>({
       success: true,
       data: buildLeaguePhase(withDetails!, rounds),
@@ -193,8 +206,22 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
 
+    if ((await requireOpenPhaseRouteMode()) === 'phase') {
+      const phase = await getPhaseWithDetails(phaseId, id);
+      if (!phase || phase.season_id !== id.toLowerCase()) {
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+      await assertFormatPhaseDeletable(phase.season_id, phase.id, phase.format_stage_key !== null);
+      throw new UserFacingError('Deleting a native league phase is not available yet.', {
+        code: 'phase_delete_unavailable', status: 503,
+      });
+    }
+
     const tournament = await getTournamentById(phaseId);
-    if (!tournament || tournament.season_id !== id) {
+    if (!tournament || tournament.season_id !== id.toLowerCase()) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
         { status: 404 }
