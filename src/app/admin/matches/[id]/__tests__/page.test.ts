@@ -32,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   listMatchAuditEvents: vi.fn(),
   getLatestMatchDispute: vi.fn(),
   listMatchProposals: vi.fn(),
+  countOpenPhaseMatchProposals: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -70,7 +71,10 @@ vi.mock('@/lib/audit/queries', () => ({
   listMatchAuditEvents: mocks.listMatchAuditEvents,
   getLatestMatchDispute: mocks.getLatestMatchDispute,
 }));
-vi.mock('@/lib/supabase/queries/match-proposals', () => ({ listMatchProposals: mocks.listMatchProposals }));
+vi.mock('@/lib/supabase/queries/match-proposals', () => ({
+  listMatchProposals: mocks.listMatchProposals,
+  countOpenPhaseMatchProposals: mocks.countOpenPhaseMatchProposals,
+}));
 vi.mock('../AdminMatchActions', () => ({ default: () => null }));
 vi.mock('../MatchContextHeader', () => ({ default: () => null }));
 vi.mock('../MatchDisputePanel', () => ({ default: () => null }));
@@ -198,6 +202,7 @@ beforeEach(() => {
   mocks.listMatchAuditEvents.mockResolvedValue({ entries: [], total: 0, offset: 0, limit: MATCH_HISTORY_PAGE_SIZE });
   mocks.getLatestMatchDispute.mockResolvedValue(null);
   mocks.listMatchProposals.mockResolvedValue([]);
+  mocks.countOpenPhaseMatchProposals.mockResolvedValue(0);
 });
 
 afterEach(() => vi.unstubAllEnvs());
@@ -237,7 +242,9 @@ describe('native admin match detail', () => {
     });
     expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: true, bestOf: 5, isSiteAdmin: false, backSuffix: '' });
     expect(props.get(MatchReopenSection)).toMatchObject({ native: true });
-    for (const panel of [MatchSchedulePanel, MatchHistoryPanel, MatchDisputePanel]) expect(types).not.toContain(panel);
+    for (const panel of [MatchHistoryPanel, MatchDisputePanel]) expect(types).not.toContain(panel);
+    expect(props.get(MatchSchedulePanel)).toMatchObject({ matchId: MATCH_ID, pendingProposals: 0 });
+    expect(mocks.countOpenPhaseMatchProposals).toHaveBeenCalledExactlyOnceWith(MATCH_ID, expect.any(String));
     expect(mocks.isPhaseAdminFor).toHaveBeenCalledWith('viewer-1', PHASE_ID);
     expect(mocks.getPhaseRoundById).toHaveBeenCalledWith(ROUND_ID, PHASE_ID);
     expect(mocks.getPhaseWithDetails).toHaveBeenCalledWith(PHASE_ID, SEASON_ID);
@@ -252,6 +259,30 @@ describe('native admin match detail', () => {
     expect(types).not.toContain(AdminMatchActions);
     expect(mocks.getPhaseWithDetails).not.toHaveBeenCalled();
     expect(mocks.resolvePlayerNames).not.toHaveBeenCalled();
+    expect(mocks.countOpenPhaseMatchProposals).not.toHaveBeenCalled();
+  });
+
+  it('keeps a native proposal count failure distinct from a real zero', async () => {
+    mocks.countOpenPhaseMatchProposals.mockRejectedValueOnce(new Error('Count unavailable'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const { props } = await renderPage();
+      expect(props.get(MatchSchedulePanel)).toMatchObject({ matchId: MATCH_ID, pendingProposals: null });
+      expect(mocks.listMatchProposals).not.toHaveBeenCalled();
+      expect(log).toHaveBeenCalledTimes(1);
+    } finally {
+      log.mockRestore();
+    }
+  });
+
+  it('renders the native schedule read-only on completion without counting proposals', async () => {
+    const match = fullMatchRow({ id: MATCH_ID, round_id: ROUND_ID, status: 'completed' });
+    const { tournament_id: _tournamentId, ...phaseMatch } = match;
+    mocks.getPhaseMatchById.mockResolvedValue({ ...phaseMatch, phase_id: PHASE_ID });
+    const { props } = await renderPage();
+    expect(props.get(MatchSchedulePanel)).toMatchObject({ status: 'completed' });
+    expect(mocks.countOpenPhaseMatchProposals).not.toHaveBeenCalled();
+    expect(mocks.listMatchProposals).not.toHaveBeenCalled();
   });
 
   it('a new detail entry still checks legacy ownership even when the phase-only viewer keeps the layout', async () => {
@@ -481,6 +512,7 @@ describe('AdminMatchPage: per-match access', () => {
     const { props } = await renderPage();
 
     expect(props.get(MatchSchedulePanel)).toMatchObject({ pendingProposals: 2 });
+    expect(mocks.countOpenPhaseMatchProposals).not.toHaveBeenCalled();
   });
 
   it('a failed live read fails closed (rethrows)', async () => {

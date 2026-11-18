@@ -146,6 +146,18 @@ export async function listPhaseMatchProposals(matchId: string, playerId: string)
   return rows.map(toMatchProposalWithPlayers);
 }
 
+export async function countOpenPhaseMatchProposals(matchId: string, nowIso: string): Promise<number> {
+  assertValidUuid(matchId, 'match id');
+  const { count, error } = await supabase
+    .from('phase_match_proposals')
+    .select('id', { count: 'exact', head: true })
+    .eq('match_id', matchId)
+    .eq('status', PENDING)
+    .gt('expires_at', nowIso);
+  if (error) throw error;
+  return count ?? 0;
+}
+
 export async function listPendingMatchProposalsForPlayer(
   playerId: string
 ): Promise<MatchProposalWithPlayers[]> {

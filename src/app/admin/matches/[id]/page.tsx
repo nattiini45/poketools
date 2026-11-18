@@ -20,7 +20,7 @@ import { TOURNAMENT_TAB_PARAM } from '@/lib/tournament/page-view';
 import { historyPanelKey, MATCH_HISTORY_PAGE_SIZE, type MatchHistoryPage } from '@/lib/admin/match-detail';
 import { readOptional } from '@/lib/admin/optional-read';
 import { getLatestMatchDispute, listMatchAuditEvents } from '@/lib/audit/queries';
-import { listMatchProposals } from '@/lib/supabase/queries/match-proposals';
+import { countOpenPhaseMatchProposals, listMatchProposals } from '@/lib/supabase/queries/match-proposals';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import { matchListBackHref, matchPageBackSuffix } from '@/lib/admin/match-list';
@@ -74,10 +74,11 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
   }
 
   const emptyHistory: MatchHistoryPage = { entries: [], total: 0, offset: 0, limit: MATCH_HISTORY_PAGE_SIZE };
+  const now = requestTimeMs();
   // The match, its context and the viewer's role are needed for the controls;
   // history, dispute details and proposals only add to the page, so a failed
   // read degrades that section instead of failing the page.
-  const [t, tMatch, isSiteAdmin, query, context, historyRead, disputeRead, proposalsRead] = await Promise.all([
+  const [t, tMatch, isSiteAdmin, query, context, historyRead, disputeRead, proposalsRead, phaseProposalCount] = await Promise.all([
     getT(adminCoreMessages),
     getT(adminMatchMessages),
     viewerIsSiteAdmin(),
@@ -90,11 +91,13 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
     ),
     native ? null : readOptional('dispute details', match.status === 'disputed' ? getLatestMatchDispute(id) : Promise.resolve(null), null),
     native ? null : readOptional('time proposals', listMatchProposals(id), []),
+    native && match.status !== 'completed'
+      ? readOptional<number | null>('phase time proposal count', countOpenPhaseMatchProposals(id, new Date(now).toISOString()), null)
+      : null,
   ]);
   const dispute = disputeRead?.value ?? null;
   const proposals = proposalsRead?.value ?? [];
-  const now = requestTimeMs();
-  const pendingProposals = proposals.filter(
+  const pendingProposals = phaseProposalCount ? phaseProposalCount.value : proposals.filter(
     (proposal) => proposal.status === 'pending' && Date.parse(proposal.expires_at) > now,
   ).length;
   const winnerName = match.winner_id
@@ -220,15 +223,13 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
               <MatchDisputePanel dispute={dispute} reportedWinnerName={winnerName} reporterName={context.submitter_name} />
             )}
 
-            {!native && (
-              <MatchSchedulePanel
-                matchId={id}
-                status={match.status}
-                scheduledAt={match.scheduled_at}
-                roundDeadline={context.round_deadline}
-                pendingProposals={pendingProposals}
-              />
-            )}
+            <MatchSchedulePanel
+              matchId={id}
+              status={match.status}
+              scheduledAt={match.scheduled_at}
+              roundDeadline={context.round_deadline}
+              pendingProposals={pendingProposals}
+            />
 
             {/* Admin Actions */}
             <AdminMatchActions

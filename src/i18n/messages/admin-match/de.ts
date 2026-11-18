@@ -40,6 +40,7 @@ export default defineDe<typeof en>()({
       one: '{count} offener Terminvorschlag der Spieler wird beim Speichern abgebrochen.',
       other: '{count} offene Terminvorschläge der Spieler werden beim Speichern abgebrochen.',
     },
+    proposalCountUnavailable: 'Offene Terminvorschläge konnten nicht gezählt werden. Wenn du den Termin änderst, versucht das System trotzdem, sie abzubrechen.',
     afterDeadline: 'Dieser Termin liegt nach der Rundenfrist.',
     proposalsNotCancelled:
       'Der Termin wurde gespeichert, aber die offenen Terminvorschläge der Spieler konnten nicht abgebrochen werden. Ein Spieler kann noch einen annehmen und das Spiel verschieben.',
