@@ -72,14 +72,18 @@ export async function findLegacyPhaseAliasOwner({ phaseId, matchId }: PhaseAlias
 
 export async function standaloneTournamentAliasExists({ phaseId, matchId }: PhaseAliasInput): Promise<boolean> {
   if (phaseId === undefined) return false;
-  if (matchId !== undefined) {
-    const { data, error } = await supabase.from('matches')
-      .select('id, tournament:tournaments!matches_tournament_id_fkey!inner(id)')
-      .eq('id', matchId).eq('tournament_id', phaseId).is('tournament.season_id', null).maybeSingle();
-    if (error) throw error;
-    return data !== null;
-  }
+  if (matchId !== undefined) return standaloneMatchAliasExists(matchId, phaseId);
   const { data, error } = await supabase.from('tournaments').select('id').eq('id', phaseId).is('season_id', null).maybeSingle();
+  if (error) throw error;
+  return data !== null;
+}
+
+export async function standaloneMatchAliasExists(matchId: string, tournamentId?: string): Promise<boolean> {
+  let query = supabase.from('matches')
+    .select('id, tournament:tournaments!matches_tournament_id_fkey!inner(id)')
+    .eq('id', matchId).is('tournament.season_id', null);
+  if (tournamentId !== undefined) query = query.eq('tournament_id', tournamentId);
+  const { data, error } = await query.maybeSingle();
   if (error) throw error;
   return data !== null;
 }

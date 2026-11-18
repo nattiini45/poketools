@@ -141,7 +141,7 @@ The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snap
 - `/api/matches/me` (the player's own matches: full rows)
 - `/api/matches/[id]/social-image` (site admins: POST uploads, DELETE removes; 404 `INVALID_MATCH_ID` for a malformed id; see Social Images)
 - `/api/manual-result`
-- `/api/confirm-match/[mid]` (participants and admins: full `Match`; only admins write `notes`; a dispute may carry an optional `reason`, see "Dispute details" and "Confirm and dispute" below)
+- `/api/confirm-match/[mid]` (participants and admins: only admins write `notes`; a dispute may carry an optional `reason`, see "Dispute details" and "Confirm and dispute" below). The ID-only compatibility entry point dispatches to the native decision workflow only for a verified native phase match in phase mode, or to the legacy workflow for a verified standalone match. It refuses phase requests during maintenance. With the readiness switch off it retains the old lookup path. The scoped native endpoint is `POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/decision`.
 - `/api/cron/auto-confirm` (`?limit=` 1..100, default 25; anything else answers 400 `validation_failed`)
 - `/api/matches/[mid]/proposals`
 - `/api/match-proposals/[id]/accept` (the responding participant: full row)
