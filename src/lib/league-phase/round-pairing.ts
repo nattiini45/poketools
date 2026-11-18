@@ -1,15 +1,15 @@
 import 'server-only';
 
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { formKitGroups, legRoundRange, pairNextRound, roundRobinOf } from '@/lib/format-engine/pairing';
+import { filteredRoundRobinRound, formKitGroups, kitStageRounds, legRoundRange, pairNextRound, roundRobinLegRound, roundRobinOf } from '@/lib/format-engine/pairing';
 import type { KitPhase } from '@/lib/format-engine/load';
 import type { PairingAids } from '@/lib/format-engine/pairing-server';
-import { assertMirroredGroupsPlayLegs } from '@/lib/format-engine/route-guards';
+import { assertBatchMayRunAhead, assertMirroredGroupsPlayLegs, batchRoundCap } from '@/lib/format-engine/route-guards';
 import { generateRound } from '@/lib/tournament';
 import { byeRecordsFromRounds } from '@/lib/tournament/byes';
 import { pendingWeeks, planPhaseWeeks, resolveWeekPairings, type PhaseWeekContext } from '@/lib/tournament/group-rounds';
 import { mirrorsLeagueGroups, toScheduleGroups } from '@/lib/tournament/phase-week-plan';
-import { getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
+import { generateRoundRobinRound, getRoundRobinTotalRounds } from '@/lib/tournament/round-robin';
 import { assertNoScheduleDrift } from '@/lib/tournament/schedule-drift';
 import { groupLabel } from '@/lib/tournament/serpentine';
 import type { PhaseRoundGroupLayout } from '@/lib/supabase/queries/phase-rounds';
@@ -70,7 +70,7 @@ export function planNativeRoundGroups(
   };
 }
 
-export async function pairNativeRound(input: {
+interface NativePairingInput {
   phase: Pick<Phase, 'season_id' | 'current_round'> & { bracket_type: 'swiss' | 'round_robin' };
   context: PhaseWeekContext<PhaseRound>;
   participantIds: string[];
@@ -78,9 +78,11 @@ export async function pairNativeRound(input: {
   kit: KitPhase | null;
   aidsFor: (round: number) => Promise<PairingAids>;
   loadStandingsContext: () => Promise<SeasonStandingsContext>;
-}): Promise<GeneratedRound> {
+}
+
+export async function pairNativeRound(input: NativePairingInput): Promise<GeneratedRound> {
   const { phase, context, participantIds, participantNames, kit, aidsFor } = input;
-  const { groups, rounds, matches } = context;
+  const { groups, rounds } = context;
   const robin = phase.bracket_type === 'round_robin';
   const mirrored = mirrorsLeagueGroups(groups);
   const kitRobin = kit ? roundRobinOf(kit.stage.pairing) : null;
@@ -111,16 +113,7 @@ export async function pairNativeRound(input: {
   if (mirrored && rounds.length === 0) planPhaseWeeks(context);
 
   const number = phase.current_round + 1;
-  const byNumber = new Map(rounds.map(round => [round.id, round.round_number]));
-  const history = matches.flatMap(match => {
-    const roundNumber = byNumber.get(match.round_id);
-    if (roundNumber === undefined) throw new Error('Native pairing history has a match without a phase round');
-    if (match.player_1_id === BYE_PLAYER_ID || match.player_2_id === BYE_PLAYER_ID) return [];
-    return [{
-      match_id: match.id, player_1_id: match.player_1_id, player_2_id: match.player_2_id,
-      winner_id: match.winner_id, round_number: roundNumber, status: match.status,
-    }];
-  });
+  const history = nativePairingHistory(context);
   const byeHistory = byeRecordsFromRounds(rounds.filter(round => round.round_number < number));
   const aids = await aidsFor(number);
   const merged: GeneratedRound = { round_number: number, round_name: `Round ${number}`, pairings: [], bye_player_ids: [] };
@@ -159,6 +152,108 @@ export async function pairNativeRound(input: {
     throw allGenerated();
   }
   return merged;
+}
+
+export async function pairNativeRoundBatch(input: Omit<NativePairingInput, 'participantNames'>): Promise<GeneratedRound[]> {
+  const { phase, context, participantIds, kit, aidsFor } = input;
+  const { groups, rounds, matches } = context;
+  const kitRobin = kit ? roundRobinOf(kit.stage.pairing) : null;
+  if (phase.bracket_type !== 'round_robin' || (kit && !kitRobin)) {
+    throw new UserFacingError('Generate-all-rounds is only supported for round_robin tournaments', { code: 'rounds_round_robin_only' });
+  }
+  const mirrored = mirrorsLeagueGroups(groups);
+  assertMirroredGroupsPlayLegs(kitRobin, mirrored);
+  const cap = batchRoundCap(kit) ?? Infinity;
+  const filtered = kit?.stage.pairing.kind === 'filter';
+  const byNumber = new Map(rounds.map(round => [round.round_number, round]));
+  const withFixtures = new Set(matches.map(match => match.round_id));
+  const batch: GeneratedRound[] = [];
+  const alreadyWritten = (number: number) => {
+    const existing = byNumber.get(number);
+    return existing && (withFixtures.has(existing.id) ||
+      (existing.pairings_generated && (filtered || existing.bye_player_ids.length > 0)));
+  };
+
+  const append = (round: GeneratedRound) => {
+    const existing = byNumber.get(round.round_number);
+    if (existing?.status === 'completed') {
+      throw new UserFacingError(`${existing.name} is already completed and holds no matches. Delete it to generate it again.`, {
+        code: 'rounds_round_completed', params: { round: existing.name }, status: 409,
+      });
+    }
+    batch.push(round);
+  };
+
+  if (groups.length > 0 && (!kit || mirrored)) {
+    const plan = planPhaseWeeks(context);
+    const weeks: number[] = [];
+    for (const week of pendingWeeks(context, plan)) {
+      if (week.week > cap) break;
+      if (alreadyWritten(week.week)) continue;
+      if (week.awaitingTables && weeks.length > 0) break;
+      weeks.push(week.week);
+    }
+    const { resolved } = await resolveWeekPairings(phase.season_id, context, weeks, {
+      loadStandingsContext: input.loadStandingsContext,
+    });
+    for (const { week, pairings } of resolved) {
+      const { allowPair } = await aidsFor(week.week);
+      if (filtered && !allowPair) throw new Error('Native round robin filter needs a pairing predicate');
+      const kept = allowPair ? pairings.filter(pair => allowPair(pair.player_1_id, pair.player_2_id)) : pairings;
+      append({
+        round_number: week.week, round_name: `Round ${week.week}`, pairings: kept,
+        bye_player_ids: [], forbidden: pairings.length - kept.length,
+      });
+    }
+  } else {
+    const history = nativePairingHistory(context);
+    const circles = (groups.length ? toScheduleGroups(groups).map(group => [...group.memberIds]) : [participantIds]).map(ids => {
+      const members = new Set(ids);
+      return {
+        ids,
+        total: kitRobin ? kitStageRounds(kitRobin, ids.length) ?? 0 : getRoundRobinTotalRounds(ids.length),
+        paired: history.filter(match => members.has(match.player_1_id) && members.has(match.player_2_id)),
+      };
+    });
+    const total = Math.min(cap, Math.max(0, ...circles.map(circle => circle.total)));
+    for (let number = 1; number <= total; number++) {
+      if (alreadyWritten(number)) continue;
+      const { allowPair } = await aidsFor(number);
+      if (filtered && !allowPair) throw new Error('Native round robin filter needs a pairing predicate');
+      const merged: GeneratedRound = { round_number: number, round_name: `Round ${number}`, pairings: [], bye_player_ids: [] };
+      for (const { ids, total: roundsInCircle, paired } of circles) {
+        if (number > roundsInCircle) continue;
+        const round = !kitRobin
+          ? generateRoundRobinRound(ids, number)
+          : allowPair
+            ? filteredRoundRobinRound(ids, kitRobin, number, allowPair)
+            : roundRobinLegRound(ids, kitRobin, number);
+        const leg = kitRobin ? legRoundRange(ids.length, number) : null;
+        const previous = leg ? paired.filter(match => match.round_number >= leg.first && match.round_number <= leg.last) : paired;
+        assertNoScheduleDrift(round.round_name, round.pairings, previous, { ignoreRoundNumber: number });
+        merged.pairings.push(...round.pairings);
+        merged.bye_player_ids.push(...round.bye_player_ids);
+        merged.forbidden = (merged.forbidden ?? 0) + (round.forbidden ?? 0);
+      }
+      append(merged);
+    }
+  }
+  if (batch.length === 0) throw allGenerated();
+  assertBatchMayRunAhead(kit, batch.length);
+  return batch;
+}
+
+function nativePairingHistory(context: PhaseWeekContext<PhaseRound>): MatchRecord[] {
+  const byNumber = new Map(context.rounds.map(round => [round.id, round.round_number]));
+  return context.matches.flatMap(match => {
+    const roundNumber = byNumber.get(match.round_id);
+    if (roundNumber === undefined) throw new Error('Native pairing history has a match without a phase round');
+    if (match.player_1_id === BYE_PLAYER_ID || match.player_2_id === BYE_PLAYER_ID) return [];
+    return [{
+      match_id: match.id, player_1_id: match.player_1_id, player_2_id: match.player_2_id,
+      winner_id: match.winner_id, round_number: roundNumber, status: match.status,
+    }];
+  });
 }
 
 function allGenerated() {

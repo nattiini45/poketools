@@ -3,9 +3,10 @@
 import { useEffect, useId, useMemo, useRef, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { AlertDialog, AlertDialogBackdrop, AlertDialogClose, AlertDialogContent, AlertDialogDescription, AlertDialogTitle, AlertDialogTrigger } from '@ui-sdk/react/alert-dialog';
+import { Button as ActionButton } from '@ui-sdk/react/button';
 import { isoToLocalInput, localInputToIso } from '@/components/draft-admin/admin-view';
 import Alert from '@/components/ui/Alert';
-import Button from '@/components/ui/Button';
+import Button, { getButtonClasses } from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
 import ItemIcon from '@/components/ui/ItemIcon';
 import Select from '@/components/ui/Select';
@@ -77,6 +78,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const swissBlocked = phase.bracket_type === 'swiss' && current !== undefined && current.status !== 'completed';
   const groupedManualBlocked = phase.bracket_type === 'round_robin' && leagueHasGroups;
   const canGenerateNext = !isElimination && !hasStructure;
+  const canGenerateAll = canGenerateNext && phase.bracket_type === 'round_robin';
   const canGenerateBracket = isElimination && rounds.length === 0;
   const canCreateManual = !isElimination && !hasStructure && !groupedManualBlocked;
   const latest = Math.max(0, ...rounds.map(round => round.round_number));
@@ -149,6 +151,13 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
                 onClick={() => void write(requests.generate, 'rounds.errors.generateRound')}>
                 {t('rounds.generateNext')}
               </Button>
+            )}
+            {canGenerateAll && (
+              <ActionButton type="button" className={getButtonClasses('secondary', 'sm')}
+                disabled={busy || manualOpen || participants.length < 2}
+                onClick={() => write(requests.generateAll, 'rounds.errors.generateAll')}>
+                {t('rounds.generateAll')}
+              </ActionButton>
             )}
             {canCreateManual && (
               <Button type="button" ref={manualTrigger} variant="secondary" size="sm" disabled={busy || manualOpen || participants.length < 2 || swissBlocked}

@@ -1069,6 +1069,8 @@ POST .../groups/repair                      Hand group rows left by pre-handover
 GET .../rounds, GET .../rounds/[rid]          Native phase rounds and round details with public matches
 POST .../rounds/manual                       Native manual round with participant and format readiness checks
 POST .../rounds/generate                     Native next Swiss or round-robin round; first group mirror and fixtures commit together
+POST .../rounds/generate-all                 Native remaining round-robin rounds, stopping before the next unresolved placement week;
+                                            commits the ready batch together; optional start applies only to its first round
 PATCH .../rounds/[rid]                       Native round deadline, best-of and status (pending-only best-of)
 DELETE .../rounds/[rid]                      Native confirmed delete of the latest eligible game-free round with only
                                             scheduled, unlinked fixtures; rejects played, managed or dependent rounds

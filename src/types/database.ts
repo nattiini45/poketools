@@ -10007,6 +10007,18 @@ export type Database = {
         }
         Returns: Json
       }
+      phase_round_generate_batch: {
+        Args: {
+          p_expected_revision?: number
+          p_expected_updated_at: string
+          p_inputs: Json
+          p_phase_id: string
+          p_replacement_groups?: Json
+          p_rounds: Json
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_round_write: {
         Args: {
           p_best_of: number

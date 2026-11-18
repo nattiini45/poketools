@@ -67,7 +67,7 @@ const EXTRA_ROUTES = [
  * so a live-format route that calls one of them has expired what it changed.
  */
 const EXPIRE_CALL =
-  /\b(expireTournamentReads|expirePhaseReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePlayerVisibilityReads|expirePublicTags|revalidateMatchPages|revalidatePhaseMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge)\(/;
+  /\b(expireTournamentReads|expirePhaseReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePlayerVisibilityReads|expirePublicTags|revalidateMatchPages|revalidatePhaseMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge|generatePhaseRounds)\(/;
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 

@@ -137,7 +137,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       .rejects.toMatchObject({ code: 'phase_round_delete_locked' });
   });
 
-  it('commits a generated round and its first group mirror together, once per snapshot', async () => {
+  async function firstGeneratedRoundPlan() {
     const phase = await create('round_robin');
     await enroll(phase.id);
     const { getSeasonGroups } = await import('@/lib/supabase/queries/season-groups');
@@ -166,6 +166,11 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       },
     };
 
+    return { input, live, leagueGroups };
+  }
+
+  it('commits a generated round and its first group mirror together, once per snapshot', async () => {
+    const { input, live, leagueGroups } = await firstGeneratedRoundPlan();
     await expect(rounds.writeGeneratedPhaseRound({
       ...input, matches: [...input.matches, { player_1_id: playerIds[0], player_2_id: randomUUID() }],
     })).rejects.toMatchObject({ code: '23503' });
@@ -186,6 +191,38 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect((await admin.from('phase_matches').select('id', { head: true, count: 'exact' }).eq('phase_id', live.id)).count)
       .toBe(input.matches.length);
     expect((await phases.getPhaseById(live.id))?.status).toBe('active');
+  });
+
+  it('rolls the entire batch back if its second write fails and commits only one concurrent batch', async () => {
+    const { input, live, leagueGroups } = await firstGeneratedRoundPlan();
+    const second = {
+      ...input, round_number: 2, name: 'Round 2', deadline: '2030-01-08T00:00:00.000Z',
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] }],
+    };
+    await expect(rounds.writeGeneratedPhaseRoundBatch(input, [
+      input, { ...second, matches: [{ player_1_id: playerIds[0], player_2_id: randomUUID() }] },
+    ])).rejects.toMatchObject({ code: '23503' });
+    expect(await groups.getGroupsByPhase(live.id)).toEqual([]);
+    expect(await rounds.getRoundsByPhase(live.id)).toEqual([]);
+    expect(await phases.getPhaseById(live.id)).toMatchObject({ status: 'upcoming', current_round: 0 });
+
+    const attempts = await Promise.allSettled([
+      rounds.writeGeneratedPhaseRoundBatch(input, [input, second]),
+      rounds.writeGeneratedPhaseRoundBatch(input, [input, second]),
+    ]);
+    expect(attempts.map(attempt => attempt.status).sort()).toEqual(['fulfilled', 'rejected']);
+    expect(attempts.find(attempt => attempt.status === 'rejected')).toMatchObject({
+      reason: { code: 'round_status_changed', statusCode: 409 },
+    });
+    const saved = await rounds.getRoundsByPhase(live.id);
+    expect(saved.map(row => [row.round_number, row.pairings_generated, Date.parse(row.deadline ?? '')])).toEqual([
+      [1, true, Date.parse(input.deadline ?? '')], [2, true, Date.parse(second.deadline)],
+    ]);
+    expect((await groups.getGroupsByPhase(live.id)).map(group => group.season_group_id)).toEqual(leagueGroups.map(group => group.id));
+    const fixtures = await admin.from('phase_matches').select('id', { head: true, count: 'exact' }).eq('phase_id', live.id);
+    expect(fixtures.error).toBeNull();
+    expect(fixtures.count).toBe(input.matches.length + second.matches.length);
+    expect(await phases.getPhaseById(live.id)).toMatchObject({ status: 'active', current_round: 2 });
   });
 
   it('serializes manual appends and inserts without shifting an already started phase', async () => {

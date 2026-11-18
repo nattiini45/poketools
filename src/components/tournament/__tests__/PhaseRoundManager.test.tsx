@@ -131,7 +131,7 @@ describe('native phase round manager', () => {
       await user.click(screen.getByRole('button', { name: /Round 1/ }));
       await screen.findByRole('link');
       expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-      expect(screen.queryByRole('button', { name: /reset|repair|regenerate|generate all/i })).toBeNull();
+      expect(screen.queryByRole('button', { name: /reset|repair|regenerate/i })).toBeNull();
       view.unmount();
     }
   });
@@ -166,6 +166,24 @@ describe('native phase round manager', () => {
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${base}/generate-bracket`, { method: 'POST' });
     view.rerender(withI18n(<PhaseRoundManager {...props} phase={bracket} rounds={[{ ...pending, bracket_side: 'winners' }]} />));
     expect(screen.queryByRole('button', { name: /generate|repair|manual/i })).toBeNull();
+  });
+
+  it('offers batch generation only for round robin and sends one native write from the keyboard', async () => {
+    const user = userEvent.setup();
+    let finish!: (response: Response) => void;
+    fetchMock.mockReturnValueOnce(new Promise(resolve => { finish = resolve; }));
+    const view = render(withI18n(<PhaseRoundManager {...props} />));
+    const button = screen.getByRole('button', { name: 'Generate All Rounds' });
+    expect(createAgent().snapshot().some(entry => entry.label === 'Generate All Rounds')).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+    button.focus();
+    await user.keyboard('{Enter}{Enter}');
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`${base}/rounds/generate-all`, { method: 'POST' });
+    expect(refresh).not.toHaveBeenCalled();
+    finish(success([pending]));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    view.rerender(withI18n(<PhaseRoundManager {...props} phase={{ ...props.phase, bracket_type: 'swiss' }} />));
+    expect(screen.queryByRole('button', { name: 'Generate All Rounds' })).toBeNull();
   });
 
   it('patches best-of, deadline and start through the owned round and refreshes the workspace', async () => {

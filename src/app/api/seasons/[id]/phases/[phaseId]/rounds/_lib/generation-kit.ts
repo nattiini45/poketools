@@ -20,7 +20,7 @@ import type { GeneratedRound } from '@/lib/tournament/types';
 import type { SessionPlayer } from '@/types/auth';
 import type { Phase, PhaseRound } from '@/types/league-phase';
 import type { Season } from '@/types/season';
-import { nativeRoundServices } from '../../_lib/effects';
+import { nativeRoundServices } from './effects';
 
 export async function prepareNativeGenerationKit(input: {
   request: Request;
@@ -69,8 +69,8 @@ export async function prepareNativeGenerationKit(input: {
       if (deadline === null) logger.warn('phase-rounds/generate', 'The stage calendar has no readable start', { phaseId: phase.id });
       return deadline;
     },
-    async afterWrite(round: GeneratedRound) {
-      if (forced) {
+    async afterWrite(round: GeneratedRound, first: boolean) {
+      if (first && forced) {
         logAuditEvent({
           actor_id: forced.actor.id, actor_name: forced.actor.name, action: 'season.format.round.force_start',
           resource_type: 'phase', resource_id: phase.id,
@@ -87,7 +87,7 @@ export async function prepareNativeGenerationKit(input: {
         },
       };
       const events: KitEvent[] = [{ event: 'round_start', stage, round: number }];
-      if (phase.status === 'upcoming') events.unshift({ event: 'stage_start', stage });
+      if (first && phase.status === 'upcoming') events.unshift({ event: 'stage_start', stage });
       for (const event of events) {
         for (let attempt = 1; attempt <= 2; attempt++) {
           try {
