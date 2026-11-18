@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { recordGameResult } from '@/lib/pkmn/game-pipeline';
+import { canAdministerReplayMatch, recordAdminPhaseReplay, resolveAdminReplayMatch } from '@/lib/league-phase/admin-replay';
+import { recordGameResult, type ReplayGameInput } from '@/lib/pkmn/game-pipeline';
 import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
-import { getMatchById } from '@/lib/supabase/queries/matches';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { emitMatchResultEffects } from '@/lib/match/result-effects';
 import { replayImportSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -41,19 +40,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rateResult = await checkRateLimit('replay-import', player.playerId, { limit: 20, windowSeconds: 60 * 60 });
     if (!rateResult.allowed) return rateLimitedResponse(rateResult.retryAfterSeconds);
 
-    const match = await getMatchById(matchId);
-    if (!match) {
+    const target = await resolveAdminReplayMatch(matchId);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
         { status: 404 }
       );
     }
 
-    // Admin or tournament resource admin only — this bypasses the legibility gate.
-    const authorized =
-      player.isAdmin ||
-      (await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id));
-    if (!authorized) {
+    if (!await canAdministerReplayMatch(player, target)) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Admin access required', code: 'forbidden' },
         { status: 403 }
@@ -70,6 +65,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     const body = zodResult.data;
+    const { match } = target;
 
     // Fetch the replay once more, hash it and parse it: the organizer reviewed
     // the preview of `body.replay_hash`, so a different battle is refused.
@@ -95,21 +91,25 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     // so the pipeline's participant check is intentionally bypassed. The
     // pipeline still requires the two sides to be the match's two participants
     // and reads the winner and stats from the bound replay.
-    const result = await recordGameResult({
-      match_id: matchId,
+    const input: ReplayGameInput = {
+      match_id: target.kind === 'phase' ? match.id : matchId,
       source: 'ps_replay',
       replay,
       side_player_ids: body.side_player_ids,
       submitter_id: player.playerId,
       is_admin: true,
-    });
+    };
+    const result = target.kind === 'phase'
+      ? await recordAdminPhaseReplay(target.owner, input)
+      : await recordGameResult(input);
 
-    // Shared post-record side effects (revalidate, notify, AI, aggregates)
-    await emitMatchResultEffects(matchId, {
-      boReached: result.bo_reached,
-      requestCookie: request.headers.get('cookie'),
-      replayUrl: body.replay_url,
-    });
+    if (target.kind !== 'phase') {
+      await emitMatchResultEffects(matchId, {
+        boReached: result.bo_reached,
+        requestCookie: request.headers.get('cookie'),
+        replayUrl: body.replay_url,
+      });
+    }
 
     // Audit: this path skips the username legibility gate, so record who
     // imported it and how each side was assigned.
@@ -117,12 +117,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       actor_id: player.playerId,
       actor_name: player.name,
       action: 'game.import_replay',
-      resource_type: 'game',
+      resource_type: target.kind === 'phase' ? 'phase_game' : 'game',
       resource_id: result.game_id,
       resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
       metadata: {
-        match_id: matchId,
-        tournament_id: match.tournament_id,
+        match_id: input.match_id,
+        ...(target.kind === 'phase'
+          ? { phase_id: target.owner.phase_id, season_id: target.owner.season_id }
+          : { tournament_id: target.match.tournament_id }),
         replay_url: body.replay_url,
         replay_hash: replay.hash,
         winner_id: result.game_winner_id,

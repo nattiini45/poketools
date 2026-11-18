@@ -127,7 +127,7 @@ export default async function SubmitResultPage({ params }: PageProps) {
             prepTeams={prepTeams}
             generation={generation}
             redirectTo={matchHref}
-            isAdmin={owner.kind === 'legacy' && canAdminister}
+            isAdmin={canAdminister}
           />
         )}
 

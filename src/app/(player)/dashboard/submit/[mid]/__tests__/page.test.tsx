@@ -176,12 +176,12 @@ describe('native phase result submission page', () => {
     expect(mocks.tournamentSelect).not.toHaveBeenCalled();
   });
 
-  it('lets a live phase-only admin see both sides without exposing the legacy manual replay import', async () => {
+  it('lets a live phase-only admin see both sides and use manual replay assignment', async () => {
     mocks.access = viewer('organizer');
     mocks.nativeAdmin.mockResolvedValue(true);
     await render();
     expect(prepTeamsProp()).toEqual({ player1: [set('Pikachu')], player2: [set('Garchomp')] });
-    expect(mocks.clientProps[0].isAdmin).toBe(false);
+    expect(mocks.clientProps[0].isAdmin).toBe(true);
   });
 
   it('refuses an outsider before reading either team or ruleset', async () => {

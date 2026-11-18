@@ -1,11 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { canAdministerReplayMatch, resolveAdminReplayMatch } from '@/lib/league-phase/admin-replay';
 import { fetchBoundReplay } from '@/lib/pkmn/replay-binding';
 import { findGameIdByReplayHash, ReplayAlreadyRecordedError } from '@/lib/supabase/queries/games';
+import { findPhaseGameIdByReplayHash } from '@/lib/supabase/queries/phase-games';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
-import { getMatchById } from '@/lib/supabase/queries/matches';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { replayPreviewSchema, formatZodErrors } from '@/lib/validation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { logger } from '@/lib/logger';
@@ -36,19 +36,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rateResult = await checkRateLimit('replay-preview', player.playerId, { limit: 20, windowSeconds: 60 * 60 });
     if (!rateResult.allowed) return rateLimitedResponse(rateResult.retryAfterSeconds);
 
-    const match = await getMatchById(matchId);
-    if (!match) {
+    const target = await resolveAdminReplayMatch(matchId);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
         { status: 404 }
       );
     }
 
-    // Admin or tournament resource admin only — this bypasses the legibility gate.
-    const authorized =
-      player.isAdmin ||
-      (await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id));
-    if (!authorized) {
+    if (!await canAdministerReplayMatch(player, target)) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Admin access required', code: 'forbidden' },
         { status: 403 }
@@ -65,13 +61,16 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
     const body = zodResult.data;
+    const { match } = target;
 
     // Parse the replay — NO username gate.
     const replay = await fetchBoundReplay(body.replay_url);
     const parsed = replay.parsed;
 
     // The import would refuse this battle; say so before the organizer reviews it.
-    const existingGameId = await findGameIdByReplayHash(replay.hash);
+    const existingGameId = target.kind === 'legacy'
+      ? await findGameIdByReplayHash(replay.hash)
+      : await findPhaseGameIdByReplayHash(replay.hash);
     if (existingGameId) {
       logger.error('replay-preview', 'replay hash is already bound to a game', {
         replayHash: replay.hash,
