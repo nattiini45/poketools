@@ -97,18 +97,18 @@ describe('editableFormatTypes', () => {
 
 describe('assertFormatChangeAllowed', () => {
   it('allows resending the stored type, even once started', () => {
-    expect(() => assertFormatChangeAllowed('singles', 'singles', signals({ status: 'active' }))).not.toThrow();
+    expect(() => assertFormatChangeAllowed('singles', 'singles', true)).not.toThrow();
     expect(() =>
-      assertFormatChangeAllowed('evolution_point_buy', 'evolution_point_buy', signals({ status: 'completed' }))
+      assertFormatChangeAllowed('evolution_point_buy', 'evolution_point_buy', true)
     ).not.toThrow();
   });
 
   it('allows a change between classic types before the league started', () => {
-    expect(() => assertFormatChangeAllowed('singles', 'doubles', signals({ phases: [upcomingPhase] }))).not.toThrow();
+    expect(() => assertFormatChangeAllowed('singles', 'doubles', false)).not.toThrow();
   });
 
   it('refuses a change after the start with 409 SEASON_FORMAT_LOCKED', () => {
-    const error = thrown(() => assertFormatChangeAllowed('singles', 'draft', signals({ status: 'active' })));
+    const error = thrown(() => assertFormatChangeAllowed('singles', 'draft', true));
     expect(error.code).toBe('SEASON_FORMAT_LOCKED');
     expect(error.statusCode).toBe(409);
   });
@@ -117,7 +117,7 @@ describe('assertFormatChangeAllowed', () => {
     ['singles', 'evolution_point_buy'],
     ['evolution_point_buy', 'singles'],
   ] as const)('refuses %s -> %s before the start with 409 SEASON_FORMAT_POINT_BUY_LOCKED', (from, to) => {
-    const error = thrown(() => assertFormatChangeAllowed(from, to, signals()));
+    const error = thrown(() => assertFormatChangeAllowed(from, to, false));
     expect(error.code).toBe('SEASON_FORMAT_POINT_BUY_LOCKED');
     expect(error.statusCode).toBe(409);
   });

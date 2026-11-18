@@ -372,6 +372,11 @@ export async function updateSeason(
 
   // A custom league without an attached format cannot become active (trigger on `seasons`): FORMAT_NOT_ATTACHED
   // becomes a typed 409. Every other error is returned unchanged by the mapper, so legacy leagues behave as before.
+  if (error?.code === 'P0001' && error.message === 'phase_storage_not_ready') {
+    throw new UserFacingError('League phases are temporarily unavailable during maintenance.', {
+      code: 'phase_storage_unavailable', status: 503,
+    });
+  }
   if (error) throw mapFormatDbError(error);
   if (!data) {
     throw new UserFacingError('This league changed its status in the meantime. Reload the page and try again.', {

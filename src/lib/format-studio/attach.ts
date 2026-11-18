@@ -265,12 +265,19 @@ export async function assertSeasonFormatAttached(seasonId: string): Promise<void
  * after the league has started (`season_format_type_locked`). A change between the legacy types takes no extra
  * read and no new refusal. A league that does not exist is left to the update to report.
  */
-export async function assertFormatTypeChangeAllowed(seasonId: string, next: SeasonFormatType): Promise<void> {
+export async function assertFormatTypeChangeAllowed(
+  seasonId: string,
+  next: SeasonFormatType,
+  readStarted = async () => {
+    const signals = await getSeasonStartSignals(seasonId);
+    return signals !== null && isSeasonStarted(signals);
+  },
+): Promise<void> {
   const season = await getSeasonById(seasonId);
   if (season === null || season.format_type === next) return;
   if (season.format_type !== 'custom' && next !== 'custom') return;
-  const [summary, signals] = await Promise.all([getSeasonFormatSummary(seasonId), getSeasonStartSignals(seasonId)]);
-  if (summary !== null || (signals !== null && isSeasonStarted(signals))) {
+  const [summary, started] = await Promise.all([getSeasonFormatSummary(seasonId), readStarted()]);
+  if (summary !== null || started) {
     throw new FormatStudioError('season_format_type_locked');
   }
 }

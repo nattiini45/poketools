@@ -3,7 +3,8 @@
  * stored-league read) and the season.update audit record; plus the date order
  * of POST /api/seasons. The test-flag and archive behaviour is in route.test.ts.
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { revalidateTag } from 'next/cache';
 
 vi.mock('@/lib/utils/rate-limit', () => ({
   checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 }),
@@ -43,7 +44,9 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 
 vi.mock('@/lib/supabase/queries/season-start', () => ({
   getSeasonPhaseStartSignals: vi.fn(),
+  isNativeSeasonStarted: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ addResourceAdmin: vi.fn() }));
 vi.mock('@/lib/supabase/queries/point-buy-lists', () => ({
@@ -71,7 +74,9 @@ import { PATCH } from '@/app/api/seasons/[id]/route';
 import { POST } from '@/app/api/seasons/route';
 import { requireAnyAdmin, requireResourceAdmin } from '@/lib/auth/helpers';
 import { getSeasonById, updateSeason, createSeason } from '@/lib/supabase/queries/seasons';
-import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
+import { getSeasonPhaseStartSignals, isNativeSeasonStarted } from '@/lib/supabase/queries/season-start';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { archiveTournamentsBySeason } from '@/lib/supabase/queries/tournaments';
 import { logAuditEvent } from '@/lib/audit/log';
 
 const SEASON_ID = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc';
@@ -118,6 +123,47 @@ beforeEach(() => {
   vi.mocked(getSeasonById).mockResolvedValue(stored);
   vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([]);
   vi.mocked(updateSeason).mockImplementation(async (_id, input) => ({ ...stored, ...input }) as Season);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+describe('PATCH /api/seasons/[id] in phase storage', () => {
+  beforeEach(() => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(isNativeSeasonStarted).mockResolvedValue(true);
+  });
+
+  it.each([
+    [{ format_type: 'doubles' }, 'SEASON_FORMAT_LOCKED'],
+    [{ ruleset_id: null }, 'ruleset_pin_started'],
+  ])('uses native start evidence for %s while the league is upcoming', async (update, code) => {
+    const response = await patch(update);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code });
+    expect(isNativeSeasonStarted).toHaveBeenCalledExactlyOnceWith(SEASON_ID);
+    expect(getSeasonPhaseStartSignals).not.toHaveBeenCalled();
+    expect(updateSeason).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('updates the parent archive flag %s with no legacy write', async (archived) => {
+    const response = await patch({ name: 'Renamed', archived });
+    expect(response.status).toBe(200);
+    expect(updateSeason).toHaveBeenCalledExactlyOnceWith(SEASON_ID, { name: 'Renamed', archived });
+    expect(archiveTournamentsBySeason).not.toHaveBeenCalled();
+    expect(isNativeSeasonStarted).not.toHaveBeenCalled();
+    expect(revalidateTag).toHaveBeenCalledWith(`season:${SEASON_ID}`, { expire: 0 });
+    expect(revalidateTag).not.toHaveBeenCalledWith('tournaments', { expire: 0 });
+  });
+
+  it('refuses frozen mode before reading or updating the league', async () => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('frozen_phase');
+    const response = await patch({ archived: true });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getSeasonById).not.toHaveBeenCalled();
+    expect(updateSeason).not.toHaveBeenCalled();
+    expect(archiveTournamentsBySeason).not.toHaveBeenCalled();
+  });
 });
 
 describe('PATCH /api/seasons/[id]: stored league', () => {
