@@ -514,6 +514,39 @@ export type CompleteRoundResult =
 
   | { outcome: 'unchanged' };
 
+export async function finishPhaseRoundReset(
+  seasonId: string, phaseId: string, round: Pick<PhaseRound, 'id' | 'status' | 'updated_at'>, downstreamIds: string[],
+): Promise<PhaseRound> {
+  if (round.status !== 'pending') phaseRoundMachine.assertTransition(round.status, 'pending', 'admin');
+  const { data, error } = await supabase.rpc('phase_round_reset_finish', {
+    p_season_id: seasonId, p_phase_id: phaseId, p_round_id: round.id,
+    p_expected_status: round.status, p_expected_updated_at: round.updated_at, p_downstream_ids: downstreamIds,
+  });
+  if (error) {
+    if (error.code === '55P03' || isRoundWriteSignal(error, 'round_status_changed')) {
+      throw Object.assign(new UserFacingError(tournamentErrors.round_status_changed, {
+        code: 'round_status_changed', status: 409,
+      }), { cause: error });
+    }
+    if (isRoundWriteSignal(error, 'phase_round_reset_games_remaining')) {
+      throw Object.assign(new UserFacingError(tournamentErrors.phase_round_reset_games_remaining, {
+        code: 'phase_round_reset_games_remaining', status: 409,
+      }), { cause: error });
+    }
+    if (isRoundWriteSignal(error, 'phase_round_reset_archived')) {
+      throw new UserFacingError(tournamentErrors.phase_round_reset_archived, { code: 'phase_round_reset_archived', status: 409 });
+    }
+    if (isRoundWriteSignal(error, 'PHASE_NOT_FOUND')) {
+      throw new UserFacingError('Phase not found', { code: 'PHASE_NOT_FOUND', status: 404 });
+    }
+    if (isRoundWriteSignal(error, 'round_not_found')) {
+      throw new UserFacingError('Round not found', { code: 'round_not_found', status: 404 });
+    }
+    throw error;
+  }
+  return parseRoundWrite(data);
+}
+
 export async function completePhaseRound(id: string, options: { force: boolean }): Promise<CompleteRoundResult> {
   const { data, error } = await supabase.rpc('phase_round_complete', { p_round_id: id, p_force: options.force });
   if (error) throw error;

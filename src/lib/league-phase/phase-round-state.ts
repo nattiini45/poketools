@@ -13,7 +13,9 @@ export const phaseRoundMachine = defineMachine({
   actors: roundMachine.spec.actors,
   transitions: roundMachine.spec.transitions.map((transition) => ({
     ...transition,
-    writers: ['src/lib/supabase/queries/phase-rounds.ts', 'supabase/migrations/20261117110000_phase_lifecycle.sql'],
+    writers: ['src/lib/supabase/queries/phase-rounds.ts',
+      transition.event === 'reset' ? 'supabase/migrations/20261118113000_phase_round_reset_finish.sql'
+        : 'supabase/migrations/20261117110000_phase_lifecycle.sql'],
     note: 'The native round writer uses phase_rounds and phase_matches only and retains the current-state guard.',
   })),
 });

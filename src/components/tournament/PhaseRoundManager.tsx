@@ -14,13 +14,14 @@ import { useLocale, useT } from '@/i18n/client';
 import { useMinuteClock } from '@/i18n/LocalTime';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { commonMessages } from '@/i18n/messages/common';
-import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
+import { errorsMatches, errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { leagueAdminMessages } from '@/i18n/messages/league-admin';
 import { tournamentsAdminMessages } from '@/i18n/messages/tournaments/admin';
 import { uiMessages } from '@/i18n/messages/ui';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
 import { phaseMatchHref, type LeaguePhaseAddress } from '@/lib/league-phase/paths';
+import { gameChangeWarnings } from '@/lib/match/game-change-outcome';
 import { bestOfChoices } from '@/lib/tournament/best-of';
 import type { ApiError, ApiResult, ApiWarning } from '@/types/api';
 import type { Phase, PhaseParticipant, PhaseRound } from '@/types/league-phase';
@@ -47,7 +48,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const tPhase = useT(leagueAdminMessages);
   const tUi = useT(uiMessages);
   const locale = useLocale();
-  const errorText = useApiErrorText(errorsTournaments, errorsSeasons);
+  const errorText = useApiErrorText(errorsTournaments, errorsSeasons, errorsMatches);
   const now = useMinuteClock();
   const router = useRouter();
   const [refreshing, startRefresh] = useTransition();
@@ -62,6 +63,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
   const [regenerateOpen, setRegenerateOpen] = useState(false);
   const [cascadeNotice, setCascadeNotice] = useState<ApiError | null>(null);
+  const [reset, setReset] = useState<{ roundId: string; cascade: boolean } | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<LoadedDetail | null>(null);
@@ -104,9 +106,9 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
 
   async function write(
     request: () => Promise<ApiResult<unknown>>, fallback: WriteErrorKey, onSuccess?: () => void,
-    onRefusal?: (error: ApiError) => boolean,
+    onRefusal?: (error: ApiError) => boolean, allowed = editable,
   ) {
-    if (busy || manualOpen || !editable) return;
+    if (busy || manualOpen || !allowed) return;
     setWriting(fallback);
     setError(null);
     setWarnings([]);
@@ -125,6 +127,28 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
       startRefresh(() => router.refresh());
       setWriting(null);
     }
+  }
+
+  function resetRound(roundId: string, cascade: boolean) {
+    return write(async () => {
+      const result = await requests.reset(roundId, cascade);
+      if (!result.success) return result;
+      return {
+        ...result,
+        warnings: gameChangeWarnings(result.data).flatMap((warning): ApiWarning[] => {
+          if (warning.code === 'admin_game_format_revert_failed') return [{ code: 'round_format_revert_failed' }];
+          if (warning.code === 'admin_game_evolution_recheck_failed') return [{ code: 'phase_round_reset_evolution_recheck_failed' }];
+          return warning.code ? [{ code: warning.code, ...(warning.params ? { params: warning.params } : {}) }] : [];
+        }),
+      };
+    }, 'rounds.errors.resetRound', () => {
+      setAttempt(n => n + 1);
+      region.current?.focus();
+    }, refusal => {
+      if (cascade || refusal.code !== 'DOWNSTREAM_PLAYED') return false;
+      setReset({ roundId, cascade: true });
+      return true;
+    }, !phase.archived);
   }
 
   function regenerateBracket() {
@@ -160,7 +184,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
 
   return (
     <div ref={region} tabIndex={-1} className="space-y-4">
-      {!editable && <Alert variant="info">{tPhase('phasePage.roundsReadOnly')}</Alert>}
+      {!editable && <Alert variant="info">{tPhase(phase.archived ? 'phasePage.roundsReadOnly' : 'phasePage.completedRoundsReadOnly')}</Alert>}
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       {warnings.map(warning => <Alert key={warning.code} variant="warning">{errorText(warning)}</Alert>)}
       {editable && (canGenerateBracket || canGenerateNext || canCreateManual || canRegenerateBracket) && (
@@ -272,6 +296,11 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
             const transitions = phaseRoundMachine.transitionsFrom(round.status, 'admin');
             const canStart = canEdit && transitions.some(transition => transition.event === 'start');
             const canComplete = canEdit && transitions.some(transition => transition.event === 'complete');
+            const resetDialog = reset?.roundId === round.id ? reset : null;
+            const canReset = !phase.archived && !manualOpen && expanded && detail?.success
+              && detail.data.updated_at === round.updated_at
+              && (transitions.some(transition => transition.event === 'reset')
+                || detail.data.matches.some(match => match.status !== 'scheduled'));
             const bestOf = bestOfDraft?.id === round.id ? bestOfDraft.value : round.best_of;
             const canDelete = canEdit && !hasStructure && phaseAllowsDeletion
               && round.status !== 'completed' && round.round_number === latest && detail?.success && expanded
@@ -347,6 +376,37 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
                       ) : (
                         <p className="text-caption text-fg-muted">{t('rounds.completeBlocked', { count: openCount })}</p>
                       ))}
+                      {(canReset || (!phase.archived && resetDialog)) && (
+                        <AlertDialog open={resetDialog !== null} onOpenChange={(open, details) => {
+                          if (open) setReset({ roundId: round.id, cascade: false });
+                          else {
+                            setReset(null);
+                            if (details.returnValue === 'confirm') void resetRound(round.id, resetDialog?.cascade === true);
+                          }
+                        }}>
+                          <AlertDialogTrigger disabled={busy || !canReset}
+                            render={<Button type="button" variant="ghost" size="sm" className="text-loss" />}>
+                            {t('rounds.reset')}
+                          </AlertDialogTrigger>
+                          <AlertDialogBackdrop className="fixed inset-0 z-50 backdrop-blur-xs" />
+                          <AlertDialogContent className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-poke-xl border border-poke-border bg-poke-surface p-6 shadow-poke-lg">
+                            <AlertDialogTitle className="text-lg font-heading font-bold text-poke-text-primary">
+                              {t(resetDialog?.cascade ? 'rounds.resetDialog.cascadeTitle' : 'rounds.resetDialog.title')}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription className="my-4 text-sm text-poke-text-secondary">
+                              {t(resetDialog?.cascade ? 'rounds.resetDialog.cascadeMessage' : 'rounds.resetDialog.message')}
+                            </AlertDialogDescription>
+                            <div className="flex flex-wrap justify-end gap-3">
+                              <AlertDialogClose render={<Button type="button" variant="ghost" size="sm" />}>{tUi('confirmDialog.cancel')}</AlertDialogClose>
+                              <AlertDialogClose value="confirm" disabled={busy}
+                                data-agent-confirm={t(resetDialog?.cascade ? 'rounds.resetDialog.cascadeMessage' : 'rounds.resetDialog.message')}
+                                render={<Button type="button" variant="danger" size="sm" className={resetDialog?.cascade ? 'order-first' : undefined} />}>
+                                {t(resetDialog?.cascade ? 'rounds.resetDialog.cascadeConfirm' : 'rounds.resetDialog.confirm')}
+                              </AlertDialogClose>
+                            </div>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                       {canDelete && (
                         <AlertDialog onOpenChange={(open, details) => {
                           if (!open && details.returnValue === 'confirm') {

@@ -1363,7 +1363,7 @@ stateDiagram-v2
 | `start` | `pending` | `active` | admin, system | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
 | `complete` | `active` | `completed` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
 | `complete_unstarted` | `pending` | `completed` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
-| `reset` | `active`, `completed` | `pending` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
+| `reset` | `active`, `completed` | `pending` | admin | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261118113000_phase_round_reset_finish.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
 | `revert` | `completed` | `active` | system | `src/lib/supabase/queries/phase-rounds.ts`<br>`supabase/migrations/20261117110000_phase_lifecycle.sql` | The native round writer uses phase_rounds and phase_matches only and retains the current-state guard. |
 
 ## Phase storage generation
