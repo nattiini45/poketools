@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { requirePlayer } from '@/lib/auth/helpers';
@@ -12,6 +13,7 @@ import { regenerateEliminationBracket, type GenerateBracketResult } from '@/lib/
 import { assertBracketMayBeRegenerated } from '@/lib/tournament/regenerate-guard';
 import { cascadeActionSchema, formatZodErrors } from '@/lib/validation';
 import type { ApiResult } from '@/types/api';
+import type { PhaseMatchWithPlayers } from '@/types/league-phase-match';
 import { loadNativeKitBracket } from '../generate-bracket/kit-start';
 import { nativeRoundServices } from '../rounds/_lib/effects';
 import { invalidPhaseRoundPath, loadRoundPhase, phaseRoundError, type PhaseParams } from '../rounds/_lib/scope';
@@ -43,10 +45,16 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     const services = nativeRoundServices(phase).matches;
     const resetIds: string[] = [];
     const storage = createNativeBracketPersistence({
-      getMatches: getMatchesByPhase,
+      async getMatches(id) {
+        const matches = await getMatchesByPhase(id);
+        assertNoScheduledGames(matches);
+        return matches;
+      },
       async getMatch(id) {
         const match = await getPhaseMatchById(id);
-        return match?.phase_id === phase.id ? match : null;
+        if (match?.phase_id !== phase.id) return null;
+        assertNoScheduledGames([match]);
+        return match;
       },
       async resetMatch(id, actorId, force) {
         resetIds.push(id);
@@ -87,5 +95,13 @@ export async function POST(request: NextRequest, { params }: { params: Promise<P
     return NextResponse.json<ApiResult<GenerateBracketResult>>({ success: true, data: result });
   } catch (error) {
     return phaseRoundError(error, 'Failed to regenerate bracket');
+  }
+}
+
+function assertNoScheduledGames(matches: readonly Pick<PhaseMatchWithPlayers, 'status' | 'games'>[]) {
+  if (matches.some(match => match.status === 'scheduled' && match.games.length > 0)) {
+    throw new UserFacingError(tournamentErrors.phase_bracket_regenerate_scheduled_games, {
+      code: 'phase_bracket_regenerate_scheduled_games', status: 409,
+    });
   }
 }

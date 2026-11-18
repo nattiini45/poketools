@@ -152,6 +152,37 @@ it('refuses legacy mode and a phase belonging to a different league before any m
   expect(m.rpc).not.toHaveBeenCalled();
 });
 
+it.each([false, true])('preflights every match before resetting any results when a scheduled match has games (cascade=%s)', async cascade => {
+  m.phase.mockResolvedValue({ ...phase, status: 'active' });
+  m.rounds.mockResolvedValue([{ id: 'semis', round_number: 1 }]);
+  m.phaseMatches.mockResolvedValue([
+    { id: 'completed-match', status: 'completed', games: [{ id: 'completed-game' }] },
+    { id: 'scheduled-match', status: 'scheduled', games: [{ id: 'unsettled-game' }] },
+  ]);
+  const response = await REGENERATE(request({ cascade }), ctx());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: 'phase_bracket_regenerate_scheduled_games' });
+  expect(m.phaseMatch).not.toHaveBeenCalled();
+  expect(m.resetMatch).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(m.audit).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+});
+
+it('refuses a scheduled game observed on the reload before calling the reset pipeline', async () => {
+  m.phase.mockResolvedValue({ ...phase, status: 'active' });
+  m.rounds.mockResolvedValue([{ id: 'semis', round_number: 1 }]);
+  const original = { id: 'changed-match', phase_id: phaseId, status: 'completed', games: [{ id: 'game' }] };
+  m.phaseMatches.mockResolvedValue([original]);
+  m.phaseMatch.mockResolvedValue({ ...original, status: 'scheduled' });
+  const response = await REGENERATE(request({ cascade: true }), ctx());
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({ code: 'phase_bracket_regenerate_scheduled_games' });
+  expect(m.phaseMatch).toHaveBeenCalledExactlyOnceWith(original.id);
+  expect(m.resetMatch).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
+});
+
 it('plans a single-elimination bracket with a bye, writes one native RPC, and emits native effects', async () => {
   const response = await POST(request(), ctx());
   expect(response.status).toBe(201);

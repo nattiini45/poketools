@@ -119,6 +119,7 @@ export default {
   bracket_already_generated: 'Bracket already generated',
   phase_bracket_inputs_changed: 'The phase settings or seeds changed while the bracket was being planned. Nothing was written. Generate it again.',
   bracket_regenerate_elim_only: 'Bracket regeneration only applies to elimination formats',
+  phase_bracket_regenerate_scheduled_games: 'A scheduled match has saved games. Resolve or remove those games before regenerating the bracket.',
   // The phase of a custom league has already ended (completed): its bracket is not wiped and restarted; reopen the phase first (409, nothing written).
   bracket_regenerate_phase_completed:
     'This phase has already ended, so its bracket cannot be regenerated. Reopen the phase first, then regenerate the bracket.',
