@@ -57,6 +57,7 @@ export default defineDe<typeof en>()({
     details: 'Details zum Einspruch',
     reason: 'Begründung',
     noReason: 'Keine Begründung angegeben',
+    loadFailed: 'Die Details des Einspruchs konnten nicht geladen werden.',
     notRecorded:
       'Die Details dieses Einspruchs wurden nicht erfasst. Einsprüche aus der Zeit vor der Erfassung von Begründungen haben keine.',
     reportedWinner: 'Gemeldeter Sieger',

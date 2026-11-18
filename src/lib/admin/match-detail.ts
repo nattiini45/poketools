@@ -129,7 +129,9 @@ function toHistoryChanges(changes: unknown): MatchHistoryEntry['changes'] {
 }
 
 /** The audit row as the client sees it: `ip_address` and raw metadata never leave the server. */
-export function toMatchHistoryEntry(row: AuditLogRecord): MatchHistoryEntry {
+export function toMatchHistoryEntry(
+  row: Pick<AuditLogRecord, 'id' | 'action' | 'actor_id' | 'actor_name' | 'created_at' | 'changes' | 'metadata'>,
+): MatchHistoryEntry {
   const metadata = isPlainObject(row.metadata) ? row.metadata : null;
   const reason = metadata && typeof metadata.reason === 'string' && metadata.reason.trim() !== ''
     ? metadata.reason

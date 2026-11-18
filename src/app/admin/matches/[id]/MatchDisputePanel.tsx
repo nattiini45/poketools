@@ -12,6 +12,7 @@ import type { MatchDisputeInfo } from '@/lib/admin/match-detail';
 interface MatchDisputePanelProps {
   /** The newest dispute event, or null when the match was disputed before details were recorded. */
   dispute: MatchDisputeInfo | null;
+  loadFailed?: boolean;
   /** The winner the result reported (the match's current winner), if any. */
   reportedWinnerName: string | null;
   reporterName: string | null;
@@ -27,7 +28,7 @@ function Row({ label, children }: { label: string; children: ReactNode }) {
 }
 
 /** Who disputed the result, when and why. Read-only: resolving it stays in the override controls. */
-export default function MatchDisputePanel({ dispute, reportedWinnerName, reporterName }: MatchDisputePanelProps) {
+export default function MatchDisputePanel({ dispute, loadFailed, reportedWinnerName, reporterName }: MatchDisputePanelProps) {
   const t = useT(adminMatchMessages);
 
   return (
@@ -54,7 +55,7 @@ export default function MatchDisputePanel({ dispute, reportedWinnerName, reporte
         ) : (
           <div className="sm:col-span-2">
             <dt className={FACT_LABEL}>{t('dispute.details')}</dt>
-            <dd className="mt-0.5 text-body text-fg-muted">{t('dispute.notRecorded')}</dd>
+            <dd className="mt-0.5 text-body text-fg-muted">{t(loadFailed ? 'dispute.loadFailed' : 'dispute.notRecorded')}</dd>
           </div>
         )}
         <Row label={t('dispute.reportedWinner')}>{reportedWinnerName ?? t('dispute.noWinner')}</Row>

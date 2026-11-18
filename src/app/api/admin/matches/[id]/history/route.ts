@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { authorizeMatchAdmin } from '@/lib/auth/match-admin';
+import { authorizeCorrectionTarget } from '../reset/correction-target';
 import { formatZodErrors, matchHistoryQuerySchema } from '@/lib/validation';
 import { listMatchAuditEvents } from '@/lib/audit/queries';
 import type { MatchHistoryPage } from '@/lib/admin/match-detail';
@@ -17,8 +17,7 @@ interface RouteParams {
  */
 export async function GET(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params;
-    const access = await authorizeMatchAdmin(id);
+    const access = await authorizeCorrectionTarget(params);
     if (!access.ok) return access.response;
 
     const search = request.nextUrl.searchParams;
@@ -36,7 +35,8 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const page = await listMatchAuditEvents(id, parsed.data);
+    const { id, kind } = access.target;
+    const page = await listMatchAuditEvents(id, parsed.data, kind);
     return NextResponse.json<ApiResult<MatchHistoryPage>>({ success: true, data: page });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to load the match history');

@@ -84,12 +84,12 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
     viewerIsSiteAdmin(),
     searchParams,
     native ? loadAdminPhaseMatchContext(target.match, target.owner) : loadAdminMatchContext(target.match),
-    native ? null : readOptional(
+    readOptional(
       'match history',
-      listMatchAuditEvents(id, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }),
+      listMatchAuditEvents(id, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }, target.kind),
       emptyHistory,
     ),
-    native ? null : readOptional('dispute details', match.status === 'disputed' ? getLatestMatchDispute(id) : Promise.resolve(null), null),
+    match.status === 'disputed' ? readOptional('dispute details', getLatestMatchDispute(id, target.kind), null) : null,
     native ? null : readOptional('time proposals', listMatchProposals(id), []),
     native && match.status !== 'completed'
       ? readOptional<number | null>('phase time proposal count', countOpenPhaseMatchProposals(id, new Date(now).toISOString()), null)
@@ -219,8 +219,8 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
           </div>
 
           <aside aria-label={t('matches.detail.actionsRail')} className="flex min-w-0 flex-col gap-4" data-admin-match-rail>
-            {!native && match.status === 'disputed' && (
-              <MatchDisputePanel dispute={dispute} reportedWinnerName={winnerName} reporterName={context.submitter_name} />
+            {disputeRead && (
+              <MatchDisputePanel dispute={dispute} loadFailed={disputeRead.failed} reportedWinnerName={winnerName} reporterName={context.submitter_name} />
             )}
 
             <MatchSchedulePanel
@@ -247,18 +247,16 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
 
             <MatchReopenSection matchId={id} status={match.status} native={native} />
 
-            {historyRead && (
-              <MatchHistoryPanel
-                key={historyPanelKey(historyRead.value, historyRead.failed)}
-                matchId={id}
-                initialPage={historyRead.value}
-                loadFailed={historyRead.failed}
-                players={[
-                  { id: match.player_1_id, name: match.player_1_name },
-                  { id: match.player_2_id, name: match.player_2_name },
-                ]}
-              />
-            )}
+            <MatchHistoryPanel
+              key={historyPanelKey(historyRead.value, historyRead.failed)}
+              matchId={id}
+              initialPage={historyRead.value}
+              loadFailed={historyRead.failed}
+              players={[
+                { id: match.player_1_id, name: match.player_1_name },
+                { id: match.player_2_id, name: match.player_2_name },
+              ]}
+            />
           </aside>
         </div>
       </PageContainer>

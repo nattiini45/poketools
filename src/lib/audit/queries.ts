@@ -73,25 +73,22 @@ export async function listAuditLogEntries(
 
 // ── Per-match history ───────────────────────────────────────────────
 
-/**
- * Audit events of one match: its own events (resource_type match) plus the
- * events of its games (resource_type game, `metadata.match_id`). One page,
- * newest first. `matchId` is validated as a uuid before it is interpolated
- * into the filter, so the string cannot be bent by the caller. The returned
- * entries drop `ip_address`.
- */
+const MATCH_AUDIT_COLUMNS = 'id,action,actor_id,actor_name,created_at,changes,metadata';
+
 export async function listMatchAuditEvents(
   matchId: string,
-  opts: { limit: number; offset: number }
+  opts: { limit: number; offset: number },
+  kind: 'tournament' | 'phase',
 ): Promise<MatchHistoryPage> {
   assertValidUuid(matchId, 'match id');
+  const prefix = kind === 'phase' ? 'phase_' : '';
 
   const { data, error, count } = await supabase
     .from('audit_log')
-    .select('*', { count: 'exact' })
+    .select(MATCH_AUDIT_COLUMNS, { count: 'exact' })
     .or(
-      `and(resource_type.eq.match,resource_id.eq.${matchId}),` +
-        `and(resource_type.eq.game,metadata->>match_id.eq.${matchId})`
+      `and(resource_type.eq.${prefix}match,resource_id.eq.${matchId}),` +
+        `and(resource_type.eq.${prefix}game,metadata->>match_id.eq.${matchId})`
     )
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
@@ -100,7 +97,7 @@ export async function listMatchAuditEvents(
   if (error) throw error;
 
   return {
-    entries: (data ?? []).map((row) => toMatchHistoryEntry(toAuditLogRecord(row))),
+    entries: (data ?? []).map(toMatchHistoryEntry),
     total: count ?? 0,
     offset: opts.offset,
     limit: opts.limit,
@@ -108,14 +105,17 @@ export async function listMatchAuditEvents(
 }
 
 /** The newest `match.dispute` event of a match, or null when none was recorded. */
-export async function getLatestMatchDispute(matchId: string): Promise<MatchDisputeInfo | null> {
+export async function getLatestMatchDispute(
+  matchId: string,
+  kind: 'tournament' | 'phase',
+): Promise<MatchDisputeInfo | null> {
   assertValidUuid(matchId, 'match id');
 
   const { data, error } = await supabase
     .from('audit_log')
-    .select('*')
+    .select(MATCH_AUDIT_COLUMNS)
     .eq('action', 'match.dispute')
-    .eq('resource_type', 'match')
+    .eq('resource_type', kind === 'phase' ? 'phase_match' : 'match')
     .eq('resource_id', matchId)
     .order('created_at', { ascending: false })
     .order('id', { ascending: false })
@@ -126,11 +126,10 @@ export async function getLatestMatchDispute(matchId: string): Promise<MatchDispu
   const row = data?.[0];
   if (!row) return null;
 
-  const record = toAuditLogRecord(row);
-  const entry = toMatchHistoryEntry(record);
+  const entry = toMatchHistoryEntry(row);
   const metadata =
-    record.metadata && typeof record.metadata === 'object' && !Array.isArray(record.metadata)
-      ? record.metadata
+    row.metadata && typeof row.metadata === 'object' && !Array.isArray(row.metadata)
+      ? row.metadata
       : null;
   return {
     actor_id: entry.actor_id,

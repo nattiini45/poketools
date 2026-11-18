@@ -60,6 +60,7 @@ export default {
     details: 'Dispute details',
     reason: 'Reason',
     noReason: 'No reason given',
+    loadFailed: 'The dispute details could not be loaded.',
     notRecorded:
       'The details of this dispute were not recorded. Disputes raised before reasons were tracked have none.',
     reportedWinner: 'Reported winner',
