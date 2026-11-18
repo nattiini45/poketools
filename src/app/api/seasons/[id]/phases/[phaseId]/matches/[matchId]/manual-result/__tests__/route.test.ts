@@ -6,7 +6,7 @@ import { POST } from '../route';
 
 const h = vi.hoisted(() => ({
   auth: vi.fn(), access: vi.fn(), limit: vi.fn(), mode: vi.fn(), owner: vi.fn(), match: vi.fn(),
-  services: vi.fn(), record: vi.fn(), moments: vi.fn(), effects: vi.fn(), logError: vi.fn(),
+  services: vi.fn(), record: vi.fn(), moments: vi.fn(), effects: vi.fn(), logError: vi.fn(), invalidate: vi.fn(),
 }));
 vi.mock('@/lib/auth/helpers', () => ({ requirePlayer: h.auth }));
 vi.mock('@/lib/auth/phase-access', () => ({ assertMayRecordPhaseResult: h.access }));
@@ -17,6 +17,7 @@ vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: h.m
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ findNativePhaseAliasOwner: h.owner }));
 vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: h.match }));
 vi.mock('@/lib/league-phase/services', () => ({ createNativePhaseServices: h.services }));
+vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn(), revalidatePhaseMatchPages: h.invalidate }));
 vi.mock('@/lib/supabase/queries/phase-broadcast-moments', () => ({ createPhaseMomentsBatch: h.moments }));
 vi.mock('@/lib/league-phase/result-effects', () => ({ emitPhaseResultEffects: h.effects }));
 vi.mock('@/lib/logger', () => ({ logger: { error: h.logError, warn: vi.fn() } }));
@@ -54,6 +55,10 @@ beforeEach(() => {
 });
 
 it('records through native services with scoped IDs, shared stat defaults and live access', async () => {
+  h.record.mockImplementationOnce(async () => {
+    await h.services.mock.calls[0][0].invalidateMatch(phaseId, matchId);
+    return result;
+  });
   const response = await call({ ...body, screenshot_url: 'https://example.com/proof.png' });
   expect(response.status).toBe(200);
   expect(await response.json()).toEqual({ success: true, data: { ...result, moments_saved: 0 } });
@@ -68,6 +73,7 @@ it('records through native services with scoped IDs, shared stat defaults and li
       was_lead: false, kos_dealt: 0, was_koed: false, moves_used: [], turns_active: 0 }],
   });
   expect(h.moments).not.toHaveBeenCalled();
+  expect(h.invalidate).toHaveBeenCalledExactlyOnceWith(phaseId, matchId, id);
   expect(h.effects).toHaveBeenCalledExactlyOnceWith(owner, matchId, result);
   expect(h.record).toHaveBeenCalledBefore(h.effects);
 });

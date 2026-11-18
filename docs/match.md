@@ -140,7 +140,7 @@ The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snap
 - `/api/tournaments/[id]/rounds/[rid]` (public GET: the round with `PublicMatch[]`; 404 when the round belongs to another tournament)
 - `/api/matches/me` (the player's own matches: full rows)
 - `/api/matches/[id]/social-image` (site admins: POST uploads, DELETE removes; 404 `INVALID_MATCH_ID` for a malformed id; see Social Images)
-- `/api/manual-result`
+- `/api/manual-result` keeps the existing tracker and submit form body and response. With the readiness switch off, it uses the original lookup; in phase mode it calls the same native writer as the scoped manual-result route only for a verified native owner, and keeps the legacy workflow for verified standalone tournaments. Phase matches are refused during maintenance.
 - `/api/confirm-match/[mid]` (participants and admins: only admins write `notes`; a dispute may carry an optional `reason`, see "Dispute details" and "Confirm and dispute" below). The ID-only compatibility entry point dispatches to the native decision workflow only for a verified native phase match in phase mode, or to the legacy workflow for a verified standalone match. It refuses phase requests during maintenance. With the readiness switch off it retains the old lookup path. The scoped native endpoint is `POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/decision`.
 - `/api/cron/auto-confirm` (`?limit=` 1..100, default 25; anything else answers 400 `validation_failed`)
 - `/api/matches/[mid]/proposals`
