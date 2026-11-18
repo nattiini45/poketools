@@ -51,6 +51,7 @@ interface EditGameFormProps {
   battleStats: BattleStat[];
   /** The viewer is a site admin (the admin data tools are site-admin only). */
   isSiteAdmin: boolean;
+  native?: boolean;
   /** Where Back and a finished save go (default: the match page); the match page's `?back=` rides along. */
   returnHref?: string;
 }
@@ -118,6 +119,7 @@ export default function EditGameForm({
   player2,
   battleStats,
   isSiteAdmin,
+  native = false,
   returnHref = `/admin/matches/${matchId}`,
 }: EditGameFormProps) {
   const router = useRouter();
@@ -125,6 +127,7 @@ export default function EditGameForm({
   const dataLocale = useDataLocale();
   const winnerLabelId = useId();
   const players = [player1, player2];
+  const [expectedUpdatedAt] = useState(gameUpdatedAt);
 
   // Split existing stats by player
   const p1Stats = battleStats.filter((s) => s.player_id === player1.id).map(statToInput);
@@ -215,7 +218,7 @@ export default function EditGameForm({
       const request = gameEditRequest(gameId, {
         winnerId,
         battleStats: battle_stats,
-        expectedUpdatedAt: gameUpdatedAt,
+        expectedUpdatedAt,
         confirmDownstream,
       });
       const result = await sendGameChange(request.url, request.init);
@@ -381,7 +384,12 @@ export default function EditGameForm({
           {resetCount > 0 && <p>{t('gameChange.downstream.done', { count: resetCount })}</p>}
         </Alert>
       )}
-      <GameChangeAlerts error={error && 'api' in error ? error.api : null} warnings={warnings} isSiteAdmin={isSiteAdmin} />
+      <GameChangeAlerts
+        error={error && 'api' in error ? error.api : null}
+        warnings={warnings}
+        isSiteAdmin={isSiteAdmin}
+        allowDataToolsRecovery={!native}
+      />
 
       <div className="flex flex-wrap gap-2">
         {/* A saved edit cannot be saved again from this page: its version is spent (the next save would answer 409). */}

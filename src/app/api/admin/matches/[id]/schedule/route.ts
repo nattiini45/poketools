@@ -1,14 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { authorizeMatchAdmin } from '@/lib/auth/match-admin';
 import { formatZodErrors, matchScheduleSchema } from '@/lib/validation';
-import { cancelPendingMatchProposalsForMatch } from '@/lib/supabase/queries/match-proposals';
+import { cancelPendingMatchProposalsForMatch, cancelPendingPhaseMatchProposals } from '@/lib/supabase/queries/match-proposals';
 import { updateOpenMatchSchedule } from '@/lib/supabase/queries/matches';
-import { revalidateMatchPages } from '@/lib/revalidation';
+import { updateOpenPhaseMatchSchedule } from '@/lib/supabase/queries/phase-matches';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
 import type { ScheduleResult } from '@/lib/admin/match-detail';
 import type { ApiResult } from '@/types/api';
+import { authorizeCorrectionTarget, correctionAuditTarget, revalidateCorrectionTarget } from '../reset/correction-target';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -40,10 +40,10 @@ function sameInstant(a: string | null, b: string | null): boolean {
  */
 export async function PATCH(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params;
-    const access = await authorizeMatchAdmin(id);
+    const access = await authorizeCorrectionTarget(params);
     if (!access.ok) return access.response;
-    const { player, match } = access;
+    const { player, target } = access;
+    const { id, match } = target;
 
     let rawBody: unknown = null;
     try {
@@ -77,7 +77,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Guarded write: null means the match completed (or vanished) since the read above.
-    const updated = await updateOpenMatchSchedule(id, scheduledAt);
+    const updated = target.kind === 'phase'
+      ? await updateOpenPhaseMatchSchedule(id, scheduledAt, target.owner.phase_id)
+      : await updateOpenMatchSchedule(id, scheduledAt);
     if (!updated) return scheduleCompleted();
 
     // The time is committed. A failed proposal cancel must not skip the audit event or the
@@ -85,7 +87,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     let proposalsCancelled = 0;
     let proposalsCancelFailed = false;
     try {
-      proposalsCancelled = (await cancelPendingMatchProposalsForMatch(id)).length;
+      proposalsCancelled = target.kind === 'phase'
+        ? await cancelPendingPhaseMatchProposals(id)
+        : (await cancelPendingMatchProposalsForMatch(id)).length;
     } catch (err) {
       proposalsCancelFailed = true;
       logger.error('admin/schedule', 'the time was saved but cancelling its pending proposals failed', {
@@ -94,25 +98,26 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
+    const audit = correctionAuditTarget(target);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,
       action: 'match.schedule',
-      resource_type: 'match',
+      resource_type: audit.resourceType,
       resource_id: id,
       resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
       changes: {
         scheduled_at: { before: match.scheduled_at, after: updated.scheduled_at },
       },
       metadata: {
-        tournament_id: match.tournament_id,
+        ...audit.metadata,
         proposals_cancelled: proposalsCancelled,
         proposals_cancel_failed: proposalsCancelFailed,
       },
     });
 
     try {
-      await revalidateMatchPages(match.tournament_id, id);
+      await revalidateCorrectionTarget(target);
     } catch (err) {
       logger.error('admin/schedule', 'the time was saved but the page revalidation failed', {
         matchId: id,

@@ -1,14 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { authorizeMatchAdmin } from '@/lib/auth/match-admin';
 import { formatZodErrors, matchReopenSchema } from '@/lib/validation';
 import { reopenMatch } from '@/lib/match/reopen';
-import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { stageEndedParams } from '@/lib/match/stage-ended-warning';
 import type { ReopenMatchResult } from '@/lib/admin/match-detail';
 import type { ApiResult } from '@/types/api';
+import { authorizeCorrectionTarget, correctionAuditTarget, nativeCorrectionServices, revalidateCorrectionTarget } from '../reset/correction-target';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -21,10 +20,10 @@ interface RouteParams {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params;
-    const access = await authorizeMatchAdmin(id);
+    const access = await authorizeCorrectionTarget(params);
     if (!access.ok) return access.response;
-    const { player, match } = access;
+    const { player, target } = access;
+    const { id, match } = target;
 
     const rateResult = await checkRateLimit('admin-match-reopen', player.playerId, {
       limit: 20,
@@ -47,16 +46,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const result = await reopenMatch(id, player.playerId);
+    const result = target.kind === 'phase'
+      ? await (await nativeCorrectionServices(target.owner)).reopenMatch(id, player.playerId)
+      : await reopenMatch(id, player.playerId);
     const incomplete = result.failed_steps.length > 0;
 
-    await revalidateMatchPages(match.tournament_id, id);
+    await revalidateCorrectionTarget(target);
 
+    const audit = correctionAuditTarget(target);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,
       action: 'match.reopen',
-      resource_type: 'match',
+      resource_type: audit.resourceType,
       resource_id: id,
       resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
       changes: {
@@ -64,7 +66,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         winner_id: { before: match.winner_id, after: null },
       },
       metadata: {
-        tournament_id: match.tournament_id,
+        ...audit.metadata,
         reason: parsed.data.reason,
         from_status: result.from_status,
         ratings_rebuilt_players: result.ratings_rebuilt_players,

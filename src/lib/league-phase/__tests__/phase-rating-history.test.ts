@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createMixedRatingStorage, getPhaseRatingHistoryByMatches } from '../rating-streak-streams';
+import { createMixedRatingStorage, getPhaseRatingHistoryByMatches, mixedStreakStorage } from '../rating-streak-streams';
+import { computeStreaksFromHistory } from '@/lib/gamification/streaks';
+import type { RatingStreamMatch } from '@/lib/rating/storage';
 import type { Tables } from '@/types/database';
 
 const fixture = vi.hoisted(() => ({
@@ -7,9 +9,11 @@ const fixture = vi.hoisted(() => ({
   calls: [] as Array<{ table: string; ids: string[]; from: number; to: number }>,
   tables: [] as string[],
   error: null as unknown,
+  rpc: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/client', () => ({ supabase: {
+  rpc: fixture.rpc,
   from: (table: string) => {
     fixture.tables.push(table);
     let ids: string[] = [];
@@ -42,6 +46,7 @@ beforeEach(() => {
   fixture.calls = [];
   fixture.tables = [];
   fixture.error = null;
+  fixture.rpc.mockReset();
 });
 
 describe('source-specific phase rating verification', () => {
@@ -68,6 +73,35 @@ describe('source-specific phase rating verification', () => {
     const rows = await createMixedRatingStorage('phase').getHistoryByMatches(['standalone', 'phase']);
     expect(rows.map((row) => row.match_id)).toEqual(['standalone', 'phase']);
     expect(new Set(fixture.tables)).toEqual(new Set(['rating_history', 'phase_rating_history']));
+  });
+
+  it('sends the surviving native history and streak pointer to the fenced mixed replacements', async () => {
+    const date = '2026-01-01T00:00:00Z';
+    const nativeMatch: RatingStreamMatch = {
+      id: 'native-match', phase_id: 'native-phase', player_1_id: 'one', player_2_id: 'opponent',
+      winner_id: 'one', confirmed_at: date, date_played: date, created_at: date,
+    };
+    const nativeHistory = { ...history(nativeMatch.id, 'one'), result: 'win' as const };
+    fixture.rpc.mockResolvedValueOnce({ data: 1, error: null }).mockResolvedValueOnce({ error: null });
+
+    await createMixedRatingStorage('tournament').replacePlayerCurve('one', {
+      rating: 1510, rd: 300, volatility: 0.06, peak_rating: 1510, peak_date: date,
+      wins: 1, losses: 0, draws: 0, last_match_at: date,
+    }, [nativeHistory], ['removed-standalone-match', nativeMatch.id], [nativeMatch]);
+    const streaks = computeStreaksFromHistory('one', [nativeMatch], new Map(), {
+      testSeasonTournamentIds: new Set(), testSeasonPhaseIds: new Set(),
+    });
+    await mixedStreakStorage.replacePlayerStreaks('one', streaks, [nativeMatch.id], [nativeMatch.id]);
+
+    expect(fixture.rpc.mock.calls.map(([rpc]) => rpc)).toEqual(['rating_replace_player_streams', 'streaks_replace_player_streams']);
+    expect(fixture.rpc.mock.calls[0]?.[1]).toMatchObject({
+      p_history: [{ match_id: 'native-match', player_id: 'one' }],
+      p_expected_matches: [{ kind: 'phase', match_id: 'native-match', confirmed_at: date }],
+    });
+    expect(fixture.rpc.mock.calls[1]?.[1]).toMatchObject({
+      p_state: { current_win_streak: 1, last_match_id: null, last_phase_match_id: 'native-match', counted_match_ids: ['native-match'] },
+      p_expected_match_ids: ['native-match'],
+    });
   });
 
   it('does not query empty input and propagates a phase read failure', async () => {

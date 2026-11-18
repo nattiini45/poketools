@@ -25,6 +25,8 @@ const STALE_AFTER_MS = 3 * 60 * 1000;
 interface ScoutingReportCardProps {
   analysis: MatchPrepAnalysis | null;
   matchId: string;
+  nativePhase?: boolean;
+  staleAfterMs?: number;
   /** True when the user has saved a prep team but the current report was generated without it */
   showRescout?: boolean;
   /** Only admins can repeat scouting (to prevent token waste) */
@@ -64,6 +66,8 @@ function ProfPortrait({ alt }: { alt: string }) {
 export default function ScoutingReportCard({
   analysis,
   matchId,
+  nativePhase = false,
+  staleAfterMs = STALE_AFTER_MS,
   showRescout,
   isAdmin,
   contentLocale,
@@ -95,13 +99,11 @@ export default function ScoutingReportCard({
     setError(null);
     if (force) setCollapsed(true);
 
-    // Both paths persist a structured report and stream SSE status; the agent
-    // path differs only in endpoint + body. On "done" we reload and the server
-    // re-reads the persisted `match_prep_analyses` row into the structured card.
-    const endpoint = ENABLE_AGENT_MATCH_ANALYSIS
+    const useAgent = ENABLE_AGENT_MATCH_ANALYSIS && !nativePhase;
+    const endpoint = useAgent
       ? '/api/ai/agent/analyze-match'
       : '/api/ai/match-prep-analysis';
-    const body = ENABLE_AGENT_MATCH_ANALYSIS
+    const body = useAgent
       ? { match_id: matchId, analysis_type: 'opponent_scout', force }
       : { match_id: matchId, force };
 
@@ -112,6 +114,13 @@ export default function ScoutingReportCard({
         body: JSON.stringify(body),
       });
 
+      if (!response.ok && nativePhase && response.headers.get('content-type')?.includes('application/json')) {
+        const error = await response.json() as ApiErrorLike;
+        setError({ kind: 'api', error });
+        setGenerating(false);
+        if (force) setCollapsed(false);
+        return;
+      }
       if (!response.ok || !response.body) {
         throw new Error('Request failed');
       }
@@ -121,13 +130,15 @@ export default function ScoutingReportCard({
       let lastStatus = '';
       let lastError = '';
       let lastCode = '';
+      let rest = '';
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const text = decoder.decode(value, { stream: true });
-        for (const line of text.split('\n')) {
+        const lines = (rest + decoder.decode(value, { stream: true })).split('\n');
+        rest = lines.pop() ?? '';
+        for (const line of lines) {
           if (line.startsWith('data: ')) {
             try {
               const parsed = JSON.parse(line.slice(6));
@@ -139,7 +150,7 @@ export default function ScoutingReportCard({
         }
       }
 
-      if (lastStatus === 'done') {
+      if (lastStatus === 'done' || (nativePhase && lastStatus === 'already_pending')) {
         window.location.reload();
       } else if (lastStatus === 'failed') {
         setError(
@@ -195,7 +206,7 @@ export default function ScoutingReportCard({
   // render and hydration); a finished report reloads the page anyway.
   if (analysis.status === 'pending') {
     const createdAt = new Date(analysis.created_at).getTime();
-    const isStale = requestTime - createdAt > STALE_AFTER_MS;
+    const isStale = requestTime - createdAt > staleAfterMs;
 
     return (
       <div className={cn(SHELL, 'flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5')}>

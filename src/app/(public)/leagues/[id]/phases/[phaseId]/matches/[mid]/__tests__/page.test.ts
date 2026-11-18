@@ -211,7 +211,7 @@ describe('canonical league phase match', () => {
     else expect(mock.proposals).not.toHaveBeenCalled();
     expect(mock.privateMatch).not.toHaveBeenCalled();
     expect(items.filter(el => typeof el.props.href === 'string' && el.props.href.startsWith('/dashboard/')).map(el => el.props.href))
-      .toEqual(status === 'active' ? [`/dashboard/submit/${MATCH}`] : []);
+      .toEqual(status === 'active' ? [`/dashboard/match-prep/${MATCH}`, `/dashboard/submit/${MATCH}`] : []);
   });
 
   it.each([true, false])('offers native result submission to an active non-participant only with phase admin access (%s)', async allowed => {
@@ -222,6 +222,7 @@ describe('canonical league phase match', () => {
     const items = elements(await Page(params()));
     expect(mock.phaseAdmin).toHaveBeenCalledWith(player, PHASE);
     expect(items.some(el => el.props.href === `/dashboard/submit/${MATCH}`)).toBe(allowed);
+    expect(items.some(el => el.props.href === `/dashboard/match-prep/${MATCH}`)).toBe(false);
     expect(mock.proposals).not.toHaveBeenCalled();
   });
 

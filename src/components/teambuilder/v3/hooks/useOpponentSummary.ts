@@ -21,7 +21,7 @@ export interface OpponentSummaryData {
   opponent_id: string;
   opponent_name: string;
   pokemon: OpponentPokemonSummary[];
-  data_scope: 'tournament' | 'season';
+  data_scope: 'tournament' | 'season' | 'phase';
   total_games: number;
 }
 

@@ -1,15 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { formatZodErrors, matchResetSchema } from '@/lib/validation';
-import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
-import { getMatchById } from '@/lib/supabase/queries/matches';
 import { resetMatch } from '@/lib/pkmn/game-pipeline';
-import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { ResetMatchResult } from '@/types/game';
-import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { authorizeCorrectionTarget, correctionAuditTarget, nativeCorrectionServices, revalidateCorrectionTarget } from './correction-target';
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -18,29 +14,10 @@ interface RouteParams {
 /** POST /api/admin/matches/[id]/reset — reset a match to scheduled */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const player = await requirePlayer();
-    const { id } = await params;
-    const invalidId = rejectInvalidPathId(id, 'INVALID_MATCH_ID');
-    if (invalidId) return invalidId;
-
-    const match = await getMatchById(id);
-    if (!match) {
-      return NextResponse.json<ApiResult<never>>(
-        { success: false, error: 'Match not found', code: 'match_not_found' },
-        { status: 404 }
-      );
-    }
-
-    // Require site admin or tournament resource admin
-    const hasAdminAccess = player.isAdmin ||
-      await isResourceAdminFor(player.playerId, 'tournament', match.tournament_id);
-
-    if (!hasAdminAccess) {
-      return NextResponse.json<ApiResult<never>>(
-        { success: false, error: 'Admin access required', code: 'forbidden' },
-        { status: 403 }
-      );
-    }
+    const access = await authorizeCorrectionTarget(params);
+    if (!access.ok) return access.response;
+    const { player, target } = access;
+    const { id, match } = target;
 
     let rawBody: unknown = {};
     try {
@@ -57,15 +34,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const result = await resetMatch(id, player.playerId, parsed.data.cascade === true);
+    const cascade = parsed.data.cascade === true;
+    const result = target.kind === 'phase'
+      ? await (await nativeCorrectionServices(target.owner)).resetMatch(id, player.playerId, cascade)
+      : await resetMatch(id, player.playerId, cascade);
 
-    await revalidateMatchPages(match.tournament_id, id);
+    await revalidateCorrectionTarget(target);
 
+    const audit = correctionAuditTarget(target);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,
       action: 'match.reset',
-      resource_type: 'match',
+      resource_type: audit.resourceType,
       resource_id: id,
       resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
       changes: {
@@ -74,10 +55,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         submitter_id: { before: match.submitter_id, after: null },
       },
       metadata: {
-        tournament_id: match.tournament_id,
+        ...audit.metadata,
         games_deleted: result.games_deleted,
         has_downstream_matches: result.has_downstream_matches,
-        cascade: parsed.data.cascade === true,
+        cascade,
         ...(parsed.data.reason ? { reason: parsed.data.reason } : {}),
         // Itemized recalculation summary (spec §24) — surfaces the derived
         // records that were recalculated so the audit log records what was

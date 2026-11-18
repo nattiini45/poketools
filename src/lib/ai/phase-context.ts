@@ -1,4 +1,6 @@
 import 'server-only';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import aiErrors from '@/i18n/messages/errors/ai/en';
 import { getPhaseById, getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
 import { getPhaseMatchById, getMatchesByPhase } from '@/lib/supabase/queries/phase-matches';
 import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
@@ -94,10 +96,16 @@ export async function buildPhaseMatchAnalysisPrompt(phaseId: string, matchId: st
   return { systemPrompt: withOutputLanguage(buildSystemPrompt(gen), locale), userPrompt: context };
 }
 
-export async function gatherPhaseMatchPrepContext(phaseId: string, matchId: string, playerId: string) {
+export async function gatherPhaseMatchPrepContext(
+  phaseId: string, matchId: string, playerId: string, options?: { scheduledOnly: boolean },
+) {
   const scope = await loadPhaseMatchScope(phaseId, matchId);
   const { match, gen } = scope;
   if (playerId !== match.player_1_id && playerId !== match.player_2_id) throw new Error('Scouting perspective must be a match participant');
+  if (options?.scheduledOnly && match.status !== 'scheduled') {
+    throw new UserFacingError(aiErrors.ai_scouting_scheduled_only.replace('{status}', match.status),
+      { code: 'ai_scouting_scheduled_only', params: { status: match.status } });
+  }
   const opponentId = playerId === match.player_1_id ? match.player_2_id : match.player_1_id;
   const ownName = playerId === match.player_1_id ? match.player_1_name : match.player_2_name;
   const opponentName = playerId === match.player_1_id ? match.player_2_name : match.player_1_name;
@@ -134,7 +142,9 @@ export async function gatherPhaseMatchPrepContext(phaseId: string, matchId: stri
     locale: scope.season.language === 'en' ? 'en' as const : 'de' as const };
 }
 
-export async function buildPhaseMatchPrepPrompt(phaseId: string, matchId: string, playerId: string) {
-  const { context, gen, hasUserTeam, locale } = await gatherPhaseMatchPrepContext(phaseId, matchId, playerId);
+export async function buildPhaseMatchPrepPrompt(
+  phaseId: string, matchId: string, playerId: string, options?: { scheduledOnly: boolean },
+) {
+  const { context, gen, hasUserTeam, locale } = await gatherPhaseMatchPrepContext(phaseId, matchId, playerId, options);
   return { systemPrompt: withOutputLanguage(buildScoutingSystemPrompt(gen), locale), userPrompt: context, hasUserTeam };
 }

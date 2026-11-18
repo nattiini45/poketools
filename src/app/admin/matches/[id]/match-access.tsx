@@ -2,6 +2,8 @@ import { getLiveAccess } from '@/lib/auth/helpers';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getT } from '@/i18n/server';
 import { adminCoreMessages } from '@/i18n/messages/admin-core';
+import { gatePhaseAdmin } from '@/lib/auth/phase-access';
+import type { AdminMatchTarget } from './match-target';
 
 /**
  * View gate of the per-match admin pages (`/admin/matches/[id]/**`).
@@ -26,6 +28,12 @@ export async function canAdministerMatch(tournamentId: string): Promise<boolean>
   if (!access?.isAnyAdmin || !access.player) return false;
   if (access.isSiteAdmin) return true;
   return isResourceAdminFor(access.player.playerId, 'tournament', tournamentId);
+}
+
+export async function canAdministerMatchTarget(target: AdminMatchTarget): Promise<boolean> {
+  return target.kind === 'phase'
+    ? (await gatePhaseAdmin(target.owner.phase_id)).kind === 'ok'
+    : canAdministerMatch(target.match.tournament_id);
 }
 
 /**

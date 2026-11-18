@@ -46,6 +46,7 @@ interface TeamsEditorProps {
   format?: string;
   generation?: number;
   tournamentId?: string | null;
+  phaseId?: string | null;
   seasonId?: string | null;
   matchId?: string | null;
   initialPokemon?: PokemonSet[];
@@ -63,6 +64,7 @@ export default function TeamsEditor({
   format = 'gen9ou',
   generation,
   tournamentId,
+  phaseId,
   seasonId,
   matchId,
   initialPokemon,
@@ -82,6 +84,7 @@ export default function TeamsEditor({
         format,
         generation,
         tournamentId,
+        phaseId,
         seasonId,
         matchId,
         teamId,
@@ -118,14 +121,14 @@ export default function TeamsEditor({
     if (state.dirty && !window.confirm(t('editor.discardConfirm'))) {
       return;
     }
-    if (state.tournamentId) {
+    if (state.tournamentId || state.phaseId) {
       // Tournament teams are 1:1 — new personal teams live on /teambuilder
       router.push('/teambuilder');
       return;
     }
     dispatch({ type: 'CLEAR_TEAM' });
     dispatch({ type: 'SET_META', patch: { teamId: null, importSource: 'manual' } });
-  }, [state.dirty, state.tournamentId, router, t]);
+  }, [state.dirty, state.tournamentId, state.phaseId, router, t]);
 
   // ── Keyboard shortcuts (global, when not in workspace) ───────────────
   useEffect(() => {

@@ -11,13 +11,21 @@
  */
 import { isValidElement, type ReactNode } from 'react';
 import Link from 'next/link';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LiveAccess } from '@/lib/auth/helpers';
 import { fullMatchRow, PRIVATE_MATCH_SENTINELS } from '@/lib/match/__tests__/private-match-fields';
 
 const mocks = vi.hoisted(() => ({
   cookies: new Map<string, { value: string }>(),
   getMatchById: vi.fn(),
+  getPhaseMatchById: vi.fn(),
+  findNativePhaseAliasOwner: vi.fn(),
+  standaloneMatchAliasExists: vi.fn(),
+  readPhaseStorageMode: vi.fn(),
+  isPhaseAdminFor: vi.fn(),
+  getPhaseRoundById: vi.fn(),
+  getPhaseWithDetails: vi.fn(),
+  resolvePlayerNames: vi.fn(),
   getLiveAccess: vi.fn<() => Promise<LiveAccess | null>>(),
   isResourceAdminFor: vi.fn(),
   loadAdminMatchContext: vi.fn(),
@@ -37,6 +45,16 @@ vi.mock('next/headers', () => ({
   cookies: async () => ({ get: (name: string) => mocks.cookies.get(name) }),
 }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: mocks.getMatchById }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: mocks.getPhaseMatchById }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: mocks.findNativePhaseAliasOwner,
+  standaloneMatchAliasExists: mocks.standaloneMatchAliasExists,
+}));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: mocks.readPhaseStorageMode }));
+vi.mock('@/lib/supabase/queries/phase-admins', () => ({ isPhaseAdminFor: mocks.isPhaseAdminFor }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getPhaseRoundById: mocks.getPhaseRoundById }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseWithDetails: mocks.getPhaseWithDetails }));
+vi.mock('@/lib/supabase/queries/players', () => ({ resolvePlayerNames: mocks.resolvePlayerNames }));
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ isResourceAdminFor: mocks.isResourceAdminFor }));
 vi.mock('@/lib/auth/helpers', () => ({ getLiveAccess: mocks.getLiveAccess }));
 vi.mock('@/components/shared/AdminGuard', () => ({
@@ -44,7 +62,10 @@ vi.mock('@/components/shared/AdminGuard', () => ({
 }));
 vi.mock('@/components/match/MatchStatusBadge', () => ({ default: () => null }));
 vi.mock('@/components/match/GameList', () => ({ default: () => null }));
-vi.mock('@/lib/admin/match-context', () => ({ loadAdminMatchContext: mocks.loadAdminMatchContext }));
+vi.mock('@/lib/admin/match-context', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/admin/match-context')>(),
+  loadAdminMatchContext: mocks.loadAdminMatchContext,
+}));
 vi.mock('@/lib/audit/queries', () => ({
   listMatchAuditEvents: mocks.listMatchAuditEvents,
   getLatestMatchDispute: mocks.getLatestMatchDispute,
@@ -71,6 +92,9 @@ import { MATCH_HISTORY_PAGE_SIZE, type AdminMatchContext } from '@/lib/admin/mat
 const TOURNAMENT_ID = '11111111-1111-4111-8111-111111111111';
 const MATCH_ID = '33333333-3333-4333-8333-333333333333';
 const NOTES = PRIVATE_MATCH_SENTINELS.notes;
+const PHASE_ID = '55555555-5555-4555-8555-555555555555';
+const SEASON_ID = '66666666-6666-4666-8666-666666666666';
+const ROUND_ID = '77777777-7777-4777-8777-777777777777';
 
 const CONTEXT: AdminMatchContext = {
   league_id: 'league-1',
@@ -165,6 +189,7 @@ function findAction(node: ReactNode): { backSuffix?: string } | null {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined);
   mocks.cookies.clear();
   mocks.getMatchById.mockResolvedValue(fullMatchRow({ id: MATCH_ID, tournament_id: TOURNAMENT_ID }));
   mocks.getLiveAccess.mockResolvedValue(null);
@@ -173,6 +198,118 @@ beforeEach(() => {
   mocks.listMatchAuditEvents.mockResolvedValue({ entries: [], total: 0, offset: 0, limit: MATCH_HISTORY_PAGE_SIZE });
   mocks.getLatestMatchDispute.mockResolvedValue(null);
   mocks.listMatchProposals.mockResolvedValue([]);
+});
+
+afterEach(() => vi.unstubAllEnvs());
+
+describe('native admin match detail', () => {
+  beforeEach(() => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    mocks.readPhaseStorageMode.mockResolvedValue('phase');
+    mocks.findNativePhaseAliasOwner.mockResolvedValue({ kind: 'phase', phase_id: PHASE_ID, season_id: SEASON_ID });
+    const match = fullMatchRow({ id: MATCH_ID, round_id: ROUND_ID, status: 'disputed' });
+    const { tournament_id: _tournamentId, ...phaseMatch } = match;
+    mocks.getPhaseMatchById.mockResolvedValue({ ...phaseMatch, phase_id: PHASE_ID });
+    mocks.isPhaseAdminFor.mockResolvedValue(true);
+    mocks.getLiveAccess.mockResolvedValue({
+      ...access({}),
+      player: { playerId: 'viewer-1', status: 'active', isAdmin: false } as LiveAccess['player'],
+    });
+    mocks.getPhaseRoundById.mockResolvedValue({
+      id: ROUND_ID, phase_id: PHASE_ID, name: 'Round 2', round_number: 2, status: 'active', best_of: 5, deadline: null,
+    });
+    mocks.getPhaseWithDetails.mockResolvedValue({ id: PHASE_ID, season_id: SEASON_ID, name: 'Groups', season_name: 'Sample League' });
+    mocks.resolvePlayerNames.mockResolvedValue({});
+  });
+
+  it('uses live phase ownership, native context and canonical links for a phase-only admin', async () => {
+    const tree = await AdminMatchPage({
+      params: Promise.resolve({ id: MATCH_ID }),
+      searchParams: Promise.resolve({ back: '//outside.example' }),
+    });
+    const { texts, types, props } = walk(tree);
+    const phaseUrl = `/leagues/${SEASON_ID}/phases/${PHASE_ID}`;
+    expect(texts).toContain(NOTES);
+    expect(linkHrefs(tree)).toEqual([`${phaseUrl}?tab=rounds`]);
+    expect(props.get(MatchContextHeader)).toMatchObject({
+      publicHref: `${phaseUrl}/matches/${MATCH_ID}`, listHref: `${phaseUrl}?tab=rounds`,
+      context: { league_name: 'Sample League', phase_name: 'Groups', best_of: 5 },
+    });
+    expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: true, bestOf: 5, isSiteAdmin: false, backSuffix: '' });
+    expect(props.get(MatchReopenSection)).toMatchObject({ native: true });
+    for (const panel of [MatchSchedulePanel, MatchHistoryPanel, MatchDisputePanel]) expect(types).not.toContain(panel);
+    expect(mocks.isPhaseAdminFor).toHaveBeenCalledWith('viewer-1', PHASE_ID);
+    expect(mocks.getPhaseRoundById).toHaveBeenCalledWith(ROUND_ID, PHASE_ID);
+    expect(mocks.getPhaseWithDetails).toHaveBeenCalledWith(PHASE_ID, SEASON_ID);
+    expect(mocks.getMatchById).not.toHaveBeenCalled();
+    for (const read of NEW_READS) expect(mocks[read]).not.toHaveBeenCalled();
+  });
+
+  it('does not send private notes or load context after revocation on a page render', async () => {
+    mocks.isPhaseAdminFor.mockResolvedValue(false);
+    const { texts, types } = await renderPage();
+    expect(texts).not.toContain(NOTES);
+    expect(types).not.toContain(AdminMatchActions);
+    expect(mocks.getPhaseWithDetails).not.toHaveBeenCalled();
+    expect(mocks.resolvePlayerNames).not.toHaveBeenCalled();
+  });
+
+  it('a new detail entry still checks legacy ownership even when the phase-only viewer keeps the layout', async () => {
+    expect((await renderPage()).texts).toContain(NOTES);
+    const standaloneId = '88888888-8888-4888-8888-888888888888';
+    mocks.findNativePhaseAliasOwner.mockResolvedValue(null);
+    mocks.standaloneMatchAliasExists.mockResolvedValue(true);
+    mocks.getMatchById.mockResolvedValue(fullMatchRow({ id: standaloneId, tournament_id: TOURNAMENT_ID }));
+    const { texts, types } = await renderPage(standaloneId);
+    expect(texts).not.toContain(NOTES);
+    expect(types).not.toContain(AdminMatchActions);
+    expect(mocks.loadAdminMatchContext).not.toHaveBeenCalled();
+  });
+
+  it('does not link to the legacy replay import page for a scheduled native match', async () => {
+    const { tournament_id: _tournamentId, ...phaseMatch } = fullMatchRow({
+      id: MATCH_ID, round_id: ROUND_ID, status: 'scheduled',
+    });
+    mocks.getPhaseMatchById.mockResolvedValue({ ...phaseMatch, phase_id: PHASE_ID });
+    const tree = await AdminMatchPage({ params: Promise.resolve({ id: MATCH_ID }) });
+    expect(linkHrefs(tree).some((href) => href.includes('/import-replay'))).toBe(false);
+  });
+
+  it('rejects a mismatched phase without falling back to historical rows', async () => {
+    mocks.getPhaseMatchById.mockResolvedValue({ id: MATCH_ID, phase_id: SEASON_ID });
+    await expect(renderPage()).rejects.toThrow('NEXT_NOT_FOUND');
+    expect(mocks.getMatchById).not.toHaveBeenCalled();
+    expect(mocks.isPhaseAdminFor).not.toHaveBeenCalled();
+  });
+
+  it('does not join context from a different league', async () => {
+    mocks.getPhaseWithDetails.mockResolvedValue({ id: PHASE_ID, season_id: PHASE_ID });
+    await expect(renderPage()).rejects.toThrow(`Phase ${PHASE_ID} not found in league ${SEASON_ID}`);
+  });
+
+  it('refuses on a frozen mode without opening either match store', async () => {
+    mocks.readPhaseStorageMode.mockResolvedValue('frozen_phase');
+    await expect(renderPage()).rejects.toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(mocks.findNativePhaseAliasOwner).not.toHaveBeenCalled();
+    expect(mocks.getMatchById).not.toHaveBeenCalled();
+  });
+
+  it('admits an active standalone tournament only with the matching standalone owner', async () => {
+    mocks.findNativePhaseAliasOwner.mockResolvedValue(null);
+    mocks.standaloneMatchAliasExists.mockResolvedValue(true);
+    mocks.getLiveAccess.mockResolvedValue(access({ isAnyAdmin: true }));
+    mocks.isResourceAdminFor.mockResolvedValue(true);
+
+    const { props, types } = await renderPage();
+    expect(mocks.standaloneMatchAliasExists).toHaveBeenCalledWith(MATCH_ID, TOURNAMENT_ID);
+    expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('viewer-1', 'tournament', TOURNAMENT_ID);
+    expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: false });
+    expect(types).toContain(MatchHistoryPanel);
+    expect(mocks.isPhaseAdminFor).not.toHaveBeenCalled();
+
+    mocks.standaloneMatchAliasExists.mockResolvedValue(false);
+    await expect(renderPage()).rejects.toThrow('NEXT_NOT_FOUND');
+  });
 });
 
 describe('AdminMatchPage: per-match access', () => {
@@ -228,6 +365,8 @@ describe('AdminMatchPage: per-match access', () => {
     expect(texts).toContain(NOTES);
     expect(types).toContain(AdminMatchActions);
     expect(mocks.isResourceAdminFor).not.toHaveBeenCalled();
+    expect(mocks.readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(mocks.findNativePhaseAliasOwner).not.toHaveBeenCalled();
   });
 
   it('a site admin sees every section of the match page, in order, and the context supplies the format', async () => {

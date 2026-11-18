@@ -88,6 +88,8 @@ export default defineDe<typeof en>()({
     unpaired: { one: '{count} Spieler ohne Gegner', other: '{count} Spieler ohne Gegner' },
     bye: '1 Spieler hat ein Freilos',
     selectPlayer: 'Spieler wählen …',
+    playerOne: 'Erster Spieler in Spiel {count}',
+    playerTwo: 'Zweiter Spieler in Spiel {count}',
     versus: 'vs.',
     remove: 'Entfernen',
     addMatch: '+ Spiel hinzufügen',

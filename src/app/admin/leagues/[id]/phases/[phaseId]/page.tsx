@@ -28,6 +28,7 @@ import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import PhaseGroupsPanel from '@/components/league/PhaseGroupsPanel';
 import RoundManager from '@/components/tournament/RoundManager';
+import PhaseRoundManager from '@/components/tournament/PhaseRoundManager';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
 import EditableDescription from '@/components/shared/EditableDescription';
 import Alert from '@/components/ui/Alert';
@@ -214,15 +215,20 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 async function renderNativePhaseAdmin(seasonId: string, phaseId: string) {
   const phase = await getPhaseWithDetails(phaseId, seasonId);
   if (!phase || phase.season_id !== seasonId) notFound();
-  const [stages, rounds, groups, participants, t, tEnum, tCommon] = await Promise.all([
+  const [stages, rounds, groups, participants, leagueHasGroups, t, tEnum, tCommon] = await Promise.all([
     getPhasesBySeasonId(seasonId),
     getRoundsByPhase(phaseId),
     getGroupsByPhase(phaseId),
     getPhaseParticipants(phaseId),
+    phase.bracket_type === 'round_robin' && seasonHasGroups(seasonId),
     getT(leagueAdminMessages),
     getT(enumMessages),
     getT(commonMessages),
   ]);
+  const hasDependentPhase = stages.some(stage => stage.id !== phaseId && (
+    stage.enrollment_source?.source_phase_id === phaseId
+      || stage.enrollment_source?.contributions?.some(source => source.source_phase_id === phaseId)
+  ));
   return (
     <AdminGuard>
       <AdminCrumbName href={`/admin/leagues/${seasonId}`} name={phase.season_name} />
@@ -249,7 +255,21 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string) {
           <ul>{groups.map(group => <li key={group.id}>{group.name}</li>)}</ul>
         </Section>
         <Section id="tournament-rounds" title={t('phasePage.rounds')}>
-          <ol>{rounds.map(round => <li key={round.id}>{round.name}</li>)}</ol>
+          <PhaseRoundManager
+            key={phaseId}
+            address={{ season_id: seasonId, phase_id: phaseId }}
+            phase={{
+              status: phase.status,
+              archived: phase.archived,
+              bracket_type: phase.bracket_type,
+              current_round: phase.current_round,
+              best_of_default: phase.best_of_default,
+            }}
+            rounds={rounds}
+            participants={participants.map(({ id, name, seed }) => ({ id, name, seed }))}
+            leagueHasGroups={leagueHasGroups}
+            phaseAllowsDeletion={!hasDependentPhase && phase.format_stage_key === null && phase.stage_spec === null}
+          />
         </Section>
       </PageContainer>
     </AdminGuard>

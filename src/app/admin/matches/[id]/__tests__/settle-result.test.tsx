@@ -21,7 +21,6 @@ function ui() {
       player2={{ id: 'p2', name: 'Gary' }}
       currentWinnerId={null}
       games={[]}
-      tournamentId="t1"
       bestOf={3}
       isSiteAdmin={false}
     />

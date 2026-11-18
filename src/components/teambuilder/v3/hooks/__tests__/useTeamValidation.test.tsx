@@ -77,6 +77,14 @@ describe('useTeamValidation', () => {
     expect(body).not.toHaveProperty('match_id');
   });
 
+  it('sends a native phase and match without legacy locators', async () => {
+    const phaseId = '00000000-0000-4000-8000-000000000005';
+    const body = await sentBody(stateWith({ mode: 'plan', phaseId, matchId: MATCH, tournamentId: TOURNAMENT }));
+    expect(body).toMatchObject({ ruleset_id: RULESET, phase_id: phaseId, match_id: MATCH });
+    expect(body).not.toHaveProperty('tournament_id');
+    expect(body).not.toHaveProperty('season_id');
+  });
+
   it('never sends a match without its tournament (the API refuses that)', async () => {
     const body = await sentBody(stateWith({ tournamentId: null, matchId: MATCH }));
     expect(body).not.toHaveProperty('match_id');

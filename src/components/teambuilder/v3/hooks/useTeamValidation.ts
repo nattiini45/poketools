@@ -18,14 +18,15 @@ export function useTeamValidation(
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // Stable ref to rulesetId/seasonId/tournamentId/matchId so the effect only re-runs on team/dirty changes
   const rulesetIdRef = useRef(state.rulesetId);
   const seasonIdRef = useRef(state.seasonId);
   const tournamentIdRef = useRef(state.tournamentId);
+  const phaseIdRef = useRef(state.phaseId);
   const matchIdRef = useRef(state.matchId);
   useEffect(() => { rulesetIdRef.current = state.rulesetId; }, [state.rulesetId]);
   useEffect(() => { seasonIdRef.current = state.seasonId; }, [state.seasonId]);
   useEffect(() => { tournamentIdRef.current = state.tournamentId; }, [state.tournamentId]);
+  useEffect(() => { phaseIdRef.current = state.phaseId; }, [state.phaseId]);
   useEffect(() => { matchIdRef.current = state.matchId; }, [state.matchId]);
 
   useEffect(() => {
@@ -40,20 +41,21 @@ export function useTeamValidation(
       abortRef.current = new AbortController();
 
       try {
-        // tournament_id is sent so the API can resolve the EFFECTIVE ruleset
-        // (custom-league-over-base-tier) AND look up the player's assigned
-        // core triple for `type_quotas.source === 'player_core'` validation.
+        const scope = phaseIdRef.current ? {
+          phase_id: phaseIdRef.current,
+          match_id: matchIdRef.current,
+        } : {
+          ...(seasonIdRef.current ? { season_id: seasonIdRef.current } : {}),
+          ...(tournamentIdRef.current ? { tournament_id: tournamentIdRef.current } : {}),
+          ...(tournamentIdRef.current && matchIdRef.current ? { match_id: matchIdRef.current } : {}),
+        };
         const res = await fetch('/api/validate-team', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             pokemon,
             ruleset_id: rulesetIdRef.current,
-            ...(seasonIdRef.current ? { season_id: seasonIdRef.current } : {}),
-            ...(tournamentIdRef.current ? { tournament_id: tournamentIdRef.current } : {}),
-            // A team built for a match is checked by the rules of that match's round (the API refuses a match_id
-            // without its tournament).
-            ...(tournamentIdRef.current && matchIdRef.current ? { match_id: matchIdRef.current } : {}),
+            ...scope,
           }),
           signal: abortRef.current.signal,
         });
@@ -73,7 +75,7 @@ export function useTeamValidation(
     return () => {
       if (timerRef.current) clearTimeout(timerRef.current);
     };
-    // Re-run when team content or dirty flag changes; rulesetId/seasonId/tournamentId/matchId via refs
+    // Re-run when team content or dirty flag changes; the persisted scope is held in refs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.team, state.dirty, dispatch]);
 }
