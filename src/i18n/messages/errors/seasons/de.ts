@@ -18,6 +18,7 @@ export default defineDe<typeof en>()({
   PHASE_PARTICIPANTS_LOCKED: 'Bei einer abgeschlossenen Phase lassen sich die Teilnehmer nicht mehr ändern.',
   PHASE_ROSTER_REQUIRED: 'Alle Teilnehmer müssen im Kader der Liga stehen.',
   PHASE_GROUP_INVALID: 'Ungültige Gruppe für diese Phase.',
+  PHASE_GROUP_REPAIR_UNAVAILABLE: 'Für native Phasen ist keine Gruppenreparatur verfügbar.',
   PHASE_GROUP_MEMBER_NOT_FOUND: 'Der Spieler ist nicht in der Ausgangsgruppe.',
   PHASE_GROUPS_INSUFFICIENT_SEEDS: 'Es braucht mindestens so viele gesetzte Teilnehmer wie Gruppen.',
   PHASE_GROUPS_LEAGUE_MANAGED:

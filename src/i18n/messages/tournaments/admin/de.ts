@@ -298,6 +298,8 @@ export default defineDe<typeof en>()({
     reimportFailed: 'Die Tabelle konnte nicht neu importiert werden.',
     seedByRatingFailed: 'Das Setzen nach Rating ist fehlgeschlagen.',
     locked: 'Nach dem Erstellen des Turnierbaums ist die Setzliste gesperrt.',
+    phaseLocked: 'Kader und Setzliste dieser Phase sind schreibgeschützt.',
+    removeFailed: 'Der Spieler konnte nicht aus dieser Phase entfernt werden.',
     heading: 'Teilnehmer ({count})',
     reimport: 'Aus der Tabelle neu importieren',
     seedByRating: 'Nach Rating setzen',

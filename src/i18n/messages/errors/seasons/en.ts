@@ -29,6 +29,7 @@ export default {
   PHASE_PARTICIPANTS_LOCKED: 'Participants cannot be changed on a completed phase',
   PHASE_ROSTER_REQUIRED: 'All enrollees must be league roster members',
   PHASE_GROUP_INVALID: 'Invalid group for this phase',
+  PHASE_GROUP_REPAIR_UNAVAILABLE: 'Group repair is not available for native phases',
   PHASE_GROUP_MEMBER_NOT_FOUND: 'Player is not in the source group',
   PHASE_GROUPS_INSUFFICIENT_SEEDS: 'Need at least as many seeded participants as groups',
   // League groups: a grouped league's phases mirror its groups (league groups editor, Participants tab)

@@ -4,6 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { phaseGroupMemberMoveSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { assertNativePhaseNotArchived } from '@/lib/league-phase/admin-locks';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { getGroupsByPhase, movePhaseGroupMember } from '@/lib/supabase/queries/phase-groups';
@@ -37,6 +38,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 404 }
       );
     }
+
+    if (native) assertNativePhaseNotArchived(phase);
 
     const rawBody = await request.json();
     const parsed = phaseGroupMemberMoveSchema.safeParse(rawBody);

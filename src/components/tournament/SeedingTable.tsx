@@ -31,9 +31,15 @@ type SeedingErrorKey =
  * `AdminTournamentParticipant` fields and hands rows back unchanged apart from
  * `seed` and `starting_bracket`, so any wider row type passes through.
  */
-export interface SeedingTableProps<P extends AdminTournamentParticipant = AdminTournamentParticipant> {
+export type SeedingTableProps<P extends AdminTournamentParticipant = AdminTournamentParticipant> = ({
   tournamentId: string;
   seasonId: string | null;
+  phase?: never;
+} | {
+  phase: { seasonId: string; phaseId: string };
+  tournamentId?: never;
+  seasonId?: never;
+}) & {
   enrollmentSource: EnrollmentSource | null;
   sourcePhaseName: string | null;
   /**
@@ -65,11 +71,12 @@ export interface SeedingTableProps<P extends AdminTournamentParticipant = AdminT
    * server refuses with `format_phase_owned` asks for a reason and is repeated as an audited force.
    */
   startedFormatPhase?: boolean;
-}
+};
 
 export default function SeedingTable<P extends AdminTournamentParticipant>({
   tournamentId,
   seasonId,
+  phase,
   enrollmentSource,
   sourcePhaseName,
   participants,
@@ -83,6 +90,12 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   editable = true,
   startedFormatPhase = false,
 }: SeedingTableProps<P>) {
+  const phaseAddress = phase ?? (seasonId ? { seasonId, phaseId: tournamentId } : null);
+  const phaseParticipantsUrl = phaseAddress
+    ? `/api/seasons/${phaseAddress.seasonId}/phases/${phaseAddress.phaseId}/participants`
+    : null;
+  const participantsUrl = phase && phaseParticipantsUrl ? phaseParticipantsUrl : `/api/tournaments/${tournamentId}/participants`;
+  const rosterReadUrl = phase ? `${participantsUrl}?view=admin` : participantsUrl;
   const [orderedIds, setOrderedIds] = useState<string[]>(() =>
     participants.map((p) => p.id)
   );
@@ -236,7 +249,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
     }
 
     try {
-      const res = await fetch(`/api/tournaments/${tournamentId}/participants`, {
+      const res = await fetch(participantsUrl, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(withRosterForce({ seeds }, forceReason)),
@@ -277,13 +290,13 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
    * the server refused with `format_phase_owned`: the reason dialog is the confirmation, so no second prompt follows.
    */
   async function reimportStandings(force = false, forceReason?: string) {
-    if (!seasonId) return;
+    if (!phaseParticipantsUrl) return;
     setSyncing(true);
     setError(null);
     setSeedsSaved(false);
     try {
       const res = await fetch(
-        `/api/seasons/${seasonId}/phases/${tournamentId}/participants/sync-standings`,
+        `${phaseParticipantsUrl}/sync-standings`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -314,8 +327,9 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         setError(apiFailure(result));
         return;
       }
-      const partRes = await fetch(`/api/tournaments/${tournamentId}/participants`);
+      const partRes = await fetch(rosterReadUrl);
       const partJson: ApiResult<P[]> = await partRes.json();
+      if (phase && !partJson.success) setError(apiFailure(partJson));
       if (partJson.success) {
         onParticipantsChange(partJson.data);
         setOrderedIds(partJson.data.map((p) => p.id));
@@ -338,13 +352,13 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
   }
 
   async function seedByRating(forceReason?: string) {
-    if (!seasonId) return;
+    if (!phaseParticipantsUrl) return;
     setSeedingRating(true);
     setError(null);
     setSeedsSaved(false);
     try {
       const res = await fetch(
-        `/api/seasons/${seasonId}/phases/${tournamentId}/participants/seed-by-rating`,
+        `${phaseParticipantsUrl}/seed-by-rating`,
         forceReason === undefined
           ? { method: 'POST' }
           : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(withRosterForce({}, forceReason)) }
@@ -359,8 +373,9 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
         setError(apiFailure(result));
         return;
       }
-      const partRes = await fetch(`/api/tournaments/${tournamentId}/participants`);
+      const partRes = await fetch(rosterReadUrl);
       const partJson: ApiResult<P[]> = await partRes.json();
+      if (phase && !partJson.success) setError(apiFailure(partJson));
       if (partJson.success) {
         const sorted = [...partJson.data].sort((a, b) => {
           if (a.seed !== null && b.seed !== null) return a.seed - b.seed;
@@ -428,7 +443,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
 
       {!editable && (
         <p className="text-caption text-fg-muted">
-          {t('seeding.locked')}
+          {t(phase ? 'seeding.phaseLocked' : 'seeding.locked')}
         </p>
       )}
 
@@ -441,7 +456,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
           {t('seeding.heading', { count: orderedParticipants.length })}
         </h3>
         <div className="flex items-center gap-2 flex-wrap">
-          {seasonId && enrollmentSource?.frozen && (
+          {phaseParticipantsUrl && (phase || enrollmentSource?.frozen) && (
             <Button
               variant="ghost"
               size="sm"
@@ -452,7 +467,7 @@ export default function SeedingTable<P extends AdminTournamentParticipant>({
               {t('seeding.reimport')}
             </Button>
           )}
-          {seasonId && (
+          {phaseParticipantsUrl && (
             <Button
               variant="ghost"
               size="sm"

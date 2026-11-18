@@ -1,8 +1,10 @@
 'use client';
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import type { TournamentGroupWithMembers } from '@/types/season';
+import type { PhaseGroupWithMembers } from '@/types/league-phase';
 import type { ApiResult } from '@/types/api';
 import Button from '@/components/ui/Button';
 import Card from '@/components/ui/Card';
@@ -14,7 +16,7 @@ import { useLocale, useT } from '@/i18n/client';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import { useApiErrorText } from '@/i18n/use-api-error';
-import { errorsSeasons } from '@/i18n/messages/errors/seasons';
+import { errorsSeasons, errorsTournaments } from '@/i18n/messages/errors';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 import { PHASE_GROUP_COUNTS, redrawNeedsConfirm } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
@@ -29,6 +31,7 @@ interface PhaseGroupsPanelProps {
    * league groups editor and explains the placement-week pause of "Generate All Rounds".
    */
   leagueManaged?: boolean;
+  native?: { groups: PhaseGroupWithMembers[]; archived: boolean };
 }
 
 /** Selects and buttons reach 44px on phones (touch targets), the compact size from `sm` up. */
@@ -70,13 +73,17 @@ type GroupsError =
  * (serpentine assign, clear, member moves). A phase of a league WITH groups shows its mirrored groups read-only
  * (`leagueManaged`): no control the API would refuse is offered.
  */
-export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = false }: PhaseGroupsPanelProps) {
+export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = false, native }: PhaseGroupsPanelProps) {
+  const router = useRouter();
   const t = useT(leaguePhasesMessages);
   const locale = useLocale();
-  const errorText = useApiErrorText(errorsSeasons);
-  const [groups, setGroups] = useState<TournamentGroupWithMembers[]>([]);
+  const errorText = useApiErrorText(errorsSeasons, errorsTournaments);
+  const [legacyGroups, setGroups] = useState<TournamentGroupWithMembers[] | PhaseGroupWithMembers[]>([]);
+  const groups = native?.groups ?? legacyGroups;
+  const editable = !leagueManaged && !native?.archived;
+  const nativeMode = native !== undefined;
   const [groupCount, setGroupCount] = useState(2);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!nativeMode);
   const [assigning, setAssigning] = useState(false);
   const [moving, setMoving] = useState<string | null>(null);
   /** The re-draw confirm is open (null = closed) and names the groups a serpentine assign would replace. */
@@ -88,7 +95,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
   const fetchGroups = useCallback(async () => {
     try {
       const res = await fetch(`/api/seasons/${seasonId}/phases/${phaseId}/groups`);
-      const result: ApiResult<TournamentGroupWithMembers[]> = await res.json();
+      const result: ApiResult<TournamentGroupWithMembers[] | PhaseGroupWithMembers[]> = await res.json();
       if (result.success) setGroups(result.data);
       else setError({ api: toApiErrorLike(result) });
     } catch {
@@ -99,8 +106,8 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
   }, [seasonId, phaseId]);
 
   useEffect(() => {
-    void fetchGroups();
-  }, [fetchGroups]);
+    if (!nativeMode) void fetchGroups();
+  }, [fetchGroups, nativeMode]);
 
   async function handleSerpentineAssign() {
     setAssigning(true);
@@ -111,12 +118,13 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ group_count: groupCount, serpentine: true }),
       });
-      const result: ApiResult<TournamentGroupWithMembers[]> = await res.json();
+      const result: ApiResult<TournamentGroupWithMembers[] | PhaseGroupWithMembers[]> = await res.json();
       if (!result.success) {
         setError({ api: toApiErrorLike(result) });
         return;
       }
-      setGroups(result.data);
+      if (nativeMode) router.refresh();
+      else setGroups(result.data);
       setEditVersion((version) => version + 1);
     } catch {
       setError({ key: 'assignFailed' });
@@ -148,7 +156,8 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         setError({ api: toApiErrorLike(result) });
         return;
       }
-      setGroups([]);
+      if (nativeMode) router.refresh();
+      else setGroups([]);
     } catch {
       setError({ key: 'clearFailed' });
     }
@@ -181,7 +190,8 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         return;
       }
       setEditVersion((version) => version + 1);
-      await fetchGroups();
+      if (nativeMode) router.refresh();
+      else await fetchGroups();
     } catch {
       setError({ key: 'moveFailed' });
     } finally {
@@ -216,7 +226,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
           <Alert variant="info" className={INFO_CALLOUT}>{t.rich('groups.leagueManaged', { link: participantsLink })}</Alert>
           <p className="text-caption text-fg-muted">{t('groups.placementPause')}</p>
         </>
-      ) : (
+      ) : editable ? (
       <div className="flex flex-wrap items-end gap-3">
         <GroupCountSelect value={groupCount} onChange={setGroupCount} />
         <Button
@@ -234,7 +244,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
           </Button>
         )}
       </div>
-      )}
+      ) : null}
 
       <ConfirmDialog
         open={redrawCount !== null}
@@ -248,7 +258,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
       />
 
       {groups.length === 0 ? (
-        <EmptyGroupsNote leagueManaged={leagueManaged} />
+        editable ? <EmptyGroupsNote leagueManaged={false} /> : null
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {groups.map((group) => (
@@ -268,7 +278,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
                         )}
                         {m.player_name}
                       </span>
-                      {leagueManaged ? null : (
+                      {editable && (
                         <div className="w-40 max-w-full shrink-0">
                           <Select
                             className="h-11 py-1 text-caption sm:h-9"
@@ -294,7 +304,7 @@ export default function PhaseGroupsPanel({ seasonId, phaseId, leagueManaged = fa
         </div>
       )}
 
-      {groups.length > 0 && (
+      {!nativeMode && groups.length > 0 && (
         <PhaseGroupRepair
           key={editVersion}
           seasonId={seasonId}

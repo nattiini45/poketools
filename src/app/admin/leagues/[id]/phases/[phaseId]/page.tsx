@@ -9,7 +9,9 @@ import PageContainer from '@/components/ui/PageContainer';
 import Section from '@/components/ui/Section';
 import { gateResourceAdmin } from '@/lib/auth/resource-gate';
 import { isValidUuid } from '@/lib/utils/uuid';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getPublicSeasonParticipants, getSeasonById } from '@/lib/supabase/queries/seasons';
+import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
+import { toAdminTournamentParticipant } from '@/lib/players/public-player';
 import { getStagesBySeasonId, getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPhaseWithDetails, getPhasesBySeasonId, getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
@@ -28,6 +30,7 @@ import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
 import PhaseLifecycleActions from '@/components/league/PhaseLifecycleActions';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import PhaseGroupsPanel from '@/components/league/PhaseGroupsPanel';
+import PhaseRosterManager from '@/components/league/PhaseRosterManager';
 import RoundManager from '@/components/tournament/RoundManager';
 import PhaseRoundManager from '@/components/tournament/PhaseRoundManager';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
@@ -216,12 +219,19 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
 async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer: { playerId: string; isAdmin: boolean }) {
   const phase = await getPhaseWithDetails(phaseId, seasonId);
   if (!phase || phase.season_id !== seasonId) notFound();
-  const [stages, rounds, groups, participants, leagueHasGroups, rulesets, pin, t, tEnum, tCommon] = await Promise.all([
+  const formatManaged = phase.format_stage_key !== null;
+  const startedFormatPhase = formatManaged && phase.status === 'active';
+  const rosterEditable = !phase.archived && (phase.status === 'upcoming' || startedFormatPhase);
+  const [stages, rounds, groups, roster, candidates, leagueHasGroups, rulesets, pin, t, tEnum, tCommon] = await Promise.all([
     getPhasesBySeasonId(seasonId),
     getRoundsByPhase(phaseId),
     getGroupsByPhase(phaseId),
-    getPhaseParticipants(phaseId),
-    phase.bracket_type === 'round_robin' && seasonHasGroups(seasonId),
+    getPhaseParticipants(phaseId).then(async rows => ({
+      participants: rows.map(toAdminTournamentParticipant),
+      ratings: await getPlayerRatingsBatch(rows.map(player => player.id)),
+    })),
+    rosterEditable ? getPublicSeasonParticipants(seasonId) : [],
+    seasonHasGroups(seasonId),
     listRulesetOptionsFor({ actor: viewer, seasonId, keep: [phase.ruleset_id] }),
     getRulesetPinInfo(phase.ruleset_id, viewer),
     getT(leagueAdminMessages),
@@ -229,7 +239,7 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
     getT(commonMessages),
   ]);
   const summary = buildLeaguePhase(phase, rounds);
-  const formatManaged = phase.format_stage_key !== null;
+  const { participants, ratings } = roster;
   const hasDependentPhase = stages.some(stage => stage.id !== phaseId && (
     stage.enrollment_source?.source_phase_id === phaseId
       || stage.enrollment_source?.contributions?.some(source => source.source_phase_id === phaseId)
@@ -262,10 +272,22 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
           )}
         </Section>
         <Section id="tournament-participants" title={t('phasePage.participants')}>
-          <ul>{participants.map(player => <li key={player.id}>{player.name}</li>)}</ul>
+          <PhaseRosterManager
+            key={phaseId}
+            seasonId={seasonId}
+            phaseId={phaseId}
+            bracketType={phase.bracket_type}
+            editable={rosterEditable}
+            startedFormatPhase={startedFormatPhase}
+            initialParticipants={participants}
+            initialEnrollment={phase.enrollment_source}
+            sourcePhaseName={stages.find(stage => stage.id === phase.enrollment_source?.source_phase_id)?.name ?? null}
+            candidates={candidates.map(({ id, name }) => ({ id, name }))}
+            ratings={Object.fromEntries([...ratings].map(([id, entry]) => [id, entry.rating]))}
+          />
         </Section>
         <Section id="tournament-groups" title={t('phasePage.groups')}>
-          <ul>{groups.map(group => <li key={group.id}>{group.name}</li>)}</ul>
+          <PhaseGroupsPanel seasonId={seasonId} phaseId={phaseId} leagueManaged={leagueHasGroups} native={{ groups, archived: phase.archived }} />
         </Section>
         <Section id="tournament-rounds" title={t('phasePage.rounds')}>
           <PhaseRoundManager
@@ -280,7 +302,7 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer:
             }}
             rounds={rounds}
             participants={participants.map(({ id, name, seed }) => ({ id, name, seed }))}
-            leagueHasGroups={leagueHasGroups}
+            leagueHasGroups={phase.bracket_type === 'round_robin' && leagueHasGroups}
             phaseAllowsDeletion={!hasDependentPhase && phase.format_stage_key === null && phase.stage_spec === null}
           />
         </Section>

@@ -4,6 +4,7 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { phaseGroupsCreateSchema, formatZodErrors } from '@/lib/validation';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { assertNativePhaseNotArchived } from '@/lib/league-phase/admin-locks';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getPhaseById, getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
 import { getGroupsByPhase, replaceAdminPhaseGroups } from '@/lib/supabase/queries/phase-groups';
@@ -36,7 +37,7 @@ async function assertPhaseInSeason(id: string, requestedPhaseId: string) {
       status: 404,
     });
   }
-  return { native, phaseId, seasonId };
+  return { native, phaseId, seasonId, phase };
 }
 
 /**
@@ -71,7 +72,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const { native, phaseId, seasonId } = await assertPhaseInSeason(id, requestedPhaseId);
+    const { native, phaseId, seasonId, phase } = await assertPhaseInSeason(id, requestedPhaseId);
+    if (native) assertNativePhaseNotArchived(phase);
 
     const rawBody = await request.json();
     const parsed = phaseGroupsCreateSchema.safeParse(rawBody);
@@ -141,7 +143,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const { native, phaseId, seasonId } = await assertPhaseInSeason(id, requestedPhaseId);
+    const { native, phaseId, seasonId, phase } = await assertPhaseInSeason(id, requestedPhaseId);
+    if (native) assertNativePhaseNotArchived(phase);
     await assertPhaseGroupsEditable(seasonId);
     if (native) {
       await replaceAdminPhaseGroups(seasonId, phaseId, [], []);

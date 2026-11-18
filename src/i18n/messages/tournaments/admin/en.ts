@@ -304,6 +304,8 @@ export default {
     reimportFailed: 'Failed to re-import standings',
     seedByRatingFailed: 'Failed to seed by rating',
     locked: 'Seeding is locked after bracket generation.',
+    phaseLocked: 'This phase’s roster and seeds are read-only.',
+    removeFailed: 'Couldn’t remove the player from this phase.',
     heading: 'Participants ({count})',
     reimport: 'Re-import from table',
     seedByRating: 'Seed by rating',
