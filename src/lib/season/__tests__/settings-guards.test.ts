@@ -31,19 +31,19 @@ describe('isRulesetPinLocked', () => {
   const running = signals({ status: 'active' });
 
   it('locks a started league that has a ruleset, by every start signal', () => {
-    expect(isRulesetPinLocked('rs-1', running)).toBe(true);
-    expect(isRulesetPinLocked('rs-1', signals({ status: 'completed' }))).toBe(true);
-    expect(isRulesetPinLocked('rs-1', signals({ phases: [{ status: 'active', rounds_total: 0 }] }))).toBe(true);
-    expect(isRulesetPinLocked('rs-1', signals({ phases: [{ status: 'upcoming', rounds_total: 2 }] }))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(running))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(signals({ status: 'completed' })))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(signals({ phases: [{ status: 'active', rounds_total: 0 }] })))).toBe(true);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(signals({ phases: [{ status: 'upcoming', rounds_total: 2 }] })))).toBe(true);
   });
 
   it('leaves a league that has not started editable', () => {
-    expect(isRulesetPinLocked('rs-1', signals())).toBe(false);
-    expect(isRulesetPinLocked('rs-1', signals({ phases: [upcomingPhase] }))).toBe(false);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(signals()))).toBe(false);
+    expect(isRulesetPinLocked('rs-1', isSeasonStarted(signals({ phases: [upcomingPhase] })))).toBe(false);
   });
 
   it('leaves a started league without a ruleset editable: the server still lets it get its first one', () => {
-    expect(isRulesetPinLocked(null, running)).toBe(false);
+    expect(isRulesetPinLocked(null, isSeasonStarted(running))).toBe(false);
   });
 });
 
@@ -71,16 +71,16 @@ describe('isSeasonStarted', () => {
 
 describe('formatChangeLock', () => {
   it('reports the point-buy lock first, started or not', () => {
-    expect(formatChangeLock('evolution_point_buy', signals())).toBe('point_buy');
-    expect(formatChangeLock('evolution_point_buy', signals({ status: 'active' }))).toBe('point_buy');
+    expect(formatChangeLock('evolution_point_buy', isSeasonStarted(signals()))).toBe('point_buy');
+    expect(formatChangeLock('evolution_point_buy', isSeasonStarted(signals({ status: 'active' })))).toBe('point_buy');
   });
 
   it('reports started for a started classic league', () => {
-    expect(formatChangeLock('singles', signals({ status: 'active' }))).toBe('started');
+    expect(formatChangeLock('singles', isSeasonStarted(signals({ status: 'active' })))).toBe('started');
   });
 
   it('is null for a classic league that has not started', () => {
-    expect(formatChangeLock('draft', signals({ phases: [upcomingPhase] }))).toBeNull();
+    expect(formatChangeLock('draft', isSeasonStarted(signals({ phases: [upcomingPhase] })))).toBeNull();
   });
 });
 

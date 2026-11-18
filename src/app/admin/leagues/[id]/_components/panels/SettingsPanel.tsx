@@ -15,7 +15,7 @@ import { LEAGUE_ADMIN_DANGER_SECTION } from '@/lib/league-admin/tabs';
 import { formatChangeLock, isRulesetPinLocked } from '@/lib/season/settings-guards';
 import { getRulesetPinInfo } from '@/lib/ruleset-studio/pin-info.server';
 import { listRulesetOptionsFor } from '@/lib/supabase/queries/rulesets';
-import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
+import { readLeagueStarted } from '@/lib/league-phase/season-start';
 import ContentLanguageControl from '../ContentLanguageControl';
 import type { LeagueAdminPanelContext } from './context';
 
@@ -40,14 +40,14 @@ import type { LeagueAdminPanelContext } from './context';
  */
 export async function settingsPanel({ id, league, playerId, isSiteAdmin, t }: LeagueAdminPanelContext, danger: ReactNode) {
   const viewer = { playerId, isAdmin: isSiteAdmin };
-  const [rulesets, pin, phases, tForm] = await Promise.all([
+  const [rulesets, pin, started, tForm] = await Promise.all([
     listRulesetOptionsFor({ actor: viewer, seasonId: id, keep: [league.ruleset_id] }),
     getRulesetPinInfo(league.ruleset_id, viewer),
-    getSeasonPhaseStartSignals(id),
+    readLeagueStarted(league),
     getT(leagueAdminMessages),
   ]);
-  const formatLock = formatChangeLock(league.format_type, { status: league.status, phases });
-  const rulesetLocked = isRulesetPinLocked(league.ruleset_id, { status: league.status, phases });
+  const formatLock = formatChangeLock(league.format_type, started);
+  const rulesetLocked = isRulesetPinLocked(league.ruleset_id, started);
   const initial: LeagueSettingsValues = {
     name: league.name,
     formatType: league.format_type,

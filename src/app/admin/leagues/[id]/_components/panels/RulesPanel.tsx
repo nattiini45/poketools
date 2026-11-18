@@ -6,9 +6,8 @@ import FormatRulesEditor from '@/components/league/FormatRulesEditor';
 import EpbImportPanel from '@/components/league/EpbImportPanel';
 import { getT } from '@/i18n/server';
 import { glossaryMessages } from '@/i18n/messages/glossary';
-import { isSeasonStarted } from '@/lib/season/settings-guards';
+import { readLeagueStarted } from '@/lib/league-phase/season-start';
 import { getSeasonParticipants } from '@/lib/supabase/queries/seasons';
-import { getSeasonPhaseStartSignals } from '@/lib/supabase/queries/season-start';
 import { toPublicPlayerRef } from '@/lib/players/public-player';
 import type { LeagueAdminPanelContext } from './context';
 
@@ -21,13 +20,12 @@ import type { LeagueAdminPanelContext } from './context';
  */
 export async function rulesPanel({ id, league, caps, t }: LeagueAdminPanelContext) {
   // Only `{ id, name }` crosses into client components (AGENTS.md: never raw players rows).
-  const [participants, phases, tGlossary] = await Promise.all([
+  const [participants, seasonStarted, tGlossary] = await Promise.all([
     caps.evolutionTiers ? getSeasonParticipants(id) : [],
-    caps.pointBuyList ? getSeasonPhaseStartSignals(id) : null,
+    caps.pointBuyList ? readLeagueStarted(league) : false,
     caps.pointBuyList ? getT(glossaryMessages) : null,
   ]);
   const playerRefs = participants.map(toPublicPlayerRef);
-  const seasonStarted = phases ? isSeasonStarted({ status: league.status, phases }) : false;
 
   return (
     <>

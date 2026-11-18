@@ -12,9 +12,9 @@ import {
 } from '@/lib/format-studio/api-schemas';
 import { attachFormatToSeason, detachFormatFromSeason, type AttachedStage } from '@/lib/format-studio/attach';
 import type { EngineGap, SeasonFormatSummary } from '@/lib/format-studio/library-types';
-import { isSeasonStarted } from '@/lib/season/season-started';
+import { readLeagueStarted } from '@/lib/league-phase/season-start';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { getSeasonFormat, getSeasonFormatSummary, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
+import { getSeasonFormat, getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { logAuditEvent } from '@/lib/audit/log';
 import { expireSeasonReads } from '@/lib/revalidation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -83,15 +83,15 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
     if (season === null) throw seasonNotFound();
 
     const custom = season.format_type === 'custom';
-    const [summary, signals] = await Promise.all([
+    const [summary, started] = await Promise.all([
       custom ? getSeasonFormatSummary(id) : Promise.resolve(null),
-      getSeasonStartSignals(id),
+      readLeagueStarted(season),
     ]);
     const status: SeasonFormatState['status'] = !custom ? 'not_custom' : summary === null ? 'unattached' : 'attached';
     const state: SeasonFormatState = {
       status,
       can_start: status !== 'unattached',
-      started: signals !== null && isSeasonStarted(signals),
+      started,
       season_format: summary,
     };
     if (query.data.include === 'spec' && summary !== null) {
