@@ -18,6 +18,7 @@ interface MatchPrepClientProps {
    * `match_id` + `tournament_id`, and the validation panel's pools card reads the season's kit league view.
    */
   tournamentId?: string | null;
+  phaseId?: string;
   seasonId?: string | null;
   rulesetId?: string;
   /** The ruleset's name. The page's versus header shows it now; the prop stays so the page's contract is unchanged. */
@@ -29,6 +30,9 @@ interface MatchPrepClientProps {
   opponentName: string;
   initialPokemon?: PokemonSet[];
   scoutingAnalysis?: MatchPrepAnalysis | null;
+  showScouting?: boolean;
+  scoutingStaleAfterMs?: number;
+  locked?: boolean;
   /** Whether the user already had a prep team when the page loaded */
   hasExistingPrepTeam?: boolean;
   /** Only admins can repeat scouting */
@@ -42,6 +46,7 @@ interface MatchPrepClientProps {
 export default function MatchPrepClient({
   matchId,
   tournamentId,
+  phaseId,
   seasonId,
   rulesetId,
   baseFormat,
@@ -49,6 +54,9 @@ export default function MatchPrepClient({
   opponentName,
   initialPokemon,
   scoutingAnalysis = null,
+  showScouting = true,
+  scoutingStaleAfterMs,
+  locked = false,
   hasExistingPrepTeam = false,
   isAdmin = false,
   contentLocale,
@@ -66,15 +74,19 @@ export default function MatchPrepClient({
       </PlateLink>
 
       {/* Professor Linden scouting report */}
-      <ScoutingReportCard
-        analysis={scoutingAnalysis}
-        matchId={matchId}
-        showRescout={teamSavedThisSession || hasExistingPrepTeam}
-        isAdmin={isAdmin}
-        contentLocale={contentLocale}
-        opponentName={opponentName}
-        speciesTypes={speciesTypes}
-      />
+      {showScouting && (
+        <ScoutingReportCard
+          analysis={scoutingAnalysis}
+          matchId={matchId}
+          nativePhase={Boolean(phaseId)}
+          staleAfterMs={scoutingStaleAfterMs}
+          showRescout={teamSavedThisSession || hasExistingPrepTeam}
+          isAdmin={isAdmin}
+          contentLocale={contentLocale}
+          opponentName={opponentName}
+          speciesTypes={speciesTypes}
+        />
+      )}
 
       {/* v3 TeamsEditor in plan mode.
           key={matchId} forces a fresh editor instance per match prep: it discards
@@ -88,9 +100,10 @@ export default function MatchPrepClient({
           generation={generation}
           matchId={matchId}
           tournamentId={tournamentId}
+          phaseId={phaseId}
           seasonId={seasonId}
           initialPokemon={initialPokemon}
-          locked={false}
+          locked={locked}
           rulesetId={rulesetId}
           onSaveSuccess={() => setTeamSavedThisSession(true)}
         />

@@ -7,6 +7,12 @@ import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getMatchPrepTeam } from '@/lib/supabase/queries/match-prep-teams';
 import { getMatchPrepAnalysis } from '@/lib/supabase/queries/match-prep-analyses';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { getPhaseById, isPlayerPhaseParticipant } from '@/lib/supabase/queries/league-phases';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { getPlayerPhaseMatchPrep } from '@/lib/supabase/queries/phase-teams';
+import { getPhaseMatchPrepAnalysis } from '@/lib/supabase/queries/phase-ai-artifacts';
+import { AI_ANALYSIS_STALE_MS } from '@/lib/ai/constants';
 import { isValidUuid } from '@/lib/utils/uuid';
 import MatchPrepClient from '@/components/match/MatchPrepClient';
 import MatchPageBackLink from '@/components/match/MatchPageBackLink';
@@ -31,32 +37,54 @@ export default async function MatchPrepPage({ params }: PageProps) {
   // A malformed id is a missing page, not a database error (22P02).
   if (!isValidUuid(mid)) notFound();
 
-  const match = await getMatchById(mid);
+  const owner = await resolveIdOnlyMatchRoute(mid.toLowerCase());
+  if (!owner) notFound();
+  const legacy = owner.kind === 'legacy' ? await getMatchById(mid) : null;
+  const native = owner.kind === 'phase' ? await getPhaseMatchById(mid.toLowerCase()) : null;
+  if (owner.kind === 'phase' && (native?.id !== mid.toLowerCase() || native.phase_id !== owner.phase_id)) notFound();
+  const match = native ?? legacy;
   if (!match) notFound();
 
   const isParticipant =
     player.playerId === match.player_1_id ||
     player.playerId === match.player_2_id;
 
-  // Only match participants and the superadmin can view prep — regular admins cannot
   if (!isParticipant && !(await isSuperadminNow())) {
     redirect('/dashboard');
   }
 
-  // Every read here fails loudly (AGENTS.md rule 5): a failed prep-team, season or ruleset
-  // read reaches the error boundary instead of rendering an empty prep form or no ruleset.
-  const [tournament, prepTeam, scoutingAnalysis] = await Promise.all([
-    getTournamentById(match.tournament_id),
-    getMatchPrepTeam(mid, player.playerId),
-    // Only fetch scouting for scheduled matches
-    match.status === 'scheduled'
-      ? getMatchPrepAnalysis(mid, player.playerId)
-      : Promise.resolve(null),
-  ]);
+  let showScouting = owner.kind === 'legacy';
+  let seasonId: string | null | undefined;
+  let ruleset: Awaited<ReturnType<typeof getRulesetById>>;
+  let prepTeam: Awaited<ReturnType<typeof getMatchPrepTeam>> | Awaited<ReturnType<typeof getPlayerPhaseMatchPrep>>;
+  let scoutingAnalysis: Awaited<ReturnType<typeof getMatchPrepAnalysis>>;
+  if (owner.kind === 'phase') {
+    if (!player.isAdmin && (player.status === 'banned' || player.status === 'suspended')) redirect('/dashboard');
+    const isEnrolled = isParticipant && await isPlayerPhaseParticipant(player.playerId, owner.phase_id);
+    if (!player.isAdmin && !isEnrolled) redirect('/dashboard');
+    showScouting = match.status === 'scheduled' && isEnrolled;
+    const phase = await getPhaseById(owner.phase_id);
+    if (!phase || phase.id !== owner.phase_id || phase.season_id !== owner.season_id) notFound();
+    seasonId = owner.season_id;
+    ruleset = await getRulesetById(phase.ruleset_id);
+    if (!ruleset || ruleset.id !== phase.ruleset_id) notFound();
+    [prepTeam, scoutingAnalysis] = await Promise.all([
+      isParticipant ? getPlayerPhaseMatchPrep(match.id, player.playerId) : null,
+      showScouting ? getPhaseMatchPrepAnalysis(phase.id, match.id, player.playerId) : null,
+    ]);
+  } else {
+    if (!legacy) notFound();
+    const [tournament, storedPrep, storedScouting] = await Promise.all([
+      getTournamentById(legacy.tournament_id),
+      getMatchPrepTeam(mid, player.playerId),
+      match.status === 'scheduled' ? getMatchPrepAnalysis(mid, player.playerId) : null,
+    ]);
+    seasonId = tournament?.season_id;
+    ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
+    prepTeam = storedPrep;
+    scoutingAnalysis = storedScouting;
+  }
 
-  // The phase's own pin (an immutable ruleset version): the displayed format and the ruleset id forwarded to the
-  // agent are the real league rules.
-  const ruleset = tournament ? await getRulesetById(tournament.ruleset_id) : null;
 
   const isP1 = player.playerId === match.player_1_id;
   const opponentName = isP1 ? match.player_2_name : match.player_1_name;
@@ -64,7 +92,7 @@ export default async function MatchPrepPage({ params }: PageProps) {
   // The stored scouting report is written in the league's language (i18n-core §6.4).
   const contentLocale =
     match.status === 'scheduled' && scoutingAnalysis
-      ? await resolveContentLocale({ seasonId: tournament?.season_id })
+      ? await resolveContentLocale({ seasonId })
       : undefined;
 
   // The types of the Pokémon the report names, for the type badges on the scouting card: a dex lookup, no read.
@@ -102,9 +130,10 @@ export default async function MatchPrepPage({ params }: PageProps) {
           labels={{ versus: tForms('versus.vs'), you: tForms('versus.you'), winner: tForms('versus.winner') }}
         />
         <MatchPrepClient
-          matchId={mid}
-          tournamentId={match.tournament_id}
-          seasonId={tournament?.season_id}
+          matchId={native?.id ?? mid}
+          tournamentId={legacy?.tournament_id}
+          phaseId={native?.phase_id}
+          seasonId={seasonId}
           rulesetId={ruleset?.id}
           rulesetName={ruleset?.name}
           baseFormat={ruleset?.base_format}
@@ -112,6 +141,9 @@ export default async function MatchPrepPage({ params }: PageProps) {
           opponentName={opponentName}
           initialPokemon={prepTeam?.pokemon}
           scoutingAnalysis={match.status === 'scheduled' ? scoutingAnalysis : null}
+          showScouting={showScouting}
+          scoutingStaleAfterMs={native ? AI_ANALYSIS_STALE_MS : undefined}
+          locked={Boolean(native && (!isParticipant || match.status === 'completed'))}
           hasExistingPrepTeam={!!prepTeam?.pokemon?.length}
           isAdmin={player.isAdmin}
           contentLocale={contentLocale}

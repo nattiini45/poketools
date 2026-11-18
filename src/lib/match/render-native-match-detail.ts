@@ -92,6 +92,8 @@ export async function renderNativeMatchDetail(seasonId: string, match: PublicPha
     proposals,
     nativeConfirmHref: isParticipant || (viewerId && access?.isSiteAdmin) ? `/dashboard/confirm/${match.id}` : undefined,
     nativeSubmitHref: canRecord && (isParticipant || submitAdmin) ? `/dashboard/submit/${match.id}` : undefined,
+    nativePrepHref: canRecord && isParticipant && (access?.isSiteAdmin || participants.some(player => player.id === viewerId))
+      ? `/dashboard/match-prep/${match.id}` : undefined,
   });
 }
 

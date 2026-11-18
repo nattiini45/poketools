@@ -76,6 +76,7 @@ interface MatchDetailProps {
   proposals: MatchProposalWithPlayers[];
   nativeConfirmHref?: string;
   nativeSubmitHref?: string;
+  nativePrepHref?: string;
   legacyActions?: {
     isSiteAdmin?: boolean;
     canEditGames: boolean;
@@ -85,7 +86,7 @@ interface MatchDetailProps {
 
 export default async function MatchDetail({
   match, competition, round, battleStatsByGame, analysis, standings, player1Streaks, player2Streaks,
-  back, viewerId, notes, contentLocale, epb, proposals, nativeConfirmHref, nativeSubmitHref, legacyActions,
+  back, viewerId, notes, contentLocale, epb, proposals, nativeConfirmHref, nativeSubmitHref, nativePrepHref, legacyActions,
 }: MatchDetailProps) {
   function extractStanding(playerId: string): PlayerStanding | null {
     const idx = standings.findIndex((s) => s.player_id === playerId);
@@ -106,6 +107,7 @@ export default async function MatchDetail({
   const canUseLegacyActions = legacyActions !== undefined && (isParticipant || isSiteAdmin);
   const confirmHref = canConfirm ? (canUseLegacyActions ? `/dashboard/confirm/${mid}` : nativeConfirmHref) : undefined;
   const submitHref = canAct ? (canUseLegacyActions ? `/dashboard/submit/${mid}` : nativeSubmitHref) : undefined;
+  const prepHref = canAct && isParticipant ? (canUseLegacyActions ? `/dashboard/match-prep/${mid}` : nativePrepHref) : undefined;
 
   // Pokémon score: sum of surviving (brought but not KO'd) mons across all games
   const { p1Score: score1, p2Score: score2 } = Object.keys(battleStatsByGame).length > 0
@@ -261,10 +263,10 @@ export default async function MatchDetail({
           </Link>
         </div>
         {/* Participant / Admin actions */}
-        {((canUseLegacyActions && canAct) || submitHref || confirmHref) && (
+        {(prepHref || submitHref || confirmHref) && (
           <div className="flex flex-wrap gap-x-4 gap-y-3">
-            {canUseLegacyActions && canAct && isParticipant && (
-              <Link href={`/dashboard/match-prep/${mid}`} className="inline-flex rounded-[3px] text-body">
+            {prepHref && (
+              <Link href={prepHref} className="inline-flex rounded-[3px] text-body">
                 <SkewPlate variant="button" tone="secondary">
                   {t('detail.planTeam')}
                 </SkewPlate>

@@ -53,6 +53,15 @@ export async function getPhaseMatchPrepAnalysis(phaseId: string, matchId: string
   return data ? prep(data) : null;
 }
 
+export async function getPhaseScoutingAccess(phaseId: string, matchId: string) {
+  assertValidUuid(phaseId);
+  assertValidUuid(matchId);
+  const { data, error } = await supabase.from('phase_matches').select('status,player_1_id,player_2_id')
+    .eq('id', matchId).eq('phase_id', phaseId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 export async function getPhasePlayerPrepTeam(phaseId: string, matchId: string, playerId: string): Promise<{ pokemon: PokemonSet[] } | null> {
   await assertScope(phaseId, matchId);
   const { data, error } = await supabase.from('phase_match_prep_teams').select('pokemon')
@@ -106,12 +115,13 @@ export async function deletePhaseMatchAnalysis(phaseId: string, matchId: string)
   return (data ?? []).length === 1;
 }
 
-export async function deletePhaseMatchPrepAnalysis(phaseId: string, matchId: string, playerId: string): Promise<boolean> {
-  const row = await getPhaseMatchPrepAnalysis(phaseId, matchId, playerId);
-  if (!row) return false;
-  aiArtifactMachine.assertTransition(row.status, 'absent', 'player');
+export async function deletePhaseMatchPrepAnalysis(
+  phaseId: string, matchId: string, playerId: string, expected: Pick<MatchPrepAnalysis, 'id' | 'status'>,
+): Promise<boolean> {
+  await assertScope(phaseId, matchId);
+  aiArtifactMachine.assertTransition(expected.status, 'absent', 'player');
   const { data, error } = await supabase.from('phase_match_prep_analyses').delete()
-    .eq('id', row.id).eq('match_id', matchId).eq('player_id', playerId).eq('status', row.status).select('id');
+    .eq('id', expected.id).eq('match_id', matchId).eq('player_id', playerId).eq('status', expected.status).select('id');
   if (error) throw error;
   return (data ?? []).length === 1;
 }
