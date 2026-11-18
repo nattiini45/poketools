@@ -91,12 +91,17 @@ export const pinTargetSchema = z.strictObject({
 });
 export type PinTarget = z.infer<typeof pinTargetSchema>;
 
+const maxPinTargets = 50;
+const uniquePinTargets = (targets: readonly { kind: string; id: string }[]) =>
+  new Set(targets.map((t) => `${t.kind}:${t.id}`)).size === targets.length;
+const pinTargetDuplicateMessage = 'A league or phase may be listed only once';
+
 /** A league or phase appears once: two moves of the same target would race each other's compare-and-set. */
 const pinTargetsSchema = z
   .array(pinTargetSchema)
   .min(1)
-  .max(50)
-  .refine((targets) => new Set(targets.map((t) => `${t.kind}:${t.id}`)).size === targets.length, { message: 'A league or phase may be listed only once' });
+  .max(maxPinTargets)
+  .refine(uniquePinTargets, { message: pinTargetDuplicateMessage });
 
 /**
  * `POST /api/ruleset-definitions/[id]/pins`: move the pin of up to 50 leagues and phases to one version of this ruleset.
@@ -116,3 +121,9 @@ export type RulesetPinsBody = z.infer<typeof rulesetPinsSchema>;
  */
 export const rulesetPinImpactSchema = rulesetPinsSchema.omit({ confirm_started: true });
 export type RulesetPinImpactBody = z.infer<typeof rulesetPinImpactSchema>;
+
+export const rulesetPinsWithPhasesSchema = rulesetPinsSchema.extend({
+  targets: z.array(pinTargetSchema.extend({ kind: z.enum(['season', 'tournament', 'phase']) }))
+    .min(1).max(maxPinTargets).refine(uniquePinTargets, { message: pinTargetDuplicateMessage }),
+});
+export const rulesetPinImpactWithPhasesSchema = rulesetPinsWithPhasesSchema.omit({ confirm_started: true });

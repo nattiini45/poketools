@@ -86,7 +86,7 @@ export function countBecomingInvalid(
   return summarizePinImpact(teams, from, to, coreOf).broken;
 }
 
-export async function computePinImpact(input: PinImpactInput): Promise<PinImpact> {
+export async function computePinImpact(input: PinImpactInput): Promise<PinImpact<PinTargetState['kind']>> {
   return computePinImpactWithStorage<'season' | 'tournament', PinTargetState>(input, {
     targets: (...args) => loadMoveTargets(...args),
     teams: (state, budget) => listTeamsForPinImpact({ kind: state.kind, id: state.id }, budget),

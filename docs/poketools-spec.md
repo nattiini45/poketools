@@ -1142,6 +1142,7 @@ POST /api/ruleset-definitions/[id]/pins     Move leagues and phases (up to 50) t
 POST /api/ruleset-definitions/[id]/pins/impact  The question before a move: how many already-submitted teams would stop being
                                             valid under the target version (differential, at most 2000 teams per request,
                                             `truncated` says so). Writes nothing, no audit. ruleset-pin-impact 60 per hour
+                                            Both routes accept explicit `kind: 'phase'` only in open native phase mode.
 GET  /api/ruleset-definitions/[id]/versions/[no]  One published version with its document and frozen rules (diff, rebase)
 GET  /api/rulesets                          Public: the head version of every shared ruleset in the flat shape of the old API
                                             (names in `bans`, `additions`, `clauses`, plus `gen`, `universe`, `allow`, `version`);

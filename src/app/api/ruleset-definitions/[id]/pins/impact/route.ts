@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { readBoundedJson } from '@/lib/ruleset-studio/api-body';
-import { rulesetPinImpactSchema, validationFailedResponse } from '@/lib/ruleset-studio/api-schemas';
+import { rulesetPinImpactWithPhasesSchema, validationFailedResponse } from '@/lib/ruleset-studio/api-schemas';
 import { requireRulesetViewer } from '@/lib/ruleset-studio/guards';
 import type { PinImpact } from '@/lib/ruleset-studio/pin-info';
 import { computePinImpact } from '@/lib/ruleset-studio/pin-impact.server';
+import { computePinImpactWithPhases } from '@/lib/ruleset-studio/phase-pin-impact.server';
+import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 
@@ -29,15 +32,20 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const rate = await checkRateLimit('ruleset-pin-impact', player.playerId, { limit: 60, windowSeconds: 60 * 60 });
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
 
-    const parsed = rulesetPinImpactSchema.safeParse(await readBoundedJson(request));
+    const parsed = rulesetPinImpactWithPhasesSchema.safeParse(await readBoundedJson(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
-    const impact = await computePinImpact({
+    const { targets } = parsed.data;
+    const legacyTargets = targets.flatMap(target => target.kind === 'phase' ? [] : [{ id: target.id, kind: target.kind }]);
+    const hasPhaseTarget = legacyTargets.length !== targets.length;
+    if (hasPhaseTarget && await requireOpenPhaseRouteMode() !== 'phase') throw new RulesetStudioError('ruleset_not_found');
+    const input = {
       actor: player,
       definition,
       toVersionNo: parsed.data.to_version_no,
-      targets: parsed.data.targets,
-    });
+    };
+    const impact = hasPhaseTarget ? await computePinImpactWithPhases({ ...input, targets })
+      : await computePinImpact({ ...input, targets: legacyTargets });
     return NextResponse.json<ApiResult<PinImpact>>({ success: true, data: impact });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to check the ruleset pin move');

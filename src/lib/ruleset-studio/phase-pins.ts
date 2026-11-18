@@ -27,6 +27,9 @@ export async function loadMoveTargetsWithPhases(
 ): Promise<NativePinState[]> {
   const legacy = targets.flatMap((target) => target.kind === 'phase' ? [] : [{ kind: target.kind, id: target.id }]);
   const legacyStates = await loadMoveTargets(actor, legacy, versions);
+  if (legacyStates.some(state => state.kind === 'tournament' && state.season_id !== null)) {
+    throw new RulesetStudioError('ruleset_not_found');
+  }
   const phaseStates = await getPhasePinStates(targets.filter((target) => target.kind === 'phase').map((target) => target.id));
   const byKey = new Map<string, NativePinState>([...legacyStates, ...phaseStates].map((state) => [`${state.kind}:${state.id}`, state]));
   const ownVersionIds = new Set(versions.map((version) => version.id));
