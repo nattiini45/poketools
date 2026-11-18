@@ -65,11 +65,16 @@ export async function generatePhaseRounds(request: NextRequest, params: Promise<
         code: 'tournament_current_round_incomplete', params: { round: current.name },
       });
     }
-    if (elimination && current) {
-      const count = matches.filter(match => match.round_id === current.id && match.status !== 'completed').length;
-      if (count > 0) {
-        throw new UserFacingError(`${current.name} still has ${count} unfinished match(es), so the next round cannot be built from it. Finish them first.`, {
-          code: 'rounds_previous_matches_unfinished', params: { round: current.name, count }, status: 409,
+    if (elimination) {
+      const unfinished = new Map<string, number>();
+      for (const match of matches) {
+        if (match.status !== 'completed') unfinished.set(match.round_id, (unfinished.get(match.round_id) ?? 0) + 1);
+      }
+      for (const round of rounds) {
+        const count = unfinished.get(round.id);
+        if (!count || round.round_number > phase.current_round) continue;
+        throw new UserFacingError(`${round.name} still has ${count} unfinished match(es), so the next round cannot be built from it. Finish them first.`, {
+          code: 'rounds_previous_matches_unfinished', params: { round: round.name, count }, status: 409,
         });
       }
     }

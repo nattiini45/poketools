@@ -70,7 +70,10 @@ BEGIN
       WHERE phase_id = p_phase_id AND round_number = v_phase.current_round;
     IF NOT FOUND OR v_phase.current_round < 1 OR v_previous.status <> 'completed'
       OR p_round_number IS DISTINCT FROM v_phase.current_round + 1
-      OR EXISTS (SELECT 1 FROM public.phase_matches WHERE round_id = v_previous.id AND status <> 'completed')
+      OR EXISTS (
+        SELECT 1 FROM public.phase_matches m JOIN public.phase_rounds r ON (r.phase_id, r.id) = (m.phase_id, m.round_id)
+        WHERE r.phase_id = p_phase_id AND r.round_number <= v_phase.current_round AND m.status <> 'completed'
+      )
       OR p_replacement_groups IS NOT NULL OR p_bye_player_ids IS DISTINCT FROM '{}'::uuid[] THEN
       RAISE EXCEPTION 'phase_round_inputs_changed' USING ERRCODE = 'P0001';
     END IF;

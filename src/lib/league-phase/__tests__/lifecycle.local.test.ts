@@ -196,8 +196,12 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
   it('continues a flat elimination only from settled native history and matching seeds', async () => {
     const phase = await create('single_elim');
     await enroll(phase.id);
+    const earlier = await rounds.createPhaseRoundWithMatches({
+      phase_id: phase.id, name: 'Quarterfinals', round_number: 1, best_of: 3,
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] }],
+    });
     const previous = await rounds.createPhaseRoundWithMatches({
-      phase_id: phase.id, name: 'Semifinals', round_number: 1, best_of: 3,
+      phase_id: phase.id, name: 'Semifinals', round_number: 2, best_of: 3,
       matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] },
         { player_1_id: playerIds[2], player_2_id: playerIds[3] }],
     });
@@ -210,7 +214,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     if (!live) throw new Error('Flat elimination fixture missing');
     const input: Parameters<typeof rounds.writeGeneratedPhaseRound>[0] = {
       phase_id: live.id, season_id: seasonId, phase_status: live.status, expected_updated_at: live.updated_at,
-      round_id: null, name: 'Finals', round_number: 2, best_of: 5, bye_player_ids: [], deadline: null,
+      round_id: null, name: 'Finals', round_number: 3, best_of: 5, bye_player_ids: [], deadline: null,
       matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[2] }],
       inputs: {
         phase: {
@@ -219,7 +223,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         },
         season: { start_date: null, format_type: 'singles' },
         rounds: history.map(({ id, round_number, status, bye_player_ids, pairings_generated, bracket_side }) =>
-          ({ id, round_number, status, bye_player_ids, pairings_generated, bracket_side })),
+          ({ id, round_number, status, bye_player_ids, pairings_generated, bracket_side })).sort((a, b) => a.id.localeCompare(b.id)),
         matches: await getNativeKitMatchFacts(live.id),
         participants: roster.map(({ id, name, seed, starting_bracket }) => ({ id, name, seed, starting_bracket }))
           .sort((a, b) => a.id.localeCompare(b.id)),
@@ -230,20 +234,26 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     const assertRefused = (plan = input) => expect(rounds.writeGeneratedPhaseRound(plan))
       .rejects.toMatchObject({ code: 'round_status_changed', statusCode: 409 });
     await assertRefused();
-    for (const match of input.inputs.matches) {
-      expect((await admin.from('phase_matches').update({ status: 'completed', winner_id: match.player_1_id })
-        .eq('id', match.id)).error).toBeNull();
-    }
+    const settle = async (roundId: string) => {
+      for (const match of input.inputs.matches.filter(match => match.round_id === roundId)) {
+        expect((await admin.from('phase_matches').update({ status: 'completed', winner_id: match.player_1_id })
+          .eq('id', match.id)).error).toBeNull();
+      }
+    };
+    await settle(previous.id);
     await assertRefused();
+    input.inputs.matches = await getNativeKitMatchFacts(live.id);
+    await assertRefused();
+    await settle(earlier.id);
     input.inputs.matches = await getNativeKitMatchFacts(live.id);
     await assertRefused({ ...input, inputs: { ...input.inputs, participants: input.inputs.participants
       .map((participant, index) => index === 0 ? { ...participant, starting_bracket: 'losers' } : participant) } });
-    expect((await rounds.getRoundsByPhase(phase.id)).map(round => round.id)).toEqual([previous.id]);
+    expect((await rounds.getRoundsByPhase(phase.id)).map(round => round.id)).toEqual([earlier.id, previous.id]);
     const final = await rounds.writeGeneratedPhaseRound(input);
-    expect(final).toMatchObject({ round_number: 2, name: 'Finals', best_of: 5, status: 'pending', bracket_side: null, bye_player_ids: [] });
+    expect(final).toMatchObject({ round_number: 3, name: 'Finals', best_of: 5, status: 'pending', bracket_side: null, bye_player_ids: [] });
     expect((await getNativeKitMatchFacts(live.id)).filter(match => match.round_id === final.id))
       .toEqual([expect.objectContaining({ status: 'scheduled', ...input.matches[0] })]);
-    expect((await phases.getPhaseById(live.id))?.current_round).toBe(2);
+    expect((await phases.getPhaseById(live.id))?.current_round).toBe(3);
   });
 
   it('rolls the entire batch back if its second write fails and commits only one concurrent batch', async () => {

@@ -268,6 +268,21 @@ it('refuses a new, managed or unsettled flat elimination bracket without a write
   expect(m.expire).not.toHaveBeenCalled();
 });
 
+it('refuses a reset earlier flat match even when the latest round is settled', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 2 });
+  m.rounds.mockResolvedValue([
+    { ...round(1, [], 'pending'), bracket_side: null }, { ...round(2), bracket_side: null },
+  ]);
+  m.matches.mockResolvedValue([match(1, 'a', 'c', 'scheduled'), match(2, 'a', 'b')]);
+  const response = await run();
+  expect(response.status).toBe(409);
+  expect(await response.json()).toMatchObject({
+    code: 'rounds_previous_matches_unfinished', params: { round: 'Round 1', count: 1 },
+  });
+  expect(m.write).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+});
+
 it('plans the league mirror in group and enrollment order and sends it with the fixtures in one write', async () => {
   m.phase.mockResolvedValue({ ...phase, bracket_type: 'round_robin' });
   m.participants.mockResolvedValue(players);

@@ -1069,7 +1069,7 @@ POST .../groups/repair                      Hand group rows left by pre-handover
 GET .../rounds, GET .../rounds/[rid]          Native phase rounds and round details with public matches
 POST .../rounds/manual                       Native manual round with participant and format readiness checks
 POST .../rounds/generate                     Native next Swiss, round-robin or existing flat elimination round; first table group mirror
-                                            and fixtures commit together, and flat elimination can only continue a settled round
+                                            and fixtures commit together, and flat elimination requires settled matches through the current round
 POST .../rounds/generate-all                 Native remaining round-robin rounds, stopping before the next unresolved placement week;
                                             commits the ready batch together; optional start applies only to its first round
 PATCH .../rounds/[rid]                       Native round deadline, best-of and status (pending-only best-of)
