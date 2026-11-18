@@ -132,6 +132,32 @@ describe('native match decisions', () => {
     expect(finalize).not.toHaveBeenCalled();
   });
 
+  it('does not fall back to player permissions for an administrator action after revocation', async () => {
+    const port = effects();
+    const response = await createNativeMatchDecisionHandler(port)(request({ action: 'dispute' }), context, player as never, true);
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ code: 'forbidden' });
+    expect(port.canAdminister).toHaveBeenCalledWith(player, 'phase');
+    expect(updatePhaseMatchStatus).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(port.announceDispute).not.toHaveBeenCalled();
+  });
+
+  it('keeps an admin dispute note out of the match row and preserves the original reporter', async () => {
+    const port = effects();
+    vi.mocked(port.canAdminister).mockResolvedValue(true);
+    vi.mocked(updatePhaseMatchStatus).mockResolvedValueOnce({ ...match, status: 'disputed' });
+    const response = await createNativeMatchDecisionHandler(port)(
+      request({ action: 'dispute', notes: 'Replay differs' }), context, player as never, true,
+    );
+    expect(response.status).toBe(200);
+    expect(updatePhaseMatchStatus).toHaveBeenCalledExactlyOnceWith(mid, 'disputed', undefined, p1, undefined, 'pending_confirmation', 'admin');
+    expect(logAuditEvent).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      action: 'match.dispute', resource_type: 'phase_match', metadata: { phase_id: 'phase', reason: 'Replay differs', by_admin: true },
+    }));
+    expect(finalize).not.toHaveBeenCalled();
+  });
+
   it('recognizes an identical CAS winner without repeating finalization or announcements', async () => {
     vi.mocked(updatePhaseMatchStatus).mockResolvedValueOnce(null);
     vi.mocked(getPhaseMatchById).mockResolvedValueOnce(match).mockResolvedValueOnce({ ...match, status: 'completed' });

@@ -163,6 +163,7 @@ The Evolution Point Buy files (`epb-*.ts`, `evolution-match-evaluator.ts`, `snap
 - **Audit.** Every dispute, by a player or an admin, writes one `match.dispute` audit event (status change, `metadata.reason`, `metadata.by_admin`; see "Dispute details"). An admin confirm writes `match.override` when it sets a winner or notes or resolves a disputed match. A participant's own confirm writes no audit event.
 - **`date_played`** stays the completion stamp: it is only ever set when a match completes, so there is no earlier play date to overwrite.
 - The admin match page asks for confirmation before Complete and Dispute and shows the recorded series tally with warnings; see [Admin](./admin.md).
+- In phase mode the same controls post to the scoped decision endpoint with `?as=admin`. The native handler verifies the live phase grant even if the requester is also a participant. It keeps dispute reasons in audit data and uses native finalization for completed results. The decision endpoint cannot settle a scheduled match.
 
 ## Bulk Actions (admin matches list)
 `POST /api/admin/matches/batch` runs one action over up to 100 matches, one at a time, with the logic in `src/lib/match/bulk-actions.ts` and the pure contract (schema, eligibility, selection, note helpers) in `src/lib/admin/match-bulk.ts`. Every match is re-read and re-checked on fresh data, so the preview in the dialog is advice and the server decides.

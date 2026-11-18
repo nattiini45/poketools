@@ -23,7 +23,7 @@ export function createNativeMatchDecisionHandler(effects: NativeMatchDecisionEff
     getMatchById: (id) => getPhaseMatchById(id),
     canAdminister: (player, id) => effects.canAdminister(player, id),
     updateMatchStatus: (id, status, winnerId, submitterId, notes, expectedStatus, asAdmin) =>
-      updatePhaseMatchStatus(id, status, winnerId, submitterId, notes, expectedStatus, asAdmin ? 'admin' : 'player'),
+      updatePhaseMatchStatus(id, status, winnerId, submitterId, status === 'completed' ? notes : undefined, expectedStatus, asAdmin ? 'admin' : 'player'),
     finalizeMatchCompletion: (input) => effects.finalizer.finalizeMatchCompletion(input),
     resourceType: 'phase_match',
     auditOwner: (match) => ({ phase_id: match.phase_id }),

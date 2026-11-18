@@ -18,8 +18,8 @@ const id = '10000000-0000-4000-8000-000000000001';
 const phaseId = '20000000-0000-4000-8000-000000000002';
 const matchId = '30000000-0000-4000-8000-0000000000ab';
 const player = { playerId: 'viewer' };
-const call = (league = id, match = matchId.toUpperCase()) =>
-  POST(new NextRequest('http://localhost', { method: 'POST', body: JSON.stringify({ action: 'confirm' }) }),
+const call = (league = id, match = matchId.toUpperCase(), query = '') =>
+  POST(new NextRequest('http://localhost/' + query, { method: 'POST', body: JSON.stringify({ action: 'confirm' }) }),
     { params: Promise.resolve({ id: league, phaseId, matchId: match }) });
 
 beforeEach(() => {
@@ -34,15 +34,28 @@ beforeEach(() => {
 it('passes the verified match and live player to the native decision workflow', async () => {
   expect((await call()).status).toBe(200);
   expect(h.owner).toHaveBeenCalledExactlyOnceWith({ phaseId, matchId });
-  const [request, context, actor] = h.decide.mock.calls[0];
+  const [request, context, actor, adminOnly] = h.decide.mock.calls[0];
   expect(await request.json()).toEqual({ action: 'confirm' });
   expect(await context.params).toEqual({ mid: matchId });
   expect(actor).toBe(player);
+  expect(adminOnly).toBe(false);
   const invalidate: NativePhaseInvalidation = h.services.mock.calls[0][0];
   await invalidate.invalidateMatch(phaseId, matchId);
   invalidate.invalidateSeason(id, [phaseId]);
   expect(h.revalidateMatch).toHaveBeenCalledExactlyOnceWith(phaseId, matchId, id);
   expect(h.expireSeason).toHaveBeenCalledExactlyOnceWith(id, { phaseIds: [phaseId] });
+});
+
+it('passes strict admin intent to the same scoped decision workflow', async () => {
+  expect((await call(id, matchId, '?as=admin')).status).toBe(200);
+  expect(h.owner).toHaveBeenCalledExactlyOnceWith({ phaseId, matchId });
+  expect(h.decide).toHaveBeenCalledExactlyOnceWith(expect.any(NextRequest), { params: expect.any(Promise) }, player, true);
+});
+
+it('rejects unknown intent values without resolving an owner', async () => {
+  expect((await call(id, matchId, '?as=manager')).status).toBe(400);
+  expect(h.owner).not.toHaveBeenCalled();
+  expect(h.decide).not.toHaveBeenCalled();
 });
 
 it('rejects a wrong league and a missing or wrong-phase match without invoking the workflow', async () => {

@@ -40,7 +40,7 @@ const refusal = {
   params: { count: 2, matches: encodeDownstreamMatches(LATER) },
 };
 
-function ui(correctionsOnly = false) {
+function ui(native = false) {
   return (
     <AdminMatchActions
       matchId="m1"
@@ -49,7 +49,7 @@ function ui(correctionsOnly = false) {
       player2={{ id: 'p2', name: 'Gary' }}
       currentWinnerId="p1"
       games={[GAME]}
-      correctionsOnly={correctionsOnly}
+      phaseOwner={native ? { season_id: 's1', phase_id: 'ph1' } : undefined}
       bestOf={1}
       isSiteAdmin
     />
