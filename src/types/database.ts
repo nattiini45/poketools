@@ -9992,6 +9992,20 @@ export type Database = {
         Args: { p_match_id: string; p_phase_id: string; p_scheduled_at: string }
         Returns: Json
       }
+      phase_match_settle_admin: {
+        Args: {
+          p_actor_id: string
+          p_expected_status: Database["public"]["Enums"]["match_status"]
+          p_kind: string
+          p_match_id: string
+          p_phase_id: string
+          p_player_1_id: string
+          p_player_2_id: string
+          p_reason: string
+          p_winner_id: string
+        }
+        Returns: string
+      }
       phase_matches_delete_scheduled: {
         Args: { p_match_ids: string[] }
         Returns: number

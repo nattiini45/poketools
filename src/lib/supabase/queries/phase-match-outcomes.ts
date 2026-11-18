@@ -1,5 +1,7 @@
 import { supabase } from '../client';
 import type { Tables } from '@/types/database';
+import { phaseMatchMachine } from '@/lib/league-phase/phase-match-state';
+import type { MatchResultInput } from '@/lib/validation';
 import {
   isMatchOutcomeKind,
   isMatchOutcomeSource,
@@ -61,6 +63,28 @@ export async function recordPhaseMatchOutcome(input: RecordMatchOutcomeInput): P
   });
   if (error) throw error;
   if (data !== 'written' && data !== 'kept') throw new Error(`match_outcome_record returned ${String(data)}`);
+  return data;
+}
+
+export async function settlePhaseMatchAsAdmin(
+  match: Pick<Tables<'phase_matches'>, 'id' | 'phase_id' | 'status' | 'player_1_id' | 'player_2_id'>,
+  actorId: string,
+  result: MatchResultInput,
+): Promise<string | null> {
+  phaseMatchMachine.assertTransition(match.status, 'completed', 'admin');
+  const { data, error } = await supabase.rpc('phase_match_settle_admin', {
+    p_phase_id: match.phase_id,
+    p_match_id: match.id,
+    p_expected_status: match.status,
+    p_player_1_id: match.player_1_id,
+    p_player_2_id: match.player_2_id,
+    p_winner_id: result.winner_id,
+    p_actor_id: actorId,
+    p_kind: result.outcome,
+    p_reason: result.reason,
+  });
+  if (error?.code === 'P0001' && error.message === 'tournament_not_found') return null;
+  if (error) throw error;
   return data;
 }
 

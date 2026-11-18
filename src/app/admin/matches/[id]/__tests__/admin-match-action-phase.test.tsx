@@ -85,9 +85,10 @@ describe('AdminMatchActions action phase', () => {
     expect(router.refresh).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps a scheduled native match out of the override and legacy settlement flows', () => {
+  it('offers a scheduled native match only the reason-required result flow', () => {
     render(ui('scheduled', [], true));
-    expect(screen.queryByRole('button', { name: /Complete Match|Mark Disputed|Record result/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Complete Match|Mark Disputed/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Record result' })).toBeTruthy();
   });
 
   it('keeps native reset preview and cascade approval alongside override controls', async () => {

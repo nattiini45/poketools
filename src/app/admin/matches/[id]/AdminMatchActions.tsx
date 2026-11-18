@@ -241,7 +241,7 @@ export default function AdminMatchActions({
   const canReset = actions.has('reset');
   const canComplete = actions.has('confirm') || actions.has('resolve_dispute') || actions.has('set_result');
   const canMarkDisputed = actions.has('dispute') || actions.has('flag_dispute');
-  const canSettle = !phaseOwner && actions.has('settle');
+  const canSettle = actions.has('settle');
   /** A match nothing completes any more (completed): its reset sits in its own card. */
   const resetInCard = canReset && !canComplete;
   const tally = useMemo(
