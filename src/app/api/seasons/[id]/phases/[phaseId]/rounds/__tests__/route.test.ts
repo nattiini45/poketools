@@ -2,14 +2,14 @@ import { NextRequest } from 'next/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { GET as list } from '../route';
-import { GET as detail, PATCH } from '../[rid]/route';
+import { DELETE, GET as detail, PATCH } from '../[rid]/route';
 import { POST } from '../manual/route';
 
 const m = vi.hoisted(() => ({
   actor: vi.fn(), allowed: vi.fn(), mode: vi.fn(), season: vi.fn(), phase: vi.fn(), round: vi.fn(),
   rounds: vi.fn(), matches: vi.fn(), participants: vi.fn(), grouped: vi.fn(), seasonGroups: vi.fn(), phaseGroups: vi.fn(),
   create: vi.fn(), bestOf: vi.fn(), deadline: vi.fn(), status: vi.fn(), complete: vi.fn(),
-  expire: vi.fn(), audit: vi.fn(), completed: vi.fn(), prepareKit: vi.fn(),
+  expire: vi.fn(), audit: vi.fn(), completed: vi.fn(), prepareKit: vi.fn(), deleteRound: vi.fn(),
 }));
 vi.mock('@/lib/auth/helpers', () => ({
   requirePlayer: m.actor,
@@ -26,6 +26,7 @@ vi.mock('@/lib/supabase/queries/phase-groups', () => ({ getGroupsByPhase: m.phas
 vi.mock('@/lib/supabase/queries/phase-rounds', () => ({
   getPhaseRoundById: m.round, getRoundsByPhase: m.rounds, createPhaseRoundWithMatches: m.create,
   updatePhaseRoundBestOf: m.bestOf, updatePhaseRoundDeadline: m.deadline, updatePhaseRoundStatus: m.status, completePhaseRound: m.complete,
+  deleteAdminPhaseRound: m.deleteRound,
 }));
 vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchesByRound: m.matches }));
 vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: vi.fn() }));
@@ -47,11 +48,12 @@ const phase = {
   id: phaseId, season_id: id, status: 'upcoming', bracket_type: 'swiss', current_round: 0,
   best_of_default: 1, bo_overrides: { 'Round 1': 3 },
 };
-const round = { id: rid, phase_id: phaseId, name: 'Round 1', status: 'pending', best_of: 3, deadline: null, round_number: 1, bracket_side: null };
+const round = { id: rid, phase_id: phaseId, name: 'Round 1', status: 'pending', best_of: 3, deadline: null, round_number: 1, bracket_side: null, updated_at: '2026-11-18T10:00:00Z' };
 const actor = { playerId: 'fake-admin', name: 'Test Admin', isAdmin: false };
 const ctx = (params = { id: id.toUpperCase(), phaseId: phaseId.toUpperCase(), rid: rid.toUpperCase() }) => ({ params: Promise.resolve(params) });
 const request = (method: string, body?: unknown) => new NextRequest('http://localhost', { method, body: JSON.stringify(body) });
 const pairings = [{ player_1_id: p1.toUpperCase(), player_2_id: p2 }];
+const confirmedDelete = () => DELETE(request('DELETE', { confirm: true }), ctx());
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -67,6 +69,69 @@ beforeEach(() => {
   m.phaseGroups.mockResolvedValue([]);
   m.participants.mockResolvedValue([p1, p2, p3].map(id => ({ id })));
   m.create.mockResolvedValue(round);
+});
+
+it('checks live phase authority and scopes a delete to its round and native storage', async () => {
+  m.actor.mockRejectedValueOnce(new UserFacingError('Forbidden', { code: 'forbidden', status: 403 }));
+  expect((await confirmedDelete()).status).toBe(403);
+  expect(m.mode).not.toHaveBeenCalled();
+  m.mode.mockResolvedValueOnce('legacy');
+  expect((await confirmedDelete()).status).toBe(404);
+  m.mode.mockRejectedValueOnce(new UserFacingError('Unavailable', { code: 'phase_storage_unavailable', status: 503 }));
+  expect((await confirmedDelete()).status).toBe(503);
+  expect(m.season).not.toHaveBeenCalled();
+  m.season.mockResolvedValueOnce(null);
+  expect(await (await confirmedDelete()).json()).toMatchObject({ code: 'season_not_found' });
+  m.phase.mockResolvedValueOnce({ ...phase, season_id: wrong });
+  expect(await (await confirmedDelete()).json()).toMatchObject({ code: 'PHASE_NOT_FOUND' });
+  m.allowed.mockResolvedValueOnce(false);
+  expect((await confirmedDelete()).status).toBe(403);
+  expect(m.round).not.toHaveBeenCalled();
+  m.round.mockResolvedValueOnce({ ...round, phase_id: wrong });
+  expect(await (await confirmedDelete()).json()).toMatchObject({ code: 'round_not_found' });
+  expect(m.round).toHaveBeenCalledExactlyOnceWith(rid, phaseId);
+  expect(m.deleteRound).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+  expect(m.audit).not.toHaveBeenCalled();
+});
+
+it.each([undefined, {}, { confirm: false }, { confirm: 'true' }])('requires explicit round deletion confirmation: %j', async body => {
+  const response = await DELETE(request('DELETE', body), ctx());
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: 'phase_round_delete_confirm_required' });
+  expect(m.deleteRound).not.toHaveBeenCalled();
+});
+
+it('distinguishes malformed JSON from missing confirmation', async () => {
+  const response = await DELETE(new NextRequest('http://localhost', { method: 'DELETE', body: '{' }), ctx());
+  expect(response.status).toBe(400);
+  expect(await response.json()).toMatchObject({ code: 'invalid_json' });
+  expect(m.deleteRound).not.toHaveBeenCalled();
+});
+
+it('audits committed round metadata and expires the phase and league only after deletion', async () => {
+  m.deleteRound.mockImplementationOnce(async () => {
+    expect(m.audit).not.toHaveBeenCalled();
+    expect(m.expire).not.toHaveBeenCalled();
+    return { name: 'Committed round name', round_number: 1, matches: 2 };
+  });
+  expect(await (await confirmedDelete()).json()).toEqual({ success: true, data: { deleted: true } });
+  expect(m.deleteRound).toHaveBeenCalledExactlyOnceWith(id, phaseId, rid, round.updated_at, true);
+  expect(m.audit).toHaveBeenCalledExactlyOnceWith({
+    actor_id: actor.playerId, actor_name: actor.name, action: 'round.delete',
+    resource_type: 'phase_round', resource_id: rid, resource_name: 'Committed round name',
+    metadata: { season_id: id, phase_id: phaseId, round_number: 1, deleted_matches: 2 },
+  });
+  expect(m.expire).toHaveBeenCalledExactlyOnceWith(phaseId, id);
+});
+
+it('returns a generation change at the transaction fence without auditing or invalidating', async () => {
+  m.deleteRound.mockRejectedValueOnce({ code: 'P0001', message: 'phase_storage_not_ready' });
+  const response = await confirmedDelete();
+  expect(response.status).toBe(503);
+  expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+  expect(m.audit).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
 });
 
 it('lists native rounds and sanitizes matches in public round detail', async () => {

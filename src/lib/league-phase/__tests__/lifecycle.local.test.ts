@@ -68,6 +68,75 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }, null)).toBe(true);
   }
 
+  it('atomically deletes only the latest confirmed unplayed round and rewinds its current-round pointer', async () => {
+    const phase = await create('swiss');
+    const previous = await rounds.createPhaseRound({ phase_id: phase.id, name: 'Previous fixture round', round_number: 1, best_of: 1 });
+    const target = await rounds.createPhaseRoundWithMatches({
+      phase_id: phase.id, name: 'Latest fixture round', round_number: 2, best_of: 1,
+      bye_player_ids: [playerIds[2]], matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] }],
+    });
+    const args = {
+      p_season_id: seasonId, p_phase_id: phase.id, p_round_id: target.id,
+      p_expected_updated_at: target.updated_at, p_confirm: true,
+    };
+    const other = await create('swiss');
+    expect((await admin.rpc('phase_admin_round_delete', { ...args, p_phase_id: other.id })).error?.message).toBe('round_not_found');
+    expect((await admin.rpc('phase_admin_round_delete', { ...args, p_confirm: false })).error?.message).toBe('phase_round_delete_confirm_required');
+    expect((await admin.rpc('phase_admin_round_delete', { ...args, p_expected_updated_at: '2020-01-01T00:00:00Z' })).error?.message).toBe('phase_round_delete_changed');
+    await expect(rounds.deleteAdminPhaseRound(seasonId, phase.id, previous.id, previous.updated_at, true))
+      .rejects.toMatchObject({ code: 'phase_round_delete_dependent' });
+    expect((await phases.getPhaseById(phase.id))?.current_round).toBe(2);
+
+    const deletions = await Promise.all([
+      admin.rpc('phase_admin_round_delete', args),
+      admin.rpc('phase_admin_round_delete', args),
+    ]);
+    expect(deletions.filter(result => result.error === null).map(result => result.data))
+      .toEqual([{ name: target.name, round_number: 2, matches: 1 }]);
+    expect(deletions.filter(result => result.error !== null).map(result => result.error?.message)).toEqual(['round_not_found']);
+    expect((await rounds.getRoundsByPhase(phase.id)).map(round => round.id)).toEqual([previous.id]);
+    expect((await admin.from('phase_matches').select('id').eq('round_id', target.id)).data).toEqual([]);
+    expect(await phases.getPhaseById(phase.id)).toMatchObject({ current_round: 1, status: 'active' });
+  });
+
+  it('preserves game, prep, report and round rows on guarded deletion refusals', async () => {
+    const phase = await create('swiss');
+    const round = await rounds.createPhaseRoundWithMatches({
+      phase_id: phase.id, name: 'Protected fixture round', round_number: 1, best_of: 1,
+      matches: [{ player_1_id: playerIds[0], player_2_id: playerIds[1] }],
+    });
+    const match = await admin.from('phase_matches').select('id').eq('round_id', round.id).single();
+    expect(match.error).toBeNull();
+    if (!match.data) throw new Error('Fixture match missing');
+    const matchId = match.data.id;
+    const remove = () => rounds.deleteAdminPhaseRound(seasonId, phase.id, round.id, round.updated_at, true);
+
+    expect((await admin.from('phase_games').insert({ match_id: matchId, game_number: 1 })).error).toBeNull();
+    await expect(remove()).rejects.toMatchObject({ code: 'phase_round_delete_results' });
+    expect((await admin.from('phase_games').select('id').eq('match_id', matchId)).data).toHaveLength(1);
+    expect((await admin.from('phase_games').delete().eq('match_id', matchId)).error).toBeNull();
+
+    expect((await admin.from('phase_match_prep_teams').insert({ match_id: matchId, player_id: playerIds[0] })).error).toBeNull();
+    await expect(remove()).rejects.toMatchObject({ code: 'phase_round_delete_teams' });
+    expect((await admin.from('phase_match_prep_teams').select('id').eq('match_id', matchId)).data).toHaveLength(1);
+    expect((await admin.from('phase_match_prep_teams').delete().eq('match_id', matchId)).error).toBeNull();
+
+    expect((await admin.from('phase_reports').insert({
+      phase_id: phase.id, round_id: round.id, report_type: 'round_forecast', model_id: 'fixture',
+    })).error).toBeNull();
+    await expect(remove()).rejects.toMatchObject({ code: 'phase_round_delete_linked' });
+    expect((await admin.from('phase_reports').select('id').eq('round_id', round.id)).data).toHaveLength(1);
+    expect((await admin.from('phase_matches').select('id').eq('round_id', round.id)).data).toEqual([{ id: matchId }]);
+    expect(await rounds.getPhaseRoundById(round.id, phase.id)).not.toBeNull();
+    expect((await phases.getPhaseById(phase.id))?.current_round).toBe(1);
+
+    const completed = await rounds.completePhaseRound(round.id, { force: true });
+    expect(completed.outcome).toBe('completed');
+    if (completed.outcome !== 'completed') throw new Error('Fixture round was not completed');
+    await expect(rounds.deleteAdminPhaseRound(seasonId, phase.id, round.id, completed.round.updated_at, true))
+      .rejects.toMatchObject({ code: 'phase_round_delete_locked' });
+  });
+
   it('commits a generated round and its first group mirror together, once per snapshot', async () => {
     const phase = await create('round_robin');
     await enroll(phase.id);

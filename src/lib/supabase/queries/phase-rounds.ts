@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
+import seasonErrors from '@/i18n/messages/errors/seasons/en';
 import { isUniqueViolationOf } from '../unique-violation';
 import type { Json, Tables } from '@/types/database';
 import type { RoundStatus } from '@/types/round';
@@ -514,4 +515,43 @@ export async function updatePhaseRoundDeadline(
 export async function deletePhaseRound(id: string): Promise<void> {
   const { error } = await supabase.rpc('phase_round_delete', { p_round_id: id });
   if (error) throw error;
+}
+
+const adminRoundDeleteRefusals = {
+  season_not_found: [seasonErrors.season_not_found, 404],
+  PHASE_NOT_FOUND: [seasonErrors.PHASE_NOT_FOUND, 404],
+  round_not_found: [tournamentErrors.round_not_found, 404],
+  phase_round_delete_confirm_required: [tournamentErrors.phase_round_delete_confirm_required, 400],
+  STRUCTURE_ELIM_ROUND_DELETE: [tournamentErrors.STRUCTURE_ELIM_ROUND_DELETE, 400],
+  phase_round_delete_locked: [tournamentErrors.phase_round_delete_locked, 409],
+  phase_round_delete_dependent: [tournamentErrors.phase_round_delete_dependent, 409],
+  phase_round_delete_results: [tournamentErrors.phase_round_delete_results, 409],
+  phase_round_delete_teams: [tournamentErrors.phase_round_delete_teams, 409],
+  phase_round_delete_linked: [tournamentErrors.phase_round_delete_linked, 409],
+  phase_round_delete_changed: [tournamentErrors.phase_round_delete_changed, 409],
+} as const;
+
+export async function deleteAdminPhaseRound(
+  seasonId: string, phaseId: string, roundId: string, expectedUpdatedAt: string, confirm: true,
+) {
+  const { data, error } = await supabase.rpc('phase_admin_round_delete', {
+    p_season_id: seasonId, p_phase_id: phaseId, p_round_id: roundId,
+    p_expected_updated_at: expectedUpdatedAt, p_confirm: confirm,
+  });
+  if (error) {
+    const signal = error.code === 'P0001' ? error.message
+      : error.code === '55P03' || error.code === '40P01' ? 'phase_round_delete_changed'
+        : null;
+    if (signal && Object.hasOwn(adminRoundDeleteRefusals, signal)) {
+      const code = signal as keyof typeof adminRoundDeleteRefusals;
+      const [message, status] = adminRoundDeleteRefusals[code];
+      throw Object.assign(new UserFacingError(message, { code, status }), { cause: error });
+    }
+    throw error;
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)
+    || typeof data.name !== 'string' || typeof data.round_number !== 'number' || typeof data.matches !== 'number') {
+    throw new Error('Native round deletion returned an invalid result');
+  }
+  return { name: data.name, round_number: data.round_number, matches: data.matches };
 }

@@ -157,6 +157,13 @@ export default {
     "The phase status was saved, but the league format's reaction to it (stage start or end, tie checks) did not run. Send the same status again to repeat it.",
   // A match of the round changed (a result, an accepted challenge) between the admin's reset and the delete; nothing was deleted (409).
   round_changed: 'A match of this round changed while it was being deleted, so nothing was deleted. Reload the round and try again.',
+  phase_round_delete_confirm_required: 'Deleting a round requires confirm: true.',
+  phase_round_delete_changed: 'The round or one of its matches changed while it was being deleted. Reload the round and try again.',
+  phase_round_delete_locked: 'This round or its phase is completed, archived, or managed by a league format, so the round cannot be deleted here.',
+  phase_round_delete_dependent: 'This round cannot be deleted while a later round exists or another phase takes its enrollment from this phase.',
+  phase_round_delete_results: 'This round cannot be deleted while one of its matches has games or result data.',
+  phase_round_delete_teams: 'This round cannot be deleted while one of its matches has linked teams.',
+  phase_round_delete_linked: 'This round cannot be deleted while it or one of its matches has linked records or scheduling details.',
   // The round a retry meant to fill is completed (an admin completed it empty, or a completion won the race with the write); no match was written (409).
   rounds_round_completed: '{round} is already completed, so no matches were written into it. Delete it to generate it again.',
   // The status of the tournament or phase moved (another admin, a round written, a stage end) between the read and the guarded write; nothing was written (409).
