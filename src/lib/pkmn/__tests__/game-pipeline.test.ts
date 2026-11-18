@@ -131,6 +131,7 @@ vi.mock('@/lib/audit/log', () => ({
 }));
 
 vi.mock('@/lib/rating/updateRatings', () => ({
+  rebuildRatingsForPlayersWithStorage: vi.fn(),
   // T5: rebuildRatingsForPlayers (chronological replay) is the reset's rating path.
   // recordGameResult's live rating write path is out of scope for this suite.
   rebuildRatingsForPlayers: vi.fn(async (playerIds: string[]) =>
@@ -154,6 +155,16 @@ vi.mock('@/lib/rating/updateRatings', () => ({
 
 vi.mock('@/lib/gamification/streaks', () => ({
   recomputeStreaks: vi.fn(async () => {}),
+  recomputeStreaksWithStorage: vi.fn(),
+}));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({
+  readPhaseStorageMode: vi.fn(),
+}));
+
+vi.mock('@/lib/league-phase/rating-streak-streams', () => ({
+  createMixedRatingStorage: vi.fn(() => ({ family: 'mixed-ratings' })),
+  mixedStreakStorage: { family: 'mixed-streaks' },
 }));
 
 vi.mock('@/lib/gamification/signatures', () => ({
@@ -248,9 +259,12 @@ import {
 import type { BoundReplay } from '@/lib/pkmn/replay-binding';
 import { buildGameAggregateDeltas, rollbackGameAggregates } from '@/lib/supabase/queries/aggregates';
 import { shouldExcludeFromAllTime } from '@/lib/supabase/queries/test-accounts';
-import { planRatingRebuild, rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
+import { planRatingRebuild, rebuildRatingsForPlayers, rebuildRatingsForPlayersWithStorage } from '@/lib/rating/updateRatings';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { createMixedRatingStorage, mixedStreakStorage } from '@/lib/league-phase/rating-streak-streams';
+import { reopenMatch } from '@/lib/match/reopen';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { recomputeStreaks } from '@/lib/gamification/streaks';
+import { recomputeStreaks, recomputeStreaksWithStorage } from '@/lib/gamification/streaks';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { cleanMatchChildren } from '@/lib/match/match-children';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
@@ -2425,6 +2439,110 @@ function round(overrides: Partial<NonNullable<RoundRow>> = {}): RoundRow {
     ...overrides,
   } as RoundRow;
 }
+
+describe('standalone corrections in phase mode', () => {
+  const players = ['player-1', 'player-2'];
+  const match = { ...matchWithStatus('completed')!, winner_id: 'player-1' };
+  const edit = () => editGame({ game_id: 'game-1', admin_id: 'admin-1' });
+  const remove = () => deleteGame('game-1', 'admin-1');
+  const reset = () => resetMatch('match-1', 'admin-1');
+  const reopen = () => reopenMatch('match-1', 'admin-1');
+  const roundReset = () => resetRound('round-1', 'admin-1');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(rebuildRatingsForPlayersWithStorage).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it.each([
+    { action: 'reset', run: reset, beforeWrite: resetMatchFields, statusWrite: resetMatchFields },
+    { action: 'edit', run: edit, beforeWrite: claimGameEditLease, statusWrite: transitionMatchStatus },
+    { action: 'delete', run: remove, beforeWrite: cancelAggregateJobsForGame, statusWrite: transitionMatchStatus },
+    { action: 'reopen', run: reopen, beforeWrite: transitionMatchStatus, statusWrite: transitionMatchStatus },
+    { action: 'round reset', run: roundReset, beforeWrite: resetMatchFields, statusWrite: resetMatchFields },
+  ])('$action preflights before writing and replays mixed projections after taking back the result', async ({ action, run, beforeWrite, statusWrite }) => {
+    if (action === 'reset' || action === 'round reset') mockResetReads(match);
+    else vi.mocked(getMatchById).mockResolvedValueOnce(match);
+    if (action === 'round reset') vi.mocked(getMatchesByRound).mockResolvedValueOnce([match]);
+    await run();
+
+    const ratings = vi.mocked(createMixedRatingStorage).mock.results[0]?.value;
+    expect(readPhaseStorageMode).toHaveBeenCalledTimes(1);
+    expect(createMixedRatingStorage).toHaveBeenCalledWith('tournament');
+    expect(planRatingRebuild).toHaveBeenCalledWith(players, { excludeMatchIds: ['match-1'], storage: ratings });
+    expect(planRatingRebuild).toHaveBeenCalledBefore(vi.mocked(beforeWrite));
+    expect(statusWrite).toHaveBeenCalledBefore(vi.mocked(rebuildRatingsForPlayersWithStorage));
+    expect(rebuildRatingsForPlayersWithStorage).toHaveBeenCalledWith(players, ratings);
+    expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-1', mixedStreakStorage);
+    expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-2', mixedStreakStorage);
+    expect(vi.mocked(updateSignatures).mock.calls).toEqual([['player-1'], ['player-2']]);
+    expect(rebuildRatingsForPlayers).not.toHaveBeenCalled();
+    expect(recomputeStreaks).not.toHaveBeenCalled();
+  });
+
+  it('does not claim the edit lease if the mixed rating preflight refuses', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(match);
+    vi.mocked(planRatingRebuild).mockRejectedValueOnce(new Error('mixed history gap'));
+    await expect(edit()).rejects.toThrow('mixed history gap');
+    expect(claimGameEditLease).not.toHaveBeenCalled();
+    expect(cancelAggregateJobsForGame).not.toHaveBeenCalled();
+    expect(rebuildRatingsForPlayersWithStorage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    { action: 'reset', run: reset }, { action: 'edit', run: edit },
+    { action: 'delete', run: remove }, { action: 'reopen', run: reopen },
+  ])('refuses $action of a league-owned legacy row before any write', async ({ run }) => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(match);
+    vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 'tourney-1', season_id: 'league-1' } as never);
+    await expect(run()).rejects.toMatchObject({ code: 'tournament_not_found', statusCode: 404 });
+    expect(planRatingRebuild).not.toHaveBeenCalled();
+    expect(claimGameEditLease).not.toHaveBeenCalled();
+    expect(cancelAggregateJobsForGame).not.toHaveBeenCalled();
+    expect(transitionMatchStatus).not.toHaveBeenCalled();
+    expect(resetMatchFields).not.toHaveBeenCalled();
+  });
+
+  it('does not treat an unknown match as standalone', async () => {
+    vi.mocked(getMatchById).mockResolvedValueOnce(null);
+    await expect(reset()).rejects.toMatchObject({ code: 'match_not_found', statusCode: 404 });
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expect(resetMatchFields).not.toHaveBeenCalled();
+  });
+
+  it('checks round ownership even when a round has no matches to reset', async () => {
+    vi.mocked(getRoundById).mockResolvedValueOnce(round({ status: 'active' }));
+    vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 'tourney-1', season_id: 'league-1' } as never);
+    await expect(roundReset()).rejects.toMatchObject({ code: 'tournament_not_found', statusCode: 404 });
+    expect(getMatchesByRound).not.toHaveBeenCalled();
+    expect(updateRoundStatus).not.toHaveBeenCalled();
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('does not dispatch a correction when storage is %s', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    await expect(reopen()).rejects.toMatchObject({ code: 'phase_storage_unavailable', statusCode: 503 });
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(createMixedRatingStorage).not.toHaveBeenCalled();
+    expect(transitionMatchStatus).not.toHaveBeenCalled();
+  });
+
+  it('keeps the default legacy correction free of new schema reads and preserves call arities', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
+    mockResetReads(match);
+    await reset();
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(createMixedRatingStorage).not.toHaveBeenCalled();
+    expect(planRatingRebuild).toHaveBeenCalledExactlyOnceWith(players, { excludeMatchIds: ['match-1'] });
+    expect(rebuildRatingsForPlayers).toHaveBeenCalledExactlyOnceWith(players);
+    expect(vi.mocked(recomputeStreaks).mock.calls).toEqual([['player-1'], ['player-2']]);
+  });
+});
 
 describe('recordGameResult: round read', () => {
   beforeEach(() => {

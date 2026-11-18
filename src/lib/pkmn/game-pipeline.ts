@@ -40,8 +40,9 @@ import {
 import { deleteMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
 import { deleteMatchPrepAnalysesByMatch } from '@/lib/supabase/queries/match-prep-analyses';
 import { deleteMatchSnapshots } from '@/lib/supabase/queries/match-snapshots';
-import { planRatingRebuild, rebuildRatingsForPlayers } from '@/lib/rating/updateRatings';
-import { recomputeStreaks } from '@/lib/gamification/streaks';
+import { planRatingRebuild, rebuildRatingsForPlayers, rebuildRatingsForPlayersWithStorage } from '@/lib/rating/updateRatings';
+import { recomputeStreaks, recomputeStreaksWithStorage } from '@/lib/gamification/streaks';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { updateSignatures } from '@/lib/gamification/signatures';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
@@ -535,6 +536,42 @@ export async function recordGameResult(input: GamePipelineInput): Promise<GamePi
   return createGamePipeline(legacyGamePipelineStorage()).recordGameResult(input);
 }
 
+export async function createStandaloneCorrectionPipeline() {
+  const { createMixedRatingStorage, mixedStreakStorage } = await import('@/lib/league-phase/rating-streak-streams');
+  const ratings = createMixedRatingStorage('tournament');
+  const getCompetitionById = async (id: string) => {
+    const tournament = await getTournamentById(id);
+    if (!tournament || tournament.season_id !== null) {
+      throw new UserFacingError('Tournament not found', { code: 'tournament_not_found', status: 404 });
+    }
+    return tournament;
+  };
+  const pipeline = createGamePipeline({
+    ...legacyGamePipelineStorage(),
+    getCompetitionById,
+    getMatchesByRound: async (id) => {
+      const round = await getRoundById(id);
+      if (!round) throw new UserFacingError('Round not found', { code: 'round_not_found', status: 404 });
+      await getCompetitionById(round.tournament_id);
+      const matches = await getMatchesByRound(id);
+      if (matches.some((match) => match.tournament_id !== round.tournament_id)) {
+        throw new Error('Round matches do not belong to the round tournament');
+      }
+      return matches;
+    },
+    planRatingRebuild: (ids, options) => planRatingRebuild(ids, { ...options, storage: ratings }),
+    rebuildRatingsForPlayers: (ids) => rebuildRatingsForPlayersWithStorage(ids, ratings),
+    recomputeStreaks: (id) => recomputeStreaksWithStorage(id, mixedStreakStorage),
+  });
+  return { pipeline, getCompetitionById };
+}
+
+async function getTournamentCorrectionPipeline() {
+  return await requireOpenPhaseRouteMode() === 'phase'
+    ? (await createStandaloneCorrectionPipeline()).pipeline
+    : createGamePipeline(legacyGamePipelineStorage());
+}
+
 export async function recheckEvolutions(seasonId: string | null, player1Id: string, player2Id: string): Promise<EvolutionRecheckResult> {
   return createGamePipeline(legacyGamePipelineStorage()).recheckEvolutions(seasonId, player1Id, player2Id);
 }
@@ -557,7 +594,7 @@ export async function revertRoundIfCompleted(roundId: string): Promise<void> {
 }
 
 export async function deleteGame(gameId: string, adminId: string, options: GameChangeOptions = {}): Promise<DeleteGameResult> {
-  return createGamePipeline(legacyGamePipelineStorage()).deleteGame(gameId, adminId, options);
+  return (await getTournamentCorrectionPipeline()).deleteGame(gameId, adminId, options);
 }
 
 export async function collectPlayedDownstreamMatches(match: MatchWithPlayers, tournament: { id: string; bracket_type: string }, participants: GamePipelineParticipant[]): Promise<MatchWithPlayers[]> {
@@ -565,19 +602,19 @@ export async function collectPlayedDownstreamMatches(match: MatchWithPlayers, to
 }
 
 export async function resetMatch(matchId: string, adminId: string, cascade = false): Promise<ResetMatchResult> {
-  return createGamePipeline(legacyGamePipelineStorage()).resetMatch(matchId, adminId, cascade);
+  return (await getTournamentCorrectionPipeline()).resetMatch(matchId, adminId, cascade);
 }
 
 export async function previewMatchReset(matchId: string): Promise<MatchResetPreview> {
-  return createGamePipeline(legacyGamePipelineStorage()).previewMatchReset(matchId);
+  return (await getTournamentCorrectionPipeline()).previewMatchReset(matchId);
 }
 
 export async function resetRound(roundId: string, adminId: string, cascade = false): Promise<ResetRoundResult> {
-  return createGamePipeline(legacyGamePipelineStorage()).resetRound(roundId, adminId, cascade);
+  return (await getTournamentCorrectionPipeline()).resetRound(roundId, adminId, cascade);
 }
 
 export async function editGame(input: EditGameInput, options: GameChangeOptions = {}): Promise<EditGameResult> {
-  return createGamePipeline(legacyGamePipelineStorage()).editGame(input, options);
+  return (await getTournamentCorrectionPipeline()).editGame(input, options);
 }
 
 export function createGamePipeline<M extends GamePipelineMatch, C extends GamePipelineCompetition>(storage: GamePipelineStorage<M, C>) {
