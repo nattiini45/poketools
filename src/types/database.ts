@@ -9979,6 +9979,24 @@ export type Database = {
         Returns: Json
       }
       phase_round_delete: { Args: { p_round_id: string }; Returns: Json }
+      phase_round_generate: {
+        Args: {
+          p_best_of: number
+          p_bye_player_ids: string[]
+          p_deadline: string
+          p_expected_revision?: number
+          p_expected_updated_at: string
+          p_inputs: Json
+          p_matches: Json
+          p_name: string
+          p_phase_id: string
+          p_replacement_groups?: Json
+          p_round_id: string
+          p_round_number: number
+          p_season_id: string
+        }
+        Returns: Json
+      }
       phase_round_write: {
         Args: {
           p_best_of: number

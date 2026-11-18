@@ -4,8 +4,10 @@ import tournamentErrors from '@/i18n/messages/errors/tournaments/en';
 import { isUniqueViolationOf } from '../unique-violation';
 import type { Json, Tables } from '@/types/database';
 import type { RoundStatus } from '@/types/round';
-import type { PhaseRound, PhaseStatus } from '@/types/league-phase';
+import type { Phase, PhaseRound, PhaseStatus } from '@/types/league-phase';
+import type { Season } from '@/types/season';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
+import { phaseMachine } from '@/lib/league-phase/phase-state';
 import type { PhaseRoundActor } from '@/lib/league-phase/phase-round-state';
 import { readBoundedPages } from '../read-bounded-pages';
 import type { RoundByeSource } from '@/lib/tournament/byes';
@@ -214,6 +216,69 @@ export async function createPhaseRoundWithMatches(input: {
     ...(input.expected_revision === undefined ? {} : { p_expected_revision: input.expected_revision }),
   });
   if (error) throw mapRoundWriteError(error, input.name, 'createPhaseRoundWithMatches');
+  return parseRoundWrite(data);
+}
+
+export interface PhaseRoundGroupLayout {
+  name: string;
+  group_number: number;
+  season_group_id: string | null;
+  members: { player_id: string; seed: number }[];
+}
+
+export async function writeGeneratedPhaseRound(input: {
+  phase_id: string;
+  season_id: string;
+  phase_status: PhaseStatus;
+  expected_updated_at: string;
+  expected_revision?: number;
+  round_id: string | null;
+  name: string;
+  round_number: number;
+  best_of: number;
+  bye_player_ids: string[];
+  matches: readonly RoundMatchInput[];
+  deadline: string | null;
+  inputs: {
+    phase: Pick<Phase, 'status' | 'current_round' | 'bracket_type' | 'stage_spec' | 'name' | 'bo_overrides' | 'best_of_default'>;
+    season: Pick<Season, 'start_date' | 'format_type'>;
+    participants: { id: string; name: string; seed: number | null }[];
+    rounds: Pick<PhaseRound, 'id' | 'round_number' | 'status' | 'bye_player_ids' | 'pairings_generated' | 'bracket_side'>[];
+    matches: Pick<Tables<'phase_matches'>, 'id' | 'round_id' | 'status' | 'winner_id' | 'player_1_id' | 'player_2_id'>[];
+    groups: (PhaseRoundGroupLayout & { id: string })[];
+    league_groups: { id: string; name: string; sort_order: number; player_ids: string[] }[];
+  };
+  replacement_groups?: PhaseRoundGroupLayout[];
+}): Promise<PhaseRound> {
+  if (input.phase_status === 'upcoming') phaseMachine.assertTransition('upcoming', 'active', 'admin');
+  const { data, error } = await supabase.rpc('phase_round_generate', {
+    p_phase_id: input.phase_id,
+    p_season_id: input.season_id,
+    p_round_id: (input.round_id ?? NULL_ARG) as string,
+    p_name: input.name,
+    p_round_number: input.round_number,
+    p_best_of: input.best_of,
+    p_bye_player_ids: input.bye_player_ids,
+    p_matches: roundMatchesJson(input.matches),
+    p_deadline: (input.deadline ?? NULL_ARG) as string,
+    p_expected_updated_at: input.expected_updated_at,
+    p_inputs: input.inputs as unknown as Json,
+    ...(input.replacement_groups === undefined ? {} : { p_replacement_groups: input.replacement_groups as unknown as Json }),
+    ...(input.expected_revision === undefined ? {} : { p_expected_revision: input.expected_revision }),
+  });
+  if (error) {
+    if (error.code === '55P03') {
+      throw Object.assign(new UserFacingError('Another operation is changing this phase. No round was written. Try again.', {
+        code: 'round_status_changed', status: 409,
+      }), { cause: error });
+    }
+    if (isRoundWriteSignal(error, 'phase_round_inputs_changed')) {
+      throw Object.assign(new UserFacingError('The phase or its pairing history changed while this round was being generated. No round was written. Generate it again.', {
+        code: 'round_status_changed', status: 409,
+      }), { cause: error });
+    }
+    throw mapRoundWriteError(error, input.name, 'writeGeneratedPhaseRound');
+  }
   return parseRoundWrite(data);
 }
 
