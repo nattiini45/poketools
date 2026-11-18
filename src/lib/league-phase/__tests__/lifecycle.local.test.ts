@@ -91,7 +91,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
   });
 
   it('keeps retained group slots across enrollment sync and refuses removal after scheduling', async () => {
-    const phase = await create();
+    const phase = await create('double_elim');
     await enroll(phase.id);
     const [group] = await groups.createPhaseGroupBatch([{
       phase_id: phase.id, season_id: seasonId, season_group_id: null, name: 'Example group', group_number: 1,
@@ -119,14 +119,22 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     await rounds.createPhaseRound({ phase_id: phase.id, name: 'Finals', round_number: 1, best_of: 3 });
     const scheduledSlots = await slots();
     const scheduled = await phases.getPhaseById(phase.id);
+    await phases.updatePhaseParticipantSeeds(phase.id, [{ player_id: playerIds[0], seed: 2, starting_bracket: 'losers' }]);
+    const forcedSync = '2026-11-17T00:02:00Z';
+    expect(await phases.replacePhaseEnrollment(phase.id, entries, {
+      type: 'roster', source_phase_id: null, synced_at: forcedSync, frozen: false,
+    }, nextSync, true)).toBe(true);
+    expect((await phases.getPhaseParticipants(phase.id)).find(player => player.id === playerIds[0]))
+      .toMatchObject({ seed: 2, starting_bracket: 'losers' });
     await expect(phases.removePhaseParticipant(phase.id, playerIds[0])).rejects.toMatchObject({
       code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409,
     });
     await expect(phases.replacePhaseEnrollment(phase.id, entries.slice(1), {
-      type: 'roster', source_phase_id: null, synced_at: '2026-11-17T00:02:00Z', frozen: false,
-    }, nextSync, true)).rejects.toMatchObject({ code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409 });
+      type: 'roster', source_phase_id: null, synced_at: '2026-11-17T00:03:00Z', frozen: false,
+    }, forcedSync, true)).rejects.toMatchObject({ code: 'PHASE_GROUP_ROSTER_SCHEDULED', statusCode: 409 });
     expect(await slots()).toEqual(scheduledSlots);
-    expect((await phases.getPhaseById(phase.id))?.enrollment_source).toEqual(scheduled?.enrollment_source);
+    expect((await phases.getPhaseById(phase.id))?.enrollment_source)
+      .toMatchObject({ ...scheduled?.enrollment_source, synced_at: forcedSync, frozen: true });
     expect(await phases.getPhaseParticipants(phase.id)).toHaveLength(2);
   });
 

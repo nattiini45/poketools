@@ -18,7 +18,7 @@ describe('native lifecycle SQL', () => {
   it('preserves retained group rows and rejects scheduled removals before changing the roster or freeze flag', () => {
     const replace = rosterSql.slice(0, rosterSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_enrollment_replace'));
     expect(replace).toMatch(/DELETE FROM public\.phase_participants p WHERE p\.phase_id = p_phase_id\s+AND NOT EXISTS/);
-    expect(replace).toContain('ON CONFLICT (phase_id, player_id) DO UPDATE');
+    expect(replace).toContain('ON CONFLICT (phase_id, player_id) DO UPDATE SET seed = EXCLUDED.seed;');
     expect(replace.indexOf('public.phase__lock')).toBeLessThan(replace.indexOf('PHASE_GROUP_ROSTER_SCHEDULED'));
     expect(replace.indexOf('PHASE_GROUP_ROSTER_SCHEDULED')).toBeLessThan(replace.indexOf('DELETE FROM'));
     const edit = rosterSql.slice(rosterSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_participant_edit'));

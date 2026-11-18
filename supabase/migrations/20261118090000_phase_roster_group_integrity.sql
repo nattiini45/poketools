@@ -24,7 +24,7 @@ BEGIN
   UPDATE public.phase_participants SET seed = NULL WHERE phase_id = p_phase_id AND seed IS NOT NULL;
   INSERT INTO public.phase_participants (phase_id, player_id, seed)
     SELECT p_phase_id, e.player_id, e.seed FROM jsonb_to_recordset(p_entries) AS e(player_id uuid, seed integer)
-    ON CONFLICT (phase_id, player_id) DO UPDATE SET seed = EXCLUDED.seed, starting_bracket = EXCLUDED.starting_bracket;
+    ON CONFLICT (phase_id, player_id) DO UPDATE SET seed = EXCLUDED.seed;
 END $$;
 
 CREATE OR REPLACE FUNCTION public.phase_enrollment_replace(

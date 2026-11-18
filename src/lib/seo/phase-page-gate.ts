@@ -33,9 +33,12 @@ export async function phasePageGate(pathname: string, query: URLSearchParams): P
         const { standaloneTournamentAliasExists } = await import('@/lib/supabase/queries/phase-route-owners');
         return { kind: await standaloneTournamentAliasExists(alias.target) ? 'pass' : 'not_found' };
       }
-      const { findNativePhaseAliasOwner, findLegacyPhaseAliasOwner } = await import('@/lib/supabase/queries/phase-route-owners');
-      const owner = mode === 'frozen_phase' ? await findNativePhaseAliasOwner(alias.target) : await findLegacyPhaseAliasOwner(alias.target);
-      return { kind: owner ? 'unavailable' : 'pass' };
+      const { findNativePhaseAliasOwner, findLegacyPhaseAliasOwner, standaloneTournamentAliasExists } =
+        await import('@/lib/supabase/queries/phase-route-owners');
+      const legacyOwner = await findLegacyPhaseAliasOwner(alias.target);
+      const nativeOwner = !legacyOwner && mode === 'frozen_phase' ? await findNativePhaseAliasOwner(alias.target) : null;
+      if (legacyOwner || nativeOwner) return { kind: 'unavailable' };
+      return { kind: await standaloneTournamentAliasExists(alias.target) ? 'pass' : 'not_found' };
     }
 
     const seasonId = decodeId(canonical[1]);

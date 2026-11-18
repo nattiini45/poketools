@@ -45,11 +45,29 @@ it('does not redirect or probe phase ownership for old URLs in legacy mode', asy
 
 it.each(['frozen_legacy', 'frozen_phase'])('returns unavailable for a verified alias during %s', async mode => {
   h.mode.mockResolvedValue(mode);
-  h.legacy.mockResolvedValue({ season_id: season });
+  h.legacy.mockResolvedValue(mode === 'frozen_legacy' ? { season_id: season } : null);
   expect(await phasePageGate(`/tournaments/${phase}`, noQuery)).toEqual({ kind: 'unavailable' });
   expect(mode === 'frozen_phase' ? h.native : h.legacy).toHaveBeenCalledExactlyOnceWith({ phaseId: phase });
   expect(await phasePageGate(canonical, noQuery)).toEqual({ kind: 'unavailable' });
   expect(h.canonical).not.toHaveBeenCalled();
+});
+
+it('blocks a stale legacy phase alias when the native transfer is frozen and no native owner was moved', async () => {
+  h.mode.mockResolvedValue('frozen_phase');
+  h.native.mockResolvedValue(null);
+  h.legacy.mockResolvedValue({ season_id: season });
+  expect(await phasePageGate(`/tournaments/${phase}`, noQuery)).toEqual({ kind: 'unavailable' });
+  expect(h.legacy).toHaveBeenCalledExactlyOnceWith({ phaseId: phase });
+  expect(h.standalone).not.toHaveBeenCalled();
+});
+
+it('passes only verified standalone aliases while frozen', async () => {
+  h.mode.mockResolvedValue('frozen_phase');
+  h.native.mockResolvedValue(null);
+  h.legacy.mockResolvedValue(null);
+  h.standalone.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+  expect(await phasePageGate(`/tournaments/${phase}`, noQuery)).toEqual({ kind: 'pass' });
+  expect(await phasePageGate(`/tournaments/${phase}`, noQuery)).toEqual({ kind: 'not_found' });
 });
 
 it('returns not found for wrong-league matches, rather than probing another store', async () => {
