@@ -68,6 +68,57 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }, null)).toBe(true);
   }
 
+  it('commits a generated round and its first group mirror together, once per snapshot', async () => {
+    const phase = await create('round_robin');
+    await enroll(phase.id);
+    const { getSeasonGroups } = await import('@/lib/supabase/queries/season-groups');
+    const [live, participants, leagueGroups] = await Promise.all([
+      phases.getPhaseById(phase.id), phases.getPhaseParticipants(phase.id), getSeasonGroups(seasonId),
+    ]);
+    if (!live) throw new Error('Native pairing phase missing after enrollment');
+    const input: Parameters<typeof rounds.writeGeneratedPhaseRound>[0] = {
+      phase_id: live.id, season_id: seasonId, phase_status: live.status,
+      round_id: null, name: 'Round 1', round_number: 1, best_of: 3, bye_player_ids: [],
+      matches: leagueGroups.map(group => ({ player_1_id: group.player_ids[0], player_2_id: group.player_ids[1] })),
+      deadline: '2030-01-01T00:00:00.000Z', expected_updated_at: live.updated_at,
+      replacement_groups: leagueGroups.map((group, index) => ({
+        season_group_id: group.id, name: group.name, group_number: index + 1,
+        members: participants.filter(player => group.player_ids.includes(player.id))
+          .map((player, seed) => ({ player_id: player.id, seed: seed + 1 })),
+      })),
+      inputs: {
+        phase: {
+          status: live.status, current_round: live.current_round, bracket_type: live.bracket_type,
+          stage_spec: live.stage_spec, name: live.name, bo_overrides: live.bo_overrides, best_of_default: live.best_of_default,
+        },
+        season: { start_date: null, format_type: 'singles' }, rounds: [], matches: [], groups: [],
+        participants: participants.map(({ id, name, seed }) => ({ id, name, seed })).sort((a, b) => a.id.localeCompare(b.id)),
+        league_groups: leagueGroups.map(({ id, name, sort_order, player_ids }) => ({ id, name, sort_order, player_ids: [...player_ids].sort() })),
+      },
+    };
+
+    await expect(rounds.writeGeneratedPhaseRound({
+      ...input, matches: [...input.matches, { player_1_id: playerIds[0], player_2_id: randomUUID() }],
+    })).rejects.toMatchObject({ code: '23503' });
+    expect(await groups.getGroupsByPhase(live.id)).toEqual([]);
+    expect(await rounds.getRoundsByPhase(live.id)).toEqual([]);
+    expect((await phases.getPhaseById(live.id))?.status).toBe('upcoming');
+
+    const attempts = await Promise.allSettled([rounds.writeGeneratedPhaseRound(input), rounds.writeGeneratedPhaseRound(input)]);
+    expect(attempts.map(attempt => attempt.status).sort()).toEqual(['fulfilled', 'rejected']);
+    for (const attempt of attempts) {
+      if (attempt.status === 'rejected') expect(attempt.reason).toMatchObject({ code: 'round_status_changed', statusCode: 409 });
+    }
+    const saved = await rounds.getRoundsByPhase(live.id);
+    expect(saved).toHaveLength(1);
+    expect(saved[0]).toMatchObject({ round_number: 1, pairings_generated: true });
+    expect(Date.parse(saved[0].deadline ?? '')).toBe(Date.parse(input.deadline ?? ''));
+    expect((await groups.getGroupsByPhase(live.id)).map(group => group.season_group_id)).toEqual(leagueGroups.map(group => group.id));
+    expect((await admin.from('phase_matches').select('id', { head: true, count: 'exact' }).eq('phase_id', live.id)).count)
+      .toBe(input.matches.length);
+    expect((await phases.getPhaseById(live.id))?.status).toBe('active');
+  });
+
   it('serializes manual appends and inserts without shifting an already started phase', async () => {
     const prefix = `Placement ${randomUUID()}`;
     const input = {

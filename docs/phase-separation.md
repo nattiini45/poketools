@@ -60,6 +60,8 @@ Manual native phase creation uses one season-scoped transaction for the name che
 
 The initial native elimination bracket takes the phase lock before making any writes. A changed settings timestamp, roster seed, starting side, or expected format revision refuses the plan; nothing is materialized from those stale inputs. The guarded write delegates to the same atomic round/match/freeze transaction once the inputs match.
 
+Native automatic round generation reads Swiss or round-robin history from the phase. The write checks the phase, roster, rounds, match facts, group layouts and format revision under the season and phase locks. The first group mirror, round, pairings, byes and any calendar deadline commit together. Existing elimination brackets use the bracket engine instead; batch round generation is separate.
+
 Format materialisation, kit context, advancement, group formation, classic creation and substitution expose explicit persistence ports. Native status reactions use native context and pure event/check planners, with a required revision/idempotency-aware event writer and invalidation callback. Native paths that need match results, standings, aggregate counts, repair or notifications require explicit callbacks from their owning later layers; they never silently load legacy results. These dormant adapters are not authorization to enable native traffic before those consumers ship.
 
 ## Delivery and verification
