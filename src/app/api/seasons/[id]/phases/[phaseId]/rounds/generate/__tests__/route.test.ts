@@ -235,18 +235,24 @@ it('uses winners across stale groups when flat elimination history shows cross-g
   }));
 });
 
-it('preserves independent flat elimination pairings when historic matches stayed inside their groups', async () => {
-  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 1 });
+it('preserves independent flat group finals and uses the legacy numbered best-of override', async () => {
+  m.phase.mockResolvedValue({
+    ...phase, bracket_type: 'single_elim', status: 'active', current_round: 1,
+    bo_overrides: { 'Round 2': 3, Finals: 5 },
+  });
   m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
-  m.participants.mockResolvedValue(players.map(player => ({ ...player, starting_bracket: 'winners' })));
-  m.groups.mockResolvedValue([['a', 'b', 'c'], ['d', 'e', 'f']].map((ids, index) => ({
+  const cohorts = [['a', 'b', 'c', 'd'], ['e', 'f', 'g', 'h']];
+  m.participants.mockResolvedValue(cohorts.flat().map((id, index) => ({
+    id, name: `Trainer ${id}`, seed: index + 1, starting_bracket: 'winners',
+  })));
+  m.groups.mockResolvedValue(cohorts.map((ids, index) => ({
     id: `group-${index}`, name: `Group ${index}`, group_number: index + 1, season_group_id: null,
     members: ids.map((id, seed) => ({ player_id: id, seed: seed + 1 })),
   })));
-  m.matches.mockResolvedValue([match(1, 'a', 'b'), match(1, 'd', 'e')]);
+  m.matches.mockResolvedValue([match(1, 'a', 'b'), match(1, 'c', 'd'), match(1, 'e', 'f'), match(1, 'g', 'h')]);
   expect((await run()).status).toBe(201);
   expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
-    name: 'Round 2', matches: [{ player_1_id: 'a', player_2_id: 'c' }, { player_1_id: 'd', player_2_id: 'f' }],
+    name: 'Round 2', best_of: 3, matches: [{ player_1_id: 'a', player_2_id: 'c' }, { player_1_id: 'e', player_2_id: 'g' }],
   }));
 });
 
