@@ -181,6 +181,7 @@ export interface FinalizeMatchCompletionInput<M extends FinalizationMatch = Matc
   previousStatus: MatchStatus;
   /** Absent: a played result (faints from the battle stats, source replay or manual). */
   adminOutcome?: AdminMatchOutcome;
+  precommittedAdminOutcomeAt?: string;
 }
 
 export interface FinalizeMatchCompletionResult {
@@ -516,6 +517,7 @@ export function createMatchFinalizer<M extends FinalizationMatch, C extends Fina
     winnerId,
     previousStatus,
     adminOutcome,
+    precommittedAdminOutcomeAt,
   }: FinalizeMatchCompletionInput<M>): Promise<FinalizeMatchCompletionResult> {
     if (previousStatus === 'completed') {
       return { finalized: false, reason: 'already_completed' };
@@ -533,10 +535,14 @@ export function createMatchFinalizer<M extends FinalizationMatch, C extends Fina
     // run, the marker stays unset and the heal finishes the match.
     let confirmedAt: string | null = null;
     const completionStep = await runner.run('mark_finalized', () => getMatchById(match.id));
+    if (!completionStep.ok && precommittedAdminOutcomeAt !== undefined) {
+      return { finalized: true, complete: false, failed_steps: runner.failed };
+    }
     if (completionStep.ok) {
       // The completion this run owns is this winner's: a match reopened and completed again with another winner is another
       // completion (its own run finalizes it), and rating this winner under its token would stamp the wrong result.
-      if (completionStep.value?.status !== 'completed' || completionStep.value.winner_id !== winnerId) {
+      if (completionStep.value?.status !== 'completed' || completionStep.value.winner_id !== winnerId
+        || (precommittedAdminOutcomeAt !== undefined && completionStep.value.confirmed_at !== precommittedAdminOutcomeAt)) {
         return { finalized: false, reason: 'match_changed', current_status: completionStep.value?.status ?? 'removed' };
       }
       confirmedAt = completionStep.value.confirmed_at;
@@ -549,8 +555,10 @@ export function createMatchFinalizer<M extends FinalizationMatch, C extends Fina
     const statsByGame = statsStep.ok ? statsStep.value : null;
     const flatStats = statsByGame ? Object.values(statsByGame).flat() : null;
 
-    let outcomeRecorded = false;
-    if (adminOutcome) {
+    let outcomeRecorded: boolean;
+    if (precommittedAdminOutcomeAt !== undefined) {
+      outcomeRecorded = true;
+    } else if (adminOutcome) {
       // Always rewrite the row with THIS request's outcome, even for a played result whose stats are unknown: the
       // staged row is not atomic with the status flip, so a concurrent request may have overwritten it between
       // staging and the flip, and only the request whose flip won knows the outcome that matches the winner.
@@ -563,6 +571,7 @@ export function createMatchFinalizer<M extends FinalizationMatch, C extends Fina
       outcomeRecorded = (await runner.run('outcome', () => recordPlayedOutcome(match, statsByGame, { replaceAdminRow: true }))).ok;
     } else {
       runner.blocked('outcome', 'battle_stats');
+      outcomeRecorded = false;
     }
 
     const ratingsStep = await runner.run('ratings', () => {

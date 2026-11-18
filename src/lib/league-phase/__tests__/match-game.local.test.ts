@@ -95,6 +95,59 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
     return id;
   }
 
+  it('commits only the winning native settlement and preserves the original reporter and games', async () => {
+    const id = await schedulingMatch();
+    const gameId = randomUUID();
+    expect((await admin.from('phase_games').insert({
+      id: gameId, match_id: id, game_number: 1, winner_id: players[0], replay_url: '',
+    })).error).toBeNull();
+    expect((await admin.from('phase_battle_stats').insert({
+      game_id: gameId, player_id: players[0], pokemon_name: 'Pikachu', was_koed: true,
+    })).error).toBeNull();
+    expect((await admin.from('phase_matches').update({
+      status: 'in_progress', submitter_id: players[1], notes: 'Original note',
+    }).eq('id', id)).error).toBeNull();
+    const match = await matches.getPhaseMatchById(id);
+    if (!match) throw new Error('Missing native settlement fixture');
+    const choices = [
+      { winner_id: players[0], outcome: 'forfeit', reason: 'Conceded' },
+      { winner_id: players[1], outcome: 'played', reason: 'Agreed outside the app' },
+    ] as const;
+    const staleSeats = { ...match, player_1_id: players[1], player_2_id: players[0] };
+    await expect(outcomes.settlePhaseMatchAsAdmin(staleSeats, players[0], choices[0])).resolves.toBeNull();
+    expect(await outcomes.getPhaseMatchOutcome(id)).toBeNull();
+    const wins = await Promise.all(choices.map((choice, i) => outcomes.settlePhaseMatchAsAdmin(match, players[i], choice)));
+    expect(wins.filter(Boolean)).toHaveLength(1);
+    const i = wins.findIndex(Boolean);
+    const stored = await matches.getPhaseMatchById(id);
+    expect(stored).toMatchObject({
+      status: 'completed', winner_id: choices[i].winner_id, submitter_id: players[1],
+      notes: 'Original note', games: [{ id: gameId }], date_played: expect.any(String),
+      confirmed_at: wins[i], auto_confirm_at: null,
+    });
+    const marker = await admin.from('phase_matches').select('finalized_at').eq('id', id).single();
+    expect(marker.error).toBeNull();
+    expect(marker.data).toEqual({ finalized_at: null });
+    expect(await outcomes.getPhaseMatchOutcome(id)).toMatchObject({
+      source: 'admin', kind: choices[i].outcome, reason: choices[i].reason, set_by: players[i],
+      p1_faints: i === 1 ? 1 : null, p2_faints: i === 1 ? 0 : null,
+    });
+  });
+
+  it('rolls back the native status flip if the outcome write fails', async () => {
+    const id = await schedulingMatch();
+    expect((await admin.from('phase_matches').update({ submitter_id: players[1] }).eq('id', id)).error).toBeNull();
+    const match = await matches.getPhaseMatchById(id);
+    if (!match) throw new Error('Missing native settlement fixture');
+    await expect(outcomes.settlePhaseMatchAsAdmin(match, randomUUID(), {
+      winner_id: players[0], outcome: 'no_show', reason: 'No arrival',
+    })).rejects.toMatchObject({ code: '23503', message: expect.stringContaining('phase_match_outcomes_set_by_fkey') });
+    expect(await matches.getPhaseMatchById(id)).toMatchObject({
+      status: 'scheduled', winner_id: null, submitter_id: players[1], confirmed_at: null, date_played: null,
+    });
+    expect(await outcomes.getPhaseMatchOutcome(id)).toBeNull();
+  });
+
   it('serializes opposite native proposals and persists an expired answer without changing the match', async () => {
     const { createPhaseMatchProposal, respondToPhaseMatchProposal } = await import('@/lib/supabase/queries/match-proposals');
     const id = await schedulingMatch();

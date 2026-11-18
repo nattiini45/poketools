@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => {
@@ -31,6 +31,23 @@ vi.mock('@/lib/logger', () => ({ logger: { error: vi.fn(), warn: vi.fn(), info: 
 
 vi.mock('@/lib/revalidation', () => ({
   revalidateMatchPages: vi.fn(),
+  revalidatePhaseMatchPages: vi.fn(),
+  expireSeasonReads: vi.fn(),
+}));
+
+const phase = vi.hoisted(() => ({
+  mode: vi.fn(), owner: vi.fn(), standalone: vi.fn(), get: vi.fn(), admin: vi.fn(), settle: vi.fn(), finalize: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: phase.mode }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: phase.owner,
+  standaloneMatchAliasExists: phase.standalone,
+}));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: phase.get }));
+vi.mock('@/lib/supabase/queries/phase-admins', () => ({ isPhaseAdminFor: phase.admin }));
+vi.mock('@/lib/supabase/queries/phase-match-outcomes', () => ({ settlePhaseMatchAsAdmin: phase.settle }));
+vi.mock('@/lib/league-phase/services', () => ({
+  createNativePhaseServices: () => ({ matches: { finalizeMatchCompletion: phase.finalize } }),
 }));
 
 vi.mock('@/lib/audit/log', () => ({
@@ -54,7 +71,7 @@ import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
 import { discardStagedAdminOutcome, finalizeMatchCompletion, stageAdminOutcome } from '@/lib/match/finalize';
 import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
-import { revalidateMatchPages } from '@/lib/revalidation';
+import { revalidateMatchPages, revalidatePhaseMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
@@ -91,9 +108,97 @@ function request(body: unknown): NextRequest {
 const STAGED = { setAt: '2026-11-06T10:00:00.123456+00:00' };
 const validBody = { winner_id: P1, reason: 'Bob did not show up' };
 
+afterEach(() => vi.unstubAllEnvs());
+
+describe('native phase settlement', () => {
+  const phaseId = '33333333-3333-4333-8333-333333333333';
+  const seasonId = '44444444-4444-4444-8444-444444444444';
+  const actor = { playerId: P2, name: 'Phase admin', isAdmin: false };
+  const confirmedAt = '2026-11-18T17:00:00.123456+00:00';
+  const { tournament_id: _legacy, ...base } = matchWith();
+  const match = { ...base, phase_id: phaseId, submitter_id: P1 };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(requirePlayer).mockResolvedValue(actor as never);
+    vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 });
+    phase.mode.mockResolvedValue('phase');
+    phase.owner.mockResolvedValue({ kind: 'phase', phase_id: phaseId, season_id: seasonId });
+    phase.get.mockResolvedValue(match);
+    phase.admin.mockResolvedValue(true);
+    phase.settle.mockResolvedValue(confirmedAt);
+    phase.finalize.mockResolvedValue({ finalized: true, failed_steps: [] });
+  });
+
+  it('writes once, audits the reason and finalizes only the native owner', async () => {
+    const response = await POST(request({ ...validBody, outcome: 'no_show' }), routeParams);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      success: true, data: { id: MATCH_ID, status: 'completed', winner_id: P1, confirmed_at: confirmedAt },
+    });
+    expect(phase.admin).toHaveBeenCalledExactlyOnceWith(P2, phaseId);
+    expect(phase.settle).toHaveBeenCalledExactlyOnceWith(match, P2, { ...validBody, outcome: 'no_show' });
+    expect(revalidatePhaseMatchPages).toHaveBeenCalledExactlyOnceWith(phaseId, MATCH_ID, seasonId);
+    expect(logAuditEvent).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      resource_type: 'phase_match', resource_id: MATCH_ID, action: 'match.admin_result',
+      metadata: { phase_id: phaseId, season_id: seasonId, outcome: 'no_show', reason: validBody.reason, from_status: 'scheduled', games_recorded: 0 },
+    }));
+    expect(phase.finalize).toHaveBeenCalledExactlyOnceWith({
+      match: { ...match, winner_id: P1, status: 'completed' }, winnerId: P1, previousStatus: 'scheduled',
+      precommittedAdminOutcomeAt: confirmedAt,
+    });
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(stageAdminOutcome).not.toHaveBeenCalled();
+    expect(finalizeMatchCompletion).not.toHaveBeenCalled();
+  });
+
+  it('does not stage an outcome or finalize if the locked status or seats changed', async () => {
+    phase.settle.mockResolvedValue(null);
+    phase.get.mockResolvedValueOnce(match).mockResolvedValueOnce({ ...match, status: 'disputed' });
+    const response = await POST(request(validBody), routeParams);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'match_state_changed', params: { status: 'disputed' } });
+    expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+    expect(phase.finalize).not.toHaveBeenCalled();
+  });
+
+  it('requires a live phase grant and a meaningful reason before the write', async () => {
+    phase.admin.mockResolvedValueOnce(false);
+    expect((await POST(request(validBody), routeParams)).status).toBe(403);
+    expect((await POST(request({ winner_id: P1, reason: '  ' }), routeParams)).status).toBe(400);
+    expect(phase.settle).not.toHaveBeenCalled();
+  });
+
+  it('refuses a retired league alias and keeps a verified standalone match on the legacy handler', async () => {
+    phase.owner.mockResolvedValue(null);
+    phase.standalone.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    vi.mocked(requirePlayer).mockResolvedValue(siteAdmin as never);
+    vi.mocked(getMatchById).mockResolvedValue(matchWith() as never);
+    vi.mocked(updateMatchStatus).mockResolvedValue(matchWith({ status: 'completed', winner_id: P1 }) as never);
+    vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true, failed_steps: [] });
+    expect((await POST(request(validBody), routeParams)).status).toBe(404);
+    expect(stageAdminOutcome).not.toHaveBeenCalled();
+    expect((await POST(request(validBody), routeParams)).status).toBe(200);
+    expect(stageAdminOutcome).toHaveBeenCalledTimes(1);
+    expect(phase.settle).not.toHaveBeenCalled();
+  });
+
+  it('reports incomplete native follow-up without discarding the committed outcome', async () => {
+    phase.finalize.mockResolvedValue({ finalized: true, failed_steps: ['ratings'] });
+    const response = await POST(request(validBody), routeParams);
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ code: 'match_finalize_incomplete', params: { count: 1 } });
+    expect(phase.settle).toHaveBeenCalledTimes(1);
+    expect(discardStagedAdminOutcome).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/admin/matches/[id]/result', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined);
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.mocked(requirePlayer).mockResolvedValue(siteAdmin as never);
     vi.mocked(isResourceAdminFor).mockResolvedValue(false);

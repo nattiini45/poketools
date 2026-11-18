@@ -12,7 +12,7 @@ vi.mock('next/navigation', () => ({
 
 const fetchMock = vi.fn();
 
-function ui() {
+function ui(native = false) {
   return (
     <AdminMatchActions
       matchId="m1"
@@ -23,6 +23,7 @@ function ui() {
       games={[]}
       bestOf={3}
       isSiteAdmin={false}
+      phaseOwner={native ? { season_id: 's1', phase_id: 'ph1' } : undefined}
     />
   );
 }
@@ -47,10 +48,10 @@ describe('settling a scheduled match from the admin page', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('posts the winner and the typed reason to the result route', async () => {
+  it.each([false, true])('posts the winner and the typed reason (native: %s)', async (native) => {
     fetchMock.mockResolvedValue({ json: async () => ({ success: true, data: {} }) });
     const user = userEvent.setup();
-    render(withI18n(ui()));
+    render(withI18n(ui(native)));
 
     await user.click(screen.getByRole('button', { name: 'Gary' }));
     await user.click(screen.getByRole('button', { name: 'Record result' }));

@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { authorizeMatchAdmin } from '@/lib/auth/match-admin';
+import { authorizeCorrectionTarget, correctionAuditTarget, revalidateCorrectionTarget } from '../reset/correction-target';
 import { formatZodErrors, matchResultSchema } from '@/lib/validation';
 import { getMatchById, updateMatchStatus } from '@/lib/supabase/queries/matches';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { settlePhaseMatchAsAdmin } from '@/lib/supabase/queries/phase-match-outcomes';
 import { validateTransition } from '@/lib/tournament/match-state';
 import {
   discardStagedAdminOutcome,
@@ -12,7 +14,8 @@ import {
 } from '@/lib/match/finalize';
 import { StagedOutcomeBlockedError } from '@/lib/match/staged-outcome';
 import { logger } from '@/lib/logger';
-import { revalidateMatchPages } from '@/lib/revalidation';
+import { expireSeasonReads, revalidatePhaseMatchPages } from '@/lib/revalidation';
+import { createNativePhaseServices } from '@/lib/league-phase/services';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
@@ -75,10 +78,10 @@ async function unstageOutcome(
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id } = await params;
-    const access = await authorizeMatchAdmin(id);
+    const access = await authorizeCorrectionTarget(params);
     if (!access.ok) return access.response;
-    const { player, match } = access;
+    const { player, target } = access;
+    const { id, match } = target;
 
     const rateResult = await checkRateLimit('admin-match-result', player.playerId, {
       limit: 20,
@@ -132,45 +135,51 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const previousStatus = match.status;
     const adminOutcome = { kind: outcome, reason, setBy: player.playerId };
-    let staged: StagedAdminOutcome | null;
-    try {
-      staged = (await stageAdminOutcome(id, adminOutcome)) ?? null;
-    } catch (err) {
-      if (!(err instanceof StagedOutcomeBlockedError)) throw err;
-      // A replay-tie disputed the match since it was read: a deliberate client-facing 409, logged so the dispute is traceable.
-      logger.warn('admin-match-result', 'staged outcome blocked: the match changed state since it was read', { matchId: id, status: err.status, error: err });
-      return NextResponse.json<ApiResult<never>>(
-        {
-          success: false,
-          error: `The match changed to ${err.status} while you were editing it. Review it and try again.`,
-          code: 'match_state_changed',
-          params: { status: err.status },
-        },
-        { status: 409 }
-      );
-    }
-    let updated: Match | null;
-    try {
-      updated = await updateMatchStatus(
-        id,
-        'completed',
-        winnerId,
-        // The original reporter stays the submitter; an unplayed match gets the admin.
-        match.submitter_id ?? player.playerId,
-        undefined,
-        previousStatus
-      );
-    } catch (err) {
-      // The write threw, so it may have committed: a completed match may be this request's own, whose row stays.
-      const current = await getMatchById(id).catch(() => null);
-      await unstageOutcome(id, current, current?.status === 'completed' ? null : staged);
-      throw err;
+    let staged: StagedAdminOutcome | null = null;
+    let updated: Match | Pick<Match, 'id' | 'status' | 'winner_id' | 'confirmed_at'> | null;
+    let nativeConfirmedAt: string | null = null;
+    if (target.kind === 'phase') {
+      nativeConfirmedAt = await settlePhaseMatchAsAdmin(target.match, player.playerId, parsed.data);
+      updated = nativeConfirmedAt ? { id, status: 'completed', winner_id: winnerId, confirmed_at: nativeConfirmedAt } : null;
+    } else {
+      try {
+        staged = (await stageAdminOutcome(id, adminOutcome)) ?? null;
+      } catch (err) {
+        if (!(err instanceof StagedOutcomeBlockedError)) throw err;
+        // A replay-tie disputed the match since it was read: a deliberate client-facing 409, logged so the dispute is traceable.
+        logger.warn('admin-match-result', 'staged outcome blocked: the match changed state since it was read', { matchId: id, status: err.status, error: err });
+        return NextResponse.json<ApiResult<never>>(
+          {
+            success: false,
+            error: `The match changed to ${err.status} while you were editing it. Review it and try again.`,
+            code: 'match_state_changed',
+            params: { status: err.status },
+          },
+          { status: 409 }
+        );
+      }
+      try {
+        updated = await updateMatchStatus(
+          id,
+          'completed',
+          winnerId,
+          // The original reporter stays the submitter; an unplayed match gets the admin.
+          match.submitter_id ?? player.playerId,
+          undefined,
+          previousStatus
+        );
+      } catch (err) {
+        // The write threw, so it may have committed: a completed match may be this request's own, whose row stays.
+        const current = await getMatchById(id).catch(() => null);
+        await unstageOutcome(id, current, current?.status === 'completed' ? null : staged);
+        throw err;
+      }
     }
 
     if (!updated) {
       // The compare-and-set missed: the match left `previousStatus` meanwhile.
-      const current = await getMatchById(id);
-      await unstageOutcome(id, current, staged);
+      const current = await (target.kind === 'phase' ? getPhaseMatchById(id) : getMatchById(id));
+      if (target.kind === 'tournament') await unstageOutcome(id, current, staged);
       if (!current) {
         return NextResponse.json<ApiResult<never>>(
           { success: false, error: 'Match not found', code: 'match_not_found' },
@@ -188,13 +197,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await revalidateMatchPages(match.tournament_id, id);
+    await revalidateCorrectionTarget(target);
 
+    const audit = correctionAuditTarget(target);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,
       action: 'match.admin_result',
-      resource_type: 'match',
+      resource_type: audit.resourceType,
       resource_id: id,
       resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
       changes: {
@@ -202,7 +212,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         winner_id: { before: match.winner_id, after: winnerId },
       },
       metadata: {
-        tournament_id: match.tournament_id,
+        ...audit.metadata,
         reason,
         outcome,
         from_status: previousStatus,
@@ -210,12 +220,22 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       },
     });
 
-    const finalize = await finalizeMatchCompletion({
-      match: { ...match, winner_id: winnerId, status: 'completed' },
-      winnerId,
-      previousStatus,
-      adminOutcome,
-    });
+    const completion = { winnerId, previousStatus };
+    const finalize = target.kind === 'phase'
+      ? await createNativePhaseServices({
+          invalidateMatch: (phase, matchId) => revalidatePhaseMatchPages(
+            phase, matchId, phase === target.owner.phase_id ? target.owner.season_id : undefined,
+          ),
+          invalidateSeason: (season, phaseIds) => expireSeasonReads(season, { phaseIds }),
+          invalidateWiki: (phase) => revalidatePhaseMatchPages(phase),
+        }).matches.finalizeMatchCompletion({
+          ...completion,
+          precommittedAdminOutcomeAt: nativeConfirmedAt ?? undefined,
+          match: { ...target.match, winner_id: winnerId, status: 'completed' },
+        })
+      : await finalizeMatchCompletion({
+          ...completion, adminOutcome, match: { ...target.match, winner_id: winnerId, status: 'completed' },
+        });
     if (!finalize.finalized && finalize.reason === 'match_changed') {
       // Another request reset or reopened the match after the status flip above; it owns the cleanup, nothing is left to finalize.
       const status = finalize.current_status ?? 'removed';
@@ -250,7 +270,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json<ApiResult<Match>>({ success: true, data: updated });
+    return NextResponse.json<ApiResult<typeof updated>>({ success: true, data: updated });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to set the match result');
   }

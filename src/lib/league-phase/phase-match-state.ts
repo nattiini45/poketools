@@ -13,6 +13,9 @@ export const phaseMatchMachine = defineMachine({
       ...(transition.event === 'forfeit'
         ? ['supabase/migrations/20261117127000_phase_format_cron.sql#phase_format_forfeit_complete']
         : []),
+      ...(transition.event === 'settle' || transition.event === 'set_result'
+        ? ['supabase/migrations/20261118118000_phase_match_admin_settlement.sql#phase_match_settle_admin']
+        : []),
     ],
   })),
 });

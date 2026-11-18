@@ -104,6 +104,37 @@ describe('owner-neutral finalization', () => {
     expect(storage.updateRatings).not.toHaveBeenCalled();
   });
 
+  it('finalizes the verified native settlement without rewriting its outcome', async () => {
+    const { finalizer, storage } = fixture();
+    expect(await finalizer.finalizeMatchCompletion({
+      match, winnerId: 'p1', previousStatus: 'scheduled', precommittedAdminOutcomeAt: 'completion-one',
+    })).toEqual({ finalized: true, complete: true, failed_steps: [] });
+    expect(storage.recordMatchOutcome).not.toHaveBeenCalled();
+    expect(storage.runFormatHook).toHaveBeenCalledWith(match, 'p1', competition, 'completion-one');
+    expect(storage.markMatchFinalized).toHaveBeenCalledWith('match', undefined, { confirmedAt: 'completion-one' });
+  });
+
+  it('will not adopt a newer native settlement with the same winner', async () => {
+    const { finalizer, storage } = fixture();
+    storage.getMatchById.mockResolvedValue({ ...match, confirmed_at: 'completion-two' });
+    expect(await finalizer.finalizeMatchCompletion({
+      match, winnerId: 'p1', previousStatus: 'scheduled', precommittedAdminOutcomeAt: 'completion-one',
+    })).toEqual({ finalized: false, reason: 'match_changed', current_status: 'completed' });
+    expect(storage.recordMatchOutcome).not.toHaveBeenCalled();
+    expect(storage.loadCompetition).not.toHaveBeenCalled();
+  });
+
+  it('keeps an unverified committed settlement for recovery without running any further effects', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { finalizer, storage } = fixture();
+    storage.getMatchById.mockRejectedValue(new Error('Completion read unavailable'));
+    expect(await finalizer.finalizeMatchCompletion({
+      match, winnerId: 'p1', previousStatus: 'scheduled', precommittedAdminOutcomeAt: 'completion-one',
+    })).toEqual({ finalized: true, complete: false, failed_steps: ['mark_finalized'] });
+    expect(storage.loadCompetition).not.toHaveBeenCalled();
+    expect(storage.recordMatchOutcome).not.toHaveBeenCalled();
+  });
+
   it('heals only verified ratings, skips existing snapshots and never repeats announcements or achievements', async () => {
     const { finalizer, storage, calls } = fixture();
     storage.matchCountsForRatings.mockReturnValue(false);
