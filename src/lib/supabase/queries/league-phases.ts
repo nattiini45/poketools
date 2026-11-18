@@ -121,6 +121,7 @@ export async function getPhasesBySeasonIds(seasonIds: string[]): Promise<Map<str
 
 export interface PhaseStatusGuard {
   from: PhaseStatus;
+  seasonId?: string;
 }
 
 export async function updatePhase(
@@ -167,13 +168,13 @@ export async function updatePhase(
   }
 
   if (guard) {
-    const { data, error } = await supabase
+    let query = supabase
       .from('league_phases')
       .update(updates)
       .eq('id', id)
-      .eq('status', guard.from)
-      .select()
-      .maybeSingle();
+      .eq('status', guard.from);
+    if (guard.seasonId !== undefined) query = query.eq('season_id', guard.seasonId);
+    const { data, error } = await query.select().maybeSingle();
     if (error) throw error;
     if (!data) {
       throw new UserFacingError('This tournament or phase changed its status in the meantime. Reload the page and try again.', {
