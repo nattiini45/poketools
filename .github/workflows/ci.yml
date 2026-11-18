@@ -171,12 +171,14 @@ jobs:
 
       - name: Local-stack suites
         run: |
+          LOCAL_STACK_FORMAT_TEST_PASS=legacy npm run test:db
+          bash scripts/phase-separation/legacy-format-fence.sh supabase_db_poketools
+          LOCAL_STACK_FORMAT_TEST_PASS=frozen_legacy npm run test:db
           docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 <<'SQL'
-          SELECT public.phase_storage_transition('legacy', 'frozen_legacy');
           SELECT public.phase_storage_transition('frozen_legacy', 'frozen_phase');
           SELECT public.phase_storage_transition('frozen_phase', 'phase');
           SQL
-          npm run test:db
+          LOCAL_STACK_FORMAT_TEST_PASS=phase npm run test:db
         env:
           LOCAL_STACK_CI: '1'
 

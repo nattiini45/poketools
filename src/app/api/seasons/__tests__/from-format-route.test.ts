@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 // The new-competition wizard path of POST /api/seasons (`from_format`). The wizard library has its own suites
@@ -34,6 +34,7 @@ vi.mock('@/lib/supabase/queries/seasons', () => ({
 vi.mock('@/lib/supabase/queries/resource-admins', () => ({ addResourceAdmin: vi.fn() }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: vi.fn() }));
 vi.mock('@/lib/format-studio/create-league', () => ({ createLeagueFromFormat: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { AuthError, requireAnyAdmin } from '@/lib/auth/helpers';
@@ -44,6 +45,8 @@ import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { logAuditEvent } from '@/lib/audit/log';
 import { createLeagueFromFormat, type CreatedLeague } from '@/lib/format-studio/create-league';
 import { FormatStudioError } from '@/lib/format-studio/errors';
+import { legacyFormatStorage, nativeFormatStorage } from '@/lib/league-phase/format-storage';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
@@ -116,7 +119,10 @@ beforeEach(() => {
   vi.mocked(checkRateLimit).mockResolvedValue(allowed);
   vi.mocked(assertRulesetUsableForCreate).mockResolvedValue(undefined);
   vi.mocked(createLeagueFromFormat).mockResolvedValue(created());
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+  vi.mocked(readPhaseStorageMode).mockResolvedValue('legacy');
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe('POST /api/seasons with from_format: guard and rate limits', () => {
   it.each([
@@ -202,6 +208,27 @@ describe('POST /api/seasons with from_format: validation', () => {
 });
 
 describe('POST /api/seasons with from_format: success', () => {
+  it('creates the league and stages through native storage and expires their native scopes', async () => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    expect((await POST(request(fromPreset))).status).toBe(201);
+    expect(createLeagueFromFormat).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ actor: player() }), nativeFormatStorage);
+    expect(createSeason).not.toHaveBeenCalled();
+    expect(addResourceAdmin).not.toHaveBeenCalled();
+    expect(revalidateTag).toHaveBeenCalledWith(`phase:${STAGE}`, { expire: 0 });
+    expect(vi.mocked(revalidateTag).mock.calls.some(([tag]) => tag.startsWith('tournament'))).toBe(false);
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('refuses format creation in %s', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+    const response = await POST(request(fromPreset));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(assertRulesetUsableForCreate).not.toHaveBeenCalled();
+    expect(createLeagueFromFormat).not.toHaveBeenCalled();
+    expect(revalidateTag).not.toHaveBeenCalled();
+    expect(logAuditEvent).not.toHaveBeenCalled();
+  });
+
   it('creates a league from an example in one call and answers 201 with the league, format and stages', async () => {
     const response = await POST(request({ ...fromPreset, from_format: { preset_id: 'wichtelcup', ruleset_preset_id: 'gen9ou' }, language: 'en' }));
     const json = await response.json();
@@ -211,7 +238,7 @@ describe('POST /api/seasons with from_format: success', () => {
       actor: player(),
       season: { name: 'Winter Wichtelcup', format_type: 'custom', language: 'en' },
       fromFormat: { preset_id: 'wichtelcup', ruleset_preset_id: 'gen9ou' },
-    });
+    }, legacyFormatStorage);
     expect(json).toEqual({
       success: true,
       data: {
@@ -259,7 +286,7 @@ describe('POST /api/seasons with from_format: success', () => {
       actor: player(),
       season: { name: 'Winter Wichtelcup', format_type: 'custom', ruleset_id: RULESET },
       fromFormat: { definition_id: DEFINITION, version_no: 2 },
-    });
+    }, legacyFormatStorage);
     expect(revalidateTag).not.toHaveBeenCalledWith('format-library', { expire: 0 });
     expect(revalidatePath).not.toHaveBeenCalledWith('/admin/rulesets');
     expect(vi.mocked(logAuditEvent).mock.calls[0][0].metadata).toEqual({

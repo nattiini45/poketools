@@ -13,6 +13,8 @@ import {
   listSeasonsByIds,
 } from '@/lib/supabase/queries/seasons';
 import { createClassicLeague } from '@/lib/league-phase/classic-storage';
+import { legacyFormatStorage, nativeFormatStorage } from '@/lib/league-phase/format-storage';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
 import { getActiveListVersion, bindSeasonToList } from '@/lib/supabase/queries/point-buy-lists';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -92,12 +94,16 @@ async function createFromFormat(player: SessionPlayer, fields: LeagueFields, fro
     const rate = await checkRateLimit('format-create', player.playerId, FORMAT_CREATE_LIMIT);
     if (!rate.allowed) return rateLimitedResponse(rate.retryAfterSeconds);
   }
+  const mode = await requireOpenPhaseRouteMode();
   await assertRulesetUsableForCreate(player, fields.ruleset_id);
 
-  const created = await createLeagueFromFormat({ actor: player, season: fields, fromFormat });
+  const created = await createLeagueFromFormat(
+    { actor: player, season: fields, fromFormat },
+    mode === 'phase' ? nativeFormatStorage : legacyFormatStorage,
+  );
 
   // Committed: the league list, the new league's pages and (for a fork) the format library show it on the next view.
-  expireSeasonReads(created.season_id, created.stage_ids);
+  expireSeasonReads(created.season_id, mode === 'phase' ? { phaseIds: created.stage_ids } : created.stage_ids);
   if (forks) expireFormatLibraryReads();
   if (created.ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
 

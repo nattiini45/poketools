@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
@@ -30,7 +30,7 @@ vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getSeasonFormatSummary: vi.fn(),
 }));
 vi.mock('@/lib/supabase/queries/season-start', () => ({ getSeasonPhaseStartSignals: vi.fn(), isNativeSeasonStarted: vi.fn() }));
-vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { AuthError, requireResourceAdmin } from '@/lib/auth/helpers';
@@ -42,7 +42,8 @@ import type { SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import { PRESETS } from '@/lib/format-kit';
 import { getSeasonFormat, getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { getSeasonPhaseStartSignals, isNativeSeasonStarted } from '@/lib/supabase/queries/season-start';
-import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { legacyFormatStorage, nativeFormatStorage } from '@/lib/league-phase/format-storage';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { UserFacingError } from '@/lib/api/user-facing-error';
@@ -114,10 +115,12 @@ beforeEach(() => {
   vi.mocked(requireResourceAdmin).mockResolvedValue(admin);
   vi.mocked(checkRateLimit).mockResolvedValue({ allowed: true, remaining: 29, retryAfterSeconds: 0 });
   vi.mocked(getSeasonById).mockResolvedValue(season());
-  vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+  vi.mocked(readPhaseStorageMode).mockResolvedValue('legacy');
   vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([]);
   vi.mocked(getSeasonFormatSummary).mockResolvedValue(summary);
 });
+afterEach(() => vi.unstubAllEnvs());
 
 describe.each([
   ['GET', () => GET(get(), params())],
@@ -192,7 +195,7 @@ describe('GET /api/seasons/[id]/format', () => {
     ['phase', false],
     ['frozen_phase', true],
   ] as const)('reports only the native start %s → %s', async (mode, started) => {
-    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
     vi.mocked(isNativeSeasonStarted).mockResolvedValue(started);
     vi.mocked(getSeasonPhaseStartSignals).mockResolvedValue([{ status: started ? 'upcoming' : 'active', rounds_total: 0 }]);
     const response = await GET(get(), params());
@@ -230,6 +233,19 @@ describe('GET /api/seasons/[id]/format', () => {
 });
 
 describe('POST /api/seasons/[id]/format', () => {
+  it('attaches to the native store and expires only the touched phase scopes', async () => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(attachFormatToSeason).mockResolvedValue(outcome());
+    const response = await POST(post({ definition_id: DEFINITION_ID, confirm_clear: true }), params());
+    expect(response.status).toBe(201);
+    expect(attachFormatToSeason).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ seasonId: SEASON_ID, confirmClear: true }), nativeFormatStorage,
+    );
+    const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
+    expect(expired).toEqual(expect.arrayContaining([`season:${SEASON_ID}`, `phase:${STAGE_A}`, `phase:${STAGE_B}`, `phase:${STAGE_OLD}`]));
+    expect(expired.some((tag) => tag.startsWith('tournament'))).toBe(false);
+  });
+
   it('answers 201 for a first attach with the stages and the engine gaps, expires the stage ids and audits', async () => {
     vi.mocked(attachFormatToSeason).mockResolvedValue(outcome());
     const response = await POST(post({ definition_id: DEFINITION_ID, version_no: 2 }), params());
@@ -247,7 +263,7 @@ describe('POST /api/seasons/[id]/format', () => {
       versionNo: 2,
       confirmClear: false,
       confirmedCounts: null,
-    });
+    }, legacyFormatStorage);
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
 
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
@@ -372,6 +388,18 @@ describe('POST /api/seasons/[id]/format', () => {
 });
 
 describe('DELETE /api/seasons/[id]/format', () => {
+  it('detaches the native phases without expiring tournament scopes', async () => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [], cleared: null });
+    const response = await DELETE(del(), params());
+    expect(response.status).toBe(200);
+    expect(detachFormatFromSeason).toHaveBeenCalledExactlyOnceWith(
+      SEASON_ID, { confirmClear: false, confirmedCounts: null }, nativeFormatStorage,
+    );
+    expect(revalidateTag).toHaveBeenCalledWith(`phase:${STAGE_A}`, { expire: 0 });
+    expect(vi.mocked(revalidateTag).mock.calls.some(([tag]) => tag.startsWith('tournament'))).toBe(false);
+  });
+
   it('detaches: 200 with the removed ids, expires them and audits', async () => {
     vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A, STAGE_B], removed_ruleset_ids: [], cleared: null });
     const response = await DELETE(del(), params());
@@ -379,7 +407,7 @@ describe('DELETE /api/seasons/[id]/format', () => {
     expect(response.status).toBe(200);
     expect(body).toEqual({ success: true, data: { removed_stage_ids: [STAGE_A, STAGE_B] } });
     expect(revalidatePath).not.toHaveBeenCalled();
-    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: false, confirmedCounts: null });
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: false, confirmedCounts: null }, legacyFormatStorage);
     expect(checkRateLimit).toHaveBeenCalledWith('format-attach', admin.playerId, { limit: 30, windowSeconds: 3600 });
     const expired = vi.mocked(revalidateTag).mock.calls.map(([tag]) => tag);
     expect(expired).toEqual(expect.arrayContaining([`season:${SEASON_ID}`, `tournament:${STAGE_A}`, `tournament:${STAGE_B}`]));
@@ -403,7 +431,7 @@ describe('DELETE /api/seasons/[id]/format', () => {
     vi.mocked(detachFormatFromSeason).mockResolvedValue({ removed_stage_ids: [STAGE_A], removed_ruleset_ids: [], cleared });
     const response = await DELETE(delWithBody({ confirm_clear: true }), params());
     expect(response.status).toBe(200);
-    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: true, confirmedCounts: null });
+    expect(detachFormatFromSeason).toHaveBeenCalledWith(SEASON_ID, { confirmClear: true, confirmedCounts: null }, legacyFormatStorage);
     expect(logAuditEvent).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'season.format.detach', metadata: expect.objectContaining({ confirm_clear: true, cleared }) }),
     );
@@ -452,4 +480,16 @@ describe('DELETE /api/seasons/[id]/format', () => {
     expect(response.headers.get('Retry-After')).toBe('3');
     expect(detachFormatFromSeason).not.toHaveBeenCalled();
   });
+});
+
+it.each(['frozen_legacy', 'frozen_phase'] as const)('refuses both format writes in %s', async (mode) => {
+  vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+  for (const response of [await POST(post({ definition_id: DEFINITION_ID }), params()), await DELETE(del(), params())]) {
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+  }
+  expect(attachFormatToSeason).not.toHaveBeenCalled();
+  expect(detachFormatFromSeason).not.toHaveBeenCalled();
+  expect(revalidateTag).not.toHaveBeenCalled();
+  expect(logAuditEvent).not.toHaveBeenCalled();
 });

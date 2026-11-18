@@ -13,6 +13,8 @@ import {
 import { attachFormatToSeason, detachFormatFromSeason, type AttachedStage } from '@/lib/format-studio/attach';
 import type { EngineGap, SeasonFormatSummary } from '@/lib/format-studio/library-types';
 import { readLeagueStarted } from '@/lib/league-phase/season-start';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { legacyFormatStorage, nativeFormatStorage } from '@/lib/league-phase/format-storage';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getSeasonFormat, getSeasonFormatSummary } from '@/lib/supabase/queries/season-formats';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -124,6 +126,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const parsed = attachBodySchema.safeParse(await readBoundedJson(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
+    const mode = await requireOpenPhaseRouteMode();
     const outcome = await attachFormatToSeason({
       actor: admin,
       seasonId: id,
@@ -131,8 +134,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       versionNo: parsed.data.version_no,
       confirmClear: parsed.data.confirm_clear === true,
       confirmedCounts: parsed.data.confirmed_counts ?? null,
-    });
-    expireSeasonReads(id, outcome.touched_stage_ids);
+    }, mode === 'phase' ? nativeFormatStorage : legacyFormatStorage);
+    expireSeasonReads(id, mode === 'phase' ? { phaseIds: outcome.touched_stage_ids } : outcome.touched_stage_ids);
     if (outcome.rulesets_changed) revalidatePath('/admin/rulesets');
 
     logAuditEvent({
@@ -185,9 +188,14 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
     const parsed = detachBodySchema.safeParse(await readBoundedJsonOrEmpty(request));
     if (!parsed.success) return validationFailedResponse(parsed.error);
 
+    const mode = await requireOpenPhaseRouteMode();
     const confirmClear = parsed.data.confirm_clear === true;
-    const { removed_stage_ids, removed_ruleset_ids, cleared } = await detachFormatFromSeason(id, { confirmClear, confirmedCounts: parsed.data.confirmed_counts ?? null });
-    expireSeasonReads(id, removed_stage_ids);
+    const { removed_stage_ids, removed_ruleset_ids, cleared } = await detachFormatFromSeason(
+      id,
+      { confirmClear, confirmedCounts: parsed.data.confirmed_counts ?? null },
+      mode === 'phase' ? nativeFormatStorage : legacyFormatStorage,
+    );
+    expireSeasonReads(id, mode === 'phase' ? { phaseIds: removed_stage_ids } : removed_stage_ids);
     if (removed_ruleset_ids.length > 0) revalidatePath('/admin/rulesets');
 
     logAuditEvent({

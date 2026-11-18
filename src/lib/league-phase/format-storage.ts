@@ -28,5 +28,5 @@ export const nativeFormatStorage: FormatStoragePort = {
   attach: (input) => attachSeasonFormat(input, 'native'),
   detach: (seasonId, confirmClear, confirmedCounts) => detachSeasonFormat(seasonId, confirmClear, confirmedCounts, 'native'),
   create: (input) => createCompetitionFromFormat(input, 'native'),
-  invalidate: (seasonId) => expireSeasonReads(seasonId),
+  invalidate: (seasonId, phaseIds) => expireSeasonReads(seasonId, { phaseIds }),
 };

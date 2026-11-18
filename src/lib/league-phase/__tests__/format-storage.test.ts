@@ -59,7 +59,13 @@ describe('explicit format materialisation storage', () => {
 
   it('never invents tournament cache scopes for native phase ids', () => {
     nativeFormatStorage.invalidate(seasonId, ['phase-1']);
-    expect(expireSeasonReads).toHaveBeenCalledExactlyOnceWith(seasonId);
+    expect(expireSeasonReads).toHaveBeenCalledExactlyOnceWith(seasonId, { phaseIds: ['phase-1'] });
+  });
+
+  it('reports a write fenced inside the native attach transaction as maintenance', async () => {
+    db.rpc.mockResolvedValueOnce({ data: null, error: { code: 'P0001', message: 'phase_storage_not_ready' } });
+    await expect(nativeFormatStorage.attach(input)).rejects.toMatchObject({ code: 'phase_storage_unavailable', statusCode: 503 });
+    expect(db.rpc).toHaveBeenCalledTimes(1);
   });
 });
 

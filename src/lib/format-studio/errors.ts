@@ -155,6 +155,10 @@ export function mapFormatDbError(error: unknown): unknown {
 
   if (e.code === 'P0001' && e.message !== undefined) {
     switch (e.message) {
+      case 'phase_storage_not_ready':
+        return new UserFacingError('League phases are temporarily unavailable during maintenance.', {
+          code: 'phase_storage_unavailable', status: 503,
+        });
       case 'FORMAT_NOT_FOUND':
         return new FormatStudioError('format_not_found');
       case 'FORMAT_STALE_REVISION':
