@@ -2,6 +2,7 @@ import { cache } from 'react';
 import { publicReads } from '@/lib/cache/public-reads';
 import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { selectProfileStorage } from '@/lib/profile/storage';
 import { isValidUuid } from '@/lib/utils/uuid';
 
 /**
@@ -11,7 +12,8 @@ import { isValidUuid } from '@/lib/utils/uuid';
  */
 export const readLeague = cache((id: string) => publicReads.season(id));
 export const readTournament = cache((id: string) => publicReads.tournament(id));
-export const readPlayerProfile = cache((id: string) => publicReads.playerProfile(id));
+export const readPlayerProfile = cache(async (id: string) =>
+  (await selectProfileStorage()) === 'phase' ? publicReads.playerProfile(id, 'phase') : publicReads.playerProfile(id));
 
 const readPhase = cache(async (seasonId: string, phaseId: string) => {
   const mode = await requireOpenPhaseRouteMode();

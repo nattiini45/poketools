@@ -4,7 +4,13 @@ import { compareMatchesByScheduledAt } from '@/lib/match/compare-scheduled-at';
 import { getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
-import { listTournamentsByIds, getParticipantsBatch } from '@/lib/supabase/queries/tournaments';
+import { listTournamentsByIds, getParticipantsBatch, getTournamentsByPlayer } from '@/lib/supabase/queries/tournaments';
+import { getMixedProfileBattleStats, getMixedProfileMatches, getProfilePhaseParticipants, getProfilePhases, type ProfileMatchSource, type ProfilePhase, type ProfilePokemonResult } from '@/lib/supabase/queries/profile';
+import { getCompletedPhaseMatchRecordsBatch } from '@/lib/supabase/queries/phase-format-runtime';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
+import { loadNativeKitStandingsData } from '@/lib/league-phase/standings-context';
+import type { ProfileStorage } from './storage';
+import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { loadScoringByesBatch } from '@/lib/tournament/scoring-byes';
 import { kitForPhase } from '@/lib/format-engine/context';
 import { isPlayoffStage } from '@/lib/tournament/league-placings';
@@ -17,9 +23,8 @@ import {
   loadSeasonStandingsContexts,
   NO_SEASON_CONTEXT,
 } from '@/lib/tournament/season-standings';
-import type { MatchWithTournament } from '@/lib/supabase/queries/matches';
-import type { MatchStatus } from '@/types/match';
 import type { PlayerAggregate } from '@/types/game';
+import type { TournamentWithDetails } from '@/types/tournament';
 import type {
   PlayerProfile,
   ProfileParticipation,
@@ -28,8 +33,14 @@ import type {
   ProfileKillRanking,
   ProfileHeadlineStats,
   ProfileTrophy,
-  PlayerBattleStatRow,
 } from '@/types/profile';
+
+type NativeCompetition = ProfilePhase & { phase_id: string };
+type ProfileCompetition = TournamentWithDetails | NativeCompetition;
+
+function competitionKey(owner: { phase_id: string } | { tournament_id: string }): string {
+  return 'phase_id' in owner ? `phase:${owner.phase_id}` : owner.tournament_id;
+}
 
 /**
  * Compose a complete player profile by aggregating data from multiple tables.
@@ -46,14 +57,17 @@ import type {
  * `src/lib/profile/redact.ts` and `src/lib/players/public-player.ts`).
  */
 export async function composePlayerProfile(
-  playerId: string
+  playerId: string,
+  storage: ProfileStorage = 'legacy',
 ): Promise<PlayerProfile | null> {
   const player = await getPlayerById(playerId);
   if (!player) return null;
+  const native = storage === 'phase';
 
   // Parallel fetch: profile baseline + gamification slices
   const [
-    participations,
+    tournamentMemberships,
+    phases,
     allMatches,
     battleStats,
     playerAggregates,
@@ -62,9 +76,10 @@ export async function composePlayerProfile(
     playerSignatures,
     playerAchievements,
   ] = await Promise.all([
-    getPlayerParticipations(playerId),
-    getMatchesByPlayerWithTournament(playerId),
-    getPlayerBattleStats(playerId),
+    native ? getTournamentsByPlayer(playerId, { standaloneOnly: true }) : getPlayerParticipations(playerId),
+    native ? getProfilePhases(playerId) : [],
+    native ? getMixedProfileMatches(playerId) : getMatchesByPlayerWithTournament(playerId),
+    native ? getMixedProfileBattleStats(playerId) : getPlayerBattleStats(playerId),
     getAllTimePlayerAggregates(playerId),
     getPlayerRating(playerId),
     getPlayerStreaks(playerId),
@@ -74,8 +89,8 @@ export async function composePlayerProfile(
 
   // Two independent chains: the participations' standings, and the global
   // kill ranks (which depend on the battle stats alone).
-  const [{ tournaments, standingsMap }, best_kill_pokemon] = await Promise.all([
-    loadParticipationStandings(playerId, participations.tournamentIds),
+  const [{ competitions, standingsMap }, best_kill_pokemon] = await Promise.all([
+    loadParticipationStandings(playerId, tournamentMemberships, phases),
     computeBestKillPokemon(battleStats),
   ]);
 
@@ -86,15 +101,16 @@ export async function composePlayerProfile(
   const current_participations: ProfileParticipation[] = [];
   const past_participations: ProfileParticipation[] = [];
 
-  for (const t of tournaments) {
+  for (const t of competitions) {
+    const key = 'phase_id' in t ? competitionKey(t) : t.id;
     const participation: ProfileParticipation = {
       id: t.id,
       name: t.name,
-      type: 'tournament',
+      ...('phase_id' in t ? { type: 'phase', phase_id: t.phase_id, season_id: t.season_id } as const : { type: 'tournament' } as const),
       status: t.status,
       bracket_type: t.bracket_type,
-      standing: standingsMap.get(t.id) ?? null,
-      best_pokemon: bestPokemonByTournament.get(t.id) ?? null,
+      standing: standingsMap.get(key) ?? null,
+      best_pokemon: bestPokemonByTournament.get(key) ?? null,
     };
 
     if (t.status === 'completed') {
@@ -138,15 +154,12 @@ export async function composePlayerProfile(
 
   // Trophies: top-3 finishes in completed tournaments
   const trophies: ProfileTrophy[] = [];
-  for (const t of tournaments) {
+  for (const t of competitions) {
     if (t.status !== 'completed') continue;
-    const standing = standingsMap.get(t.id);
+    const standing = standingsMap.get('phase_id' in t ? competitionKey(t) : t.id);
     if (standing && standing.rank >= 1 && standing.rank <= 3) {
-      trophies.push({
-        id: t.id,
-        name: t.name,
-        rank: standing.rank as 1 | 2 | 3,
-      });
+      const trophy = { id: t.id, name: t.name, rank: standing.rank as 1 | 2 | 3 };
+      trophies.push('phase_id' in t ? { ...trophy, phase_id: t.phase_id, season_id: t.season_id } : trophy);
     }
   }
 
@@ -188,12 +201,17 @@ type ParticipationStanding = { rank: number; total: number; wins: number; losses
  */
 async function loadParticipationStandings(
   playerId: string,
-  tournamentIds: string[]
+  tournamentMemberships: { tournamentIds: string[] } | TournamentWithDetails[],
+  phases: ProfilePhase[],
 ): Promise<{
-  tournaments: Awaited<ReturnType<typeof listTournamentsByIds>>;
+  competitions: ProfileCompetition[];
   standingsMap: Map<string, ParticipationStanding>;
 }> {
-  const tournaments = await listTournamentsByIds(tournamentIds);
+  const tournaments = Array.isArray(tournamentMemberships)
+    ? tournamentMemberships : await listTournamentsByIds(tournamentMemberships.tournamentIds);
+  const nativePhases: NativeCompetition[] = phases.map((phase) => ({ ...phase, phase_id: phase.id }));
+  const competitions: ProfileCompetition[] = [...tournaments, ...nativePhases];
+  if (nativePhases.length) competitions.sort((a, b) => b.created_at.localeCompare(a.created_at) || a.id.localeCompare(b.id));
 
   const standingsMap = new Map<string, ParticipationStanding>();
   const tournamentsNeedingStandings = tournaments.filter(
@@ -201,7 +219,10 @@ async function loadParticipationStandings(
   );
 
   const standingsTournamentIds = tournamentsNeedingStandings.map((t) => t.id);
-  const [participantsByTournament, matchRecordsByTournament, byesByTournament, seasonContexts] = await Promise.all([
+  const activePhases = nativePhases.filter((phase) => phase.status === 'active' || phase.status === 'completed');
+  const phaseIds = activePhases.map((phase) => phase.id);
+  const [participantsByTournament, matchRecordsByTournament, byesByTournament, seasonContexts,
+    participantsByPhase, matchRecordsByPhase, nativeSeasonContexts] = await Promise.all([
     getParticipantsBatch(standingsTournamentIds),
     getCompletedMatchRecordsBatch(standingsTournamentIds),
     // A Swiss tournament's table scores the byes stored on its rounds: one rounds read for all of them.
@@ -222,23 +243,32 @@ async function loadParticipationStandings(
         return null;
       }
     ),
+    getProfilePhaseParticipants(phaseIds),
+    getCompletedPhaseMatchRecordsBatch(phaseIds),
+    phaseIds.length ? loadSeasonStandingsContexts(activePhases.map((phase) => phase.season_id), loadNativeKitStandingsData)
+      : new Map<string, typeof NO_SEASON_CONTEXT>(),
   ]);
+  const byeRoundsByPhase = await getByeRoundsByPhaseIds(activePhases.filter((phase) =>
+    phase.bracket_type === 'swiss' && formatScoresByes(nativeSeasonContexts.get(phase.season_id)?.formatType)).map((phase) => phase.id));
 
-  for (const t of tournamentsNeedingStandings) {
-    if (t.season_id && seasonContexts === null) continue;
-    if (t.bracket_type === 'swiss' && byesByTournament === null) continue;
+  for (const t of [...tournamentsNeedingStandings, ...activePhases]) {
+    const native = 'phase_id' in t;
+    if (!native && t.season_id && seasonContexts === null) continue;
+    if (!native && t.bracket_type === 'swiss' && byesByTournament === null) continue;
     try {
-      const participants = participantsByTournament.get(t.id) ?? [];
-      const matchRecords = matchRecordsByTournament.get(t.id) ?? [];
+      const participants = (native ? participantsByPhase : participantsByTournament).get(t.id) ?? [];
+      const matchRecords = (native ? matchRecordsByPhase : matchRecordsByTournament).get(t.id) ?? [];
 
       const participantIds = participants.map((p) => p.id);
       const participantNames: Record<string, string> = {};
       for (const p of participants) participantNames[p.id] = p.name;
 
-      const seasonContext = (t.season_id ? seasonContexts?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
+      const seasonContext = (t.season_id ? (native ? nativeSeasonContexts : seasonContexts)?.get(t.season_id) : undefined) ?? NO_SEASON_CONTEXT;
       // This tournament's own table: a stage with no completed match yet still ranks by its own stage rules.
       const context = seasonContext.kit ? { ...seasonContext, kit: kitForPhase(seasonContext.kit, t.id) } : seasonContext;
-      const byes = byesByTournament?.get(t.id) ?? [];
+      const byes = native
+        ? scoringByeRecords(t.bracket_type, byeRoundsByPhase.get(t.id) ?? [])
+        : byesByTournament?.get(t.id) ?? [];
       const standings = computeStandingsFromContext(
         context,
         participantIds,
@@ -249,7 +279,7 @@ async function loadParticipationStandings(
       );
       const playerIdx = standings.findIndex((s) => s.player_id === playerId);
       if (playerIdx !== -1) {
-        standingsMap.set(t.id, {
+        standingsMap.set(native ? competitionKey(t) : t.id, {
           rank: standings[playerIdx].rank ?? playerIdx + 1,
           total: standings.length,
           wins: standings[playerIdx].wins,
@@ -259,15 +289,15 @@ async function loadParticipationStandings(
     } catch (err) {
       // One tournament's table failing must not take the whole profile down;
       // that participation then shows no standing. Logged, never silent.
-      console.error(`[profile/compose] standings failed for tournament ${t.id}:`, err);
+      console.error(`[profile/compose] standings failed for ${native ? 'phase' : 'tournament'} ${t.id}:`, err);
     }
   }
 
-  return { tournaments, standingsMap };
+  return { competitions, standingsMap };
 }
 
 function buildProfileMatches(
-  matches: MatchWithTournament[],
+  matches: ProfileMatchSource[],
   playerId: string
 ): ProfileMatch[] {
   return matches.map((m) => {
@@ -288,12 +318,13 @@ function buildProfileMatches(
 
     return {
       id: m.id,
-      tournament_id: m.tournament_id,
-      tournament_name: m.tournament_name,
+      ...('phase_id' in m
+        ? { phase_id: m.phase_id, season_id: m.season_id, phase_name: m.phase_name }
+        : { tournament_id: m.tournament_id, tournament_name: m.tournament_name }),
       opponent_id: opponentId,
       opponent_name: opponentName,
       opponent_avatar_url: opponentAvatar,
-      status: m.status as MatchStatus,
+      status: m.status,
       winner_id: m.winner_id,
       date_played: m.date_played,
       game_score: `${myWins}-${theirWins}`,
@@ -302,13 +333,14 @@ function buildProfileMatches(
 }
 
 function computeBestPokemonByTournament(
-  battleStats: PlayerBattleStatRow[]
+  battleStats: ProfilePokemonResult[]
 ): Map<string, { pokemon_name: string; kos_dealt: number }> {
   // Group by tournament_id + pokemon_name, sum kos_dealt
   const map = new Map<string, Map<string, number>>();
   for (const stat of battleStats) {
-    if (!map.has(stat.tournament_id)) map.set(stat.tournament_id, new Map());
-    const pokemonMap = map.get(stat.tournament_id)!;
+    const key = competitionKey(stat);
+    if (!map.has(key)) map.set(key, new Map());
+    const pokemonMap = map.get(key)!;
     pokemonMap.set(
       stat.pokemon_name,
       (pokemonMap.get(stat.pokemon_name) ?? 0) + stat.kos_dealt
@@ -351,7 +383,7 @@ function computeMostUsedPokemonFromAggregates(
 }
 
 async function computeBestKillPokemon(
-  battleStats: PlayerBattleStatRow[]
+  battleStats: ProfilePokemonResult[]
 ): Promise<ProfileKillRanking[]> {
   // Player's Pokémon by KOs dealt
   const pokemonKos = new Map<string, number>();
@@ -382,7 +414,7 @@ async function computeBestKillPokemon(
 }
 
 function computeHeadlineStats(
-  allMatches: MatchWithTournament[],
+  allMatches: ProfileMatchSource[],
   playerAggregates: PlayerAggregate[],
   playerId: string,
   standingsMap: Map<string, { rank: number; total: number; wins: number; losses: number }>
@@ -398,7 +430,7 @@ function computeHeadlineStats(
   const totalKos = playerAggregates.reduce((sum, agg) => sum + agg.total_kos_dealt, 0);
 
   // Count unique tournaments entered
-  const tournamentIds = new Set(allMatches.map((m) => m.tournament_id));
+  const tournamentIds = new Set(allMatches.map(competitionKey));
 
   // Count tournaments won (rank === 1)
   let tournamentsWon = 0;

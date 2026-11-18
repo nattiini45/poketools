@@ -7,6 +7,7 @@ import PlayerAvatar from '@/components/shared/PlayerAvatar';
 import SkewChip from '@/components/ui/SkewChip';
 import type { PublicPlayer } from '@/types/player';
 import type { ProfileMatch } from '@/types/profile';
+import { phaseHref, phaseMatchHref } from '@/lib/league-phase/paths';
 import { cn } from '@/lib/utils/cn';
 import { FOCUS } from './focus';
 import ResultToken from './ResultToken';
@@ -26,11 +27,13 @@ function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: 
   const isWin = match.winner_id === playerId;
   const isLoss = match.winner_id !== null && match.winner_id !== playerId;
   const isScheduled = match.status === 'scheduled' || match.status === 'in_progress';
+  const competitionHref = 'phase_id' in match ? phaseHref(match) : `/tournaments/${match.tournament_id}`;
+  const competitionName = 'phase_id' in match ? match.phase_name : match.tournament_name;
 
   return (
     <li className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-poke-md border border-hairline bg-elevated px-3 py-2 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover">
       <Link
-        href={`/tournaments/${match.tournament_id}/matches/${match.id}`}
+        href={'phase_id' in match ? phaseMatchHref(match, match.id) : `${competitionHref}/matches/${match.id}`}
         className={cn('absolute inset-0 z-0 rounded-poke-md', FOCUS)}
         aria-label={t('matchList.viewMatch', { opponent: match.opponent_name })}
       />
@@ -53,10 +56,10 @@ function MatchRow({ match, playerId, player }: { match: ProfileMatch; playerId: 
 
       <div className="ml-auto flex min-w-0 items-center gap-3">
         <Link
-          href={`/tournaments/${match.tournament_id}`}
+          href={competitionHref}
           className={cn('relative z-10 min-h-6 truncate rounded-poke-sm text-caption/6 text-fg-muted hover:text-accent-ink', FOCUS)}
         >
-          {match.tournament_name}
+          {competitionName}
         </Link>
         {match.date_played && (
           <span className="shrink-0 font-mono text-micro text-fg-muted tabular-nums">{formatter.instant(match.date_played, 'date')}</span>

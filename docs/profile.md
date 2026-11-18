@@ -31,6 +31,8 @@ src/lib/profile/
 
 Mapped source awards and participations do not add credit again when the matching live counterpart exists. Shared honors stay shared after hidden/unlinked recipients are filtered. Existing live phase-title semantics are unchanged; absent historical ranking inputs never become invented ordinal ranks. Ratings, streaks and recent form remain live-only. Coverage distinguishes excluded, inactive and failed historical reads from successful data.
 
+The page, its metadata, and both profile APIs select the active storage generation before composing. In native mode, including a native freeze, matches, phase participation standings, trophies and best-Pokémon results read phase-owned rows alongside standalone tournament rows. A phase match carries `season_id`, `phase_id` and `phase_name` instead of the tournament fields; a phase participation has `type: 'phase'`, and phase trophies carry their phase address. Existing tournament rows keep their shape. Tagged public profile entries for the two generations are separate and still contain only the public player card.
+
 ## Dependencies
 - **External Libraries**: None
 - **Internal Modules**:

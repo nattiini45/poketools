@@ -6,11 +6,12 @@ const reads = vi.hoisted(() => ({
   playerProfile: vi.fn(),
   phase: vi.fn(),
   mode: vi.fn(),
+  profileMode: vi.fn(),
 }));
 
 vi.mock('@/lib/cache/public-reads', () => ({ publicReads: reads }));
 vi.mock('@/lib/cache/phase-public-reads', () => ({ phasePublicReads: { detail: reads.phase } }));
-vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: reads.mode }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: reads.mode, getPhaseRouteMode: reads.profileMode }));
 
 import { leagueMetadata, phaseMetadata, playerMetadata, tournamentMetadata } from '../page-metadata';
 import { readLeague, readLeaguePhase, readPlayerProfile, readTournament } from '../page-reads';
@@ -21,6 +22,7 @@ const PHASE_ID = '22222222-2222-4222-8222-2222222222ab';
 
 beforeEach(() => {
   vi.resetAllMocks();
+  reads.profileMode.mockResolvedValue('legacy');
 });
 
 describe('league metadata', () => {
@@ -104,6 +106,11 @@ describe('player metadata', () => {
 });
 
 describe('page reads', () => {
+  it.each(['phase', 'frozen_phase'])('uses a separate profile cache in %s mode', async (mode) => {
+    reads.profileMode.mockResolvedValue(mode);
+    await readPlayerProfile(ID);
+    expect(reads.playerProfile).toHaveBeenCalledExactlyOnceWith(ID, 'phase');
+  });
   it('hand the page and its metadata the same cached read', async () => {
     reads.season.mockResolvedValue({ id: ID, name: 'Spring League' });
     reads.tournament.mockResolvedValue({ id: ID, name: 'Open Cup' });

@@ -196,6 +196,7 @@ import { getSwissByeRoundsBySeason } from '@/lib/supabase/queries/rounds';
 import { getItemUsageForPokemon } from '@/lib/supabase/queries/teams';
 import { PRIVATE_MATCH_FIELDS, PUBLIC_MATCH_FIELDS } from '@/lib/match/public-match';
 import { expectNoPrivateMatchData } from '@/lib/match/__tests__/private-match-fields';
+import { composePlayerProfile } from '@/lib/profile/compose';
 
 type ReaderName = keyof typeof publicReads;
 
@@ -631,6 +632,17 @@ describe('public read cache — no session data and no private player columns', 
     // A warm hit serves the same narrowed player.
     const warm = await publicReads.playerProfile(P);
     expect(warm?.player).toEqual(stored.player);
+  });
+
+  it('keeps legacy and native profile cache entries separate and expires both on a phase write', async () => {
+    await publicReads.playerProfile(P);
+    const native = await publicReads.playerProfile(P, 'phase');
+    await publicReads.playerProfile(P, 'phase');
+    expect(vi.mocked(composePlayerProfile).mock.calls).toEqual([[P], [P, 'phase']]);
+    expect(fakeNextCache.entries.size).toBe(2);
+    expect(Object.keys(native?.player ?? {}).sort()).toEqual([...PUBLIC_PROFILE_PLAYER_FIELDS].sort());
+    expireSeasonReads(S, { phaseIds: [T] });
+    expect(fakeNextCache.entries.size).toBe(0);
   });
 
   it('tournament matches are narrowed to PublicMatch before they are cached', async () => {

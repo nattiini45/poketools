@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { composePlayerProfile } from '@/lib/profile/compose';
+import { selectProfileStorage } from '@/lib/profile/storage';
 import { toPublicProfileView } from '@/lib/profile/redact';
 import { combineHistoricalProfile, readHistoricalProfile } from '@/lib/profile/historical-statistics';
 import type { ApiResult } from '@/types/api';
@@ -18,7 +19,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(id, 'INVALID_PLAYER_ID');
     if (invalidId) return invalidId;
-    const profile = await composePlayerProfile(id);
+    const storage = await selectProfileStorage();
+    const profile = storage === 'phase' ? await composePlayerProfile(id, storage) : await composePlayerProfile(id);
 
     if (!profile) {
       return NextResponse.json<ApiResult<never>>(

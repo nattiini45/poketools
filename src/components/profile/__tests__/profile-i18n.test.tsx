@@ -11,6 +11,7 @@ vi.mock('next/link', () => ({
 import ProfileHeader from '../ProfileHeader';
 import ProfileMatchList from '../ProfileMatchList';
 import ProfileParticipations from '../ProfileParticipations';
+import ProfileTrophies from '../ProfileTrophies';
 import ProfilePokemonSpotlight from '../ProfilePokemonSpotlight';
 import { ordinalSuffix } from '../ordinal';
 import type { PublicPlayer } from '@/types/player';
@@ -92,6 +93,21 @@ describe('profile components in both languages', () => {
     expect(de).toContain('>S<');
     expect(de).toContain('9. Okt. 2026');
     expect(renderWithI18n(<ProfileMatchList title="x" matches={[]} playerId="p1" />)).toContain('No matches');
+  });
+
+  it('links a native match, participation and trophy to the owning phase without changing accessible names', () => {
+    const { tournament_id: _id, tournament_name: _name, ...facts } = MATCH as Extract<ProfileMatch, { tournament_id: string }>;
+    const address = { season_id: 'league-1', phase_id: 'phase-1' };
+    const href = '/leagues/league-1/phases/phase-1';
+    const de = renderWithI18n(<>
+      <ProfileMatchList title="fixture" matches={[{ ...facts, ...address, phase_name: 'Fixture Phase' }]} playerId="p1" />
+      <ProfileParticipations current={[{ ...PARTICIPATION, ...address, id: address.phase_id, type: 'phase', name: 'Fixture Phase' }]} past={[]} />
+      <ProfileTrophies trophies={[{ ...address, id: address.phase_id, name: 'Fixture Phase', rank: 1 }]} />
+    </>, { locale: 'de' });
+    expect(de).toContain(`href="${href}/matches/m1"`);
+    expect(de).toContain('aria-label="Spiel gegen Bob ansehen"');
+    expect(de.match(new RegExp(`href="${href}"`, 'g'))).toHaveLength(3);
+    expect(de).not.toContain('/tournaments/phase-1');
   });
 
   it('ProfileParticipations renders ordinals, enum labels and records per locale', () => {

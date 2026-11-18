@@ -135,6 +135,7 @@ export async function loadSeasonStandingsContext(
  */
 export async function loadSeasonStandingsContexts(
   seasonIds: readonly (string | null | undefined)[],
+  loadKit = loadKitStandingsData,
 ): Promise<Map<string, SeasonStandingsContext>> {
   const ids = [...new Set(seasonIds.filter((id): id is string => Boolean(id)))];
   const contexts = new Map<string, SeasonStandingsContext>();
@@ -149,7 +150,7 @@ export async function loadSeasonStandingsContexts(
   const [epbPoints, orders, kits] = await Promise.all([
     Promise.all(epbIds.map((id) => getSeasonEvolutionPoints(id))),
     epbIds.length > 0 ? getTiebreakerOrdersBySeason(epbIds) : new Map<string, TiebreakerStep[]>(),
-    Promise.all(customIds.map((id) => loadKitStandingsData(id))),
+    Promise.all(customIds.map((id) => loadKit(id))),
   ]);
   const pointsById = new Map(epbIds.map((id, index) => [id, epbPoints[index]]));
   const kitById = new Map(customIds.map((id, index) => [id, kits[index]]));
