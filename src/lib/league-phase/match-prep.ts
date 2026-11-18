@@ -24,7 +24,7 @@ import type { MatchPrepInput } from '@/lib/validation/schemas';
 import type { SessionPlayer } from '@/types/auth';
 import type { CompetitionOwner } from '@/types/competition-owner';
 import type { Json } from '@/types/database';
-import type { PokemonSet } from '@/types/team';
+import type { PokemonSet, TeamValidationResult } from '@/types/team';
 import commonErrors from '@/i18n/messages/errors/common/en';
 import matchErrors from '@/i18n/messages/errors/matches/en';
 import seasonErrors from '@/i18n/messages/errors/seasons/en';
@@ -62,25 +62,28 @@ function staleFormat() {
   return new UserFacingError(seasonErrors.format_context_stale, { code: 'format_context_stale', status: 409 });
 }
 
-async function checkNativeTeam(
+async function loadPinnedRuleset(rulesetId: string) {
+  const ruleset = await getRulesetById(rulesetId);
+  if (!ruleset || ruleset.id !== rulesetId) {
+    throw new UserFacingError(tournamentErrors.ruleset_not_found, { code: 'ruleset_not_found', status: 404 });
+  }
+  return ruleset;
+}
+
+async function loadTeamPolicy(
   { phase, round }: Awaited<ReturnType<typeof loadScope>>,
-  playerId: string,
-  pokemon: PokemonSet[],
-  showAdvisory: boolean,
-): Promise<KitTeamAdvisory> {
+  checkCompliance?: { playerId: string; pokemon: PokemonSet[] },
+) {
   const season = await getSeasonById(phase.season_id);
   if (!season || season.id !== phase.season_id) {
     throw new UserFacingError(seasonErrors.season_not_found, { code: 'season_not_found', status: 404 });
   }
-  if (isEvolutionPointBuy(season.format_type)) {
-    await assertEpbTeamCompliant(season.id, playerId, pokemon);
-    await assertNoSuspendedLinesInTeam(season.id, playerId, round.round_number, pokemon);
+  if (checkCompliance && isEvolutionPointBuy(season.format_type)) {
+    await assertEpbTeamCompliant(season.id, checkCompliance.playerId, checkCompliance.pokemon);
+    await assertNoSuspendedLinesInTeam(season.id, checkCompliance.playerId, round.round_number, checkCompliance.pokemon);
   }
 
-  const ruleset = await getRulesetById(phase.ruleset_id);
-  if (!ruleset || ruleset.id !== phase.ruleset_id) {
-    throw new UserFacingError(tournamentErrors.ruleset_not_found, { code: 'ruleset_not_found', status: 404 });
-  }
+  const ruleset = await loadPinnedRuleset(phase.ruleset_id);
 
   const format = season.format_type === 'custom' ? await getSeasonFormat(season.id) : null;
   if (season.format_type === 'custom' && !format) {
@@ -100,34 +103,57 @@ async function checkNativeTeam(
     if (stage.key !== phase.format_stage_key) throw staleFormat();
   }
 
-  if (!showAdvisory || !format || !stage
-    || (!stage.constraints?.length && !format.spec.domains?.length && !format.spec.resources?.length)) {
-    return {};
-  }
+  const kit = format && stage && (stage.constraints?.length || format.spec.domains?.length || format.spec.resources?.length)
+    ? { format, stage, round: round.round_number } : null;
+  return { ruleset, season, kit };
+}
 
+async function evaluateTeamPolicy(
+  { ruleset, season, kit }: Awaited<ReturnType<typeof loadTeamPolicy>>,
+  playerId: string,
+  pokemon: PokemonSet[],
+): Promise<TeamValidationResult> {
+  const input = { pokemon, ruleset, playerId, seasonId: season.id, season };
+  if (!kit) return checkTeam(input);
+  const { format, stage, round } = kit;
+  const [base, runtime] = await Promise.all([checkTeam(input), getFormatRuntime(season.id)]);
+  const { state, tunableIssues } = buildRuntimeState(format.spec, runtime, {
+    tunables: format.tunables as Json,
+    amendments: format.amendments as Json,
+  });
+  const members = resolveTeamMembers(pokemon, ruleset.gen, ruleset.rules.universe === 'national');
+  const issues = evaluateConstraints({
+    constraints: stage.constraints ?? [], def: format.spec, state, seed: format.seed,
+    playerId, round, members,
+  });
+  const failedExpressions = issues.filter(issue => issue.code === 'kit_constraint_expr');
+  if (tunableIssues.length || failedExpressions.length) {
+    throw Object.assign(staleFormat(), { cause: { tunableIssues, failedExpressions } });
+  }
+  return mergeConstraintIssues(base, issues, members);
+}
+
+export async function validateNativeMatchPrep(owner: PhaseOwner, matchId: string, player: SessionPlayer, pokemon: PokemonSet[]) {
+  const scope = await loadScope(owner, matchId, player);
+  if (!scope.playerIds.includes(player.playerId)) {
+    return checkTeam({ pokemon, ruleset: await loadPinnedRuleset(scope.phase.ruleset_id) });
+  }
+  return evaluateTeamPolicy(await loadTeamPolicy(scope), player.playerId, pokemon);
+}
+
+async function checkNativeTeam(
+  scope: Awaited<ReturnType<typeof loadScope>>,
+  playerId: string,
+  pokemon: PokemonSet[],
+  showAdvisory: boolean,
+): Promise<KitTeamAdvisory> {
+  const policy = await loadTeamPolicy(scope, { playerId, pokemon });
+  if (!showAdvisory || !policy.kit) return {};
   try {
-    const [base, runtime] = await Promise.all([
-      checkTeam({ pokemon, ruleset, playerId, seasonId: season.id, season }),
-      getFormatRuntime(season.id),
-    ]);
-    const { state, tunableIssues } = buildRuntimeState(format.spec, runtime, {
-      tunables: format.tunables as Json,
-      amendments: format.amendments as Json,
-    });
-    const members = resolveTeamMembers(pokemon, ruleset.gen, ruleset.rules.universe === 'national');
-    const issues = evaluateConstraints({
-      constraints: stage.constraints ?? [], def: format.spec, state, seed: format.seed,
-      playerId, round: round.round_number, members,
-    });
-    const failedExpressions = issues.filter(issue => issue.code === 'kit_constraint_expr');
-    if (tunableIssues.length || failedExpressions.length) {
-      logger.error('phase/match-prep', 'Cannot evaluate the materialized Kit policy', { phaseId: phase.id, tunableIssues, failedExpressions });
-      return { team_check: { status: 'unavailable' } };
-    }
-    const verdict = mergeConstraintIssues(base, issues, members);
+    const verdict = await evaluateTeamPolicy(policy, playerId, pokemon);
     return verdict.valid ? {} : { team_check: { status: 'unmet', verdict } };
   } catch (error) {
-    logger.error('phase/match-prep', 'Team advisory could not be computed', { phaseId: phase.id, playerId, error });
+    logger.error('phase/match-prep', 'Team advisory could not be computed', { phaseId: scope.phase.id, playerId, error });
     return { team_check: { status: 'unavailable' } };
   }
 }

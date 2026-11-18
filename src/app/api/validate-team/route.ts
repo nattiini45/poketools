@@ -1,6 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { validateNativeMatchPrep } from '@/lib/league-phase/match-prep';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import matchErrors from '@/i18n/messages/errors/matches/en';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { validateTeamSchema, formatZodErrors } from '@/lib/validation';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -48,6 +52,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = zodResult.data;
+
+    if (body.phase_id) {
+      if (!body.match_id || body.tournament_id) {
+        const issues = 'phase_id: needs match_id without tournament_id';
+        return NextResponse.json<ApiResult<never>>(
+          { success: false, error: issues, code: 'validation_failed', params: { issues } },
+          { status: 400 }
+        );
+      }
+      const matchId = body.match_id.toLowerCase();
+      const owner = await resolveIdOnlyMatchRoute(matchId);
+      if (owner?.kind !== 'phase' || owner.phase_id !== body.phase_id.toLowerCase()) {
+        throw new UserFacingError(matchErrors.match_not_found, { status: 404, code: 'match_not_found' });
+      }
+      const result = await validateNativeMatchPrep(owner, matchId, player, body.pokemon);
+      return NextResponse.json<ApiResult<TeamValidationResult>>({ success: true, data: result });
+    }
 
     if (body.match_id !== undefined && !body.tournament_id) {
       const issues = 'match_id: needs tournament_id';
