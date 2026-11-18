@@ -10,6 +10,9 @@ import {
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent, diffField } from '@/lib/audit/log';
 import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseWithDetails } from '@/lib/supabase/queries/league-phases';
+import { listRoundStatusesByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
 import { newEvenBestOfIssues } from '@/lib/tournament/best-of';
 import { buildLeaguePhase,assertPhaseEditable, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import {
@@ -50,18 +53,19 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
     const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const tournament = await getTournamentWithDetails(phaseId);
-    if (!tournament || tournament.season_id !== id) {
+    const mode = await requireOpenPhaseRouteMode();
+    const phase = mode === 'phase' ? await getPhaseWithDetails(phaseId) : await getTournamentWithDetails(phaseId);
+    if (!phase || phase.season_id !== id.toLowerCase()) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Phase not found', code: 'PHASE_NOT_FOUND' },
         { status: 404 }
       );
     }
 
-    const rounds = await getRoundsByTournament(phaseId);
+    const rounds = mode === 'phase' ? await listRoundStatusesByPhaseIds([phase.id]) : await getRoundsByTournament(phaseId);
     return NextResponse.json<ApiResult<LeaguePhase>>({
       success: true,
-      data: buildLeaguePhase(tournament, rounds),
+      data: buildLeaguePhase(phase, rounds),
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch phase');

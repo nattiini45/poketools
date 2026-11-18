@@ -104,14 +104,20 @@ export const socialEnvSchema = z.object({
  * stays valid for each of them. The modules keep reading their own group per
  * call (`rateLimitStore`); this only moves the first failure to boot.
  */
-export const bootEnvSchemas = [rateLimitEnvSchema] as const;
+export const phaseStorageEnvSchema = z.object({
+  READ_PHASE_STORAGE_STATE: optionalTrimmed(
+    z.enum(['true', 'false'], { message: "must be 'true' or 'false' (or unset)" })
+  ),
+});
+
+export const bootEnvSchemas = [rateLimitEnvSchema, phaseStorageEnvSchema] as const;
 
 /** Validate every `bootEnvSchemas` group; throws one `MissingEnvError` listing every failing key. */
 export function assertBootEnv(source: EnvSource = process.env): void {
   const problems: Array<{ key: string; reason: string }> = [];
   for (const schema of bootEnvSchemas) {
     try {
-      readEnv(schema, source);
+      readEnv<z.ZodRawShape>(schema, source);
     } catch (err) {
       if (!(err instanceof MissingEnvError)) throw err;
       problems.push(...err.problems);

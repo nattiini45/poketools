@@ -2,6 +2,10 @@ import type { MetadataRoute } from 'next';
 import { publicReads } from '@/lib/cache/public-reads';
 import { siteUrl } from '@/lib/site-url';
 import { getWikiIndexRows, getWikiTeraTypes } from '@/lib/wiki/index-rows.server';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
+import { getStagesBySeasonIds } from '@/lib/supabase/queries/tournaments';
+import { phaseHref } from '@/lib/league-phase/paths';
 
 // Read at request time: `next build` runs with a placeholder database URL, so a prerendered sitemap would be built
 // from nothing (or fail). The league and tournament lists come from the 60 s tagged read cache.
@@ -31,7 +35,13 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const detail = (prefix: string, rows: readonly { name: string }[]) =>
     rows.map((row) => entry(`${prefix}/${encodeURIComponent(row.name)}`));
 
-  const [leagues, tournaments] = await Promise.all([publicReads.seasonList(), publicReads.tournamentList()]);
+  const [leagues, tournaments, mode] = await Promise.all([
+    publicReads.seasonList(), publicReads.tournamentList(), getPhaseRouteMode(),
+  ]);
+  const visibleLeagues = leagues.filter((league) => !league.is_test_season && !league.archived);
+  const ids = visibleLeagues.map(league => league.id);
+  const phases = mode === 'phase' ? Object.values(await phasePublicReads.bySeasonIds(ids)).flat()
+    : mode === 'legacy' ? [...(await getStagesBySeasonIds(ids)).values()].flat() : [];
 
   return [
     ...STATIC_PATHS.map(entry),
@@ -40,7 +50,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     ...detail('/wiki/abilities', getWikiIndexRows('abilities')),
     ...detail('/wiki/items', getWikiIndexRows('items')),
     ...getWikiTeraTypes().map((type) => entry(`/wiki/tera/${encodeURIComponent(type)}`)),
-    ...leagues.filter((league) => !league.is_test_season && !league.archived).map((league) => entry(`/leagues/${league.id}`)),
-    ...tournaments.filter((tournament) => !tournament.archived).map((tournament) => entry(`/tournaments/${tournament.id}`)),
+    ...visibleLeagues.map((league) => entry(`/leagues/${league.id}`)),
+    ...phases.flatMap(phase => phase.archived || phase.season_id === null
+      ? [] : [entry(phaseHref({ season_id: phase.season_id, phase_id: phase.id }))]),
+    ...tournaments.filter((tournament) => !tournament.archived && !tournament.season_id).map((tournament) => entry(`/tournaments/${tournament.id}`)),
   ];
 }

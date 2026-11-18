@@ -1,7 +1,8 @@
 import type { Round } from '@/types/round';
 import type { MatchWithPlayers } from '@/types/match';
 
-type BracketRoundLike = Pick<Round, 'bracket_side'>;
+export type BracketRound = Pick<Round, 'id' | 'round_number' | 'name' | 'bracket_side'>;
+type BracketRoundLike = Pick<BracketRound, 'bracket_side'>;
 type BracketMatchLike = Pick<MatchWithPlayers, 'bracket_pos'>;
 
 /**
@@ -10,8 +11,8 @@ type BracketMatchLike = Pick<MatchWithPlayers, 'bracket_pos'>;
  * new tournaments use the bracket-engine UI and slot rendering.
  */
 export function isLegacyElimBracketData(
-  rounds: BracketRoundLike[],
-  matches: BracketMatchLike[] = [],
+  rounds: readonly BracketRoundLike[],
+  matches: readonly BracketMatchLike[] = [],
 ): boolean {
   if (rounds.length === 0) {
     return false;

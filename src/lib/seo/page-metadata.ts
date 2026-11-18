@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
-import { readLeague, readPlayerProfile, readTournament } from '@/lib/seo/page-reads';
+import { readLeague, readLeaguePhase, readPlayerProfile, readTournament } from '@/lib/seo/page-reads';
 import { NOINDEX } from '@/lib/seo/robots';
+import { phaseHref, phaseStatsHref } from '@/lib/league-phase/paths';
 
 /**
  * Metadata of the league, tournament and player pages. A missing entity returns no title (the page calls
@@ -17,6 +18,17 @@ export async function leagueMetadata(id: string): Promise<Metadata> {
 export async function tournamentMetadata(id: string): Promise<Metadata> {
   const tournament = await readTournament(id);
   return tournament ? { title: tournament.name } : {};
+}
+
+export async function phaseMetadata(seasonId: string, phaseId: string, view?: 'stats'): Promise<Metadata> {
+  const entry = await readLeaguePhase(seasonId, phaseId);
+  if (!entry) return {};
+  const phase = entry.kind === 'phase' ? entry.phase : entry.tournament;
+  const address = { season_id: seasonId.toLowerCase(), phase_id: phase.id };
+  return {
+    title: phase.name,
+    alternates: { canonical: view === 'stats' ? phaseStatsHref(address) : phaseHref(address) },
+  };
 }
 
 export async function playerMetadata(id: string): Promise<Metadata> {

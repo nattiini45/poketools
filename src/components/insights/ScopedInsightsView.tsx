@@ -1,5 +1,7 @@
 'use client';
 
+import type { LeaguePhaseAddress } from '@/lib/league-phase/paths';
+
 import { useState } from 'react';
 import PokemonUsageTable, {
   DEFAULT_POKEMON_USAGE_LABELS,
@@ -53,9 +55,10 @@ interface ScopedInsightsViewProps {
   killRanking: KillRankingRow[];
   /** Required for head-to-head; if absent the H2H tab is hidden. */
   tournamentId?: string | null;
+  phase?: LeaguePhaseAddress;
   participants?: { id: string; name: string }[];
   /** Used by the lazy-loaded Move Usage table for its `/api/stats` fetch. */
-  aggregateScopeType: 'tournament' | 'league' | 'all_time';
+  aggregateScopeType: 'tournament' | 'phase' | 'league' | 'all_time';
   aggregateScopeId: string | null;
   labels?: ScopedInsightsLabels;
 }
@@ -71,6 +74,7 @@ export default function ScopedInsightsView({
   isDoubles,
   killRanking,
   tournamentId,
+  phase,
   participants = [],
   aggregateScopeType,
   aggregateScopeId,
@@ -84,7 +88,8 @@ export default function ScopedInsightsView({
     h2h: t('tabs.h2h'),
   };
   const showKills = killRanking.length > 0;
-  const showH2h = !!tournamentId && participants.length > 0;
+  const headToHeadScope = phase ? { phase } : tournamentId ? { tournamentId } : null;
+  const showH2h = headToHeadScope !== null && participants.length > 0;
 
   const initialTab: SubTab = usageRows.length > 0 ? 'usage' : showKills ? 'kills' : 'moves';
 
@@ -125,10 +130,10 @@ export default function ScopedInsightsView({
       {activeTab === 'kills' && showKills && <KillRankingTable data={killRanking} labels={labels?.kills} />}
 
       {activeTab === 'moves' && (
-        <MoveUsageTable scopeType={aggregateScopeType} scopeId={aggregateScopeId} labels={labels?.moves} />
+        <MoveUsageTable scopeType={aggregateScopeType} scopeId={aggregateScopeId} seasonId={phase?.season_id} labels={labels?.moves} />
       )}
 
-      {activeTab === 'h2h' && showH2h && tournamentId && (
+      {activeTab === 'h2h' && showH2h && headToHeadScope && (
         <div className="space-y-4">
           <div className="flex gap-3 items-end flex-wrap">
             <div>
@@ -165,7 +170,7 @@ export default function ScopedInsightsView({
           </div>
           {h2hPlayer1 && h2hPlayer2 ? (
             <HeadToHeadMatrix
-              tournamentId={tournamentId}
+              {...headToHeadScope}
               player1Id={h2hPlayer1}
               player2Id={h2hPlayer2}
               player1Name={participants.find((p) => p.id === h2hPlayer1)?.name ?? ''}

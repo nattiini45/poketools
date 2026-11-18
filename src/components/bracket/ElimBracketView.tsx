@@ -1,6 +1,7 @@
 import SingleElimBracket from '@/components/bracket/SingleElimBracket';
 import DoubleElimBracket from '@/components/bracket/DoubleElimBracket';
-import { isLegacyElimBracketData } from '@/components/bracket/legacy';
+import type { BracketMatch, BracketMatchLink } from '@/components/bracket/BracketMatchCard';
+import { isLegacyElimBracketData, type BracketRound } from '@/components/bracket/legacy';
 import { unneededResetSlotKeys } from '@/components/bracket/bracket-reset';
 import { lossesEnteringMatches } from '@/components/bracket/entry-losses';
 import type { BracketCopy } from '@/components/bracket/labels';
@@ -13,14 +14,11 @@ import { getBracketSlotLabels } from '@/lib/tournament/bracket-propagation';
 import { computeBracketState, startingBracketsFromParticipants } from '@/lib/tournament/double-elim';
 import type { MatchRecord } from '@/lib/tournament/types';
 import type { PublicTournamentParticipant } from '@/lib/players/public-player';
-import type { PublicMatch } from '@/lib/match/public-match';
-import type { Round } from '@/types/round';
 
-interface ElimBracketViewProps {
+type ElimBracketViewProps = BracketMatchLink & {
   bracketType: 'single_elim' | 'double_elim';
-  tournamentId: string;
-  rounds: Round[];
-  matches: PublicMatch[];
+  rounds: readonly BracketRound[];
+  matches: readonly BracketMatch[];
   /** Phase enrollment: seeds place the slots, `starting_bracket` the losers-side starters. */
   participants: readonly Pick<PublicTournamentParticipant, 'id' | 'seed' | 'starting_bracket'>[];
   /** Completed results; only the winner matters (double elimination loss counts). */
@@ -44,13 +42,13 @@ interface ElimBracketViewProps {
    * drawn unless a third-place match already exists.
    */
   thirdPlaceEnabled?: boolean;
-}
+};
 
 /** The structure without its third-place slot, unless a match already sits in it. */
 function withoutUnusedThirdPlace(
   structure: BracketStructure,
-  rounds: readonly Round[],
-  matches: readonly PublicMatch[],
+  rounds: readonly BracketRound[],
+  matches: readonly BracketMatch[],
 ): BracketStructure {
   const slot = structure.slots.find((s) => s.isThirdPlace);
   if (!slot) return structure;
@@ -77,7 +75,6 @@ function withoutUnusedThirdPlace(
  */
 export default function ElimBracketView({
   bracketType,
-  tournamentId,
   rounds,
   matches,
   participants,
@@ -85,8 +82,9 @@ export default function ElimBracketView({
   copy,
   bracketResetEnabled = true,
   thirdPlaceEnabled = false,
+  ...matchLink
 }: ElimBracketViewProps) {
-  const matchesByRound: Record<string, PublicMatch[]> = {};
+  const matchesByRound: Record<string, BracketMatch[]> = {};
   for (const match of matches) {
     (matchesByRound[match.round_id] ??= []).push(match);
   }
@@ -123,7 +121,7 @@ export default function ElimBracketView({
       <SingleElimBracket
         rounds={shownRounds}
         matchesByRound={matchesByRound}
-        tournamentId={tournamentId}
+        {...matchLink}
         structureSlots={structure?.slots}
         slotLabels={slotLabels}
         slotIndexByKey={slotIndexByKey}
@@ -158,7 +156,7 @@ export default function ElimBracketView({
     <DoubleElimBracket
       rounds={shownRounds}
       matchesByRound={matchesByRound}
-      tournamentId={tournamentId}
+      {...matchLink}
       structureSlots={structureSlots}
       slotLabels={slotLabels}
       slotIndexByKey={slotIndexByKey}

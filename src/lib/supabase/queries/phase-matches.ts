@@ -310,6 +310,20 @@ export async function getMatchesByPhase(phaseId: string): Promise<PhaseMatchWith
   return rows.map((row) => toMatchWithPlayers(row as MatchWithPlayersRow));
 }
 
+export async function getPhaseHeadToHead(phaseId: string, playerA: string, playerB: string) {
+  assertValidUuid(phaseId, 'phaseId');
+  assertValidUuid(playerA, 'playerA');
+  assertValidUuid(playerB, 'playerB');
+  const a = postgrestQuoted(playerA);
+  const b = postgrestQuoted(playerB);
+  return readAllPages((from, to) => supabase.from('phase_matches')
+    .select('id, phase_id, winner_id, games:phase_games(winner_id)')
+    .eq('phase_id', phaseId)
+    .eq('status', 'completed')
+    .or(`and(player_1_id.eq.${a},player_2_id.eq.${b}),and(player_1_id.eq.${b},player_2_id.eq.${a})`)
+    .order('created_at').order('id').range(from, to));
+}
+
 export async function deletePhaseMatchesByIds(ids: string[], effects: PhaseMatchChildrenEffects): Promise<void> {
   if (!ids.length) return;
   if (typeof effects?.releaseTeams !== 'function') throw new Error('Native phase team release effect is required before match deletion');

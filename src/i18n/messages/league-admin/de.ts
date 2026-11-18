@@ -358,5 +358,6 @@ export default defineDe<typeof en>()({
     groups: 'Gruppen',
     rounds: 'Runden',
     sectionsNav: 'Abschnitte dieser Phase',
+    readOnly: 'Hier siehst du den Kader, die Gruppen und die Runden der Phase. Bearbeiten kannst du sie hier noch nicht.',
   },
 });

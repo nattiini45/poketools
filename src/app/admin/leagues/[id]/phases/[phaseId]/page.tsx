@@ -12,6 +12,10 @@ import { isValidUuid } from '@/lib/utils/uuid';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getStagesBySeasonId, getTournamentWithDetails } from '@/lib/supabase/queries/tournaments';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
+import { getPhaseWithDetails, getPhasesBySeasonId, getPhaseParticipants } from '@/lib/supabase/queries/league-phases';
+import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getSeasonGroupMembership, seasonHasGroups } from '@/lib/supabase/queries/season-groups';
 import { getGroupsByTournament } from '@/lib/supabase/queries/tournament-groups';
 import { getRulesetPinInfo } from '@/lib/ruleset-studio/pin-info.server';
@@ -65,6 +69,8 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   // Phase delete is site-admin only, decided from the live gate (never the session copy).
   const { isSiteAdmin, playerId } = gate;
   const viewer = { playerId, isAdmin: isSiteAdmin };
+  const mode = await requireOpenPhaseRouteMode();
+  if (mode === 'phase') return renderNativePhaseAdmin(seasonId.toLowerCase(), phaseId.toLowerCase());
 
   const [league, tournament, stages, rounds, leagueHasGroups, phaseGroups, t, tEnum, tCommon] = await Promise.all([
     getSeasonById(seasonId),
@@ -199,6 +205,51 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
               leagueGroups: leagueAdminHref(seasonId, 'participants'),
             }}
           />
+        </Section>
+      </PageContainer>
+    </AdminGuard>
+  );
+}
+
+async function renderNativePhaseAdmin(seasonId: string, phaseId: string) {
+  const phase = await getPhaseWithDetails(phaseId, seasonId);
+  if (!phase || phase.season_id !== seasonId) notFound();
+  const [stages, rounds, groups, participants, t, tEnum, tCommon] = await Promise.all([
+    getPhasesBySeasonId(seasonId),
+    getRoundsByPhase(phaseId),
+    getGroupsByPhase(phaseId),
+    getPhaseParticipants(phaseId),
+    getT(leagueAdminMessages),
+    getT(enumMessages),
+    getT(commonMessages),
+  ]);
+  return (
+    <AdminGuard>
+      <AdminCrumbName href={`/admin/leagues/${seasonId}`} name={phase.season_name} />
+      <AdminCrumbName href={`/admin/leagues/${seasonId}/phases/${phaseId}`} name={phase.name} />
+      <PageContainer
+        icon="metronome"
+        title={phase.name}
+        subtitle={t('phasePage.subtitle', {
+          league: phase.season_name,
+          order: phaseNumbers(stages).get(phaseId) ?? 1,
+          bracket: enumLabel(tEnum, 'bracketType', phase.bracket_type),
+          bestOf: tCommon('bestOf', { count: phase.best_of_default }),
+          status: enumLabel(tEnum, 'tournamentStatus', phase.status),
+        })}
+        maxWidth="lg"
+      >
+        <Link href={leagueAdminHref(seasonId, 'phases')}>{t('phasePage.back', { name: phase.season_name })}</Link>
+        <Alert variant="info">{t('phasePage.readOnly')}</Alert>
+        {phase.description && <Section id="tournament-description" title={t('phasePage.description')}>{phase.description}</Section>}
+        <Section id="tournament-participants" title={t('phasePage.participants')}>
+          <ul>{participants.map(player => <li key={player.id}>{player.name}</li>)}</ul>
+        </Section>
+        <Section id="tournament-groups" title={t('phasePage.groups')}>
+          <ul>{groups.map(group => <li key={group.id}>{group.name}</li>)}</ul>
+        </Section>
+        <Section id="tournament-rounds" title={t('phasePage.rounds')}>
+          <ol>{rounds.map(round => <li key={round.id}>{round.name}</li>)}</ol>
         </Section>
       </PageContainer>
     </AdminGuard>

@@ -22,7 +22,7 @@ import type { MatchProposalWithPlayers } from '@/types/match-proposal';
 import type { MatchWithPlayers } from '@/types/match';
 
 interface MatchSchedulingPanelProps {
-  matchId: string;
+  matchId?: string;
   status: string;
   currentPlayerId: string | null;
   canManage: boolean;
@@ -85,7 +85,7 @@ export default function MatchSchedulingPanel({
   const [error, setError] = useState<PanelError | null>(null);
   const [successKey, setSuccessKey] = useState<PanelSuccess | null>(null);
 
-  const canPropose = canManage && status !== 'completed' && status !== 'disputed';
+  const canPropose = !!matchId && canManage && status !== 'completed' && status !== 'disputed';
   // A pending proposal past its expiry is expired in effect: it blocks no new proposal and takes no answer (the
   // server expires the row when a new proposal is made).
   const requestTime = useRequestTime();
@@ -113,6 +113,7 @@ export default function MatchSchedulingPanel({
   }
 
   async function refreshProposals() {
+    if (!matchId) return;
     const res = await fetch(`/api/matches/${matchId}/proposals`);
     const json: ApiResult<MatchProposalWithPlayers[]> = await res.json();
     if (json.success && json.data) {
@@ -121,6 +122,7 @@ export default function MatchSchedulingPanel({
   }
 
   async function handleCreateProposal() {
+    if (!matchId || !canPropose) return;
     setLoading('create');
     setError(null);
     setSuccessKey(null);
@@ -150,6 +152,7 @@ export default function MatchSchedulingPanel({
   }
 
   async function handleResponse(proposalId: string, action: 'accept' | 'reject') {
+    if (!matchId || !canManage) return;
     setLoading(`${action}:${proposalId}`);
     setError(null);
     setSuccessKey(null);
@@ -186,10 +189,10 @@ export default function MatchSchedulingPanel({
         </div>
       </div>
 
-      {canManage && proposals.length > 0 && (
+      {proposals.length > 0 && (
         <div className="space-y-2 mb-4">
           {proposals.map((proposal) => {
-            const canRespond =
+            const canRespond = matchId && canManage &&
               proposal.responder_id === currentPlayerId &&
               matchProposalMachine.nextStates(effectiveProposalStatus(proposal, requestTime), 'responder').length > 0;
             return (

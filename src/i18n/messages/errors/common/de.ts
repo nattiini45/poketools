@@ -5,6 +5,7 @@ export default defineDe<typeof en>()({
   network_error: 'Netzwerkfehler. Prüfe deine Verbindung und versuche es noch einmal.',
   unknown_error: 'Da ist etwas schiefgelaufen. Bitte versuche es noch einmal.',
   upstream_timeout: 'Der Server hat zu lange für eine Antwort gebraucht. Versuche es gleich noch einmal.',
+  phase_storage_unavailable: 'Ligaphasen sind während der Wartung vorübergehend nicht verfügbar.',
   validation_failed: 'Ungültige Eingabe: {issues}',
   rate_limited: 'Zu viele Anfragen. Versuche es in {seconds} Sek. noch einmal.',
   rate_limit_unavailable: 'Diese Aktion ist gerade nicht verfügbar. Versuche es in einer Minute noch einmal.',

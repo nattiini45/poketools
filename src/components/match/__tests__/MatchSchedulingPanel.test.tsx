@@ -58,4 +58,21 @@ describe('MatchSchedulingPanel', () => {
     expect(html).not.toContain('>Reject<');
     expect(html).toContain('>Propose<');
   });
+
+  it('shows an authorized read-only proposal without any legacy write controls', () => {
+    const html = renderWithI18n(
+      <MatchSchedulingPanel
+        status="scheduled"
+        currentPlayerId={null}
+        canManage={false}
+        scheduledAt={null}
+        roundDeadline={null}
+        initialProposals={[{ ...proposal('2026-11-10T12:00:00.000Z'), message: 'Practice on Friday?' }]}
+      />,
+      { requestTime: NOW },
+    );
+
+    expect(html).toContain('Practice on Friday?');
+    expect(html).not.toContain('<button');
+  });
 });

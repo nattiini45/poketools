@@ -8,6 +8,9 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { logAuditEvent } from '@/lib/audit/log';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { legacyPhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
+import { listRoundStatusesByPhaseIds, type RoundStatusRow } from '@/lib/supabase/queries/phase-rounds';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
 import { addResourceAdmin } from '@/lib/supabase/queries/resource-admins';
@@ -23,19 +26,35 @@ interface RouteParams {
   params: Promise<{ id: string }>;
 }
 
-// Public: league phases are visible like tournament stages
+// Public: no auth required
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
     const { id } = await params;
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
+    const mode = await requireOpenPhaseRouteMode();
     const season = await getSeasonById(id);
     if (!season) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'League not found', code: 'SEASON_NOT_FOUND' },
         { status: 404 }
       );
+    }
+
+    if (mode === 'phase') {
+      const stages = await getPhasesBySeasonId(season.id);
+      const rounds = await listRoundStatusesByPhaseIds(stages.map((stage) => stage.id));
+      const byStage = new Map<string, RoundStatusRow[]>();
+      for (const round of rounds) {
+        const existing = byStage.get(round.phase_id);
+        if (existing) existing.push(round);
+        else byStage.set(round.phase_id, [round]);
+      }
+      return NextResponse.json<ApiResult<LeaguePhase[]>>({
+        success: true,
+        data: stages.map((stage) => buildLeaguePhase(stage, byStage.get(stage.id) ?? [])),
+      });
     }
 
     const stages = await getStagesBySeasonId(id);

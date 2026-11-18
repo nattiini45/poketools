@@ -4,6 +4,7 @@ import { REQUEST_PATH_HEADER, requestPathOf } from '@/lib/auth/request-path';
 import { signInPath } from '@/lib/auth/safe-callback-url';
 import { hasSessionCookie, isSignInGatedPath } from '@/lib/auth/sign-in-gate';
 import { pageGate, type PageGateResult } from '@/lib/seo/page-gate';
+import { phasePageGate } from '@/lib/seo/phase-page-gate';
 import { formatShareLimitMark, isRouterPrefetch, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { buildNoncePolicy, buildStaticPolicy, cspEnforced, isVercelPreview, newNonce } from '@/lib/security/csp-policy.mjs';
 
@@ -77,6 +78,25 @@ export async function proxy(request: NextRequest) {
     return redirect;
   }
 
+  const shouldGatePage = request.method === 'GET' || request.method === 'HEAD';
+  const phaseGate = shouldGatePage ? await phasePageGate(request.nextUrl.pathname, request.nextUrl.searchParams) : { kind: 'pass' as const };
+  if (phaseGate.kind === 'redirect') {
+    const response = NextResponse.redirect(new URL(phaseGate.href, request.url), 308);
+    response.headers.set('cache-control', 'no-store');
+    response.headers.set('content-security-policy', buildStaticPolicy({ dev, previewToolbar }));
+    return response;
+  }
+  if (phaseGate.kind === 'unavailable') {
+    return new NextResponse(null, {
+      status: 503,
+      headers: {
+        'cache-control': 'no-store',
+        'x-robots-tag': 'noindex',
+        'content-security-policy': buildStaticPolicy({ dev, previewToolbar }),
+      },
+    });
+  }
+
   const nonce = newNonce();
   const enforce = cspEnforced();
   const policy = buildNoncePolicy({ nonce, dev, enforce, previewToolbar });
@@ -92,13 +112,13 @@ export async function proxy(request: NextRequest) {
   // proxy's own verdict: the delete above the gate drops a client-supplied one, and only a charge sets it again.
   requestHeaders.delete(SHARE_LIMIT_HEADER);
   const gate: PageGateResult =
-    request.method === 'GET' || request.method === 'HEAD'
+    shouldGatePage && phaseGate.kind !== 'not_found'
       ? await pageGate(request.nextUrl.pathname, request.headers)
       : { status: null, shareLimit: null };
   if (gate.shareLimit) requestHeaders.set(SHARE_LIMIT_HEADER, formatShareLimitMark(gate.shareLimit));
 
   // The not-found page renders for the rewritten request, so it gets the same nonce and policy as any page.
-  const pageMissing = gate.status === 'not_found';
+  const pageMissing = phaseGate.kind === 'not_found' || gate.status === 'not_found';
   const response = pageMissing
     ? NextResponse.rewrite(new URL('/_not-found', request.url), { request: { headers: requestHeaders }, status: 404 })
     : NextResponse.next({ request: { headers: requestHeaders } });

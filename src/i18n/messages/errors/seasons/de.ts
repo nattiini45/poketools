@@ -25,6 +25,7 @@ export default defineDe<typeof en>()({
     other: '{count} Trainer dieser Phase sind in keiner Ligagruppe. Teile sie zuerst im Tab „Teilnehmer“ ein.',
   },
   PHASE_GROUPS_STALE: 'Die Ligagruppen haben sich geändert, während die Runde erstellt wurde; erstelle sie noch einmal.',
+  PHASE_GROUP_ROSTER_SCHEDULED: 'Sobald die Phase Runden hat, kannst du keinen Spieler aus einer Gruppe entfernen. Setze stattdessen einen Ersatzspieler ein.',
   PLAN_CHANGED: 'Die Gruppeneinträge haben sich seit der Prüfung geändert; prüfe sie noch einmal.',
   GROUP_SLOT_CHANGED: 'Die Gruppen haben sich zwischenzeitlich geändert; prüfe sie noch einmal.',
   phase_seed_duplicate: 'Jeder Setzplatz darf nur einmal vergeben werden.',

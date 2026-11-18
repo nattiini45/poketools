@@ -4,15 +4,20 @@ const reads = vi.hoisted(() => ({
   season: vi.fn(),
   tournament: vi.fn(),
   playerProfile: vi.fn(),
+  phase: vi.fn(),
+  mode: vi.fn(),
 }));
 
 vi.mock('@/lib/cache/public-reads', () => ({ publicReads: reads }));
+vi.mock('@/lib/cache/phase-public-reads', () => ({ phasePublicReads: { detail: reads.phase } }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: reads.mode }));
 
-import { leagueMetadata, playerMetadata, tournamentMetadata } from '../page-metadata';
-import { readLeague, readPlayerProfile, readTournament } from '../page-reads';
+import { leagueMetadata, phaseMetadata, playerMetadata, tournamentMetadata } from '../page-metadata';
+import { readLeague, readLeaguePhase, readPlayerProfile, readTournament } from '../page-reads';
 import { NOINDEX } from '../robots';
 
 const ID = '11111111-1111-4111-8111-111111111111';
+const PHASE_ID = '22222222-2222-4222-8222-2222222222ab';
 
 beforeEach(() => {
   vi.resetAllMocks();
@@ -41,6 +46,48 @@ describe('tournament metadata', () => {
   it('returns nothing for a missing tournament', async () => {
     reads.tournament.mockResolvedValue(null);
     expect(await tournamentMetadata(ID)).toEqual({});
+  });
+});
+
+describe('phase metadata', () => {
+  it('publishes only the canonical URL and title for a native phase', async () => {
+    reads.mode.mockResolvedValue('phase');
+    reads.phase.mockResolvedValue({ id: PHASE_ID, season_id: ID, name: 'Finals', description: 'Not metadata' });
+    expect(await phaseMetadata(ID, PHASE_ID.toUpperCase())).toEqual({
+      title: 'Finals',
+      alternates: { canonical: `/leagues/${ID}/phases/${PHASE_ID}` },
+    });
+    expect(reads.phase).toHaveBeenCalledExactlyOnceWith(ID, PHASE_ID);
+    expect(reads.tournament).not.toHaveBeenCalled();
+  });
+
+  it('carries the original legacy record, with ownership checked before metadata is emitted', async () => {
+    reads.mode.mockResolvedValue('legacy');
+    const linked = { id: PHASE_ID, season_id: ID, name: 'Finals' };
+    reads.tournament.mockResolvedValueOnce(linked).mockResolvedValueOnce({ ...linked, season_id: null });
+    expect(await readLeaguePhase(ID, PHASE_ID)).toEqual({ kind: 'legacy-phase', tournament: linked });
+    expect(await phaseMetadata(ID, PHASE_ID)).toEqual({});
+    expect(reads.phase).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back when native ownership is missing', async () => {
+    reads.mode.mockResolvedValue('phase');
+    reads.phase.mockResolvedValue(null);
+    expect(await phaseMetadata(ID, PHASE_ID)).toEqual({});
+    expect(reads.tournament).not.toHaveBeenCalled();
+  });
+
+  it('rejects malformed addresses without reading the mode', async () => {
+    expect(await phaseMetadata(ID, 'bad')).toEqual({});
+    expect(reads.mode).not.toHaveBeenCalled();
+  });
+
+  it('propagates failure to determine readiness without reading either store', async () => {
+    const failure = new Error('Unavailable');
+    reads.mode.mockRejectedValue(failure);
+    await expect(phaseMetadata(ID, PHASE_ID)).rejects.toBe(failure);
+    expect(reads.phase).not.toHaveBeenCalled();
+    expect(reads.tournament).not.toHaveBeenCalled();
   });
 });
 

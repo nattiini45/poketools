@@ -1,4 +1,5 @@
 import { supabase } from '../client';
+import { readBoundedPages } from '../read-bounded-pages';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
@@ -120,6 +121,29 @@ export async function listMatchProposals(matchId: string): Promise<MatchProposal
 
   if (error) throw error;
   return data.map((row) => toMatchProposalWithPlayers(row as MatchProposalWithPlayersRow));
+}
+
+export async function listPhaseMatchProposals(matchId: string, playerId: string): Promise<MatchProposalWithPlayers[]> {
+  assertValidUuid(matchId, 'match id');
+  assertValidUuid(playerId, 'player id');
+
+  const { rows } = await readBoundedPages<MatchProposalWithPlayersRow>(
+    (from, to) => supabase
+      .from('phase_match_proposals')
+      .select(`
+        *,
+        proposer:players!phase_match_proposals_proposer_id_fkey ( name ),
+        responder:players!phase_match_proposals_responder_id_fkey ( name )
+      `)
+      .eq('match_id', matchId)
+      .or(`proposer_id.eq.${playerId},responder_id.eq.${playerId}`)
+      .order('created_at', { ascending: false })
+      .order('id')
+      .range(from, to),
+    { label: 'listPhaseMatchProposals' },
+  );
+
+  return rows.map(toMatchProposalWithPlayers);
 }
 
 export async function listPendingMatchProposalsForPlayer(

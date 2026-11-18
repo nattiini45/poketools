@@ -4,6 +4,7 @@ import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
 import { emitPhaseDiscordEvent } from '@/lib/discord/notify';
 import type { PhaseReport } from '@/types/phase-report';
 import type { NativePhaseInvalidation } from './services';
+import { phaseHref } from './paths';
 
 export function createPhaseReportPublisher(invalidate: NativePhaseInvalidation['invalidateSeason']) {
   return async (report: PhaseReport): Promise<void> => {
@@ -12,8 +13,8 @@ export function createPhaseReportPublisher(invalidate: NativePhaseInvalidation['
     if (!phase || !round || round.phase_id !== phase.id) throw new Error('Native report publication scope mismatch');
     const baseUrl = process.env.NEXTAUTH_URL
       ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
-    const phaseUrl = new URL(`/leagues/${phase.season_id}/phases/${phase.id}`, baseUrl).toString();
     const owner = { kind: 'phase' as const, phase_id: phase.id, season_id: phase.season_id };
+    const phaseUrl = new URL(phaseHref(owner), baseUrl).toString();
     const content = report.content;
     if (report.report_type === 'round_recap' && 'match_summaries' in content) {
       await invalidate(phase.season_id, [phase.id]);

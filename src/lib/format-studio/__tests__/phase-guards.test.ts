@@ -83,6 +83,17 @@ describe('assertFormatPhaseStatusUnchanged', () => {
 });
 
 describe('assertFormatPhaseRosterOpen', () => {
+  it('honors verified native ownership without reading legacy phases', async () => {
+    const force = { force: true, reason: '  Corrected the roster  ' };
+    await expect(assertFormatPhaseRosterOpen(SEASON, { id: HAND_MADE, status: 'active' }, force, true))
+      .resolves.toEqual({ reason: 'Corrected the roster' });
+    expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: HAND_MADE, status: 'completed' }, force, true)))
+      .toBe('format_phase_owned');
+    await expect(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }, undefined, false))
+      .resolves.toBeNull();
+    expect(getKitPhases).not.toHaveBeenCalled();
+  });
+
   it('refuses a roster change of a started format phase, never reading the phases of an upcoming one', async () => {
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'active' }))).toBe('format_phase_owned');
     expect(await code(assertFormatPhaseRosterOpen(SEASON, { id: OWNED, status: 'completed' }))).toBe('format_phase_owned');

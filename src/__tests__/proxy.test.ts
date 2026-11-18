@@ -3,9 +3,11 @@ import { NextRequest } from 'next/server';
 import { unstable_doesMiddlewareMatch as doesProxyMatch } from 'next/experimental/testing/server';
 import { buildStaticPolicy } from '@/lib/security/csp-policy.mjs';
 import { pageGate } from '@/lib/seo/page-gate';
+import { phasePageGate } from '@/lib/seo/phase-page-gate';
 import { config, proxy } from '../proxy';
 
 vi.mock('@/lib/seo/page-gate', () => ({ pageGate: vi.fn(async () => ({ status: null, shareLimit: null })) }));
+vi.mock('@/lib/seo/phase-page-gate', () => ({ phasePageGate: vi.fn(async () => ({ kind: 'pass' })) }));
 
 function pageRequest(path: string, headers: Record<string, string> = {}) {
   return new NextRequest(`https://poketools.test${path}`, { headers });
@@ -15,6 +17,32 @@ function pageRequest(path: string, headers: Record<string, string> = {}) {
 function forwardedRequestHeader(response: Response, name: string) {
   return response.headers.get(`x-middleware-request-${name}`);
 }
+
+describe('phase alias HTTP handling', () => {
+  it('returns a query-preserving 308 before the obsolete existence check can return a 404', async () => {
+    vi.mocked(pageGate).mockClear();
+    vi.mocked(phasePageGate).mockResolvedValueOnce({ kind: 'redirect', href: '/leagues/example/phases/final?x=a&x=b' });
+    const response = await proxy(pageRequest('/tournaments/final?x=a&x=b'));
+    expect(response.status).toBe(308);
+    expect(response.headers.get('location')).toBe('https://poketools.test/leagues/example/phases/final?x=a&x=b');
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(pageGate).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 without a Location when storage is unavailable', async () => {
+    vi.mocked(phasePageGate).mockResolvedValueOnce({ kind: 'unavailable' });
+    const response = await proxy(pageRequest('/tournaments/final'));
+    expect(response.status).toBe(503);
+    expect(response.headers.get('location')).toBeNull();
+  });
+
+  it('rewrites a missing canonical resource with a real 404', async () => {
+    vi.mocked(phasePageGate).mockResolvedValueOnce({ kind: 'not_found' });
+    const response = await proxy(pageRequest('/leagues/example/phases/final'));
+    expect(response.status).toBe(404);
+    expect(response.headers.get('x-middleware-rewrite')).toBe('https://poketools.test/_not-found');
+  });
+});
 
 describe('proxy request path (#56)', () => {
   const signedIn = { cookie: 'authjs.session-token=a' };

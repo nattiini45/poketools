@@ -15,6 +15,7 @@ import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import type { MatchRecord } from '@/lib/tournament/types';
 import type { EvolutionStanding } from '@/lib/tournament/evolution-standings';
 import type { PublicMatch } from '@/lib/match/public-match';
+import { adminPhaseHref, type LeaguePhaseAddress } from '@/lib/league-phase/paths';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { KillRankingRow, PokemonUsageRow } from '@/types/game';
@@ -46,17 +47,22 @@ interface Participant {
   gym_type: string | null;
 }
 
-interface TournamentTabsUnifiedProps {
+type TabsMatch = Omit<PublicMatch, 'tournament_id'>;
+type TabsReport = Pick<TournamentReport, 'id' | 'report_type' | 'content' | 'status'> & { round_id: string | null };
+
+type TournamentTabsUnifiedProps = (
+  { tournamentId: string; phase?: never } | { phase: LeaguePhaseAddress; tournamentId?: never }
+) & {
   bracketType: BracketType;
   participants: Participant[];
   rounds: Round[];
-  matches: PublicMatch[];
+  matches: TabsMatch[];
   matchRecords: MatchRecord[];
-  matchesByRound: Record<string, PublicMatch[]>;
+  matchesByRound: Record<string, TabsMatch[]>;
   battleStats: TournamentBattleStat[];
-  tournamentId: string;
+  matchHrefPrefix?: string;
   totalRounds: number;
-  reports: TournamentReport[];
+  reports: TabsReport[];
   /** Pre-rendered bracket component for single_elim / double_elim */
   bracketContent?: ReactNode;
   /** Pre-rendered standings for swiss */
@@ -81,7 +87,7 @@ interface TournamentTabsUnifiedProps {
   kit?: KitStandingsData;
   /** The panel to show: the page's `?tab=` (the link-tab strip above is the page's). */
   activeTab: TournamentPageTab;
-}
+};
 
 const ROUND_TONE: Record<Round['status'], SkewChipTone> = { active: 'live', pending: 'accent', completed: 'neutral' };
 
@@ -94,6 +100,8 @@ export default function TournamentTabsUnified({
   matchesByRound,
   battleStats,
   tournamentId,
+  phase,
+  matchHrefPrefix,
   totalRounds,
   reports,
   bracketContent,
@@ -187,6 +195,7 @@ export default function TournamentTabsUnified({
   const reportsByRound = useMemo(() => {
     const map = new Map<string, Set<string>>();
     for (const r of reports) {
+      if (r.round_id === null) continue;
       const set = map.get(r.round_id) ?? new Set();
       set.add(r.report_type);
       map.set(r.round_id, set);
@@ -195,6 +204,7 @@ export default function TournamentTabsUnified({
   }, [reports]);
 
   async function handleGenerateReport(roundId: string, reportType: 'round_recap' | 'round_forecast') {
+    if (!tournamentId) return;
     const key = `${roundId}-${reportType}`;
     setGeneratingFor(key);
     try {
@@ -258,6 +268,7 @@ export default function TournamentTabsUnified({
             <DecisionMatchPanel
               tiedPlayers={epbTiedPlayers}
               tournamentId={tournamentId}
+              roundsHref={phase ? `${adminPhaseHref(phase)}#tournament-rounds` : undefined}
               seasonId={seasonId ?? undefined}
               isAdmin={sessionIsAdmin}
             />
@@ -277,8 +288,9 @@ export default function TournamentTabsUnified({
           killRanking={killRanking}
           participants={participants.map((p) => ({ id: p.id, name: p.name }))}
           tournamentId={tournamentId}
-          aggregateScopeType="tournament"
-          aggregateScopeId={tournamentId}
+          phase={phase}
+          aggregateScopeType={phase ? 'phase' : 'tournament'}
+          aggregateScopeId={phase?.phase_id ?? tournamentId ?? null}
         />
       )}
 
@@ -316,7 +328,7 @@ export default function TournamentTabsUnified({
                       <span className="font-heading text-title text-fg">{translateEngineLabel('round', round.name, locale)}</span>
                       <SkewChip tone={ROUND_TONE[round.status]}>{enumLabel(tEnum, 'roundStatus', round.status)}</SkewChip>
                       {/* Admin generate buttons (hidden when Kale Cabbage disabled) */}
-                      {ENABLE_KALE_CABBAGE && sessionIsAdmin && (
+                      {ENABLE_KALE_CABBAGE && sessionIsAdmin && tournamentId && (
                         <>
                           {!hasForecast && (
                             <button
@@ -348,7 +360,7 @@ export default function TournamentTabsUnified({
                         {roundMatches.map((m) => (
                           <Link
                             key={m.id}
-                            href={`/tournaments/${tournamentId}/matches/${m.id}`}
+                            href={`${matchHrefPrefix ?? `/tournaments/${tournamentId}/matches`}/${m.id}`}
                             className="grid min-h-11 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 rounded-poke-md border border-hairline px-3 py-2 text-body transition-colors hover:bg-elevated focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-ink"
                           >
                             <span
@@ -385,6 +397,7 @@ export default function TournamentTabsUnified({
             status: r.status,
           }))}
           tournamentId={tournamentId}
+          matchHrefPrefix={matchHrefPrefix}
         />
       )}
     </div>

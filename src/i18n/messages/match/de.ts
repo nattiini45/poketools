@@ -16,6 +16,7 @@ export default defineDe<typeof en>()({
     noGames: 'Noch keine Partien gespielt.',
     notes: 'Notizen',
     backToTournament: 'Zurück zum Turnier',
+    backToPhase: 'Zurück zur Phase',
   },
   shared: {
     kos: { one: '{count} KO', other: '{count} KOs' },

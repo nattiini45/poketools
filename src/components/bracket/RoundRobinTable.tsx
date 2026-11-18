@@ -18,7 +18,7 @@ export const DEFAULT_ROUND_ROBIN_LABELS: RoundRobinTableLabels = getMessages(bra
 
 interface RoundRobinTableProps {
   participants: { id: string; name: string }[];
-  matches: PublicMatch[];
+  matches: Omit<PublicMatch, 'tournament_id'>[];
   /** Header and result letters as an override; the viewer's language by default. */
   labels?: RoundRobinTableLabels;
 }

@@ -10,6 +10,7 @@ export default {
   network_error: 'Network error. Check your connection and try again.',
   unknown_error: 'Something went wrong. Please try again.',
   upstream_timeout: 'The server took too long to answer. Please try again in a moment.',
+  phase_storage_unavailable: 'League phases are temporarily unavailable during maintenance.',
   validation_failed: 'Validation failed: {issues}',
   rate_limited: 'Rate limit exceeded. Try again in {seconds}s.',
   rate_limit_unavailable: 'This action is temporarily unavailable. Try again in a minute.',

@@ -13,6 +13,7 @@ const { mockBuilder } = vi.hoisted(() => {
   }
   mb.single = vi.fn();
   mb.maybeSingle = vi.fn();
+  mb.range = vi.fn();
   return { mockBuilder: mb };
 });
 
@@ -30,6 +31,7 @@ import {
   createMatchProposal,
   expireOverdueMatchProposals,
   listMatchProposals,
+  listPhaseMatchProposals,
   listPendingMatchProposalsForPlayer,
 } from '../match-proposals';
 
@@ -97,6 +99,23 @@ describe('queries/match-proposals', () => {
     expect(mockBuilder.eq).toHaveBeenCalledWith('status', 'pending');
     expect(mockBuilder.or).toHaveBeenCalledWith('proposer_id.eq.player-1,responder_id.eq.player-1');
     expect(mockBuilder.order).toHaveBeenCalledWith('expires_at', { ascending: true });
+  });
+
+  it('reads phase proposals only for the native match and either seat of the viewing player', async () => {
+    mockBuilder.range.mockResolvedValue({
+      data: [{ ...proposalRow, proposer: { name: 'Sample One' }, responder: { name: 'Sample Two' } }],
+      error: null,
+    });
+
+    await expect(listPhaseMatchProposals('match-1', 'player-1')).resolves.toEqual([
+      { ...proposalRow, proposer_name: 'Sample One', responder_name: 'Sample Two' },
+    ]);
+
+    expect(mockBuilder.from.mock.calls).toEqual([['phase_match_proposals']]);
+    expect(mockBuilder.eq).toHaveBeenCalledWith('match_id', 'match-1');
+    expect(mockBuilder.or).toHaveBeenCalledWith('proposer_id.eq.player-1,responder_id.eq.player-1');
+    expect(mockBuilder.order).toHaveBeenLastCalledWith('id');
+    expect(mockBuilder.range).toHaveBeenCalledWith(0, 999);
   });
 
   it('accepts a pending proposal with responded_at metadata', async () => {

@@ -11,25 +11,30 @@ import { statsMessages } from '@/i18n/messages/stats';
 import { supplementaryRecordsMessages } from '@/i18n/messages/supplementary-records';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import type { PublicMatch } from '@/lib/match/public-match';
+import type { LeaguePhaseAddress } from '@/lib/league-phase/paths';
 import type { ApiResult } from '@/types/api';
 import type { HeadToHeadSupplement } from '@/types/supplementary-records';
 
-interface HeadToHeadMatrixProps {
-  tournamentId: string;
+type HeadToHeadScope = { tournamentId: string; phase?: never } | { phase: LeaguePhaseAddress; tournamentId?: never };
+type HeadToHeadMatch = Pick<PublicMatch, 'id' | 'winner_id'> & { games: readonly Pick<PublicMatch['games'][number], 'winner_id'>[] };
+
+type HeadToHeadMatrixProps = HeadToHeadScope & {
   player1Id: string;
   player2Id: string;
   player1Name: string;
   player2Name: string;
-}
+};
 
 /** The public head-to-head read: the pair's completed matches in one tournament. */
-export function headToHeadUrl(tournamentId: string, player1Id: string, player2Id: string): string {
+export function headToHeadUrl(scope: string | LeaguePhaseAddress, player1Id: string, player2Id: string): string {
   const query = new URLSearchParams({
-    tournament_id: tournamentId,
+    ...(typeof scope === 'string' ? { tournament_id: scope } : {}),
     player_1_id: player1Id,
     player_2_id: player2Id,
   });
-  return `/api/matches/head-to-head?${query.toString()}`;
+  const endpoint = typeof scope === 'string' ? '/api/matches/head-to-head'
+    : `/api/seasons/${encodeURIComponent(scope.season_id)}/phases/${encodeURIComponent(scope.phase_id)}/matches/head-to-head`;
+  return `${endpoint}?${query.toString()}`;
 }
 
 /**
@@ -38,7 +43,7 @@ export function headToHeadUrl(tournamentId: string, player1Id: string, player2Id
  * one (network failure, a non-JSON page): the card's own "failed to load".
  */
 export type HeadToHeadLoad =
-  | { ok: true; matches: PublicMatch[]; supplement?: HeadToHeadSupplement }
+  | { ok: true; matches: HeadToHeadMatch[]; supplement?: HeadToHeadSupplement }
   | { ok: false; error: ApiErrorLike | null };
 
 /**
@@ -47,14 +52,18 @@ export type HeadToHeadLoad =
  * did not meet.
  */
 export async function loadHeadToHead(
-  tournamentId: string,
+  scope: string | LeaguePhaseAddress,
   player1Id: string,
   player2Id: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<HeadToHeadLoad> {
+  return fetchHeadToHead(headToHeadUrl(scope, player1Id, player2Id), fetchImpl);
+}
+
+async function fetchHeadToHead(url: string, fetchImpl: typeof fetch): Promise<HeadToHeadLoad> {
   try {
-    const res = await fetchImpl(headToHeadUrl(tournamentId, player1Id, player2Id));
-    const json = (await res.json()) as ApiResult<PublicMatch[]> & { supplement?: HeadToHeadSupplement };
+    const res = await fetchImpl(url);
+    const json = (await res.json()) as ApiResult<HeadToHeadMatch[]> & { supplement?: HeadToHeadSupplement };
     if (!json.success) return { ok: false, error: toApiErrorLike(json) };
     // `supplement` is sent only when the active pack has a head-to-head provider.
     return json.supplement
@@ -76,7 +85,7 @@ export interface HeadToHeadSummary {
 
 /** Match and game records of the pair, from player 1's and player 2's side. */
 export function summarizeHeadToHead(
-  matches: readonly PublicMatch[],
+  matches: readonly HeadToHeadMatch[],
   player1Id: string,
   player2Id: string,
 ): HeadToHeadSummary {
@@ -190,6 +199,7 @@ export function HeadToHeadError({ message, onRetry }: { message: string; onRetry
  */
 export default function HeadToHeadMatrix({
   tournamentId,
+  phase,
   player1Id,
   player2Id,
   player1Name,
@@ -202,19 +212,20 @@ export default function HeadToHeadMatrix({
   // The result is kept with the request it answers: after the pair changes
   // (or on a retry) the old result no longer matches and the card shows
   // "Loading..." until the new one arrives.
-  const requestKey = `${tournamentId}|${player1Id}|${player2Id}|${attempt}`;
+  const url = headToHeadUrl(phase ?? tournamentId, player1Id, player2Id);
+  const requestKey = `${url}|${attempt}`;
   const [loaded, setLoaded] = useState<{ key: string; result: HeadToHeadLoad } | null>(null);
 
   useEffect(() => {
     // A response for a pair the viewer has since changed is dropped.
     let current = true;
-    void loadHeadToHead(tournamentId, player1Id, player2Id).then((result) => {
+    void fetchHeadToHead(url, fetch).then((result) => {
       if (current) setLoaded({ key: requestKey, result });
     });
     return () => {
       current = false;
     };
-  }, [requestKey, tournamentId, player1Id, player2Id]);
+  }, [requestKey, url]);
 
   const state = loaded?.key === requestKey ? loaded.result : null;
   if (!state) {

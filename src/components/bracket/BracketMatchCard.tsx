@@ -6,9 +6,27 @@ import Link from 'next/link';
 import type { EntryLosses } from './entry-losses';
 import { DEFAULT_BRACKET_LABELS, type BracketLabels } from './labels';
 
-interface BracketMatchCardProps {
-  match: PublicMatch;
-  tournamentId: string;
+type MatchCardData = Pick<
+  PublicMatch,
+  | 'id'
+  | 'status'
+  | 'winner_id'
+  | 'player_1_id'
+  | 'player_2_id'
+  | 'player_1_name'
+  | 'player_2_name'
+  | 'player_1_avatar_url'
+  | 'player_2_avatar_url'
+> & { games: readonly Pick<PublicMatch['games'][number], 'winner_id'>[] };
+
+export type BracketMatch = MatchCardData & Pick<PublicMatch, 'round_id' | 'bracket_pos' | 'bracket_side'>;
+
+export type BracketMatchLink =
+  | { tournamentId: string; matchHrefPrefix?: never }
+  | { tournamentId?: never; matchHrefPrefix: string };
+
+type BracketMatchCardProps = BracketMatchLink & {
+  match: MatchCardData;
   /** Status chip labels in another language; absent keeps the English chip. */
   statusLabels?: Readonly<Record<MatchStatus, string>> | null;
   /**
@@ -18,11 +36,12 @@ interface BracketMatchCardProps {
   entryLosses?: EntryLosses;
   /** The loss mark's words; English by default. */
   lossLabels?: Pick<BracketLabels, 'lossesShort' | 'lossesEntering'>;
-}
+};
 
 export default function BracketMatchCard({
   match,
   tournamentId,
+  matchHrefPrefix,
   statusLabels,
   entryLosses,
   lossLabels = DEFAULT_BRACKET_LABELS,
@@ -32,7 +51,7 @@ export default function BracketMatchCard({
 
   return (
     <Link
-      href={`/tournaments/${tournamentId}/matches/${match.id}`}
+      href={`${matchHrefPrefix ?? `/tournaments/${tournamentId}/matches`}/${match.id}`}
       className="block rounded-poke-lg border border-hairline bg-surface shadow-poke-card p-2 hover:shadow-poke-card-hover hover:-translate-y-0.5 transition-all duration-200 text-sm"
     >
       <div className="flex items-center justify-between mb-1">
@@ -112,6 +131,6 @@ function Score({
   );
 }
 
-function countWins(match: PublicMatch, playerId: string): number {
+function countWins(match: MatchCardData, playerId: string): number {
   return match.games.filter((g) => g.winner_id === playerId).length;
 }
