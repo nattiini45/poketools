@@ -250,6 +250,21 @@ it('preserves independent flat elimination pairings when historic matches stayed
   }));
 });
 
+it('does not lose an enrolled flat elimination bye to incomplete stored groups', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 2 });
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }, { ...round(2), bracket_side: null }]);
+  m.participants.mockResolvedValue(players.slice(0, 5).map(player => ({ ...player, starting_bracket: 'winners' })));
+  m.groups.mockResolvedValue([{
+    id: 'group-a', name: 'Group A', group_number: 1, season_group_id: null,
+    members: ['a', 'b', 'c', 'd'].map((id, seed) => ({ player_id: id, seed: seed + 1 })),
+  }]);
+  m.matches.mockResolvedValue([match(1, 'a', 'b'), match(1, 'c', 'd'), match(2, 'a', 'c')]);
+  expect((await run()).status).toBe(201);
+  expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    matches: [{ player_1_id: 'a', player_2_id: 'e' }], bye_player_ids: [],
+  }));
+});
+
 it('refuses a new, managed or unsettled flat elimination bracket without a write', async () => {
   const elimination = { ...phase, bracket_type: 'single_elim' };
   m.phase.mockResolvedValueOnce(elimination);

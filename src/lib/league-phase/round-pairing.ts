@@ -87,7 +87,7 @@ export async function pairNativeRound(input: NativePairingInput): Promise<Genera
   const { groups: storedGroups, rounds } = context;
   const robin = phase.bracket_type === 'round_robin';
   const elimination = phase.bracket_type === 'single_elim' || phase.bracket_type === 'double_elim';
-  const groups = elimination && storedGroups.length > 0 && hasCrossGroupEliminationHistory(context, phase.current_round)
+  const groups = elimination && storedGroups.length > 0 && !canPairFlatEliminationByGroup(context, participantIds, phase.current_round)
     ? [] : storedGroups;
   const mirrored = mirrorsLeagueGroups(groups);
   const kitRobin = kit ? roundRobinOf(kit.stage.pairing) : null;
@@ -264,10 +264,13 @@ function nativePairingHistory(context: PhaseWeekContext<PhaseRound>, includeLega
   });
 }
 
-function hasCrossGroupEliminationHistory(context: PhaseWeekContext<PhaseRound>, currentRound: number) {
+function canPairFlatEliminationByGroup(context: PhaseWeekContext<PhaseRound>, participantIds: string[], currentRound: number) {
+  const memberships = context.groups.flatMap(group => group.members.map(member => [member.player_id, group.id] as const));
+  const groupOf = new Map(memberships);
+  if (groupOf.size !== memberships.length || groupOf.size !== participantIds.length
+    || participantIds.some(id => !groupOf.has(id))) return false;
   const playedRounds = new Set(context.rounds.filter(round => round.round_number <= currentRound).map(round => round.id));
-  const groupOf = new Map(context.groups.flatMap(group => group.members.map(member => [member.player_id, group.id] as const)));
-  return context.matches.some(match => {
+  return !context.matches.some(match => {
     if (match.status !== 'completed' || !playedRounds.has(match.round_id)
       || match.player_1_id === BYE_PLAYER_ID || match.player_2_id === BYE_PLAYER_ID) return false;
     const group = groupOf.get(match.player_1_id);
