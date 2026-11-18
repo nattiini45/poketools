@@ -1,34 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireResourceAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { UserFacingError } from '@/lib/api/user-facing-error';
-import {
-  getTournamentById,
-  getParticipants,
-  updateParticipantSeeds,
-} from '@/lib/supabase/queries/tournaments';
+import { loadPhaseRosterScope } from '@/lib/league-phase/roster-scope';
 import { SeedUpdatePartialError } from '@/lib/tournament/seed-errors';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { assertPhaseEditable } from '@/lib/tournament/league-phase';
-import { assertFormatPhaseRosterOpen } from '@/lib/format-studio/phase-guards';
-import { auditRosterOverride, rosterOverrideOf } from '@/lib/format-studio/roster-override';
-import { expireTournamentReads } from '@/lib/revalidation';
+import { auditRosterOverride } from '@/lib/format-studio/roster-override';
+import { expirePhaseReads, expireTournamentReads } from '@/lib/revalidation';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 
 interface RouteParams {
   params: Promise<{ id: string; phaseId: string }>;
-}
-
-async function assertPhaseInSeason(seasonId: string, phaseId: string) {
-  const phase = await getTournamentById(phaseId);
-  if (!phase || phase.season_id !== seasonId) {
-    throw new UserFacingError('Phase not found in this league', {
-      code: 'PHASE_NOT_FOUND',
-      status: 404,
-    });
-  }
-  return phase;
 }
 
 /** The JSON body of a call that may have none (the plain seed-by-rating has none): a body that is not JSON asks for no override. */
@@ -48,17 +31,18 @@ async function optionalJsonBody(request: NextRequest): Promise<unknown> {
  */
 export async function POST(request: NextRequest, { params }: RouteParams) {
   try {
-    const { id, phaseId } = await params;
+    const { id, phaseId: requestedPhaseId } = await params;
     const admin = await requireResourceAdmin('season', id);
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
-    const invalidPhaseId = rejectInvalidPathId(phaseId, 'INVALID_PHASE_ID');
+    const invalidPhaseId = rejectInvalidPathId(requestedPhaseId, 'INVALID_PHASE_ID');
     if (invalidPhaseId) return invalidPhaseId;
-    const phase = await assertPhaseInSeason(id, phaseId);
+    const { mode, phase, phaseId, seasonId, persistence, assertRosterOpen } = await loadPhaseRosterScope(id, requestedPhaseId);
     assertPhaseEditable(phase, 'participants');
-    const override = await assertFormatPhaseRosterOpen(id, phase, rosterOverrideOf(await optionalJsonBody(request)));
+    const override = await assertRosterOpen(await optionalJsonBody(request));
+    const expire = () => mode === 'phase' ? expirePhaseReads(phaseId, seasonId) : expireTournamentReads(phaseId, seasonId);
 
-    const participants = await getParticipants(phaseId);
+    const participants = await persistence.participants(phaseId);
     if (participants.length === 0) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'No participants to seed', code: 'phase_seed_no_participants' },
@@ -81,15 +65,15 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }));
 
     try {
-      await updateParticipantSeeds(phaseId, seeds);
+      await persistence.updateSeeds(phaseId, seeds);
     } catch (err) {
       // A partial write already changed some seeds: expire the cached reads so
       // the admin and viewers see the state that now needs a re-save.
-      if (err instanceof SeedUpdatePartialError) expireTournamentReads(phaseId, id);
+      if (err instanceof SeedUpdatePartialError) expire();
       throw err;
     }
-    expireTournamentReads(phaseId, id);
-    if (override) auditRosterOverride(admin, id, phase, override, 'seed_by_rating', { seeded: seeds.length });
+    expire();
+    if (override) auditRosterOverride(admin, seasonId, phase, override, 'seed_by_rating', { seeded: seeds.length });
 
     return NextResponse.json<ApiResult<{ seeds: typeof seeds }>>({
       success: true,
