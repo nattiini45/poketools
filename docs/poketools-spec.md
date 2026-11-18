@@ -999,6 +999,9 @@ POST /api/manual-result         Write manually entered match result + stats to d
 
 POST /api/confirm-match/[mid]   Player B confirms result → set match to completed
 POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/decision   Confirm or dispute a match in the native phase generation
+POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/manual-result
+                                 Record a manual game in the native phase generation. Body match_id must match
+                                 the route match ID; the tracker keeps the moments_saved and warning contract.
 
 POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; continues legacy per-round elim).
                                 Returns 400 BRACKET_V2_MANAGED when structure elim rounds exist, 400
