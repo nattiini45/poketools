@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const h = vi.hoisted(() => ({ from: vi.fn(), settle: vi.fn(), match: vi.fn() }));
-vi.mock('../../client', () => ({ supabase: { from: h.from } }));
+const h = vi.hoisted(() => ({ from: vi.fn(), rpc: vi.fn(), settle: vi.fn(), match: vi.fn() }));
+vi.mock('../../client', () => ({ supabase: { from: h.from, rpc: h.rpc } }));
 vi.mock('../ai-artifacts', () => ({ settleAiArtifact: h.settle }));
 vi.mock('../phase-matches', () => ({ getPhaseMatchById: h.match }));
-import { createPhaseMatchAnalysis, createPhaseMatchPrepAnalysis, deletePhaseMatchAnalysis, deletePhaseMatchPrepAnalysis,
+import { createPhaseMatchAnalysis, claimPhaseMatchPrepAnalysis, deletePhaseMatchAnalysis,
   getPhaseMatchAnalysis, getPhaseMatchPrepAnalysis, getPhasePlayerPrepTeam, getPhaseAiParticipants, getPhaseScoutingAccess,
   updatePhaseMatchAnalysis, updatePhaseMatchPrepAnalysis } from '../phase-ai-artifacts';
 const phaseId = '20000000-0000-0000-0000-000000000001';
@@ -57,13 +57,21 @@ describe('native phase artifact persistence', () => {
     await expect(createPhaseMatchAnalysis(phaseId, matchId, 'model')).rejects.toThrow('not found in phase');
     expect(h.from).not.toHaveBeenCalled();
   });
-  it('inserts pending artifacts only into their native tables', async () => {
+  it('inserts pending post-match artifacts only into the native table', async () => {
     const q = query(row);
     await createPhaseMatchAnalysis(phaseId, matchId, 'requested-model');
     expect(q.insert).toHaveBeenCalledWith({ match_id: matchId, model_id: 'requested-model', status: 'pending' });
-    await createPhaseMatchPrepAnalysis(phaseId, matchId, 'p1', 'requested-model', true);
-    expect(q.insert).toHaveBeenCalledWith({ match_id: matchId, player_id: 'p1', model_id: 'requested-model', status: 'pending', has_user_team: true });
-    expect(h.from).toHaveBeenCalledWith('phase_match_prep_analyses');
+    expect(h.from).toHaveBeenCalledWith('phase_match_analyses');
+  });
+  it('claims and maps a new scouting artifact via the quota RPC', async () => {
+    h.rpc.mockResolvedValueOnce({ data: { kind: 'claimed', artifact: row }, error: null });
+    expect(await claimPhaseMatchPrepAnalysis(phaseId, matchId, 'p1', 'requested-model', true, null, 10))
+      .toMatchObject({ kind: 'claimed', artifact: { id: row.id, status: 'pending', player_id: 'p1' } });
+    expect(h.rpc).toHaveBeenCalledExactlyOnceWith('phase_scouting_claim', {
+      p_phase_id: phaseId, p_match_id: matchId, p_player_id: 'p1', p_model_id: 'requested-model',
+      p_has_user_team: true, p_daily_limit: 10,
+    });
+    expect(h.from).not.toHaveBeenCalled();
   });
   it('settles both native tables through the shared compare-and-set helper', async () => {
     h.settle.mockResolvedValue(false);
@@ -78,14 +86,15 @@ describe('native phase artifact persistence', () => {
     expect(await deletePhaseMatchAnalysis(phaseId, matchId)).toBe(true);
     expect(removed.eq).toHaveBeenCalledWith('id', row.id); expect(removed.eq).toHaveBeenCalledWith('status', 'pending');
   });
-  it('discards only the observed scouting attempt instead of re-reading a concurrent winner', async () => {
-    const removed = query([]);
-    expect(await deletePhaseMatchPrepAnalysis(phaseId, matchId, 'p1', { id: row.id, status: 'pending' })).toBe(false);
-    expect(h.from).toHaveBeenCalledExactlyOnceWith('phase_match_prep_analyses');
-    expect(removed.delete).toHaveBeenCalledTimes(1);
-    expect(removed.eq.mock.calls).toEqual([
-      ['id', row.id], ['match_id', matchId], ['player_id', 'p1'], ['status', 'pending'],
-    ]);
+  it('compares the observed scouting attempt and does not write via a separate query on claim loss', async () => {
+    h.rpc.mockResolvedValueOnce({ data: { kind: 'lost' }, error: null });
+    expect(await claimPhaseMatchPrepAnalysis(phaseId, matchId, 'p1', 'model', true, { id: row.id, status: 'pending' }, 10))
+      .toEqual({ kind: 'lost' });
+    expect(h.rpc).toHaveBeenCalledExactlyOnceWith('phase_scouting_claim', {
+      p_phase_id: phaseId, p_match_id: matchId, p_player_id: 'p1', p_model_id: 'model',
+      p_has_user_team: true, p_daily_limit: 10, p_expected_id: row.id, p_expected_status: 'pending',
+    });
+    expect(h.from).not.toHaveBeenCalled();
   });
   it('propagates query errors instead of treating them as missing artifacts', async () => {
     const error = new Error('Synthetic query failure'); query(null, error);

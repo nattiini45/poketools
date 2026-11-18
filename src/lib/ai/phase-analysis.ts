@@ -6,10 +6,10 @@ import matchErrors from '@/i18n/messages/errors/matches/en';
 import { canAdministerPhaseAccess } from '@/lib/auth/phase-access';
 import { isPlayerPhaseParticipant } from '@/lib/supabase/queries/league-phases';
 import { loadPhaseMatchScope, buildPhaseMatchAnalysisPrompt, buildPhaseMatchPrepPrompt } from './phase-context';
-import { getPhaseMatchAnalysis, getPhaseMatchPrepAnalysis, createPhaseMatchAnalysis, createPhaseMatchPrepAnalysis,
-  updatePhaseMatchAnalysis, updatePhaseMatchPrepAnalysis, deletePhaseMatchAnalysis, deletePhaseMatchPrepAnalysis,
+import { getPhaseMatchAnalysis, getPhaseMatchPrepAnalysis, createPhaseMatchAnalysis, claimPhaseMatchPrepAnalysis,
+  updatePhaseMatchAnalysis, updatePhaseMatchPrepAnalysis, deletePhaseMatchAnalysis,
   getPhaseScoutingAccess } from '@/lib/supabase/queries/phase-ai-artifacts';
-import { checkAndRecordAiGeneration } from './rate-limit';
+import { checkAndRecordAiGeneration, getAiDailyLimit } from './rate-limit';
 import { complete } from './client';
 import { parseAnalysisResponse } from './parse-analysis';
 import { parseScoutingResponse } from './parse-scouting';
@@ -28,6 +28,12 @@ type PhaseScoutingPreparation =
   | { kind: 'superseded' }
   | { kind: 'ready'; run: () => Promise<{ kind: 'generated'; artifact: MatchPrepAnalysis } | { kind: 'superseded' }> };
 
+const scoutingMatchNotFound = () => new UserFacingError(matchErrors.match_not_found, { code: 'match_not_found', status: 404 });
+const scoutingParticipantRequired = () => new UserFacingError(aiErrors.ai_scouting_participants_only,
+  { status: 403, code: 'ai_scouting_participants_only' });
+const scoutingScheduledOnly = (status: string) => new UserFacingError(aiErrors.ai_scouting_scheduled_only.replace('{status}', status),
+  { code: 'ai_scouting_scheduled_only', params: { status } });
+
 export async function preparePhaseScouting(
   input: { phaseId: string; matchId: string; force?: boolean; perspectivePlayerId?: string },
   player: SessionPlayer,
@@ -35,13 +41,12 @@ export async function preparePhaseScouting(
   const { phaseId, matchId, force, perspectivePlayerId = player.playerId } = input;
   const { playerId } = player;
   const match = await getPhaseScoutingAccess(phaseId, matchId);
-  if (!match) throw new UserFacingError(matchErrors.match_not_found, { code: 'match_not_found', status: 404 });
+  if (!match) throw scoutingMatchNotFound();
   if (perspectivePlayerId !== playerId || (playerId !== match.player_1_id && playerId !== match.player_2_id)
     || !await isPlayerPhaseParticipant(playerId, phaseId)) {
-    throw new UserFacingError(aiErrors.ai_scouting_participants_only, { status: 403, code: 'ai_scouting_participants_only' });
+    throw scoutingParticipantRequired();
   }
-  if (match.status !== 'scheduled') throw new UserFacingError(aiErrors.ai_scouting_scheduled_only.replace('{status}', match.status),
-    { code: 'ai_scouting_scheduled_only', params: { status: match.status } });
+  if (match.status !== 'scheduled') throw scoutingScheduledOnly(match.status);
 
   const read = () => getPhaseMatchPrepAnalysis(phaseId, matchId, playerId);
   const isFreshPending = (artifact: MatchPrepAnalysis) => artifact.status === 'pending'
@@ -56,23 +61,20 @@ export async function preparePhaseScouting(
   if (existing?.status === 'completed' && !player.isAdmin && !prompt.hasUserTeam) {
     return { kind: 'cached', artifact: existing };
   }
-  const concurrentResult = async (): Promise<PhaseScoutingPreparation> => {
+  const claim = await claimPhaseMatchPrepAnalysis(phaseId, matchId, playerId, getClaudeModelId(),
+    prompt.hasUserTeam, existing, getAiDailyLimit('match-prep-analysis'));
+  if (claim.kind === 'limited') return claim;
+  if (claim.kind === 'match_not_found') throw scoutingMatchNotFound();
+  if (claim.kind === 'not_participant') throw scoutingParticipantRequired();
+  if (claim.kind === 'unscheduled') throw scoutingScheduledOnly(claim.status);
+  if (claim.kind === 'lost') {
     const current = await read();
     if (current?.status === 'completed') return { kind: 'cached', artifact: current };
     if (current && isFreshPending(current)) return { kind: 'pending', artifact: current };
     return { kind: 'superseded' };
-  };
-  if (existing && !await deletePhaseMatchPrepAnalysis(phaseId, matchId, playerId, existing)) {
-    return concurrentResult();
-  }
-  let record: MatchPrepAnalysis;
-  try {
-    record = await createPhaseMatchPrepAnalysis(phaseId, matchId, playerId, getClaudeModelId(), prompt.hasUserTeam);
-  } catch (error) {
-    if (typeof error === 'object' && error !== null && 'code' in error && error.code === '23505') return concurrentResult();
-    throw error;
   }
 
+  const record = claim.artifact;
   const started = Date.now();
   const settleFailure = (error: string) => updatePhaseMatchPrepAnalysis(record.id,
     { status: 'failed', error, generation_time_ms: Date.now() - started });
@@ -84,17 +86,6 @@ export async function preparePhaseScouting(
       logger.error('ai/phase-analysis', 'Failed to settle phase scouting failure', { error: settleError, phaseId, matchId });
     }
   };
-  try {
-    const allowance = await checkAndRecordAiGeneration(playerId, 'match-prep-analysis');
-    if (!allowance.allowed) {
-      await settleFailure('daily_limit_reached');
-      return { kind: 'limited', limit: allowance.limit };
-    }
-  } catch (error) {
-    await recordFailure(error);
-    throw error;
-  }
-
   return { kind: 'ready', async run() {
     try {
       const result = await complete(prompt.systemPrompt, prompt.userPrompt,

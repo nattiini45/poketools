@@ -79,13 +79,48 @@ export async function createPhaseMatchAnalysis(phaseId: string, matchId: string,
   return analysis(data);
 }
 
-export async function createPhaseMatchPrepAnalysis(phaseId: string, matchId: string, playerId: string, modelId: string, hasUserTeam: boolean): Promise<MatchPrepAnalysis> {
-  await assertScope(phaseId, matchId);
+type PhaseScoutingClaim =
+  | { kind: 'claimed'; artifact: MatchPrepAnalysis }
+  | { kind: 'limited'; limit: number }
+  | { kind: 'unscheduled'; status: string }
+  | { kind: 'lost' }
+  | { kind: 'match_not_found' }
+  | { kind: 'not_participant' };
+
+export async function claimPhaseMatchPrepAnalysis(
+  phaseId: string, matchId: string, playerId: string, modelId: string, hasUserTeam: boolean,
+  expected: Pick<MatchPrepAnalysis, 'id' | 'status'> | null, dailyLimit: number,
+): Promise<PhaseScoutingClaim> {
+  assertValidUuid(phaseId);
+  assertValidUuid(matchId);
+  if (expected) aiArtifactMachine.assertTransition(expected.status, 'absent', 'player');
   aiArtifactMachine.assertTransition('absent', 'pending', 'system');
-  const { data, error } = await supabase.from('phase_match_prep_analyses')
-    .insert({ match_id: matchId, player_id: playerId, model_id: modelId, has_user_team: hasUserTeam, status: 'pending' }).select(PREP_COLUMNS).single();
+  const { data, error } = await supabase.rpc('phase_scouting_claim', {
+    p_phase_id: phaseId, p_match_id: matchId, p_player_id: playerId, p_model_id: modelId,
+    p_has_user_team: hasUserTeam, p_daily_limit: dailyLimit,
+    ...(expected && { p_expected_id: expected.id, p_expected_status: expected.status }),
+  });
   if (error) throw error;
-  return prep(data);
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    switch (data.kind) {
+      case 'claimed':
+        if (data.artifact && typeof data.artifact === 'object' && !Array.isArray(data.artifact)) {
+          return { kind: data.kind, artifact: prep(data.artifact as Tables<'phase_match_prep_analyses'>) };
+        }
+        break;
+      case 'limited':
+        if (typeof data.limit === 'number') return { kind: data.kind, limit: data.limit };
+        break;
+      case 'unscheduled':
+        if (typeof data.status === 'string') return { kind: data.kind, status: data.status };
+        break;
+      case 'lost':
+      case 'match_not_found':
+      case 'not_participant':
+        return { kind: data.kind };
+    }
+  }
+  throw new Error('Unexpected phase scouting claim result');
 }
 
 type ResultValues<T> = {
@@ -111,17 +146,6 @@ export async function deletePhaseMatchAnalysis(phaseId: string, matchId: string)
   aiArtifactMachine.assertTransition(row.status, 'absent', 'admin');
   const { data, error } = await supabase.from('phase_match_analyses').delete()
     .eq('id', row.id).eq('match_id', matchId).eq('status', row.status).select('id');
-  if (error) throw error;
-  return (data ?? []).length === 1;
-}
-
-export async function deletePhaseMatchPrepAnalysis(
-  phaseId: string, matchId: string, playerId: string, expected: Pick<MatchPrepAnalysis, 'id' | 'status'>,
-): Promise<boolean> {
-  await assertScope(phaseId, matchId);
-  aiArtifactMachine.assertTransition(expected.status, 'absent', 'player');
-  const { data, error } = await supabase.from('phase_match_prep_analyses').delete()
-    .eq('id', expected.id).eq('match_id', matchId).eq('player_id', playerId).eq('status', expected.status).select('id');
   if (error) throw error;
   return (data ?? []).length === 1;
 }

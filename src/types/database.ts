@@ -10022,6 +10022,19 @@ export type Database = {
         }
         Returns: Json
       }
+      phase_scouting_claim: {
+        Args: {
+          p_daily_limit: number
+          p_expected_id?: string
+          p_expected_status?: string
+          p_has_user_team: boolean
+          p_match_id: string
+          p_model_id: string
+          p_phase_id: string
+          p_player_id: string
+        }
+        Returns: Json
+      }
       phase_stage_orders_reorder: {
         Args: { p_phase_ids: string[]; p_season_id: string }
         Returns: undefined
