@@ -165,7 +165,44 @@ describe('native phase round manager', () => {
     await waitFor(() => expect(refresh).toHaveBeenCalledTimes(2));
     expect(fetchMock).toHaveBeenNthCalledWith(2, `${base}/generate-bracket`, { method: 'POST' });
     view.rerender(withI18n(<PhaseRoundManager {...props} phase={bracket} rounds={[{ ...pending, bracket_side: 'winners' }]} />));
-    expect(screen.queryByRole('button', { name: /generate|repair|manual/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(Generate Bracket|Generate Next Round|Generate All Rounds|Create Manual Round)$/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Repair Bracket' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Regenerate Bracket' })).toBeTruthy();
+  });
+
+  it('requires a separate confirmation for a played bracket and keeps repair on the native phase', async () => {
+    const user = userEvent.setup();
+    fetchMock.mockResolvedValueOnce(success({ slots_materialized: 1, slots_updated: 0 }))
+      .mockResolvedValueOnce(Response.json({
+        success: false, error: '2 played match(es) will be reset and all results rolled back.',
+        code: 'REGENERATE_PLAYED', params: { count: 2 },
+      }, { status: 409 }))
+      .mockResolvedValueOnce(success({ format_revert_failed: true }));
+    render(withI18n(<PhaseRoundManager {...props}
+      phase={{ ...props.phase, bracket_type: 'single_elim' }} rounds={[{ ...pending, bracket_side: 'winners' }]} />));
+    await user.click(screen.getByRole('button', { name: 'Repair Bracket' }));
+    await waitFor(() => expect(refresh).toHaveBeenCalledOnce());
+    expect(fetchMock).toHaveBeenNthCalledWith(1, `${base}/repair-bracket`, { method: 'POST' });
+
+    const trigger = screen.getByRole('button', { name: 'Regenerate Bracket' });
+    await user.click(trigger);
+    const first = await screen.findByRole('alertdialog', { name: 'Regenerate Bracket' });
+    expect(document.activeElement).toBe(within(first).getByRole('button', { name: 'Cancel' }));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await user.click(within(first).getByRole('button', { name: 'Regenerate' }));
+    const second = await screen.findByRole('alertdialog', { name: 'Reset Played Matches' });
+    await waitFor(() => expect(document.activeElement).toBe(within(second).getByRole('button', { name: 'Cancel' })));
+    expect(fetchMock).toHaveBeenNthCalledWith(2, `${base}/regenerate-bracket`, expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ cascade: false }),
+    }));
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    const confirm = within(second).getByRole('button', { name: 'Reset and Regenerate' });
+    expect(confirm.getAttribute('data-agent-confirm')).toContain('2 played match(es)');
+    await user.click(confirm);
+    await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/format/i));
+    expect(fetchMock).toHaveBeenNthCalledWith(3, `${base}/regenerate-bracket`, expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ cascade: true }),
+    }));
   });
 
   it('offers batch generation only for round robin and sends one native write from the keyboard', async () => {

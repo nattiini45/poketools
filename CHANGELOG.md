@@ -293,6 +293,8 @@ Version 0.6.0 (`package.json`, `package-lock.json`); rename this section to `[0.
 
 ### Fixed
 
+- Native bracket regeneration refuses a scheduled match with saved games before it starts cascading resets. Clear or resolve those games before rebuilding the bracket.
+
 - Dormant native rating writes now reject a superseded winner or completion token. Mixed rating replacement validates the full countable match stream, including previously unrated matches made countable by a league flag change, before replacing shared projections.
 - Mixed rating replacement removes excluded legacy league history atomically, so retained source records do not prevent native reconciliation or game-edit rebuilds.
 - Dormant native non-EPB evolution checks now sum phase-owned battle stats through the shared threshold engine instead of reading legacy tournament games.

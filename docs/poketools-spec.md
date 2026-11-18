@@ -1075,6 +1075,9 @@ PATCH .../rounds/[rid]                       Native round deadline, best-of and 
 DELETE .../rounds/[rid]                      Native confirmed delete of the latest eligible game-free round with only
                                             scheduled, unlinked fixtures; rejects played, managed or dependent rounds
 POST .../generate-bracket                    Initial native single- or double-elimination bracket; refuses a stale plan
+POST .../repair-bracket                      Rebuild native bracket slots from resolved feeders; refuses changed or linked slots
+POST .../regenerate-bracket                  Rebuild the native bracket from current seeds; played matches require explicit cascade.
+                                            Refuses a scheduled match with saved games before resetting any match in the snapshot.
 POST /api/seasons/[id]/participants/substitute  League (`scope: 'league'`) or phase (`scope: <phaseId>`) substitute
 POST /api/seasons/[id]/advance              Advance to next phase (optional `force`; same guards as sync)
 GET/POST/DELETE /api/seasons/[id]/format    Custom format league: state (`not_custom` | `unattached` | `attached`,

@@ -407,7 +407,7 @@ export default {
     rounds: 'Rounds',
     /** Names the strip of in-page links to these sections. */
     sectionsNav: 'Sections of this phase',
-    readOnly: 'Phase settings, the roster and groups are still read-only here. You can’t repair or regenerate brackets, reset played rounds or force round completion here.',
+    readOnly: 'Phase settings, the roster and groups are still read-only here. You can’t reset played rounds or force round completion here.',
     roundsReadOnly: 'Rounds in completed or archived phases are read-only here.',
     noRounds: 'No rounds.',
     deleteRoundWarning: 'This deletes the round and its unplayed matches. The server refuses if the round has results, dependencies, or linked records.',

@@ -9769,6 +9769,18 @@ export type Database = {
           stranded_pending: number
         }[]
       }
+      phase_bracket_repair: {
+        Args: {
+          p_expected_matches: Json
+          p_expected_rounds: Json
+          p_expected_seeds: Json
+          p_expected_updated_at: string
+          p_phase_id: string
+          p_season_id: string
+          p_slots: Json
+        }
+        Returns: Json
+      }
       phase_bracket_write: {
         Args: {
           p_current_round: number
