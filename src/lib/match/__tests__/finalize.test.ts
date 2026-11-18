@@ -45,6 +45,7 @@ vi.mock('@/lib/gamification/signatures', () => ({
 vi.mock('@/lib/gamification/streaks', () => ({
   updateStreaks: vi.fn(),
   recomputeStreaks: vi.fn(),
+  recomputeStreaksWithStorage: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -75,7 +76,15 @@ vi.mock('@/lib/format-engine/runtime/hooks', () => ({
 
 vi.mock('@/lib/rating/updateRatings', () => ({
   updateRatings: vi.fn(),
+  updateRatingsWithStorage: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/league-phase/rating-streak-streams', () => ({
+  createMixedRatingStorage: vi.fn(() => ({ family: 'mixed-ratings' })),
+  mixedStreakStorage: { family: 'mixed-streaks' },
+}));
+vi.mock('@/lib/league-phase/achievement-streams', () => ({ checkMixedTournamentAchievements: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
@@ -115,8 +124,11 @@ import { runEpbMatchdayHooks } from '@/lib/match/epb-matchday';
 import { creditMatchRealKills } from '@/lib/match/evolution-match-evaluator';
 import { checkAchievements } from '@/lib/gamification/achievements';
 import { updateSignatures } from '@/lib/gamification/signatures';
-import { recomputeStreaks, updateStreaks } from '@/lib/gamification/streaks';
-import { updateRatings } from '@/lib/rating/updateRatings';
+import { recomputeStreaks, recomputeStreaksWithStorage, updateStreaks } from '@/lib/gamification/streaks';
+import { updateRatings, updateRatingsWithStorage } from '@/lib/rating/updateRatings';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { createMixedRatingStorage, mixedStreakStorage } from '@/lib/league-phase/rating-streak-streams';
+import { checkMixedTournamentAchievements } from '@/lib/league-phase/achievement-streams';
 import { deleteMatchOutcome, getMatchOutcome, recordMatchOutcome } from '@/lib/supabase/queries/match-outcomes';
 import { onMatchCompleted } from '@/lib/format-engine/runtime/hooks';
 import type { MatchWithPlayers } from '@/types/match';
@@ -159,6 +171,9 @@ const STREAK_CHANGES: StreakChanges = {
 };
 
 let errorSpy: ReturnType<typeof vi.spyOn>;
+
+beforeEach(() => vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined));
+afterEach(() => vi.unstubAllEnvs());
 
 describe('finalizeMatchCompletion', () => {
   beforeEach(() => {
@@ -211,6 +226,45 @@ describe('finalizeMatchCompletion', () => {
     expect(emitDiscordEvent).toHaveBeenCalledWith(expect.objectContaining({ event_type: 'match_confirmed' }));
     expect(markMatchFinalized).toHaveBeenCalledWith('match-1', undefined, { confirmedAt: null });
     expect(logAuditEvent).not.toHaveBeenCalled();
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(createMixedRatingStorage).not.toHaveBeenCalled();
+  });
+
+  it('uses mixed projections for verified standalone completions in phase mode', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 'tournament-1', name: 'Weekly', season_id: null } as never);
+    vi.mocked(updateRatingsWithStorage).mockResolvedValueOnce({
+      status: 'rated', winnerRating: 1520, loserRating: 1480, winnerChange: 20, loserChange: -20,
+    });
+    vi.mocked(recomputeStreaksWithStorage).mockResolvedValue(STREAK_CHANGES);
+    vi.mocked(checkMixedTournamentAchievements).mockResolvedValue([]);
+
+    const result = await finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' });
+    expect(result).toEqual({ finalized: true, complete: true, failed_steps: [] });
+    expect(getTournamentById).toHaveBeenCalledTimes(1);
+    expect(createMixedRatingStorage).toHaveBeenCalledWith('tournament');
+    expect(updateRatingsWithStorage).toHaveBeenCalledWith('player-1', 'player-2', false, 'match-1', { family: 'mixed-ratings' });
+    expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-1', mixedStreakStorage);
+    expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-2', mixedStreakStorage);
+    expect(checkMixedTournamentAchievements).toHaveBeenCalledWith('player-1', expect.objectContaining({
+      match_id: 'match-1', tournament_id: 'tournament-1', season_id: null,
+    }));
+    expect(updateRatings).not.toHaveBeenCalled();
+    expect(recomputeStreaks).not.toHaveBeenCalled();
+    expect(checkAchievements).not.toHaveBeenCalled();
+  });
+
+  it('refuses a leftover league-owned tournament in phase mode before projections or outcome writes', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+
+    await expect(finalizeMatchCompletion({ match, winnerId: 'player-1', previousStatus: 'pending_confirmation' }))
+      .rejects.toThrow('only accepts standalone tournament finalization');
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(recordMatchOutcome).not.toHaveBeenCalled();
+    expect(createMixedRatingStorage).not.toHaveBeenCalled();
+    expect(markMatchFinalized).not.toHaveBeenCalled();
   });
 
   describe('the outcome step', () => {
@@ -1267,6 +1321,21 @@ describe('finalizeMatchCompletion', () => {
           metadata: expect.objectContaining({ not_rerun: ['achievements', 'announcements'] }),
         })
       );
+    });
+
+    it('heals verified standalone streaks from both match stores without reapplying ratings', async () => {
+      vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+      vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+      vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 'tournament-1', name: 'Weekly', season_id: null } as never);
+      vi.mocked(recomputeStreaksWithStorage).mockResolvedValue(STREAK_CHANGES);
+
+      expect(await healMatchFinalization(completed)).toEqual({ healed: true, failed_steps: [] });
+      expect(getRatingHistoryByMatch).toHaveBeenCalledWith('match-1');
+      expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-1', mixedStreakStorage);
+      expect(recomputeStreaksWithStorage).toHaveBeenCalledWith('player-2', mixedStreakStorage);
+      expect(updateRatingsWithStorage).not.toHaveBeenCalled();
+      expect(checkMixedTournamentAchievements).not.toHaveBeenCalled();
+      expect(recomputeStreaks).not.toHaveBeenCalled();
     });
 
     describe('the completion it heals', () => {
