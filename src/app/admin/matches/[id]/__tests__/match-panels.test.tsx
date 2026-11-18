@@ -269,6 +269,17 @@ describe('MatchDisputePanel', () => {
     expect(html).toContain('Einspruch');
     expect(html).toContain('Die Details dieses Einspruchs wurden nicht erfasst.');
   });
+
+  it('distinguishes a failed read from a dispute with no recorded details', () => {
+    const html = renderWithI18n(
+      <MatchDisputePanel dispute={null} loadFailed reportedWinnerName="Birch" reporterName="Aster" />,
+      { locale: 'de' },
+    );
+    expect(html).toContain('Die Details des Einspruchs konnten nicht geladen werden.');
+    expect(html).not.toContain('wurden nicht erfasst');
+    expect(html).toContain('Birch');
+    expect(html).toContain('Aster');
+  });
 });
 
 describe('MatchHistoryPanel', () => {

@@ -242,14 +242,17 @@ describe('native admin match detail', () => {
     });
     expect(props.get(AdminMatchActions)).toMatchObject({ correctionsOnly: true, bestOf: 5, isSiteAdmin: false, backSuffix: '' });
     expect(props.get(MatchReopenSection)).toMatchObject({ native: true });
-    for (const panel of [MatchHistoryPanel, MatchDisputePanel]) expect(types).not.toContain(panel);
+    for (const panel of [MatchHistoryPanel, MatchDisputePanel]) expect(types).toContain(panel);
+    expect(mocks.listMatchAuditEvents).toHaveBeenCalledExactlyOnceWith(MATCH_ID, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }, 'phase');
+    expect(mocks.getLatestMatchDispute).toHaveBeenCalledExactlyOnceWith(MATCH_ID, 'phase');
     expect(props.get(MatchSchedulePanel)).toMatchObject({ matchId: MATCH_ID, pendingProposals: 0 });
     expect(mocks.countOpenPhaseMatchProposals).toHaveBeenCalledExactlyOnceWith(MATCH_ID, expect.any(String));
     expect(mocks.isPhaseAdminFor).toHaveBeenCalledWith('viewer-1', PHASE_ID);
     expect(mocks.getPhaseRoundById).toHaveBeenCalledWith(ROUND_ID, PHASE_ID);
     expect(mocks.getPhaseWithDetails).toHaveBeenCalledWith(PHASE_ID, SEASON_ID);
     expect(mocks.getMatchById).not.toHaveBeenCalled();
-    for (const read of NEW_READS) expect(mocks[read]).not.toHaveBeenCalled();
+    expect(mocks.loadAdminMatchContext).not.toHaveBeenCalled();
+    expect(mocks.listMatchProposals).not.toHaveBeenCalled();
   });
 
   it('does not send private notes or load context after revocation on a page render', async () => {
@@ -260,6 +263,8 @@ describe('native admin match detail', () => {
     expect(mocks.getPhaseWithDetails).not.toHaveBeenCalled();
     expect(mocks.resolvePlayerNames).not.toHaveBeenCalled();
     expect(mocks.countOpenPhaseMatchProposals).not.toHaveBeenCalled();
+    expect(mocks.listMatchAuditEvents).not.toHaveBeenCalled();
+    expect(mocks.getLatestMatchDispute).not.toHaveBeenCalled();
   });
 
   it('keeps a native proposal count failure distinct from a real zero', async () => {
@@ -418,7 +423,7 @@ describe('AdminMatchPage: per-match access', () => {
     expect(props.get(AdminMatchActions)).toMatchObject({ bestOf: 3, matchId: MATCH_ID });
     expect(props.get(MatchSchedulePanel)).toMatchObject({ roundDeadline: CONTEXT.round_deadline });
     expect(props.get(MatchContextHeader)).toMatchObject({ context: CONTEXT });
-    expect(mocks.listMatchAuditEvents).toHaveBeenCalledWith(MATCH_ID, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 });
+    expect(mocks.listMatchAuditEvents).toHaveBeenCalledWith(MATCH_ID, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }, 'tournament');
   });
 
   it('the dispute panel and its read exist only for a disputed match', async () => {
@@ -440,7 +445,7 @@ describe('AdminMatchPage: per-match access', () => {
 
     const disputed = await renderPage();
     expect(disputed.types).toContain(MatchDisputePanel);
-    expect(mocks.getLatestMatchDispute).toHaveBeenCalledWith(MATCH_ID);
+    expect(mocks.getLatestMatchDispute).toHaveBeenCalledWith(MATCH_ID, 'tournament');
     expect(disputed.props.get(MatchDisputePanel)).toMatchObject({
       dispute,
       reportedWinnerName: 'Mara Feldkamp',
@@ -486,7 +491,7 @@ describe('AdminMatchPage: per-match access', () => {
     expect(types).toContain(AdminMatchActions);
     expect(types).toContain(MatchReopenSection);
     expect(props.get(MatchHistoryPanel)).toMatchObject({ loadFailed: true, initialPage: { entries: [], total: 0 } });
-    expect(props.get(MatchDisputePanel)).toMatchObject({ dispute: null });
+    expect(props.get(MatchDisputePanel)).toMatchObject({ dispute: null, loadFailed: true });
     expect(props.get(MatchSchedulePanel)).toMatchObject({ pendingProposals: 0 });
     expect(log).toHaveBeenCalledTimes(3);
     log.mockRestore();
