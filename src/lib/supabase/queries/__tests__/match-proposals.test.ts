@@ -1,13 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chainMethods = [
-  'from', 'select', 'insert', 'update', 'delete', 'eq', 'lte', 'or', 'order', 'limit',
+  'from', 'select', 'insert', 'update', 'delete', 'eq', 'gt', 'lte', 'or', 'order', 'limit',
 ];
 
 const { mockBuilder } = vi.hoisted(() => {
   const mb: Record<string, ReturnType<typeof vi.fn>> = {};
   for (const method of [
-    'from', 'select', 'insert', 'update', 'delete', 'eq', 'lte', 'or', 'order', 'limit',
+    'from', 'select', 'insert', 'update', 'delete', 'eq', 'gt', 'lte', 'or', 'order', 'limit',
   ]) {
     mb[method] = vi.fn().mockReturnValue(mb);
   }
@@ -29,6 +29,7 @@ import {
   acceptMatchProposal,
   cancelPendingMatchProposalsForMatch,
   cancelPendingPhaseMatchProposals,
+  countOpenPhaseMatchProposals,
   createMatchProposal,
   expireOverdueMatchProposals,
   listMatchProposals,
@@ -58,6 +59,16 @@ beforeEach(() => {
 });
 
 describe('queries/match-proposals', () => {
+  it('counts unexpired native pending proposals without transferring rows', async () => {
+    const now = '2026-05-22T12:00:00Z';
+    mockBuilder.gt.mockResolvedValue({ count: 1100, error: null });
+    expect(await countOpenPhaseMatchProposals('match-1', now)).toBe(1100);
+    expect(mockBuilder.from).toHaveBeenCalledExactlyOnceWith('phase_match_proposals');
+    expect(mockBuilder.select).toHaveBeenCalledExactlyOnceWith('id', { count: 'exact', head: true });
+    expect(mockBuilder.eq.mock.calls).toEqual([['match_id', 'match-1'], ['status', 'pending']]);
+    expect(mockBuilder.gt).toHaveBeenCalledExactlyOnceWith('expires_at', now);
+  });
+
   it('counts every cancelled native proposal without returning its rows', async () => {
     mockBuilder.eq.mockReturnValueOnce(mockBuilder).mockResolvedValueOnce({ count: 1100, error: null });
     expect(await cancelPendingPhaseMatchProposals('match-1')).toBe(1100);

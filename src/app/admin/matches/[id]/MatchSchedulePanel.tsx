@@ -23,7 +23,7 @@ interface MatchSchedulePanelProps {
   scheduledAt: string | null;
   roundDeadline: string | null;
   /** Time proposals from the players that are still open (a schedule change cancels them). */
-  pendingProposals: number;
+  pendingProposals: number | null;
 }
 
 type PanelOutcome = 'saved' | 'cleared' | 'unchanged';
@@ -139,7 +139,8 @@ export default function MatchSchedulePanel({
         </div>
 
         {afterDeadline && <Alert variant="warning">{t('schedule.afterDeadline')}</Alert>}
-        {pendingProposals > 0 && (
+        {pendingProposals === null && <Alert variant="warning">{t('schedule.proposalCountUnavailable')}</Alert>}
+        {pendingProposals !== null && pendingProposals > 0 && (
           <Alert variant="warning">{t('schedule.pendingProposals', { count: pendingProposals })}</Alert>
         )}
 

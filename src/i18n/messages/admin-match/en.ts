@@ -43,6 +43,7 @@ export default {
       one: '{count} open time proposal from the players will be cancelled when you save.',
       other: '{count} open time proposals from the players will be cancelled when you save.',
     },
+    proposalCountUnavailable: 'Open time proposals could not be counted. Changing the time still attempts to cancel them.',
     afterDeadline: 'This time is after the round deadline.',
     proposalsNotCancelled:
       'The time was saved, but the open time proposals from the players could not be cancelled. A player can still accept one and move the match.',
