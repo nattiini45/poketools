@@ -73,8 +73,11 @@ export async function getNativeKitCompletedRecords(phaseId: string): Promise<Mat
   });
 }
 
-export async function getNativeKitMatchFacts(phaseId: string) {
-  return readAllPages((from, to) => supabase.from('phase_matches')
-    .select('id, round_id, status, winner_id, player_1_id, player_2_id')
-    .eq('phase_id', phaseId).order('id').range(from, to));
+export async function getNativeKitMatchFacts(phaseId: string, legacyOrder = false) {
+  return readAllPages((from, to) => {
+    const query = supabase.from('phase_matches')
+      .select('id, round_id, status, winner_id, player_1_id, player_2_id')
+      .eq('phase_id', phaseId);
+    return (legacyOrder ? query.order('created_at') : query).order('id').range(from, to);
+  });
 }

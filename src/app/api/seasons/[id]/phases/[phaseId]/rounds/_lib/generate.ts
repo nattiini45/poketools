@@ -16,6 +16,7 @@ import { getNativeKitMatchFacts } from '@/lib/supabase/queries/phase-format-runt
 import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
 import { getRoundsByPhase, RoundAlreadyWrittenError, updatePhaseRoundStatus, writeGeneratedPhaseRound, writeGeneratedPhaseRoundBatch } from '@/lib/supabase/queries/phase-rounds';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
+import { startingBracketsFromParticipants } from '@/lib/tournament/double-elim';
 import { parseGenerateOptions } from '@/lib/tournament/generate-options';
 import type { ApiResult, ApiWarning } from '@/types/api';
 import type { PhaseRound } from '@/types/league-phase';
@@ -40,22 +41,42 @@ export async function generatePhaseRounds(request: NextRequest, params: Promise<
       throw new UserFacingError('Tournament is already completed', { code: 'tournament_already_completed' });
     }
     const bracket = phase.bracket_type;
-    if (bracket !== 'swiss' && bracket !== 'round_robin') {
+    const elimination = bracket === 'single_elim' || bracket === 'double_elim';
+    const rounds = await getRoundsByPhase(phase.id);
+    if (elimination && rounds.length === 0) {
       throw new UserFacingError('Elimination brackets are built by the bracket engine. Use Generate Bracket instead.', { code: 'BRACKET_V2_REQUIRED' });
     }
 
-    const rounds = await getRoundsByPhase(phase.id);
     if (rounds.some(round => round.bracket_side != null)) {
       throw new UserFacingError('This tournament bracket is managed by the bracket engine. Use Generate Bracket or Regenerate Bracket instead.', { code: 'BRACKET_V2_MANAGED' });
     }
-    const matches = await getNativeKitMatchFacts(phase.id);
+    const current = rounds.find(round => round.round_number === phase.current_round);
+    if (elimination && (!current || phase.current_round < 1)) {
+      throw new UserFacingError('Round not found', { code: 'round_not_found', status: 409 });
+    }
+    if (elimination && phase.archived) {
+      throw new UserFacingError('Archived phase is read-only', { code: 'phase_bracket_archived', status: 409 });
+    }
+    const matches = elimination ? await getNativeKitMatchFacts(phase.id, true) : await getNativeKitMatchFacts(phase.id);
     const services = nativeRoundServices(phase);
     const format = await prepareNativeGenerationKit({ request, season, phase, actor, rounds, matches, kit: services.matches.kit });
-    const current = rounds.find(round => round.round_number === phase.current_round);
-    if (bracket === 'swiss' && current && current.status !== 'completed') {
+    if (bracket !== 'round_robin' && current && current.status !== 'completed') {
       throw new UserFacingError(`Current round (${current.name}) is not yet completed`, {
         code: 'tournament_current_round_incomplete', params: { round: current.name },
       });
+    }
+    if (elimination) {
+      const unfinished = new Map<string, number>();
+      for (const match of matches) {
+        if (match.status !== 'completed') unfinished.set(match.round_id, (unfinished.get(match.round_id) ?? 0) + 1);
+      }
+      for (const round of rounds) {
+        const count = unfinished.get(round.id);
+        if (!count || round.round_number > phase.current_round) continue;
+        throw new UserFacingError(`${round.name} still has ${count} unfinished match(es), so the next round cannot be built from it. Finish them first.`, {
+          code: 'rounds_previous_matches_unfinished', params: { round: round.name, count }, status: 409,
+        });
+      }
     }
 
     const [enrolled, groups, leagueGroups] = await Promise.all([
@@ -64,16 +85,21 @@ export async function generatePhaseRounds(request: NextRequest, params: Promise<
     if (enrolled.length < 2) {
       throw new UserFacingError('Need at least 2 participants', { code: 'tournament_participants_too_few' });
     }
-    const participants = enrolled.map(({ id, name, seed }) => ({ id, name, seed }));
+    const participants = enrolled.map(({ id, name, seed, starting_bracket }) => ({
+      id, name, seed, ...(elimination ? { starting_bracket } : {}),
+    }));
     const playerIds = participants.map(player => player.id);
     const names = Object.fromEntries(participants.map(player => [player.id, player.name]));
     const groupLayout = groups.map(({ id, name, group_number, season_group_id, members }) => ({
       id, name, group_number, season_group_id, members: members.map(({ player_id, seed }) => ({ player_id, seed })),
     }));
     const kit = format?.pairing ?? null;
-    const schedule = planNativeRoundGroups(groupLayout, leagueGroups, playerIds, rounds.length === 0, kit);
+    const schedule = elimination
+      ? { groups: groupLayout, replacement: undefined }
+      : planNativeRoundGroups(groupLayout, leagueGroups, playerIds, rounds.length === 0, kit);
     const pairing = {
-      phase: { ...phase, bracket_type: bracket }, kit, participantIds: playerIds, participantNames: names,
+      phase, kit, participantIds: playerIds, participantNames: names,
+      startingBrackets: elimination ? startingBracketsFromParticipants(enrolled) : undefined,
       context: {
         rounds, matches, groups: schedule.groups.map(group => ({
           ...group, members: group.members.map(member => ({ ...member, player_name: names[member.player_id] })),

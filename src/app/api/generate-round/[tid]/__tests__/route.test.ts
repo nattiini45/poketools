@@ -1150,6 +1150,30 @@ describe('POST /api/generate-round/[tid]', () => {
       expect(generateRound).toHaveBeenCalled();
     });
 
+    it('uses the numbered best-of override when multiple flat groups generate finals', async () => {
+      vi.mocked(getTournamentById).mockResolvedValue({
+        ...legacyElim, best_of_default: 1, bo_overrides: { 'Round 2': 3, Finals: 5 },
+      } as never);
+      vi.mocked(getRoundsByTournament).mockResolvedValue([legacyRound] as never);
+      const cohorts = [['p1', 'p2', 'p3', 'p4'], ['p5', 'p6', 'p7', 'p8']];
+      vi.mocked(getParticipants).mockResolvedValue(cohorts.flat().map(id => ({ id, name: id })) as never);
+      vi.mocked(getGroupsByTournament).mockResolvedValue(cohorts.map(ids => ({
+        members: ids.map(id => ({ player_id: id, player_name: id })),
+      })) as never);
+      for (const ids of cohorts) {
+        vi.mocked(generateRound).mockReturnValueOnce({
+          round_number: 2, round_name: 'Finals', bye_player_ids: [],
+          pairings: [{ player_1_id: ids[0], player_2_id: ids[2] }],
+        });
+      }
+      const response = await POST({} as NextRequest, routeParams(baseTournament.id));
+      expect(response.status).toBe(201);
+      expect(createRoundWithMatches).toHaveBeenCalledOnce();
+      expect(createRoundWithMatches).toHaveBeenCalledWith(expect.objectContaining({
+        name: 'Round 2', best_of: 3, matches: [{ player_1_id: 'p1', player_2_id: 'p3' }, { player_1_id: 'p5', player_2_id: 'p7' }],
+      }));
+    });
+
     it('scores Swiss from completed matches but pairs against every match, whatever its status', async () => {
       const completed = [{ player_1_id: 'p3', player_2_id: 'p4', winner_id: 'p3', round_number: 1 }];
       const paired = [

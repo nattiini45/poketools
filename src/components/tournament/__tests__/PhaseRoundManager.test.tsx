@@ -243,6 +243,29 @@ describe('native phase round manager', () => {
     }));
   });
 
+  it('exposes native continuation only for an existing flat bracket and blocks an open round', async () => {
+    const user = userEvent.setup();
+    const flat = { ...props.phase, bracket_type: 'single_elim' } as const;
+    const view = render(withI18n(<PhaseRoundManager {...props} phase={flat} />));
+    const blocked = screen.getByRole<HTMLButtonElement>('button', { name: 'Generate Next Round' });
+    expect(blocked.disabled).toBe(true);
+    expect(screen.getByText('Current round (Round 1) is not yet completed')).toBeTruthy();
+    await user.click(blocked);
+    expect(fetchMock).not.toHaveBeenCalled();
+    fetchMock.mockResolvedValueOnce(Response.json({
+      success: false, error: 'Finish prior matches', code: 'rounds_previous_matches_unfinished',
+      params: { round: 'Round 1', count: 1 },
+    }, { status: 409 }));
+    expect(screen.getByRole('button', { name: 'Regenerate Bracket' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^(Generate Bracket|Repair Bracket|Generate All Rounds)$/ })).toBeNull();
+    view.rerender(withI18n(<PhaseRoundManager {...props} phase={flat} rounds={[{ ...pending, status: 'completed' }]} />, { locale: 'de' }));
+    const next = screen.getByRole('button', { name: 'Nächste Runde erstellen' });
+    next.focus();
+    await user.keyboard('{Enter}');
+    expect(await screen.findByText(/hat noch 1 unfertiges Match/)).toBeTruthy();
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(`${base}/rounds/generate`, { method: 'POST' });
+  });
+
   it('offers batch generation only for round robin and sends one native write from the keyboard', async () => {
     const user = userEvent.setup();
     let finish!: (response: Response) => void;
