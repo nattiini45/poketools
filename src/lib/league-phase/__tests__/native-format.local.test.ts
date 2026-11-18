@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { NextRequest } from 'next/server';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
@@ -15,6 +16,15 @@ vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }
 vi.mock('@/auth', () => ({
   auth: () => { throw new Error('This fixture supplies its actor explicitly'); },
   loadSessionPlayer: () => { throw new Error('This fixture supplies its actor explicitly'); },
+}));
+vi.mock('@/lib/auth/helpers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/auth/helpers')>()),
+  requireAnyAdmin: vi.fn(),
+  requireResourceAdmin: vi.fn(),
+}));
+vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils/rate-limit')>()),
+  checkRateLimit: vi.fn().mockResolvedValue({ allowed: true, remaining: 19, retryAfterSeconds: 0 }),
 }));
 
 describe.skipIf(!optedIn)('native format materialisation on the disposable phase-mode stack', () => {
@@ -168,6 +178,49 @@ describe.skipIf(!optedIn)('native format materialisation on the disposable phase
     expect(await phaseRows(created.season_id)).toHaveLength(input.stages.length);
     expect(await formats.getSeasonFormat(created.season_id)).not.toBeNull();
   });
+
+  it('runs create, reattach and detach through the real HTTP handlers with no legacy rows', async () => {
+    const [auth, seasons, format] = await Promise.all([
+      import('@/lib/auth/helpers'), import('@/app/api/seasons/route'), import('@/app/api/seasons/[id]/format/route'),
+    ]);
+    vi.mocked(auth.requireAnyAdmin).mockResolvedValue(actor);
+    vi.mocked(auth.requireResourceAdmin).mockResolvedValue(actor);
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    try {
+      const base = 'http://localhost/api/seasons';
+      const request = (url: string, method: 'POST' | 'DELETE', body?: unknown) =>
+        new NextRequest(url, { method, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
+      const created = await seasons.POST(request(base, 'POST', {
+        name: `Native route ${actorId}`, format_type: 'custom', from_format: { preset_id: 'wichtelcup' },
+      }));
+      const createBody = await created.json();
+      expect(created.status, JSON.stringify(createBody)).toBe(201);
+      const seasonId: string = createBody.data.season.id;
+      const definitionId: string = createBody.data.format.definition_id;
+      seasonIds.push(seasonId);
+      definitionIds.push(definitionId);
+      const stored = await formats.getSeasonFormat(seasonId);
+      expect(stored?.definition_id).toBe(definitionId);
+      presetRulesetIds.push(...Object.values(await formats.getSeasonPresetRulesets(seasonId)));
+      const first = await phaseRows(seasonId);
+      expect(first.length).toBeGreaterThan(0);
+
+      const url = `${base}/${seasonId}/format`;
+      const params = { params: Promise.resolve({ id: seasonId }) };
+      const replaced = await format.POST(request(url, 'POST', { definition_id: definitionId, version_no: 1 }), params);
+      expect(replaced.status, await replaced.clone().text()).toBe(200);
+      expect((await phaseRows(seasonId)).map((phase) => phase.id)).toEqual(first.map((phase) => phase.id));
+      const detached = await format.DELETE(request(url, 'DELETE'), params);
+      expect(detached.status, await detached.clone().text()).toBe(200);
+      expect(await phaseRows(seasonId)).toEqual([]);
+      expect(await formats.getSeasonFormat(seasonId)).toBeNull();
+      const legacy = await admin.from('tournaments').select('id').eq('season_id', seasonId);
+      expect(legacy.error).toBeNull();
+      expect(legacy.data).toEqual([]);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }, 60_000);
 
   it('rolls the new league, publication, grant and native phases back when stage materialisation fails', async () => {
     const input = competitionInput('classic-league');
