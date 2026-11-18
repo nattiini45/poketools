@@ -1204,7 +1204,8 @@ GET  /api/cron/draft-ticks      Cron (10 min): slow-draft timeouts, redraft auto
 GET  /api/cron/auto-confirm     Cron (15 min): confirms due pending_confirmation matches (compare-and-set),
                                 then heals completed matches whose finalize did not finish
                                 (finalized_at IS NULL, older than 10 min; replay-safe steps only).
-                                500 auto_confirm_partial_failure when any match failed
+                                In phase mode runs separate bounded phase and standalone worklists; frozen
+                                modes run neither (503). 500 auto_confirm_partial_failure when any match failed.
 GET  /api/cron/format-engine    Cron (15 min): fires due format calendar events, applies match/team/action deadline
                                 policies, expires challenges, fires lost action_locked events and backfills missed
                                 match_completed events (at most 100 leagues per run in a window that moves on each slot,

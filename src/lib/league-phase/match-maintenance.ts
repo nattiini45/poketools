@@ -1,4 +1,4 @@
-import { createAutoConfirmHandler, type AutoConfirmStorage } from '@/lib/match/auto-confirm';
+import { createAutoConfirmRunner, type AutoConfirmStorage } from '@/lib/match/auto-confirm';
 import { phaseMatchMachine } from './phase-match-state';
 import {
   getPhaseMatchById,
@@ -11,8 +11,8 @@ import type { PhaseMatchWithPlayers } from '@/types/league-phase-match';
 type PhaseFinalizer = Pick<AutoConfirmStorage<PhaseMatchWithPlayers>,
   'finalizeMatchCompletion' | 'healMatchFinalization' | 'findMatchesNeedingAdmin'>;
 
-export function createPhaseAutoConfirmHandler(finalizer: PhaseFinalizer) {
-  return createAutoConfirmHandler<PhaseMatchWithPlayers>({
+export function createPhaseAutoConfirmRunner(finalizer: PhaseFinalizer) {
+  return createAutoConfirmRunner<PhaseMatchWithPlayers>({
     ...finalizer,
     machine: phaseMatchMachine,
     resourceType: 'phase_match',

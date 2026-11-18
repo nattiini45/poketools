@@ -1,14 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { NextResponse } from 'next/server';
-
-vi.mock('@/lib/api/error-response', () => ({
-  safeErrorResponse: vi.fn((_err: unknown, fallback: string) => NextResponse.json({ success: false, error: fallback }, { status: 500 })),
+const { phaseAutoConfirm } = vi.hoisted(() => ({ phaseAutoConfirm: vi.fn() }));
+vi.mock('@/lib/api/error-response', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/error-response')>();
+  return { ...actual, safeErrorResponse: vi.fn(actual.safeErrorResponse) };
+});
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/league-phase/services', () => ({
+  createNativePhaseServices: () => ({ matches: { autoConfirm: phaseAutoConfirm } }),
 }));
+vi.mock('@/lib/revalidation', () => ({ expireSeasonReads: vi.fn(), revalidatePhaseMatchPages: vi.fn() }));
 
 vi.mock('@/lib/match/finalize', () => ({
   findMatchesNeedingAdmin: vi.fn(),
   finalizeMatchCompletion: vi.fn(),
+  finalizeStandaloneMatchCompletion: vi.fn(),
   healMatchFinalization: vi.fn(),
+  healStandaloneMatchFinalization: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -24,7 +31,7 @@ vi.mock('@/lib/audit/log', () => ({
 
 import { POST, maxDuration } from '@/app/api/cron/auto-confirm/route';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { findMatchesNeedingAdmin, finalizeMatchCompletion, healMatchFinalization } from '@/lib/match/finalize';
+import { findMatchesNeedingAdmin, finalizeMatchCompletion, finalizeStandaloneMatchCompletion, healMatchFinalization } from '@/lib/match/finalize';
 import {
   getMatchById,
   listMatchesNeedingFinalize,
@@ -33,6 +40,7 @@ import {
 } from '@/lib/supabase/queries/matches';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 
 const originalCronSecret = process.env.CRON_SECRET;
 const match = {
@@ -76,10 +84,12 @@ describe('POST /api/cron/auto-confirm', () => {
     vi.clearAllMocks();
     errorSpy = vi.spyOn(logger, 'error').mockImplementation(() => {});
     process.env.CRON_SECRET = 'secret';
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', undefined);
     vi.mocked(listMatchesReadyForAutoConfirm).mockResolvedValue([match] as never);
     vi.mocked(listMatchesNeedingFinalize).mockResolvedValue([]);
     vi.mocked(updateMatchStatus).mockResolvedValue({ ...match, status: 'completed' } as never);
     vi.mocked(finalizeMatchCompletion).mockResolvedValue({ finalized: true, complete: true, failed_steps: [] });
+    vi.mocked(finalizeStandaloneMatchCompletion).mockResolvedValue({ finalized: true, complete: true, failed_steps: [] });
     vi.mocked(healMatchFinalization).mockResolvedValue({ healed: true, failed_steps: [] });
     vi.mocked(findMatchesNeedingAdmin).mockResolvedValue(new Map());
     vi.mocked(getMatchById).mockResolvedValue({ ...match, status: 'pending_confirmation' } as never);
@@ -87,11 +97,57 @@ describe('POST /api/cron/auto-confirm', () => {
 
   afterEach(() => {
     process.env.CRON_SECRET = originalCronSecret;
+    vi.unstubAllEnvs();
     errorSpy.mockRestore();
   });
 
   it('gives the batch the full function budget', () => {
     expect(maxDuration).toBe(300);
+  });
+
+  it('runs native and standalone worklists and combines their results in phase mode', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    phaseAutoConfirm.mockResolvedValueOnce({
+      needsAdmin: ['phase-review'], checked: 2, completed: 1, skipped_no_winner: 0, skipped_conflict: 1, failed: [],
+      heal: { checked: 1, healed: 0, skipped: 0, failed: [],
+        needs_admin: [{ match_id: 'phase-review', steps: ['ratings'] }], scan_truncated: true },
+    });
+
+    const response = await POST(request());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      data: { needsAdmin: ['phase-review'], checked: 3, completed: 2, skipped_conflict: 1,
+        heal: { checked: 1, scan_truncated: true } },
+    });
+    expect(readPhaseStorageMode).toHaveBeenCalledTimes(1);
+    expect(phaseAutoConfirm).toHaveBeenCalledWith(5, expect.any(Number));
+    expect(listMatchesReadyForAutoConfirm).toHaveBeenCalledWith(expect.any(String), 5, true);
+    expect(listMatchesNeedingFinalize).toHaveBeenCalledWith(expect.any(String), 100, undefined, true);
+    expect(finalizeStandaloneMatchCompletion).toHaveBeenCalledTimes(1);
+    expect(finalizeMatchCompletion).not.toHaveBeenCalled();
+  });
+
+  it('does not lose standalone work when the native worklist fails', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    const nativeFailure = new Error('native worklist failed');
+    phaseAutoConfirm.mockRejectedValueOnce(nativeFailure);
+
+    const response = await POST(request());
+    expect(response.status).toBe(500);
+    expect(finalizeStandaloneMatchCompletion).toHaveBeenCalledTimes(1);
+    expect(safeErrorResponse).toHaveBeenCalledWith(nativeFailure, 'Failed to auto-confirm matches');
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('does not run either worklist in %s', async (mode) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    const response = await POST(request());
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(listMatchesReadyForAutoConfirm).not.toHaveBeenCalled();
+    expect(phaseAutoConfirm).not.toHaveBeenCalled();
   });
 
   it('returns cron_not_configured and logs when CRON_SECRET is missing', async () => {

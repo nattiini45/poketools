@@ -1710,14 +1710,17 @@ export async function transitionMatchStatus(
 /** Pending confirmations whose auto-confirm timer has elapsed. */
 export async function listMatchesReadyForAutoConfirm(
   nowIso = new Date().toISOString(),
-  limit = 50
+  limit = 50,
+  standaloneOnly = false,
 ): Promise<MatchWithPlayers[]> {
-  const { data, error } = await supabase
-    .from('matches')
-    .select(MATCH_WITH_PLAYERS_SELECT)
+  const matches = supabase.from('matches');
+  const query = (standaloneOnly
+    ? matches.select(STANDALONE_AUTO_CONFIRM_SELECT).is('tournament.season_id', null)
+    : matches.select(MATCH_WITH_PLAYERS_SELECT))
     .eq('status', AUTO_CONFIRM_FROM)
     .not('auto_confirm_at', 'is', null)
-    .lte('auto_confirm_at', nowIso)
+    .lte('auto_confirm_at', nowIso);
+  const { data, error } = await query
     .order('auto_confirm_at', { ascending: true })
     .limit(limit);
 
@@ -1730,6 +1733,8 @@ export interface FinalizeWorklistCursor {
   updated_at: string;
   id: string;
 }
+
+const STANDALONE_AUTO_CONFIRM_SELECT = `${MATCH_WITH_PLAYERS_SELECT}, tournament:tournaments!matches_tournament_id_fkey!inner(id)`;
 
 /**
  * Completed matches whose finalize did not finish (`finalized_at` still NULL)
@@ -1745,11 +1750,13 @@ export interface FinalizeWorklistCursor {
 export async function listMatchesNeedingFinalize(
   updatedBeforeIso: string,
   limit = 25,
-  after?: FinalizeWorklistCursor
+  after?: FinalizeWorklistCursor,
+  standaloneOnly = false,
 ): Promise<MatchWithPlayers[]> {
-  let query = supabase
-    .from('matches')
-    .select(MATCH_WITH_PLAYERS_SELECT)
+  const matches = supabase.from('matches');
+  let query = (standaloneOnly
+    ? matches.select(STANDALONE_AUTO_CONFIRM_SELECT).is('tournament.season_id', null)
+    : matches.select(MATCH_WITH_PLAYERS_SELECT))
     .eq('status', 'completed')
     .is('finalized_at', null)
     .lte('updated_at', updatedBeforeIso);

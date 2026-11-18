@@ -185,8 +185,7 @@ const legacyStorage: MatchFinalizationStorage<MatchWithPlayers, Tournament> = {
 };
 const finalizer = createMatchFinalizer(legacyStorage);
 
-async function finalizerForOpenGeneration(tournamentId: string) {
-  if (await requireOpenPhaseRouteMode() === 'legacy') return finalizer;
+async function standaloneFinalizer(tournamentId: string) {
   const tournament = await loadTournament(tournamentId);
   if (tournament.season_id !== null) throw new Error('Active phase storage only accepts standalone tournament finalization here');
   const [streams, achievements] = await Promise.all([
@@ -204,11 +203,23 @@ async function finalizerForOpenGeneration(tournamentId: string) {
 }
 
 export async function finalizeMatchCompletion(input: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
-  return (await finalizerForOpenGeneration(input.match.tournament_id)).finalizeMatchCompletion(input);
+  return await requireOpenPhaseRouteMode() === 'phase'
+    ? finalizeStandaloneMatchCompletion(input)
+    : finalizer.finalizeMatchCompletion(input);
 }
 
 export async function healMatchFinalization(match: MatchWithPlayers): Promise<HealMatchFinalizationResult> {
-  return (await finalizerForOpenGeneration(match.tournament_id)).healMatchFinalization(match);
+  return await requireOpenPhaseRouteMode() === 'phase'
+    ? healStandaloneMatchFinalization(match)
+    : finalizer.healMatchFinalization(match);
+}
+
+export async function finalizeStandaloneMatchCompletion(input: FinalizeMatchCompletionInput): Promise<FinalizeMatchCompletionResult> {
+  return (await standaloneFinalizer(input.match.tournament_id)).finalizeMatchCompletion(input);
+}
+
+export async function healStandaloneMatchFinalization(match: MatchWithPlayers): Promise<HealMatchFinalizationResult> {
+  return (await standaloneFinalizer(match.tournament_id)).healMatchFinalization(match);
 }
 
 export async function stageAdminOutcome(matchId: string, outcome: AdminMatchOutcome): Promise<StagedAdminOutcome | null> {

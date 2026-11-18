@@ -4,7 +4,9 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import {
   findMatchesNeedingAdmin,
   finalizeMatchCompletion,
+  finalizeStandaloneMatchCompletion,
   healMatchFinalization,
+  healStandaloneMatchFinalization,
   type FinalizeStep,
 } from '@/lib/match/finalize';
 import {
@@ -110,10 +112,7 @@ interface AutoConfirmResult {
  * finalizes here: a concurrent confirm may be finalizing the same match, and
  * the heal picks a committed completion up after the grace period.
  */
-export function createAutoConfirmHandler<M extends AutoConfirmMatch>(
-  storage: AutoConfirmStorage<M>,
-  getCronSecret: () => string | undefined = () => process.env.CRON_SECRET,
-) {
+export function createAutoConfirmRunner<M extends AutoConfirmMatch>(storage: AutoConfirmStorage<M>): AutoConfirmRunner {
   async function logStatusAfterConfirmError(matchId: string): Promise<void> {
     try {
       const latest = await storage.getMatchById(matchId);
@@ -141,7 +140,214 @@ export function createAutoConfirmHandler<M extends AutoConfirmMatch>(
     }
   }
 
-  async function handle(request: Request) {
+  return async function run(limit, now) {
+    const matches = await storage.listMatchesReadyForAutoConfirm(new Date(now).toISOString(), limit);
+
+    const result: AutoConfirmResult = {
+      needsAdmin: [],
+      checked: matches.length,
+      completed: 0,
+      skipped_no_winner: 0,
+      skipped_conflict: 0,
+      failed: [],
+      heal: { checked: 0, healed: 0, skipped: 0, failed: [], needs_admin: [], scan_truncated: false },
+    };
+
+    // Pass 1: confirm elapsed pending results. Each match is isolated: one
+    // failure is recorded and the batch goes on.
+    for (const match of matches) {
+      if (!match.winner_id) {
+        result.skipped_no_winner += 1;
+        continue;
+      }
+      const winnerId = match.winner_id;
+
+      try {
+        // Compare-and-set on pending_confirmation (event auto_confirm of the
+        // match machine): a player confirm or dispute that landed after the list
+        // read wins, and finalize never runs twice.
+        storage.machine.assertTransition(AUTO_CONFIRM_FROM, 'completed', 'system');
+        const updated = await storage.updateMatchStatus(
+          match.id,
+          'completed',
+          winnerId,
+          undefined,
+          match.notes ? `${match.notes}\nAuto-confirmed after timeout.` : 'Auto-confirmed after timeout.',
+          AUTO_CONFIRM_FROM
+        );
+        if (!updated) {
+          result.skipped_conflict += 1;
+          continue;
+        }
+
+        const finalize = await storage.finalizeMatchCompletion({
+          match: { ...match, winner_id: winnerId, status: 'completed' },
+          winnerId,
+          previousStatus: AUTO_CONFIRM_FROM,
+        });
+
+        logAuditEvent({
+          actor_id: null,
+          actor_name: 'System',
+          action: 'match.auto_confirm',
+          resource_type: storage.resourceType,
+          resource_id: match.id,
+          resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+          metadata: {
+            ...storage.auditOwner(match),
+            auto_confirm_at: match.auto_confirm_at,
+            winner_id: winnerId,
+          },
+        });
+        result.completed += 1;
+
+        if (!finalize.finalized) {
+          logger.error('cron/auto-confirm', 'finalize did not run for match', {
+            matchId: match.id,
+            reason: finalize.reason ?? 'unknown',
+          });
+          result.failed.push({ match_id: match.id, steps: ['confirm'] });
+        } else if (finalize.failed_steps && finalize.failed_steps.length > 0) {
+          // Each step already logged its own error; the heal pass picks the
+          // match up once the grace period is over.
+          result.failed.push({ match_id: match.id, steps: finalize.failed_steps });
+        }
+      } catch (err) {
+        logger.error('cron/auto-confirm', 'could not auto-confirm match', { matchId: match.id, error: err });
+        await logStatusAfterConfirmError(match.id);
+        result.failed.push({ match_id: match.id, steps: ['confirm'] });
+      }
+    }
+
+    // Pass 2: heal completed matches whose finalize did not finish. Keyset
+    // paging walks past rows the heal cannot act on, so they never starve the
+    // healable rows behind them.
+    const healCutoff = new Date(now - HEAL_GRACE_MS).toISOString();
+    let cursor: FinalizeWorklistCursor | undefined;
+    let healAttempts = 0;
+    let page = 0;
+    scan: for (;;) {
+      if (page >= HEAL_MAX_PAGES) {
+        // Rows may wait behind the last one read; the next run starts at the
+        // head again, so report it instead of reading on.
+        const more = await storage.listMatchesNeedingFinalize(healCutoff, 1, cursor);
+        result.heal.scan_truncated = more.length > 0;
+        break;
+      }
+      const rows = await storage.listMatchesNeedingFinalize(healCutoff, HEAL_PAGE_SIZE, cursor);
+      page += 1;
+      if (rows.length === 0) break;
+      const needsAdmin = await storage.findMatchesNeedingAdmin(rows);
+
+      for (const match of rows) {
+        if (healAttempts >= HEAL_BATCH_LIMIT) break scan;
+        cursor = { updated_at: match.updated_at, id: match.id };
+        result.heal.checked += 1;
+
+        const adminReason = needsAdmin.get(match.id);
+        if (adminReason) {
+          result.heal.needs_admin.push({ match_id: match.id, steps: [], reason: adminReason });
+          continue;
+        }
+
+        try {
+          const heal = await storage.healMatchFinalization(match);
+          if (heal.skipped) {
+            logger.warn('cron/auto-confirm', 'heal skipped match', {
+              matchId: match.id,
+              reason: heal.reason ?? 'unknown',
+            });
+            result.heal.skipped += 1;
+            continue;
+          }
+          if (heal.needs_admin) {
+            // State changed between the classification and the heal; the heal
+            // already logged the cause.
+            result.heal.needs_admin.push({
+              match_id: match.id,
+              steps: heal.failed_steps,
+              ...(heal.reason ? { reason: heal.reason } : {}),
+            });
+            continue;
+          }
+          healAttempts += 1;
+          if (heal.healed) {
+            result.heal.healed += 1;
+          } else {
+            logger.error('cron/auto-confirm', 'heal incomplete for match', {
+              matchId: match.id,
+              steps: heal.failed_steps,
+              ...(heal.failed_steps.length > 0 ? {} : { reason: heal.reason ?? 'unknown' }),
+            });
+            result.heal.failed.push({ match_id: match.id, steps: heal.failed_steps });
+          }
+        } catch (err) {
+          healAttempts += 1;
+          logger.error('cron/auto-confirm', 'heal threw for match', { matchId: match.id, error: err });
+          result.heal.failed.push({ match_id: match.id, steps: [] });
+        }
+      }
+      if (rows.length < HEAL_PAGE_SIZE) break;
+    }
+
+    result.needsAdmin = result.heal.needs_admin.map((entry) => entry.match_id);
+    if (result.needsAdmin.length > 0) {
+      // One line per run (not one per match): these rows stay on the worklist
+      // until an admin repairs them (docs/match.md runbook).
+      logger.error('cron/auto-confirm', 'completed matches need an admin', {
+        count: result.needsAdmin.length,
+        matches: result.heal.needs_admin.map((entry) => ({
+          matchId: entry.match_id,
+          reason: entry.reason ?? 'unknown',
+        })),
+      });
+    }
+    if (result.heal.scan_truncated) {
+      logger.error(
+        'cron/auto-confirm',
+        'heal scan stopped with worklist rows left; needs-admin rows are crowding the worklist',
+        { rowsScanned: HEAL_MAX_PAGES * HEAL_PAGE_SIZE }
+      );
+    }
+
+    return result;
+  };
+}
+
+export type AutoConfirmRunner = (limit: number, now: number) => Promise<AutoConfirmResult>;
+
+function combineAutoConfirmResults(first: AutoConfirmResult, second: AutoConfirmResult): AutoConfirmResult {
+  return {
+    needsAdmin: [...first.needsAdmin, ...second.needsAdmin],
+    checked: first.checked + second.checked,
+    completed: first.completed + second.completed,
+    skipped_no_winner: first.skipped_no_winner + second.skipped_no_winner,
+    skipped_conflict: first.skipped_conflict + second.skipped_conflict,
+    failed: [...first.failed, ...second.failed],
+    heal: {
+      checked: first.heal.checked + second.heal.checked,
+      healed: first.heal.healed + second.heal.healed,
+      skipped: first.heal.skipped + second.heal.skipped,
+      failed: [...first.heal.failed, ...second.heal.failed],
+      needs_admin: [...first.heal.needs_admin, ...second.heal.needs_admin],
+      scan_truncated: first.heal.scan_truncated || second.heal.scan_truncated,
+    },
+  };
+}
+
+export function createAutoConfirmHandler<M extends AutoConfirmMatch>(
+  storage: AutoConfirmStorage<M>,
+  getCronSecret?: () => string | undefined,
+) {
+  const run = createAutoConfirmRunner(storage);
+  return createAutoConfirmCronHandler(async () => [run], getCronSecret);
+}
+
+export function createAutoConfirmCronHandler(
+  selectRunners: () => Promise<readonly [AutoConfirmRunner, AutoConfirmRunner?]>,
+  getCronSecret: () => string | undefined = () => process.env.CRON_SECRET,
+) {
+  return async function handle(request: Request) {
     const authHeader = request.headers.get('authorization');
     const cronSecret = getCronSecret();
 
@@ -172,173 +378,18 @@ export function createAutoConfirmHandler<M extends AutoConfirmMatch>(
       }
       const limit = parsed.data.limit ?? DEFAULT_CONFIRM_LIMIT;
       const now = Date.now();
-      const matches = await storage.listMatchesReadyForAutoConfirm(new Date(now).toISOString(), limit);
-
-      const result: AutoConfirmResult = {
-        needsAdmin: [],
-        checked: matches.length,
-        completed: 0,
-        skipped_no_winner: 0,
-        skipped_conflict: 0,
-        failed: [],
-        heal: { checked: 0, healed: 0, skipped: 0, failed: [], needs_admin: [], scan_truncated: false },
-      };
-
-      // Pass 1: confirm elapsed pending results. Each match is isolated: one
-      // failure is recorded and the batch goes on.
-      for (const match of matches) {
-        if (!match.winner_id) {
-          result.skipped_no_winner += 1;
-          continue;
+      const [primary, secondary] = await selectRunners();
+      let result: AutoConfirmResult;
+      if (!secondary) {
+        result = await primary(limit, now);
+      } else {
+        const [standalone, phase] = await Promise.allSettled([primary(limit, now), secondary(limit, now)]);
+        if (standalone.status === 'rejected' && phase.status === 'rejected') {
+          throw new AggregateError([standalone.reason, phase.reason], 'Both auto-confirm worklists failed');
         }
-        const winnerId = match.winner_id;
-
-        try {
-          // Compare-and-set on pending_confirmation (event auto_confirm of the
-          // match machine): a player confirm or dispute that landed after the list
-          // read wins, and finalize never runs twice.
-          storage.machine.assertTransition(AUTO_CONFIRM_FROM, 'completed', 'system');
-          const updated = await storage.updateMatchStatus(
-            match.id,
-            'completed',
-            winnerId,
-            undefined,
-            match.notes ? `${match.notes}\nAuto-confirmed after timeout.` : 'Auto-confirmed after timeout.',
-            AUTO_CONFIRM_FROM
-          );
-          if (!updated) {
-            result.skipped_conflict += 1;
-            continue;
-          }
-
-          const finalize = await storage.finalizeMatchCompletion({
-            match: { ...match, winner_id: winnerId, status: 'completed' },
-            winnerId,
-            previousStatus: AUTO_CONFIRM_FROM,
-          });
-
-          logAuditEvent({
-            actor_id: null,
-            actor_name: 'System',
-            action: 'match.auto_confirm',
-            resource_type: storage.resourceType,
-            resource_id: match.id,
-            resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
-            metadata: {
-              ...storage.auditOwner(match),
-              auto_confirm_at: match.auto_confirm_at,
-              winner_id: winnerId,
-            },
-          });
-          result.completed += 1;
-
-          if (!finalize.finalized) {
-            logger.error('cron/auto-confirm', 'finalize did not run for match', {
-              matchId: match.id,
-              reason: finalize.reason ?? 'unknown',
-            });
-            result.failed.push({ match_id: match.id, steps: ['confirm'] });
-          } else if (finalize.failed_steps && finalize.failed_steps.length > 0) {
-            // Each step already logged its own error; the heal pass picks the
-            // match up once the grace period is over.
-            result.failed.push({ match_id: match.id, steps: finalize.failed_steps });
-          }
-        } catch (err) {
-          logger.error('cron/auto-confirm', 'could not auto-confirm match', { matchId: match.id, error: err });
-          await logStatusAfterConfirmError(match.id);
-          result.failed.push({ match_id: match.id, steps: ['confirm'] });
-        }
-      }
-
-      // Pass 2: heal completed matches whose finalize did not finish. Keyset
-      // paging walks past rows the heal cannot act on, so they never starve the
-      // healable rows behind them.
-      const healCutoff = new Date(now - HEAL_GRACE_MS).toISOString();
-      let cursor: FinalizeWorklistCursor | undefined;
-      let healAttempts = 0;
-      let page = 0;
-      scan: for (;;) {
-        if (page >= HEAL_MAX_PAGES) {
-          // Rows may wait behind the last one read; the next run starts at the
-          // head again, so report it instead of reading on.
-          const more = await storage.listMatchesNeedingFinalize(healCutoff, 1, cursor);
-          result.heal.scan_truncated = more.length > 0;
-          break;
-        }
-        const rows = await storage.listMatchesNeedingFinalize(healCutoff, HEAL_PAGE_SIZE, cursor);
-        page += 1;
-        if (rows.length === 0) break;
-        const needsAdmin = await storage.findMatchesNeedingAdmin(rows);
-
-        for (const match of rows) {
-          if (healAttempts >= HEAL_BATCH_LIMIT) break scan;
-          cursor = { updated_at: match.updated_at, id: match.id };
-          result.heal.checked += 1;
-
-          const adminReason = needsAdmin.get(match.id);
-          if (adminReason) {
-            result.heal.needs_admin.push({ match_id: match.id, steps: [], reason: adminReason });
-            continue;
-          }
-
-          try {
-            const heal = await storage.healMatchFinalization(match);
-            if (heal.skipped) {
-              logger.warn('cron/auto-confirm', 'heal skipped match', {
-                matchId: match.id,
-                reason: heal.reason ?? 'unknown',
-              });
-              result.heal.skipped += 1;
-              continue;
-            }
-            if (heal.needs_admin) {
-              // State changed between the classification and the heal; the heal
-              // already logged the cause.
-              result.heal.needs_admin.push({
-                match_id: match.id,
-                steps: heal.failed_steps,
-                ...(heal.reason ? { reason: heal.reason } : {}),
-              });
-              continue;
-            }
-            healAttempts += 1;
-            if (heal.healed) {
-              result.heal.healed += 1;
-            } else {
-              logger.error('cron/auto-confirm', 'heal incomplete for match', {
-                matchId: match.id,
-                steps: heal.failed_steps,
-                ...(heal.failed_steps.length > 0 ? {} : { reason: heal.reason ?? 'unknown' }),
-              });
-              result.heal.failed.push({ match_id: match.id, steps: heal.failed_steps });
-            }
-          } catch (err) {
-            healAttempts += 1;
-            logger.error('cron/auto-confirm', 'heal threw for match', { matchId: match.id, error: err });
-            result.heal.failed.push({ match_id: match.id, steps: [] });
-          }
-        }
-        if (rows.length < HEAL_PAGE_SIZE) break;
-      }
-
-      result.needsAdmin = result.heal.needs_admin.map((entry) => entry.match_id);
-      if (result.needsAdmin.length > 0) {
-        // One line per run (not one per match): these rows stay on the worklist
-        // until an admin repairs them (docs/match.md runbook).
-        logger.error('cron/auto-confirm', 'completed matches need an admin', {
-          count: result.needsAdmin.length,
-          matches: result.heal.needs_admin.map((entry) => ({
-            matchId: entry.match_id,
-            reason: entry.reason ?? 'unknown',
-          })),
-        });
-      }
-      if (result.heal.scan_truncated) {
-        logger.error(
-          'cron/auto-confirm',
-          'heal scan stopped with worklist rows left; needs-admin rows are crowding the worklist',
-          { rowsScanned: HEAL_MAX_PAGES * HEAL_PAGE_SIZE }
-        );
+        if (standalone.status === 'rejected') throw standalone.reason;
+        if (phase.status === 'rejected') throw phase.reason;
+        result = combineAutoConfirmResults(standalone.value, phase.value);
       }
 
       const failedCount = result.failed.length + result.heal.failed.length;
@@ -364,22 +415,24 @@ export function createAutoConfirmHandler<M extends AutoConfirmMatch>(
     } catch (err) {
       return safeErrorResponse(err, 'Failed to auto-confirm matches');
     }
-  }
-
-  return handle;
+  };
 }
 
-export function createLegacyAutoConfirmHandler(getCronSecret?: () => string | undefined) {
-  return createAutoConfirmHandler<MatchWithPlayers>({
+export function createLegacyAutoConfirmRunner(standaloneOnly = false) {
+  return createAutoConfirmRunner<MatchWithPlayers>({
     machine: matchMachine,
     resourceType: 'match',
     auditOwner: () => ({}),
     getMatchById: (...args) => getMatchById(...args),
-    listMatchesReadyForAutoConfirm: (...args) => listMatchesReadyForAutoConfirm(...args),
-    listMatchesNeedingFinalize: (...args) => listMatchesNeedingFinalize(...args),
+    listMatchesReadyForAutoConfirm: (...args) => standaloneOnly
+      ? listMatchesReadyForAutoConfirm(...args, true)
+      : listMatchesReadyForAutoConfirm(...args),
+    listMatchesNeedingFinalize: (cutoff, limit, after) => standaloneOnly
+      ? listMatchesNeedingFinalize(cutoff, limit, after, true)
+      : listMatchesNeedingFinalize(cutoff, limit, after),
     updateMatchStatus: (...args) => updateMatchStatus(...args),
-    finalizeMatchCompletion: (...args) => finalizeMatchCompletion(...args),
-    healMatchFinalization: (...args) => healMatchFinalization(...args),
+    finalizeMatchCompletion: (input) => standaloneOnly ? finalizeStandaloneMatchCompletion(input) : finalizeMatchCompletion(input),
+    healMatchFinalization: (match) => standaloneOnly ? healStandaloneMatchFinalization(match) : healMatchFinalization(match),
     findMatchesNeedingAdmin: (...args) => findMatchesNeedingAdmin(...args),
-  }, getCronSecret);
+  });
 }
