@@ -218,6 +218,38 @@ it('respects nominal losers-bracket starts in an existing flat double-eliminatio
   }));
 });
 
+it('uses winners across stale groups when flat elimination history shows cross-group play', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 1 });
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
+  m.participants.mockResolvedValue(players.slice(0, 4).map(player => ({ ...player, starting_bracket: 'winners' })));
+  const storedGroups = [['a', 'b'], ['c', 'd']].map((ids, index) => ({
+    id: `group-${index}`, name: `Group ${index}`, group_number: index + 1, season_group_id: null,
+    members: ids.map((id, seed) => ({ player_id: id, seed: seed + 1 })),
+  }));
+  m.groups.mockResolvedValue(storedGroups);
+  m.matches.mockResolvedValue([match(1, 'a', 'c'), match(1, 'b', 'd')]);
+  expect((await run()).status).toBe(201);
+  expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    name: 'Finals', matches: [{ player_1_id: 'a', player_2_id: 'b' }],
+    inputs: expect.objectContaining({ groups: storedGroups }),
+  }));
+});
+
+it('preserves independent flat elimination pairings when historic matches stayed inside their groups', async () => {
+  m.phase.mockResolvedValue({ ...phase, bracket_type: 'single_elim', status: 'active', current_round: 1 });
+  m.rounds.mockResolvedValue([{ ...round(1), bracket_side: null }]);
+  m.participants.mockResolvedValue(players.map(player => ({ ...player, starting_bracket: 'winners' })));
+  m.groups.mockResolvedValue([['a', 'b', 'c'], ['d', 'e', 'f']].map((ids, index) => ({
+    id: `group-${index}`, name: `Group ${index}`, group_number: index + 1, season_group_id: null,
+    members: ids.map((id, seed) => ({ player_id: id, seed: seed + 1 })),
+  })));
+  m.matches.mockResolvedValue([match(1, 'a', 'b'), match(1, 'd', 'e')]);
+  expect((await run()).status).toBe(201);
+  expect(m.write).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+    name: 'Round 2', matches: [{ player_1_id: 'a', player_2_id: 'c' }, { player_1_id: 'd', player_2_id: 'f' }],
+  }));
+});
+
 it('refuses a new, managed or unsettled flat elimination bracket without a write', async () => {
   const elimination = { ...phase, bracket_type: 'single_elim' };
   m.phase.mockResolvedValueOnce(elimination);
