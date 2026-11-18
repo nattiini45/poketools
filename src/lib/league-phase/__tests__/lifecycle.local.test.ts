@@ -225,6 +225,57 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     expect(await phases.getPhaseById(live.id)).toMatchObject({ status: 'active', current_round: 2 });
   });
 
+  it('repairs a missing native bracket slot once and refuses to rewrite a scheduled slot with linked data', async () => {
+    const phase = await create('single_elim');
+    await enroll(phase.id);
+    const [{ generateEliminationBracket }, { createNativeBracketPersistence }, { planPhaseBracketRepair }, matchQueries] = await Promise.all([
+      import('@/lib/tournament/bracket-generate'), import('@/lib/league-phase/bracket-persistence'),
+      import('@/lib/league-phase/bracket-repair'), import('@/lib/supabase/queries/phase-matches'),
+    ]);
+    const participants = await phases.getPhaseParticipants(phase.id);
+    await generateEliminationBracket(phase, participants, {}, createNativeBracketPersistence());
+    const original = (await matchQueries.getMatchesByPhase(phase.id)).sort((a, b) => (a.bracket_pos ?? 0) - (b.bracket_pos ?? 0));
+    expect(original).toHaveLength(2);
+    const [existing, missing] = original;
+    expect((await admin.from('phase_matches').delete().eq('id', missing.id)).error).toBeNull();
+    expect((await admin.from('phase_matches').update({
+      player_1_id: existing.player_2_id, player_2_id: existing.player_1_id, notes: 'Fixture linked note',
+    }).eq('id', existing.id)).error).toBeNull();
+    const loadPlan = async () => {
+      const [live, ownedRounds, ownedMatches] = await Promise.all([
+        phases.getPhaseById(phase.id), rounds.getRoundsByPhase(phase.id), matchQueries.getMatchesByPhase(phase.id),
+      ]);
+      if (!live) throw new Error('Fixture phase disappeared');
+      return {
+        seasonId, phaseId: live.id, updatedAt: live.updated_at,
+        seeds: participants.map(({ id: player_id, name, seed, starting_bracket }) => ({ player_id, name, seed, starting_bracket })),
+        rounds: ownedRounds.map(({ id, round_number, bracket_side, status }) => ({ id, round_number, bracket_side, status })),
+        matches: ownedMatches.map(({ id, updated_at, games }) => ({ id, updated_at, has_games: games.length > 0 })),
+        slots: planPhaseBracketRepair(live, participants, ownedRounds, ownedMatches),
+      };
+    };
+    const refused = await loadPlan();
+    expect(refused.slots).toHaveLength(2);
+    await expect(rounds.writePhaseBracketRepair(refused)).rejects.toMatchObject({ code: 'phase_bracket_repair_linked' });
+    expect(await matchQueries.getMatchesByPhase(phase.id)).toEqual([
+      expect.objectContaining({ id: existing.id, player_1_id: existing.player_2_id, notes: 'Fixture linked note' }),
+    ]);
+    expect((await admin.from('phase_matches').update({ notes: '' }).eq('id', existing.id)).error).toBeNull();
+    await expect(rounds.writePhaseBracketRepair(refused)).rejects.toMatchObject({ code: 'phase_bracket_repair_changed' });
+    const ready = await loadPlan();
+    const attempts = await Promise.allSettled([rounds.writePhaseBracketRepair(ready), rounds.writePhaseBracketRepair(ready)]);
+    expect(attempts).toEqual(expect.arrayContaining([
+      { status: 'fulfilled', value: { slots_materialized: 1, slots_updated: 1 } },
+      expect.objectContaining({ status: 'rejected', reason: expect.objectContaining({ code: 'phase_bracket_repair_changed' }) }),
+    ]));
+    const saved = await matchQueries.getMatchesByPhase(phase.id);
+    expect(saved).toHaveLength(2);
+    expect(saved).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: existing.id, player_1_id: existing.player_1_id, player_2_id: existing.player_2_id }),
+      expect.objectContaining({ bracket_pos: missing.bracket_pos, player_1_id: missing.player_1_id, player_2_id: missing.player_2_id }),
+    ]));
+  });
+
   it('serializes manual appends and inserts without shifting an already started phase', async () => {
     const prefix = `Placement ${randomUUID()}`;
     const input = {

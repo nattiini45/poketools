@@ -110,6 +110,9 @@ export default defineDe<typeof en>()({
   bracket_regenerate_phase_completed:
     'Diese Phase ist bereits beendet, deshalb kann ihr Turnierbaum nicht neu erstellt werden. Öffne die Phase zuerst wieder und erstelle den Turnierbaum danach neu.',
   bracket_repair_elim_only: 'Den Turnierbaum reparieren geht nur im K.-o.-System und im Doppel-K.-o.',
+  phase_bracket_archived: 'Eine archivierte Phase kannst du nicht bearbeiten.',
+  phase_bracket_repair_changed: 'Der Turnierbaum hat sich während der Planung geändert. Es wurde nichts gespeichert. Lade die Seite neu und versuch es noch einmal.',
+  phase_bracket_repair_linked: 'Ein Spiel, das neu gepaart werden müsste, hat bereits verknüpfte Daten. Es wurde nichts gespeichert. Prüfe das Spiel, bevor du es neu paarst.',
 
   // Re-pairing one match
   repair_match_not_found: 'Spiel nicht gefunden.',

@@ -123,6 +123,9 @@ export default {
   bracket_regenerate_phase_completed:
     'This phase has already ended, so its bracket cannot be regenerated. Reopen the phase first, then regenerate the bracket.',
   bracket_repair_elim_only: 'Bracket repair only applies to elimination formats',
+  phase_bracket_archived: 'Archived phase is read-only',
+  phase_bracket_repair_changed: 'The bracket changed while the repair was being planned. Nothing was written. Reload and try again.',
+  phase_bracket_repair_linked: 'A slot that needs repair already has linked data. Nothing was written. Review that match before re-pairing it.',
 
   // Re-pairing one match
   repair_match_not_found: 'Match not found',

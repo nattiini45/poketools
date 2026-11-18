@@ -2,12 +2,15 @@ import { NextRequest } from 'next/server';
 import { beforeEach, expect, it, vi } from 'vitest';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { POST } from '../route';
+import { POST as REPAIR } from '../../repair-bracket/route';
+import { POST as REGENERATE } from '../../regenerate-bracket/route';
 
 const m = vi.hoisted(() => ({
   actor: vi.fn(), allowed: vi.fn(), mode: vi.fn(), season: vi.fn(), phase: vi.fn(),
   participants: vi.fn(), rounds: vi.fn(), rpc: vi.fn(), startRound: vi.fn(), updateSeason: vi.fn(),
   expire: vi.fn(), audit: vi.fn(), discord: vi.fn(), social: vi.fn(), formatAttached: vi.fn(),
   kitPhase: vi.fn(), kitContext: vi.fn(), stageStart: vi.fn(), fireEvent: vi.fn(),
+  phaseMatches: vi.fn(), phaseMatch: vi.fn(), resetMatch: vi.fn(), invalidateMatch: vi.fn(),
   legacy: vi.fn(() => { throw new Error('Legacy persistence must not run'); }),
 }));
 vi.mock('@/lib/auth/helpers', () => ({
@@ -21,6 +24,7 @@ vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: m.m
 vi.mock('@/lib/supabase/client', () => ({ supabase: { rpc: m.rpc } }));
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: m.season, updateSeason: m.updateSeason }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: m.phase, getPhaseParticipants: m.participants }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getMatchesByPhase: m.phaseMatches, getPhaseMatchById: m.phaseMatch }));
 vi.mock('@/lib/supabase/queries/phase-rounds', async (importOriginal) => ({
   ...await importOriginal<typeof import('@/lib/supabase/queries/phase-rounds')>(),
   getRoundsByPhase: m.rounds, updatePhaseRoundStatus: m.startRound,
@@ -33,7 +37,7 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: m.legacy, getMatchesByTournament: m.legacy, createMatch: m.legacy,
 }));
 vi.mock('@/lib/pkmn/game-pipeline', () => ({ resetMatch: m.legacy }));
-vi.mock('@/lib/revalidation', () => ({ expirePhaseReads: m.expire }));
+vi.mock('@/lib/revalidation', () => ({ expirePhaseReads: m.expire, revalidatePhaseMatchPages: m.invalidateMatch }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: m.audit }));
 vi.mock('@/lib/discord/notify', () => ({ emitPhaseDiscordEvent: m.discord, emitDiscordEvent: m.legacy }));
 vi.mock('@/lib/social/notify', () => ({ emitPhaseSocialEvent: m.social, emitSocialEvent: m.legacy }));
@@ -43,7 +47,7 @@ vi.mock('@/lib/format-engine/runtime/hooks', () => ({
   onNativePhaseStatusChanged: m.stageStart, onRoundGenerated: m.legacy,
 }));
 vi.mock('@/lib/format-engine/runtime/fire', () => ({ fireEvent: m.fireEvent }));
-vi.mock('../../rounds/_lib/effects', () => ({ nativeRoundServices: () => ({ matches: { kit: nativeKit } }) }));
+vi.mock('../../rounds/_lib/effects', () => ({ nativeRoundServices: () => ({ matches: { kit: nativeKit, resetMatch: m.resetMatch } }) }));
 
 const id = '10000000-0000-4000-8000-0000000000a1';
 const phaseId = '20000000-0000-4000-8000-0000000000b2';
@@ -89,6 +93,63 @@ beforeEach(() => {
   m.participants.mockResolvedValue(players);
   m.rounds.mockResolvedValue([]);
   m.rpc.mockResolvedValue({ data: null, error: null });
+  m.phaseMatches.mockResolvedValue([]);
+});
+
+it('repairs a missing native final from its completed feeder without rewriting the feeder', async () => {
+  m.phase.mockResolvedValue({ ...phase, status: 'active' });
+  m.rounds.mockResolvedValue([
+    { id: 'semis', round_number: 1, bracket_side: 'winners', status: 'completed' },
+    { id: 'final', round_number: 2, bracket_side: 'winners', status: 'pending' },
+  ]);
+  m.phaseMatches.mockResolvedValue([{
+    id: 'played', round_id: 'semis', bracket_side: 'winners', bracket_pos: 1, status: 'completed', updated_at: phase.updated_at,
+    player_1_id: 'player-2', player_2_id: 'player-3', winner_id: 'player-2', games: [{ id: 'played-game' }],
+  }]);
+  m.rpc.mockResolvedValueOnce({ data: { slots_materialized: 1, slots_updated: 0 }, error: null });
+  const response = await REPAIR(request(), ctx());
+  expect(response.status).toBe(200);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith('phase_bracket_repair', expect.objectContaining({
+    p_season_id: id, p_phase_id: phaseId, p_expected_matches: [{ id: 'played', updated_at: phase.updated_at, has_games: true }],
+    p_slots: [expect.objectContaining({ match_id: null, round_id: 'final', player_1_id: 'player-1', player_2_id: 'player-2' })],
+  }));
+  expect(m.expire).toHaveBeenCalledExactlyOnceWith(phaseId, id);
+  expect(m.legacy).not.toHaveBeenCalled();
+});
+
+it('requires explicit cascade before undoing a played native bracket and invalidates an attempted reset', async () => {
+  m.phase.mockResolvedValue({ ...phase, status: 'active' });
+  m.rounds.mockResolvedValue([{ id: 'semis', round_number: 1, bracket_side: 'winners', status: 'completed' }]);
+  const played = { id: 'played', phase_id: phaseId, status: 'completed', games: [{ id: 'game' }] };
+  m.phaseMatches.mockResolvedValue([played]);
+  m.phaseMatch.mockResolvedValue(played);
+  m.resetMatch.mockResolvedValue({ format_revert_failed: true });
+  const preview = await REGENERATE(request({ cascade: false }), ctx());
+  expect(preview.status).toBe(409);
+  expect(await preview.json()).toMatchObject({ code: 'REGENERATE_PLAYED', params: { count: 1 } });
+  expect(m.resetMatch).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
+  expect(m.expire).not.toHaveBeenCalled();
+  const response = await REGENERATE(request({ cascade: true }), ctx());
+  expect(response.status).toBe(200);
+  expect(await response.json()).toMatchObject({ data: { format_revert_failed: true } });
+  expect(m.resetMatch).toHaveBeenCalledExactlyOnceWith('played', actor.playerId, true);
+  expect(m.rpc).toHaveBeenCalledExactlyOnceWith('phase_bracket_write_guarded', expect.objectContaining({
+    p_phase_id: phaseId, p_expected_status: 'active', p_replace: true,
+  }));
+  expect(m.rpc).toHaveBeenCalledAfter(m.resetMatch);
+  expect(m.invalidateMatch).toHaveBeenCalledExactlyOnceWith(phaseId, 'played', id);
+  expect(m.legacy).not.toHaveBeenCalled();
+});
+
+it('refuses legacy mode and a phase belonging to a different league before any maintenance', async () => {
+  m.mode.mockResolvedValueOnce('legacy');
+  expect((await REPAIR(request(), ctx())).status).toBe(404);
+  m.phase.mockResolvedValueOnce({ ...phase, season_id: other });
+  expect((await REGENERATE(request({ cascade: true }), ctx())).status).toBe(404);
+  expect(m.phaseMatches).not.toHaveBeenCalled();
+  expect(m.resetMatch).not.toHaveBeenCalled();
+  expect(m.rpc).not.toHaveBeenCalled();
 });
 
 it('plans a single-elimination bracket with a bye, writes one native RPC, and emits native effects', async () => {

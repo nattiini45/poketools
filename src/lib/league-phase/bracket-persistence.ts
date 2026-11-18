@@ -5,7 +5,7 @@ import { phaseMachine } from './phase-state';
 type BracketResultsPersistence = Pick<BracketPersistence, 'getMatches' | 'getMatch' | 'resetMatch'>;
 
 export function createNativeBracketPersistence(results?: undefined, guard?: PhaseBracketInputGuard): BracketGenerationPersistence;
-export function createNativeBracketPersistence(results: BracketResultsPersistence): BracketPersistence;
+export function createNativeBracketPersistence(results: BracketResultsPersistence, guard?: PhaseBracketInputGuard): BracketPersistence;
 export function createNativeBracketPersistence(results?: BracketResultsPersistence, guard?: PhaseBracketInputGuard): BracketGenerationPersistence {
   return {
     getRounds: getRoundsByPhase,

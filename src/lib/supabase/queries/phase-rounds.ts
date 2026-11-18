@@ -340,6 +340,47 @@ export interface PhaseBracketInputGuard {
   formatRevision?: number;
 }
 
+export async function writePhaseBracketRepair(input: {
+  seasonId: string;
+  phaseId: string;
+  updatedAt: string;
+  seeds: { player_id: string; name: string; seed: number | null; starting_bracket: string }[];
+  rounds: Pick<PhaseRound, 'id' | 'round_number' | 'bracket_side' | 'status'>[];
+  matches: { id: string; updated_at: string; has_games: boolean }[];
+  slots: (Omit<BracketMatchInput, 'id'> & { match_id: string | null })[];
+}): Promise<{ slots_materialized: number; slots_updated: number }> {
+  const { data, error } = await supabase.rpc('phase_bracket_repair', {
+    p_season_id: input.seasonId,
+    p_phase_id: input.phaseId,
+    p_expected_updated_at: input.updatedAt,
+    p_expected_seeds: input.seeds,
+    p_expected_rounds: input.rounds,
+    p_expected_matches: input.matches,
+    p_slots: input.slots,
+  });
+  if (error) {
+    if (error.code === '55P03' || isRoundWriteSignal(error, 'phase_bracket_repair_changed')) {
+      throw Object.assign(new UserFacingError(tournamentErrors.phase_bracket_repair_changed, {
+        code: 'phase_bracket_repair_changed', status: 409,
+      }), { cause: error });
+    }
+    if (isRoundWriteSignal(error, 'phase_bracket_repair_linked')) {
+      throw Object.assign(new UserFacingError(tournamentErrors.phase_bracket_repair_linked, {
+        code: 'phase_bracket_repair_linked', status: 409,
+      }), { cause: error });
+    }
+    if (isRoundWriteSignal(error, 'PHASE_NOT_FOUND')) {
+      throw new UserFacingError('Phase not found', { code: 'PHASE_NOT_FOUND', status: 404 });
+    }
+    throw error;
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data)
+    && typeof data.slots_materialized === 'number' && typeof data.slots_updated === 'number') {
+    return { slots_materialized: data.slots_materialized, slots_updated: data.slots_updated };
+  }
+  throw new Error('Unexpected phase bracket repair result');
+}
+
 export async function writePhaseBracket(input: {
   phase_id: string;
   expected_status: PhaseStatus;

@@ -22,7 +22,7 @@ import { useApiErrorText } from '@/i18n/use-api-error';
 import { phaseRoundMachine } from '@/lib/league-phase/phase-round-state';
 import { phaseMatchHref, type LeaguePhaseAddress } from '@/lib/league-phase/paths';
 import { bestOfChoices } from '@/lib/tournament/best-of';
-import type { ApiResult, ApiWarning } from '@/types/api';
+import type { ApiError, ApiResult, ApiWarning } from '@/types/api';
 import type { Phase, PhaseParticipant, PhaseRound } from '@/types/league-phase';
 import ManualRoundForm from './ManualRoundForm';
 import { ROUND_MATCHES_LOAD_FAILED, ROUND_ROW_ACTIONS_CLASS, ROUND_ROW_HEADER_CLASS, RoundByeNotice, RoundDeadlineRow, RoundDisclosure, RoundMatchesPanel } from './RoundManager';
@@ -60,6 +60,8 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const [writing, setWriting] = useState<WriteErrorKey | null>(null);
   const [error, setError] = useState<UiError<WriteErrorKey> | null>(null);
   const [warnings, setWarnings] = useState<ApiWarning[]>([]);
+  const [regenerateOpen, setRegenerateOpen] = useState(false);
+  const [cascadeNotice, setCascadeNotice] = useState<ApiError | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
   const [loaded, setLoaded] = useState<LoadedDetail | null>(null);
@@ -80,6 +82,8 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
   const canGenerateNext = !isElimination && !hasStructure;
   const canGenerateAll = canGenerateNext && phase.bracket_type === 'round_robin';
   const canGenerateBracket = isElimination && rounds.length === 0;
+  const canRepairBracket = isElimination && hasStructure;
+  const canRegenerateBracket = isElimination && rounds.length > 0;
   const canCreateManual = !isElimination && !hasStructure && !groupedManualBlocked;
   const latest = Math.max(0, ...rounds.map(round => round.round_number));
 
@@ -98,14 +102,19 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
     return () => abort.abort();
   }, [selected, attempt, requests]);
 
-  async function write(request: () => Promise<ApiResult<unknown>>, fallback: WriteErrorKey, onSuccess?: () => void) {
+  async function write(
+    request: () => Promise<ApiResult<unknown>>, fallback: WriteErrorKey, onSuccess?: () => void,
+    onRefusal?: (error: ApiError) => boolean,
+  ) {
     if (busy || manualOpen || !editable) return;
     setWriting(fallback);
     setError(null);
     setWarnings([]);
     try {
       const result = await request();
-      if (!result.success) setError(apiFailure(result));
+      if (!result.success) {
+        if (!onRefusal?.(result)) setError(apiFailure(result));
+      }
       else {
         setWarnings(result.warnings ?? []);
         onSuccess?.();
@@ -116,6 +125,23 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
       startRefresh(() => router.refresh());
       setWriting(null);
     }
+  }
+
+  function regenerateBracket() {
+    const cascade = cascadeNotice !== null;
+    setCascadeNotice(null);
+    return write(async () => {
+      const result = await requests.regenerateBracket(cascade);
+      if (result.success && result.data.format_revert_failed) {
+        return { ...result, warnings: [{ code: 'round_format_revert_failed' }] };
+      }
+      return result;
+    }, 'rounds.errors.regenerateBracket', () => setExpandedId(null), refusal => {
+      if (cascade || refusal.code !== 'REGENERATE_PLAYED') return false;
+      setCascadeNotice(refusal);
+      setRegenerateOpen(true);
+      return true;
+    });
   }
 
   function edit(roundId: string, change: PhaseRoundEdit) {
@@ -137,7 +163,7 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
       {!editable && <Alert variant="info">{tPhase('phasePage.roundsReadOnly')}</Alert>}
       {error && <Alert variant="error">{'api' in error ? errorText(error.api) : t(error.key)}</Alert>}
       {warnings.map(warning => <Alert key={warning.code} variant="warning">{errorText(warning)}</Alert>)}
-      {editable && (canGenerateBracket || canGenerateNext || canCreateManual) && (
+      {editable && (canGenerateBracket || canGenerateNext || canCreateManual || canRegenerateBracket) && (
         <>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-poke-lg border border-hairline bg-elevated p-3">
             {canGenerateBracket && (
@@ -145,6 +171,45 @@ export default function PhaseRoundManager({ address, phase, rounds, participants
                 onClick={() => void write(requests.generateBracket, 'rounds.errors.generateBracket')}>
                 {t('rounds.generateBracket')}
               </Button>
+            )}
+            {canRepairBracket && (
+              <ActionButton type="button" className={getButtonClasses('secondary', 'sm')} disabled={busy}
+                onClick={() => write(requests.repairBracket, 'rounds.errors.repairBracket')}>
+                {t('rounds.repairBracket')}
+              </ActionButton>
+            )}
+            {canRegenerateBracket && (
+              <AlertDialog open={regenerateOpen} onOpenChange={(open, details) => {
+                setRegenerateOpen(open);
+                if (!open) {
+                  if (details.returnValue === 'confirm') void regenerateBracket();
+                  else setCascadeNotice(null);
+                }
+              }}>
+                <AlertDialogTrigger disabled={busy || participants.length < 2}
+                  render={<Button type="button" variant="secondary" size="sm" />}>
+                  {t('rounds.regenerateBracket')}
+                </AlertDialogTrigger>
+                <AlertDialogBackdrop className="fixed inset-0 z-50 backdrop-blur-xs" />
+                <AlertDialogContent className="fixed left-1/2 top-1/2 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-poke-xl border border-poke-border bg-poke-surface p-6 shadow-poke-lg">
+                  <AlertDialogTitle className="text-lg font-heading font-bold text-poke-text-primary">
+                    {t(cascadeNotice ? 'rounds.regenerateDialog.cascadeTitle' : 'rounds.regenerateDialog.title')}
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="my-4 text-sm text-poke-text-secondary">
+                    {cascadeNotice
+                      ? t('rounds.regenerateDialog.cascadeMessage', { cascade: errorText(cascadeNotice) })
+                      : t('rounds.regenerateDialog.message')}
+                  </AlertDialogDescription>
+                  <div className="flex justify-end gap-3">
+                    <AlertDialogClose render={<Button type="button" variant="ghost" size="sm" />}>{tUi('confirmDialog.cancel')}</AlertDialogClose>
+                    <AlertDialogClose value="confirm" disabled={busy}
+                      data-agent-confirm={cascadeNotice ? errorText(cascadeNotice) : t('rounds.regenerateDialog.message')}
+                      render={<Button type="button" variant="danger" size="sm" className={cascadeNotice ? 'order-first' : undefined} />}>
+                      {t(cascadeNotice ? 'rounds.regenerateDialog.cascadeConfirm' : 'rounds.regenerateDialog.confirm')}
+                    </AlertDialogClose>
+                  </div>
+                </AlertDialogContent>
+              </AlertDialog>
             )}
             {canGenerateNext && (
               <Button type="button" size="sm" disabled={busy || manualOpen || participants.length < 2 || swissBlocked} loading={writing === 'rounds.errors.generateRound'}

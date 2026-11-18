@@ -358,7 +358,7 @@ export default defineDe<typeof en>()({
     groups: 'Gruppen',
     rounds: 'Runden',
     sectionsNav: 'Abschnitte dieser Phase',
-    readOnly: 'Die Phaseneinstellungen, der Kader und die Gruppen sind hier weiterhin schreibgeschützt. Du kannst hier keine Turnierbäume reparieren oder neu erstellen, gespielte Runden zurücksetzen oder einen Rundenabschluss erzwingen.',
+    readOnly: 'Die Phaseneinstellungen, der Kader und die Gruppen sind hier weiterhin schreibgeschützt. Du kannst hier keine gespielten Runden zurücksetzen oder einen Rundenabschluss erzwingen.',
     roundsReadOnly: 'Runden in abgeschlossenen oder archivierten Phasen kannst du hier nicht bearbeiten.',
     noRounds: 'Keine Runden.',
     deleteRoundWarning: 'Dadurch löschst du die Runde und ihre ungespielten Spiele. Wenn es Ergebnisse, Abhängigkeiten oder verknüpfte Einträge gibt, wird die Runde nicht gelöscht.',
