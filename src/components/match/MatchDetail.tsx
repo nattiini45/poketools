@@ -72,7 +72,7 @@ interface MatchDetailProps {
   viewerId?: string;
   notes?: string;
   contentLocale?: Locale;
-  epb?: { snapshots: MatchEvolutionSnapshot[]; entries: PointBuyListEntry[]; replayViewed: boolean };
+  epb?: { snapshots: MatchEvolutionSnapshot[]; entries: PointBuyListEntry[]; replayViewed: boolean; viewedEndpoint?: string };
   proposals: MatchProposalWithPlayers[];
   legacyActions?: {
     isSiteAdmin?: boolean;
@@ -326,7 +326,7 @@ export default async function MatchDetail({
           {/* Crystal XP animation replay — driven by stored snapshots;
               targets resolved server-side per evolution (stage crossed) */}
           <MatchEvolutionReplay
-            viewedEndpoint={legacyActions ? `/api/matches/${mid}/epb-replay-viewed` : undefined}
+            viewedEndpoint={epb?.viewedEndpoint ?? (legacyActions ? `/api/matches/${mid}/epb-replay-viewed` : undefined)}
             initialViewed={epb?.replayViewed ?? false}
             isAuthenticated={Boolean(viewerId)}
             evolutionSnapshots={epbSnapshots.filter((s) => s.evolution_triggered)}

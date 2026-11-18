@@ -68,7 +68,7 @@ export async function renderNativeMatchDetail(seasonId: string, match: PublicPha
   const [privateMatch, contentLocale, epb, proposals] = await Promise.all([
     access?.isSiteAdmin ? getPhaseMatchById(match.id) : null,
     analysis?.status === 'completed' ? resolveContentLocale({ seasonId }) : undefined,
-    isEpb ? loadNativeEpbMatchDetail(match.id, seasonId, viewerId) : undefined,
+    isEpb ? loadNativeEpbMatchDetail(match.id, seasonId, phaseId, viewerId) : undefined,
     viewerId && isParticipant ? listPhaseMatchProposals(match.id, viewerId) : [],
   ]);
 
@@ -90,12 +90,15 @@ export async function renderNativeMatchDetail(seasonId: string, match: PublicPha
   });
 }
 
-async function loadNativeEpbMatchDetail(matchId: string, seasonId: string, viewerId?: string) {
+async function loadNativeEpbMatchDetail(matchId: string, seasonId: string, phaseId: string, viewerId?: string) {
   const [snapshots, season, replayViewed] = await Promise.all([
     getPhaseMatchSnapshots(matchId),
     getSeasonById(seasonId),
     viewerId ? hasViewedPhaseEpbReplay(viewerId, matchId) : false,
   ]);
   const entries = season?.point_buy_list_id ? await getListEntries(season.point_buy_list_id) : [];
-  return { snapshots, entries, replayViewed };
+  return {
+    snapshots, entries, replayViewed,
+    viewedEndpoint: `/api/seasons/${seasonId}/phases/${phaseId}/matches/${matchId}/epb-replay-viewed`,
+  };
 }

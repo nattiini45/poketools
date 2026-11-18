@@ -47,6 +47,7 @@ vi.mock('@/lib/reconcile/evolution-rebuild', () => ({
 
 import {
   RESTORE_AGGREGATE_DRAIN_BUDGET_MS,
+  createEntityDeleteRebuilder,
   rebuildAfterSeasonDelete,
   rebuildAfterSeasonRestore,
   rebuildAfterTournamentDelete,
@@ -264,6 +265,32 @@ describe('rebuildAfterTournamentDelete', () => {
 
     expect(mockRebuildRatings).not.toHaveBeenCalled();
     expect(mockRecomputeStreaks).not.toHaveBeenCalled();
+  });
+});
+
+describe('rebuildAfterPhaseDelete', () => {
+  it('clears only the native phase and rebuilds the surviving league and global projections', async () => {
+    const clearPhaseAggregates = vi.fn().mockResolvedValue({ aggregatesDeleted: 3, playerAggregatesDeleted: 10 });
+    const rebuild = createEntityDeleteRebuilder({
+      clearAggregatesForScope,
+      clearPhaseAggregates,
+      getSeasonById,
+      drainPendingAggregateJobs,
+      rebuildAggregatesForScope,
+      countFailedIncrementJobsForSeason,
+      requeueFailedIncrementJobsForSeason,
+      rebuildRatingsForPlayers,
+      rebuildRatingsSettled,
+      recomputeStreaks,
+      repairSeasonEvolution,
+    });
+    const result = await rebuild.rebuildAfterPhaseDelete({ phaseId: PHASES[0], seasonId: SEASON_ID, playerIds: PLAYERS });
+    expect(clearPhaseAggregates).toHaveBeenCalledExactlyOnceWith(PHASES[0]);
+    expect(mockClear).not.toHaveBeenCalled();
+    expect(mockRebuildScope.mock.calls).toEqual([['league', SEASON_ID], ['all_time', null]]);
+    expect(mockRebuildRatings).toHaveBeenCalledWith(PLAYERS);
+    expect(mockRecomputeStreaks.mock.calls).toEqual(PLAYERS.map((id) => [id]));
+    expect(result).toMatchObject({ scope: 'phase', leagueScope: { seasonId: SEASON_ID, mode: 'rebuilt' } });
   });
 });
 
