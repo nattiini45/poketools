@@ -99,6 +99,7 @@ export default async function MatchDetail({
 
 
   const isParticipant = viewerId === match.player_1_id || viewerId === match.player_2_id;
+  const canManageSchedule = isParticipant && (!!legacyActions || back.kind === 'phase');
   const canAct = match.status === 'scheduled' || match.status === 'in_progress';
   const canConfirm = match.status === 'pending_confirmation';
   const canEditGames = legacyActions?.canEditGames ?? false;
@@ -294,10 +295,10 @@ export default async function MatchDetail({
       <MatchHighlightCard {...highlightProps} />
 
       <MatchSchedulingPanel
-        matchId={legacyActions ? mid : undefined}
+        matchId={legacyActions || canManageSchedule ? mid : undefined}
         status={match.status}
-        currentPlayerId={legacyActions ? viewerId ?? null : null}
-        canManage={!!legacyActions && isParticipant}
+        currentPlayerId={legacyActions || canManageSchedule ? viewerId ?? null : null}
+        canManage={canManageSchedule}
         scheduledAt={match.scheduled_at}
         roundDeadline={round?.deadline ?? null}
         initialProposals={proposals}

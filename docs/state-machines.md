@@ -40,7 +40,7 @@ Each machine below is a column, timestamp or flag combination that moves through
 - [League recycle bin](#league-recycle-bin) — `derived: seasons row + league_trash (rebuild_pending, purge_after) + league_trash_restore_rebuilds`
 - [Match](#match) — `matches.status (enum match_status) with confirmed_at, auto_confirm_at, date_played and finalized_at`
 - [Match outcome](#match-outcome) — `match_outcomes.kind with source = 'admin' (row absent = none)`
-- [Match proposal](#match-proposal) — `match_proposals.status (enum match_proposal_status) with expires_at`
+- [Match proposal](#match-proposal) — `match_proposals.status or phase_match_proposals.status (enum match_proposal_status) with expires_at`
 - [Phase aggregate job](#phase-aggregate-job) — `phase_aggregate_jobs.status`
 - [Phase game aggregate marker](#phase-game-aggregate-marker) — `phase_games.aggregate_applied_at (NULL = uncounted)`
 - [Phase game edit lease](#phase-game-edit-lease) — `phase_games.edit_lease_token + phase_games.edit_lease_until`
@@ -1046,7 +1046,7 @@ stateDiagram-v2
 ## Match proposal
 
 - **Id:** `match_proposal`
-- **State lives in:** match_proposals.status (enum match_proposal_status) with expires_at
+- **State lives in:** match_proposals.status or phase_match_proposals.status (enum match_proposal_status) with expires_at
 - **Module doc:** `docs/match.md`
 - **States:** `pending`, `accepted`, `rejected`, `expired`, `cancelled`
 - **Actors:** `responder`, `admin`, `system`
@@ -1068,10 +1068,10 @@ stateDiagram-v2
 
 | Event | From | To | Actors | Writers | Note |
 | --- | --- | --- | --- | --- | --- |
-| `accept` | `pending` | `accepted` | responder | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The responder accepts before expires_at; the match is scheduled at the proposed time. |
-| `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` |  |
-| `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
-| `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
+| `accept` | `pending` | `accepted` | responder | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_proposal_respond` | The responder accepts before expires_at; the match is scheduled at the proposed time. |
+| `reject` | `pending` | `rejected` | responder | `src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_proposal_respond` |  |
+| `expire` | `pending` | `expired` | system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/match-proposals/[id]/reject/route.ts`<br>`src/app/api/matches/[id]/proposals/route.ts`<br>`src/lib/supabase/queries/match-proposals.ts`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_proposal_create`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_proposal_respond` | Lazily, once expires_at has passed: when the responder answers it, or before a new proposal for the match. |
+| `cancel` | `pending` | `cancelled` | admin, system | `src/app/api/match-proposals/[id]/accept/route.ts`<br>`src/app/api/admin/matches/[id]/schedule/route.ts`<br>`src/app/api/tournaments/[id]/rounds/[rid]/matches/[mid]/repair/route.ts`<br>`src/lib/match/bulk-actions.ts`<br>`src/lib/season/substitute.ts`<br>`src/lib/supabase/queries/match-proposals.ts`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_proposal_respond`<br>`supabase/migrations/20261118116000_phase_match_proposal_transactions.sql#phase_match_schedule_override` | The match was scheduled another way (another proposal accepted, an admin schedule, a repair, a bulk action, a substitution). |
 
 ## Phase aggregate job
 

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { formatZodErrors, matchScheduleSchema } from '@/lib/validation';
-import { cancelPendingMatchProposalsForMatch, cancelPendingPhaseMatchProposals } from '@/lib/supabase/queries/match-proposals';
+import { cancelPendingMatchProposalsForMatch, overridePhaseMatchSchedule } from '@/lib/supabase/queries/match-proposals';
 import { updateOpenMatchSchedule } from '@/lib/supabase/queries/matches';
-import { updateOpenPhaseMatchSchedule } from '@/lib/supabase/queries/phase-matches';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
 import type { ScheduleResult } from '@/lib/admin/match-detail';
@@ -63,6 +62,40 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     if (match.status === 'completed') return scheduleCompleted();
 
+    async function finish(result: ScheduleResult) {
+      if (result.unchanged) return NextResponse.json<ApiResult<ScheduleResult>>({ success: true, data: result });
+      const audit = correctionAuditTarget(target);
+      logAuditEvent({
+        actor_id: player.playerId,
+        actor_name: player.name,
+        action: 'match.schedule',
+        resource_type: audit.resourceType,
+        resource_id: id,
+        resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        changes: {
+          scheduled_at: { before: result.previous_scheduled_at, after: result.scheduled_at },
+        },
+        metadata: {
+          ...audit.metadata,
+          proposals_cancelled: result.proposals_cancelled,
+          proposals_cancel_failed: result.proposals_cancel_failed,
+        },
+      });
+      try {
+        await revalidateCorrectionTarget(target);
+      } catch (err) {
+        logger.error('admin/schedule', 'the time was saved but the page revalidation failed', {
+          matchId: id,
+          error: err,
+        });
+      }
+      return NextResponse.json<ApiResult<ScheduleResult>>({ success: true, data: result });
+    }
+
+    if (target.kind === 'phase') {
+      return await finish(await overridePhaseMatchSchedule(target.owner.phase_id, id, scheduledAt));
+    }
+
     if (sameInstant(match.scheduled_at, scheduledAt)) {
       return NextResponse.json<ApiResult<ScheduleResult>>({
         success: true,
@@ -77,9 +110,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     // Guarded write: null means the match completed (or vanished) since the read above.
-    const updated = target.kind === 'phase'
-      ? await updateOpenPhaseMatchSchedule(id, scheduledAt, target.owner.phase_id)
-      : await updateOpenMatchSchedule(id, scheduledAt);
+    const updated = await updateOpenMatchSchedule(id, scheduledAt);
     if (!updated) return scheduleCompleted();
 
     // The time is committed. A failed proposal cancel must not skip the audit event or the
@@ -87,9 +118,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     let proposalsCancelled = 0;
     let proposalsCancelFailed = false;
     try {
-      proposalsCancelled = target.kind === 'phase'
-        ? await cancelPendingPhaseMatchProposals(id)
-        : (await cancelPendingMatchProposalsForMatch(id)).length;
+      proposalsCancelled = (await cancelPendingMatchProposalsForMatch(id)).length;
     } catch (err) {
       proposalsCancelFailed = true;
       logger.error('admin/schedule', 'the time was saved but cancelling its pending proposals failed', {
@@ -98,42 +127,12 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    const audit = correctionAuditTarget(target);
-    logAuditEvent({
-      actor_id: player.playerId,
-      actor_name: player.name,
-      action: 'match.schedule',
-      resource_type: audit.resourceType,
-      resource_id: id,
-      resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
-      changes: {
-        scheduled_at: { before: match.scheduled_at, after: updated.scheduled_at },
-      },
-      metadata: {
-        ...audit.metadata,
-        proposals_cancelled: proposalsCancelled,
-        proposals_cancel_failed: proposalsCancelFailed,
-      },
-    });
-
-    try {
-      await revalidateCorrectionTarget(target);
-    } catch (err) {
-      logger.error('admin/schedule', 'the time was saved but the page revalidation failed', {
-        matchId: id,
-        error: err,
-      });
-    }
-
-    return NextResponse.json<ApiResult<ScheduleResult>>({
-      success: true,
-      data: {
-        scheduled_at: updated.scheduled_at,
-        previous_scheduled_at: match.scheduled_at,
-        proposals_cancelled: proposalsCancelled,
-        proposals_cancel_failed: proposalsCancelFailed,
-        unchanged: false,
-      },
+    return await finish({
+      scheduled_at: updated.scheduled_at,
+      previous_scheduled_at: match.scheduled_at,
+      proposals_cancelled: proposalsCancelled,
+      proposals_cancel_failed: proposalsCancelFailed,
+      unchanged: false,
     });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to update the match schedule');

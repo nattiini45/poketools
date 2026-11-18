@@ -5,9 +5,33 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Tables } from '@/types/database';
 import type { MatchProposal, MatchProposalStatus, MatchProposalWithPlayers } from '@/types/match-proposal';
 import { matchProposalMachine } from '@/lib/match/proposal-state';
+import matchErrors from '@/i18n/messages/errors/matches/en';
+import type { ScheduleResult } from '@/lib/admin/match-detail';
 
 /** The only state an answer, an expiry or a cancellation leaves (`matchProposalMachine.sourcesOf`). */
 const [PENDING] = matchProposalMachine.sourcesOf('cancelled');
+
+const proposalWriteErrors = {
+  match_not_found: 404,
+  match_proposal_not_found: 404,
+  match_proposal_participants_only: 403,
+  match_proposal_accept_responder_only: 403,
+  match_proposal_reject_responder_only: 403,
+  match_proposal_match_closed: 409,
+  match_proposal_time_past: 400,
+  match_proposal_pending_exists: 409,
+  match_proposal_not_pending: 409,
+  match_schedule_closed: 409,
+  match_schedule_completed: 409,
+} satisfies Partial<Record<keyof typeof matchErrors, number>>;
+
+function throwPhaseProposalWriteError(error: { code: string; message: string }): never {
+  if (error.code === 'P0001' && Object.hasOwn(proposalWriteErrors, error.message)) {
+    const code = error.message as keyof typeof proposalWriteErrors;
+    throw new UserFacingError(matchErrors[code], { code, status: proposalWriteErrors[code] });
+  }
+  throw error;
+}
 
 type MatchProposalRow = Tables<'match_proposals'>;
 type PlayerJoin = { name: string };
@@ -87,6 +111,56 @@ export async function getMatchProposalById(id: string): Promise<MatchProposal | 
 
   if (error) throw error;
   return data ? toMatchProposal(data) : null;
+}
+
+export async function getPhaseMatchProposalById(id: string): Promise<MatchProposal | null> {
+  assertValidUuid(id, 'proposal id');
+  const { data, error } = await supabase.from('phase_match_proposals').select('*').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? toMatchProposal(data) : null;
+}
+
+export async function createPhaseMatchProposal(
+  phaseId: string, matchId: string, playerId: string, proposedAt: string, message = '',
+): Promise<MatchProposal> {
+  matchProposalMachine.assertTransition(PENDING, 'expired', 'system');
+  const { data, error } = await supabase.rpc('phase_match_proposal_create', {
+    p_phase_id: phaseId, p_match_id: matchId, p_player_id: playerId, p_proposed_at: proposedAt, p_message: message,
+  });
+  if (error) throwPhaseProposalWriteError(error);
+  return toMatchProposal(data as unknown as Tables<'phase_match_proposals'>);
+}
+
+export async function respondToPhaseMatchProposal(
+  phaseId: string, matchId: string, proposalId: string, playerId: string, accept: boolean,
+): Promise<MatchProposal> {
+  matchProposalMachine.assertTransition(PENDING, accept ? 'accepted' : 'rejected', 'responder');
+  matchProposalMachine.assertTransition(PENDING, 'expired', 'system');
+  if (accept) matchProposalMachine.assertTransition(PENDING, 'cancelled', 'system');
+  const { data, error } = await supabase.rpc('phase_match_proposal_respond', {
+    p_phase_id: phaseId, p_match_id: matchId, p_proposal_id: proposalId, p_player_id: playerId, p_accept: accept,
+  });
+  if (error) throwPhaseProposalWriteError(error);
+  if (data && typeof data === 'object' && !Array.isArray(data)) {
+    if (data.outcome === 'expired') {
+      throw new UserFacingError(matchErrors.match_proposal_expired, { code: 'match_proposal_expired', status: 409 });
+    }
+    if (data.outcome === 'answered' && data.proposal) {
+      return toMatchProposal(data.proposal as unknown as Tables<'phase_match_proposals'>);
+    }
+  }
+  throw new Error('Unexpected phase proposal response');
+}
+
+export async function overridePhaseMatchSchedule(
+  phaseId: string, matchId: string, scheduledAt: string | null,
+): Promise<ScheduleResult> {
+  matchProposalMachine.assertTransition(PENDING, 'cancelled', 'admin');
+  const { data, error } = await supabase.rpc('phase_match_schedule_override', {
+    p_phase_id: phaseId, p_match_id: matchId, p_scheduled_at: scheduledAt as unknown as string,
+  });
+  if (error) throwPhaseProposalWriteError(error);
+  return data as unknown as ScheduleResult;
 }
 
 export async function getPendingProposalForParticipant(
@@ -219,18 +293,6 @@ export async function cancelPendingMatchProposalsForMatch(matchId: string): Prom
 
   if (error) throw error;
   return data.map(toMatchProposal);
-}
-
-export async function cancelPendingPhaseMatchProposals(matchId: string): Promise<number> {
-  assertValidUuid(matchId, 'match id');
-  matchProposalMachine.assertTransition(PENDING, 'cancelled', 'admin');
-  const { count, error } = await supabase
-    .from('phase_match_proposals')
-    .update({ status: 'cancelled', responded_at: new Date().toISOString() }, { count: 'exact' })
-    .eq('match_id', matchId)
-    .eq('status', PENDING);
-  if (error) throw error;
-  return count ?? 0;
 }
 
 /**

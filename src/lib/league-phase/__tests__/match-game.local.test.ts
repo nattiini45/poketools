@@ -87,6 +87,65 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
     return `INSERT INTO public.${table}(id,match_id,game_number,replay_hash) VALUES ('${id}','${matchId}',${number},${hash === null ? 'NULL' : `'${hash}'`});`;
   }
 
+  async function schedulingMatch() {
+    const id = randomUUID();
+    expect((await admin.from('phase_matches').insert({
+      id, round_id: phaseRound, phase_id: phaseId, player_1_id: players[0], player_2_id: players[1],
+    })).error).toBeNull();
+    return id;
+  }
+
+  it('serializes opposite native proposals and persists an expired answer without changing the match', async () => {
+    const { createPhaseMatchProposal, respondToPhaseMatchProposal } = await import('@/lib/supabase/queries/match-proposals');
+    const id = await schedulingMatch();
+    const when = new Date(Date.now() + 86_400_000).toISOString();
+    const attempts = await Promise.allSettled(players.map(player => createPhaseMatchProposal(phaseId, id, player, when)));
+    expect(attempts.filter(result => result.status === 'fulfilled')).toHaveLength(1);
+    expect(attempts.find(result => result.status === 'rejected')).toMatchObject({
+      reason: { code: 'match_proposal_pending_exists', statusCode: 409 },
+    });
+    const stored = await admin.from('phase_match_proposals').select('*').eq('match_id', id).single();
+    expect(stored.error).toBeNull();
+    const proposal = stored.data!;
+    expect(proposal.status).toBe('pending');
+    expect((await admin.from('phase_match_proposals').update({ expires_at: '2026-01-01T00:00:00Z' }).eq('id', proposal.id)).error).toBeNull();
+    await expect(respondToPhaseMatchProposal(phaseId, id, proposal.id, proposal.responder_id, true))
+      .rejects.toMatchObject({ code: 'match_proposal_expired', statusCode: 409 });
+    const expired = await admin.from('phase_match_proposals').select('status, responded_at').eq('id', proposal.id).single();
+    expect(expired.data).toMatchObject({ status: 'expired', responded_at: expect.any(String) });
+    expect((await matches.getPhaseMatchById(id))?.scheduled_at).toBeNull();
+    await expect(createPhaseMatchProposal(phaseId, id, proposal.responder_id, when)).resolves.toMatchObject({ status: 'pending' });
+  });
+
+  it('commits acceptance and schedule together, and gives a changing admin override priority', async () => {
+    const { createPhaseMatchProposal, overridePhaseMatchSchedule, respondToPhaseMatchProposal } = await import('@/lib/supabase/queries/match-proposals');
+    const playerTime = new Date(Date.now() + 86_400_000).toISOString();
+    const adminTime = new Date(Date.now() + 172_800_000).toISOString();
+    const id = await schedulingMatch();
+    const proposal = await createPhaseMatchProposal(phaseId, id, players[0], playerTime);
+    const race = await Promise.allSettled([
+      respondToPhaseMatchProposal(phaseId, id, proposal.id, players[1], true),
+      overridePhaseMatchSchedule(phaseId, id, adminTime),
+    ]);
+    expect(race[1]).toMatchObject({ status: 'fulfilled', value: { unchanged: false, proposals_cancel_failed: false } });
+    const final = (await matches.getPhaseMatchById(id))?.scheduled_at;
+    expect(Date.parse(final ?? '')).toBe(Date.parse(adminTime));
+    const { data } = await admin.from('phase_match_proposals').select('status').eq('id', proposal.id).single();
+    if (race[0].status === 'fulfilled') expect(data?.status).toBe('accepted');
+    else {
+      expect(race[0].reason).toMatchObject({ code: 'match_proposal_not_pending' });
+      expect(data?.status).toBe('cancelled');
+    }
+
+    const clean = await schedulingMatch();
+    const pending = await createPhaseMatchProposal(phaseId, clean, players[0], playerTime);
+    await expect(respondToPhaseMatchProposal(phaseId, clean, pending.id, players[1], true)).resolves.toMatchObject({ status: 'accepted' });
+    expect(Date.parse((await matches.getPhaseMatchById(clean))?.scheduled_at ?? '')).toBe(Date.parse(playerTime));
+    const cleared = await overridePhaseMatchSchedule(phaseId, clean, null);
+    expect(cleared).toMatchObject({ scheduled_at: null, unchanged: false });
+    expect((await matches.getPhaseMatchById(clean))?.scheduled_at).toBeNull();
+  });
+
   for (const first of ['games', 'phase_games'] as const) {
     const second = first === 'games' ? 'phase_games' : 'games';
     it(`serializes ${first} first, blocks ${second}, rejects after commit and permits retry after rollback`, async () => {

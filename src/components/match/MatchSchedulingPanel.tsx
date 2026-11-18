@@ -158,7 +158,7 @@ export default function MatchSchedulingPanel({
     setSuccessKey(null);
     try {
       const res = await fetch(`/api/match-proposals/${proposalId}/${action}`, { method: 'POST' });
-      const json: ApiResult<MatchProposalWithPlayers | { proposal: MatchProposalWithPlayers; match: MatchWithPlayers }> = await res.json();
+      const json: ApiResult<MatchProposalWithPlayers | { proposal: MatchProposalWithPlayers; match: Pick<MatchWithPlayers, 'scheduled_at'> }> = await res.json();
       if (!json.success) {
         setError(apiFailure(json, 'updateFailed'));
         return;

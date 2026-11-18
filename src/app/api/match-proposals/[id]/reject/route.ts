@@ -4,9 +4,9 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import {
   expireMatchProposal,
-  getMatchProposalById,
   rejectMatchProposal,
 } from '@/lib/supabase/queries/match-proposals';
+import { answerNativeTimeProposal, loadTimeProposalById } from '@/lib/league-phase/time-proposals';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
 import type { MatchProposal } from '@/types/match-proposal';
@@ -23,12 +23,17 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_PROPOSAL_ID');
     if (invalidId) return invalidId;
 
-    const proposal = await getMatchProposalById(id);
-    if (!proposal) {
+    const target = await loadTimeProposalById(id);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Proposal not found', code: 'match_proposal_not_found' }, { status: 404 });
     }
+    const { proposal } = target;
     if (proposal.responder_id !== player.playerId) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Only the responder can reject this proposal', code: 'match_proposal_reject_responder_only' }, { status: 403 });
+    }
+    if (target.kind === 'phase') {
+      const rejected = await answerNativeTimeProposal(target, player, false);
+      return NextResponse.json<ApiResult<MatchProposal>>({ success: true, data: rejected });
     }
     if (proposal.status !== 'pending') {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Proposal is no longer pending', code: 'match_proposal_not_pending' }, { status: 409 });
