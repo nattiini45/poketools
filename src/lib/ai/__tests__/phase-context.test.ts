@@ -58,12 +58,20 @@ describe('native phase context', () => {
   });
   it('only loads the perspective prep and hides opponent preparation even for public phases', async () => {
     h.phase.mockResolvedValueOnce({ id: phaseId, season_id: 'league', ruleset_id: 'frozen-pin', name: 'Stage', team_visibility: 'always_public' });
-    const prompt = await buildPhaseMatchPrepPrompt(phaseId, matchId, 'p1');
+    const prompt = await buildPhaseMatchPrepPrompt(phaseId, matchId, 'p1', { scheduledOnly: true });
+    expect(prompt.systemPrompt).toContain('Write all prose in German');
     expect(prompt.userPrompt).toContain('OwnSecret');
     expect(prompt.userPrompt).not.toContain('OpponentSecret');
     expect(h.prep).toHaveBeenCalledWith(phaseId, matchId, 'p1');
     expect(h.team).toHaveBeenCalledTimes(1);
     expect(h.team).toHaveBeenCalledWith('p1', expect.objectContaining({ phase_id: phaseId }));
+  });
+  it('refuses scheduled-only generation if the match completed before prompt construction', async () => {
+    h.match.mockResolvedValue({ ...fixture(), status: 'completed' });
+    await expect(buildPhaseMatchPrepPrompt(phaseId, matchId, 'p1', { scheduledOnly: true }))
+      .rejects.toMatchObject({ statusCode: 400, code: 'ai_scouting_scheduled_only' });
+    expect(h.prep).not.toHaveBeenCalled();
+    expect(h.team).not.toHaveBeenCalled();
   });
   it('shows the opponent sheet only after this match completes and rejects nonparticipants', async () => {
     h.match.mockResolvedValue({ ...fixture(), status: 'completed' });

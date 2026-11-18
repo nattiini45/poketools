@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { requireAuth, isSuperadmin } from '@/lib/auth/helpers';
+import { requireAuth } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
 import { aiMatchPrepSchema, formatZodErrors } from '@/lib/validation';
 import { AI_ANALYSIS_STALE_MS, AI_MAX_TOKENS, getClaudeModelId } from '@/lib/ai/constants';
 import { getMatchById } from '@/lib/supabase/queries/matches';
@@ -16,8 +18,9 @@ import { completeStreaming } from '@/lib/ai/client';
 import { checkAndRecordAiGeneration, type AiRateLimitResult } from '@/lib/ai/rate-limit';
 import { withOutputLanguage } from '@/lib/ai/language';
 import { describeAiFailure } from '@/lib/ai/failure';
-import { createSafeSseSender } from '@/lib/ai/sse';
+import { createSafeSseSender, type SafeSseSender } from '@/lib/ai/sse';
 import { resolveContentLocale } from '@/i18n/content-locale';
+import commonErrors from '@/i18n/messages/errors/common/en';
 import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
 import type { ApiErrorCode } from '@/i18n/messages/errors';
@@ -68,11 +71,30 @@ export async function POST(request: NextRequest) {
   const matchId = zodResult.data.match_id;
   const force = zodResult.data.force;
 
-  let match: MatchWithPlayers | null;
+  let match: MatchWithPlayers | null = null;
   try {
-    match = await getMatchById(matchId);
+    const normalizedMatchId = matchId.toLowerCase();
+    const owner = await resolveIdOnlyMatchRoute(normalizedMatchId);
+    if (owner?.kind === 'phase') {
+      const { preparePhaseScouting } = await import('@/lib/ai/phase-analysis');
+      const scouting = await preparePhaseScouting({ phaseId: owner.phase_id, matchId: normalizedMatchId, force }, player);
+      if (scouting.kind === 'limited') return scoutingLimitResponse(scouting.limit);
+      return streamScouting(async (sse) => {
+        if (scouting.kind === 'pending') {
+          sse.send({ status: 'already_pending' });
+          return;
+        }
+        const outcome = scouting.kind === 'ready' ? await scouting.run() : scouting;
+        if (outcome.kind === 'superseded') {
+          sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
+        } else {
+          sse.send({ status: 'done' });
+        }
+      });
+    }
+    if (owner?.kind === 'legacy') match = await getMatchById(matchId);
   } catch (err) {
-    return safeErrorResponse(err, 'Failed to load match');
+    return safeErrorResponse(scoutingStorageError(err), 'Failed to load match');
   }
   if (!match) {
     return NextResponse.json<ApiResult<never>>(
@@ -97,8 +119,7 @@ export async function POST(request: NextRequest) {
   const isParticipant =
     player.playerId === match.player_1_id ||
     player.playerId === match.player_2_id;
-  // Only participants and superadmin — regular admins must not see opponent prep
-  if (!isParticipant && !isSuperadmin(session)) {
+  if (!isParticipant) {
     return NextResponse.json<ApiResult<never>>(
       {
         success: false,
@@ -156,19 +177,96 @@ export async function POST(request: NextRequest) {
     return safeErrorResponse(err, 'Failed to check AI rate limit');
   }
   if (!rateLimit.allowed) {
-    return NextResponse.json<ApiResult<never>>(
-      {
-        success: false,
-        error: `Scouting report limit reached (${rateLimit.limit} per day). Try again later.`,
-        code: 'daily_limit_reached',
-        params: { limit: rateLimit.limit },
-      },
-      { status: 429, headers: { 'Retry-After': '3600' } }
-    );
+    return scoutingLimitResponse(rateLimit.limit);
   }
 
-  // ── Stream the LLM work ────────────────────────────────────────────
+  return streamScouting(async (sse, emitHeartbeatIfNeeded) => {
+    // Delete previous attempt
+    if (existing) {
+      await deleteMatchPrepAnalysis(matchId, player.playerId);
+    }
 
+    const [{ systemPrompt, userPrompt, hasUserTeam }, contentLocale] = await Promise.all([
+      buildMatchPrepPrompt(matchId, player.playerId),
+      // A stored report follows the league's language (i18n-core §6.4).
+      resolveContentLocale({ matchId }),
+    ]);
+
+    // The row starts with the model we ask for; a completed row is updated to the model
+    // that actually answered (a fallback answer must not be labelled with the primary).
+    const record = await createMatchPrepAnalysis(
+      matchId,
+      player.playerId,
+      getClaudeModelId(),
+      hasUserTeam
+    );
+    const startTime = Date.now();
+
+    try {
+      const result = await completeStreaming(
+        withOutputLanguage(systemPrompt, contentLocale),
+        userPrompt,
+        emitHeartbeatIfNeeded,
+        undefined,
+        // The answer is parsed as JSON, so one cut off at the output cap is a failure. The cap
+        // leaves room for the model's thinking as well as the JSON.
+        { jsonOutput: true, surface: 'match-prep-analysis', maxTokens: AI_MAX_TOKENS.analysis },
+      );
+      const generationTime = Date.now() - startTime;
+
+      const analysis = parseScoutingResponse(result.content, hasUserTeam);
+
+      await updateMatchPrepAnalysis(record.id, {
+        analysis,
+        model_id: result.model || undefined,
+        has_user_team: hasUserTeam,
+        prompt_tokens: result.prompt_tokens,
+        completion_tokens: result.completion_tokens,
+        generation_time_ms: generationTime,
+        status: 'completed',
+        error: null,
+      });
+
+      // Saved as completed: a closed stream cannot flip it to failed.
+      sse.send({ status: 'done' });
+    } catch (llmError) {
+      logger.error('ai/match-prep-analysis', 'LLM error', { error: llmError });
+
+      const failure = describeAiFailure(llmError, { code: FAILED_CODE, message: FAILED_MESSAGE });
+      await updateMatchPrepAnalysis(record.id, {
+        status: 'failed',
+        error: failure.stored,
+        generation_time_ms: Date.now() - startTime,
+      });
+
+      sse.send({ status: 'failed', error: failure.message, code: failure.code });
+    }
+  });
+}
+
+function scoutingStorageError(error: unknown) {
+  if (typeof error === 'object' && error !== null && 'code' in error && error.code === 'P0001'
+    && 'message' in error && error.message === 'phase_storage_not_ready') {
+    return Object.assign(new UserFacingError(commonErrors.phase_storage_unavailable, {
+      code: 'phase_storage_unavailable', status: 503,
+    }), { cause: error });
+  }
+  return error;
+}
+
+function scoutingLimitResponse(limit: number) {
+  return NextResponse.json<ApiResult<never>>(
+    {
+      success: false,
+      error: `Scouting report limit reached (${limit} per day). Try again later.`,
+      code: 'daily_limit_reached',
+      params: { limit },
+    },
+    { status: 429, headers: { 'Retry-After': '3600' } },
+  );
+}
+
+function streamScouting(run: (sse: SafeSseSender, heartbeat: () => void) => Promise<void>) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       // Every frame goes through the safe sender: a browser that left must not turn a stored
@@ -191,69 +289,14 @@ export async function POST(request: NextRequest) {
       }, HEARTBEAT_INTERVAL_MS);
 
       try {
-        // Delete previous attempt
-        if (existing) {
-          await deleteMatchPrepAnalysis(matchId, player.playerId);
-        }
-
-        const [{ systemPrompt, userPrompt, hasUserTeam }, contentLocale] = await Promise.all([
-          buildMatchPrepPrompt(matchId, player.playerId),
-          // A stored report follows the league's language (i18n-core §6.4).
-          resolveContentLocale({ matchId }),
-        ]);
-
-        // The row starts with the model we ask for; a completed row is updated to the model
-        // that actually answered (a fallback answer must not be labelled with the primary).
-        const record = await createMatchPrepAnalysis(
-          matchId,
-          player.playerId,
-          getClaudeModelId(),
-          hasUserTeam
-        );
-        const startTime = Date.now();
-
-        try {
-          const result = await completeStreaming(
-            withOutputLanguage(systemPrompt, contentLocale),
-            userPrompt,
-            emitHeartbeatIfNeeded,
-            undefined,
-            // The answer is parsed as JSON, so one cut off at the output cap is a failure. The cap
-            // leaves room for the model's thinking as well as the JSON.
-            { jsonOutput: true, surface: 'match-prep-analysis', maxTokens: AI_MAX_TOKENS.analysis },
-          );
-          const generationTime = Date.now() - startTime;
-
-          const analysis = parseScoutingResponse(result.content, hasUserTeam);
-
-          await updateMatchPrepAnalysis(record.id, {
-            analysis,
-            model_id: result.model || undefined,
-            has_user_team: hasUserTeam,
-            prompt_tokens: result.prompt_tokens,
-            completion_tokens: result.completion_tokens,
-            generation_time_ms: generationTime,
-            status: 'completed',
-            error: null,
-          });
-
-          // Saved as completed: a closed stream cannot flip it to failed.
-          sse.send({ status: 'done' });
-        } catch (llmError) {
-          logger.error('ai/match-prep-analysis', 'LLM error', { error: llmError });
-
-          const failure = describeAiFailure(llmError, { code: FAILED_CODE, message: FAILED_MESSAGE });
-          await updateMatchPrepAnalysis(record.id, {
-            status: 'failed',
-            error: failure.stored,
-            generation_time_ms: Date.now() - startTime,
-          });
-
-          sse.send({ status: 'failed', error: failure.message, code: failure.code });
-        }
+        await run(sse, emitHeartbeatIfNeeded);
       } catch (setupError) {
-        logger.error('ai/match-prep-analysis', 'Setup error', { error: setupError });
-        sse.send({ status: 'failed', error: FAILED_MESSAGE, code: FAILED_CODE });
+        logger.error('ai/match-prep-analysis', 'Stream error', { error: setupError });
+        const error = scoutingStorageError(setupError);
+        const failure = error instanceof UserFacingError
+          ? error
+          : describeAiFailure(error, { code: FAILED_CODE, message: FAILED_MESSAGE });
+        sse.send({ status: 'failed', error: failure.message, code: failure.code });
       } finally {
         clearInterval(fallbackHeartbeat);
         sse.close();
