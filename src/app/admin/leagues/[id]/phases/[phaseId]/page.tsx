@@ -25,6 +25,7 @@ import { phaseNumbers } from '@/lib/league-admin/phase-controls';
 import { leagueAdminHref } from '@/lib/league-admin/tabs';
 import { participantsSectionOpen } from '@/lib/tournament/startup-checklist';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
+import PhaseLifecycleActions from '@/components/league/PhaseLifecycleActions';
 import ParticipantManager from '@/components/tournament/ParticipantManager';
 import PhaseGroupsPanel from '@/components/league/PhaseGroupsPanel';
 import RoundManager from '@/components/tournament/RoundManager';
@@ -71,7 +72,7 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   const { isSiteAdmin, playerId } = gate;
   const viewer = { playerId, isAdmin: isSiteAdmin };
   const mode = await requireOpenPhaseRouteMode();
-  if (mode === 'phase') return renderNativePhaseAdmin(seasonId.toLowerCase(), phaseId.toLowerCase());
+  if (mode === 'phase') return renderNativePhaseAdmin(seasonId.toLowerCase(), phaseId.toLowerCase(), viewer);
 
   const [league, tournament, stages, rounds, leagueHasGroups, phaseGroups, t, tEnum, tCommon] = await Promise.all([
     getSeasonById(seasonId),
@@ -212,19 +213,23 @@ export default async function AdminLeaguePhasePage({ params }: PageProps) {
   );
 }
 
-async function renderNativePhaseAdmin(seasonId: string, phaseId: string) {
+async function renderNativePhaseAdmin(seasonId: string, phaseId: string, viewer: { playerId: string; isAdmin: boolean }) {
   const phase = await getPhaseWithDetails(phaseId, seasonId);
   if (!phase || phase.season_id !== seasonId) notFound();
-  const [stages, rounds, groups, participants, leagueHasGroups, t, tEnum, tCommon] = await Promise.all([
+  const [stages, rounds, groups, participants, leagueHasGroups, rulesets, pin, t, tEnum, tCommon] = await Promise.all([
     getPhasesBySeasonId(seasonId),
     getRoundsByPhase(phaseId),
     getGroupsByPhase(phaseId),
     getPhaseParticipants(phaseId),
     phase.bracket_type === 'round_robin' && seasonHasGroups(seasonId),
+    listRulesetOptionsFor({ actor: viewer, seasonId, keep: [phase.ruleset_id] }),
+    getRulesetPinInfo(phase.ruleset_id, viewer),
     getT(leagueAdminMessages),
     getT(enumMessages),
     getT(commonMessages),
   ]);
+  const summary = buildLeaguePhase(phase, rounds);
+  const formatManaged = phase.format_stage_key !== null;
   const hasDependentPhase = stages.some(stage => stage.id !== phaseId && (
     stage.enrollment_source?.source_phase_id === phaseId
       || stage.enrollment_source?.contributions?.some(source => source.source_phase_id === phaseId)
@@ -244,10 +249,18 @@ async function renderNativePhaseAdmin(seasonId: string, phaseId: string) {
           status: enumLabel(tEnum, 'tournamentStatus', phase.status),
         })}
         maxWidth="lg"
+        action={<PhaseLifecycleActions phase={summary} canDelete={viewer.isAdmin && !hasDependentPhase} formatManaged={formatManaged} />}
       >
         <Link href={leagueAdminHref(seasonId, 'phases')}>{t('phasePage.back', { name: phase.season_name })}</Link>
         <Alert variant="info">{t('phasePage.readOnly')}</Alert>
-        {phase.description && <Section id="tournament-description" title={t('phasePage.description')}>{phase.description}</Section>}
+        <Section id="tournament-overview" title={t('phasePage.overview')} icon="town-map" collapsible>
+          <PhaseOverviewEditor seasonId={seasonId} phase={summary} rulesets={rulesets} native={{ formatManaged }} />
+          {pin !== null && (
+            <div className="mt-4">
+              <RulesetPinCard kind="tournament" target={{ kind: 'phase', id: phaseId, name: phase.name, status: phase.status, archived: phase.archived }} pin={pin} />
+            </div>
+          )}
+        </Section>
         <Section id="tournament-participants" title={t('phasePage.participants')}>
           <ul>{participants.map(player => <li key={player.id}>{player.name}</li>)}</ul>
         </Section>

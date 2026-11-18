@@ -60,10 +60,10 @@ function find(node: ReactNode, match: (el: El) => boolean): El | undefined {
 }
 
 /** Renders the editor on the server and returns the element tree its body returned. */
-function capture(status: LeaguePhase['status']): ReactNode {
+function capture(status: LeaguePhase['status'], native?: { formatManaged: boolean }): ReactNode {
   let tree: ReactNode = null;
   function Probe() {
-    tree = PhaseOverviewEditor({ seasonId: 's1', phase: phase(status), rulesets: [] });
+    tree = PhaseOverviewEditor({ seasonId: 's1', phase: phase(status), rulesets: [], native });
     return tree;
   }
   renderToStaticMarkup(<Probe />);
@@ -109,6 +109,18 @@ describe('PhaseOverviewEditor locked state', () => {
 });
 
 describe('PhaseOverviewEditor save', () => {
+  it('preserves the native format structure while allowing the overview to clear its description', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ success: true, data: {} }));
+    vi.stubGlobal('fetch', fetchMock);
+    const form = find(capture('active', { formatManaged: true }), el => el.type === PhaseForm);
+    expect(form?.props).toMatchObject({ lockBracketType: true, lockRuleset: true, lockStructure: true, locked: false });
+    const onSubmit = form?.props.onSubmit as (data: unknown) => Promise<void>;
+    await onSubmit({ name: 'Groups', bracket_type: 'swiss', is_doubles: true, best_of_default: 5, bo_overrides: { Finals: 3 } });
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/seasons/s1/phases/ph1', expect.objectContaining({
+      method: 'PATCH', body: JSON.stringify({ name: 'Groups', description: '' }),
+    }));
+  });
+
   it('throws a refusal as PhaseSaveError and shows no error of its own', async () => {
     vi.stubGlobal(
       'fetch',

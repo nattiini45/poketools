@@ -32,6 +32,37 @@ export default {
     saved: 'Phase settings saved.',
     saveChanges: 'Save Changes',
     lockedCompleted: 'This phase is completed, so its settings are locked. Reopen it to change them.',
+    lockedArchived: 'Restore this phase before changing its settings.',
+    formatManaged: 'The attached format controls the phase status and bracket settings.',
+  },
+  lifecycle: {
+    failed: 'Could not update the phase.',
+    back: 'Back to league phases',
+    complete: {
+      label: 'Mark Completed',
+      title: 'Mark “{name}” as completed?',
+      message: 'The phase settings will lock and the completion will be announced. Existing matches and results are kept.',
+    },
+    reopen: {
+      label: 'Reopen',
+      title: 'Reopen “{name}”?',
+      message: 'The phase becomes active again. Existing matches, results and standings are kept, and players already advanced stay in the next phase.',
+    },
+    archive: {
+      label: 'Archive',
+      title: 'Archive “{name}”?',
+      message: 'Archiving locks the phase settings and keeps all matches and results.',
+    },
+    restore: {
+      label: 'Restore',
+      title: 'Restore “{name}”?',
+      message: 'Restoring the phase removes the archive lock without changing its status, settings or results.',
+    },
+    delete: {
+      label: 'Delete',
+      title: 'Delete “{name}”?',
+      message: 'This permanently removes the phase and its dependent records. This cannot be undone.',
+    },
   },
   timeline: {
     loading: 'Loading phases...',

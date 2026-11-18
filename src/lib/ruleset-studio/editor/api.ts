@@ -102,7 +102,7 @@ export function forkPresetRequest(
 
 /** A league (`season`) or a phase or standalone tournament (`tournament`) whose pin the caller moves. */
 export interface PinTargetRef {
-  kind: 'season' | 'tournament';
+  kind: 'season' | 'tournament' | 'phase';
   id: string;
 }
 

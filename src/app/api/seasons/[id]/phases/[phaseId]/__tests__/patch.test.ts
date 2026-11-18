@@ -20,6 +20,17 @@ vi.mock('@/lib/auth/helpers', () => ({
 
 vi.mock('@/lib/revalidation', () => ({
   expireTournamentReads: vi.fn(),
+  expirePhaseReads: vi.fn(),
+}));
+vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/supabase/queries/league-phases')>(),
+  getPhaseWithDetails: vi.fn(),
+  updatePhase: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-rounds', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/supabase/queries/phase-rounds')>(),
+  listRoundStatusesByPhaseIds: vi.fn(async () => []),
 }));
 
 vi.mock('@/lib/ruleset-studio/pin-change', () => ({
@@ -57,6 +68,9 @@ import { assertRulesetChangeAllowed } from '@/lib/ruleset-studio/pin-change';
 import { RulesetStudioError } from '@/lib/ruleset-studio/errors';
 import { assertFormatPhaseStatusUnchanged, assertFormatPhaseUnchanged } from '@/lib/format-studio/phase-guards';
 import { FormatStudioError } from '@/lib/format-studio/errors';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { expirePhaseReads } from '@/lib/revalidation';
+import { getPhaseWithDetails, updatePhase } from '@/lib/supabase/queries/league-phases';
 
 const {
   getTournamentById,
@@ -84,6 +98,7 @@ const phaseRow = (status: 'upcoming' | 'active' | 'completed') =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.mocked(requireOpenPhaseRouteMode).mockResolvedValue('legacy');
   vi.mocked(requireResourceAdmin).mockResolvedValue({
     playerId: 'admin-1',
     name: 'Admin',
@@ -103,6 +118,48 @@ beforeEach(() => {
   updateTournament.mockResolvedValue({ id: PHASE_ID, name: 'Hinrunde', status: 'upcoming', bracket_type: 'swiss' } as never);
   getTournamentWithDetails.mockResolvedValue({ id: PHASE_ID, season_id: SEASON_ID } as never);
   getRoundsByTournament.mockResolvedValue([]);
+});
+
+describe('native admin phase archive and lifecycle', () => {
+  const nativePhase = {
+    id: PHASE_ID, season_id: SEASON_ID, name: 'Semifinals', status: 'active',
+    archived: false, bracket_type: 'single_elim', format_stage_key: null,
+  } as const;
+
+  beforeEach(() => {
+    vi.mocked(requireOpenPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(assertRulesetChangeAllowed).mockResolvedValue(undefined);
+  });
+
+  it('archives only the owned native row with an expected archive state, and expires its reads', async () => {
+    const archived = { ...nativePhase, archived: true };
+    vi.mocked(getPhaseWithDetails).mockResolvedValueOnce(nativePhase as never).mockResolvedValueOnce(archived as never);
+    vi.mocked(updatePhase).mockResolvedValueOnce(archived as never);
+    const response = await PATCH(request({ archived: true }), args());
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ success: true, data: { archived: true } });
+    expect(updatePhase).toHaveBeenCalledExactlyOnceWith(PHASE_ID, { archived: true }, {
+      from: 'active', seasonId: SEASON_ID, archived: false,
+    });
+    expect(expirePhaseReads).toHaveBeenCalledExactlyOnceWith(PHASE_ID, SEASON_ID);
+    expect(getTournamentById).not.toHaveBeenCalled();
+  });
+
+  it('refuses settings edits until the archived phase is separately restored', async () => {
+    const archived = { ...nativePhase, archived: true };
+    vi.mocked(getPhaseWithDetails).mockResolvedValue(archived as never);
+    const change = await PATCH(request({ status: 'completed' }), args());
+    expect(change.status).toBe(409);
+    const combined = await PATCH(request({ archived: false, name: 'Finals' }), args());
+    expect(combined.status).toBe(400);
+    expect(updatePhase).not.toHaveBeenCalled();
+    vi.mocked(getPhaseWithDetails).mockResolvedValueOnce(archived as never).mockResolvedValueOnce(nativePhase as never);
+    vi.mocked(updatePhase).mockResolvedValueOnce(nativePhase as never);
+    expect((await PATCH(request({ archived: false }), args())).status).toBe(200);
+    expect(updatePhase).toHaveBeenCalledExactlyOnceWith(PHASE_ID, { archived: false }, {
+      from: 'active', seasonId: SEASON_ID, archived: true,
+    });
+  });
 });
 
 describe('PATCH /api/seasons/[id]/phases/[phaseId]: a phase of the attached format of the league', () => {

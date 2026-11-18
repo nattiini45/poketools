@@ -10,6 +10,7 @@ import { errorsAdmin } from '@/i18n/messages/errors/admin';
 import { rulesetMessages } from '@/i18n/messages/ruleset';
 import { pinTargetCompleted, pinTargetStarted, type RulesetPinInfo } from '@/lib/ruleset-studio/pin-info';
 import { rulesetReadOnlyHref } from '@/components/ruleset-studio/hrefs';
+import type { PinTargetRef } from '@/lib/ruleset-studio/editor/api';
 import PinConfirmDialog from './PinConfirmDialog';
 import { describeChange } from './pin-change-text';
 import { usePinMove } from './use-pin-move';
@@ -20,7 +21,7 @@ export type PinCardKind = 'season' | 'tournament' | 'standalone';
 interface RulesetPinCardProps {
   kind: PinCardKind;
   /** The league (`season`) or phase / standalone tournament (`tournament`) whose pin this is. */
-  target: { kind: 'season' | 'tournament'; id: string; name: string; status: string };
+  target: PinTargetRef & { name: string; status: string; archived?: boolean };
   pin: RulesetPinInfo;
 }
 
@@ -46,7 +47,7 @@ export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProp
 
   const completed = pinTargetCompleted(target.status);
   const started = pinTargetStarted(target.status);
-  const update = completed ? null : pin.update;
+  const update = completed || target.archived ? null : pin.update;
   const refs = [{ kind: target.kind, id: target.id }];
 
   async function move(confirmed: boolean) {
@@ -71,7 +72,9 @@ export default function RulesetPinCard({ kind, target, pin }: RulesetPinCardProp
         )}
       </p>
 
-      {completed ? (
+      {target.archived ? (
+        <p className="text-sm text-fg-muted">{t('pin.archivedPhase')}</p>
+      ) : completed ? (
         <p className="text-sm text-fg-muted">{t(`pin.locked.${kind}`)}</p>
       ) : update === null ? (
         <p className="text-sm text-fg-muted">{t('pin.latest')}</p>

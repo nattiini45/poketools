@@ -60,6 +60,8 @@ Manual native phase creation uses one season-scoped transaction for the name che
 
 The initial native elimination bracket takes the phase lock before making any writes. A changed settings timestamp, roster seed, starting side, or expected format revision refuses the plan; nothing is materialized from those stale inputs. The guarded write delegates to the same atomic round/match/freeze transaction once the inputs match.
 
+The native league admin phase page saves settings and description through the owned phase PATCH. Archive and restore change only the archived flag; settings and lifecycle edits compare the stored status and archive flag before writing. Hand-managed phase completion and reopening use the phase machine; format-owned structure and status remain under their existing format guards. The ruleset card submits a phase pin, not a tournament pin, and archive and completion lock its update.
+
 Native automatic round generation reads Swiss or round-robin history from the phase. The write checks the phase, roster, rounds, match facts, group layouts and format revision under the season and phase locks. The first group mirror, round, pairings, byes and any calendar deadline commit together. Existing elimination brackets use the bracket engine instead; batch round generation is separate.
 
 The scoped round DELETE requires `confirm: true` and deletes only a latest round with no completed or active results and no linked records. It rechecks the round timestamp, fixtures and dependencies under lock, and rewinds the current round in the same transaction. Played-round takeback, kit-managed deletion and release of linked teams are not supported by this handler.

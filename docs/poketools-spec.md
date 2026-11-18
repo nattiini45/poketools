@@ -1057,6 +1057,8 @@ POST /api/seasons                           Create a league (any admin). Optiona
                                             At most 20 creates per admin and hour (429, `season-create`)
 GET/POST /api/seasons/[id]/phases           List/create league phases
 PATCH/DELETE /api/seasons/[id]/phases/[phaseId]  Phase config + destructive delete
+                                            Native PATCH accepts a separate { archived: boolean } change and requires
+                                            restoring an archived phase before editing its settings or status.
 POST /api/seasons/[id]/phases/reorder       Reorder upcoming phases (stage_order)
 GET/POST/DELETE/PATCH /api/seasons/[id]/phases/[phaseId]/participants
 POST .../participants/sync-standings        Import/re-sync from prior phase table (optional `force`)

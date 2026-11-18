@@ -26,6 +26,37 @@ export default defineDe<typeof en>()({
     saved: 'Phaseneinstellungen gespeichert.',
     saveChanges: 'Änderungen speichern',
     lockedCompleted: 'Diese Phase ist abgeschlossen, daher sind ihre Einstellungen gesperrt. Öffne sie wieder, um sie zu ändern.',
+    lockedArchived: 'Reaktiviere die Phase, bevor du ihre Einstellungen änderst.',
+    formatManaged: 'Das verknüpfte Format steuert den Status und die Turnierbaum-Einstellungen der Phase.',
+  },
+  lifecycle: {
+    failed: 'Die Phase konnte nicht aktualisiert werden.',
+    back: 'Zurück zu den Ligaphasen',
+    complete: {
+      label: 'Als abgeschlossen markieren',
+      title: '„{name}“ als abgeschlossen markieren?',
+      message: 'Die Einstellungen der Phase werden gesperrt und der Abschluss wird bekanntgegeben. Bestehende Spiele und Ergebnisse bleiben erhalten.',
+    },
+    reopen: {
+      label: 'Wieder öffnen',
+      title: '„{name}“ wieder öffnen?',
+      message: 'Die Phase wird wieder aktiv. Spiele, Ergebnisse und Tabellen bleiben erhalten. Bereits weitergekommene Spieler bleiben in der nächsten Phase.',
+    },
+    archive: {
+      label: 'Archivieren',
+      title: '„{name}“ archivieren?',
+      message: 'Die Phaseneinstellungen werden gesperrt. Alle Spiele und Ergebnisse bleiben erhalten.',
+    },
+    restore: {
+      label: 'Reaktivieren',
+      title: '„{name}“ reaktivieren?',
+      message: 'Die Archivsperre wird aufgehoben. Status, Einstellungen und Ergebnisse bleiben unverändert.',
+    },
+    delete: {
+      label: 'Löschen',
+      title: '„{name}“ löschen?',
+      message: 'Die Phase und ihre zugehörigen Daten werden endgültig gelöscht. Das lässt sich nicht rückgängig machen.',
+    },
   },
   timeline: {
     loading: 'Phasen werden geladen …',

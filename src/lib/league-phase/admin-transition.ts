@@ -12,11 +12,15 @@ export async function updateAdminPhase(
   before: Phase,
   update: Parameters<typeof updatePhase>[1],
 ): Promise<Omit<TournamentUpdateOutcome, 'tournament'> & { phase: Phase }> {
-  const { ruleset_id, ...fields } = update;
-  const patch = ruleset_id === before.ruleset_id ? fields : update;
+  const { ruleset_id, archived, ...fields } = update;
+  const patch = {
+    ...fields,
+    ...(ruleset_id !== undefined && ruleset_id !== before.ruleset_id ? { ruleset_id } : {}),
+    ...(archived !== undefined && archived !== before.archived ? { archived } : {}),
+  };
   const writes = Object.keys(patch).length > 0;
   const phase = writes
-    ? await updatePhase(before.id, patch, { from: before.status, seasonId: before.season_id })
+    ? await updatePhase(before.id, patch, { from: before.status, seasonId: before.season_id, archived: before.archived })
     : before;
   if (writes) expirePhaseReads(phase.id, phase.season_id);
 

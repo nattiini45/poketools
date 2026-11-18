@@ -165,6 +165,7 @@ export async function getPhasesBySeasonIds(seasonIds: string[]): Promise<Map<str
 export interface PhaseStatusGuard {
   from: PhaseStatus;
   seasonId?: string;
+  archived?: boolean;
 }
 
 export async function updatePhase(
@@ -179,6 +180,7 @@ export async function updatePhase(
 ): Promise<Phase> {
   if (input.status !== undefined && !guard) throw new Error('A phase status update requires its expected status');
   if (input.current_round !== undefined && !guard) throw new Error('A phase round counter update requires its expected status');
+  if (input.archived !== undefined && guard?.archived === undefined) throw new Error('A phase archive update requires its expected archive state');
   if (input.status !== undefined && guard && input.status !== guard.from) phaseMachine.assertTransition(guard.from, input.status, 'admin');
   const updates: Record<string, unknown> = {};
   if (input.format_stage_key !== undefined) updates.format_stage_key = input.format_stage_key;
@@ -217,6 +219,7 @@ export async function updatePhase(
       .eq('id', id)
       .eq('status', guard.from);
     if (guard.seasonId !== undefined) query = query.eq('season_id', guard.seasonId);
+    if (guard.archived !== undefined) query = query.eq('archived', guard.archived);
     const { data, error } = await query.select().maybeSingle();
     if (error) throw error;
     if (!data) {

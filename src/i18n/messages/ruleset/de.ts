@@ -34,6 +34,7 @@ export default defineDe<typeof en>()({
     openStudio: 'Regelwerk-Studio öffnen',
   },
   pin: {
+    archivedPhase: 'Reaktiviere die Phase, bevor du ihr Regelwerk aktualisierst.',
     heading: 'Regelwerk',
     current: '{name}, Version {version}',
     latest: 'Das ist die neueste Version.',

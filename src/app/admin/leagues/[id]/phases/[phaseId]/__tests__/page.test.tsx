@@ -77,6 +77,7 @@ vi.mock('@/components/ui/PageContainer', () => stub('PageContainer'));
 vi.mock('@/components/ui/Section', () => stub('Section'));
 vi.mock('@/components/ui/Alert', () => stub('Alert'));
 vi.mock('@/components/league/PhaseOverviewEditor', () => stub('PhaseOverviewEditor'));
+vi.mock('@/components/league/PhaseLifecycleActions', () => stub('PhaseLifecycleActions'));
 vi.mock('@/components/tournament/ParticipantManager', () => stub('ParticipantManager'));
 vi.mock('@/components/league/PhaseGroupsPanel', () => stub('PhaseGroupsPanel'));
 vi.mock('@/components/tournament/RoundManager', () => stub('RoundManager'));
@@ -91,6 +92,7 @@ import ParticipantManager from '@/components/tournament/ParticipantManager';
 import RoundManager from '@/components/tournament/RoundManager';
 import PhaseRoundManager from '@/components/tournament/PhaseRoundManager';
 import PhaseOverviewEditor from '@/components/league/PhaseOverviewEditor';
+import PhaseLifecycleActions from '@/components/league/PhaseLifecycleActions';
 import RulesetPinCard from '@/components/ruleset/RulesetPinCard';
 import TournamentLifecycleActions from '@/components/tournament/TournamentLifecycleActions';
 import PageContainer from '@/components/ui/PageContainer';
@@ -283,7 +285,7 @@ describe('native phase round workspace', () => {
     mocks.getPhaseWithDetails.mockResolvedValue({
       id: T1, season_id: S1, season_name: 'Summer League', name: 'Group stage', stage_order: 1,
       bracket_type: 'round_robin', best_of_default: 3, current_round: 0, status: 'upcoming',
-      archived: false, format_stage_key: null, stage_spec: null,
+      archived: false, format_stage_key: null, stage_spec: null, ruleset_id: 'rs-native',
     });
     mocks.getPhasesBySeasonId.mockResolvedValue([
       { id: T1, stage_order: 1 },
@@ -294,8 +296,10 @@ describe('native phase round workspace', () => {
     mocks.getPhaseParticipants.mockResolvedValue([{ id: 'p1', name: 'Jade', seed: 1, ban_reason: 'not serialized' }]);
   });
 
-  it('passes the bound owner and narrow roster without tournament reads and retains the read-only warning', async () => {
+  it('passes the bound owner and narrow roster without tournament reads and binds native phase controls', async () => {
     mocks.getLiveAccess.mockResolvedValue(liveAccess({ isSiteAdmin: false }));
+    const pin = { definition_id: 'def-1', name: 'Standard OU', version_id: 'rs-native', version_no: 2, update: null, can_view: true };
+    mocks.getRulesetPinInfo.mockResolvedValue(pin);
     const tree = await render();
     const [manager] = findByType(tree, PhaseRoundManager);
     expect(manager.props).toMatchObject({
@@ -306,10 +310,19 @@ describe('native phase round workspace', () => {
     });
     expect(manager.props.participants).toEqual([{ id: 'p1', name: 'Jade', seed: 1 }]);
     expect(findByType(tree, RoundManager)).toHaveLength(0);
-    expect(text(tree)).toContain('Phase settings, the roster and groups are still read-only here.');
+    expect(text(tree)).toContain('The roster and groups are still read-only here.');
+    expect(findByType(tree, TournamentLifecycleActions)).toHaveLength(0);
+    expect(findByType(tree, PhaseLifecycleActions)[0]?.props).toMatchObject({
+      phase: { id: T1, season_id: S1 }, canDelete: false, formatManaged: false,
+    });
+    expect(findByType(tree, PhaseOverviewEditor)[0]?.props).toMatchObject({ seasonId: S1, native: { formatManaged: false } });
+    expect(findByType(tree, RulesetPinCard)[0]?.props).toMatchObject({
+      target: { kind: 'phase', id: T1 }, pin,
+    });
     expect(mocks.getPhaseWithDetails).toHaveBeenCalledExactlyOnceWith(T1, S1);
     expect(mocks.getRoundsByPhase).toHaveBeenCalledExactlyOnceWith(T1);
-    expect(phaseReads()).toEqual(['seasonHasGroups']);
+    expect(mocks.listRulesetOptionsFor).toHaveBeenCalledWith({ actor: { playerId: 'u1', isAdmin: false }, seasonId: S1, keep: ['rs-native'] });
+    expect(phaseReads()).toEqual(['seasonHasGroups', 'listRulesetOptionsFor', 'getRulesetPinInfo']);
     expect(mocks.isResourceAdminFor).toHaveBeenCalledWith('u1', 'season', S1);
   });
 

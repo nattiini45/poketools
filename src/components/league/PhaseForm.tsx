@@ -14,6 +14,7 @@ import { useT } from '@/i18n/client';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { errorsSeasons } from '@/i18n/messages/errors/seasons';
+import { errorsTournaments } from '@/i18n/messages/errors/tournaments';
 import { leaguePhasesMessages } from '@/i18n/messages/league-phases';
 import { commonMessages } from '@/i18n/messages/common';
 import { enumMessages } from '@/i18n/messages/enums';
@@ -33,6 +34,8 @@ interface PhaseFormProps {
   initialData?: Partial<PhaseFormData>;
   submitLabel?: string;
   lockBracketType?: boolean;
+  lockStructure?: boolean;
+  lockRuleset?: boolean;
   /**
    * Every field and the submit button are disabled (a completed phase: reopen it to change its
    * settings).
@@ -131,13 +134,15 @@ export default function PhaseForm({
   initialData,
   submitLabel,
   lockBracketType = false,
+  lockStructure = false,
+  lockRuleset = false,
   locked = false,
   defaultRulesetId = null,
 }: PhaseFormProps) {
   const t = useT(leaguePhasesMessages);
   const tCommon = useT(commonMessages);
   const tEnum = useT(enumMessages);
-  const errorText = useApiErrorText(errorsSeasons);
+  const errorText = useApiErrorText(errorsSeasons, errorsTournaments);
   const [name, setName] = useState(initialData?.name ?? '');
   const [description, setDescription] = useState(initialData?.description ?? '');
   const [bracketType, setBracketType] = useState<BracketType>(
@@ -273,27 +278,33 @@ export default function PhaseForm({
           onChange={setRulesetId}
           options={rulesets}
           placeholder={t('form.selectRuleset')}
+          disabled={lockRuleset}
+          studioLink={!lockRuleset}
           required
         />
 
         <Select
           label={t('form.bestOf')}
+          disabled={lockStructure}
           value={String(bestOf)}
           onChange={(e) => setBestOf(Number(e.target.value))}
           options={bestOfChoices(initialData?.best_of_default ?? bestOf).map((count) => ({ value: String(count), label: tCommon('bestOf', { count }) }))}
         />
 
-        <BoOverrideEditor
-          bracketType={bracketType}
-          defaultBo={bestOf}
-          overrides={boOverrides}
-          onChange={setBoOverrides}
-        />
+        <fieldset disabled={lockStructure}>
+          <BoOverrideEditor
+            bracketType={bracketType}
+            defaultBo={bestOf}
+            overrides={boOverrides}
+            onChange={setBoOverrides}
+          />
+        </fieldset>
 
         <div className="space-y-1">
           <label className="flex items-center gap-2 text-body text-fg">
             <input
               type="checkbox"
+              disabled={lockStructure}
               checked={isDoubles}
               onChange={(e) => {
                 setDoublesChoice(e.target.checked);

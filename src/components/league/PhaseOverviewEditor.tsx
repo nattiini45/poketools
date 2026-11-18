@@ -17,12 +17,14 @@ interface PhaseOverviewEditorProps {
   seasonId: string;
   phase: LeaguePhase;
   rulesets: readonly RulesetOption[];
+  native?: { formatManaged: boolean };
 }
 
 export default function PhaseOverviewEditor({
   seasonId,
   phase,
   rulesets,
+  native,
 }: PhaseOverviewEditorProps) {
   const router = useRouter();
   const t = useT(leaguePhasesMessages);
@@ -31,10 +33,17 @@ export default function PhaseOverviewEditor({
   /** A refusal is thrown as `PhaseSaveError`: `PhaseForm` shows it, the editor shows no error of its own. */
   async function handleSave(data: PhaseFormData) {
     setSaved(false);
+    const body: Partial<PhaseFormData> = native ? { ...data, description: data.description ?? '' } : data;
+    if (native?.formatManaged) {
+      delete body.bracket_type;
+      delete body.best_of_default;
+      delete body.bo_overrides;
+      delete body.is_doubles;
+    }
     const res = await fetch(`/api/seasons/${seasonId}/phases/${phase.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
+      body: JSON.stringify(body),
     });
     const result: ApiResult<LeaguePhase> = await res.json();
     if (!result.success) {
@@ -45,14 +54,18 @@ export default function PhaseOverviewEditor({
   }
 
   const completed = phase.status === 'completed';
+  const archived = native !== undefined && phase.archived;
 
   return (
     <div className="space-y-3">
-      {completed && <Alert variant="info" className={INFO_CALLOUT}>{t('overview.lockedCompleted')}</Alert>}
+      {archived ? <Alert variant="info" className={INFO_CALLOUT}>{t('overview.lockedArchived')}</Alert>
+        : completed && !native?.formatManaged && <Alert variant="info" className={INFO_CALLOUT}>{t('overview.lockedCompleted')}</Alert>}
+      {native?.formatManaged && <Alert variant="info" className={INFO_CALLOUT}>{t('overview.formatManaged')}</Alert>}
       {saved && (
         <p className="text-caption text-win">{t('overview.saved')}</p>
       )}
       <PhaseForm
+        key={native ? phase.updated_at : undefined}
         rulesets={rulesets}
         initialData={{
           name: phase.name,
@@ -67,8 +80,10 @@ export default function PhaseOverviewEditor({
         }}
         onSubmit={handleSave}
         submitLabel={t('overview.saveChanges')}
-        lockBracketType={phase.status === 'active'}
-        locked={completed}
+        lockBracketType={phase.status === 'active' || native?.formatManaged}
+        lockStructure={native?.formatManaged}
+        lockRuleset={native !== undefined && phase.status !== 'upcoming'}
+        locked={completed || archived}
       />
     </div>
   );
