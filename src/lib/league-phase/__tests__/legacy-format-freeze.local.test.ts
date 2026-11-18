@@ -5,12 +5,8 @@ import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/loca
 import type { SessionPlayer } from '@/types/auth';
 
 vi.mock('next/cache', () => ({ revalidatePath: vi.fn(), revalidateTag: vi.fn() }));
-vi.mock('@/auth', () => ({
-  auth: () => { throw new Error('This fixture supplies its actor explicitly'); },
-  loadSessionPlayer: () => { throw new Error('This fixture supplies its actor explicitly'); },
-}));
-vi.mock('@/lib/auth/helpers', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/auth/helpers')>()),
+vi.mock('@/lib/auth/helpers', () => ({
+  AuthError: class AuthError extends Error {},
   requireAnyAdmin: vi.fn(),
   requireResourceAdmin: vi.fn(),
 }));
@@ -22,9 +18,10 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 it.skipIf(!localStackOptIn('LOCAL_LEGACY_FORMAT_FREEZE'))('returns 503 without writes from a legacy app after the database freezes', async () => {
   assertLoopbackUrl(process.env.NEXT_PUBLIC_SUPABASE_URL, 'NEXT_PUBLIC_SUPABASE_URL');
   requireLocalKey('SUPABASE_SERVICE_ROLE_KEY');
-  const [{ supabase }, auth, seasons, format, cache] = await Promise.all([
-    import('@/lib/supabase/client'), import('@/lib/auth/helpers'), import('@/app/api/seasons/route'),
-    import('@/app/api/seasons/[id]/format/route'), import('next/cache'),
+  const { supabase } = await import('@/lib/supabase/client');
+  const auth = await import('@/lib/auth/helpers');
+  const [seasons, format, cache] = await Promise.all([
+    import('@/app/api/seasons/route'), import('@/app/api/seasons/[id]/format/route'), import('next/cache'),
   ]);
   const mode = await supabase.from('phase_storage_state').select('mode').single();
   expect(mode.error).toBeNull();
