@@ -1,12 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
-import { getMatchById } from '@/lib/supabase/queries/matches';
+import { loadTimeProposalMatch } from '@/lib/league-phase/time-proposals';
 import {
   createMatchProposal,
+  createPhaseMatchProposal,
   expireOverdueMatchProposals,
   getPendingProposalForParticipant,
   listMatchProposals,
+  listPhaseMatchProposals,
 } from '@/lib/supabase/queries/match-proposals';
 import { matchProposalCreateSchema, formatZodErrors } from '@/lib/validation';
 import { logAuditEvent } from '@/lib/audit/log';
@@ -39,15 +41,17 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_MATCH_ID');
     if (invalidId) return invalidId;
 
-    const match = await getMatchById(id);
-    if (!match) {
+    const target = await loadTimeProposalMatch(id);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Match not found', code: 'match_not_found' }, { status: 404 });
     }
-    if (!isMatchParticipant(player.playerId, match)) {
+    if (!isMatchParticipant(player.playerId, target.match)) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Match access required', code: 'match_access_required' }, { status: 403 });
     }
 
-    const proposals = await listMatchProposals(id);
+    const proposals = target.kind === 'phase'
+      ? await listPhaseMatchProposals(target.match.id, player.playerId)
+      : await listMatchProposals(id);
     return NextResponse.json<ApiResult<MatchProposalWithPlayers[]>>({ success: true, data: proposals });
   } catch (err) {
     return safeErrorResponse(err, 'Failed to load match proposals');
@@ -70,10 +74,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const match = await getMatchById(id);
-    if (!match) {
+    const target = await loadTimeProposalMatch(id);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Match not found', code: 'match_not_found' }, { status: 404 });
     }
+    const { match } = target;
     if (!isMatchParticipant(player.playerId, match)) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Only match participants can propose a time', code: 'match_proposal_participants_only' }, { status: 403 });
     }
@@ -94,6 +99,19 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const responderId = getResponderId(player.playerId, match);
+    if (target.kind === 'phase') {
+      const { owner } = target;
+      const proposal = await createPhaseMatchProposal(owner.phase_id, match.id, player.playerId, proposedAt.toISOString(), zodResult.data.message);
+      logAuditEvent({
+        actor_id: player.playerId, actor_name: player.name, action: 'match.proposal.create',
+        resource_type: 'phase_match', resource_id: match.id, resource_name: `${match.player_1_name} vs ${match.player_2_name}`,
+        metadata: {
+          phase_id: owner.phase_id, season_id: owner.season_id, proposal_id: proposal.id,
+          proposed_at: proposal.proposed_at, responder_id: proposal.responder_id,
+        },
+      });
+      return NextResponse.json<ApiResult<MatchProposal>>({ success: true, data: proposal }, { status: 201 });
+    }
     // An overdue proposal nobody answered is expired first: it no longer blocks a new one.
     await expireOverdueMatchProposals(id, now.toISOString());
     const [proposerPending, responderPending] = await Promise.all([

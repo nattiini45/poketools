@@ -14,6 +14,7 @@ const { mockBuilder } = vi.hoisted(() => {
   mb.single = vi.fn();
   mb.maybeSingle = vi.fn();
   mb.range = vi.fn();
+  mb.rpc = vi.fn();
   return { mockBuilder: mb };
 });
 
@@ -28,13 +29,13 @@ vi.mock('@/lib/utils/uuid', () => ({
 import {
   acceptMatchProposal,
   cancelPendingMatchProposalsForMatch,
-  cancelPendingPhaseMatchProposals,
   countOpenPhaseMatchProposals,
   createMatchProposal,
   expireOverdueMatchProposals,
   listMatchProposals,
   listPhaseMatchProposals,
   listPendingMatchProposalsForPlayer,
+  overridePhaseMatchSchedule,
 } from '../match-proposals';
 
 const proposalRow = {
@@ -69,13 +70,15 @@ describe('queries/match-proposals', () => {
     expect(mockBuilder.gt).toHaveBeenCalledExactlyOnceWith('expires_at', now);
   });
 
-  it('counts every cancelled native proposal without returning its rows', async () => {
-    mockBuilder.eq.mockReturnValueOnce(mockBuilder).mockResolvedValueOnce({ count: 1100, error: null });
-    expect(await cancelPendingPhaseMatchProposals('match-1')).toBe(1100);
-    expect(mockBuilder.from).toHaveBeenCalledExactlyOnceWith('phase_match_proposals');
-    expect(mockBuilder.eq.mock.calls).toEqual([['match_id', 'match-1'], ['status', 'pending']]);
-    expect(mockBuilder.update).toHaveBeenCalledWith({ status: 'cancelled', responded_at: expect.any(String) }, { count: 'exact' });
-    expect(mockBuilder.select).not.toHaveBeenCalled();
+  it('returns every proposal cancellation in the scoped atomic schedule result, without reading rows', async () => {
+    const data = { scheduled_at: null, previous_scheduled_at: '2026-05-22T12:00:00Z', proposals_cancelled: 1100,
+      proposals_cancel_failed: false, unchanged: false };
+    mockBuilder.rpc.mockResolvedValueOnce({ data, error: null });
+    expect(await overridePhaseMatchSchedule('phase-1', 'match-1', null)).toEqual(data);
+    expect(mockBuilder.rpc).toHaveBeenCalledExactlyOnceWith('phase_match_schedule_override', {
+      p_phase_id: 'phase-1', p_match_id: 'match-1', p_scheduled_at: null,
+    });
+    expect(mockBuilder.from).not.toHaveBeenCalled();
   });
 
   it('creates a match proposal', async () => {

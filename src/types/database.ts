@@ -9968,6 +9968,30 @@ export type Database = {
         }
         Returns: string
       }
+      phase_match_proposal_create: {
+        Args: {
+          p_match_id: string
+          p_message: string
+          p_phase_id: string
+          p_player_id: string
+          p_proposed_at: string
+        }
+        Returns: Json
+      }
+      phase_match_proposal_respond: {
+        Args: {
+          p_accept: boolean
+          p_match_id: string
+          p_phase_id: string
+          p_player_id: string
+          p_proposal_id: string
+        }
+        Returns: Json
+      }
+      phase_match_schedule_override: {
+        Args: { p_match_id: string; p_phase_id: string; p_scheduled_at: string }
+        Returns: Json
+      }
       phase_matches_delete_scheduled: {
         Args: { p_match_ids: string[] }
         Returns: number
@@ -10582,4 +10606,3 @@ export const Constants = {
     },
   },
 } as const
-

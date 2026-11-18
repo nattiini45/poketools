@@ -206,7 +206,11 @@ describe('canonical league phase match', () => {
     mock.nativeMatch.mockResolvedValue({ ...NATIVE_MATCH, status: 'scheduled' });
     const items = elements(await Page(params()));
     const scheduling = items.find(el => el.type === MatchSchedulingPanel);
-    expect(scheduling?.props).toMatchObject({ matchId: undefined, canManage: false, initialProposals: status === 'active' ? [proposal] : [] });
+    expect(scheduling?.props).toMatchObject({
+      matchId: status === 'active' ? MATCH : undefined,
+      canManage: status === 'active',
+      initialProposals: status === 'active' ? [proposal] : [],
+    });
     if (status === 'active') expect(mock.proposals).toHaveBeenCalledWith(MATCH, NATIVE_MATCH.player_1_id);
     else expect(mock.proposals).not.toHaveBeenCalled();
     expect(mock.privateMatch).not.toHaveBeenCalled();

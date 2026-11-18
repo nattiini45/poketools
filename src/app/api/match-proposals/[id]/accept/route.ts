@@ -6,8 +6,8 @@ import {
   acceptMatchProposal,
   cancelPendingMatchProposalsForMatch,
   expireMatchProposal,
-  getMatchProposalById,
 } from '@/lib/supabase/queries/match-proposals';
+import { answerNativeTimeProposal, loadTimeProposalById } from '@/lib/league-phase/time-proposals';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { logAuditEvent } from '@/lib/audit/log';
 import type { ApiResult } from '@/types/api';
@@ -26,12 +26,19 @@ export async function POST(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_PROPOSAL_ID');
     if (invalidId) return invalidId;
 
-    const proposal = await getMatchProposalById(id);
-    if (!proposal) {
+    const target = await loadTimeProposalById(id);
+    if (!target) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Proposal not found', code: 'match_proposal_not_found' }, { status: 404 });
     }
+    const { proposal } = target;
     if (proposal.responder_id !== player.playerId) {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Only the responder can accept this proposal', code: 'match_proposal_accept_responder_only' }, { status: 403 });
+    }
+    if (target.kind === 'phase') {
+      const accepted = await answerNativeTimeProposal(target, player, true);
+      return NextResponse.json<ApiResult<{ proposal: MatchProposal; match: Pick<MatchWithPlayers, 'scheduled_at'> }>>({
+        success: true, data: { proposal: accepted, match: { scheduled_at: accepted.proposed_at } },
+      });
     }
     if (proposal.status !== 'pending') {
       return NextResponse.json<ApiResult<never>>({ success: false, error: 'Proposal is no longer pending', code: 'match_proposal_not_pending' }, { status: 409 });
