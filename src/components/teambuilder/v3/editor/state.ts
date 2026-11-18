@@ -31,6 +31,7 @@ export interface EditorState {
   generation: number;
   seasonId: string | null;
   tournamentId: string | null;
+  phaseId: string | null;
   matchId: string | null;
   isDraftLeague: boolean;
 
@@ -384,6 +385,7 @@ export function createInitialState(params?: {
   format?: string;
   generation?: number;
   tournamentId?: string | null;
+  phaseId?: string | null;
   seasonId?: string | null;
   matchId?: string | null;
   teamId?: string | null;
@@ -401,6 +403,7 @@ export function createInitialState(params?: {
     generation: gen,
     seasonId: params?.seasonId ?? null,
     tournamentId: params?.tournamentId ?? null,
+    phaseId: params?.phaseId ?? null,
     matchId: params?.matchId ?? null,
     isDraftLeague: params?.isDraftLeague ?? false,
     team: [...EMPTY_SIX],

@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render } from '@testing-library/react';
 
-const editor = vi.hoisted(() => ({ props: null as Record<string, unknown> | null }));
+const editor = vi.hoisted(() => ({ props: null as Record<string, unknown> | null, scout: vi.fn(() => null) }));
 
 vi.mock('@/i18n/client', async () => {
   const { createTranslator } = await import('@/i18n/core');
@@ -16,7 +16,7 @@ vi.mock('@/i18n/client', async () => {
   };
 });
 vi.mock('next/link', () => ({ default: () => null }));
-vi.mock('@/components/match/ScoutingReportCard', () => ({ default: () => null }));
+vi.mock('@/components/match/ScoutingReportCard', () => ({ default: editor.scout }));
 vi.mock('@/components/teambuilder/v3/editor/TeamsEditor', () => ({
   default: (props: Record<string, unknown>) => {
     editor.props = props;
@@ -49,5 +49,12 @@ describe('MatchPrepClient', () => {
       seasonId: SEASON,
       rulesetId: 'ruleset-1',
     });
+  });
+
+  it('forwards a phase match to the editor and native scouting mode to the card', () => {
+    const phaseId = '00000000-0000-4000-8000-000000000005';
+    render(<MatchPrepClient matchId={MATCH} phaseId={phaseId} seasonId={SEASON} opponentName="Gary" />);
+    expect(editor.props).toMatchObject({ mode: 'plan', matchId: MATCH, phaseId, seasonId: SEASON, tournamentId: undefined });
+    expect(editor.scout).toHaveBeenLastCalledWith(expect.objectContaining({ matchId: MATCH, nativePhase: true }), undefined);
   });
 });

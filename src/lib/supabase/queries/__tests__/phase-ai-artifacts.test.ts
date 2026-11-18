@@ -3,8 +3,8 @@ const h = vi.hoisted(() => ({ from: vi.fn(), settle: vi.fn(), match: vi.fn() }))
 vi.mock('../../client', () => ({ supabase: { from: h.from } }));
 vi.mock('../ai-artifacts', () => ({ settleAiArtifact: h.settle }));
 vi.mock('../phase-matches', () => ({ getPhaseMatchById: h.match }));
-import { createPhaseMatchAnalysis, createPhaseMatchPrepAnalysis, deletePhaseMatchAnalysis,
-  getPhaseMatchAnalysis, getPhaseMatchPrepAnalysis, getPhasePlayerPrepTeam, getPhaseAiParticipants,
+import { createPhaseMatchAnalysis, createPhaseMatchPrepAnalysis, deletePhaseMatchAnalysis, deletePhaseMatchPrepAnalysis,
+  getPhaseMatchAnalysis, getPhaseMatchPrepAnalysis, getPhasePlayerPrepTeam, getPhaseAiParticipants, getPhaseScoutingAccess,
   updatePhaseMatchAnalysis, updatePhaseMatchPrepAnalysis } from '../phase-ai-artifacts';
 const phaseId = '20000000-0000-0000-0000-000000000001';
 const matchId = '20000000-0000-0000-0000-000000000002';
@@ -44,6 +44,14 @@ describe('native phase artifact persistence', () => {
     await getPhasePlayerPrepTeam(phaseId, matchId, 'p1');
     expect(h.from).toHaveBeenCalledWith('phase_match_prep_teams'); expect(q.select).toHaveBeenCalledWith('pokemon');
   });
+  it('checks match ownership and eligibility without selecting private match data', async () => {
+    const q = query({ status: 'scheduled', player_1_id: 'p1', player_2_id: 'p2' });
+    expect(await getPhaseScoutingAccess(phaseId, matchId)).toEqual({ status: 'scheduled', player_1_id: 'p1', player_2_id: 'p2' });
+    expect(h.from).toHaveBeenCalledExactlyOnceWith('phase_matches');
+    expect(q.select).toHaveBeenCalledExactlyOnceWith('status,player_1_id,player_2_id');
+    expect(q.eq.mock.calls).toEqual([['id', matchId], ['phase_id', phaseId]]);
+    expect(h.match).not.toHaveBeenCalled();
+  });
   it('rejects cross-phase ids before any artifact read or write', async () => {
     h.match.mockResolvedValue({ phase_id: 'different' }); query(row);
     await expect(createPhaseMatchAnalysis(phaseId, matchId, 'model')).rejects.toThrow('not found in phase');
@@ -69,6 +77,15 @@ describe('native phase artifact persistence', () => {
     h.from.mockReturnValueOnce(read).mockReturnValueOnce(removed);
     expect(await deletePhaseMatchAnalysis(phaseId, matchId)).toBe(true);
     expect(removed.eq).toHaveBeenCalledWith('id', row.id); expect(removed.eq).toHaveBeenCalledWith('status', 'pending');
+  });
+  it('discards only the observed scouting attempt instead of re-reading a concurrent winner', async () => {
+    const removed = query([]);
+    expect(await deletePhaseMatchPrepAnalysis(phaseId, matchId, 'p1', { id: row.id, status: 'pending' })).toBe(false);
+    expect(h.from).toHaveBeenCalledExactlyOnceWith('phase_match_prep_analyses');
+    expect(removed.delete).toHaveBeenCalledTimes(1);
+    expect(removed.eq.mock.calls).toEqual([
+      ['id', row.id], ['match_id', matchId], ['player_id', 'p1'], ['status', 'pending'],
+    ]);
   });
   it('propagates query errors instead of treating them as missing artifacts', async () => {
     const error = new Error('Synthetic query failure'); query(null, error);

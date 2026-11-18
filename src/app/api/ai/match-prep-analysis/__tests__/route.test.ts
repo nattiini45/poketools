@@ -43,6 +43,12 @@ vi.mock('@/lib/ai/rate-limit', () => ({
   checkAndRecordAiGeneration: vi.fn(),
 }));
 
+vi.mock('@/lib/league-phase/match-route-owner', () => ({
+  resolveIdOnlyMatchRoute: vi.fn(async () => ({ kind: 'legacy' })),
+}));
+
+vi.mock('@/lib/ai/phase-analysis', () => ({ preparePhaseScouting: vi.fn() }));
+
 vi.mock('@/i18n/content-locale', () => ({
   resolveContentLocale: vi.fn(async () => 'en'),
 }));
@@ -63,6 +69,9 @@ import { buildMatchPrepPrompt } from '@/lib/ai/context-builder';
 import { completeStreaming } from '@/lib/ai/client';
 import { OutputCapError, RefusalError, ModelRejectedError } from '@/lib/ai/errors';
 import { checkAndRecordAiGeneration } from '@/lib/ai/rate-limit';
+import { preparePhaseScouting } from '@/lib/ai/phase-analysis';
+import { resolveIdOnlyMatchRoute } from '@/lib/league-phase/match-route-owner';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 // ─── Helpers ────────────────────────────────────────────────────────
 
@@ -70,6 +79,8 @@ const makeRequest = (body: Record<string, unknown>) =>
   ({ json: () => Promise.resolve(body) }) as unknown as NextRequest;
 
 const UUID_MATCH = '00000000-0000-4000-8000-000000000001';
+const NATIVE_MATCH = 'f0000000-0000-4000-8000-000000000001';
+const NATIVE_OWNER = { kind: 'phase', phase_id: 'phase-1', season_id: 'league-1' } as const;
 
 const mockPlayer = {
   playerId: 'player-1',
@@ -107,6 +118,113 @@ async function readStream(response: Response): Promise<string> {
   }
   return result;
 }
+
+describe('POST /api/ai/match-prep-analysis — native ownership and SSE', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(requireAuth).mockResolvedValue(mockSession as never);
+  });
+
+  it('uses the verified phase and normalized match id with the live caller as the only perspective', async () => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+    vi.mocked(preparePhaseScouting).mockResolvedValueOnce({ kind: 'cached', artifact: { id: 'private report' } as never });
+    const res = await POST(makeRequest({ match_id: NATIVE_MATCH.toUpperCase(), force: true, player_id: 'other-player' }));
+    expect(res.headers.get('Content-Type')).toBe('text/event-stream');
+    expect(await res.text()).toBe('data: {"status":"thinking"}\n\ndata: {"status":"done"}\n\n');
+    expect(resolveIdOnlyMatchRoute).toHaveBeenCalledExactlyOnceWith(NATIVE_MATCH);
+    expect(preparePhaseScouting).toHaveBeenCalledExactlyOnceWith({
+      phaseId: NATIVE_OWNER.phase_id, matchId: NATIVE_MATCH, force: true,
+    }, mockPlayer);
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(getMatchPrepAnalysis).not.toHaveBeenCalled();
+    expect(resolveContentLocale).not.toHaveBeenCalled();
+    expect(checkAndRecordAiGeneration).not.toHaveBeenCalled();
+  });
+
+  it('returns a terminal already_pending frame without exposing the artifact', async () => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+    vi.mocked(preparePhaseScouting).mockResolvedValueOnce({ kind: 'pending', artifact: { id: 'private report' } as never });
+    const res = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    expect(await res.text()).toBe('data: {"status":"thinking"}\n\ndata: {"status":"already_pending"}\n\n');
+  });
+
+  it('returns 404 for unknown and typed 503 for known frozen matches without either generator', async () => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(null).mockRejectedValueOnce(
+      new UserFacingError('League phases are temporarily unavailable during maintenance.', { status: 503, code: 'phase_storage_unavailable' }),
+    );
+    const unknown = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    const frozen = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    expect(unknown.status).toBe(404);
+    expect(await unknown.json()).toMatchObject({ code: 'match_not_found' });
+    expect(frozen.status).toBe(503);
+    expect(await frozen.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(getMatchPrepAnalysis).not.toHaveBeenCalled();
+    expect(preparePhaseScouting).not.toHaveBeenCalled();
+  });
+
+  it('maps a write refused by the SQL storage fence to typed 503 before the stream', async () => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+    vi.mocked(preparePhaseScouting).mockRejectedValueOnce({ code: 'P0001', message: 'phase_storage_not_ready' });
+    const res = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getMatchPrepAnalysis).not.toHaveBeenCalled();
+  });
+
+  it('keeps a native quota refusal at 429 with Retry-After', async () => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+    vi.mocked(preparePhaseScouting).mockResolvedValueOnce({ kind: 'limited', limit: 10 });
+    const res = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    expect(res.status).toBe(429);
+    expect(res.headers.get('Retry-After')).toBe('3600');
+    expect(await res.json()).toMatchObject({ code: 'daily_limit_reached', params: { limit: 10 } });
+  });
+
+  it('sends thinking heartbeats until the provider settles and only then sends done', async () => {
+    vi.useFakeTimers();
+    try {
+      const provider = Promise.withResolvers<{ kind: 'generated'; artifact: never }>();
+      vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+      vi.mocked(preparePhaseScouting).mockResolvedValueOnce({ kind: 'ready', run: () => provider.promise });
+      const res = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+      const reader = res.body!.pipeThrough(new TextDecoderStream()).getReader();
+      expect(await reader.read()).toMatchObject({ value: 'data: {"status":"thinking"}\n\n' });
+      await vi.advanceTimersByTimeAsync(5_000);
+      expect(await reader.read()).toMatchObject({ value: 'data: {"status":"thinking"}\n\n' });
+      provider.resolve({ kind: 'generated', artifact: {} as never });
+      expect(await reader.read()).toMatchObject({ value: 'data: {"status":"done"}\n\n' });
+      expect(await reader.read()).toMatchObject({ done: true });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it.each([
+    { run: async () => { throw new Error('internal provider data'); }, code: 'ai_analysis_failed' },
+    { run: async () => { throw { code: 'P0001', message: 'phase_storage_not_ready' }; }, code: 'phase_storage_unavailable' },
+    { run: async () => ({ kind: 'superseded' as const }), code: 'ai_analysis_failed' },
+  ])('finishes with a typed failed frame, not done: $code', async ({ run, code }) => {
+    vi.mocked(resolveIdOnlyMatchRoute).mockResolvedValueOnce(NATIVE_OWNER);
+    vi.mocked(preparePhaseScouting).mockResolvedValueOnce({ kind: 'ready', run });
+    const res = await POST(makeRequest({ match_id: NATIVE_MATCH }));
+    const frames = await res.text();
+    expect(frames).toContain('"status":"failed"');
+    expect(frames).toContain(`"code":"${code}"`);
+    expect(frames).not.toContain('"status":"done"');
+    expect(frames).not.toContain('internal provider data');
+  });
+
+  it('does not extend the legacy superadmin exception to other site admins', async () => {
+    vi.mocked(requireAuth).mockResolvedValue({ ...mockSession, player: { ...mockPlayer, isAdmin: true, playerId: 'admin' } } as never);
+    vi.mocked(isSuperadmin).mockReturnValueOnce(false);
+    vi.mocked(getMatchById).mockResolvedValueOnce(mockMatch as never);
+    const res = await POST(makeRequest({ match_id: UUID_MATCH }));
+    expect(res.status).toBe(403);
+    expect(getMatchPrepAnalysis).not.toHaveBeenCalled();
+  });
+});
 
 // ─── Tests ──────────────────────────────────────────────────────────
 
@@ -213,6 +331,19 @@ describe('POST /api/ai/match-prep-analysis', () => {
     expect(res.status).toBe(200);
     expect(json.success).toBe(true);
     expect(json.data.status).toBe('completed');
+  });
+
+  it('preserves the legacy superadmin branch without selecting another player’s perspective', async () => {
+    vi.mocked(requireAuth).mockResolvedValueOnce({
+      ...mockSession, player: { ...mockPlayer, playerId: 'outside-admin', isAdmin: true },
+    } as never);
+    vi.mocked(isSuperadmin).mockReturnValueOnce(true);
+    vi.mocked(getMatchById).mockResolvedValueOnce(mockMatch as never);
+    vi.mocked(getMatchPrepAnalysis).mockResolvedValueOnce({ id: 'legacy-report', status: 'completed' } as never);
+    const response = await POST(makeRequest({ match_id: UUID_MATCH, player_id: 'player-2' }));
+    expect(response.status).toBe(200);
+    expect(getMatchPrepAnalysis).toHaveBeenCalledExactlyOnceWith(UUID_MATCH, 'outside-admin');
+    expect(preparePhaseScouting).not.toHaveBeenCalled();
   });
 
   it('serves a cached scouting report without consuming a rate-limit slot', async () => {

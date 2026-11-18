@@ -26,11 +26,12 @@ export default function AiPanel() {
   const [tab, setTab] = useState<AiTab>('assistant');
 
   const activeSet = state.activeSlot !== null ? state.team[state.activeSlot] : null;
+  const hasAssistant = state.phaseId === null;
 
   return (
     <div className="space-y-3">
       {/* Tab switcher — keeps the chat and the heuristic coaches one click apart. */}
-      <div className="flex gap-1 rounded-[10px] bg-sunken p-1">
+      {hasAssistant && <div className="flex gap-1 rounded-[10px] bg-sunken p-1">
         {(['assistant', 'coach'] as const).map((tabId) => (
           <button
             key={tabId}
@@ -46,9 +47,9 @@ export default function AiPanel() {
             {t(`ai.tabs.${tabId}`)}
           </button>
         ))}
-      </div>
+      </div>}
 
-      {tab === 'assistant' ? (
+      {hasAssistant && tab === 'assistant' ? (
         // key per match (or 'global' for the no-match teambuilder) keeps each
         // match prep's chat its own instance — defense-in-depth alongside the
         // per-match remount of TeamsEditor in MatchPrepClient.
