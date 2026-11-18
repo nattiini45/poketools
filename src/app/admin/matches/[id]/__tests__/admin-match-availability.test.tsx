@@ -32,7 +32,6 @@ function render(status: MatchStatus, games: GameSummary[]): string {
       player2={{ id: 'p2', name: 'Gary' }}
       currentWinnerId={null}
       games={games}
-      tournamentId="t1"
       bestOf={3}
       isSiteAdmin
     />,

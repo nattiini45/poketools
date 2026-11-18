@@ -2,7 +2,6 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { notFound } from 'next/navigation';
 import AdminGuard from '@/components/shared/AdminGuard';
-import { getMatchById } from '@/lib/supabase/queries/matches';
 import MatchStatusBadge from '@/components/match/MatchStatusBadge';
 import GameList from '@/components/match/GameList';
 import AdminMatchActions from './AdminMatchActions';
@@ -11,9 +10,13 @@ import MatchDisputePanel from './MatchDisputePanel';
 import MatchHistoryPanel from './MatchHistoryPanel';
 import MatchReopenSection from './MatchReopenSection';
 import MatchSchedulePanel from './MatchSchedulePanel';
-import { canAdministerMatch, MatchAccessDenied, viewerIsSiteAdmin } from './match-access';
+import { canAdministerMatchTarget, MatchAccessDenied, viewerIsSiteAdmin } from './match-access';
+import { loadAdminMatchTarget } from './match-target';
 import { isValidUuid } from '@/lib/utils/uuid';
-import { loadAdminMatchContext } from '@/lib/admin/match-context';
+import { loadAdminMatchContext, loadAdminPhaseMatchContext } from '@/lib/admin/match-context';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { phaseHref, phaseMatchHref } from '@/lib/league-phase/paths';
+import { TOURNAMENT_TAB_PARAM } from '@/lib/tournament/page-view';
 import { historyPanelKey, MATCH_HISTORY_PAGE_SIZE, type MatchHistoryPage } from '@/lib/admin/match-detail';
 import { readOptional } from '@/lib/admin/optional-read';
 import { getLatestMatchDispute, listMatchAuditEvents } from '@/lib/audit/queries';
@@ -54,15 +57,15 @@ interface PageProps {
 }
 
 export default async function AdminMatchPage({ params, searchParams }: PageProps) {
-  const { id } = await params;
-  if (!isValidUuid(id)) notFound();
-  const match = await getMatchById(id);
-  if (!match) notFound();
+  const { id: requestedId } = await params;
+  if (!isValidUuid(requestedId)) notFound();
+  const target = await loadAdminMatchTarget(requestedId, await requireOpenPhaseRouteMode());
+  if (!target) notFound();
+  const { match } = target;
+  const { id } = match;
+  const native = target.kind === 'phase';
 
-  // AdminGuard admits an admin of ANY resource; this page shows one match's
-  // admin notes and override controls, so the viewer must administer this
-  // match (site admin, or resource admin of its tournament or league).
-  if (!(await canAdministerMatch(match.tournament_id))) {
+  if (!(await canAdministerMatchTarget(target))) {
     return (
       <AdminGuard>
         <MatchAccessDenied />
@@ -79,18 +82,17 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
     getT(adminMatchMessages),
     viewerIsSiteAdmin(),
     searchParams,
-    loadAdminMatchContext(match),
-    readOptional(
+    native ? loadAdminPhaseMatchContext(target.match, target.owner) : loadAdminMatchContext(target.match),
+    native ? null : readOptional(
       'match history',
       listMatchAuditEvents(id, { limit: MATCH_HISTORY_PAGE_SIZE, offset: 0 }),
       emptyHistory,
     ),
-    readOptional('dispute details', match.status === 'disputed' ? getLatestMatchDispute(id) : Promise.resolve(null), null),
-    readOptional('time proposals', listMatchProposals(id), []),
+    native ? null : readOptional('dispute details', match.status === 'disputed' ? getLatestMatchDispute(id) : Promise.resolve(null), null),
+    native ? null : readOptional('time proposals', listMatchProposals(id), []),
   ]);
-  const history = historyRead.value;
-  const dispute = disputeRead.value;
-  const proposals = proposalsRead.value;
+  const dispute = disputeRead?.value ?? null;
+  const proposals = proposalsRead?.value ?? [];
   const now = requestTimeMs();
   const pendingProposals = proposals.filter(
     (proposal) => proposal.status === 'pending' && Date.parse(proposal.expires_at) > now,
@@ -100,9 +102,9 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
       ? match.player_1_name
       : match.player_2_name
     : null;
-  // Never the raw value: the list query is re-parsed and re-serialised, so the
-  // href is always a same-origin /admin/matches path with validated keys only.
-  const backHref = matchListBackHref(query?.back);
+  const backHref = native
+    ? `${phaseHref(target.owner)}?${TOURNAMENT_TAB_PARAM}=rounds`
+    : matchListBackHref(query?.back);
   // The replay import and the game edit return here; they carry the same list query along.
   const backSuffix = matchPageBackSuffix(query?.back);
 
@@ -110,11 +112,12 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
   const tally = computeSeriesTally(match.games, match.player_1_id, match.player_2_id, context.best_of);
   // The gold plate goes to the recorded winner, else to whoever leads on games.
   const aheadId = match.winner_id ?? tally.leaderId;
-  const canImport = match.status === 'scheduled' || match.status === 'in_progress';
+  const canImport = !native && (match.status === 'scheduled' || match.status === 'in_progress');
   const importHref = `/admin/matches/${id}/import-replay${backSuffix}`;
+  const publicHref = native ? phaseMatchHref(target.owner, id) : `/tournaments/${target.match.tournament_id}/matches/${id}`;
 
-  return (
-    <AdminGuard>
+  const content = (
+    <>
       <AdminCrumbName href={`/admin/matches/${id}`} name={versus} />
       <PageContainer maxWidth="xl">
         <header className="flex flex-wrap items-start justify-between gap-x-8 gap-y-4" data-admin-match-header>
@@ -175,8 +178,7 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_23rem] xl:items-start">
           <div className="flex min-w-0 flex-col gap-6">
             <MatchContextHeader
-              matchId={id}
-              tournamentId={match.tournament_id}
+              publicHref={publicHref}
               status={match.status}
               scheduledAt={match.scheduled_at}
               autoConfirmAt={match.auto_confirm_at}
@@ -184,7 +186,7 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
               player2Name={match.player_2_name}
               context={context}
               now={now}
-              listHref={backSuffix ? backHref : undefined}
+              listHref={native || backSuffix ? backHref : undefined}
             />
 
             {match.notes && (
@@ -214,17 +216,19 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
           </div>
 
           <aside aria-label={t('matches.detail.actionsRail')} className="flex min-w-0 flex-col gap-4" data-admin-match-rail>
-            {match.status === 'disputed' && (
+            {!native && match.status === 'disputed' && (
               <MatchDisputePanel dispute={dispute} reportedWinnerName={winnerName} reporterName={context.submitter_name} />
             )}
 
-            <MatchSchedulePanel
-              matchId={id}
-              status={match.status}
-              scheduledAt={match.scheduled_at}
-              roundDeadline={context.round_deadline}
-              pendingProposals={pendingProposals}
-            />
+            {!native && (
+              <MatchSchedulePanel
+                matchId={id}
+                status={match.status}
+                scheduledAt={match.scheduled_at}
+                roundDeadline={context.round_deadline}
+                pendingProposals={pendingProposals}
+              />
+            )}
 
             {/* Admin Actions */}
             <AdminMatchActions
@@ -234,27 +238,30 @@ export default async function AdminMatchPage({ params, searchParams }: PageProps
               player2={{ id: match.player_2_id, name: match.player_2_name }}
               currentWinnerId={match.winner_id}
               games={match.games}
-              tournamentId={match.tournament_id}
+              correctionsOnly={native}
               bestOf={context.best_of}
               isSiteAdmin={isSiteAdmin}
               backSuffix={backSuffix}
             />
 
-            <MatchReopenSection matchId={id} status={match.status} />
+            <MatchReopenSection matchId={id} status={match.status} native={native} />
 
-            <MatchHistoryPanel
-              key={historyPanelKey(history, historyRead.failed)}
-              matchId={id}
-              initialPage={history}
-              loadFailed={historyRead.failed}
-              players={[
-                { id: match.player_1_id, name: match.player_1_name },
-                { id: match.player_2_id, name: match.player_2_name },
-              ]}
-            />
+            {historyRead && (
+              <MatchHistoryPanel
+                key={historyPanelKey(historyRead.value, historyRead.failed)}
+                matchId={id}
+                initialPage={historyRead.value}
+                loadFailed={historyRead.failed}
+                players={[
+                  { id: match.player_1_id, name: match.player_1_name },
+                  { id: match.player_2_id, name: match.player_2_name },
+                ]}
+              />
+            )}
           </aside>
         </div>
       </PageContainer>
-    </AdminGuard>
+    </>
   );
+  return native ? content : <AdminGuard>{content}</AdminGuard>;
 }

@@ -1,5 +1,5 @@
 import type { Metadata } from 'next';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { NOINDEX } from '@/lib/seo/robots';
 import SkipToContent from '@/components/shared/SkipToContent';
 import { MAIN_CONTENT_ID } from '@/lib/ui/main-content';
@@ -9,14 +9,30 @@ import AdminShell from '@/components/admin/AdminShell';
 import AssistantDrawer from '@/components/admin/assistant/AssistantDrawer';
 import { SIDEBAR_COOKIE_NAME } from '@/components/ui/fluid/sidebar-core';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { REQUEST_PATH_HEADER } from '@/lib/auth/request-path';
+import { canAdministerPhaseAccess } from '@/lib/auth/phase-access';
 import { agentEnabledFor, parseAdminAgentEnv } from '@/lib/ai/admin-agent/env';
 import { ENABLE_ADMIN_ASSISTANT } from '@/lib/feature-flags';
 import { extensionAdminLinks } from '@/lib/pack-extensions';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { isValidUuid } from '@/lib/utils/uuid';
+import type { SessionPlayer } from '@/types/auth';
+import { readNativeAdminMatchOwner } from './matches/[id]/match-target';
 
 export const metadata: Metadata = { robots: NOINDEX };
 
 const MAIN_CLASS =
   'mx-auto w-full max-w-[1440px] flex-1 px-4 py-6 sm:px-6 lg:px-8 focus:outline-2 focus:outline-offset-2 focus:outline-transparent';
+
+async function isPhaseCorrectionEntry(player: SessionPlayer | null) {
+  if (player?.status !== 'active') return false;
+  const path = (await headers()).get(REQUEST_PATH_HEADER)?.split('?', 1)[0];
+  const route = path?.match(/^\/admin\/matches\/([^/]+)(?:\/games\/([^/]+)\/edit)?\/?$/);
+  if (!route || !isValidUuid(route[1]) || (route[2] && !isValidUuid(route[2]))) return false;
+  if (await getPhaseRouteMode() !== 'phase') return false;
+  const owner = await readNativeAdminMatchOwner(route[1].toLowerCase());
+  return owner !== null && await canAdministerPhaseAccess(player, owner.phase_id);
+}
 
 export default async function AdminLayout({
   children,
@@ -36,11 +52,14 @@ export default async function AdminLayout({
   // The shell (sidebar, top bar, command menu) is the admin IA: only a live admin gets it. Everyone else gets the
   // guard alone, which redirects a signed-out viewer and tells a player the pages are admin-only.
   if (!access?.isAnyAdmin) {
+    // A reused layout is not an authorization boundary: the two correction pages gate their own rows.
+    // Never mount the general admin shell or its tools through this entry.
+    const phaseCorrectionEntry = await isPhaseCorrectionEntry(access?.player ?? null);
     return (
       <>
         <SkipToContent />
         <main id={MAIN_CONTENT_ID} tabIndex={-1} className={MAIN_CLASS}>
-          <AdminGuard>{null}</AdminGuard>
+          {phaseCorrectionEntry ? <PageTransitionWrapper>{children}</PageTransitionWrapper> : <AdminGuard>{null}</AdminGuard>}
         </main>
       </>
     );

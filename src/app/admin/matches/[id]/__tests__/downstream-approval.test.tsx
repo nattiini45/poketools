@@ -11,6 +11,7 @@ import { withI18n } from '@/test/i18n';
 import { encodeDownstreamMatches } from '@/lib/match/downstream-matches';
 import type { GameSummary } from '@/types/match';
 import AdminMatchActions from '../AdminMatchActions';
+import EditGameForm from '../games/[gid]/edit/EditGameForm';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
@@ -39,7 +40,7 @@ const refusal = {
   params: { count: 2, matches: encodeDownstreamMatches(LATER) },
 };
 
-function ui() {
+function ui(correctionsOnly = false) {
   return (
     <AdminMatchActions
       matchId="m1"
@@ -48,7 +49,7 @@ function ui() {
       player2={{ id: 'p2', name: 'Gary' }}
       currentWinnerId="p1"
       games={[GAME]}
-      tournamentId="t1"
+      correctionsOnly={correctionsOnly}
       bestOf={1}
       isSiteAdmin
     />
@@ -72,6 +73,45 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it('edits the bound game using the loaded version even if the server props refresh before approval', async () => {
+  const version = '2026-11-17T09:00:00.123456+00:00';
+  const editor = (gameUpdatedAt: string) => withI18n(
+    <EditGameForm
+      gameId={GAME.id}
+      matchId="m1"
+      gameUpdatedAt={gameUpdatedAt}
+      currentWinnerId="p1"
+      player1={{ id: 'p1', name: 'Ash' }}
+      player2={{ id: 'p2', name: 'Gary' }}
+      battleStats={[]}
+      isSiteAdmin
+      native
+    />,
+  );
+  fetchMock
+    .mockResolvedValueOnce({ json: async () => refusal })
+    .mockResolvedValueOnce({
+      json: async () => ({ success: true, data: { evolution_recheck_failed: true } }),
+    });
+  const user = userEvent.setup();
+  const { rerender } = render(editor(version));
+
+  await user.click(screen.getByRole('button', { name: 'Save Changes' }));
+  const dialog = await screen.findByRole('dialog', { name: 'This change affects the rest of the bracket' });
+  rerender(editor('2026-11-17T10:00:00.123456+00:00'));
+  await user.click(within(dialog).getByRole('button', { name: 'Reset them and apply the change' }));
+
+  const draft = { winner_id: 'p1', battle_stats: [], expected_updated_at: version };
+  expect(fetchMock).toHaveBeenNthCalledWith(1, '/api/admin/games/g1', expect.objectContaining({
+    method: 'PATCH', body: JSON.stringify(draft),
+  }));
+  expect(fetchMock).toHaveBeenNthCalledWith(2, '/api/admin/games/g1', expect.objectContaining({
+    method: 'PATCH', body: JSON.stringify({ ...draft, confirm_downstream: ['m-semi', 'm-final'] }),
+  }));
+  await screen.findByText(/re-checking the evolution progress failed/);
+  expect(screen.queryByRole('link', { name: /admin data tools/i })).toBeNull();
+});
+
 describe('deleting a game that affects the played part of the bracket', () => {
   it('asks for approval, listing the later matches, before anything else is sent', async () => {
     fetchMock.mockResolvedValueOnce({ json: async () => refusal });
@@ -92,7 +132,7 @@ describe('deleting a game that affects the played part of the bracket', () => {
     expect(screen.queryByText(/Failed to delete/)).toBeNull();
   });
 
-  it('approving sends the same delete again with the confirm flag and the same reason, then reports the reset matches', async () => {
+  it.each([false, true])('approving sends the same delete and reason with the approved ids (native: %s)', async (native) => {
     fetchMock
       .mockResolvedValueOnce({ json: async () => refusal })
       .mockResolvedValueOnce({
@@ -102,7 +142,7 @@ describe('deleting a game that affects the played part of the bracket', () => {
         }),
       });
     const user = userEvent.setup();
-    render(withI18n(ui()));
+    render(withI18n(ui(native)));
 
     await deleteGameWithReason(user, 'Wrong replay');
     const dialog = await screen.findByRole('dialog', { name: 'This change affects the rest of the bracket' });

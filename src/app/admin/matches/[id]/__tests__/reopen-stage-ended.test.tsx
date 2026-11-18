@@ -25,7 +25,7 @@ const notice = {
 
 /** The page refreshes to the new status after a reopen; the section then shows the outcome in place of its controls. */
 function section(status: 'completed' | 'in_progress', locale?: 'de') {
-  return withI18n(<MatchReopenSection matchId="m1" status={status} />, locale ? { locale } : {});
+  return withI18n(<MatchReopenSection matchId="m1" status={status} native />, locale ? { locale } : {});
 }
 
 async function reopenWithReason(user: ReturnType<typeof userEvent.setup>, rerender: (ui: ReturnType<typeof section>) => void) {
@@ -64,6 +64,9 @@ describe('reopening a match of a phase whose stage already ended', () => {
     expect(screen.getByText(/the stage of the phase Group stage had already ended/)).toBeTruthy();
     expect(screen.getByText(/Playoffs: Ash, Misty/)).toBeTruthy();
     expect(refresh).toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledWith('/api/admin/matches/m1/reopen', expect.objectContaining({
+      method: 'POST', body: JSON.stringify({ reason: 'Wrong winner' }),
+    }));
   });
 
   it('a plain reopen shows no stage notice', async () => {
