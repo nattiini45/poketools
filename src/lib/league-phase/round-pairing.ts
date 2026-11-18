@@ -243,7 +243,7 @@ export async function pairNativeRoundBatch(input: Omit<NativePairingInput, 'part
   return batch;
 }
 
-function nativePairingHistory(context: PhaseWeekContext<PhaseRound>): MatchRecord[] {
+function nativePairingHistory(context: PhaseWeekContext<PhaseRound>) {
   const byNumber = new Map(context.rounds.map(round => [round.id, round.round_number]));
   return context.matches.flatMap(match => {
     const roundNumber = byNumber.get(match.round_id);
