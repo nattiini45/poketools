@@ -3,18 +3,16 @@
 import type { Locale } from '@/i18n/config';
 import { useLocale } from '@/i18n/client';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
-import type { PublicMatch } from '@/lib/match/public-match';
-import type { Round } from '@/types/round';
 import type { BracketSlotDef } from '@/lib/tournament/bracket-structure';
-import BracketMatchCard from './BracketMatchCard';
+import BracketMatchCard, { type BracketMatch, type BracketMatchLink } from './BracketMatchCard';
 import BracketSkeletonCard from './BracketSkeletonCard';
 import type { EntryLosses } from './entry-losses';
 import { bracketLabelsFor, type BracketLabels } from './labels';
+import type { BracketRound } from './legacy';
 
-interface DoubleElimBracketProps {
-  rounds: Round[];
-  matchesByRound: Record<string, PublicMatch[]>;
-  tournamentId: string;
+type DoubleElimBracketProps = BracketMatchLink & {
+  rounds: readonly BracketRound[];
+  matchesByRound: Record<string, readonly BracketMatch[]>;
   structureSlots?: BracketSlotDef[];
   slotLabels?: Map<string, { label1: string; label2: string }>;
   slotIndexByKey?: Map<string, number>;
@@ -30,12 +28,12 @@ interface DoubleElimBracketProps {
   entryLosses?: Record<string, EntryLosses>;
   /** The renderer's words; the viewer's language by default. */
   labels?: BracketLabels;
-}
+};
 
 type LegacySection = 'winners' | 'losers' | 'grand_finals';
 
 function classifyLegacyRound(
-  matches: PublicMatch[],
+  matches: readonly BracketMatch[],
   lossCount: Record<string, number>,
 ): LegacySection {
   if (matches.length === 0) {
@@ -68,7 +66,6 @@ function classifyLegacyRound(
 function BracketSection({
   rounds,
   matchesByRound,
-  tournamentId,
   structureSlots,
   slotLabels,
   slotIndexByKey,
@@ -76,10 +73,10 @@ function BracketSection({
   entryLosses,
   labels,
   locale,
-}: {
-  rounds: Round[];
-  matchesByRound: Record<string, PublicMatch[]>;
-  tournamentId: string;
+  ...matchLink
+}: BracketMatchLink & {
+  rounds: readonly BracketRound[];
+  matchesByRound: Record<string, readonly BracketMatch[]>;
   structureSlots?: BracketSlotDef[];
   slotLabels?: Map<string, { label1: string; label2: string }>;
   slotIndexByKey?: Map<string, number>;
@@ -112,7 +109,7 @@ function BracketSection({
                           <BracketMatchCard
                             key={match.id}
                             match={match}
-                            tournamentId={tournamentId}
+                            {...matchLink}
                             statusLabels={labels.matchStatus}
                             entryLosses={entryLosses?.[match.id]}
                             lossLabels={labels}
@@ -135,7 +132,7 @@ function BracketSection({
                       <BracketMatchCard
                         key={match.id}
                         match={match}
-                        tournamentId={tournamentId}
+                        {...matchLink}
                         statusLabels={labels.matchStatus}
                         entryLosses={entryLosses?.[match.id]}
                         lossLabels={labels}
@@ -160,7 +157,6 @@ function BracketSection({
 export default function DoubleElimBracket({
   rounds,
   matchesByRound,
-  tournamentId,
   structureSlots,
   slotLabels,
   slotIndexByKey,
@@ -168,6 +164,7 @@ export default function DoubleElimBracket({
   lossCount = {},
   entryLosses,
   labels: labelsOverride,
+  ...matchLink
 }: DoubleElimBracketProps) {
   const locale = useLocale();
   const labels = labelsOverride ?? bracketLabelsFor(locale);
@@ -177,9 +174,9 @@ export default function DoubleElimBracket({
     return <p className="text-fg-muted text-sm">{labels.noRounds}</p>;
   }
 
-  let winnersRounds: Round[];
-  let losersRounds: Round[];
-  let gfRounds: Round[];
+  let winnersRounds: BracketRound[];
+  let losersRounds: BracketRound[];
+  let gfRounds: BracketRound[];
 
   if (legacyMode) {
     winnersRounds = [];
@@ -221,7 +218,7 @@ export default function DoubleElimBracket({
           <BracketSection
             rounds={winnersRounds}
             matchesByRound={matchesByRound}
-            tournamentId={tournamentId}
+            {...matchLink}
             structureSlots={structureSlots?.filter((s) => s.bracket_side === 'winners')}
             slotLabels={slotLabels}
             slotIndexByKey={slotIndexByKey}
@@ -241,7 +238,7 @@ export default function DoubleElimBracket({
           <BracketSection
             rounds={losersRounds}
             matchesByRound={matchesByRound}
-            tournamentId={tournamentId}
+            {...matchLink}
             structureSlots={structureSlots?.filter((s) => s.bracket_side === 'losers')}
             slotLabels={slotLabels}
             slotIndexByKey={slotIndexByKey}
@@ -261,7 +258,7 @@ export default function DoubleElimBracket({
           <BracketSection
             rounds={gfRounds}
             matchesByRound={matchesByRound}
-            tournamentId={tournamentId}
+            {...matchLink}
             structureSlots={structureSlots?.filter((s) => s.bracket_side === 'grand_finals')}
             slotLabels={slotLabels}
             slotIndexByKey={slotIndexByKey}
