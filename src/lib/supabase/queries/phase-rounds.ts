@@ -102,6 +102,14 @@ function isPhaseGroupsStale(error: { code?: string; message?: string }): boolean
   return error.code === 'P0001' && error.message === 'PHASE_GROUPS_STALE';
 }
 
+function phaseGroupsStaleError(error: unknown) {
+  const refusal = new UserFacingError('The league groups changed while the round was being generated; generate it again', {
+    code: 'PHASE_GROUPS_STALE',
+    status: 409,
+  });
+  return Object.assign(refusal, { cause: error });
+}
+
 export const PHASE_ROUNDS_PHASE_ROUND_NUMBER_KEY = 'phase_rounds_phase_round_number_key';
 
 export class RoundAlreadyWrittenError extends UserFacingError {
@@ -122,10 +130,7 @@ function mapRoundWriteError(error: { code?: string; message?: string }, roundNam
   }
   if (isPhaseGroupsStale(error)) {
     console.error(`[${tag}] phase groups changed before the first round:`, error);
-    return new UserFacingError('The league groups changed while the round was being generated; generate it again', {
-      code: 'PHASE_GROUPS_STALE',
-      status: 409,
-    });
+    return phaseGroupsStaleError(error);
   }
   if (isRoundWriteSignal(error, 'rounds_phase_completed')) {
     return new UserFacingError('This phase was completed while the round was being created, so no round was written. No more rounds can be generated.', {
@@ -254,6 +259,9 @@ export async function writePhaseBracket(input: {
     p_current_round: input.current_round,
   });
   if (error) {
+    if (isPhaseGroupsStale(error)) {
+      throw phaseGroupsStaleError(error);
+    }
     if (isRoundWriteSignal(error, 'tournament_status_changed')) {
       throw new UserFacingError('This tournament or phase changed its status in the meantime. Reload the page and try again.', {
         code: 'tournament_status_changed',
