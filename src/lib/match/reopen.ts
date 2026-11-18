@@ -9,13 +9,14 @@ import { deleteMarkedOutcome, readOutcomeMark } from '@/lib/match/outcome-takeba
 import { unpropagateBracketOnMatchReset } from '@/lib/tournament/bracket-propagation';
 import { validateTransition } from '@/lib/tournament/match-state';
 import {
-  collectPlayedDownstreamMatches, preflightUncompleteRebuild, rebuildGamificationAfterUncomplete,
+  collectPlayedDownstreamMatches, createStandaloneCorrectionPipeline, preflightUncompleteRebuild, rebuildGamificationAfterUncomplete,
   recheckEvolutions, revertRoundIfCompleted,
 } from '@/lib/pkmn/game-pipeline';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { isKitCandidate } from '@/lib/format-engine/kit-candidate';
 import { loadStageEndedWarning } from '@/lib/match/stage-ended';
 import { repairSeasonEvolution } from '@/lib/reconcile/evolution-rebuild';
-import { createMatchReopener } from './reopen-core';
+import { createMatchReopener, type MatchReopenStorage } from './reopen-core';
 import type { MatchWithPlayers } from '@/types/match';
 import type { Tournament } from '@/types/tournament';
 import type { ReopenMatchResult } from '@/lib/admin/match-detail';
@@ -24,7 +25,7 @@ export { MatchReopenDownstreamPlayedError, MatchStateChangedError };
 export { createMatchReopener } from './reopen-core';
 export type { MatchReopenStorage } from './reopen-core';
 
-const legacyReopen = createMatchReopener<MatchWithPlayers, Tournament>({
+const legacyStorage: MatchReopenStorage<MatchWithPlayers, Tournament> = {
   competitionId: (match) => match.tournament_id,
   getMatchById: (id) => getMatchById(id),
   getCompetitionById: (id) => getTournamentById(id),
@@ -67,8 +68,16 @@ const legacyReopen = createMatchReopener<MatchWithPlayers, Tournament>({
   repairSeasonEvolution: (id) => repairSeasonEvolution(id),
   recheckEvolutions: (...args) => recheckEvolutions(...args),
   loadStageEndedWarning: (competition, takenBack) => loadStageEndedWarning(competition, takenBack),
-});
+};
+const legacyReopen = createMatchReopener(legacyStorage);
 
 export async function reopenMatch(matchId: string, adminId: string): Promise<ReopenMatchResult> {
-  return legacyReopen(matchId, adminId);
+  if (await requireOpenPhaseRouteMode() === 'legacy') return legacyReopen(matchId, adminId);
+  const { pipeline, getCompetitionById } = await createStandaloneCorrectionPipeline();
+  return createMatchReopener({
+    ...legacyStorage,
+    getCompetitionById,
+    preflightUncompleteRebuild: pipeline.preflightUncompleteRebuild,
+    rebuildGamificationAfterUncomplete: pipeline.rebuildGamificationAfterUncomplete,
+  })(matchId, adminId);
 }
