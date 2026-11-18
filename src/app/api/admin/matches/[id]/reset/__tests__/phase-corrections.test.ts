@@ -14,7 +14,7 @@ const h = vi.hoisted(() => ({
   phaseReset: vi.fn(), phasePreview: vi.fn(), phaseReopen: vi.fn(),
   tournamentReset: vi.fn(), tournamentPreview: vi.fn(), tournamentReopen: vi.fn(),
   tournament: vi.fn(), audit: vi.fn(), path: vi.fn(), tag: vi.fn(), rate: vi.fn(),
-  phaseSchedule: vi.fn(), tournamentSchedule: vi.fn(), phaseCancelProposals: vi.fn(), tournamentCancelProposals: vi.fn(),
+  phaseSchedule: vi.fn(), tournamentSchedule: vi.fn(), tournamentCancelProposals: vi.fn(),
   unexpectedIO: vi.fn(() => { throw new Error('Unexpected I/O'); }),
 }));
 
@@ -25,10 +25,10 @@ vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: h
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
   findNativePhaseAliasOwner: h.findOwner, standaloneMatchAliasExists: h.isStandalone,
 }));
-vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: h.phaseMatch, updateOpenPhaseMatchSchedule: h.phaseSchedule }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: h.phaseMatch }));
 vi.mock('@/lib/supabase/queries/matches', () => ({ getMatchById: h.tournamentMatch, updateOpenMatchSchedule: h.tournamentSchedule }));
 vi.mock('@/lib/supabase/queries/match-proposals', () => ({
-  cancelPendingPhaseMatchProposals: h.phaseCancelProposals, cancelPendingMatchProposalsForMatch: h.tournamentCancelProposals,
+  overridePhaseMatchSchedule: h.phaseSchedule, cancelPendingMatchProposalsForMatch: h.tournamentCancelProposals,
 }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getTournamentById: h.tournament }));
 vi.mock('@/lib/league-phase/services', () => ({ createNativePhaseServices: h.native }));
@@ -99,10 +99,12 @@ describe('Native admin scheduling', () => {
   const oldTime = '2026-11-18T10:00:00Z';
   const newTime = '2026-11-19T10:00:00Z';
 
-  it('sets the time under the phase owner, cancels native proposals and audits the native match', async () => {
+  it('sets the time and cancels the native proposals in one scoped write, then audits it', async () => {
     h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'scheduled', scheduled_at: oldTime });
-    h.phaseSchedule.mockResolvedValueOnce({ ...match, scheduled_at: newTime });
-    h.phaseCancelProposals.mockResolvedValueOnce(5);
+    h.phaseSchedule.mockResolvedValueOnce({
+      scheduled_at: newTime, previous_scheduled_at: oldTime,
+      proposals_cancelled: 5, proposals_cancel_failed: false, unchanged: false,
+    });
 
     expect(await (await send(schedule, { scheduled_at: newTime }, id.toUpperCase())).json()).toEqual({
       success: true, data: {
@@ -110,8 +112,7 @@ describe('Native admin scheduling', () => {
         proposals_cancelled: 5, proposals_cancel_failed: false, unchanged: false,
       },
     });
-    expect(h.phaseSchedule).toHaveBeenCalledExactlyOnceWith(id, newTime, owner.phase_id);
-    expect(h.phaseCancelProposals).toHaveBeenCalledExactlyOnceWith(id);
+    expect(h.phaseSchedule).toHaveBeenCalledExactlyOnceWith(owner.phase_id, id, newTime);
     expect(h.tournamentSchedule).not.toHaveBeenCalled();
     expect(h.tournamentCancelProposals).not.toHaveBeenCalled();
     expect(h.audit).toHaveBeenCalledWith(expect.objectContaining({
@@ -121,25 +122,31 @@ describe('Native admin scheduling', () => {
     expect(h.tag).toHaveBeenCalledWith(`phase:${owner.phase_id}`, { expire: 0 });
   });
 
-  it('keeps the committed time and expires the view even if proposal cancellation fails', async () => {
+  it('does not report a saved time, audit or expire tags when the atomic override fails', async () => {
     h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'disputed', scheduled_at: oldTime });
-    h.phaseSchedule.mockResolvedValueOnce({ ...match, scheduled_at: null });
-    h.phaseCancelProposals.mockRejectedValueOnce(new Error('Fixture cancellation failure'));
+    h.phaseSchedule.mockRejectedValueOnce(new Error('Fixture cancellation failure'));
     const response = await send(schedule, { scheduled_at: null });
-    expect(response.status).toBe(200);
-    expect(await response.json()).toMatchObject({ data: { scheduled_at: null, proposals_cancel_failed: true } });
-    expect(h.audit).toHaveBeenCalledOnce();
-    expect(h.tag).toHaveBeenCalled();
+    expect(response.status).toBe(500);
+    expect(await response.json()).toMatchObject({ success: false });
+    expect(h.phaseSchedule).toHaveBeenCalledExactlyOnceWith(owner.phase_id, id, null);
+    expect(h.tournamentSchedule).not.toHaveBeenCalled();
+    expect(h.tournamentCancelProposals).not.toHaveBeenCalled();
+    expect(h.audit).not.toHaveBeenCalled();
+    expect(h.tag).not.toHaveBeenCalled();
   });
 
   it('does not cancel proposals when the match completes between authorization and the update', async () => {
     h.phaseMatch.mockResolvedValueOnce({ ...match, status: 'scheduled', scheduled_at: oldTime });
-    h.phaseSchedule.mockResolvedValueOnce(null);
+    h.phaseSchedule.mockRejectedValueOnce(new UserFacingError('A completed match cannot be rescheduled. Reopen it first.', {
+      code: 'match_schedule_completed', status: 409,
+    }));
     const response = await send(schedule, { scheduled_at: newTime });
     expect(response.status).toBe(409);
     expect(await response.json()).toMatchObject({ code: 'match_schedule_completed' });
-    expect(h.phaseCancelProposals).not.toHaveBeenCalled();
+    expect(h.phaseSchedule).toHaveBeenCalledExactlyOnceWith(owner.phase_id, id, newTime);
+    expect(h.tournamentCancelProposals).not.toHaveBeenCalled();
     expect(h.audit).not.toHaveBeenCalled();
+    expect(h.tag).not.toHaveBeenCalled();
   });
 });
 
