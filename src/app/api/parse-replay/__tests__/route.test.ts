@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => ({
@@ -27,6 +27,13 @@ vi.mock('@/lib/supabase/queries/players', () => ({
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(),
+}));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: vi.fn(),
+  findLegacyPhaseAliasOwner: vi.fn(),
+  standaloneMatchAliasExists: vi.fn(),
 }));
 
 vi.mock('@/lib/revalidation', () => ({
@@ -81,7 +88,10 @@ import { fetchReplay, parseReplayLog } from '@/lib/pkmn/replay';
 import { recordGameResult } from '@/lib/pkmn/game-pipeline';
 import { getPlayerByPsUsername } from '@/lib/supabase/queries/players';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { findLegacyPhaseAliasOwner, findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 import { isResourceAdminFor } from '@/lib/supabase/queries/resource-admins';
+import { triggerMatchAnalysis } from '@/lib/ai/trigger';
 import { revalidateMatchPages } from '@/lib/revalidation';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -156,8 +166,64 @@ function makeRequest(body: Record<string, unknown>): NextRequest {
 describe('POST /api/parse-replay', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(findLegacyPhaseAliasOwner).mockReset();
+    vi.mocked(findNativePhaseAliasOwner).mockReset();
+    vi.mocked(standaloneMatchAliasExists).mockReset();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
     vi.mocked(requirePlayer).mockResolvedValue(PLAYER);
     vi.mocked(isResourceAdminFor).mockResolvedValue(false);
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('records a verified standalone match in phase mode with one body read, one replay parse and unchanged cookie forwarding', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(null);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(true);
+    vi.mocked(getMatchById).mockResolvedValue(fakeMatch as never);
+    vi.mocked(fetchReplay).mockResolvedValue({ log: REPLAY_LOG, id: '1', format: 'gen9', players: ['alice_ps', 'bob_ps'], winner: 'alice_ps' });
+    vi.mocked(parseReplayLog).mockReturnValue(fakeParsed);
+    vi.mocked(getPlayerByPsUsername).mockImplementation(async username =>
+      (username === 'alice_ps' ? { id: 'p1', name: 'Alice' } : { id: 'p2', name: 'Bob' }) as never);
+    vi.mocked(recordGameResult).mockResolvedValueOnce({ game_id: 'g1', bo_reached: true } as never);
+    vi.mocked(getTournamentById).mockResolvedValueOnce(null);
+    const request = makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL });
+    vi.mocked(request.headers.get).mockReturnValue('fixture=cookie');
+
+    expect((await POST(request)).status).toBe(200);
+    expect(standaloneMatchAliasExists).toHaveBeenCalledExactlyOnceWith(MATCH_ID);
+    expect(standaloneMatchAliasExists).toHaveBeenCalledBefore(vi.mocked(getMatchById));
+    expect(request.json).toHaveBeenCalledOnce();
+    expect(fetchReplay).toHaveBeenCalledOnce();
+    expect(parseReplayLog).toHaveBeenCalledOnce();
+    expect(triggerMatchAnalysis).toHaveBeenCalledExactlyOnceWith(MATCH_ID, 'fixture=cookie');
+  });
+
+  it.each([
+    ['phase', 404, 'match_not_found'],
+    ['frozen_legacy', 503, 'phase_storage_unavailable'],
+    ['frozen_phase', 503, 'phase_storage_unavailable'],
+  ] as const)('does not fall back to a legacy match lookup in %s when ownership is refused', async (mode, status, code) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValue(false);
+    vi.mocked(findLegacyPhaseAliasOwner).mockResolvedValueOnce(
+      mode === 'frozen_legacy' ? { tournament_id: MATCH_ID, season_id: MATCH_ID } : null,
+    );
+    if (mode !== 'frozen_legacy') {
+      vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(
+        mode === 'frozen_phase' ? { kind: 'phase', phase_id: MATCH_ID, season_id: MATCH_ID } : null,
+      );
+    }
+
+    const response = await POST(makeRequest({ match_id: MATCH_ID, replay_url: REPLAY_URL }));
+    expect(response.status).toBe(status);
+    expect(await response.json()).toMatchObject({ success: false, code });
+    if (status === 503) expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(fetchReplay).not.toHaveBeenCalled();
+    expect(recordGameResult).not.toHaveBeenCalled();
   });
 
   // ── Who may submit ────────────────────────────────────────
@@ -393,6 +459,10 @@ describe('POST /api/parse-replay', () => {
     const body = await res.json();
     expect(body.success).toBe(true);
     expect(body.data).toEqual(gameResult);
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(findNativePhaseAliasOwner).not.toHaveBeenCalled();
+    expect(findLegacyPhaseAliasOwner).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
 
     // No winner or stats from the route: the pipeline reads both from the
     // bound replay, whose hash is the hash of the fetched log.

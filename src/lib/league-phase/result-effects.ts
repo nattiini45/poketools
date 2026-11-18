@@ -25,6 +25,7 @@ export async function emitPhaseResultEffects(
   owner: PhaseAggregateOwner,
   matchId: string,
   result: RecordedPhaseResult,
+  { replayUrl }: { replayUrl?: string } = {},
 ): Promise<void> {
   const { phase_id: phaseId, season_id: seasonId } = owner;
   const context = { phaseId, seasonId, matchId, gameId: result.game_id };
@@ -81,6 +82,7 @@ export async function emitPhaseResultEffects(
         player_2_name: match.player_2_name,
         winner_name: winnerId === match.player_1_id ? match.player_1_name : match.player_2_name,
         game_score: `${score.p1}-${score.p2}`,
+        ...(replayUrl ? { replay_url: replayUrl } : {}),
         phase_name: phase.name,
         round_name: round.name,
         game_stats: gameStats,

@@ -1002,6 +1002,9 @@ POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/decision   Confirm or 
 POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/manual-result
                                  Record a manual game in the native phase generation. Body match_id must match
                                  the route match ID; the tracker keeps the moments_saved and warning contract.
+POST /api/seasons/[id]/phases/[phaseId]/matches/[matchId]/parse-replay
+                                 Record a bound Showdown replay for a verified native phase match. Auth and
+                                 participant checks precede fetch; body match_id must match the route match ID.
 
 POST /api/generate-round/[tid]  Admin: generate next round pairings (Swiss/RR; continues legacy per-round elim).
                                 Returns 400 BRACKET_V2_MANAGED when structure elim rounds exist, 400
