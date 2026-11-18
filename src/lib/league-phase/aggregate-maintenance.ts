@@ -1,4 +1,4 @@
-import { createProcessAggregatesHandler } from '@/lib/match/process-aggregates';
+import { createProcessAggregatesHandler, type AggregateMaintenanceStorage } from '@/lib/match/process-aggregates';
 import {
   countAllFailedAggregateJobs,
   getAllAggregateJobHealth,
@@ -11,12 +11,12 @@ import {
   type PhaseAggregateOwner,
 } from './phase-aggregate-storage';
 
-export function createMixedProcessAggregatesHandler(onPhaseApplied: (owner: PhaseAggregateOwner) => Promise<void>) {
-  return createProcessAggregatesHandler({
+export function mixedAggregateMaintenanceStorage(onPhaseApplied: (owner: PhaseAggregateOwner) => Promise<void>): AggregateMaintenanceStorage {
+  return {
     process: (limit) => processAllAggregateJobs(limit, onPhaseApplied),
     health: () => getAllAggregateJobHealth(),
     countFailed: () => countAllFailedAggregateJobs(),
-  });
+  };
 }
 
 export function createPhaseProcessAggregatesHandler(onApplied: (owner: PhaseAggregateOwner) => Promise<void>) {

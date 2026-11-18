@@ -1211,7 +1211,8 @@ GET  /api/cron/format-engine    Cron (15 min): fires due format calendar events,
                                 stops starting leagues after 240 s); one league's failure is logged and skipped, with
                                 500 format_cron_partial_failure when any league failed
 GET  /api/cron/process-aggregates  Cron (10 min): claims and applies queued aggregate jobs; 500 on a
-                                failed claim or queue write, or when jobs are stranded
+                                failed claim or queue write, or when jobs are stranded. Drains both queues
+                                in phase mode, the original queue in legacy mode, and neither during maintenance (503).
 GET  /api/cron/expire-suspensions  Cron (15 min): lifts timed suspensions whose end has passed (one
                                 audit event per player)
 GET  /api/cron/refresh-usage-stats  Cron (monthly): re-imports Smogon usage stats and current-gen sample sets
