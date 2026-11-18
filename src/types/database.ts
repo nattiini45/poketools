@@ -9724,6 +9724,10 @@ export type Database = {
         Returns: Json
       }
       phase__lock: { Args: { p_phase_id: string }; Returns: string }
+      phase_admin_insert: {
+        Args: { p_fields: Json; p_insert_at?: number; p_season_id: string }
+        Returns: Json
+      }
       phase_aggregate_deltas: {
         Args: {
           p_aggregate_deltas: Json
@@ -10475,4 +10479,3 @@ export const Constants = {
     },
   },
 } as const
-

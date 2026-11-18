@@ -68,6 +68,38 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     }, null)).toBe(true);
   }
 
+  it('serializes manual appends and inserts without shifting an already started phase', async () => {
+    const prefix = `Placement ${randomUUID()}`;
+    const input = {
+      season_id: seasonId, ruleset_id: rulesetId, bracket_type: 'single_elim' as const,
+      best_of_default: 3, is_doubles: false, team_visibility: 'hidden_until_match' as const,
+    };
+    const [a, b] = await Promise.all([
+      phases.insertAdminPhase({ ...input, name: `${prefix} A` }),
+      phases.insertAdminPhase({ ...input, name: `${prefix} B` }),
+    ]);
+    const later = a.phase.stage_order > b.phase.stage_order ? a.phase : b.phase;
+    expect(Math.abs(a.phase.stage_order - b.phase.stage_order)).toBe(1);
+    expect(a.shiftedIds).toEqual([]);
+    expect(b.shiftedIds).toEqual([]);
+    await expect(phases.insertAdminPhase({ ...input, name: later.name.toUpperCase() }))
+      .rejects.toMatchObject({ code: 'PHASE_NAME_TAKEN' });
+
+    const beforeIds = (await phases.getPhasesBySeasonId(seasonId)).map(phase => phase.id);
+    const inserted = await phases.insertAdminPhase({ ...input, name: `${prefix} Inserted` }, later.stage_order);
+    expect(inserted.shiftedIds).toEqual([later.id]);
+    expect(inserted.phase.stage_order).toBe(later.stage_order);
+    expect((await phases.getPhaseById(later.id))?.stage_order).toBe(later.stage_order + 1);
+    await expect(phases.reorderPhases(seasonId, beforeIds)).rejects.toMatchObject({ code: 'PHASE_REORDER_INCOMPLETE' });
+    await phases.updatePhase(later.id, { status: 'active' }, { from: 'upcoming' });
+    await expect(phases.reorderPhases(seasonId, [...beforeIds.filter(id => id !== later.id), inserted.phase.id, later.id]))
+      .rejects.toMatchObject({ code: 'PHASE_REORDER_LOCKED' });
+    await expect(phases.insertAdminPhase({ ...input, name: `${prefix} Refused` }, inserted.phase.stage_order))
+      .rejects.toMatchObject({ code: 'PHASE_INSERT_LOCKED' });
+    expect((await phases.getPhaseById(inserted.phase.id))?.stage_order).toBe(inserted.phase.stage_order);
+    expect((await phases.getPhaseById(later.id))?.stage_order).toBe(later.stage_order + 1);
+  });
+
   it('serializes enrollment CAS and changes seeds atomically without tournament rows', async () => {
     const phase = await create();
     const attempts = await Promise.all([0, 1].map((i) => phases.replacePhaseEnrollment(phase.id,

@@ -8,7 +8,6 @@ export default defineDe<typeof en>()({
   PHASE_REORDER_INCOMPLETE: 'phase_ids muss jede kommende Phase genau einmal enthalten.',
   PHASE_INSERT_INVALID: 'insert_at liegt außerhalb des gültigen Bereichs.',
   PHASE_INSERT_LOCKED: 'Vor bereits gestarteten Phasen lässt sich keine Phase einfügen.',
-  phase_insert_unavailable: 'Du kannst noch keine Phase vor bestehenden Phasen einfügen.',
   PHASE_COMPLETED_LOCKED: 'Abgeschlossene Phasen sind gesperrt. Setze die Phase zuerst wieder auf aktiv.',
   PHASE_NAME_TAKEN: 'Eine andere Phase dieser Liga hat schon diesen Namen.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Eine Phase mit Runden lässt sich nur mit confirm: true löschen.',

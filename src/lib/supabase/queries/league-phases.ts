@@ -9,6 +9,8 @@ import type { SeasonFormatType } from '@/types/season';
 import type { EnrollmentSource } from '@/types/season';
 import { SeedConflictError } from '@/lib/tournament/seed-errors';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { FormatStudioError } from '@/lib/format-studio/errors';
+import seasonErrors from '@/i18n/messages/errors/seasons/en';
 
 type PhaseRow = Tables<'league_phases'>;
 
@@ -73,6 +75,44 @@ export async function createPhase(input: PhaseFormData): Promise<Phase> {
 
   if (error) throw error;
   return toPhase(data);
+}
+
+export async function insertAdminPhase(input: PhaseFormData, insertAt?: number): Promise<{ phase: Phase; shiftedIds: string[] }> {
+  const { data, error } = await supabase.rpc('phase_admin_insert', {
+    p_season_id: input.season_id,
+    p_fields: {
+      name: input.name,
+      description: input.description,
+      bracket_type: input.bracket_type,
+      ruleset_id: input.ruleset_id,
+      best_of_default: input.best_of_default,
+      bo_overrides: input.bo_overrides as Json,
+      is_doubles: input.is_doubles,
+      team_visibility: input.team_visibility,
+      advancement_rule: input.advancement_rule as Json,
+    },
+    ...(insertAt !== undefined ? { p_insert_at: insertAt } : {}),
+  });
+  if (error) throwPhaseOrderingError(error);
+  if (!data || typeof data !== 'object' || Array.isArray(data)
+    || !data.phase || typeof data.phase !== 'object' || Array.isArray(data.phase)
+    || typeof data.phase.id !== 'string' || data.phase.season_id !== input.season_id
+    || !Array.isArray(data.shifted_ids) || !data.shifted_ids.every(id => typeof id === 'string')) {
+    throw new Error('Invalid native phase insertion result');
+  }
+  return { phase: toPhase(data.phase as PhaseRow), shiftedIds: data.shifted_ids };
+}
+
+function throwPhaseOrderingError(error: { code: string; message: string }): never {
+  if (error.code === 'P0001') {
+    const code = error.message;
+    if (code === 'format_phase_owned') throw new FormatStudioError(code);
+    if (code === 'PHASE_INSERT_INVALID' || code === 'PHASE_INSERT_LOCKED' || code === 'PHASE_NAME_TAKEN'
+      || code === 'PHASE_REORDER_LOCKED' || code === 'PHASE_REORDER_INCOMPLETE' || code === 'SEASON_NOT_FOUND') {
+      throw new UserFacingError(seasonErrors[code], { code, status: code === 'SEASON_NOT_FOUND' ? 404 : 400 });
+    }
+  }
+  throw error;
 }
 
 export async function getPhasesBySeasonId(seasonId: string): Promise<PhaseWithDetails[]> {
@@ -449,5 +489,5 @@ export async function shiftPhaseStageOrders(seasonId: string, fromOrder: number,
 
 export async function reorderPhases(seasonId: string, orderedPhaseIds: string[]): Promise<void> {
   const { error } = await supabase.rpc('phase_stage_orders_reorder', { p_season_id: seasonId, p_phase_ids: orderedPhaseIds });
-  if (error) throw error;
+  if (error) throwPhaseOrderingError(error);
 }

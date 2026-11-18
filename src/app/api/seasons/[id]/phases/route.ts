@@ -10,7 +10,7 @@ import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { legacyPhasePersistence, nativePhasePersistence } from '@/lib/league-phase/lifecycle-persistence';
 import { createNativePhaseEnrollment } from '@/lib/league-phase/enrollment-services';
 import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
-import { getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
+import { getPhasesBySeasonId, insertAdminPhase } from '@/lib/supabase/queries/league-phases';
 import { listRoundStatusesByPhaseIds, type RoundStatusRow } from '@/lib/supabase/queries/phase-rounds';
 import { syncStandingsEnrollment } from '@/lib/tournament/enrollment-sync';
 import { buildLeaguePhase, assertPhaseNameFree } from '@/lib/tournament/league-phase';
@@ -83,7 +83,6 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_SEASON_ID');
     if (invalidId) return invalidId;
     const native = (await requireOpenPhaseRouteMode()) === 'phase';
-    const storage = native ? nativePhasePersistence : legacyPhasePersistence;
 
     const season = await getSeasonById(id);
     if (!season) {
@@ -108,11 +107,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const body = parsed.data;
     const seasonId = season.id;
-    const existing = await storage.listBySeason(seasonId);
+    const existing = native ? [] : await getStagesBySeasonId(seasonId);
 
     // Names are unique per league (API-only: the table has no constraint).
     // Checked before anything is shifted, so a refusal leaves the league as is.
-    assertPhaseNameFree(body.name, existing);
+    if (!native) assertPhaseNameFree(body.name, existing);
 
     // The ruleset is a pin the caller must be allowed to use; refused here for the same reason.
     await assertRulesetUsableForCreate(admin, body.ruleset_id);
@@ -123,7 +122,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     const maxOrder = Math.max(0, ...existing.map((phase) => phase.stage_order));
     const insertAt = body.insert_at ?? maxOrder + 1;
 
-    if (insertAt < 1 || insertAt > maxOrder + 1) {
+    if (!native && (insertAt < 1 || insertAt > maxOrder + 1)) {
       throw new UserFacingError('insert_at is out of range', {
         code: 'PHASE_INSERT_INVALID',
         status: 400,
@@ -137,35 +136,32 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { code: 'PHASE_INSERT_LOCKED' }
       );
     }
-    if (native && wouldShift.length > 0) {
-      throw new UserFacingError('Inserting a phase before existing phases is not available yet.', {
-        code: 'phase_insert_unavailable', status: 503,
-      });
-    }
-
-    // The shift, the insert and the enrollment sync commit one by one: the public reads expire in a finally, with the
-    // phases whose order moved and the new phase, whichever step is the last to succeed.
     const touchedIds: string[] = [];
-    let created: Awaited<ReturnType<typeof storage.create>>;
+    const phaseInput = {
+      name: body.name,
+      description: body.description,
+      season_id: seasonId,
+      bracket_type: body.bracket_type,
+      ruleset_id: body.ruleset_id,
+      best_of_default: body.best_of_default,
+      bo_overrides: body.bo_overrides,
+      is_doubles: body.is_doubles,
+      team_visibility: body.team_visibility,
+      advancement_rule: body.advancement_rule ?? null,
+    };
+    let created: { id: string; name: string };
     try {
-      if (wouldShift.length > 0) {
-        touchedIds.push(...wouldShift.map((phase) => phase.id));
-        await legacyPhasePersistence.shiftOrders(seasonId, insertAt, 1);
+      if (native) {
+        const inserted = await insertAdminPhase(phaseInput, body.insert_at);
+        created = inserted.phase;
+        touchedIds.push(...inserted.shiftedIds);
+      } else {
+        if (wouldShift.length > 0) {
+          touchedIds.push(...wouldShift.map((phase) => phase.id));
+          await legacyPhasePersistence.shiftOrders(seasonId, insertAt, 1);
+        }
+        created = await legacyPhasePersistence.create({ ...phaseInput, stage_order: insertAt });
       }
-
-      created = await storage.create({
-        name: body.name,
-        description: body.description,
-        season_id: seasonId,
-        bracket_type: body.bracket_type,
-        ruleset_id: body.ruleset_id,
-        best_of_default: body.best_of_default,
-        bo_overrides: body.bo_overrides,
-        is_doubles: body.is_doubles,
-        team_visibility: body.team_visibility,
-        stage_order: insertAt,
-        advancement_rule: body.advancement_rule ?? null,
-      });
       touchedIds.push(created.id);
 
       if (!admin.isAdmin) {

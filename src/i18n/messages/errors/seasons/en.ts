@@ -19,7 +19,6 @@ export default {
   PHASE_REORDER_INCOMPLETE: 'phase_ids must include every upcoming phase exactly once',
   PHASE_INSERT_INVALID: 'insert_at is out of range',
   PHASE_INSERT_LOCKED: 'Cannot insert a phase before stages that have already started',
-  phase_insert_unavailable: 'Inserting a phase before existing phases is not available yet.',
   PHASE_COMPLETED_LOCKED: 'Completed phases are locked. Reopen to active first.',
   PHASE_NAME_TAKEN: 'Another phase of this league already has this name.',
   PHASE_DELETE_CONFIRM_REQUIRED: 'Deleting a phase with rounds requires confirm: true',

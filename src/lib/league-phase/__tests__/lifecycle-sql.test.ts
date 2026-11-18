@@ -6,6 +6,7 @@ import { phaseRoundMachine } from '../phase-round-state';
 
 const sql = readFileSync(join(process.cwd(), 'supabase/migrations/20261117110000_phase_lifecycle.sql'), 'utf8');
 const rosterSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118090000_phase_roster_group_integrity.sql'), 'utf8');
+const orderSql = readFileSync(join(process.cwd(), 'supabase/migrations/20261118100000_phase_admin_insert.sql'), 'utf8');
 const definitions = [...sql.matchAll(/CREATE OR REPLACE FUNCTION public\.(\w+)\(([\s\S]*?)END \$\$;|CREATE OR REPLACE FUNCTION public\.(season_group__league_scheduled)\(([\s\S]*?)\$\$;/g)];
 const body = (name: string) => {
   const start = sql.indexOf('CREATE OR REPLACE FUNCTION public.' + name + '(');
@@ -15,6 +16,23 @@ const body = (name: string) => {
 };
 
 describe('native lifecycle SQL', () => {
+  it('checks the whole live order under the season and phase locks before inserting or reordering', () => {
+    const boundary = orderSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_stage_orders_reorder');
+    const insert = orderSql.slice(0, boundary);
+    const reorder = orderSql.slice(boundary);
+    for (const sql of [insert, reorder]) {
+      expect(sql).toContain('ORDER BY id FOR NO KEY UPDATE');
+      expect(sql.indexOf('pg_advisory_xact_lock')).toBeLessThan(sql.indexOf('FOR KEY SHARE'));
+      expect(sql.indexOf('FOR KEY SHARE')).toBeLessThan(sql.indexOf('FOR NO KEY UPDATE'));
+      expect(sql.indexOf('FOR NO KEY UPDATE')).toBeLessThan(sql.indexOf('UPDATE public.league_phases'));
+    }
+    expect(insert.indexOf('PHASE_INSERT_LOCKED')).toBeLessThan(insert.indexOf('UPDATE public.league_phases'));
+    expect(insert).toContain('RETURNING id');
+    expect(reorder.indexOf('PHASE_REORDER_INCOMPLETE')).toBeLessThan(reorder.indexOf('UPDATE public.league_phases'));
+    expect(reorder.indexOf('PHASE_REORDER_LOCKED')).toBeLessThan(reorder.indexOf('UPDATE public.league_phases'));
+    expect(orderSql).not.toMatch(/phase_storage_transition|SECURITY DEFINER|DISABLE TRIGGER/i);
+  });
+
   it('preserves retained group rows and rejects scheduled removals before changing the roster or freeze flag', () => {
     const replace = rosterSql.slice(0, rosterSql.indexOf('CREATE OR REPLACE FUNCTION public.phase_enrollment_replace'));
     expect(replace).toMatch(/DELETE FROM public\.phase_participants p WHERE p\.phase_id = p_phase_id\s+AND NOT EXISTS/);

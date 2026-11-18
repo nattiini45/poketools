@@ -18,7 +18,7 @@ vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: h.m
 vi.mock('@/lib/supabase/queries/seasons', () => ({ getSeasonById: h.season }));
 vi.mock('@/lib/supabase/queries/format-engine', () => ({ getSeasonKitHead: h.format, getKitPhases: h.legacyFormatPhases }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({
-  getPhasesBySeasonId: h.list, createPhase: h.create, shiftPhaseStageOrders: h.shift, getPhaseWithDetails: h.detail,
+  getPhasesBySeasonId: h.list, insertAdminPhase: h.create, shiftPhaseStageOrders: h.shift, getPhaseWithDetails: h.detail,
   updatePhase: h.update, deletePhase: h.remove,
 }));
 vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getRoundsByPhase: vi.fn(), listRoundStatusesByPhaseIds: h.rounds }));
@@ -67,7 +67,7 @@ beforeEach(() => {
   h.season.mockResolvedValue({ id: SEASON, name: 'League' });
   h.format.mockResolvedValue(null);
   h.list.mockResolvedValue([]);
-  h.create.mockResolvedValue(ROW);
+  h.create.mockResolvedValue({ phase: ROW, shiftedIds: [] });
   h.detail.mockResolvedValue(ROW);
   h.update.mockResolvedValue({ ...ROW, status: 'completed' });
   h.rounds.mockResolvedValue([]);
@@ -79,13 +79,13 @@ beforeEach(() => {
 
 describe('native phase creation', () => {
   it('appends, grants phase administration, syncs native enrollment and expires native reads', async () => {
-    h.list.mockResolvedValue([{ id: OTHER, name: 'Opening', stage_order: 3 }]);
     const response = await POST(req('POST', createBody), args);
     expect(response.status).toBe(201);
     expect(await response.json()).toMatchObject({ data: { id: PHASE, season_id: SEASON } });
     expect(h.requireAdmin).toHaveBeenCalledWith('season', SEASON);
     expect(h.createPin).toHaveBeenCalledWith(ADMIN, PIN);
-    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ ...createBody, season_id: SEASON, stage_order: 4 }));
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ ...createBody, season_id: SEASON }), undefined);
+    expect(h.list).not.toHaveBeenCalled();
     expect(h.assign).toHaveBeenCalledWith(ADMIN.playerId, PHASE);
     expect(h.sync).toHaveBeenCalledWith(SEASON, PHASE);
     expect(h.detail).toHaveBeenCalledWith(PHASE, SEASON);
@@ -120,17 +120,18 @@ describe('native phase creation', () => {
     expect(h.legacySync).not.toHaveBeenCalled();
   });
 
-  it('does not shift native stages until the insertion lock is available', async () => {
-    h.list.mockResolvedValueOnce([{ id: OTHER, name: 'Opening', stage_order: 1, status: 'upcoming' }])
-      .mockResolvedValueOnce([{ id: OTHER, name: 'Opening', stage_order: 1, status: 'active' }]);
+  it('uses the committed shifted ids and propagates a refused native insertion', async () => {
+    h.create.mockResolvedValueOnce({ phase: ROW, shiftedIds: [OTHER] })
+      .mockRejectedValueOnce(new UserFacingError('Cannot insert a phase before stages that have already started', { code: 'PHASE_INSERT_LOCKED' }));
     const insert = () => POST(req('POST', { ...createBody, insert_at: 1 }), args);
-    const unavailable = await insert();
-    expect(unavailable.status).toBe(503);
-    expect(await unavailable.json()).toMatchObject({ code: 'phase_insert_unavailable' });
+    expect((await insert()).status).toBe(201);
+    expect(h.create).toHaveBeenCalledWith(expect.objectContaining({ season_id: SEASON }), 1);
+    expect(h.expire).toHaveBeenCalledWith(`phase:${OTHER}`, { expire: 0 });
+    h.expire.mockClear();
     expect(await (await insert()).json()).toMatchObject({ code: 'PHASE_INSERT_LOCKED' });
     expect(h.shift).not.toHaveBeenCalled();
-    expect(h.create).not.toHaveBeenCalled();
-    expect(h.expire).not.toHaveBeenCalled();
+    expect(h.legacyCreate).not.toHaveBeenCalled();
+    expect(h.expire).not.toHaveBeenCalledWith(`phase:${OTHER}`, expect.anything());
   });
 });
 
