@@ -180,6 +180,35 @@ describe.skipIf(!optedIn)('native format materialisation on the disposable phase
     expect(await formats.getSeasonFormat(created.season_id)).not.toBeNull();
   });
 
+  it('reads readiness and the descriptor from native rows through PostgREST', async () => {
+    const [seasons, readiness, descriptor, counts] = await Promise.all([
+      import('@/lib/supabase/queries/seasons'), import('@/lib/format-studio/readiness-loader'),
+      import('@/lib/format-studio/loader'), import('@/lib/supabase/queries/format-studio'),
+    ]);
+    const input = competitionInput('cup');
+    const created = await competitions.createCompetitionFromFormat(input, 'native');
+    const seasonId = created.season_id;
+    const phaseId = created.stages[0].id;
+    expect((await admin.from('phase_groups').insert({ phase_id: phaseId, season_id: seasonId, name: 'Native fixture group', group_number: 1 })).error).toBeNull();
+    const league = await seasons.getSeasonWithDetails(seasonId);
+    if (!league) throw new Error('The native format fixture league is missing');
+    expect(league.tournament_count).toBe(0);
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    try {
+      const [ready, outline, groups] = await Promise.all([
+        readiness.loadLeagueFormatState(league), descriptor.loadLeagueFormat(league), counts.getStageGroupCounts([seasonId], 'native'),
+      ]);
+      expect(ready).toMatchObject({ started: false, manualPhaseCount: 0, attached: { createdPhases: created.stages.length } });
+      expect(outline).toMatchObject({ kind: 'ok', view: { definition: { stages: expect.any(Array) } } });
+      if (outline.kind === 'ok') expect(outline.view.definition?.stages).toHaveLength(created.stages.length);
+      expect(groups.get(phaseId)).toBe(1);
+      expect((await admin.from('phase_rounds').insert({ phase_id: phaseId, name: 'Native start fixture', round_number: 1, best_of: 1 })).error).toBeNull();
+      await expect(readiness.loadLeagueFormatState(league)).resolves.toMatchObject({ started: true });
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('runs create, reattach and detach through the real HTTP handlers with no legacy rows', async () => {
     const [auth, seasons, format] = await Promise.all([
       import('@/lib/auth/helpers'), import('@/app/api/seasons/route'), import('@/app/api/seasons/[id]/format/route'),

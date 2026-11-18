@@ -4,12 +4,14 @@ import 'server-only';
  * The readiness state of a custom league: the attached format (its name, version and frozen hash, never its spec
  * or its seed), how many phases it created and the checklist of what is still missing before a first round.
  *
- * One wave of three reads (the attached row, the hand-made phase count, the start signals); the league row comes
- * from the caller. A league of any other format type has no readiness and costs no read.
+ * One wave after store selection: the attached row, the hand-made phase count, the start signals, and a total
+ * count in native mode. A league of any other format type has no readiness and costs no read.
  */
 import type { LText } from '@/lib/studio-core/ltext';
 import { isSeasonStarted } from '@/lib/season/season-started';
-import { getSeasonFormat, getSeasonManualPhaseCount, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
+import { getSeasonFormat, getSeasonManualPhaseCount, getSeasonNativePhaseCount, getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
+import { isNativeSeasonStarted } from '@/lib/supabase/queries/season-start';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import type { SeasonWithDetails } from '@/types/season';
 import { computeReadiness, type ReadinessResult } from './editor/readiness';
 
@@ -38,19 +40,21 @@ const UNNAMED: LText = { base: 'en' };
 
 export async function loadLeagueFormatState(league: SeasonWithDetails, now: Date = new Date()): Promise<LeagueFormatState | null> {
   if (league.format_type !== 'custom') return null;
-  const [row, manualPhaseCount, signals] = await Promise.all([
+  const mode = await getPhaseRouteMode();
+  const native = mode === 'phase' || mode === 'frozen_phase';
+  const [row, manualPhaseCount, started, phaseCount] = await Promise.all([
     getSeasonFormat(league.id),
-    getSeasonManualPhaseCount(league.id),
-    getSeasonStartSignals(league.id),
+    native ? getSeasonManualPhaseCount(league.id, 'native') : getSeasonManualPhaseCount(league.id),
+    native ? isNativeSeasonStarted(league.id) : getSeasonStartSignals(league.id).then((signals) => signals !== null && isSeasonStarted(signals)),
+    native ? getSeasonNativePhaseCount(league.id) : league.tournament_count,
   ]);
-  const started = signals !== null && isSeasonStarted(signals);
   const readiness = computeReadiness({
     formatType: league.format_type,
     started,
     participantCount: league.participant_count,
     seasonRulesetId: league.ruleset_id,
     attached: row === null ? null : { version_no: row.version_no, spec: row.spec },
-    phaseCount: league.tournament_count,
+    phaseCount,
     manualPhaseCount,
     seasonStartDate: league.start_date,
     now,
@@ -66,7 +70,7 @@ export async function loadLeagueFormatState(league: SeasonWithDetails, now: Date
           frozen_at: row.frozen_at,
           name: row.spec.identity?.name ?? UNNAMED,
           stageCount: row.spec.stages.length,
-          createdPhases: Math.max(0, league.tournament_count - manualPhaseCount),
+          createdPhases: Math.max(0, phaseCount - manualPhaseCount),
         };
   return { readiness, attached, manualPhaseCount, started };
 }

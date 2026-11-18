@@ -8,11 +8,15 @@ import type { SeasonWithDetails } from '@/types/season';
 import type { TournamentWithDetails } from '@/types/tournament';
 import type { LegacyFacts, LegacyInput, LegacyPack, LegacySeasonInput, LegacyStageInput } from './legacy/types';
 
+export type DescriptorStage = Pick<TournamentWithDetails,
+  'id' | 'name' | 'bracket_type' | 'stage_order' | 'best_of_default' | 'bo_overrides' | 'is_doubles' |
+  'ruleset_id' | 'ruleset_name' | 'advancement_rule' | 'enrollment_source' | 'bracket_reset_enabled'>;
+
 export interface LegacyInputSource {
   league: SeasonWithDetails;
   /** The league's phases in the order they were read. */
-  stages: readonly TournamentWithDetails[];
-  /** Groups per phase id (`tournament_groups`); a phase missing from the map has none. */
+  stages: readonly DescriptorStage[];
+  /** Groups per phase id; a phase missing from the map has none. */
   stageGroupCounts: ReadonlyMap<string, number>;
   /** League groups (`season_groups`). */
   leagueGroupCount: number;
@@ -22,7 +26,7 @@ export interface LegacyInputSource {
   epb: FormatPack['epb'];
 }
 
-function toStage(stage: TournamentWithDetails, groupCounts: ReadonlyMap<string, number>): LegacyStageInput {
+function toStage(stage: DescriptorStage, groupCounts: ReadonlyMap<string, number>): LegacyStageInput {
   const source = stage.enrollment_source;
   const rule = stage.advancement_rule;
   return {

@@ -9,15 +9,19 @@ import type { TournamentWithDetails } from '@/types/tournament';
 
 const mocks = vi.hoisted(() => ({
   getStagesBySeasonIds: vi.fn(),
+  getPhasesBySeasonIds: vi.fn(),
   getStageGroupCounts: vi.fn(),
   getLeagueGroupCounts: vi.fn(),
   getSeasonTypeAssignmentCounts: vi.fn(),
   getFormatRules: vi.fn(),
   getTierLimits: vi.fn(),
 }));
+const getPhaseRouteMode = vi.hoisted(() => vi.fn());
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getStagesBySeasonIds: mocks.getStagesBySeasonIds }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhasesBySeasonIds: mocks.getPhasesBySeasonIds }));
 vi.mock('@/lib/supabase/queries/format-studio', () => ({
   getStageGroupCounts: mocks.getStageGroupCounts,
   getLeagueGroupCounts: mocks.getLeagueGroupCounts,
@@ -106,10 +110,26 @@ const called = () => Object.entries(mocks).filter(([, fn]) => fn.mock.calls.leng
 
 beforeEach(() => {
   vi.clearAllMocks();
+  getPhaseRouteMode.mockResolvedValue('legacy');
   mockReads(new Map([['s1', cupStages('s1')]]));
 });
 
 describe('loadLeagueFormat reads', () => {
+  it.each(['phase', 'frozen_phase'])('uses native phases and counts for detail and gallery in %s', async (mode) => {
+    getPhaseRouteMode.mockResolvedValue(mode);
+    const native = stage('native-a', 's1', { name: 'Native groups', bracket_type: 'swiss', ruleset_id: 'rs-native', ruleset_name: 'Native rules' });
+    mocks.getPhasesBySeasonIds.mockResolvedValue(new Map([['s1', [native]], ['s2', []]]));
+    mocks.getStageGroupCounts.mockResolvedValue(new Map([[native.id, 2]]));
+    const leagues = [league('s1'), league('s2')];
+    const [detail, summaries] = await Promise.all([loadLeagueFormat(leagues[0]), loadLeagueFormatSummaries(leagues)]);
+    expect(detail).toMatchObject({ kind: 'ok', view: { order: ['stage_1'] } });
+    expect(JSON.stringify(detail)).toContain('Native rules');
+    expect(summaries).toMatchObject([{ id: 's1', stageCount: 1, pairings: ['swiss'] }, { id: 's2', stageCount: 0 }]);
+    expect(mocks.getPhasesBySeasonIds.mock.calls).toEqual([[['s1']], [['s1', 's2']]]);
+    expect(mocks.getStageGroupCounts.mock.calls).toEqual([[['s1'], 'native'], [['s1', 's2'], 'native']]);
+    expect(mocks.getStagesBySeasonIds).not.toHaveBeenCalled();
+  });
+
   const expectations: [SeasonFormatType, string[]][] = [
     ['singles', ['getLeagueGroupCounts', 'getSeasonTypeAssignmentCounts', 'getStageGroupCounts', 'getStagesBySeasonIds']],
     ['doubles', ['getLeagueGroupCounts', 'getSeasonTypeAssignmentCounts', 'getStageGroupCounts', 'getStagesBySeasonIds']],

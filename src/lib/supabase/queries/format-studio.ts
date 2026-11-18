@@ -31,22 +31,21 @@ function embeddedCount(value: unknown): number {
 }
 
 /**
- * Groups per phase: phase (tournament) id to its `tournament_groups` count, for every phase of the given leagues.
+ * Groups per phase: phase id to its group count, for every phase of the given leagues.
  * A phase without groups maps to 0. Phases of other leagues are never read.
  */
-export async function getStageGroupCounts(seasonIds: readonly string[]): Promise<Map<string, number>> {
+export async function getStageGroupCounts(seasonIds: readonly string[], storage: 'legacy' | 'native' = 'legacy'): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
   for (const chunk of chunksOf(seasonIds)) {
     for (let from = 0; ; from += PAGE_SIZE) {
-      const { data, error } = await supabase
-        .from('tournaments')
-        .select('id, tournament_groups ( count )')
-        .in('season_id', chunk)
-        .order('id')
-        .range(from, from + PAGE_SIZE - 1);
+      const { data, error } = storage === 'native'
+        ? await supabase.from('league_phases').select('id, phase_groups!phase_groups_phase_id_fkey ( count )')
+          .in('season_id', chunk).order('id').range(from, from + PAGE_SIZE - 1)
+        : await supabase.from('tournaments').select('id, tournament_groups ( count )')
+          .in('season_id', chunk).order('id').range(from, from + PAGE_SIZE - 1);
 
       if (error) throw error;
-      for (const row of data) counts.set(row.id, embeddedCount(row.tournament_groups));
+      for (const row of data) counts.set(row.id, embeddedCount('phase_groups' in row ? row.phase_groups : row.tournament_groups));
       if (data.length < PAGE_SIZE) break;
     }
   }

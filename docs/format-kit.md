@@ -481,6 +481,8 @@ The editor is a form over a plain JSON document. Its logic is pure and lives in 
 
 ### Attach and readiness
 
+The readiness card and the Format Studio detail and gallery descriptors read phases from the selected store, including while it is frozen. Native readiness uses exact counts of native phases and the native started check. The descriptor uses native stage rows and native group counts without a legacy fallback.
+
 The Format tab of a **custom** league (`FormatPanel`) shows, in order, the readiness card (`id="format-readiness"`; it is about getting ready to start, so a league that has started does not get it), the attach section (`id="format-attach"`) and, once the league has phases, the read-only outline. Every other league type keeps its tab and makes no new read.
 
 - **Attach panel** (`FormatAttachPanel`, a client component that gets plain props only: no spec, no seed, no player row). States: **started** (the format is locked: a notice, and only the attached summary stays), **attached** (name, version, the first 12 characters of the frozen hash with the full hash in a `title` and a Copy button, the attach time, the number of phases created, a link to the source format or a note that it was deleted, and **Re-attach** and **Detach**), and **unattached or re-attaching** (the picker). The picker is a grouped select of published formats the admin may attach (yours, shared with league admins, the gallery, and for site admins other admins' formats), loaded by `loadAttachCandidates` (at most 100, with a note when capped; names only).

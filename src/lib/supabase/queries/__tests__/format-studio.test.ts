@@ -79,6 +79,14 @@ describe('getStageGroupCounts', () => {
     expect(counts.get('t2')).toBe(0);
   });
 
+  it('reads native phase groups scoped to the requested leagues', async () => {
+    state.respond = () => ({ data: [{ id: 'p1', phase_groups: [{ count: 3 }] }], error: null });
+    expect(await getStageGroupCounts(['s1'], 'native')).toEqual(new Map([['p1', 3]]));
+    expect(state.calls).toEqual([{ table: 'league_phases', steps: [
+      ['select', 'id, phase_groups!phase_groups_phase_id_fkey ( count )'], ['in', 'season_id', ['s1']], ['order', 'id'], ['range', 0, 999],
+    ] }]);
+  });
+
   it('pages past 1000 rows', async () => {
     state.respond = (call) => {
       const [from] = rangeOf(call) as [number, number];

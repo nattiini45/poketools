@@ -8,13 +8,19 @@ const mocks = vi.hoisted(() => ({
   getSeasonFormat: vi.fn<(id: string) => Promise<SeasonFormatRow | null>>(),
   getSeasonManualPhaseCount: vi.fn<(id: string) => Promise<number>>(),
   getSeasonStartSignals: vi.fn<(id: string) => Promise<SeasonStartSignals | null>>(),
+  getSeasonNativePhaseCount: vi.fn<(id: string) => Promise<number>>(),
+  isNativeSeasonStarted: vi.fn<(id: string) => Promise<boolean>>(),
+  getPhaseRouteMode: vi.fn(),
 }));
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/supabase/queries/season-formats', () => ({
   getSeasonFormat: mocks.getSeasonFormat,
   getSeasonManualPhaseCount: mocks.getSeasonManualPhaseCount,
   getSeasonStartSignals: mocks.getSeasonStartSignals,
+  getSeasonNativePhaseCount: mocks.getSeasonNativePhaseCount,
 }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: mocks.getPhaseRouteMode }));
+vi.mock('@/lib/supabase/queries/season-start', () => ({ isNativeSeasonStarted: mocks.isNativeSeasonStarted }));
 
 import { loadLeagueFormatState } from '../readiness-loader';
 
@@ -73,9 +79,24 @@ beforeEach(() => {
   mocks.getSeasonFormat.mockResolvedValue(attached());
   mocks.getSeasonManualPhaseCount.mockResolvedValue(0);
   mocks.getSeasonStartSignals.mockResolvedValue({ status: 'upcoming', phases: [{ status: 'upcoming', rounds_total: 0 }] });
+  mocks.getPhaseRouteMode.mockResolvedValue('legacy');
 });
 
 describe('loadLeagueFormatState', () => {
+  it.each(['phase', 'frozen_phase'])('derives started and counts from native evidence in %s', async (mode) => {
+    mocks.getPhaseRouteMode.mockResolvedValue(mode);
+    mocks.getSeasonNativePhaseCount.mockResolvedValue(5);
+    mocks.getSeasonManualPhaseCount.mockResolvedValue(1);
+    mocks.isNativeSeasonStarted.mockResolvedValue(true);
+    const state = await loadLeagueFormatState(league({ tournament_count: 0 }));
+    expect(state).toMatchObject({ started: true, manualPhaseCount: 1, attached: { createdPhases: 4 } });
+    expect(mocks.getSeasonNativePhaseCount).toHaveBeenCalledExactlyOnceWith('season-1');
+    expect(mocks.getSeasonManualPhaseCount).toHaveBeenCalledExactlyOnceWith('season-1', 'native');
+    expect(mocks.isNativeSeasonStarted).toHaveBeenCalledExactlyOnceWith('season-1');
+    expect(mocks.getSeasonStartSignals).not.toHaveBeenCalled();
+    expect(JSON.stringify(state)).not.toContain('SECRET-SEED-VALUE');
+  });
+
   it.each(['singles', 'doubles', 'draft', 'evolution_point_buy'] as const)('is null for a %s league and reads nothing', async (format_type) => {
     expect(await loadLeagueFormatState(league({ format_type }))).toBeNull();
     expect(mocks.getSeasonFormat).not.toHaveBeenCalled();

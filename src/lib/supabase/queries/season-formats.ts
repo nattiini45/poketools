@@ -170,6 +170,15 @@ export async function getSeasonManualPhaseCount(seasonId: string, storage: 'lega
   return count ?? 0;
 }
 
+export async function getSeasonNativePhaseCount(seasonId: string): Promise<number> {
+  const { count, error } = await supabase.from('league_phases')
+    .select('id', { count: 'exact', head: true })
+    .eq('season_id', seasonId);
+  if (error) throw error;
+  if (count === null) throw new Error('Native league phase count missing');
+  return count;
+}
+
 /**
  * Which of the ruleset DEFINITION ids `ids` exist and have a published version, with that head version's id (what an attach
  * pins). A definition without a published version is a draft, not a ruleset, and is absent. Chunks of 50; an empty (or
