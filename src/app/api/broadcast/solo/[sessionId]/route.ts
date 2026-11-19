@@ -1,19 +1,23 @@
 import { NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { CACHE, cacheHeaders } from '@/lib/api/cache';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
 import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
+import { getStudioCastSession } from '@/lib/broadcast/studio-sessions.server';
+import { isPhaseRouteModeEnabled, requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { createInitialState, normalizeSoloTrackerState } from '@/lib/broadcast/tracker-reducer';
 import { soloPlayerDefaults } from '@/lib/broadcast/solo-defaults';
 import type { ApiResult } from '@/types/api';
 import type { PublicSoloBroadcastState, TrackerState } from '@/types/broadcast';
+import type { StudioCastSession } from '@/types/phase-cast-session';
 
 interface RouteContext {
   params: Promise<{ sessionId: string }>;
 }
 
 function buildPublicState(
-  session: NonNullable<Awaited<ReturnType<typeof getCastSessionById>>>,
+  session: StudioCastSession,
 ): PublicSoloBroadcastState {
   const defaults = soloPlayerDefaults(session);
   const tracker = session.tracker_state
@@ -82,31 +86,34 @@ function buildPublicState(
 
 // Public: no auth required — the solo overlay polls it; only the public solo state is returned
 export async function GET(request: Request, context: RouteContext) {
+  let modeAware = true;
+  const withoutCache = (response: NextResponse) => {
+    if (modeAware) response.headers.set('Cache-Control', CACHE.NONE['Cache-Control']);
+    return response;
+  };
   try {
+    modeAware = isPhaseRouteModeEnabled();
     const { sessionId } = await context.params;
     // A malformed id names no row: 404 before the query (Postgres would reject the filter with a 500).
     const invalidId = rejectInvalidPathId(sessionId, 'INVALID_SESSION_ID');
-    if (invalidId) return invalidId;
+    if (invalidId) return withoutCache(invalidId);
     const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.solo);
-    if (guarded) return guarded;
-    const session = await getCastSessionById(sessionId);
+    if (guarded) return withoutCache(guarded);
+    const phase = modeAware && await requireOpenPhaseRouteMode() === 'phase';
+    const session = phase ? await getStudioCastSession(sessionId) : await getCastSessionById(sessionId);
 
     if (!session || session.mode !== 'solo') {
-      return NextResponse.json<ApiResult<never>>(
+      return withoutCache(NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Solo session not found', code: 'solo_session_not_found' },
         { status: 404 },
-      );
+      ));
     }
 
     return NextResponse.json<ApiResult<PublicSoloBroadcastState>>(
       { success: true, data: buildPublicState(session) },
-      {
-        headers: {
-          'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5',
-        },
-      },
+      { headers: modeAware ? CACHE.NONE : cacheHeaders(2, 5) },
     );
   } catch (err) {
-    return safeErrorResponse(err, 'Failed to fetch solo broadcast state');
+    return withoutCache(safeErrorResponse(err, 'Failed to fetch solo broadcast state'));
   }
 }

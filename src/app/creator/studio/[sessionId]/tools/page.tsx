@@ -1,9 +1,9 @@
-import { gateCreatorPage } from '@/components/shared/creator-page-gate';
-import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
-import { redirect, notFound } from 'next/navigation';
 import ToolsLayout from '@/components/creator/studio/tools/ToolsLayout';
 import { getT } from '@/i18n/server';
 import { creatorMessages } from '@/i18n/messages/creator';
+import { loadStudioSessionPage } from '../session-page-access';
+
+export const dynamic = 'force-dynamic';
 
 interface Props {
   params: Promise<{ sessionId: string }>;
@@ -12,13 +12,9 @@ interface Props {
 export default async function CastStudioToolsPage({ params }: Props) {
   const { sessionId } = await params;
 
-  const gate = await gateCreatorPage();
-  if (!gate.ok) return gate.view;
-  const playerId = gate.playerId;
-
-  const session = await getCastSessionById(sessionId);
-  if (!session) notFound();
-  if (session.owner_id !== playerId) redirect('/creator/studio');
+  const result = await loadStudioSessionPage(sessionId);
+  if (!result.ok) return result.view;
+  const { session } = result;
 
   const t = await getT(creatorMessages);
 
