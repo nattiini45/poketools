@@ -198,10 +198,14 @@ function independentSessionFromRow(row: CastSessionRow & {
   } };
 }
 
-export async function listIndependentCastSessions(ownerId: string): Promise<IndependentCastSession[]> {
-  const rows = await readAllPages((from, to) => supabase.from('cast_sessions')
-    .select(INDEPENDENT_SESSION_SELECT).eq('owner_id', ownerId)
-    .order('updated_at', { ascending: false }).order('id').range(from, to));
+export async function listIndependentCastSessions(
+  ownerId: string, phaseMatch?: { phaseId: string; matchId: string },
+): Promise<IndependentCastSession[]> {
+  const rows = await readAllPages((from, to) => {
+    let query = supabase.from('cast_sessions').select(INDEPENDENT_SESSION_SELECT).eq('owner_id', ownerId);
+    if (phaseMatch) query = query.eq('phase_id', phaseMatch.phaseId).eq('phase_match_id', phaseMatch.matchId);
+    return query.order('updated_at', { ascending: false }).order('id').range(from, to);
+  });
   return rows.map(independentSessionFromRow).filter((session) => session !== null);
 }
 

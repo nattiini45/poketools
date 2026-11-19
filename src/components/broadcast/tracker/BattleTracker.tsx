@@ -1,6 +1,6 @@
 'use client';
 
-import { useReducer, useCallback, useState } from 'react';
+import { useReducer, useCallback, useEffect, useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import TrackerTeamColumn from './TrackerTeamColumn';
 import TrackerScorebar from './TrackerScorebar';
@@ -19,6 +19,7 @@ import { HotkeyProvider } from '@/hooks/useHotkeyContext';
 import { useHotkeys } from '@/hooks/useHotkeys';
 import type { GameSummary } from '@/types/match';
 import type { CasterData } from '@/types/caster';
+import type { ApiResult } from '@/types/api';
 import { useT } from '@/i18n/client';
 import type { ApiErrorLike } from '@/i18n/api-errors';
 import { useApiErrorText } from '@/i18n/use-api-error';
@@ -47,6 +48,7 @@ interface BattleTrackerProps {
   casterData?: CasterData | null;
   /** Cast session ID for auto-save features (notes, etc.) */
   sessionId?: string;
+  openPhaseSession?: boolean;
 }
 
 export default function BattleTracker({
@@ -57,6 +59,7 @@ export default function BattleTracker({
   bestOf,
   casterData = null,
   sessionId,
+  openPhaseSession = false,
 }: BattleTrackerProps) {
   const [state, dispatch] = useReducer(
     trackerReducer,
@@ -73,6 +76,19 @@ export default function BattleTracker({
   // A warning the server sent with a recorded game (e.g. its moments were not
   // saved): the game counts, but the caster must see what was lost.
   const [warning, setWarning] = useState<ApiErrorLike | null>(null);
+  const [openedSession, setOpenedSession] = useState<{ matchId: string; id: string }>();
+  useEffect(() => {
+    if (!openPhaseSession) return;
+    const controller = new AbortController();
+    void fetch(`/api/cast-sessions/phase-match/${matchId}`, { method: 'POST', signal: controller.signal })
+      .then(async (response) => {
+        const result: ApiResult<{ id: string }> = await response.json();
+        if (!controller.signal.aborted && response.ok && result.success) setOpenedSession({ matchId, id: result.data.id });
+      })
+      .catch(() => { /* The tracker remains usable without optional caster notes. */ });
+    return () => controller.abort();
+  }, [matchId, openPhaseSession]);
+  const activeSessionId = openPhaseSession && openedSession?.matchId === matchId ? openedSession.id : sessionId;
 
   const handleSubmitGame = useCallback(
     async (payload: ReturnType<typeof buildGamePayload>) => {
@@ -272,7 +288,7 @@ export default function BattleTracker({
           )}
 
           {/* Tools panel (Speed Tiers, Type Matrix, etc.) */}
-          {casterData && <TrackerToolsPanel sessionId={sessionId} />}
+          {casterData && <TrackerToolsPanel sessionId={activeSessionId} />}
         </>
       )}
 
@@ -296,7 +312,7 @@ function TrackerHotkeys({
   enabled: boolean;
 }) {
   const t = useT(broadcastCasterMessages);
-  const hotkeyBindings = [
+  const hotkeyBindings = useMemo(() => [
     ...([1, 2, 3, 4, 5, 6] as const).map((n) => ({
       key: String(n),
       handler: () => dispatch({ type: 'mark_brought' as const, player: 1 as const, slot: n - 1 }),
@@ -320,7 +336,7 @@ function TrackerHotkeys({
     { key: 'ctrl+z', handler: () => dispatch({ type: 'undo' as const }), description: t('hotkeys.undo') },
     { key: 'u', handler: () => dispatch({ type: 'undo' as const }), description: t('hotkeys.undoAlt') },
     { key: 'p', handler: () => setProducerMode((m: boolean) => !m), description: t('hotkeys.toggleProducer') },
-  ];
+  ], [dispatch, setProducerMode, t]);
   useHotkeys(hotkeyBindings, { scope: 'tracker', enabled });
   return null;
 }

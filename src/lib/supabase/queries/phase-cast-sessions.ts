@@ -36,10 +36,11 @@ function toPhaseCastSession(row: Tables<'phase_cast_sessions'> & {
   };
 }
 
-export async function listPhaseCastSessions(ownerId: string, phaseId?: string): Promise<PhaseCastSession[]> {
+export async function listPhaseCastSessions(ownerId: string, phaseId?: string, matchId?: string): Promise<PhaseCastSession[]> {
   const rows = await readAllPages((from, to) => {
     let query = supabase.from('phase_cast_sessions').select(SESSION_SELECT).eq('owner_id', ownerId);
     if (phaseId !== undefined) query = query.eq('phase_id', phaseId);
+    if (matchId !== undefined) query = query.eq('match_id', matchId);
     return query.order('updated_at', { ascending: false }).order('id').range(from, to);
   });
   return rows.map(toPhaseCastSession);
@@ -52,7 +53,9 @@ export async function getPhaseCastSessionById(id: string): Promise<PhaseCastSess
 }
 
 export async function createPhaseCastSession(
-  ownerId: string, input: PhaseCastSessionInsert, expectedSeasonId?: string,
+  ownerId: string,
+  input: PhaseCastSessionInsert & Pick<PhaseCastSessionUpdate, 'player1_team' | 'player2_team'>,
+  expectedSeasonId?: string,
 ): Promise<PhaseCastSession> {
   const phase = await getPhaseById(input.phase_id);
   if (!phase || (expectedSeasonId !== undefined && phase.season_id !== expectedSeasonId)) {
@@ -63,6 +66,8 @@ export async function createPhaseCastSession(
     name: input.name ?? UNTITLED_CAST_SESSION_NAME, mode: input.mode ?? 'cast', status: 'draft',
     player1_id: input.player1_id ?? null, player1_name: input.player1_name ?? null, player1_avatar_url: input.player1_avatar_url ?? null,
     player2_id: input.player2_id ?? null, player2_name: input.player2_name ?? null, player2_avatar_url: input.player2_avatar_url ?? null,
+    ...(input.player1_team === undefined ? {} : { player1_team: input.player1_team as unknown as Json }),
+    ...(input.player2_team === undefined ? {} : { player2_team: input.player2_team as unknown as Json }),
     format: input.format ?? 'gen9ou', generation: input.generation ?? 9,
   }).select(SESSION_SELECT).single();
   if (error) throw error;

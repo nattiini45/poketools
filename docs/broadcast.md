@@ -7,6 +7,7 @@ The Broadcast module powers live overlay state, draft replay playback, and weekl
 ```
 src/lib/broadcast/
 ├── animations.ts  # Overlay animation presets
+├── dashboard-tracker.server.ts  # Verified dashboard match scope and viewer-safe roster reads
 ├── draft-replay.ts  # Draft replay state/reducer helpers
 ├── error-retry.ts  # Back-off schedule of the overlay error boundary
 ├── overlay-config.ts  # Overlay configuration helpers
@@ -47,6 +48,10 @@ src/lib/broadcast/
 - **File**: `tracker-reducer.ts`
 - **Purpose**: Build/update live tracker state
 - **Key Methods**: `createInitialState()`, `trackerReducer()`, `buildGamePayload()`
+
+The player Broadcast Hub links active matches to the same tracker URL in either storage generation. In native mode the tracker verifies the match's league, phase and round, and uses the round's best-of. Only participants and live creators/site admins can open the tracker; the match's team visibility still determines which roster each viewer receives. Either freeze stops tracker reads.
+
+The native tracker opens its cast session through `POST /api/cast-sessions/phase-match/[id]`. The live creator guard checks the request again. The route reuses the caller's newest active session with the same native owner and match, including independent sessions with a native pointer, or creates a phase-owned draft with only the caller-visible rosters. It returns just the session ID. The existing notes PATCH and manual-result URLs don't change.
 
 ### Draft Replay Engine
 - **File**: `draft-replay.ts`
