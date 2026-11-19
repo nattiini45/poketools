@@ -5,17 +5,17 @@ import { cache } from 'react';
 import { toPublicPhaseReport, type PublicPhaseReport } from '@/lib/league-phase/public-report';
 import { loadNativeKitStandingsData } from '@/lib/league-phase/standings-context';
 import { getNativeLeagueStandingsPreview } from '@/lib/stats/standings-preview';
-import type { PublicMatch } from '@/lib/match/public-match';
+import { toPublicPhaseMatch } from '@/lib/match/public-match';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { publicTags } from '@/lib/revalidation';
 import { getPhaseParticipants, getPhaseWithDetails, getPhasesBySeasonIds } from '@/lib/supabase/queries/league-phases';
 import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
-import { getPhaseStandingsBattleStats } from '@/lib/supabase/queries/phase-games';
+import { getPhaseSeasonBattleStats, getPhaseSeasonGameTotal, getPhaseStandingsBattleStats } from '@/lib/supabase/queries/phase-games';
 import { getMatchesByPhase, getPhaseHeadToHead, getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
 import { getPhaseReports } from '@/lib/supabase/queries/phase-reports';
 import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
 import type { PhaseWithDetails } from '@/types/league-phase';
-import type { PhaseMatchWithRoundNumber } from '@/types/league-phase-match';
+export { toPublicPhaseMatch, type PublicPhaseMatch } from '@/lib/match/public-match';
 
 const DETAIL_TTL_S = 30;
 const SEASON_BATCH_SIZE = 50;
@@ -57,45 +57,6 @@ function toPublicPhase(phase: PhaseWithDetails): PublicPhase {
     participant_count: phase.participant_count,
     created_at: phase.created_at,
     updated_at: phase.updated_at,
-  };
-}
-
-export interface PublicPhaseMatch extends Omit<PublicMatch, 'tournament_id'> {
-  phase_id: string;
-  round_number?: number;
-}
-
-export function toPublicPhaseMatch(match: PhaseMatchWithRoundNumber): PublicPhaseMatch {
-  return {
-    id: match.id,
-    phase_id: match.phase_id,
-    round_id: match.round_id,
-    player_1_id: match.player_1_id,
-    player_2_id: match.player_2_id,
-    winner_id: match.winner_id,
-    status: match.status,
-    date_played: match.date_played,
-    scheduled_at: match.scheduled_at,
-    social_image_url: match.social_image_url,
-    bracket_side: match.bracket_side,
-    bracket_pos: match.bracket_pos,
-    created_at: match.created_at,
-    updated_at: match.updated_at,
-    player_1_name: match.player_1_name,
-    player_2_name: match.player_2_name,
-    player_1_avatar_url: match.player_1_avatar_url,
-    player_2_avatar_url: match.player_2_avatar_url,
-    winner_name: match.winner_name,
-    round_status: match.round_status,
-    ...(match.round_number === undefined ? {} : { round_number: match.round_number }),
-    games: match.games.map(game => ({
-      id: game.id,
-      game_number: game.game_number,
-      winner_id: game.winner_id,
-      replay_url: game.replay_url,
-      source: game.source,
-      stats_locked: game.stats_locked,
-    })),
   };
 }
 
@@ -198,6 +159,16 @@ const seasonKitStandings = cache((seasonId: string) =>
   ),
 );
 
+const seasonGameTotal = cache((seasonId: string) =>
+  cachedRead('season-game-total', [seasonId], [publicTags.season(seasonId), publicTags.aggregates('league', seasonId)], () =>
+    getPhaseSeasonGameTotal(seasonId),
+  ),
+);
+
+const seasonBattleStats = cache((seasonId: string) =>
+  cachedRead('season-battle-stats', [seasonId], [publicTags.season(seasonId)], () => getPhaseSeasonBattleStats(seasonId)),
+);
+
 const seasonStandingsPreview = cache((seasonId: string, limit: number) =>
   cachedRead('season-standings-preview', [seasonId, String(limit)], [publicTags.season(seasonId), publicTags.players, publicTags.ratings], () =>
     getNativeLeagueStandingsPreview(seasonId, limit),
@@ -205,5 +176,6 @@ const seasonStandingsPreview = cache((seasonId: string, limit: number) =>
 );
 
 export const phasePublicReads = {
-  detail, bySeasonIds, rounds, matches, match, headToHead, participants, groups, reports, battleStats, seasonKitStandings, seasonStandingsPreview,
+  detail, bySeasonIds, rounds, matches, match, headToHead, participants, groups, reports, battleStats,
+  seasonGameTotal, seasonBattleStats, seasonKitStandings, seasonStandingsPreview,
 } as const;

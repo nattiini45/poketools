@@ -4,6 +4,7 @@ import type { Tables, TablesInsert } from '@/types/database';
 import type { Game, GameCreateInput, BattleStat, BattleStatInsert } from '@/types/game';
 import { phaseGameStatsLockMachine } from '@/lib/league-phase/phase-game-marker-state';
 import { readAllPages } from '../read-all-pages';
+import { readBoundedPages } from '../read-bounded-pages';
 import type { TournamentBattleStat } from './games';
 
 type GameRow = Tables<'phase_games'>;
@@ -19,6 +20,31 @@ export async function getPhaseStandingsBattleStats(phaseId: string): Promise<Tou
     was_brought: row.was_brought, was_lead: row.was_lead, kos_dealt: row.kos_dealt, was_koed: row.was_koed,
     round_number: row.phase_games.phase_matches.phase_rounds.round_number,
   }));
+}
+
+export async function getPhaseSeasonGameTotal(seasonId: string): Promise<number> {
+  const { count, error } = await supabase.from('phase_games')
+    .select('id, match:phase_matches!phase_games_match_id_fkey!inner(status, phase:league_phases!phase_matches_phase_id_fkey!inner(season_id))',
+      { count: 'exact', head: true })
+    .eq('match.phase.season_id', seasonId)
+    .neq('match.status', 'scheduled');
+  if (error) throw error;
+  return count ?? 0;
+}
+
+export async function getPhaseSeasonBattleStats(seasonId: string): Promise<TournamentBattleStat[]> {
+  const { rows } = await readBoundedPages((from, to) => supabase.from('phase_battle_stats')
+    .select(`game_id, player_id, pokemon_name, was_brought, was_lead, kos_dealt, was_koed,
+      game:phase_games!phase_battle_stats_game_id_fkey!inner(
+        match:phase_matches!phase_games_match_id_fkey!inner(
+          phase:league_phases!phase_matches_phase_id_fkey!inner(season_id),
+          round:phase_rounds!phase_matches_phase_round_fkey!inner(round_number)
+        )
+      )`)
+    .eq('game.match.phase.season_id', seasonId)
+    .order('created_at').order('id').range(from, to),
+  { label: 'getPhaseSeasonBattleStats', maxPages: 10 });
+  return rows.map(({ game, ...row }) => ({ ...row, round_number: game.match.round.round_number }));
 }
 
 function toGame(row: GameRow): Game {

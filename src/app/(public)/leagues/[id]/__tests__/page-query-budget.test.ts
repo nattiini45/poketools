@@ -12,7 +12,7 @@
  * below are cold-cache budgets. The last block renders twice to prove a warm
  * render issues only the viewer-scoped reads (D36 fix 5).
  */
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactElement, ReactNode } from 'react';
 import { createFakeSupabase, type FakeSupabase } from '@/lib/worlds/__tests__/fake-postgrest';
 import {
@@ -98,6 +98,7 @@ import {
 } from '@/lib/supabase/queries/aggregates';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { resolveViewerWorld } from '@/lib/worlds/registry';
+import type { WorldRouteData } from '@/lib/worlds/route-data';
 
 // 10 + the league-groups read (group tables of the standings; league groups, 2026-10).
 const WORLD_BRANCH_BUDGET = 11;
@@ -157,6 +158,7 @@ const SIGNED_IN: SessionPlayer = {
 };
 
 beforeEach(() => {
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
   vi.clearAllMocks();
   cookieJar.clear();
   fakeNextCache.reset();
@@ -189,6 +191,126 @@ beforeEach(() => {
   );
 });
 
+afterEach(() => vi.unstubAllEnvs());
+
+function nativeTables(mode: 'phase' | 'frozen_phase' | 'frozen_legacy', swiss = false) {
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+  const tables = buildFixtureTables();
+  const stageIds = new Map(tables.tournaments.map(({ id }, index) =>
+    [id, `aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa${index}`]));
+  return {
+    ...tables,
+    phase_storage_state: [{ id: true, mode }],
+    league_phases: tables.tournaments.map((stage) => ({
+      ...stage,
+      id: stageIds.get(stage.id),
+      season_id: stage.season_id,
+      bracket_type: swiss && stage.season_id === SAKURA_SEASON_ID ? 'swiss' : stage.bracket_type,
+      phase_participants: stage.tournament_participants,
+    })),
+    phase_matches: tables.matches.map(({ tournament_id, ...match }) => ({
+      ...match, phase_id: stageIds.get(tournament_id), notes: 'private match note',
+    })),
+    phase_rounds: [{ id: 'sr1', phase_id: stageIds.get('s-stage-1'), round_number: 1, bye_player_ids: ['p3'] }],
+    phase_teams: [
+      { id: 'public', player_id: 'p1', pokemon: [{ species: 'Dragonite' }], match: { status: 'completed' },
+        phase: { season_id: SAKURA_SEASON_ID, team_visibility: 'hidden_until_match' } },
+      { id: 'hidden', player_id: 'p2', pokemon: [{ species: 'unrevealed roster' }], match: { status: 'scheduled' },
+        phase: { season_id: SAKURA_SEASON_ID, team_visibility: 'hidden_until_match' } },
+    ],
+  };
+}
+
+describe('league page — native storage budget', () => {
+  it.each([
+    [EPB_SEASON_ID, 'EvoligaWorld', false, 10],
+    [SAKURA_SEASON_ID, 'SakuraWorld', false, 9],
+    [SAKURA_SEASON_ID, 'SakuraWorld', true, 10],
+  ] as const)('season %s (%s, Swiss=%s) uses %s cold reads including mode', async (seasonId, worldName, swiss, budget) => {
+    const tables = nativeTables('phase', swiss);
+    fake.current = createFakeSupabase(tables);
+    vi.mocked(getSessionPlayer).mockResolvedValue(null);
+
+    const page = await renderPage(seasonId);
+    const data = findByName(page, worldName)?.props.data as WorldRouteData;
+    const queries = fake.current.queries.map((q) => q.table);
+    expect(queries).toHaveLength(budget);
+    expect(queries).toEqual(expect.arrayContaining(['phase_storage_state', 'league_phases', 'phase_matches', 'phase_teams']));
+    for (const table of ['tournaments', 'matches', 'teams', 'draft_pools', 'rulesets', 'aggregates', 'phase_games', 'phase_battle_stats']) {
+      expect(queries).not.toContain(table);
+    }
+    expect(queries.filter((table) => table === 'phase_rounds')).toHaveLength(swiss ? 1 : 0);
+    expect(data.fixtures.length).toBeGreaterThan(0);
+    expect(data.fixtures.every(({ stageId, match }) => 'phase_id' in match && match.phase_id === stageId && match.season_id === seasonId)).toBe(true);
+    expect(data.league?.tournament_count).toBe(data.stages.length);
+    expect(data.hasDraftPool).toBe(seasonId === EPB_SEASON_ID);
+    expect(JSON.stringify(data)).not.toMatch(/private match note|unrevealed roster|"tournament_id"/);
+    expectNoPrivatePlayerData(data);
+    expectNoStatsReads();
+    if (seasonId === SAKURA_SEASON_ID) expect(data.teamAces).toEqual({ p1: 'Dragonite' });
+    if (swiss) expect(data.standings.find((row) => row.player_id === 'p3')?.wins).toBe(1);
+  });
+
+  it('does not reuse the legacy world cache during a frozen native read, or vice versa', async () => {
+    const tables = nativeTables('frozen_legacy');
+    fake.current = createFakeSupabase(tables);
+    vi.mocked(getSessionPlayer).mockResolvedValue(null);
+    const load = async () => findByName(await renderPage(SAKURA_SEASON_ID), 'SakuraWorld')?.props.data as WorldRouteData;
+
+    expect((await load()).fixtures[0]?.match).toHaveProperty('tournament_id');
+    tables.phase_storage_state[0].mode = 'frozen_phase';
+    expect((await load()).fixtures[0]?.match).toHaveProperty('phase_id');
+    tables.phase_storage_state[0].mode = 'frozen_legacy';
+    fake.current.reset();
+    expect((await load()).fixtures[0]?.match).toHaveProperty('tournament_id');
+    expect(fake.current.queries.map((q) => q.table)).toEqual(['phase_storage_state']);
+  });
+
+  it('includes the mode read within the EPB budget while legacy is frozen', async () => {
+    fake.current = createFakeSupabase(nativeTables('frozen_legacy'));
+    vi.mocked(getSessionPlayer).mockResolvedValue(null);
+
+    const page = await renderPage(EPB_SEASON_ID);
+    expect((findByName(page, 'EvoligaWorld')?.props.data as WorldRouteData).hasDraftPool).toBe(true);
+    expect(fake.current.queries).toHaveLength(WORLD_BRANCH_BUDGET);
+    expect(fake.current.queries.map((q) => q.table)).toContain('phase_storage_state');
+    expect(fake.current.queries.map((q) => q.table)).not.toContain('phase_matches');
+  });
+
+  it('the fallback uses native phases, fixtures, groups, reports, and insights', async () => {
+    const actual = await vi.importActual<typeof import('@/lib/worlds/registry')>('@/lib/worlds/registry');
+    vi.mocked(resolveViewerWorld).mockImplementationOnce((season, override) => ({
+      ...actual.resolveViewerWorld(season, override),
+      id: 'unregistered-theme',
+    }));
+    const tables = nativeTables('phase');
+    const stage = tables.league_phases.find((row) => row.season_id === SAKURA_SEASON_ID)!;
+    fake.current = createFakeSupabase({
+      ...tables,
+      phase_groups: [],
+      phase_games: [{ id: 'game' }],
+      phase_reports: [],
+      phase_battle_stats: [{
+        game_id: 'game', player_id: 'p1', pokemon_name: 'Dragonite', kos_dealt: 2, was_brought: true,
+        game: { match: { phase: { season_id: SAKURA_SEASON_ID }, round: { round_number: 1 } } },
+      }],
+    });
+    vi.mocked(getSessionPlayer).mockResolvedValue(null);
+
+    const fallback = findByName(await renderPage(SAKURA_SEASON_ID), 'DefaultWorld');
+    expect(fallback?.props).toMatchObject({
+      storage: 'phase',
+      stageGroups: [{ stage: { id: stage.id }, groups: [] }],
+      fixtures: expect.arrayContaining([expect.objectContaining({ match: expect.objectContaining({ phase_id: stage.id }) })]),
+      killRanking: [expect.objectContaining({ pokemon_name: 'Dragonite', kos_dealt: 2 })],
+    });
+    const reads = fake.current.queries.map((q) => q.table);
+    expect(reads).toEqual(expect.arrayContaining(['phase_games', 'phase_battle_stats', 'phase_groups', 'phase_reports', 'aggregates']));
+    for (const table of ['tournaments', 'matches', 'battle_stats']) expect(reads).not.toContain(table);
+    expect(getTotalGamesInScope).not.toHaveBeenCalled();
+  });
+});
+
 describe('league page — route-world branch query budget', () => {
   it.each([EPB_SEASON_ID, SAKURA_SEASON_ID])(
     'season %s: the viewer language (plc_locale=de) is a cookie read and adds no query',
@@ -214,7 +336,6 @@ describe('league page — route-world branch query budget', () => {
     const queries = fake.current!.queries;
     expect(queries.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
     expect(queries.map((q) => q.table).sort()).toEqual([
-      'draft_pools',
       'evolution_tracker',
       'format_rules',
       'matches',
@@ -240,9 +361,7 @@ describe('league page — route-world branch query budget', () => {
     const page = await renderPage(SAKURA_SEASON_ID);
 
     expect(fake.current!.queries.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
-    // 8 route-world reads + the second team-lead read (the stage rows; each lead
-    // read embeds its spec §7 facts, see the EPB case above) + the league-groups read.
-    expect(fake.current!.queries).toHaveLength(10);
+    expect(fake.current!.queries).toHaveLength(9);
     expectNoStatsReads();
     expect(findByName(page, 'SakuraWorld')).toBeDefined();
   });
@@ -257,8 +376,8 @@ describe('league page — route-world branch query budget', () => {
     await renderPage(SAKURA_SEASON_ID);
 
     const read = fake.current.queries.map((q) => q.table);
-    // The 10 reads of a league without a Swiss stage + the Swiss stages' bye rounds, in the same wave.
-    expect(read).toHaveLength(11);
+    // The nine reads of a league without a Swiss stage + the Swiss stages' bye rounds, in the same wave.
+    expect(read).toHaveLength(10);
     expect(read.filter((table) => table === 'rounds')).toHaveLength(1);
     expect(read.length).toBeLessThanOrEqual(WORLD_BRANCH_BUDGET);
     expectNoStatsReads();
@@ -291,9 +410,8 @@ describe('league page — route-world branch query budget', () => {
     await renderPage(EPB_SEASON_ID);
 
     const tables = fake.current!.queries.map((q) => q.table);
-    // 9 bare reads + the stage-row team-lead read (facts embedded, spec §7) + the league-groups read +
-    // the viewer's world preference.
-    expect(tables).toHaveLength(11 + 1);
+    // The ten anonymous route reads plus the viewer's world preference.
+    expect(tables).toHaveLength(10 + 1);
     expect(tables.filter((t) => t === 'players')).toHaveLength(1);
     expect(tables).not.toContain('redraft_trade_requests');
     expectNoStatsReads();

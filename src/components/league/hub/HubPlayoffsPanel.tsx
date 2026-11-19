@@ -1,13 +1,16 @@
 import ElimBracketView from '@/components/bracket/ElimBracketView';
 import type { BracketCopy } from '@/components/bracket/labels';
+import { phaseMatchHrefPrefix } from '@/lib/league-phase/paths';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
 import type { HubBracketStage } from '@/lib/league-hub/load';
+import { hubStageHref } from '@/lib/league-hub/tabs';
 import type { MatchRecord } from '@/lib/tournament/types';
 import { HubNotice, HubStageHeader } from './HubBits';
 
 interface HubPlayoffsPanelProps {
   stages: HubBracketStage[];
   copy: LeagueHubCopy;
+  phaseSeasonId?: string;
   /** The bracket in German (`hubSharedLabels`); absent draws it with its own defaults, as the phase page does. */
   bracketCopy?: BracketCopy;
 }
@@ -17,7 +20,7 @@ interface HubPlayoffsPanelProps {
  * phase page draws it (slot skeleton, feeder labels, a settled bracket reset
  * left out), in the viewer's language.
  */
-export default function HubPlayoffsPanel({ stages, copy, bracketCopy }: HubPlayoffsPanelProps) {
+export default function HubPlayoffsPanel({ stages, copy, bracketCopy, phaseSeasonId }: HubPlayoffsPanelProps) {
   if (stages.length === 0) return <HubNotice>{copy.playoffsEmpty}</HubNotice>;
 
   return (
@@ -39,7 +42,7 @@ export default function HubPlayoffsPanel({ stages, copy, bracketCopy }: HubPlayo
               meta={`${copy.bracketType[stage.bracket_type] ?? stage.bracket_type} · ${copy.bestOf(stage.best_of_default)} · ${copy.players(participants.length)}`}
               status={stage.status}
               statusLabel={copy.status[stage.status] ?? stage.status}
-              href={`/tournaments/${stage.id}`}
+              href={hubStageHref(stage.id, phaseSeasonId)}
               linkLabel={copy.links.phasePage}
             />
             {rounds.length === 0 ? (
@@ -47,7 +50,9 @@ export default function HubPlayoffsPanel({ stages, copy, bracketCopy }: HubPlayo
             ) : (
               <ElimBracketView
                 bracketType={bracketType}
-                tournamentId={stage.id}
+                {...(phaseSeasonId === undefined
+                  ? { tournamentId: stage.id }
+                  : { matchHrefPrefix: phaseMatchHrefPrefix({ season_id: phaseSeasonId, phase_id: stage.id }) })}
                 rounds={rounds}
                 matches={matches}
                 participants={participants}

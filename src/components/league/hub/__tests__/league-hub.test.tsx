@@ -70,6 +70,7 @@ vi.mock('next-auth/react', () => ({
 
 import LeagueHub, { LEAGUE_HUB_PANEL_ID, type LeagueHubProps } from '../LeagueHub';
 import { leagueHubCopy } from '@/lib/league-hub/copy';
+import { toPublicMatch, type PublicCompetitionMatch } from '@/lib/match/public-match';
 import type { Locale } from '@/i18n/config';
 import { createFormatter } from '@/i18n/format';
 import { withI18n } from '@/test/i18n';
@@ -393,6 +394,12 @@ function makeRound(overrides: Partial<Round> & Pick<Round, 'id' | 'tournament_id
     updated_at: STAMP,
     ...overrides,
   };
+}
+
+function phaseMatch(match: PublicCompetitionMatch): PublicCompetitionMatch {
+  if ('phase_id' in match) return match;
+  const { tournament_id: phase_id, ...fields } = toPublicMatch(match);
+  return { ...fields, phase_id, season_id: LEAGUE_ID };
 }
 
 function makeRuleset(overrides: Partial<Ruleset> = {}): Ruleset {
@@ -1192,6 +1199,25 @@ describe('matches panel', () => {
     expectNoSection(rendered);
   });
 
+  it('links phase-owned match rows and headers to the league, keeping their German names', () => {
+    const rendered = renderHub({
+      storage: 'phase',
+      locale: 'de',
+      panel: {
+        tab: 'matches',
+        stages: [{ stage: GROUP_STAGE, rounds: [{ ...roundOne, matches: roundOne.matches.map(phaseMatch) }] }],
+      },
+    });
+    const phaseUrl = `/leagues/${LEAGUE_ID}/phases/${A}`;
+    const phase = findOne(rendered.panel, (el) => el.tag === 'a' && el.attrs.href === phaseUrl, 'phase link');
+    expect(squash(phase)).toBe('Zur Phasenseite →');
+    const match = matchLink(rendered, 'm1');
+    expect(match.attrs.href).toBe(`${phaseUrl}/matches/m1`);
+    expect(match.attrs['aria-label']).toBeUndefined();
+    expect(squash(match)).toContain(NAMES.p1);
+    expect(squash(match)).toContain(NAMES.p2);
+  });
+
   it('opens only the active round of a phase', () => {
     const rendered = renderHub({ panel: { tab: 'matches', stages: STAGES_MATCHES } });
     const groupRounds = rounds(stageBlocks(rendered.panel)[0]);
@@ -1842,6 +1868,18 @@ describe('playoffs panel', () => {
     expectNoSection(rendered);
   });
 
+  it('gives the same playoff bracket a native match prefix and a canonical phase header', () => {
+    const rendered = renderHub({
+      storage: 'phase',
+      panel: { tab: 'playoffs', stages: [{ ...bracket, matches: bracket.matches.map(phaseMatch) }] },
+    });
+    const hrefs = findAll(rendered.panel, tag('a')).map((link) => link.attrs.href);
+    const phaseUrl = `/leagues/${LEAGUE_ID}/phases/${P}`;
+    expect(hrefs).toEqual(expect.arrayContaining([phaseUrl, `${phaseUrl}/matches/sf1`, `${phaseUrl}/matches/sf2`]));
+    expect(hrefs.some((href) => href.startsWith('/tournaments/'))).toBe(false);
+    expect(squash(rendered.panel)).toContain('Winner of M1');
+  });
+
   it('shows the pending notice for a phase without rounds', () => {
     const rendered = renderHub({ panel: { tab: 'playoffs', stages: [bracket, pending] } });
     expect(squash(rendered.panel)).toContain('The bracket appears once the pairings are generated.');
@@ -1907,6 +1945,13 @@ describe('phases panel', () => {
       `/tournaments/${DOUBLE_ELIM_STAGE.id}`,
     ]);
     expectNoSection(rendered);
+  });
+
+  it('opens the canonical phase page from each native phase card', () => {
+    const rendered = renderHub({ storage: 'phase', panel: { tab: 'phases', phases: PHASES } });
+    expect(cards(rendered.panel).map((card) => findOne(card, tag('a'), 'card link').attrs.href)).toEqual(
+      PHASES.map(({ stage }) => `/leagues/${LEAGUE_ID}/phases/${stage.id}`),
+    );
   });
 
   it('shows format, best-of, players, status and advancement per card', () => {

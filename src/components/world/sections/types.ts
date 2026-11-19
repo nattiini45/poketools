@@ -1,7 +1,7 @@
 import type { WorldRouteData, WorldRosterTile } from '@/lib/worlds/route-data';
 import type { SeasonFormatType, SeasonWithDetails } from '@/types/season';
 import type { PublicParticipant } from '@/lib/players/public-player';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { EvolutionTracker } from '@/types/evolution';
 import type { FormatRules } from '@/types/format-rules';
@@ -35,7 +35,7 @@ export interface WorldLocaleProps {
 export interface ThemeRouteData {
   /** The season row; these league sections are season-scoped, so required. */
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   participants: PublicParticipant[];
   /** Point-buy list lines; empty when the season has no list bound. */
   entries: PointBuyListEntry[];

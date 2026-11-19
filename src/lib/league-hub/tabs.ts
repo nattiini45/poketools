@@ -1,3 +1,4 @@
+import { phaseHref } from '@/lib/league-phase/paths';
 import type { BracketType } from '@/types/tournament';
 
 /**
@@ -29,6 +30,14 @@ export const LEAGUE_HUB_TABS = [
 ] as const;
 
 export type LeagueHubTab = (typeof LEAGUE_HUB_TABS)[number];
+
+export type PhaseStorage = 'phase' | 'legacy';
+
+export function hubStageHref(stageId: string, phaseSeasonId?: string): string {
+  return phaseSeasonId === undefined
+    ? `/tournaments/${stageId}`
+    : phaseHref({ season_id: phaseSeasonId, phase_id: stageId });
+}
 
 /** The tab a bare league URL opens on. It renders from the world payload alone. */
 export const DEFAULT_LEAGUE_HUB_TAB: LeagueHubTab = 'standings';

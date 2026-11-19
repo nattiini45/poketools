@@ -297,12 +297,12 @@ export async function getSeasonFormatTypes(
  */
 export const getSeasonWithDetails = cache(async function getSeasonWithDetails(
   id: string,
-): Promise<SeasonWithDetails | null> {
-  const { data, error } = await supabase
-    .from('seasons')
-    .select(SEASON_DETAILS_SELECT)
-    .eq('id', id)
-    .maybeSingle();
+  includeDraftPool = false,
+): Promise<(SeasonWithDetails & { hasDraftPool?: boolean }) | null> {
+  const table = supabase.from('seasons');
+  const { data, error } = await (includeDraftPool
+    ? table.select(`${SEASON_DETAILS_SELECT}, draft_pools!draft_pools_season_id_fkey ( count )`).eq('id', id).maybeSingle()
+    : table.select(SEASON_DETAILS_SELECT).eq('id', id).maybeSingle());
 
   if (error) throw error;
   if (!data) return null;
@@ -310,6 +310,7 @@ export const getSeasonWithDetails = cache(async function getSeasonWithDetails(
   return {
     ...toSeason(data),
     ...toSeasonDetails(data),
+    ...(includeDraftPool && 'draft_pools' in data ? { hasDraftPool: embedCount(data.draft_pools) > 0 } : {}),
   };
 });
 

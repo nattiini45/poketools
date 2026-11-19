@@ -22,6 +22,8 @@ export interface RecordedQuery {
   table: string;
   kind: 'from' | 'rpc';
   select: string | null;
+  count?: 'exact';
+  head?: boolean;
   filters: Array<{ op: 'eq' | 'in' | 'is' | 'neq'; column: string; value: unknown }>;
   orders: Array<{ column: string; ascending: boolean }>;
   limit: number | null;
@@ -153,6 +155,8 @@ export function createFakeSupabase(
         return 0;
       });
     }
+    const count = q.count === 'exact' ? rows.length : undefined;
+    if (q.head) return { data: null, error: null, count };
     if (q.range) rows = rows.slice(q.range.from, q.range.to + 1);
     if (q.limit !== null) rows = rows.slice(0, q.limit);
     if (options.maxRows !== undefined && !q.single) rows = rows.slice(0, options.maxRows);
@@ -160,7 +164,7 @@ export function createFakeSupabase(
     if (q.single) {
       return { data: projected[0] ?? null, error: null };
     }
-    return { data: projected, error: null };
+    return { data: projected, error: null, ...(count === undefined ? {} : { count }) };
   }
 
   function from(table: string) {
@@ -181,8 +185,10 @@ export function createFakeSupabase(
         return builder;
       };
     Object.assign(builder, {
-      select: chain((s: string) => {
+      select: chain((s: string, opts?: { count?: 'exact'; head?: boolean }) => {
         q.select = compact(s ?? '*');
+        if (opts?.count) q.count = opts.count;
+        if (opts?.head) q.head = opts.head;
       }),
       eq: chain((column: string, value: unknown) => {
         q.filters.push({ op: 'eq', column, value });

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import SectionShell from '@/components/world/SectionShell';
 import { PANEL, PANEL_INSET, FOCUS_RING } from '@/components/world/panel';
 import { leagueDraftHref } from '@/lib/season/format-utils';
+import { publicCompetitionMatchHref } from '@/lib/match/public-match';
 import { createTranslator } from '@/i18n/core';
 import { LocalTime } from '@/i18n/LocalTime';
 import { worldMessages } from '@/i18n/messages/world';
@@ -123,7 +124,7 @@ export default function PulseSection({
                   {t('pulse.live')}
                 </span>
                 <Link
-                  href={`/tournaments/${live.match.tournament_id}/matches/${live.match.id}`}
+                  href={publicCompetitionMatchHref(live.match)}
                   className={`underline-offset-2 hover:underline ${FOCUS_RING}`}
                 >
                   {t('pairing', { home: live.match.player_1_name, away: live.match.player_2_name })}

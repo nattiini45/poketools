@@ -1,19 +1,20 @@
 import TournamentReportCard from '@/components/tournament/TournamentReportCard';
+import { phaseMatchHrefPrefix } from '@/lib/league-phase/paths';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
-import type { HubStage } from '@/lib/league-hub/views';
-import type { TournamentReport } from '@/types/tournament-report';
+import type { HubStageReports } from '@/lib/league-hub/load';
 import { HubNotice } from './HubBits';
 
 interface HubReportsPanelProps {
-  reports: { stage: HubStage; reports: TournamentReport[] }[];
+  reports: HubStageReports[];
   copy: LeagueHubCopy;
+  phaseSeasonId?: string;
 }
 
 /**
  * Kale Cabbage's reports, grouped by phase, newest first. The tab only exists
  * behind `ENABLE_KALE_CABBAGE` (soft-deprecated, off by default).
  */
-export default function HubReportsPanel({ reports, copy }: HubReportsPanelProps) {
+export default function HubReportsPanel({ reports, copy, phaseSeasonId }: HubReportsPanelProps) {
   const withReports = reports.filter((entry) => entry.reports.length > 0);
   if (withReports.length === 0) return <HubNotice>{copy.reportsEmpty}</HubNotice>;
 
@@ -26,7 +27,13 @@ export default function HubReportsPanel({ reports, copy }: HubReportsPanelProps)
             {[...stageReports]
               .sort((a, b) => b.created_at.localeCompare(a.created_at))
               .map((report) => (
-                <TournamentReportCard key={report.id} report={report} tournamentId={stage.id} />
+                <TournamentReportCard
+                  key={report.id}
+                  report={report}
+                  {...(phaseSeasonId === undefined
+                    ? { tournamentId: stage.id }
+                    : { matchHrefPrefix: phaseMatchHrefPrefix({ season_id: phaseSeasonId, phase_id: stage.id }) })}
+                />
               ))}
           </div>
         </div>

@@ -380,7 +380,6 @@ const WORLD_BRANCH_BUDGET = 11;
 
 /** The tables a bare EPB league URL reads, anonymous and cold (`page-query-budget.test.ts`). */
 const EPB_BASE_TABLES = [
-  'draft_pools',
   'evolution_tracker',
   'format_rules',
   'matches',
@@ -639,12 +638,8 @@ describe('league hub — the default tab keeps the bare league budget', () => {
   it('sakura: a bare URL stays within the world budget and the hub speaks English', async () => {
     const page = await renderPage(SAKURA_SEASON_ID);
 
-    // 8 route-world reads + the stage-row team-lead read behind the public
-    // world aces (each lead read embeds its spec §7 facts) + the league-groups
-    // read (group tables) + the one rounds read of the Swiss stage's byes (this
-    // league has a Swiss stage and is not Evolution Point Buy; a league without
-    // one keeps 10 reads, see page-query-budget.test.ts).
-    expect(fake.current!.queries).toHaveLength(11);
+    // Plain Sakura plus one rounds read for the Swiss stage's byes.
+    expect(fake.current!.queries).toHaveLength(10);
     expect(tablesRead().filter((table) => table === 'rounds')).toHaveLength(1);
     expectNoStatsReads();
     expect(componentName(worldOf(page))).toBe('SakuraWorld');
@@ -1082,7 +1077,7 @@ describe('league hub — an unknown or unavailable tab falls back to the default
     expect(readShapes(playoffs.queries)).toEqual(readShapes(bare.queries));
     // The bare sakura budget, incl. the stage-row team-lead read (spec §7 facts embedded), the league-groups read
     // and the Swiss stage's bye rounds.
-    expect(playoffs.queries).toHaveLength(11);
+    expect(playoffs.queries).toHaveLength(10);
     expectNoStatsReads();
 
     const hub = hubOf(playoffs.page);

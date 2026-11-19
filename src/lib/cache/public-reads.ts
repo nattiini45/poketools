@@ -357,7 +357,7 @@ function seasonSpec(name: string, seasonId: string, extraTags: readonly string[]
 }
 
 const season = cache((seasonId: string) =>
-  cachedRead(seasonSpec('season', seasonId), () => getSeasonWithDetails(seasonId)),
+  cachedRead(seasonSpec('season-with-draft-pool-v1', seasonId), () => getSeasonWithDetails(seasonId, true)),
 );
 
 const seasonRow = cache((seasonId: string) =>
@@ -426,8 +426,8 @@ const seasonMatchRecords = cache((seasonId: string) =>
 
 /**
  * The route-world payload of a league (`buildWorldRouteData`). `preload` must
- * be the rows the caller read for the same season; the entry is keyed by the
- * season id alone. It embeds the bound point-buy list's entries (roster
+ * be the rows the caller read for the same season; legacy and phase entries
+ * have separate namespaces. It embeds the bound point-buy list's entries (roster
  * lines), so it also carries that version's tag. The `-v2` name retired
  * entries cached before roster lines carried their `line_id` (B-LINE); `-v3`
  * retires entries cached before the standings carried league group tables; `-v4`
@@ -443,7 +443,8 @@ function worldRouteData(seasonId: string, preload: WorldRouteDataPreload) {
     ...(preload.league.format_type === 'custom' ? [publicTags.ratings] : []),
     ...(listId ? [publicTags.pointBuyList(listId)] : []),
   ];
-  return cachedRead(seasonSpec('world-route-data-public-v7', seasonId, extraTags), () =>
+  const name = preload.storage === 'phase' ? 'world-route-data-phase-public-v1' : 'world-route-data-public-v7';
+  return cachedRead(seasonSpec(name, seasonId, extraTags), () =>
     buildWorldRouteData(seasonId, preload),
   );
 }

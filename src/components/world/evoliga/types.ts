@@ -3,7 +3,7 @@ import type { Locale } from '@/i18n/config';
 import type { SeasonWorld } from '@/lib/worlds/types';
 import type { SeasonWithDetails } from '@/types/season';
 import type { PublicParticipant } from '@/lib/players/public-player';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { EvolutionTracker } from '@/types/evolution';
 import type { FormatRules } from '@/types/format-rules';
@@ -14,7 +14,7 @@ import type { LeagueFixture, LeagueStanding } from '@/lib/supabase/queries/leagu
 interface EvoligaWorldDataFields {
   world: SeasonWorld;
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   participants: PublicParticipant[];
   /** Point-buy list entries; empty when the season has no list bound. */
   entries: PointBuyListEntry[];

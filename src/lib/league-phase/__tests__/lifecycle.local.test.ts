@@ -72,10 +72,17 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     const { listDashboardPhaseMatches, listPlayerPhaseTeamSlots, listStandaloneDashboardMatches } = await import('@/lib/supabase/queries/dashboard-now');
     const { getMatchesByPlayer } = await import('@/lib/supabase/queries/matches');
     const { getTournamentsByPlayer } = await import('@/lib/supabase/queries/tournaments');
+    const { getSeasonWithDetails } = await import('@/lib/supabase/queries/seasons');
     const { getNativeLeagueStandingsPreview } = await import('@/lib/stats/standings-preview');
+    const { getPublicMatchesByPhaseIds } = await import('@/lib/supabase/queries/phase-matches');
+    const { listSeasonPhaseTeamLeadsWithFacts } = await import('@/lib/supabase/queries/phase-teams');
+    const { getPhaseSeasonBattleStats, getPhaseSeasonGameTotal } = await import('@/lib/supabase/queries/phase-games');
+    const { selectAnonymousVisibleLeads } = await import('@/lib/team/visibility');
     const [player, opponent, otherPlayer, byePlayer] = playerIds;
+    expect(await getSeasonWithDetails(seasonId, true)).toMatchObject({ id: seasonId, hasDraftPool: false });
     const phase = await create('swiss');
     const other = await create('swiss');
+    expect((await admin.from('league_phases').update({ team_visibility: 'always_public' }).eq('id', other.id)).error).toBeNull();
     for (const id of [phase.id, other.id]) await enroll(id);
     const nativeRound = randomUUID();
     const nativeMatch = randomUUID();
@@ -95,8 +102,8 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         { id: foreignMatch, phase_id: phase.id, round_id: nativeRound, player_1_id: opponent, player_2_id: otherPlayer },
       ], { defaultToNull: false })).error).toBeNull();
       expect((await admin.from('phase_teams').insert([
-        { phase_id: phase.id, season_id: seasonId, player_id: player, match_id: queueMatch, name: 'Exact fixture team' },
-        { phase_id: other.id, season_id: seasonId, player_id: player, name: 'Other phase fixture team' },
+        { phase_id: phase.id, season_id: seasonId, player_id: player, match_id: queueMatch, name: 'Exact fixture team', pokemon: [{ species: 'Ditto' }] },
+        { phase_id: other.id, player_id: player, name: 'Other phase fixture team', pokemon: [{ species: 'Pikachu' }, { species: 'Eevee' }] },
         { phase_id: phase.id, season_id: seasonId, player_id: opponent, name: 'Other player fixture team' },
       ], { defaultToNull: false })).error).toBeNull();
       expect((await admin.from('phase_games').insert({
@@ -142,6 +149,24 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       expect(standings.find(({ player_id }) => player_id === opponent)).toMatchObject({ wins: 0, losses: 1 });
       expect(standings.find(({ player_id }) => player_id === byePlayer)).toMatchObject({ wins: 1, losses: 0 });
 
+      const publicMatches = await getPublicMatchesByPhaseIds([phase.id, other.id, phase.id]);
+      expect(publicMatches.get(other.id)).toEqual([]);
+      expect(publicMatches.get(phase.id)?.map(({ id }) => id).sort()).toEqual([nativeMatch, queueMatch, foreignMatch].sort());
+      const publicResult = publicMatches.get(phase.id)?.find(({ id }) => id === nativeMatch);
+      expect(publicResult).toMatchObject({ phase_id: phase.id, round_number: 1, round_status: 'active', games: [{ id: phaseGame }] });
+      expect(publicResult).not.toHaveProperty('tournament_id');
+      expect(publicResult).not.toHaveProperty('notes');
+      const leads = await listSeasonPhaseTeamLeadsWithFacts(seasonId);
+      expect(leads).toContainEqual(expect.objectContaining({ lead_species: 'Ditto', facts: {
+        match_status: 'scheduled', tournament_visibility: 'hidden_until_match',
+      } }));
+      expect(selectAnonymousVisibleLeads(leads).map(({ lead_species }) => lead_species)).toEqual(['Pikachu']);
+      expect(JSON.stringify(leads)).not.toContain('Eevee');
+      expect(await getPhaseSeasonBattleStats(seasonId)).toEqual([expect.objectContaining({
+        pokemon_name: 'Pikachu', kos_dealt: 2, round_number: 1,
+      })]);
+      expect(await getPhaseSeasonBattleStats(randomUUID())).toEqual([]);
+
       const { getMixedProfileMatches, getMixedProfileBattleStats, getProfilePhases, getProfilePhaseParticipants } =
         await import('@/lib/supabase/queries/profile');
       const profileMatches = await getMixedProfileMatches(player);
@@ -163,6 +188,8 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         { id: ignored[1], match_id: foreignMatch, game_number: 2, replay_url: replayUrl(ignored[1]), source: 'manual', parsed: true },
         { id: ignored[2], match_id: foreignMatch, game_number: 3, replay_url: '', source: 'ps_replay', parsed: true },
       ])).error).toBeNull();
+      expect(await getPhaseSeasonGameTotal(seasonId)).toBe(1);
+      expect(await getPhaseSeasonGameTotal(randomUUID())).toBe(0);
       const { listReplayLibraryRows, listReplayLibraryPage, listReplayLibraryFacetRows } =
         await import('@/lib/supabase/queries/replay-library');
       const legacyReplays = await listReplayLibraryRows();

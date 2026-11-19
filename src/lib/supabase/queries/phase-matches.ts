@@ -2,6 +2,8 @@ import { supabase } from '../client';
 import { assertValidUuid } from '@/lib/utils/uuid';
 import { postgrestQuoted } from '@/lib/supabase/postgrest-filter';
 import { readAllPages } from '../read-all-pages';
+import { readBoundedPages } from '../read-bounded-pages';
+import type { PublicPhaseMatch } from '@/lib/cache/phase-public-reads';
 import type { Tables } from '@/types/database';
 import type { MatchStatus, GameSummary, GameSource } from '@/types/match';
 import type { PhaseMatch, PhaseMatchWithPlayers, PhaseMatchWithRoundNumber } from '@/types/league-phase-match';
@@ -84,6 +86,70 @@ const MATCH_WITH_PLAYERS_SELECT = `
   games:phase_games ( id, game_number, winner_id, replay_url, source, stats_locked ),
   round:phase_rounds!phase_matches_phase_round_fkey ( status, round_number )
 `;
+
+const PUBLIC_PHASE_MATCH_SELECT = `
+  id, phase_id, round_id, player_1_id, player_2_id, winner_id, status, date_played, scheduled_at,
+  social_image_url, bracket_side, bracket_pos, created_at, updated_at,
+  player_1:players!phase_matches_player_1_id_fkey ( name, avatar_url ),
+  player_2:players!phase_matches_player_2_id_fkey ( name, avatar_url ),
+  winner:players!phase_matches_winner_id_fkey ( name ),
+  games:phase_games ( id, game_number, winner_id, replay_url, source, stats_locked ),
+  round:phase_rounds!phase_matches_phase_round_fkey ( status, round_number )
+`;
+const PUBLIC_PHASE_MATCH_BATCH_SIZE = 50;
+
+export async function getPublicMatchesByPhaseIds(
+  phaseIds: readonly string[],
+): Promise<Map<string, PublicPhaseMatch[]>> {
+  for (const id of phaseIds) assertValidUuid(id, 'phaseId');
+  const unique = [...new Set(phaseIds.map(id => id.toLowerCase()))];
+  const grouped = new Map<string, PublicPhaseMatch[]>(unique.map(id => [id, []]));
+
+  for (let offset = 0; offset < unique.length; offset += PUBLIC_PHASE_MATCH_BATCH_SIZE) {
+    const chunk = unique.slice(offset, offset + PUBLIC_PHASE_MATCH_BATCH_SIZE);
+    const { rows } = await readBoundedPages(
+      (from, to) => supabase.from('phase_matches').select(PUBLIC_PHASE_MATCH_SELECT)
+        .in('phase_id', chunk).order('created_at').order('id').range(from, to),
+      { label: 'getPublicMatchesByPhaseIds' },
+    );
+    for (const row of rows) {
+      grouped.get(row.phase_id)?.push({
+        id: row.id,
+        phase_id: row.phase_id,
+        round_id: row.round_id,
+        player_1_id: row.player_1_id,
+        player_2_id: row.player_2_id,
+        winner_id: row.winner_id,
+        status: row.status,
+        date_played: row.date_played,
+        scheduled_at: row.scheduled_at,
+        social_image_url: row.social_image_url,
+        bracket_side: row.bracket_side as PublicPhaseMatch['bracket_side'],
+        bracket_pos: row.bracket_pos,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        player_1_name: row.player_1.name,
+        player_2_name: row.player_2.name,
+        player_1_avatar_url: row.player_1.avatar_url ?? null,
+        player_2_avatar_url: row.player_2.avatar_url ?? null,
+        winner_name: row.winner?.name ?? null,
+        round_status: row.round?.status ?? 'pending',
+        ...(row.round?.round_number === undefined ? {} : { round_number: row.round.round_number }),
+        games: [...(row.games ?? [])]
+          .sort((a, b) => a.game_number - b.game_number)
+          .map(g => ({
+            id: g.id,
+            game_number: g.game_number,
+            winner_id: g.winner_id,
+            replay_url: g.replay_url,
+            source: g.source,
+            stats_locked: g.stats_locked ?? false,
+          })),
+      });
+    }
+  }
+  return new Map(phaseIds.map(id => [id, grouped.get(id.toLowerCase()) ?? []]));
+}
 
 export async function getPhaseMatchesByRound(roundId: string): Promise<PhaseMatchWithPlayers[]> {
   const rows = await readAllPages<MatchWithPlayersRow>((from, to) => supabase

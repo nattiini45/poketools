@@ -1,4 +1,5 @@
 import type { GameSummary, MatchWithPlayers } from '@/types/match';
+import { phaseMatchHref } from '@/lib/league-phase/paths';
 
 /**
  * The public match shape: the ONLY match fields that may cross from a server
@@ -197,4 +198,50 @@ export function toPublicMatch(match: PublicMatchSource): PublicMatch {
 
 export function toPublicMatches(matches: readonly PublicMatchSource[]): PublicMatch[] {
   return matches.map(toPublicMatch);
+}
+
+export interface PublicPhaseMatch extends Omit<PublicMatch, 'tournament_id'> {
+  phase_id: string;
+  round_number?: number;
+}
+
+export type PublicCompetitionMatch = PublicMatch | (PublicPhaseMatch & { season_id: string });
+
+export function toPublicPhaseMatch(match: PublicPhaseMatch): PublicPhaseMatch {
+  return {
+    id: match.id,
+    phase_id: match.phase_id,
+    round_id: match.round_id,
+    player_1_id: match.player_1_id,
+    player_2_id: match.player_2_id,
+    winner_id: match.winner_id,
+    status: match.status,
+    date_played: match.date_played,
+    scheduled_at: match.scheduled_at,
+    social_image_url: match.social_image_url,
+    bracket_side: match.bracket_side,
+    bracket_pos: match.bracket_pos,
+    created_at: match.created_at,
+    updated_at: match.updated_at,
+    player_1_name: match.player_1_name,
+    player_2_name: match.player_2_name,
+    player_1_avatar_url: match.player_1_avatar_url,
+    player_2_avatar_url: match.player_2_avatar_url,
+    winner_name: match.winner_name,
+    round_status: match.round_status,
+    ...(match.round_number === undefined ? {} : { round_number: match.round_number }),
+    games: match.games.map(toPublicGame),
+  };
+}
+
+export function toPublicCompetitionMatch(match: PublicCompetitionMatch): PublicCompetitionMatch {
+  return 'phase_id' in match
+    ? { ...toPublicPhaseMatch(match), season_id: match.season_id }
+    : toPublicMatch(match);
+}
+
+export function publicCompetitionMatchHref(match: PublicCompetitionMatch): string {
+  return 'phase_id' in match
+    ? phaseMatchHref(match, match.id)
+    : `/tournaments/${match.tournament_id}/matches/${match.id}`;
 }

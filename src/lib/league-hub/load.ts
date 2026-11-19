@@ -1,24 +1,24 @@
 import 'server-only';
 
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { publicReads } from '@/lib/cache/public-reads';
+import type { PublicPhaseReport } from '@/lib/league-phase/public-report';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
 import { isEvolutionPointBuy, isLeagueDoubles } from '@/lib/season/format-utils';
-import type { LeagueGroupStandings, LeagueStanding } from '@/lib/supabase/queries/league-standings';
+import type { LeagueGroupStandings, LeagueStage, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import type { PublicSeasonParticipant, PublicTournamentParticipant } from '@/lib/players/public-player';
 import { worldStandingsContext, type WorldRouteData } from '@/lib/worlds/route-data';
 import type { KillRankingRow, PokemonUsageRow } from '@/types/game';
-import type { PublicMatch } from '@/lib/match/public-match';
-import type { Round } from '@/types/round';
+import type { PublicCompetitionMatch } from '@/lib/match/public-match';
 import type { Ruleset } from '@/types/ruleset';
-import type { SeasonWithDetails, TournamentGroupWithMembers } from '@/types/season';
+import type { SeasonWithDetails } from '@/types/season';
 import type { TournamentReport } from '@/types/tournament-report';
-import type { TournamentWithDetails } from '@/types/tournament';
-import type { LeagueHubTab } from './tabs';
+import type { LeagueHubTab, PhaseStorage } from './tabs';
 import {
   bracketStages,
   buildTableStage,
@@ -29,6 +29,8 @@ import {
   stageMatches,
   tableStages,
   withDisplayStatus,
+  type HubGroup,
+  type HubRound,
   type HubStage,
   type HubStageMatches,
   type HubTableStage,
@@ -53,8 +55,8 @@ import {
  *   reports   — the reports of each phase (Kale flag only).
  * The rounds, participants, battle-stats and reports reads are the phase
  * page's own cache entries, so a phase page view warms them and the other way
- * round. The groups read (`publicReads.tournamentGroups`) is a league-page
- * entry: the phase page never reads it.
+ * round. Native groups use the phase page's cache too; legacy groups use
+ * the league-only `publicReads.tournamentGroups` entry.
  *
  * Matches always come from the world payload's fixtures (one batched read for
  * every phase, already paid), never from a second matches read. They also
@@ -70,8 +72,8 @@ import {
 /** One elimination phase, ready for the bracket renderer. */
 export interface HubBracketStage {
   stage: HubStage;
-  rounds: Round[];
-  matches: PublicMatch[];
+  rounds: HubRound[];
+  matches: PublicCompetitionMatch[];
   participants: PublicTournamentParticipant[];
 }
 
@@ -79,9 +81,14 @@ export interface HubBracketStage {
 export interface HubPhase {
   /** The phase, with its displayed status. */
   stage: HubStage;
-  groups: TournamentGroupWithMembers[];
+  groups: HubGroup[];
   /** Whether the card shows the phase's advancement rule (`showsAdvancement`). */
   showAdvancement: boolean;
+}
+
+export interface HubStageReports {
+  stage: HubStage;
+  reports: (TournamentReport | PublicPhaseReport)[];
 }
 
 export type LeagueHubPanelData =
@@ -102,14 +109,15 @@ export type LeagueHubPanelData =
   | { tab: 'phases'; phases: HubPhase[] }
   | { tab: 'insights'; usageRows: PokemonUsageRow[]; killRanking: KillRankingRow[]; isDoubles: boolean }
   | { tab: 'rules'; ruleset: Ruleset | null }
-  | { tab: 'reports'; reports: { stage: HubStage; reports: TournamentReport[] }[] }
+  | { tab: 'reports'; reports: HubStageReports[] }
   /** The selected tab's reads failed (logged); the hub shows a notice in its place. */
   | { tab: 'unavailable'; requested: LeagueHubTab };
 
 export interface LeagueHubLoadContext {
   seasonId: string;
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: readonly LeagueStage[];
+  storage?: PhaseStorage;
   participants: readonly PublicSeasonParticipant[];
   /** The world payload, still in flight: the tab reads run beside it, never after it. */
   routeData: Promise<WorldRouteData | null>;
@@ -128,11 +136,11 @@ function gymTypeMap(participants: readonly PublicSeasonParticipant[]): Record<st
  * would not expire it; the season participants read does.
  */
 function withPublicMembers(
-  groups: TournamentGroupWithMembers[],
-  matches: readonly PublicMatch[],
+  groups: HubGroup[],
+  matches: readonly PublicCompetitionMatch[],
   enrollment: readonly Pick<PublicTournamentParticipant, 'id'>[],
   participants: readonly PublicSeasonParticipant[],
-): TournamentGroupWithMembers[] {
+): HubGroup[] {
   const byId = new Map(participants.map((participant) => [participant.id, participant]));
   const members = resolveGroupMembers(groups, matches, new Set(enrollment.map((participant) => participant.id)));
   return [...groups]
@@ -184,6 +192,12 @@ export async function loadLeagueHubPanel(
   ctx: LeagueHubLoadContext,
 ): Promise<LeagueHubPanelData | null> {
   const { seasonId, league, stages } = ctx;
+  const native = ctx.storage === 'phase';
+  const readRounds = native ? phasePublicReads.rounds : publicReads.tournamentRounds;
+  const readParticipants = native ? phasePublicReads.participants : publicReads.tournamentParticipants;
+  const readGroups = native ? phasePublicReads.groups : publicReads.tournamentGroups;
+  const readBattleStats = native ? phasePublicReads.battleStats : publicReads.tournamentBattleStats;
+  const readReports = native ? phasePublicReads.reports : publicReads.tournamentReports;
   const epb = isEvolutionPointBuy(league.format_type);
   const unavailable: LeagueHubPanelData = { tab: 'unavailable', requested: tab };
 
@@ -205,7 +219,7 @@ export async function loadLeagueHubPanel(
     case 'matches': {
       const [data, rounds] = await Promise.all([
         ctx.routeData,
-        tabRead(tab, perStage(stages, (id) => publicReads.tournamentRounds(id))),
+        tabRead(tab, perStage<HubRound[]>(stages, readRounds)),
       ]);
       if (!data) return null;
       if (rounds === READ_FAILED) return unavailable;
@@ -225,11 +239,11 @@ export async function loadLeagueHubPanel(
         tabRead(
           tab,
           Promise.all([
-            perStage(tables, (id) => publicReads.tournamentParticipants(id)),
-            perStage(tables, (id) => publicReads.tournamentGroups(id)),
-            perStage(roundRobin, (id) => publicReads.tournamentBattleStats(id)),
+            perStage(tables, readParticipants),
+            perStage<HubGroup[]>(tables, readGroups),
+            perStage(roundRobin, readBattleStats),
             // A Swiss table scores the byes stored on its rounds.
-            perStage(swiss, (id) => publicReads.tournamentRounds(id)),
+            perStage<HubRound[]>(swiss, readRounds),
           ]),
         ),
       ]);
@@ -268,8 +282,8 @@ export async function loadLeagueHubPanel(
         tabRead(
           tab,
           Promise.all([
-            perStage(brackets, (id) => publicReads.tournamentRounds(id)),
-            perStage(brackets, (id) => publicReads.tournamentParticipants(id)),
+            perStage<HubRound[]>(brackets, readRounds),
+            perStage(brackets, readParticipants),
           ]),
         ),
       ]);
@@ -301,8 +315,8 @@ export async function loadLeagueHubPanel(
         tabRead(
           tab,
           Promise.all([
-            perStage(tables, (id) => publicReads.tournamentGroups(id)),
-            perStage(tables, (id) => publicReads.tournamentParticipants(id)),
+            perStage<HubGroup[]>(tables, readGroups),
+            perStage(tables, readParticipants),
           ]),
         ),
       ]);
@@ -327,8 +341,8 @@ export async function loadLeagueHubPanel(
         tab,
         Promise.all([
           publicReads.aggregatesSummary('league', seasonId),
-          publicReads.totalGames('league', seasonId),
-          publicReads.seasonBattleStats(seasonId),
+          native ? phasePublicReads.seasonGameTotal(seasonId) : publicReads.totalGames('league', seasonId),
+          native ? phasePublicReads.seasonBattleStats(seasonId) : publicReads.seasonBattleStats(seasonId),
         ]),
       );
       if (reads === READ_FAILED) return unavailable;
@@ -353,7 +367,7 @@ export async function loadLeagueHubPanel(
     case 'reports': {
       const reports = await tabRead(
         tab,
-        perStage(stages, (id) => publicReads.tournamentReports(id)),
+        perStage<HubStageReports['reports']>(stages, readReports),
       );
       if (reports === READ_FAILED) return unavailable;
       return { tab, reports: stages.map((stage) => ({ stage, reports: reports[stage.id] ?? [] })) };

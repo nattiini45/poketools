@@ -13,6 +13,8 @@ import HubStandingsTable from '@/components/league/hub/HubStandingsTable';
 import { leagueHubCopy } from '@/lib/league-hub/copy';
 import CoreLigaParticipants from '@/components/league/CoreLigaParticipants';
 import TournamentReportCard from '@/components/tournament/TournamentReportCard';
+import { phaseHref, phaseMatchHrefPrefix } from '@/lib/league-phase/paths';
+import type { PublicPhaseReport } from '@/lib/league-phase/public-report';
 import ScopedInsightsView from '@/components/insights/ScopedInsightsView';
 import type { TournamentReport } from '@/types/tournament-report';
 import type { CoreTriple } from '@/types/season';
@@ -66,7 +68,8 @@ interface DefaultWorldProps {
     description?: string | null;
   };
   stageGroups: StageGroup[];
-  reports: TournamentReport[];
+  reports: (TournamentReport | PublicPhaseReport)[];
+  storage?: 'legacy' | 'phase';
   phaseNames: Record<string, string>;
   rulesetContent?: ReactNode;
   usageRows: PokemonUsageRow[];
@@ -93,6 +96,7 @@ export default async function DefaultWorld({
   league,
   stageGroups,
   reports,
+  storage = 'legacy',
   phaseNames,
   rulesetContent,
   usageRows,
@@ -125,11 +129,12 @@ export default async function DefaultWorld({
     .filter((f) => f.match.status !== 'completed')
     .slice(0, 5);
 
-  const reportsByPhase = new Map<string, TournamentReport[]>();
+  const reportsByPhase = new Map<string, (TournamentReport | PublicPhaseReport)[]>();
   for (const report of reports) {
-    const list = reportsByPhase.get(report.tournament_id) ?? [];
+    const ownerId = 'phase_id' in report ? report.phase_id : report.tournament_id;
+    const list = reportsByPhase.get(ownerId) ?? [];
     list.push(report);
-    reportsByPhase.set(report.tournament_id, list);
+    reportsByPhase.set(ownerId, list);
   }
 
   return (
@@ -241,7 +246,11 @@ export default async function DefaultWorld({
         ) : (
           <div className="grid gap-3 md:grid-cols-2">
             {stageGroups.map(({ stage, groups }, index) => (
-              <Link key={stage.id} href={`/tournaments/${stage.id}`} className="block">
+              <Link
+                key={stage.id}
+                href={storage === 'phase' ? phaseHref({ season_id: league.id, phase_id: stage.id }) : `/tournaments/${stage.id}`}
+                className="block"
+              >
                 <Card padding="md" hover className="h-full">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-heading font-semibold text-arena-ink">
@@ -328,7 +337,9 @@ export default async function DefaultWorld({
                       <TournamentReportCard
                         key={report.id}
                         report={report}
-                        tournamentId={report.tournament_id}
+                        {...('phase_id' in report
+                          ? { matchHrefPrefix: phaseMatchHrefPrefix({ season_id: league.id, phase_id: report.phase_id }) }
+                          : { tournamentId: report.tournament_id })}
                       />
                     ))}
                 </div>

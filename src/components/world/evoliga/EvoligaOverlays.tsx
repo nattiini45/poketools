@@ -13,7 +13,7 @@ import type { SeasonWithDetails } from '@/types/season';
 import type { PublicParticipant } from '@/lib/players/public-player';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { EvolutionTracker } from '@/types/evolution';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { Standing } from '@/lib/tournament/types';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
 import { createTranslator } from '@/i18n/core';
@@ -23,7 +23,7 @@ import type { EvoligaLocaleProps } from './types';
 
 interface EvoligaOverlaysProps extends EvoligaLocaleProps {
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   participants: PublicParticipant[];
   trackers: EvolutionTracker[];
   entries: PointBuyListEntry[];

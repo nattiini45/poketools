@@ -2,7 +2,7 @@ import { deriveRosterTiles, type WorldRouteData, type WorldRosterTile } from '@/
 
 import type { SeasonWithDetails } from '@/types/season';
 import type { PublicParticipant } from '@/lib/players/public-player';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { EvolutionTracker } from '@/types/evolution';
 import type { FormatRules } from '@/types/format-rules';
@@ -36,7 +36,7 @@ type LeagueFixture = WorldRouteData['fixtures'][number];
 export interface SakuraRouteData {
   /** The season row; the park is season-scoped, so it is required here. */
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   participants: PublicParticipant[];
   /** Point-buy list lines; empty when the season has no list bound. */
   entries: PointBuyListEntry[];
