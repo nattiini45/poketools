@@ -84,6 +84,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     const phaseGame = randomUUID();
     const standaloneId = randomUUID();
     const retiredId = randomUUID();
+    const replayUrl = (id: string) => `https://replay.pokemonshowdown.com/gen9ou-${id}`;
     try {
       expect((await admin.from('phase_rounds').insert({ id: nativeRound, phase_id: phase.id,
         name: 'Dashboard fixture', round_number: 1, best_of: 1, status: 'active', bye_player_ids: [byePlayer] })).error).toBeNull();
@@ -100,6 +101,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       ], { defaultToNull: false })).error).toBeNull();
       expect((await admin.from('phase_games').insert({
         id: phaseGame, match_id: nativeMatch, game_number: 1, winner_id: player,
+        replay_url: replayUrl(phaseGame), source: 'ps_replay', parsed: true,
       })).error).toBeNull();
       expect((await admin.from('phase_battle_stats').insert({
         game_id: phaseGame, player_id: player, pokemon_name: 'Pikachu', kos_dealt: 2,
@@ -117,7 +119,10 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         expect((await admin.from('matches').insert({ id: match_id, round_id, tournament_id: id,
           player_1_id: player, player_2_id: opponent })).error).toBeNull();
         const game_id = randomUUID();
-        expect((await admin.from('games').insert({ id: game_id, match_id, game_number: 1, winner_id: player })).error).toBeNull();
+        expect((await admin.from('games').insert({
+          id: game_id, match_id, game_number: 1, winner_id: player,
+          replay_url: replayUrl(id), source: 'ps_replay', parsed: true,
+        })).error).toBeNull();
         expect((await admin.from('battle_stats').insert({
           game_id, player_id: player, pokemon_name: season_id ? 'Ditto' : 'Pikachu', kos_dealt: 1,
         })).error).toBeNull();
@@ -151,10 +156,37 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       ]);
       expect((await getProfilePhases(player)).map(({ id }) => id).sort()).toEqual([phase.id, other.id].sort());
       expect((await getProfilePhaseParticipants([phase.id])).get(phase.id)?.map(({ id }) => id).sort()).toEqual(playerIds.slice(0, 4).sort());
+
+      const ignored = [randomUUID(), randomUUID(), randomUUID()];
+      expect((await admin.from('phase_games').insert([
+        { id: ignored[0], match_id: foreignMatch, game_number: 1, replay_url: replayUrl(ignored[0]), source: 'ps_replay', parsed: false },
+        { id: ignored[1], match_id: foreignMatch, game_number: 2, replay_url: replayUrl(ignored[1]), source: 'manual', parsed: true },
+        { id: ignored[2], match_id: foreignMatch, game_number: 3, replay_url: '', source: 'ps_replay', parsed: true },
+      ])).error).toBeNull();
+      const { listReplayLibraryRows, listReplayLibraryPage, listReplayLibraryFacetRows } =
+        await import('@/lib/supabase/queries/replay-library');
+      const legacyReplays = await listReplayLibraryRows();
+      expect(legacyReplays.map(({ replayUrl: url }) => url)).toEqual(expect.arrayContaining([replayUrl(standaloneId), replayUrl(retiredId)]));
+      expect(legacyReplays.map(({ replayUrl: url }) => url)).not.toContain(replayUrl(phaseGame));
+      const mixedReplays = await listReplayLibraryRows(undefined, 'phase');
+      expect(mixedReplays.find(({ replayUrl: url }) => url === replayUrl(phaseGame))).toMatchObject({
+        matchUrl: `/leagues/${seasonId}/phases/${phase.id}/matches/${nativeMatch}`,
+        competitionUrl: `/leagues/${seasonId}`, tournamentName: phase.name, round: 'Dashboard fixture',
+      });
+      expect(mixedReplays.find(({ replayUrl: url }) => url === replayUrl(standaloneId))).toMatchObject({
+        matchUrl: `/tournaments/${standaloneId}/matches/${standaloneMatchId}`,
+      });
+      expect(mixedReplays.some(({ replayUrl: url }) => [retiredId, ...ignored].some((id) => url === replayUrl(id)))).toBe(false);
+      expect(mixedReplays.some(({ matchUrl }) => matchUrl.endsWith(foreignMatch))).toBe(false);
+      const facets = await listReplayLibraryFacetRows('phase');
+      expect(facets).toContainEqual({ league: 'Native lifecycle fixture', tournamentName: phase.name, round: 'Dashboard fixture' });
+      const page = await listReplayLibraryPage({ page: 1_000_000, perPage: 1, ascending: false }, 'phase');
+      expect(page).toMatchObject({ total: mixedReplays.length, page: mixedReplays.length });
+      expect(page.rows).toHaveLength(1);
     } finally {
       expect((await admin.from('tournaments').delete().in('id', [standaloneId, retiredId])).error).toBeNull();
       expect((await admin.from('phase_teams').delete().in('phase_id', [phase.id, other.id])).error).toBeNull();
-      expect((await admin.from('phase_games').delete().eq('id', phaseGame)).error).toBeNull();
+      expect((await admin.from('phase_games').delete().in('match_id', [nativeMatch, foreignMatch])).error).toBeNull();
       expect((await admin.from('phase_matches').delete().in('id', [nativeMatch, queueMatch, foreignMatch])).error).toBeNull();
       expect((await admin.from('phase_rounds').delete().eq('id', nativeRound)).error).toBeNull();
     }

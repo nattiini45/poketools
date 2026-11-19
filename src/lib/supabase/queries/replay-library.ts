@@ -1,4 +1,9 @@
 import { supabase } from '../client';
+import { phaseMatchHref } from '@/lib/league-phase/paths';
+import type { Database } from '@/types/database';
+
+export type ReplayLibraryStorage = 'legacy' | 'phase';
+type MixedReplayRow = Database['public']['Views']['phase_replay_library']['Row'];
 
 type ReplayLibraryGameRow = {
   id: string;
@@ -80,15 +85,7 @@ function toReplayLibraryRow(row: ReplayLibraryGameRow): ReplayLibraryRow {
   const round = row.matches.rounds?.name ?? UNKNOWN_ROUND;
   const matchNumber = row.game_number;
 
-  const labelParts = [
-    `${player1Name} vs ${player2Name}`,
-    getReplayLibraryCompetitionName({ league, tournamentName }),
-    round,
-    `match ${matchNumber}`,
-  ];
-
-  return {
-    label: labelParts.join(', '),
+  return withReplayLabel({
     date: row.matches.date_played ?? row.created_at,
     league,
     tournamentName,
@@ -103,7 +100,47 @@ function toReplayLibraryRow(row: ReplayLibraryGameRow): ReplayLibraryRow {
     player2PsUsername,
     matchUrl: `/tournaments/${row.matches.tournament_id}/matches/${row.matches.id}`,
     replayUrl: row.replay_url,
+  });
+}
+
+function withReplayLabel(facts: Omit<ReplayLibraryRow, 'label'>): ReplayLibraryRow {
+  return {
+    label: [
+      `${facts.player1Name} vs ${facts.player2Name}`,
+      getReplayLibraryCompetitionName(facts),
+      facts.round,
+      `match ${facts.matchNumber}`,
+    ].join(', '),
+    ...facts,
   };
+}
+
+function toMixedReplayLibraryRow(row: MixedReplayRow): ReplayLibraryRow {
+  const { game_number, game_created_at, match_id, phase_id, tournament_id, league_id, replay_url } = row;
+  if (game_number === null || !game_created_at || !match_id || !replay_url) throw new Error('Invalid mixed replay library row');
+  let matchUrl: string;
+  let competitionUrl: string;
+  if (phase_id && league_id && !tournament_id) {
+    matchUrl = phaseMatchHref({ phase_id, season_id: league_id }, match_id);
+    competitionUrl = `/leagues/${league_id}`;
+  } else if (tournament_id && !phase_id && !league_id) {
+    matchUrl = `/tournaments/${tournament_id}/matches/${match_id}`;
+    competitionUrl = `/tournaments/${tournament_id}`;
+  } else {
+    throw new Error('Invalid mixed replay library owner');
+  }
+  return withReplayLabel({
+    date: row.match_played_at ?? game_created_at,
+    ...toMixedReplayFacets(row),
+    competitionUrl,
+    matchNumber: game_number,
+    player1Name: row.player_1_name ?? UNKNOWN_PLAYER,
+    player1PsUsername: row.player_1_ps_username ?? '',
+    player2Name: row.player_2_name ?? UNKNOWN_PLAYER,
+    player2PsUsername: row.player_2_ps_username ?? '',
+    matchUrl,
+    replayUrl: replay_url,
+  });
 }
 
 /**
@@ -161,12 +198,36 @@ function replayLibraryGames(select: string, countOption?: CountOption) {
     .neq('replay_url', '');
 }
 
+function uniqueReplayRows<T>(rows: T[], key: (row: T) => string | null): T[] {
+  const seen = new Set<string>();
+  return rows.filter((row) => {
+    const id = key(row);
+    if (!id) throw new Error('Replay library row has no identity');
+    if (seen.has(id)) return false;
+    seen.add(id);
+    return true;
+  });
+}
+
 /**
  * Every replay row, newest first. Used by the filtered replay-library views,
  * which match free text across joined fields in memory. With `limit`, one
  * capped read (for widgets that show the latest few).
  */
-export async function listReplayLibraryRows(limit?: number): Promise<ReplayLibraryRow[]> {
+export async function listReplayLibraryRows(limit?: number, storage: ReplayLibraryStorage = 'legacy'): Promise<ReplayLibraryRow[]> {
+  if (storage === 'phase') {
+    if (typeof limit === 'number') {
+      const { data, error } = await supabase.from('phase_replay_library').select('*')
+        .order('game_created_at', { ascending: false }).order('row_key', { ascending: false }).limit(Math.min(limit, REPLAY_LIBRARY_READ_CHUNK));
+      if (error) throw error;
+      return data.map(toMixedReplayLibraryRow);
+    }
+    const rows = await readAllChunks<MixedReplayRow>((from, to, withCount) => supabase.from('phase_replay_library')
+      .select('*', withCount ? { count: 'exact' } : undefined)
+      .order('game_created_at', { ascending: false }).order('row_key', { ascending: false }).range(from, to));
+    return uniqueReplayRows(rows, (row) => row.row_key).map(toMixedReplayLibraryRow);
+  }
+
   if (typeof limit === 'number') {
     const { data, error } = await supabase
       .from('games')
@@ -190,13 +251,7 @@ export async function listReplayLibraryRows(limit?: number): Promise<ReplayLibra
   );
 
   // A replay inserted mid-read shifts later offsets by one; drop the repeat.
-  const seen = new Set<string>();
-  const unique = rows.filter((row) => {
-    if (seen.has(row.id)) return false;
-    seen.add(row.id);
-    return true;
-  });
-  return unique.map(toReplayLibraryRow);
+  return uniqueReplayRows(rows, (row) => row.id).map(toReplayLibraryRow);
 }
 
 export interface ReplayLibraryPage {
@@ -218,8 +273,16 @@ async function fetchReplayLibraryPage(
   page: number,
   perPage: number,
   ascending: boolean,
+  storage: ReplayLibraryStorage,
 ): Promise<ChunkResult> {
   const from = (page - 1) * perPage;
+  if (storage === 'phase') {
+    return supabase.from('phase_replay_library').select('*', { count: 'exact' })
+      .order('match_played_at', { ascending, nullsFirst: !ascending })
+      .order('game_created_at', { ascending })
+      .order('row_key', { ascending })
+      .range(from, from + perPage - 1);
+  }
   const { data, error, count } = await replayLibraryGames(REPLAY_LIBRARY_SELECT, { count: 'exact' })
     // Sort by the match's play date (a to-one related column). A null date
     // means the match is still in progress, so it counts as the newest.
@@ -236,11 +299,12 @@ async function fetchReplayLibraryPage(
  */
 export async function listReplayLibraryPage(
   options: ReplayLibraryPageOptions,
+  storage: ReplayLibraryStorage = 'legacy',
 ): Promise<ReplayLibraryPage> {
   const perPage = Math.max(1, Math.floor(options.perPage));
   let page = Math.max(1, Math.floor(options.page));
 
-  let result = await fetchReplayLibraryPage(page, perPage, options.ascending);
+  let result = await fetchReplayLibraryPage(page, perPage, options.ascending, storage);
   const pastEnd =
     result.error?.code === RANGE_NOT_SATISFIABLE ||
     (!result.error && page > 1 && (result.data ?? []).length === 0);
@@ -249,21 +313,21 @@ export async function listReplayLibraryPage(
     // A stale or hand-typed ?page= beyond the end: serve the last page.
     let total = result.error ? null : result.count;
     if (total === null) {
-      const { count, error } = await replayLibraryGames(REPLAY_LIBRARY_SELECT, {
-        count: 'exact',
-        head: true,
-      });
+      const countOption = { count: 'exact', head: true } as const;
+      const { count, error } = await (storage === 'phase'
+        ? supabase.from('phase_replay_library').select('row_key', countOption)
+        : replayLibraryGames(REPLAY_LIBRARY_SELECT, countOption));
       if (error) throw error;
       total = count ?? 0;
     }
     page = Math.max(1, Math.ceil(total / perPage));
-    result = await fetchReplayLibraryPage(page, perPage, options.ascending);
+    result = await fetchReplayLibraryPage(page, perPage, options.ascending, storage);
   }
 
   if (result.error) throw result.error;
-  const data = (result.data ?? []) as ReplayLibraryGameRow[];
+  const data = result.data ?? [];
   return {
-    rows: data.map(toReplayLibraryRow),
+    rows: storage === 'phase' ? (data as MixedReplayRow[]).map(toMixedReplayLibraryRow) : (data as ReplayLibraryGameRow[]).map(toReplayLibraryRow),
     total: result.count ?? data.length,
     page,
   };
@@ -294,7 +358,13 @@ const REPLAY_LIBRARY_FACET_SELECT = `
  * full row), so the unfiltered page can fill its dropdowns without loading
  * whole rows. Same fallbacks as {@link listReplayLibraryRows}.
  */
-export async function listReplayLibraryFacetRows(): Promise<ReplayLibraryFacetRow[]> {
+export async function listReplayLibraryFacetRows(storage: ReplayLibraryStorage = 'legacy'): Promise<ReplayLibraryFacetRow[]> {
+  if (storage === 'phase') {
+    const rows = await readAllChunks<Pick<MixedReplayRow, 'league_name' | 'stage_name' | 'round_name'>>((from, to, withCount) =>
+      supabase.from('phase_replay_library').select('league_name, stage_name, round_name', withCount ? { count: 'exact' } : undefined)
+        .order('game_created_at', { ascending: false }).order('row_key', { ascending: false }).range(from, to));
+    return rows.map(toMixedReplayFacets);
+  }
   const rows = await readAllChunks<ReplayLibraryFacetGameRow>((from, to, withCount) =>
     replayLibraryGames(REPLAY_LIBRARY_FACET_SELECT, withCount ? { count: 'exact' } : undefined)
       .order('created_at', { ascending: false })
@@ -306,4 +376,12 @@ export async function listReplayLibraryFacetRows(): Promise<ReplayLibraryFacetRo
     tournamentName: row.matches.tournaments?.name ?? '',
     round: row.matches.rounds?.name ?? UNKNOWN_ROUND,
   }));
+}
+
+function toMixedReplayFacets(row: Pick<MixedReplayRow, 'league_name' | 'stage_name' | 'round_name'>): ReplayLibraryFacetRow {
+  return {
+    league: row.league_name ?? UNKNOWN_LEAGUE,
+    tournamentName: row.stage_name ?? '',
+    round: row.round_name ?? UNKNOWN_ROUND,
+  };
 }

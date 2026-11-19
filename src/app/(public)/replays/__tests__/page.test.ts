@@ -11,6 +11,9 @@ const { listReplayLibraryRows, listReplayLibraryPage, listReplayLibraryFacetRows
 );
 
 const cookieJar = vi.hoisted(() => ({ locale: undefined as string | undefined }));
+const storageMode = vi.hoisted(() => vi.fn(async () => 'legacy'));
+
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: storageMode }));
 
 // The page reads the language cookie through `getLocale()` / `getT()`.
 vi.mock('next/headers', () => ({
@@ -88,6 +91,7 @@ function facetsOf(rows: Array<{ league: string; tournamentName: string; round: s
 
 describe('ReplaysPage', () => {
   beforeEach(() => {
+    storageMode.mockResolvedValue('legacy');
     vi.clearAllMocks();
     cookieJar.locale = undefined;
   });
@@ -205,6 +209,33 @@ describe('ReplaysPage', () => {
     await ReplaysPage({ searchParams: Promise.resolve({ perPage: '50' }) });
 
     expect(listReplayLibraryPage).toHaveBeenCalledWith({ page: 1, perPage: 50, ascending: false });
+  });
+
+  it.each(['phase', 'frozen_phase'])('selects the native browse and filtered paths in %s mode', async (mode) => {
+    storageMode.mockResolvedValue(mode);
+    const native = { ...ALICE_BOB, matchUrl: '/leagues/league-1/phases/phase-1/matches/m1' };
+    listReplayLibraryPage.mockResolvedValueOnce({ rows: [native], total: 1, page: 1 });
+    listReplayLibraryFacetRows.mockResolvedValueOnce(facetsOf([native]));
+    const browse = renderToStaticMarkup(await ReplaysPage({ searchParams: Promise.resolve({}) }));
+    expect(listReplayLibraryPage).toHaveBeenCalledExactlyOnceWith({ page: 1, perPage: 20, ascending: false }, 'phase');
+    expect(listReplayLibraryFacetRows).toHaveBeenCalledExactlyOnceWith('phase');
+    expect(listReplayLibraryRows).not.toHaveBeenCalled();
+    expect(browse).toContain(native.matchUrl);
+
+    listReplayLibraryRows.mockResolvedValueOnce([native, ZARA_BEA]);
+    const filtered = renderToStaticMarkup(await ReplaysPage({ searchParams: Promise.resolve({ username: 'alice' }) }));
+    expect(listReplayLibraryRows).toHaveBeenCalledExactlyOnceWith(undefined, 'phase');
+    expect(filtered).toContain(native.matchUrl);
+    expect(filtered).not.toContain(ZARA_BEA.matchUrl);
+  });
+
+  it('keeps frozen legacy on the existing counted browse path', async () => {
+    storageMode.mockResolvedValue('frozen_legacy');
+    listReplayLibraryPage.mockResolvedValueOnce({ rows: [], total: 0, page: 1 });
+    listReplayLibraryFacetRows.mockResolvedValueOnce([]);
+    await ReplaysPage({ searchParams: Promise.resolve({}) });
+    expect(listReplayLibraryPage).toHaveBeenCalledExactlyOnceWith({ page: 1, perPage: 20, ascending: false });
+    expect(listReplayLibraryFacetRows.mock.calls).toEqual([[]]);
   });
 
   it('renders the date as an en-GB calendar date in a <time> element', async () => {

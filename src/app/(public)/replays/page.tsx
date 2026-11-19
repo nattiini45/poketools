@@ -37,10 +37,12 @@ import {
   listReplayLibraryRows,
   type ReplayLibraryFacetRow,
   type ReplayLibraryRow,
+  type ReplayLibraryStorage,
   UNKNOWN_LEAGUE,
   UNKNOWN_PLAYER,
   UNKNOWN_ROUND,
 } from '@/lib/supabase/queries/replay-library';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getLocale, getT } from '@/i18n/server';
 import type { Translator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
@@ -85,11 +87,13 @@ async function loadReplayLibraryView(
   page: number,
   perPage: number,
   sortDirection: 'asc' | 'desc',
+  storage: ReplayLibraryStorage,
 ): Promise<ReplayLibraryView> {
   if (isReplayLibraryBrowseView(params)) {
+    const options = { page, perPage, ascending: sortDirection === 'asc' };
     const [pageResult, facetRows] = await Promise.all([
-      listReplayLibraryPage({ page, perPage, ascending: sortDirection === 'asc' }),
-      listReplayLibraryFacetRows(),
+      storage === 'phase' ? listReplayLibraryPage(options, storage) : listReplayLibraryPage(options),
+      storage === 'phase' ? listReplayLibraryFacetRows(storage) : listReplayLibraryFacetRows(),
     ]);
     return {
       pageRows: pageResult.rows,
@@ -99,7 +103,7 @@ async function loadReplayLibraryView(
     };
   }
 
-  const rows = await listReplayLibraryRows();
+  const rows = storage === 'phase' ? await listReplayLibraryRows(undefined, storage) : await listReplayLibraryRows();
   const visibleRows = applyReplayLibraryParams(rows, params);
   const safePage = Math.min(page, totalTablePages(visibleRows.length, perPage));
   return {
@@ -139,7 +143,7 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default async function ReplaysPage({ searchParams }: PageProps) {
-  const [rawParams, t, locale] = await Promise.all([searchParams, getT(discoverMessages), getLocale()]);
+  const [rawParams, t, locale, mode] = await Promise.all([searchParams, getT(discoverMessages), getLocale(), getPhaseRouteMode()]);
   const params = parseReplayLibraryParams(rawParams);
   const tableParams = parseTableParams(rawParams);
   const sortState = parseSortParam(params.sort, ['date', 'players', 'league', 'round'], {
@@ -151,6 +155,7 @@ export default async function ReplaysPage({ searchParams }: PageProps) {
     tableParams.page,
     tableParams.perPage,
     sortState.direction,
+    mode === 'phase' || mode === 'frozen_phase' ? 'phase' : 'legacy',
   );
   const leagueOptions = getReplayLibraryLeagueOptions(facetRows);
   const tournamentOptions = getReplayLibraryTournamentOptions(facetRows);

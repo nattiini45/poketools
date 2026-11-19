@@ -8440,7 +8440,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      phase_replay_library: {
+        Row: {
+          game_created_at: string | null
+          game_number: number | null
+          league_id: string | null
+          league_name: string | null
+          match_id: string | null
+          match_played_at: string | null
+          phase_id: string | null
+          player_1_name: string | null
+          player_1_ps_username: string | null
+          player_2_name: string | null
+          player_2_ps_username: string | null
+          replay_url: string | null
+          round_name: string | null
+          row_key: string | null
+          stage_name: string | null
+          tournament_id: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_agent__purging: { Args: never; Returns: boolean }
