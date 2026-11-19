@@ -60,15 +60,16 @@ export function scoringByeRecordsForStages(
 }
 
 /**
- * Rounds grouped by the stage (tournament) they belong to, in input order. A stage without a round is absent from
+ * Rounds grouped by their phase or tournament owner, in input order. A stage without a round is absent from
  * the map. Pure: shared by the server loader and by readers that hold the rounds as cached JSON.
  */
-export function groupRoundsByStage<R extends { tournament_id: string }>(rounds: readonly R[]): Map<string, R[]> {
+export function groupRoundsByStage<R extends { tournament_id: string } | { phase_id: string }>(rounds: readonly R[]): Map<string, R[]> {
   const byStage = new Map<string, R[]>();
   for (const round of rounds) {
-    const stageRounds = byStage.get(round.tournament_id);
+    const stageId = 'phase_id' in round ? round.phase_id : round.tournament_id;
+    const stageRounds = byStage.get(stageId);
     if (stageRounds) stageRounds.push(round);
-    else byStage.set(round.tournament_id, [round]);
+    else byStage.set(stageId, [round]);
   }
   return byStage;
 }

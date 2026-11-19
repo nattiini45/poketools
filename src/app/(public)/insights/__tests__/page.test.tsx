@@ -9,7 +9,7 @@ const h = vi.hoisted(() => ({
   redirect: vi.fn((href: string): never => { throw new Error(href); }),
   phasePublicReads: {
     bySeasonIds: vi.fn(), seasonMatchRecords: vi.fn(), seasonByeRounds: vi.fn(),
-    seasonGameTotal: vi.fn(), seasonBattleStats: vi.fn(), allTimeGameTotal: vi.fn(),
+    seasonGameTotal: vi.fn(), seasonBattleStats: vi.fn(), allTimeGameTotal: vi.fn(), seasonKitStandings: vi.fn(),
   },
   publicReads: {
     seasonList: vi.fn(),
@@ -159,6 +159,32 @@ describe('Insights standings', () => {
     await expect(renderPage({ scope: 'tournament', id: 'phase-fixture', tab: 'kills', show: ['a', 'b'] })).rejects.toThrow(target);
     expect(h.alias).toHaveBeenCalledExactlyOnceWith({ phaseId: 'phase-fixture' });
     expect(h.publicReads.tournament).not.toHaveBeenCalled();
+  });
+
+  it('ranks by the distinct bye points of each native Swiss stage', async () => {
+    h.mode.mockResolvedValue('phase');
+    h.publicReads.season.mockResolvedValue({ id: 'season-1', name: 'League', format_type: 'custom' });
+    const phase = h.phasePublicReads;
+    phase.bySeasonIds.mockResolvedValue({ 'season-1': [
+      { id: 'small-bye', bracket_type: 'swiss' }, { id: 'large-bye', bracket_type: 'swiss' },
+    ] });
+    phase.seasonMatchRecords.mockResolvedValue([]);
+    phase.seasonByeRounds.mockResolvedValue([
+      { id: 'round-small', phase_id: 'small-bye', round_number: 1, bye_player_ids: ['a'] },
+      { id: 'round-large', phase_id: 'large-bye', round_number: 1, bye_player_ids: ['b'] },
+    ]);
+    phase.seasonBattleStats.mockResolvedValue([]);
+    phase.seasonGameTotal.mockResolvedValue(0);
+    const rules = (key: string, bye: number) => ({
+      key, scoring: { win: 3, loss: 0, bye }, rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
+    });
+    phase.seasonKitStandings.mockResolvedValue({
+      engine: 'kit', stages: { 'small-bye': rules('small', 1), 'large-bye': rules('large', 5) },
+      stageOfMatch: {}, outcomes: {}, coinFlips: {},
+    });
+
+    const rows = await renderStandings({ scope: 'league', id: 'season-1' });
+    expect(rows.map((row) => row.player_id)).toEqual(['b', 'a', 'e']);
   });
 
   it('uses the mixed denominator only for the native global view', async () => {

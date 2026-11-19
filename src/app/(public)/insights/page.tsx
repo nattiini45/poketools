@@ -153,15 +153,14 @@ async function loadScopeRows(scope: InsightsScope, native: boolean): Promise<Sco
     // batched read for all Swiss stages, and a league with no Swiss stage, or an Evolution Point Buy one (its
     // tables never read byes), reads none.
     const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
-    const [byes, ranking] = await Promise.all([
+    const [byeRounds, ranking] = await Promise.all([
       readsByes
-        ? native
-          ? phasePublicReads.seasonByeRounds(scope.id).then((rounds) => scoringByeRecords('swiss', rounds))
-          : publicReads.seasonByeRounds(scope.id).then((rounds) => scoringByeRecordsForStages(stages, groupRoundsByStage(rounds)))
+        ? native ? phasePublicReads.seasonByeRounds(scope.id) : publicReads.seasonByeRounds(scope.id)
         : [],
       // An Evolution Point Buy or kit league ranks like its tables.
       leagueRanking(scope.id, season.format_type, native),
     ]);
+    const byes = scoringByeRecordsForStages(stages, groupRoundsByStage<(typeof byeRounds)[number]>(byeRounds));
     return {
       title: season.name,
       isDoubles: isLeagueDoubles(season.format_type, stages),
