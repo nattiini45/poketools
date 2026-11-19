@@ -59,7 +59,7 @@ export function useHotkeys(
     bindingsRef.current = bindings;
   });
 
-  const ctx = useHotkeyContext();
+  const { register } = useHotkeyContext();
 
   // Register for help display
   useEffect(() => {
@@ -69,8 +69,8 @@ export function useHotkeys(
       description: b.description,
       scope,
     }));
-    return ctx.register(entries);
-  }, [enabled, scope, ctx, bindings]);
+    return register(entries);
+  }, [enabled, scope, register, bindings]);
 
   useEffect(() => {
     if (!enabled) return;

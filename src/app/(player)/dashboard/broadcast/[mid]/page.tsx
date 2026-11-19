@@ -1,16 +1,15 @@
 import AuthGuard from '@/components/shared/AuthGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { getMatchById } from '@/lib/supabase/queries/matches';
+import { loadTrackerMatch, readTrackerRosters } from '@/lib/broadcast/dashboard-tracker.server';
 import {
   createCastSession,
   listCastSessions,
   updateCastSession,
 } from '@/lib/supabase/queries/cast-sessions';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
-import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
+import type { TeamViewer } from '@/lib/team/visibility';
+import { toPublicPhaseMatch } from '@/lib/match/public-match';
 import BattleTracker from '@/components/broadcast/tracker/BattleTracker';
 import Link from 'next/link';
 import type { CasterData } from '@/types/caster';
@@ -44,8 +43,8 @@ export default async function TrackerPage({ params }: Props) {
     );
   }
 
-  const match = await getMatchById(mid);
-  if (!match) {
+  const read = await loadTrackerMatch(mid);
+  if (!read) {
     return (
       <AuthGuard>
         <PageContainer title={t('tracker.title')}>
@@ -58,9 +57,7 @@ export default async function TrackerPage({ params }: Props) {
     );
   }
 
-  // Load tournament for best-of info
-  const tournament = await getTournamentById(match.tournament_id);
-  const bestOf = tournament?.best_of_default ?? undefined;
+  const { match, bestOf } = read;
 
   // Auth hardening: only match participants, creators, and admins can access the tracker
   const isParticipant = player.playerId === match.player_1_id || player.playerId === match.player_2_id;
@@ -78,27 +75,13 @@ export default async function TrackerPage({ params }: Props) {
     );
   }
 
-  // Try to load each player's team for this match to auto-populate tracker slots
-  const [team1, team2] = await Promise.all([
-    getPlayerTeamForMatch(match.player_1_id, match),
-    getPlayerTeamForMatch(match.player_2_id, match),
-  ]);
-
   // Spec §7 per match: before this match is completed a participant sees only
   // their own roster, a creator none; an admin sees both.
   const viewer: TeamViewer = {
     viewerId: player.playerId,
     isAdmin: access.isSiteAdmin,
   };
-  const tournamentVisibility = tournament?.team_visibility ?? null;
-  const canSeeP1 = team1
-    ? decideMatchRosterVisibility(team1, viewer, match, tournamentVisibility)
-    : false;
-  const canSeeP2 = team2
-    ? decideMatchRosterVisibility(team2, viewer, match, tournamentVisibility)
-    : false;
-  const player1Pokemon = canSeeP1 ? team1?.pokemon.map((p) => p.species) : undefined;
-  const player2Pokemon = canSeeP2 ? team2?.pokemon.map((p) => p.species) : undefined;
+  const { team1, team2 } = await readTrackerRosters(read, viewer);
 
   // Fetch caster data for creators/admins (non-blocking, graceful fallback)
   let casterData: CasterData | null = null;
@@ -107,44 +90,47 @@ export default async function TrackerPage({ params }: Props) {
     try {
       const [{ fetchCasterData }, sessions] = await Promise.all([
         import('@/lib/broadcast/caster-data'),
-        listCastSessions(player.playerId),
+        read.kind === 'legacy' ? listCastSessions(player.playerId) : [],
       ]);
       casterData = await fetchCasterData(mid, viewer);
 
-      const existingSession = sessions.find(
-        (castSession) => castSession.match_id === match.id && castSession.status !== 'archived'
-      );
+      if (read.kind === 'legacy') {
+        const tournament = read.competition;
+        const existingSession = sessions.find(
+          (castSession) => castSession.match_id === match.id && castSession.status !== 'archived'
+        );
 
-      if (existingSession) {
-        castSessionId = existingSession.id;
-      } else {
-        const ruleset = tournament?.ruleset_id
-          ? await getRulesetById(tournament.ruleset_id)
-          : null;
-        const generation = generationOrDefault(ruleset?.base_format);
+        if (existingSession) {
+          castSessionId = existingSession.id;
+        } else {
+          const ruleset = tournament?.ruleset_id
+            ? await getRulesetById(tournament.ruleset_id)
+            : null;
+          const generation = generationOrDefault(ruleset?.base_format);
 
-        const createdSession = await createCastSession(player.playerId, {
-          name: `${match.player_1_name} vs ${match.player_2_name}`,
-          mode: 'cast',
-          match_id: match.id,
-          tournament_id: match.tournament_id,
-          season_id: tournament?.season_id ?? null,
-          format: ruleset?.base_format ?? 'gen9ou',
-          generation,
-        });
+          const createdSession = await createCastSession(player.playerId, {
+            name: `${match.player_1_name} vs ${match.player_2_name}`,
+            mode: 'cast',
+            match_id: match.id,
+            tournament_id: read.match.tournament_id,
+            season_id: tournament?.season_id ?? null,
+            format: ruleset?.base_format ?? 'gen9ou',
+            generation,
+          });
 
-        await updateCastSession(createdSession.id, {
-          player1_id: match.player_1_id,
-          player1_name: match.player_1_name,
-          player1_avatar_url: match.player_1_avatar_url,
-          player2_id: match.player_2_id,
-          player2_name: match.player_2_name,
-          player2_avatar_url: match.player_2_avatar_url,
-          player1_team: canSeeP1 ? (team1?.pokemon ?? []) : [],
-          player2_team: canSeeP2 ? (team2?.pokemon ?? []) : [],
-        });
+          await updateCastSession(createdSession.id, {
+            player1_id: match.player_1_id,
+            player1_name: match.player_1_name,
+            player1_avatar_url: match.player_1_avatar_url,
+            player2_id: match.player_2_id,
+            player2_name: match.player_2_name,
+            player2_avatar_url: match.player_2_avatar_url,
+            player1_team: team1 ?? [],
+            player2_team: team2 ?? [],
+          });
 
-        castSessionId = createdSession.id;
+          castSessionId = createdSession.id;
+        }
       }
     } catch (err) {
       // Caster data/session wiring is optional: the tracker works without it,
@@ -165,18 +151,19 @@ export default async function TrackerPage({ params }: Props) {
             id: match.player_1_id,
             name: match.player_1_name,
             avatar_url: match.player_1_avatar_url,
-            pokemon: player1Pokemon,
+            pokemon: team1?.map((p) => p.species),
           }}
           player2={{
             id: match.player_2_id,
             name: match.player_2_name,
             avatar_url: match.player_2_avatar_url,
-            pokemon: player2Pokemon,
+            pokemon: team2?.map((p) => p.species),
           }}
-          gamesSubmitted={match.games}
+          gamesSubmitted={read.kind === 'phase' ? toPublicPhaseMatch(read.match).games : match.games}
           bestOf={bestOf}
           casterData={casterData}
           sessionId={castSessionId}
+          {...(isCreatorOrAdmin && read.kind === 'phase' ? { openPhaseSession: true } : {})}
         />
       </PageContainer>
     </AuthGuard>

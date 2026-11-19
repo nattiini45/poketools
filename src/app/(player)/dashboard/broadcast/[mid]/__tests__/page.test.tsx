@@ -5,7 +5,7 @@
  * stubbed to record what reaches it.
  */
 import { createElement, type ReactNode } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 const mocks = vi.hoisted(() => ({
@@ -13,7 +13,24 @@ const mocks = vi.hoisted(() => ({
   trackerProps: [] as Record<string, unknown>[],
   fetchCasterData: vi.fn(),
   listCastSessions: vi.fn(),
+  mode: vi.fn(),
+  nativeOwner: vi.fn(),
+  nativeMatch: vi.fn(),
+  phase: vi.fn(),
+  phaseRound: vi.fn(),
+  nativeTeam: vi.fn(),
+  standalone: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: mocks.mode }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: mocks.nativeOwner,
+  standaloneMatchAliasExists: mocks.standalone,
+}));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: mocks.nativeMatch }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: mocks.phase }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getPhaseRoundById: mocks.phaseRound }));
+vi.mock('@/lib/supabase/queries/phase-teams', () => ({ getPlayerPhaseTeamForMatch: mocks.nativeTeam }));
 
 vi.mock('next/headers', () => ({
   cookies: async () => ({ get: () => undefined }),
@@ -79,6 +96,8 @@ vi.mock('@/lib/broadcast/caster-data', () => ({
 }));
 
 import TrackerPage from '../page';
+import { getMatchById } from '@/lib/supabase/queries/matches';
+import { createCastSession } from '@/lib/supabase/queries/cast-sessions';
 
 const PROPS = { params: Promise.resolve({ mid: 'm-1' }) };
 
@@ -98,9 +117,88 @@ async function render() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
   mocks.trackerProps = [];
   mocks.fetchCasterData.mockResolvedValue(null);
   mocks.listCastSessions.mockResolvedValue([{ id: 'cs-1', match_id: 'm-1', status: 'live' }]);
+});
+afterEach(() => vi.unstubAllEnvs());
+
+const MATCH = '10000000-0000-4000-8000-000000000001';
+const PHASE = '10000000-0000-4000-8000-000000000002';
+const LEAGUE = '10000000-0000-4000-8000-000000000003';
+const NATIVE_PROPS = { params: Promise.resolve({ mid: MATCH }) };
+
+describe('native dashboard tracker', () => {
+  beforeEach(() => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    mocks.mode.mockResolvedValue('phase');
+    mocks.standalone.mockResolvedValue(false);
+    mocks.nativeOwner.mockResolvedValue({ kind: 'phase', phase_id: PHASE, season_id: LEAGUE });
+    mocks.phase.mockResolvedValue({ id: PHASE, season_id: LEAGUE, team_visibility: 'hidden_until_match' });
+    mocks.phaseRound.mockResolvedValue({ id: 'fixture-round', phase_id: PHASE, best_of: 5 });
+    mocks.nativeMatch.mockResolvedValue({
+      id: MATCH, phase_id: PHASE, round_id: 'fixture-round',
+      player_1_id: 'p1', player_2_id: 'p2', player_1_name: 'Fixture Aster', player_2_name: 'Fixture Birch',
+      player_1_avatar_url: null, player_2_avatar_url: null, status: 'scheduled',
+      notes: 'secret match note', games: [{ id: 'game', game_number: 1, private_context: 'secret internal field' }],
+    });
+    mocks.nativeTeam.mockImplementation(async (playerId: string) => ({
+      player_id: playerId, match_id: MATCH, library_published_at: null,
+      pokemon: [{ species: playerId === 'p1' ? 'Visible fixture' : 'Private fixture', item: 'secret item' }],
+    }));
+  });
+
+  it('opens a native-only match for its participant with own species and round best-of, never private fields', async () => {
+    mocks.access = access('p1');
+    renderToStaticMarkup(await TrackerPage(NATIVE_PROPS));
+    expect(mocks.trackerProps[0]).toMatchObject({
+      matchId: MATCH, bestOf: 5, player1: { pokemon: ['Visible fixture'] },
+      player2: { pokemon: undefined }, gamesSubmitted: [{ id: 'game' }],
+    });
+    const serialized = JSON.stringify(mocks.trackerProps);
+    expect(serialized).not.toMatch(/Private fixture|secret item|secret match note|secret internal field|realtime_key/);
+    expect(mocks.trackerProps[0]).not.toHaveProperty('openPhaseSession');
+    expect(mocks.fetchCasterData).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
+
+  it('passes only live viewer authority to native caster data and requests an owner-local session from the client', async () => {
+    mocks.access = access('fixture-caster', { creator: true });
+    renderToStaticMarkup(await TrackerPage(NATIVE_PROPS));
+    expect(mocks.trackerProps[0]).toMatchObject({
+      openPhaseSession: true, player1: { pokemon: undefined }, player2: { pokemon: undefined },
+    });
+    expect(mocks.fetchCasterData).toHaveBeenCalledExactlyOnceWith(MATCH, { viewerId: 'fixture-caster', isAdmin: false });
+    expect(mocks.listCastSessions).not.toHaveBeenCalled();
+    expect(createCastSession).not.toHaveBeenCalled();
+  });
+
+  it('does not expose roster data to a nonparticipant resource admin without creator access', async () => {
+    mocks.access = { ...access('resource-admin'), isAnyAdmin: true };
+    renderToStaticMarkup(await TrackerPage(NATIVE_PROPS));
+    expect(mocks.trackerProps).toHaveLength(0);
+    expect(mocks.nativeTeam).not.toHaveBeenCalled();
+  });
+
+  it('fails closed for a different round/phase or a retired match', async () => {
+    mocks.access = access('p1');
+    mocks.phaseRound.mockResolvedValueOnce({ id: 'fixture-round', phase_id: 'wrong-phase', best_of: 5 });
+    renderToStaticMarkup(await TrackerPage(NATIVE_PROPS));
+    mocks.nativeOwner.mockResolvedValueOnce(null);
+    renderToStaticMarkup(await TrackerPage(NATIVE_PROPS));
+    expect(mocks.trackerProps).toHaveLength(0);
+    expect(mocks.nativeTeam).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
+
+  it.each(['frozen_phase', 'frozen_legacy'])('refuses %s before looking up the match', async (mode) => {
+    mocks.access = access('p1');
+    mocks.mode.mockResolvedValue(mode);
+    await expect(TrackerPage(NATIVE_PROPS)).rejects.toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(mocks.nativeOwner).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
 });
 
 describe('tracker page live roles and roster visibility', () => {

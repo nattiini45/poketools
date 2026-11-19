@@ -11,10 +11,11 @@ export default function HotkeyHelpModal() {
   const t = useT(broadcastCasterMessages);
   const { bindings, helpOpen, setHelpOpen } = useHotkeyContext();
 
-  useHotkeys(
-    [{ key: "?", handler: () => setHelpOpen(!helpOpen), description: t("hotkeys.toggleHelp") }],
-    { scope: "help" }
+  const helpBinding = useMemo(
+    () => [{ key: "?", handler: () => setHelpOpen(!helpOpen), description: t("hotkeys.toggleHelp") }],
+    [helpOpen, setHelpOpen, t],
   );
+  useHotkeys(helpBinding, { scope: "help" });
 
   const grouped = useMemo(() => {
     const map = new Map<string, typeof bindings>();

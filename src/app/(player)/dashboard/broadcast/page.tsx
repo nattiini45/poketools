@@ -4,6 +4,8 @@ import SkewChip from '@/components/ui/SkewChip';
 import AdminEmpty from '@/components/admin/AdminEmpty';
 import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
 import { getMatchesByPlayer } from '@/lib/supabase/queries/matches';
+import { listDashboardPhaseMatches, listStandaloneDashboardMatches } from '@/lib/supabase/queries/dashboard-now';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import Link from 'next/link';
 import { getT } from '@/i18n/server';
 import { creatorMessages } from '@/i18n/messages/creator';
@@ -28,7 +30,8 @@ export default async function BroadcastHubPage() {
     );
   }
 
-  const matches = await getMatchesByPlayer(player.playerId);
+  const mode = await requireOpenPhaseRouteMode();
+  const matches = mode === 'phase' ? await listPhaseModeMatches(player.playerId) : await getMatchesByPlayer(player.playerId);
   const tEnum = await getT(enumMessages);
 
   // Show pending and in_progress matches — these are trackable
@@ -99,4 +102,25 @@ export default async function BroadcastHubPage() {
       </PageContainer>
     </AuthGuard>
   );
+}
+
+async function listPhaseModeMatches(playerId: string) {
+  const [standalone, phase] = await Promise.all([
+    listStandaloneDashboardMatches(playerId), listDashboardPhaseMatches(playerId),
+  ]);
+  const phaseIds = new Set(phase.map((match) => match.id));
+  return [...phase, ...standalone.filter((match) => !phaseIds.has(match.id))]
+    .sort((a, b) => {
+      if (a.date_played !== b.date_played) {
+        if (a.date_played === null) return 1;
+        if (b.date_played === null) return -1;
+        const played = Date.parse(b.date_played) - Date.parse(a.date_played);
+        if (played) return played;
+      }
+      return Date.parse(b.created_at) - Date.parse(a.created_at) || b.id.localeCompare(a.id);
+    }).map((match) => ({
+      ...match,
+      winner_name: match.winner_id === match.player_1_id ? match.player_1_name
+        : match.winner_id === match.player_2_id ? match.player_2_name : null,
+    }));
 }
