@@ -1,6 +1,7 @@
 import type { PokemonSet } from './team';
 import type { BroadcastPresetConfig } from './broadcast';
 import type { GameSummary } from './match';
+import type { CastSessionPhaseRef } from './phase-cast-session';
 
 // ─── Caster Notes ──────────────────────────────────────────────────
 export interface CasterNotes {
@@ -83,11 +84,11 @@ export interface CastSessionUpdate {
 export type CastSessionRealtimeAction =
   | { type: 'set_session_name'; name: string }
   | { type: 'set_mode'; mode: CastSessionMode }
-  | { type: 'set_match'; matchId: string; tournamentId: string | null; seasonId: string | null }
+  | { type: 'set_match'; matchId: string; tournamentId: string | null; seasonId: string | null; phaseRef?: CastSessionPhaseRef }
   | { type: 'set_format'; format: string; generation: number }
   | { type: 'new_opponent' }
   | { type: 'toggle_show_facing' }
-  | { type: 'populate_match'; data: CastSessionPopulateResult };
+  | { type: 'populate_match'; data: CastSessionPopulateResult; phaseRef?: CastSessionPhaseRef };
 
 // ─── Populate response (returned by /api/cast-sessions/[id]/populate)
 export interface CastSessionPopulateResult {

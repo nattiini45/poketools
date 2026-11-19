@@ -112,7 +112,10 @@ export default function CastStudio() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => dispatch({ type: 'set_match', matchId: '', tournamentId: state.tournamentId, seasonId: state.seasonId })}
+            onClick={() => dispatch({
+              type: 'set_match', matchId: '', tournamentId: state.tournamentId, seasonId: state.seasonId,
+              ...(state.phaseRef ? { phaseRef: { ...state.phaseRef, match_id: null } } : {}),
+            })}
           >
             {t('studio.changeMatch')}
           </Button>

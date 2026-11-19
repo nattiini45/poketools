@@ -30,7 +30,10 @@ vi.mock('next/navigation', () => ({
   notFound: () => { throw new Error('not found'); },
 }));
 vi.mock('@/components/creator/studio/CastStudioContext', () => ({
-  CastStudioProvider: ({ session }: { session: StudioCastSession }) => { h.provider(session); return null; },
+  CastStudioProvider: ({ session, phaseMode }: { session: StudioCastSession; phaseMode: boolean }) => {
+    h.provider(session, phaseMode);
+    return null;
+  },
 }));
 vi.mock('@/components/creator/studio/tools/ToolsLayout', () => ({
   default: (props: unknown) => { h.tools(props); return null; },
@@ -111,12 +114,12 @@ describe.each([['main', Main], ['tools', Tools], ['solo', Solo]] as const)('Stud
 
 it('passes the complete typed native session only to the authorized studio and solo providers', async () => {
   renderToStaticMarkup(await Main(props));
-  expect(h.provider).toHaveBeenLastCalledWith(native);
+  expect(h.provider).toHaveBeenLastCalledWith(native, true);
   const soloSession = { ...native, mode: 'solo' };
   h.phase.mockResolvedValue(soloSession);
   await expect(Main(props)).rejects.toThrow(`redirect:/creator/studio/${ID}/solo`);
   renderToStaticMarkup(await Solo(props));
-  expect(h.provider).toHaveBeenLastCalledWith(soloSession);
+  expect(h.provider).toHaveBeenLastCalledWith(soloSession, true);
   expect(native).not.toHaveProperty('tournament_id');
 });
 

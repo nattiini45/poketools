@@ -19,7 +19,7 @@ export default async function CastStudioSessionPage({ params }: Props) {
 
   return (
     <div>
-      <CastStudioProvider session={session}>
+      <CastStudioProvider session={session} phaseMode={result.phaseMode}>
         <CastStudio />
       </CastStudioProvider>
     </div>

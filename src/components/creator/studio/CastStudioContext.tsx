@@ -27,12 +27,10 @@ import type { TrackerState } from '@/types/broadcast';
 import type { PokemonSet } from '@/types/team';
 import type { GameSummary } from '@/types/match';
 import type {
-  CastSessionUpdate,
   CastSessionMode,
-  CastSessionPopulateResult,
   CastSessionRealtimeAction,
 } from '@/types/cast-session';
-import type { StudioCastSession } from '@/types/phase-cast-session';
+import type { CastSessionPhaseRef, StudioCastSession, StudioCastSessionUpdate } from '@/types/phase-cast-session';
 
 // ─── Studio-level state (wraps tracker state + session metadata) ───
 
@@ -55,6 +53,8 @@ export interface CastStudioState {
   matchId: string | null;
   tournamentId: string | null;
   seasonId: string | null;
+  phaseRef: CastSessionPhaseRef | null;
+  phaseMode: boolean;
   player1Team: PokemonSet[];
   player2Team: PokemonSet[];
   tracker: TrackerState;
@@ -130,17 +130,21 @@ function normalizeSessionTracker(session: StudioCastSession, tracker: TrackerSta
   return normalizeSoloTrackerState(tracker, soloPlayerDefaults(session));
 }
 
-function sessionMatchId(session: StudioCastSession) {
-  return 'tournament_id' in session && session.phase_ref ? session.phase_ref.match_id : session.match_id;
+function sessionPhaseRef(session: StudioCastSession): CastSessionPhaseRef | null {
+  if ('tournament_id' in session) return session.phase_ref ?? null;
+  if (!session.season_id) throw new Error('Missing league for a phase-owned Cast Studio session');
+  return { season_id: session.season_id, phase_id: session.phase_id, match_id: session.match_id };
 }
 
-function buildCastSessionUpdate(state: CastStudioState): CastSessionUpdate {
+function buildCastSessionUpdate(state: CastStudioState): StudioCastSessionUpdate {
   return {
     name: state.sessionName,
     mode: state.mode,
-    match_id: state.matchId || null,
-    tournament_id: state.tournamentId,
-    season_id: state.seasonId,
+    ...(state.phaseRef ? { phase_ref: state.phaseRef } : {
+      match_id: state.matchId || null,
+      tournament_id: state.tournamentId,
+      season_id: state.seasonId,
+    }),
     player1_id: state.tracker.current_game.player1.player_id || null,
     player1_name: state.tracker.current_game.player1.player_name || null,
     player1_avatar_url: state.tracker.current_game.player1.avatar_url,
@@ -156,22 +160,16 @@ function buildCastSessionUpdate(state: CastStudioState): CastSessionUpdate {
 }
 
 type StudioAction =
+  | CastSessionRealtimeAction
   | { type: 'tracker'; action: TrackerDispatchAction }
   | { type: 'set_player1_team'; team: PokemonSet[] }
   | { type: 'set_player2_team'; team: PokemonSet[] }
   | { type: 'update_player1_set'; slot: number; set: Partial<PokemonSet> }
   | { type: 'update_player2_set'; slot: number; set: Partial<PokemonSet> }
   | { type: 'set_facing'; player1Slot: number | null; player2Slot: number | null }
-  | { type: 'toggle_show_facing' }
-  | { type: 'set_session_name'; name: string }
-  | { type: 'set_mode'; mode: CastSessionMode }
-  | { type: 'set_match'; matchId: string; tournamentId: string | null; seasonId: string | null }
-  | { type: 'set_format'; format: string; generation: number }
-  | { type: 'new_opponent' }
   | { type: 'save_start'; sent: string }
   | { type: 'save_ok'; at: string }
   | { type: 'save_fail'; error: ApiErrorLike }
-  | { type: 'populate_match'; data: CastSessionPopulateResult }
   | { type: 'load_session'; session: StudioCastSession }
   | { type: 'set_sync_status'; status: CastChannelStatus };
 
@@ -251,8 +249,19 @@ function applyEdit(state: CastStudioState, action: StudioAction): CastStudioStat
       return { ...state, sessionName: action.name };
     case 'set_mode':
       return { ...state, mode: action.mode };
-    case 'set_match':
+    case 'set_match': {
+      if (!state.phaseMode && action.phaseRef) return state;
+      const phaseRef = action.phaseRef ?? state.phaseRef;
+      if (phaseRef) {
+        if (action.matchId !== '' && phaseRef.match_id !== action.matchId) return state;
+        return {
+          ...state, matchId: action.matchId, tournamentId: null, seasonId: phaseRef.season_id,
+          phaseRef: { ...phaseRef, match_id: action.matchId || null },
+          tracker: { ...state.tracker, match_id: action.matchId },
+        };
+      }
       return { ...state, matchId: action.matchId, tournamentId: action.tournamentId, seasonId: action.seasonId };
+    }
     case 'set_format':
       return { ...state, format: action.format, generation: action.generation };
 
@@ -264,11 +273,13 @@ function applyEdit(state: CastStudioState, action: StudioAction): CastStudioStat
       };
 
     case 'populate_match':
+      if ((!state.phaseMode && action.phaseRef) || (state.phaseRef && !action.phaseRef)) return state;
       return {
         ...state,
         matchId: action.data.match.id,
-        tournamentId: action.data.match.tournament_id,
+        tournamentId: action.phaseRef ? null : action.data.match.tournament_id,
         seasonId: action.data.match.season_id,
+        phaseRef: action.phaseRef ?? null,
         format: action.data.format ?? state.format,
         generation: action.data.generation ?? state.generation,
         player1Team: action.data.player1_team,
@@ -299,10 +310,12 @@ function applyEdit(state: CastStudioState, action: StudioAction): CastStudioStat
 /** The studio state of a stored session (the load_session action). */
 function loadSession(state: CastStudioState, s: StudioCastSession): CastStudioState {
   const defaults = s.mode === 'solo' ? soloPlayerDefaults(s) : null;
+  const phaseRef = sessionPhaseRef(s);
+  const matchId = phaseRef ? phaseRef.match_id : s.match_id;
   const trackerState = s.tracker_state
     ? normalizeSessionTracker(s, s.tracker_state as unknown as TrackerState)
     : buildTrackerState(
-        sessionMatchId(s),
+        matchId,
         {
           id: defaults?.player1.id ?? s.player1_id,
           name: defaults?.player1.name ?? s.player1_name,
@@ -323,12 +336,13 @@ function loadSession(state: CastStudioState, s: StudioCastSession): CastStudioSt
     mode: s.mode,
     format: s.format,
     generation: s.generation,
-    matchId: sessionMatchId(s),
+    matchId,
     tournamentId: 'tournament_id' in s ? s.tournament_id : null,
-    seasonId: s.season_id,
+    seasonId: phaseRef?.season_id ?? s.season_id,
+    phaseRef,
     player1Team: s.player1_team,
     player2Team: s.player2_team,
-    tracker: trackerState,
+    tracker: phaseRef ? { ...trackerState, match_id: matchId ?? '' } : trackerState,
     syncStatus: state.syncStatus,
     lastSavedAt: s.updated_at,
   };
@@ -359,15 +373,18 @@ export function useCastStudio(): CastStudioContextValue {
 
 interface CastStudioProviderProps {
   session: StudioCastSession;
+  phaseMode?: boolean;
   children: ReactNode;
 }
 
-export function CastStudioProvider({ session, children }: CastStudioProviderProps) {
+export function CastStudioProvider({ session, phaseMode = false, children }: CastStudioProviderProps) {
   const defaults = session.mode === 'solo' ? soloPlayerDefaults(session) : null;
+  const phaseRef = sessionPhaseRef(session);
+  const matchId = phaseRef ? phaseRef.match_id : session.match_id;
   const initialTracker = session.tracker_state
     ? normalizeSessionTracker(session, session.tracker_state as unknown as TrackerState)
     : buildTrackerState(
-        sessionMatchId(session),
+        matchId,
         {
           id: defaults?.player1.id ?? session.player1_id,
           name: defaults?.player1.name ?? session.player1_name,
@@ -388,12 +405,14 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
     mode: session.mode,
     format: session.format,
     generation: session.generation,
-    matchId: sessionMatchId(session),
+    matchId,
     tournamentId: 'tournament_id' in session ? session.tournament_id : null,
-    seasonId: session.season_id,
+    seasonId: phaseRef?.season_id ?? session.season_id,
+    phaseRef,
+    phaseMode,
     player1Team: session.player1_team,
     player2Team: session.player2_team,
-    tracker: initialTracker,
+    tracker: phaseRef ? { ...initialTracker, match_id: matchId ?? '' } : initialTracker,
     facing: { player1Slot: null, player2Slot: null },
     showFacing: false,
     save: { status: 'idle' },
@@ -506,6 +525,7 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
               matchId: stateRef.current.matchId ?? '',
               tournamentId: stateRef.current.tournamentId,
               seasonId: stateRef.current.seasonId,
+              ...(stateRef.current.phaseRef ? { phaseRef: stateRef.current.phaseRef } : {}),
             },
           });
           ch.send({ type: 'tracker_action', action: { type: 'load_session', state: stateRef.current.tracker } });

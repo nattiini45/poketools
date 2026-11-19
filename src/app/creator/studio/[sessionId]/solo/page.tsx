@@ -17,7 +17,7 @@ export default async function SoloStreamerPage({ params }: Props) {
 
   return (
     <div>
-      <CastStudioProvider session={session}>
+      <CastStudioProvider session={session} phaseMode={result.phaseMode}>
         <SoloLayout />
       </CastStudioProvider>
     </div>
