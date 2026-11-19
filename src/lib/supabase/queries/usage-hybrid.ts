@@ -5,6 +5,8 @@ import type {
 } from '@/types/usage';
 import { getUsageByFormat, getPokemonUsageStats } from './meta-usage';
 import { getAggregates, getAggregateForPokemon, getTotalGamesInScope } from './aggregates';
+import { getPhaseSeasonGameTotal } from './phase-games';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { speciesSearchKeys } from '@/lib/pkmn/i18n/names/species';
 import { MATCH_WORD_PREFIX, matchRank } from '@/lib/pkmn/i18n/search';
 import { generationOrDefault } from '@/lib/pkmn/format-id';
@@ -58,6 +60,8 @@ export async function getHybridUsageList(
   // Determine scope for league data
   const scopeType = seasonId ? 'league' as const : tournamentId ? 'tournament' as const : null;
   const scopeId = seasonId ?? tournamentId ?? null;
+  const mode = seasonId ? await getPhaseRouteMode() : 'legacy';
+  const native = mode === 'phase' || mode === 'frozen_phase';
 
   // If we have a league/tournament scope, try to get league-specific data
   let leagueMap: Map<string, number> | null = null;
@@ -71,9 +75,10 @@ export async function getHybridUsageList(
         for (const agg of aggregates) {
           leagueMap.set(agg.pokemon_name, agg.total_appearances);
         }
-        totalGamesInScope = await getTotalGamesInScope(scopeType, scopeId);
+        totalGamesInScope = native ? await getPhaseSeasonGameTotal(scopeId) : await getTotalGamesInScope(scopeType, scopeId);
       }
-    } catch {
+    } catch (error) {
+      if (native) throw error;
       // League data unavailable — fall through to meta only
       leagueMap = null;
       totalGamesInScope = 0;
@@ -161,15 +166,19 @@ export async function getHybridPokemonDetail(
       ? ('tournament' as const)
       : null;
   const scopeId = options.seasonId ?? options.tournamentId ?? null;
+  const scopeGameTotal = scopeType && scopeId
+    ? (scopeType === 'league' ? getPhaseRouteMode() : Promise.resolve('legacy')).then((mode) =>
+        mode === 'phase' || mode === 'frozen_phase'
+          ? getPhaseSeasonGameTotal(scopeId)
+          : getTotalGamesInScope(scopeType, scopeId))
+    : 0;
 
   const [meta, leagueAggregate, totalGames] = await Promise.all([
     getPokemonUsageStats(pokemonName, options.format),
     scopeType && scopeId
       ? getAggregateForPokemon(pokemonName, scopeType, scopeId)
       : Promise.resolve(null),
-    scopeType && scopeId
-      ? getTotalGamesInScope(scopeType, scopeId)
-      : Promise.resolve(0),
+    scopeGameTotal,
   ]);
 
   if (!meta && !leagueAggregate) return null;

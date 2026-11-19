@@ -340,15 +340,17 @@ const pokemonAggregate = cache((pokemonName: string) =>
  * edits of match-linked teams (`/api/teams/[id]`).
  */
 const itemUsage = cache(
-  (pokemonName: string, scopeType: AggregateScope, scopeId: string | null, playerId: string | null) =>
+  (pokemonName: string, scopeType: AggregateScope, scopeId: string | null, playerId: string | null, storage: 'legacy' | 'phase' = 'legacy') =>
     cachedRead(
       {
-        name: 'item-usage',
+        name: storage === 'phase' ? 'item-usage-phase-v1' : 'item-usage',
         key: [pokemonName, scopeType, scopeId, playerId],
         tags: [publicTags.aggregates(scopeType, scopeId)],
         ttl: aggregatesTtl(scopeType),
       },
-      () => getItemUsageForPokemon(pokemonName, scopeType, scopeId, playerId ?? undefined),
+      () => storage === 'phase'
+        ? getItemUsageForPokemon(pokemonName, scopeType, scopeId, playerId ?? undefined, 'phase')
+        : getItemUsageForPokemon(pokemonName, scopeType, scopeId, playerId ?? undefined),
     ),
 );
 

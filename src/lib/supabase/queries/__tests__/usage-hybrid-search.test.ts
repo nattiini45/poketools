@@ -10,10 +10,14 @@ vi.mock('../aggregates', () => ({
   getAggregateForPokemon: vi.fn(),
   getTotalGamesInScope: vi.fn(),
 }));
+vi.mock('../phase-games', () => ({ getPhaseSeasonGameTotal: vi.fn() }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
 
-import { getHybridUsageList } from '../usage-hybrid';
-import { getUsageByFormat } from '../meta-usage';
-import { getAggregates, getTotalGamesInScope } from '../aggregates';
+import { getHybridPokemonDetail, getHybridUsageList } from '../usage-hybrid';
+import { getPokemonUsageStats, getUsageByFormat } from '../meta-usage';
+import { getAggregateForPokemon, getAggregates, getTotalGamesInScope } from '../aggregates';
+import { getPhaseSeasonGameTotal } from '../phase-games';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 
 type MetaResult = Awaited<ReturnType<typeof getUsageByFormat>>;
 type AggregateRows = Awaited<ReturnType<typeof getAggregates>>;
@@ -32,6 +36,7 @@ function meta(rows: { pokemon_name: string; usage_pct: number }[]): MetaResult {
 describe('getHybridUsageList search (bilingual prefix)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
     vi.mocked(getTotalGamesInScope).mockResolvedValue(20);
     vi.mocked(getUsageByFormat).mockResolvedValue(meta([]));
     vi.mocked(getAggregates).mockResolvedValue([
@@ -39,6 +44,33 @@ describe('getHybridUsageList search (bilingual prefix)', () => {
       aggregate('Garchomp', 8),
       aggregate('Glimmora', 4),
     ]);
+  });
+
+  it('uses native league games for both the list and detail even while frozen', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('frozen_phase');
+    vi.mocked(getPhaseSeasonGameTotal).mockResolvedValue(40);
+    vi.mocked(getPokemonUsageStats).mockResolvedValue(null);
+    vi.mocked(getAggregateForPokemon).mockResolvedValue({
+      ...aggregate('Charizard', 10), total_led: 2, move_counts: {},
+    });
+
+    const scope = { format: 'gen9ou', seasonId: 'native-league' };
+    const list = await getHybridUsageList(scope);
+    const detail = await getHybridPokemonDetail('Charizard', scope);
+    expect(list.data.find((row) => row.pokemon_name === 'Charizard')?.usage_pct).toBe(0.25);
+    expect(detail).toMatchObject({ usage_pct: 0.25, lead_pct: 0.05, source: 'league' });
+    expect(getPhaseSeasonGameTotal).toHaveBeenCalledTimes(2);
+    expect(getTotalGamesInScope).not.toHaveBeenCalled();
+  });
+
+  it('propagates a failed native read instead of replacing league data with public meta', async () => {
+    const failure = new Error('Native league game count unavailable');
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(getPhaseSeasonGameTotal).mockRejectedValueOnce(failure);
+
+    await expect(getHybridUsageList({ format: 'gen9ou', seasonId: 'native-league' })).rejects.toBe(failure);
+    expect(getUsageByFormat).not.toHaveBeenCalled();
+    expect(getTotalGamesInScope).not.toHaveBeenCalled();
   });
 
   it('a German prefix ("Glu") matches a pokemon_name of Charizard (Glurak)', async () => {

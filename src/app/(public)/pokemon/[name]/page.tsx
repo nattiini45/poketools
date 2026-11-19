@@ -8,6 +8,8 @@ import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 import type { DataLocale, StatKey } from '@/lib/pkmn/i18n/types';
 import { getSession } from '@/lib/auth/helpers';
 import { publicReads } from '@/lib/cache/public-reads';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
 import { getWikiSpeciesDetail } from '@/lib/wiki/index-rows.server';
 import { getDataLocale, getT } from '@/i18n/server';
@@ -64,7 +66,9 @@ export default async function PokemonDetailPage({ params }: PageProps) {
   // Fetch default all_time stats + wiki content (notes only when logged in)
   const [aggregate, totalGames, notes, historical, archiveOptions] = await Promise.all([
     publicReads.pokemonAggregate(species.name),
-    publicReads.totalGames('all_time', null),
+    getPhaseRouteMode().then((mode) => mode === 'phase' || mode === 'frozen_phase'
+      ? phasePublicReads.allTimeGameTotal()
+      : publicReads.totalGames('all_time', null)),
     session
       ? getApprovedNotes('pokemon', species.name).catch(() => [])
       : Promise.resolve([]),

@@ -136,6 +136,20 @@ Wiki content components are **layout-agnostic** — they accept data props and r
 - Static @pkmn/dex data doesn't change between deploys
 - Community notes fetched on each request (not cached)
 
+The species page and its competitive stats API use a shared aggregate
+numerator and the game total of the active store. In phase mode the
+all-time total includes phase and standalone games, and a league total
+counts its native games only. The team-builder hybrid usage list and detail
+also use the native denominator for league scope. No phase reads run with
+the mode lookup disabled.
+
+Item frequencies come from a capped SQL count over rosters linked to
+completed matches. In phase mode `get_item_usage_for_pokemon_phase_storage`
+counts native league rosters, plus standalone tournament rosters for
+all-time. The top items keep the full qualifying sets as their denominator.
+The legacy RPC is unchanged and still serves standalone scopes. Both RPCs
+are service-role-only.
+
 ## Dependencies
 - [PKMN Module](./pkmn.md) — `getMove()`, `getItem()`, `getAbility()`, `getSpecies()`, `getAllMoves()`, `getAllItems()`, `getAllAbilities()`
 - [Supabase Module](./supabase.md) — wiki_notes queries
