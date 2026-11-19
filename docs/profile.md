@@ -8,6 +8,7 @@ The Profile module composes full player profile views by aggregating player, mat
 src/lib/profile/
 ├── compose.ts  # Player profile composition logic
 ├── historical-statistics.ts  # Inclusion-aware historical composition outside shared caches
+├── storage.ts  # Selects the active phase or legacy store before caching
 └── redact.ts  # The player row a visitor may see: the PublicPlayer profile card
 ```
 
