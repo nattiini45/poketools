@@ -10,6 +10,7 @@ src/lib/broadcast/
 ├── draft-replay.ts  # Draft replay state/reducer helpers
 ├── error-retry.ts  # Back-off schedule of the overlay error boundary
 ├── overlay-config.ts  # Overlay configuration helpers
+├── match-read.ts  # Verified native or standalone match reads for public preview and state
 ├── phase-populate.ts  # Native phase caster data assembly
 ├── phase-session-services.ts  # Dormant native cast session operations
 ├── phase-session-view.ts  # Public native cast session projection
@@ -97,6 +98,7 @@ The overlay data routes need no session, and a miss runs the whole database fan-
 - The limiter fails open: a limiter outage (it is a Postgres RPC on Vercel) lets requests through rather than blacking out a live broadcast. The query refusal protects the database either way.
 - A request without a client IP (a local run, the capture harness) is not limited on the in-memory store.
 - Legacy `Cache-Control` on successful responses stays the same (state 2 s, or 5 s with `enrich=true`; preview 30 s; standings 60 s; solo 2 s). Native standings follows the league's phases, even during a native freeze, and is not shared-cacheable across storage generations.
+- With phase routing on, preview and state use the verified match owner and return `no-store`.
 - With playoffs, the overlay shows the same league-wide standings and final placings as the league page. Both read the league roster from `season_participants` in either storage generation, so a league member who hasn't joined a phase stays in the table. Phase enrollment is the source for a primary-phase-only table, not a substitute for the league roster.
 
 ### Client behaviour under a limit

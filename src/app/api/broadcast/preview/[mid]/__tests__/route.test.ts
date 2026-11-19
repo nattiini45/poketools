@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextResponse } from 'next/server';
 
 // ── Mocks ──────────────────────────────────────────────────────────────
@@ -7,6 +7,16 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(),
   getH2HBetweenPlayers: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({
+  getPhaseMatchById: vi.fn(),
+  getPhaseHeadToHead: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ standaloneMatchAliasExists: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getPhaseRoundById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-teams', () => ({ getPlayerPhaseTeamForMatch: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/signatures', () => ({
   getPlayerSignatures: vi.fn(),
@@ -60,6 +70,12 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 
 import { GET } from '../route';
 import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { getPhaseMatchById, getPhaseHeadToHead } from '@/lib/supabase/queries/phase-matches';
+import { standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
+import { getPlayerPhaseTeamForMatch } from '@/lib/supabase/queries/phase-teams';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
@@ -159,6 +175,120 @@ function setupDefaultMocks() {
 describe('GET /api/broadcast/preview/[mid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(['phase', 'frozen_phase'] as const)('serves %s preview from its phase and redacts each roster before projection', async (mode) => {
+    setupDefaultMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    const match = { ...mockMatch, phase_id: 'phase-1' };
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce(match as never);
+    vi.mocked(getPhaseById).mockResolvedValueOnce({
+      id: 'phase-1', season_id: 'native-season', name: 'Native Phase', team_visibility: 'hidden_until_match', best_of_default: 3,
+    } as never);
+    vi.mocked(getPhaseRoundById).mockResolvedValueOnce({ name: 'Native Round', best_of: 5 } as never);
+    vi.mocked(getSeasonById).mockResolvedValueOnce({ name: 'Native Season' } as never);
+    vi.mocked(getPhaseHeadToHead).mockResolvedValueOnce([{ id: 'meeting', winner_id: 'p2' }] as never);
+    vi.mocked(getPlayerPhaseTeamForMatch)
+      .mockResolvedValueOnce(teamOf('p1') as never)
+      .mockResolvedValueOnce(teamOf('p2', { library_published_at: '2026-10-01T00:00:00Z' }) as never);
+
+    const res = await GET(makeRequest(), { params: makeParams({ mid: match.id }) });
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(json.data).toMatchObject({
+      tournament_name: 'Native Phase', round_name: 'Native Round', season_name: 'Native Season',
+      best_of: 5, format_name: '', h2h: { player1_wins: 0, player2_wins: 1, total_matches: 1 },
+      player2_team: [{ pokemon_name: 'Garchomp', item: 'Choice Scarf', ability: 'Rough Skin' }],
+    });
+    expect(json.data.player1_team).toHaveLength(6);
+    for (const slot of json.data.player1_team) {
+      expect(slot).toMatchObject({ pokemon_name: 'hidden', item: '', ability: '', moves_used: [] });
+    }
+    expect(getPhaseRoundById).toHaveBeenCalledExactlyOnceWith('r1', 'phase-1');
+    expect(getSeasonById).toHaveBeenCalledExactlyOnceWith('native-season');
+    expect(getPlayerPhaseTeamForMatch).toHaveBeenCalledWith('p1', match);
+    expect(getPlayerPhaseTeamForMatch).toHaveBeenCalledWith('p2', match);
+    expect(getPhaseHeadToHead).toHaveBeenCalledExactlyOnceWith('phase-1', 'p1', 'p2');
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expect(getPlayerTeamForMatch).not.toHaveBeenCalled();
+    expect(getH2HBetweenPlayers).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('only serves legacy fallback if its actual tournament is standalone (%s)', async (standalone) => {
+    setupDefaultMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce(null);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(standalone);
+    if (standalone) {
+      vi.mocked(getTournamentById).mockResolvedValueOnce({ id: 't1', name: 'Standalone', season_id: null } as never);
+    }
+
+    const res = await GET(makeRequest(), { params: makeParams({ mid: mockMatch.id }) });
+
+    expect(standaloneMatchAliasExists).toHaveBeenCalledExactlyOnceWith(mockMatch.id);
+    if (standalone) {
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect((await res.json()).data).toMatchObject({ tournament_name: 'Standalone', season_name: '' });
+    } else {
+      expect(res.status).toBe(404);
+      expect((await res.json()).code).toBe('match_not_found');
+      expect(getMatchById).not.toHaveBeenCalled();
+      expect(getTournamentById).not.toHaveBeenCalled();
+      expect(getPlayerTeamForMatch).not.toHaveBeenCalled();
+      expect(getH2HBetweenPlayers).not.toHaveBeenCalled();
+    }
+  });
+
+  it('serves the frozen legacy league without probing native storage', async () => {
+    setupDefaultMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('frozen_legacy');
+
+    const res = await GET(makeRequest(), { params: makeParams({ mid: mockMatch.id }) });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect((await res.json()).data).toMatchObject({ tournament_name: 'Tournament One', season_name: 'Season One' });
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    expect(getPhaseById).not.toHaveBeenCalled();
+    expect(getPlayerPhaseTeamForMatch).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+  });
+
+  it('stops sharing legacy preview responses when the storage switch is enabled', async () => {
+    setupDefaultMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('legacy');
+
+    const res = await GET(makeRequest(), { params: makeParams({ mid: mockMatch.id }) });
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back to legacy when the native lookup fails', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    const error = new Error('native read failed');
+    vi.mocked(getPhaseMatchById).mockRejectedValueOnce(error);
+
+    const res = await GET(makeRequest(), { params: makeParams({ mid: mockMatch.id }) });
+
+    expect(res.status).toBe(500);
+    expect(safeErrorResponse).toHaveBeenCalledExactlyOnceWith(error, 'Failed to fetch match preview');
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
   });
 
   it('returns 404 when match is not found', async () => {
@@ -191,6 +321,8 @@ describe('GET /api/broadcast/preview/[mid]', () => {
     expect(json.data.round_name).toBe('Round 1');
     expect(json.data.season_name).toBe('Season One');
     expect(json.data.best_of).toBe(3);
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
   });
 
   it('enriches player info with ratings and record', async () => {

@@ -2,16 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
-import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
+import { readBroadcastMatch, readBroadcastMatchMetadata, readBroadcastHeadToHead } from '@/lib/broadcast/match-read';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerAchievements } from '@/lib/supabase/queries/achievements';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { getRoundById } from '@/lib/supabase/queries/rounds';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
-import { filterTeamPokemonForBroadcast } from '@/lib/team/visibility';
+import { getPlayerPhaseTeamForMatch } from '@/lib/supabase/queries/phase-teams';
+import { decideMatchRosterVisibility, redactedPokemon } from '@/lib/team/visibility';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import type { ApiResult } from '@/types/api';
 import type {
@@ -42,17 +40,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (invalidId) return invalidId;
     const guarded = await guardBroadcastRequest(request, BROADCAST_ROUTE_LIMITS.preview);
     if (guarded) return guarded;
-    const match = await getMatchById(mid);
+    const read = await readBroadcastMatch(mid);
 
-    if (!match) {
+    if (!read) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
         { status: 404 }
       );
     }
 
+    const { match } = read;
     const p1Id = match.player_1_id;
     const p2Id = match.player_2_id;
+    const readTeam = (playerId: string) => read.kind === 'phase'
+      ? getPlayerPhaseTeamForMatch(playerId, read.match)
+      : getPlayerTeamForMatch(playerId, read.match);
 
     // Fetch all data in parallel
     const [
@@ -61,8 +63,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       p1Streaks, p2Streaks,
       p1Achievements, p2Achievements,
       p1Team, p2Team,
-      tournament,
-      round,
+      { competition, round, seasonName },
     ] = await Promise.all([
       getPlayerSignatures(p1Id),
       getPlayerSignatures(p2Id),
@@ -72,26 +73,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
       getPlayerStreaks(p2Id),
       getPlayerAchievements(p1Id).then((a) => a.slice(0, 5)),
       getPlayerAchievements(p2Id).then((a) => a.slice(0, 5)),
-      getPlayerTeamForMatch(p1Id, match),
-      getPlayerTeamForMatch(p2Id, match),
-      getTournamentById(match.tournament_id),
-      getRoundById(match.round_id),
+      readTeam(p1Id),
+      readTeam(p2Id),
+      readBroadcastMatchMetadata(read),
     ]);
 
-    // Get season name
-    let seasonName = '';
-    if (tournament?.season_id) {
-      const season = await getSeasonById(tournament.season_id);
-      seasonName = season?.name ?? '';
-    }
-
     // Spec §7 per match: an upcoming match's rosters stay redacted.
-    const tournamentVisibility = tournament?.team_visibility ?? null;
-    const p1Pokemon = filterTeamPokemonForBroadcast(p1Team, match, tournamentVisibility);
-    const p2Pokemon = filterTeamPokemonForBroadcast(p2Team, match, tournamentVisibility);
+    const visiblePokemon = (team: typeof p1Team) => {
+      if (!team) return [];
+      return decideMatchRosterVisibility(team, { viewerId: null, isAdmin: false }, match, competition?.team_visibility ?? null)
+        ? team.pokemon
+        : redactedPokemon();
+    };
 
     // Compute H2H using targeted query (only fetches matches between these two players)
-    const h2h = await computeH2H(p1Id, p2Id, match.tournament_id);
+    const h2h = computeH2H(p1Id, p2Id, await readBroadcastHeadToHead(read));
 
     // Build enriched player info
     const buildPlayer = (
@@ -151,21 +147,21 @@ export async function GET(request: NextRequest, context: RouteContext) {
         p2Id, match.player_2_name, match.player_2_avatar_url,
         p2Rating, p2Sigs, p2Streaks, p2Achievements,
       ),
-      player1_team: enrichTeamRoster(p1Pokemon),
-      player2_team: enrichTeamRoster(p2Pokemon),
+      player1_team: enrichTeamRoster(visiblePokemon(p1Team)),
+      player2_team: enrichTeamRoster(visiblePokemon(p2Team)),
       h2h,
-      tournament_name: tournament?.name ?? '',
+      tournament_name: competition?.name ?? '',
       round_name: round?.name ?? '',
       season_name: seasonName,
       format_name: '',
-      best_of: round?.best_of ?? tournament?.best_of_default ?? 1,
+      best_of: round?.best_of ?? competition?.best_of_default ?? 1,
     };
 
     return NextResponse.json<ApiResult<MatchPreviewData>>(
       { success: true, data: preview },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=60',
+          'Cache-Control': read.sharedCache ? 'public, s-maxage=30, stale-while-revalidate=60' : 'no-store',
         },
       }
     );
@@ -174,15 +170,11 @@ export async function GET(request: NextRequest, context: RouteContext) {
   }
 }
 
-async function computeH2H(
+function computeH2H(
   player1Id: string,
   player2Id: string,
-  tournamentId: string,
-): Promise<H2HRecord | null> {
-  // A failed read propagates to the route's safeErrorResponse: null means
-  // "no previous meeting" and must never stand in for a database error.
-  const h2hMatches = await getH2HBetweenPlayers(player1Id, player2Id, tournamentId);
-
+  h2hMatches: Awaited<ReturnType<typeof readBroadcastHeadToHead>>,
+): H2HRecord | null {
   if (h2hMatches.length === 0) return null;
 
   let p1Wins = 0;

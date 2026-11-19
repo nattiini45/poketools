@@ -2,17 +2,22 @@ import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { BROADCAST_ROUTE_LIMITS, guardBroadcastRequest } from '@/lib/broadcast/request-guard';
-import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
+import {
+  readBroadcastMatch,
+  readBroadcastMatchMetadata,
+  readBroadcastMatchHistory,
+  type BroadcastMatchRead,
+} from '@/lib/broadcast/match-read';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
 import { getRecentMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
+import { getRecentPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
 import { getPlayerAchievements } from '@/lib/supabase/queries/achievements';
-import { getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { getRoundById } from '@/lib/supabase/queries/rounds';
-import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getMatchAnalysis } from '@/lib/supabase/queries/match-analyses';
+import { getPhaseMatchAnalysis } from '@/lib/supabase/queries/phase-ai-artifacts';
 import { computePokemonScore } from '@/lib/match/aggregation';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import type { ApiResult } from '@/types/api';
@@ -57,20 +62,19 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (guarded) return guarded;
 
     const enrich = request.nextUrl.searchParams.get('enrich') === 'true';
-    const match = await getMatchById(mid);
+    const read = await readBroadcastMatch(mid);
 
-    if (!match) {
+    if (!read) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
         { status: 404 }
       );
     }
 
-    // Get all battle stats for this match
-    const [statsByGame, recentMoments] = await Promise.all([
-      getBattleStatsByMatch(mid),
-      getRecentMomentsByMatch(mid, 5),
-    ]);
+    const { match } = read;
+    const [statsByGame, recentMoments] = await (read.kind === 'phase'
+      ? Promise.all([getPhaseBattleStatsByMatch(match.id), getRecentPhaseMomentsByMatch(match.id, 5)])
+      : Promise.all([getBattleStatsByMatch(mid), getRecentMomentsByMatch(mid, 5)]));
 
     // Series score from completed games
     const p1Wins = match.games.filter((g) => g.winner_id === match.player_1_id).length;
@@ -132,7 +136,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
     if (enrich) {
       const enrichedState = await buildEnrichedState(
         baseState,
-        match,
+        read,
         statsByGame,
       );
 
@@ -140,7 +144,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { success: true, data: enrichedState },
         {
           headers: {
-            'Cache-Control': 'public, s-maxage=5, stale-while-revalidate=10',
+            'Cache-Control': read.sharedCache ? 'public, s-maxage=5, stale-while-revalidate=10' : 'no-store',
           },
         }
       );
@@ -151,7 +155,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
       { success: true, data: baseState },
       {
         headers: {
-          'Cache-Control': 'public, s-maxage=2, stale-while-revalidate=5',
+          'Cache-Control': read.sharedCache ? 'public, s-maxage=2, stale-while-revalidate=5' : 'no-store',
         },
       }
     );
@@ -164,12 +168,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
 
 async function buildEnrichedState(
   baseState: LiveMatchState,
-  match: NonNullable<Awaited<ReturnType<typeof getMatchById>>>,
+  read: BroadcastMatchRead,
   statsByGame: Record<string, BattleStat[]>,
 ): Promise<EnrichedMatchState> {
   const p1Id = baseState.player1.id;
   const p2Id = baseState.player2.id;
-  const m = match;
+  const m = read.match;
 
   // Fetch all enrichment data in parallel
   const [
@@ -177,8 +181,7 @@ async function buildEnrichedState(
     p1Rating, p2Rating,
     p1Streaks, p2Streaks,
     p1Achievements, p2Achievements,
-    tournament,
-    round,
+    { competition, round, seasonName },
     h2hMatches,
   ] = await Promise.all([
     getPlayerSignatures(p1Id),
@@ -189,25 +192,19 @@ async function buildEnrichedState(
     getPlayerStreaks(p2Id),
     getPlayerAchievements(p1Id).then((a) => a.slice(0, 5)),
     getPlayerAchievements(p2Id).then((a) => a.slice(0, 5)),
-    getTournamentById(m.tournament_id),
-    getRoundById(m.round_id),
+    readBroadcastMatchMetadata(read),
     // No catch: a failed H2H read fails the enriched response (no masking to an empty history).
-    getH2HBetweenPlayers(p1Id, p2Id, m.tournament_id),
+    readBroadcastMatchHistory(read),
   ]);
 
   // Compute H2H record and timeline from the single targeted query
   const h2h = computeH2HFromMatches(h2hMatches, p1Id, p2Id);
-  const h2hTimeline = buildH2HTimelineFromMatches(h2hMatches, p1Id, p2Id, m.id);
-
-  // Get season name if tournament has a season
-  let seasonName = '';
-  if (tournament?.season_id) {
-    const season = await getSeasonById(tournament.season_id);
-    seasonName = season?.name ?? '';
-  }
+  const h2hTimeline = buildH2HTimelineFromMatches(h2hMatches, m.id);
 
   // Fetch match analysis if available
-  const analysis = await getMatchAnalysis(m.id);
+  const analysis = await (read.kind === 'phase'
+    ? getPhaseMatchAnalysis(read.match.phase_id, m.id)
+    : getMatchAnalysis(m.id));
 
   // Compute pokemon score
   const pokemonScore = computePokemonScore(statsByGame, p1Id, p2Id);
@@ -246,7 +243,7 @@ async function buildEnrichedState(
     enriched_player2: buildPlayer(baseState.player2, p2Rating, p2Sigs, p2Streaks, p2Achievements),
     pokemon_score: { p1: pokemonScore.p1Score, p2: pokemonScore.p2Score },
     per_game_breakdown: perGameBreakdown,
-    tournament_name: tournament?.name ?? '',
+    tournament_name: competition?.name ?? '',
     round_name: round?.name ?? '',
     season_name: seasonName,
     format_name: '',
@@ -259,7 +256,7 @@ async function buildEnrichedState(
 // ─── Game Breakdowns ────────────────────────────────────────────────
 
 function buildGameBreakdowns(
-  match: NonNullable<Awaited<ReturnType<typeof getMatchById>>>,
+  match: BroadcastMatchRead['match'],
   statsByGame: Record<string, BattleStat[]>,
 ): GameBreakdown[] {
   return match.games.map((game) => {
@@ -313,7 +310,7 @@ function enrichPokemonStates(stats: BattleStat[], isWinner: boolean): EnrichedPo
 // ─── H2H Computation (pure functions — operate on pre-fetched matches) ──
 
 function computeH2HFromMatches(
-  matches: Awaited<ReturnType<typeof getH2HBetweenPlayers>>,
+  matches: Awaited<ReturnType<typeof readBroadcastMatchHistory>>,
   player1Id: string,
   player2Id: string,
 ): H2HRecord | null {
@@ -348,9 +345,7 @@ interface H2HTimelineEntry {
 
 /** Build a timeline of past H2H encounters (excluding current match) */
 function buildH2HTimelineFromMatches(
-  matches: Awaited<ReturnType<typeof getH2HBetweenPlayers>>,
-  player1Id: string,
-  player2Id: string,
+  matches: Awaited<ReturnType<typeof readBroadcastMatchHistory>>,
   currentMatchId: string,
 ): H2HTimelineEntry[] {
   return matches

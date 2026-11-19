@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse, type NextRequest } from 'next/server';
 
 vi.mock('@/lib/auth/helpers', () => {
@@ -20,6 +20,19 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
   getMatchById: vi.fn(),
   getH2HBetweenPlayers: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({
+  getPhaseMatchById: vi.fn(),
+  getPhaseHeadToHead: vi.fn(),
+  getPhaseMatchesByIds: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ standaloneMatchAliasExists: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getPhaseRoundById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseBattleStatsByMatch: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-broadcast-moments', () => ({ getRecentPhaseMomentsByMatch: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-ai-artifacts', () => ({ getPhaseMatchAnalysis: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/games', () => ({
   getBattleStatsByMatch: vi.fn(),
@@ -77,6 +90,14 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 
 import { GET } from '@/app/api/broadcast/state/[mid]/route';
 import { getMatchById, getH2HBetweenPlayers } from '@/lib/supabase/queries/matches';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { getPhaseMatchById, getPhaseHeadToHead, getPhaseMatchesByIds } from '@/lib/supabase/queries/phase-matches';
+import { standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
+import { getRecentPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
+import { getPhaseMatchAnalysis } from '@/lib/supabase/queries/phase-ai-artifacts';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getRecentMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
 import { getPlayerSignatures } from '@/lib/supabase/queries/signatures';
@@ -114,11 +135,158 @@ const mockMatch = {
 };
 
 const routeContext = { params: Promise.resolve({ mid: '33333333-3333-4333-8333-333333333333' }) };
+const phaseMatch = { ...mockMatch, phase_id: 'phase-1' };
+const phaseMoment = {
+  id: 'moment-1',
+  game_id: 'game-1',
+  match_id: mockMatch.id,
+  turn_number: 3,
+  moment_type: 'big_ko',
+  description: null,
+  pokemon_name: 'Pikachu',
+  timestamp: '2026-10-01T00:00:00.000Z',
+  created_by: 'p1',
+} as const;
+
+function hitState(query = '') {
+  const url = new URL(`http://localhost:3000/api/broadcast/state/${mockMatch.id}${query}`);
+  return GET({ nextUrl: url, url: url.toString(), headers: new Headers() } as unknown as NextRequest, routeContext);
+}
 
 describe('GET /api/broadcast/state/[mid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
     vi.mocked(getMatchAnalysis).mockResolvedValue(null);
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(['phase', 'frozen_phase'] as const)('keeps %s plain state on native match, stats and recent moments only', async (mode) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce(phaseMatch as never);
+    vi.mocked(getPhaseBattleStatsByMatch).mockResolvedValueOnce({
+      'game-1': [{ player_id: 'p1', pokemon_name: 'Pikachu', was_brought: true, was_lead: true, was_koed: false, kos_dealt: 2 }],
+    } as never);
+    vi.mocked(getRecentPhaseMomentsByMatch).mockResolvedValueOnce([phaseMoment]);
+
+    const res = await hitState();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect(await res.json()).toEqual({
+      success: true,
+      data: {
+        match_id: mockMatch.id,
+        series_score: { player1: 1, player2: 0 },
+        player1: { id: 'p1', name: 'Alice', avatar_url: 'https://example.com/alice.png' },
+        player2: { id: 'p2', name: 'Bob', avatar_url: 'https://example.com/bob.png' },
+        current_game: {
+          game_number: 1, player1_kos: 2, player2_kos: 0, player2_pokemon: [],
+          player1_pokemon: [{ pokemon_name: 'Pikachu', was_brought: true, was_lead: true, was_koed: false, kos_dealt: 2 }],
+        },
+        recent_moments: [phaseMoment],
+        match_status: 'in_progress',
+        winner_id: null,
+      },
+    });
+    expect(getPhaseBattleStatsByMatch).toHaveBeenCalledExactlyOnceWith(mockMatch.id);
+    expect(getRecentPhaseMomentsByMatch).toHaveBeenCalledExactlyOnceWith(mockMatch.id, 5);
+    expect(getPhaseById).not.toHaveBeenCalled();
+    expect(getPhaseRoundById).not.toHaveBeenCalled();
+    expect(getPhaseHeadToHead).not.toHaveBeenCalled();
+    expect(getPhaseMatchAnalysis).not.toHaveBeenCalled();
+    expect(getPlayerSignatures).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(getBattleStatsByMatch).not.toHaveBeenCalled();
+    expect(getRecentMomentsByMatch).not.toHaveBeenCalled();
+  });
+
+  it('enriches the native match with its phase round, history and stored analysis', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce(phaseMatch as never);
+    vi.mocked(getPhaseBattleStatsByMatch).mockResolvedValueOnce({});
+    vi.mocked(getRecentPhaseMomentsByMatch).mockResolvedValueOnce([]);
+    vi.mocked(getPhaseById).mockResolvedValueOnce({ name: 'Native Phase', season_id: 'native-season' } as never);
+    vi.mocked(getPhaseRoundById).mockResolvedValueOnce({ name: 'Native Round' } as never);
+    vi.mocked(getSeasonById).mockResolvedValueOnce({ name: 'Native Season' } as never);
+    vi.mocked(getPhaseHeadToHead).mockResolvedValueOnce([{ id: 'phase-history' }, { id: 'other-owner' }] as never);
+    vi.mocked(getPhaseMatchesByIds).mockResolvedValueOnce([
+      { ...phaseMatch, id: 'phase-history', status: 'completed', updated_at: '2026-10-01', winner_id: 'p1', winner_name: 'Alice' },
+      { ...phaseMatch, id: 'other-owner', phase_id: 'phase-2', status: 'completed', winner_id: 'p2' },
+    ] as never);
+    vi.mocked(getPhaseMatchAnalysis).mockResolvedValueOnce({ id: 'native-analysis' } as never);
+    vi.mocked(getPlayerSignatures).mockResolvedValue(null);
+    vi.mocked(getPlayerRating).mockResolvedValue(null);
+    vi.mocked(getPlayerStreaks).mockResolvedValue(null);
+    vi.mocked(getPlayerAchievements).mockResolvedValue([]);
+    vi.mocked(computePokemonScore).mockReturnValue({ p1Score: 1, p2Score: 0 } as never);
+
+    const res = await hitState('?enrich=true');
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect((await res.json()).data).toMatchObject({
+      tournament_name: 'Native Phase', round_name: 'Native Round', season_name: 'Native Season',
+      h2h: { player1_wins: 1, player2_wins: 0, total_matches: 1 },
+      h2h_matches: [{ match_id: 'phase-history', date: '2026-10-01', winner_name: 'Alice', draw: false, score: '1-0' }],
+      match_analysis: { id: 'native-analysis' },
+    });
+    expect(getPhaseRoundById).toHaveBeenCalledExactlyOnceWith('round-1', 'phase-1');
+    expect(getPhaseHeadToHead).toHaveBeenCalledExactlyOnceWith('phase-1', 'p1', 'p2');
+    expect(getPhaseMatchAnalysis).toHaveBeenCalledExactlyOnceWith('phase-1', mockMatch.id);
+    expect(getH2HBetweenPlayers).not.toHaveBeenCalled();
+    expect(getMatchAnalysis).not.toHaveBeenCalled();
+    expect(getTournamentById).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('requires a standalone owner before reading legacy match children (%s)', async (standalone) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('frozen_phase');
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce(null);
+    vi.mocked(getMatchById).mockResolvedValueOnce(mockMatch as never);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(standalone);
+    if (standalone) {
+      vi.mocked(getBattleStatsByMatch).mockResolvedValueOnce({});
+      vi.mocked(getRecentMomentsByMatch).mockResolvedValueOnce([]);
+    }
+
+    const res = await hitState();
+
+    expect(standaloneMatchAliasExists).toHaveBeenCalledExactlyOnceWith(mockMatch.id);
+    expect(getPhaseBattleStatsByMatch).not.toHaveBeenCalled();
+    if (standalone) {
+      expect(res.status).toBe(200);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect(getBattleStatsByMatch).toHaveBeenCalledExactlyOnceWith(mockMatch.id);
+      expect(getRecentMomentsByMatch).toHaveBeenCalledExactlyOnceWith(mockMatch.id, 5);
+    } else {
+      expect(res.status).toBe(404);
+      expect(getMatchById).not.toHaveBeenCalled();
+      expect(await res.json()).toEqual({ success: false, error: 'Match not found', code: 'match_not_found' });
+      expect(getBattleStatsByMatch).not.toHaveBeenCalled();
+      expect(getRecentMomentsByMatch).not.toHaveBeenCalled();
+    }
+  });
+
+  it('serves frozen legacy league state without reading native matches or children', async () => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('frozen_legacy');
+    vi.mocked(getMatchById).mockResolvedValueOnce(mockMatch as never);
+    vi.mocked(getBattleStatsByMatch).mockResolvedValueOnce({});
+    vi.mocked(getRecentMomentsByMatch).mockResolvedValueOnce([phaseMoment]);
+
+    const res = await hitState();
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Cache-Control')).toBe('no-store');
+    expect((await res.json()).data).toMatchObject({ recent_moments: [phaseMoment], match_status: 'in_progress' });
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    expect(getPhaseBattleStatsByMatch).not.toHaveBeenCalled();
+    expect(getRecentPhaseMomentsByMatch).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
   });
 
   it('returns slim broadcast state (no enrich)', async () => {
@@ -160,6 +328,9 @@ describe('GET /api/broadcast/state/[mid]', () => {
     const body = await res.json();
 
     expect(body.success).toBe(true);
+    expect(res.headers.get('Cache-Control')).toBe('public, s-maxage=2, stale-while-revalidate=5');
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
     expect(body.data.match_id).toBe('33333333-3333-4333-8333-333333333333');
     expect(body.data.series_score).toEqual({ player1: 1, player2: 0 });
     expect(body.data.player1.name).toBe('Alice');
