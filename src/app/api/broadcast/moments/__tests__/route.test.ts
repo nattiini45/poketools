@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextResponse, type NextRequest } from 'next/server';
+import { UserFacingError } from '@/lib/api/user-facing-error';
 
 vi.mock('@/lib/auth/helpers', () => {
   class AuthError extends Error {
@@ -16,7 +17,9 @@ vi.mock('@/lib/auth/helpers', () => {
 });
 
 vi.mock('@/lib/api/error-response', () => ({
-  safeErrorResponse: vi.fn((_err: unknown, fallback: string) => NextResponse.json({ success: false, error: fallback }, { status: 500 })),
+  safeErrorResponse: vi.fn((error: unknown, fallback: string) => error instanceof UserFacingError
+    ? NextResponse.json({ success: false, error: error.message, code: error.code }, { status: error.statusCode })
+    : NextResponse.json({ success: false, error: fallback }, { status: 500 })),
 }));
 
 vi.mock('@/lib/supabase/queries/matches', () => ({
@@ -28,9 +31,22 @@ vi.mock('@/lib/supabase/queries/broadcast-moments', () => ({
   createMoment: vi.fn(),
 }));
 
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
+  findNativePhaseAliasOwner: vi.fn(), standaloneMatchAliasExists: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-broadcast-moments', () => ({
+  createPhaseMoment: vi.fn(), getPhaseMomentsByMatch: vi.fn(),
+}));
+
 import { GET, POST } from '@/app/api/broadcast/moments/route';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { createPhaseMoment, getPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
 import {
   getMomentsByMatch,
   createMoment,
@@ -46,6 +62,9 @@ const mockMoment = {
   created_by: 'player-1',
   created_at: '2024-01-01T00:00:00Z',
 };
+
+beforeEach(() => vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false'));
+afterEach(() => vi.unstubAllEnvs());
 
 describe('GET /api/broadcast/moments', () => {
   beforeEach(() => {
@@ -63,6 +82,36 @@ describe('GET /api/broadcast/moments', () => {
 
     expect(body).toEqual({ success: true, data: [mockMoment] });
     expect(getMomentsByMatch).toHaveBeenCalledWith(UUID_MATCH);
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(getPhaseMomentsByMatch).not.toHaveBeenCalled();
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('reads only the verified native match moments in %s', async (mode) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce({ kind: 'phase', phase_id: 'phase', season_id: 'league' });
+    vi.mocked(getPhaseMomentsByMatch).mockResolvedValueOnce([mockMoment as never]);
+
+    const res = await GET({ nextUrl: new URL(`http://localhost/api/broadcast/moments?match_id=${UUID_MATCH}`) } as NextRequest);
+    expect(await res.json()).toEqual({ success: true, data: [mockMoment] });
+    expect(findNativePhaseAliasOwner).toHaveBeenCalledExactlyOnceWith({ matchId: UUID_MATCH });
+    expect(getPhaseMomentsByMatch).toHaveBeenCalledExactlyOnceWith(UUID_MATCH);
+    expect(getMomentsByMatch).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+  });
+
+  it.each([true, false])('requires actual standalone ownership before reading legacy moments in native mode (%s)', async standalone => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValueOnce(null);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValueOnce(standalone);
+    vi.mocked(getMomentsByMatch).mockResolvedValue([mockMoment as never]);
+
+    const res = await GET({ nextUrl: new URL(`http://localhost/api/broadcast/moments?match_id=${UUID_MATCH}`) } as NextRequest);
+    expect(await res.json()).toEqual({ success: true, data: standalone ? [mockMoment] : [] });
+    expect(standaloneMatchAliasExists).toHaveBeenCalledExactlyOnceWith(UUID_MATCH);
+    expect(getMomentsByMatch).toHaveBeenCalledTimes(standalone ? 1 : 0);
+    expect(getPhaseMomentsByMatch).not.toHaveBeenCalled();
   });
 
   it('returns 400 when match_id missing', async () => {
@@ -106,6 +155,39 @@ describe('POST /api/broadcast/moments', () => {
     player_2_id: 'player-2',
     tournament_id: 'tourn-1',
   };
+
+  it.each([true, false])('writes only to the authorized native match (%s)', async allowed => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce('phase');
+    vi.mocked(requirePlayer).mockResolvedValue({ ...mockPlayer, playerId: allowed ? 'player-1' : 'outsider' } as never);
+    vi.mocked(getPhaseMatchById).mockResolvedValueOnce({ ...mockMatch, phase_id: 'phase' } as never);
+    vi.mocked(createPhaseMoment).mockResolvedValueOnce(mockMoment as never);
+
+    const res = await POST({ json: async () => ({ match_id: UUID_MATCH, moment_type: 'highlight' }) } as NextRequest);
+    expect(res.status).toBe(allowed ? 200 : 403);
+    expect(getPhaseMatchById).toHaveBeenCalledExactlyOnceWith(UUID_MATCH);
+    if (allowed) expect(createPhaseMoment).toHaveBeenCalledExactlyOnceWith({
+      match_id: UUID_MATCH, moment_type: 'highlight', description: null, created_by: 'player-1',
+    });
+    else expect(createPhaseMoment).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(createMoment).not.toHaveBeenCalled();
+    vi.mocked(createPhaseMoment).mockReset();
+  });
+
+  it.each(['frozen_phase', 'frozen_legacy'] as const)('refuses moments writes in %s before loading or writing any match', async mode => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
+
+    const res = await POST({ json: async () => ({ match_id: UUID_MATCH, moment_type: 'highlight' }) } as NextRequest);
+    expect(res.status).toBe(503);
+    expect(await res.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+    expect(createPhaseMoment).not.toHaveBeenCalled();
+    expect(createMoment).not.toHaveBeenCalled();
+  });
 
   it('creates a moment as match participant', async () => {
     vi.mocked(requirePlayer).mockResolvedValue(mockPlayer as never);
