@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import type { ConversationList, ConversationSummary } from '@/components/admin/assistant/types';
 import { adminAgentStore } from '@/lib/ai/admin-agent/store';
+import { ownershipRegistryVersion, proposalStorageGeneration } from '@/lib/ai/admin-agent/registry/ownership-version';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getRequestLocale } from '@/i18n/server';
 import { checkRateLimit } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
@@ -79,6 +81,7 @@ export async function POST(request: NextRequest) {
       uiLocale: getRequestLocale(request),
       context,
       ...defaults,
+      toolRegistryVersion: ownershipRegistryVersion(defaults.toolRegistryVersion, proposalStorageGeneration(await getPhaseRouteMode())),
     });
     return NextResponse.json<ApiResult<ConversationSummary>>(
       { success: true, data: toConversationSummary(row, auth.role, new Date()) },

@@ -10,7 +10,7 @@
 import { createHmac } from 'node:crypto';
 import { NextResponse, type NextRequest } from 'next/server';
 import { afterFingerprintFor } from '@/lib/ai/admin-agent/proposals/after-state';
-import { liveBeforeState, liveFingerprints } from '@/lib/ai/admin-agent/proposals/live';
+import { liveBeforeState, liveFingerprints, liveProposalOwnership } from '@/lib/ai/admin-agent/proposals/live';
 import {
   executeProposal,
   ProposalExecutionError,
@@ -48,6 +48,7 @@ function hashClientIp(request: NextRequest): string | null {
 function liveDeps(auth: AgentAuth): ExecutorDeps {
   return {
     store: adminAgentStore,
+    ownership: liveProposalOwnership,
     bindings: getBindingRegistry(),
     fingerprints: liveFingerprints,
     // The state each undoable step leaves, and the pins a move starts from: what a later `propose_undo` is built on.

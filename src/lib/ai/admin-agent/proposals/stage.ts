@@ -29,13 +29,16 @@ import type { JsonValue } from '@/lib/studio-core/json';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
 import { effectiveProposalStatus, isProposalActionable } from '../store/proposal-state';
 import { toolErrorFromThrown } from '../registry/errors';
+import { buildToolSet } from '../registry';
 import type { AdminId } from '../store/ids';
-import type { ProposalRecord, ProposalStatus } from '../store/types';
+import type { ConversationRecord, ProposalRecord, ProposalStatus } from '../store/types';
 import { prepareBuild } from './build';
 import { proposalCardSchema, type ProposalCard } from './card';
 import { escalateClass } from './class';
 import { buildPreconditions, preconditionsHash, ReadUnavailable } from './fingerprints';
 import { isStageableGoLive, prepareGoLive } from './golive';
+import { ownershipRegistryVersion, proposalStorageGeneration } from '../registry/ownership-version';
+import { allowsProposalSteps, isProposalStorageFrozen, type ProposalOwnershipFence } from './ownership-contract';
 import { hasUndoableRows, prepareUndo, UNDO_TOOL } from './undo';
 import { StageRefusal, type PrepareContext } from './prepare';
 import { collectUuids, unknownReferences } from './provenance';
@@ -161,7 +164,19 @@ function refusedFrom(err: unknown): StageRefused {
   return { status: 'refused', code: mapped.code, ...(mapped.params === undefined ? {} : { params: mapped.params }) };
 }
 
-export function createProposalStager(deps: StagerDeps) {
+export function createProposalStager(deps: StagerDeps, fence?: ProposalOwnershipFence & {
+  getConversation: (adminId: AdminId, conversationId: string) => Promise<Pick<ConversationRecord, 'tool_set'> | null>;
+}) {
+  async function canOpen(proposal: ProposalRecord, adminId: AdminId, steps: readonly StoredStep[]): Promise<boolean> {
+    const mode = await fence?.mode() ?? null;
+    if (mode === null || fence === undefined) return true;
+    const conversation = await fence.getConversation(adminId, proposal.conversation_id);
+    if (conversation === null || (conversation.tool_set !== 'site' && conversation.tool_set !== 'scoped')) return false;
+    const raw = buildToolSet({ role: conversation.tool_set, maxPhase: deps.config().maxPhase }).registryVersion;
+    return steps.length > 0 && proposal.tool_registry_version === ownershipRegistryVersion(raw, proposalStorageGeneration(mode))
+      && await allowsProposalSteps(mode, steps, fence.reader);
+  }
+
   async function run(input: StageInput): Promise<StageResult> {
     const { admin, conversation } = input;
     const cfg = deps.config();
@@ -199,6 +214,12 @@ export function createProposalStager(deps: StagerDeps) {
       if (unknown.length > 0) throw new StageRefusal('unknown_reference', { count: unknown.length, id: unknown[0] });
     }
 
+    const mode = await fence?.mode() ?? null;
+    if (mode !== null) {
+      const raw = buildToolSet({ role, maxPhase: cfg.maxPhase }).registryVersion;
+      if (conversation.tool_registry_version !== ownershipRegistryVersion(raw, proposalStorageGeneration(mode))) throw new StageRefusal('proposal_stale');
+    }
+
     // 6. The kind-specific preparer.
     let createdIds: Promise<Set<string>> | null = null;
     const ctx: PrepareContext = {
@@ -220,6 +241,10 @@ export function createProposalStager(deps: StagerDeps) {
         : tool.name === UNDO_TOOL
           ? await prepareUndo(ctx, args as Parameters<typeof prepareUndo>[1])
           : await prepareGoLive(ctx, args);
+
+    if (fence && !(await allowsProposalSteps(mode, prepared.steps.map(({ step }) => step), fence.reader))) {
+      throw new StageRefusal(isProposalStorageFrozen(mode) ? 'phase_storage_unavailable' : 'tool_not_available');
+    }
 
     // 7. Ids, hashes, token, expiry.
     const proposalId = deps.newId();
@@ -259,6 +284,7 @@ export function createProposalStager(deps: StagerDeps) {
     });
     const token = deriveApprovalToken(deps.tokenKey(), proposalId, admin.id);
     const ttlMinutes = prepared.ttl === 'build' ? cfg.proposalTtlMinutes.build : cfg.proposalTtlMinutes.golive;
+    if ((await fence?.mode() ?? null) !== mode) throw new StageRefusal('proposal_stale');
 
     // 8. One immutable row. The store refuses a third pending proposal (`agent_cap_reached`) and supersedes the older card
     // of the same tool and target.
@@ -339,6 +365,10 @@ export function createProposalStager(deps: StagerDeps) {
     const status = proposal.status as ProposalStatus;
     const effectiveStatus = effectiveProposalStatus({ status, expires_at: proposal.expires_at }, new Date(now));
     const byStep = new Map(actions.map((action) => [action.step_key ?? '', action]));
+    const resume = resumeOf(proposal, adminId, now);
+    const actionable = isProposalActionable(effectiveStatus);
+    const undoable = proposal.kind !== 'undo' && (status === 'completed' || status === 'partial') && hasUndoableRows(actions);
+    const allowed = (!actionable && !resume?.eligible && !undoable) || await canOpen(proposal, adminId, steps.data);
 
     return {
       id: proposal.id,
@@ -346,7 +376,7 @@ export function createProposalStager(deps: StagerDeps) {
       class: proposal.class as 'B' | 'G',
       status,
       effectiveStatus,
-      actionable: isProposalActionable(effectiveStatus),
+      actionable: actionable && allowed,
       createdAt: proposal.created_at,
       expiresAt: proposal.expires_at,
       secondsLeft: status === 'proposed' ? Math.max(0, Math.ceil((expiresMs - now) / 1000)) : null,
@@ -372,8 +402,8 @@ export function createProposalStager(deps: StagerDeps) {
           verify: verifyCounts(action?.verify),
         };
       }),
-      resume: resumeOf(proposal, adminId, now),
-      undoable: proposal.kind !== 'undo' && (status === 'completed' || status === 'partial') && hasUndoableRows(actions),
+      resume: allowed ? resume : null,
+      undoable: undoable && allowed,
       details: steps.data.map((step) => ({
         key: step.key,
         method: step.method,
@@ -392,6 +422,10 @@ export function createProposalStager(deps: StagerDeps) {
   async function getApprovalToken(proposalId: string, adminId: AdminId): Promise<string | null> {
     const proposal = await deps.store.proposals.getProposalOrThrow(adminId, proposalId);
     if (proposal.status !== 'proposed' || new Date(proposal.expires_at).getTime() <= deps.now().getTime()) return null;
+    if (fence) {
+      const steps = storedStepSchema.array().safeParse(proposal.steps);
+      if (!steps.success || !(await canOpen(proposal, adminId, steps.data))) return null;
+    }
     return deriveApprovalToken(deps.tokenKey(), proposal.id, adminId);
   }
 

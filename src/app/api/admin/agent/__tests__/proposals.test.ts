@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(),
   getCard: vi.fn(),
   getApprovalToken: vi.fn(),
+  storageMode: vi.fn(),
   store: {
     conversations: { withTurnLease: vi.fn(), getConversation: vi.fn(), claimBudget: vi.fn() },
     messages: { appendMessage: vi.fn(), loadTail: vi.fn() },
@@ -40,8 +41,11 @@ vi.mock('@/lib/auth/helpers', () => ({
 vi.mock('@/lib/auth/session-override', () => ({ authAndRecord: mocks.authAndRecord }));
 vi.mock('@/lib/ai/admin-agent/store', () => ({ adminAgentStore: mocks.store }));
 vi.mock('@/lib/ai/admin-agent/proposals/serve', () => ({ getCard: mocks.getCard, getApprovalToken: mocks.getApprovalToken }));
-// The approve side wires the live reads and the registry; neither is under test here (the executor has its own suites).
-vi.mock('@/lib/ai/admin-agent/proposals/live', () => ({ liveFingerprints: { read: vi.fn() }, liveBeforeState: vi.fn() }));
+vi.mock('@/lib/ai/admin-agent/proposals/live', () => ({
+  liveFingerprints: { read: vi.fn() },
+  liveBeforeState: vi.fn(),
+  liveProposalOwnership: { mode: mocks.storageMode, reader: { resolve: vi.fn() } },
+}));
 vi.mock('@/lib/ai/admin-agent/registry', () => ({ buildToolSet: () => ({ registryVersion: 'registry-secret-version' }) }));
 vi.mock('@/lib/audit/log', () => ({ logAuditEvent: mocks.logAuditEvent }));
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
@@ -91,6 +95,7 @@ beforeEach(() => {
   vi.stubEnv('ADMIN_AGENT_ENABLED', 'true');
   // The route gate refuses a hosted database outside a production build; the suites run against mocks.
   vi.stubEnv('ADMIN_AGENT_ALLOW_HOSTED', 'true');
+  mocks.storageMode.mockResolvedValue(null);
   mocks.requireAnyAdmin.mockResolvedValue(player());
   mocks.authAndRecord.mockResolvedValue({ expires: '2099-01-01T00:00:00.000Z' });
   mocks.checkRateLimit.mockResolvedValue({ allowed: true, remaining: 10, retryAfterSeconds: 0 });
@@ -234,6 +239,16 @@ describe('POST /api/admin/agent/proposals/[id]/approve', () => {
       mocks.store.proposals.claimProposal.mockResolvedValue(proposal({ status: 'executing', approved_by: ME, executing_started_at: '2026-10-27T10:03:00.000Z' }));
       mocks.store.proposals.finishProposal.mockResolvedValue(proposal({ status: 'stale' }));
       mocks.store.conversations.getConversation.mockResolvedValue(conversation());
+    });
+
+    it.each(['frozen_legacy', 'frozen_phase'])('refuses a phase-dependent approval in %s before claiming it', async (mode) => {
+      mocks.storageMode.mockResolvedValue(mode);
+      mocks.store.proposals.getProposalOrThrow.mockResolvedValue(proposal({ steps: [STEP] }));
+      const res = await call();
+      expect(res.status).toBe(503);
+      expect(await res.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+      expect(mocks.store.proposals.claimProposal).not.toHaveBeenCalled();
+      expect(mocks.store.actions.insertAction).not.toHaveBeenCalled();
     });
 
     it('refuses the approve with a harness error when no session could be recorded: nothing reaped, claimed or dispatched', async () => {
