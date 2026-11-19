@@ -140,6 +140,28 @@ export async function getPhaseTeamVisibilityFacts(ids: readonly string[]): Promi
   return out;
 }
 
+export async function listSeasonPhaseRostersWithFacts(seasonId: string, playerId?: string) {
+  const rows = await readAllPages((from, to) => {
+    const query = supabase.from('phase_teams')
+      .select(`
+        id, player_id, match_id, created_at, library_published_at, pokemon,
+        match:phase_matches!phase_teams_phase_match_fkey ( status ),
+        phase:league_phases!phase_teams_phase_id_fkey!inner ( team_visibility )
+      `)
+      .eq('phase.season_id', seasonId);
+    if (playerId !== undefined) query.eq('player_id', playerId);
+    return query.order('created_at').order('id').range(from, to);
+  });
+  return rows.map(({ id, player_id, match_id, created_at, library_published_at, pokemon, match, phase }) => ({
+    id, player_id, match_id, created_at, library_published_at,
+    pokemon: pokemon as unknown as PhaseTeam['pokemon'],
+    facts: {
+      match_status: match?.status ?? null,
+      tournament_visibility: phase?.team_visibility ?? null,
+    },
+  }));
+}
+
 export async function listSeasonPhaseTeamLeadsWithFacts(seasonId: string): Promise<TeamLeadWithFacts[]> {
   assertValidUuid(seasonId, 'seasonId');
   const { rows } = await readBoundedPages(
