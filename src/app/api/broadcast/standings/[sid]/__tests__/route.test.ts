@@ -33,6 +33,15 @@ vi.mock('@/lib/supabase/queries/matches', () => ({
 
 vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: vi.fn() }));
 
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({
+  getPhasesBySeasonId: vi.fn(),
+  getPublicPhaseStandingsParticipants: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPublicMatchesByPhaseIds: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getByeRoundsByPhaseIds: vi.fn() }));
+
 vi.mock('@/lib/supabase/queries/ratings', () => ({
   getPlayerRatingsBatch: vi.fn(),
 }));
@@ -43,6 +52,7 @@ vi.mock('@/lib/supabase/queries/signatures', () => ({
 
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
+  getAggregatesSummary: vi.fn(),
 }));
 
 vi.mock('@/lib/tournament/season-standings', async (importOriginal) => ({
@@ -66,6 +76,11 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 }));
 
 import { GET } from '@/app/api/broadcast/standings/[sid]/route';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
+import { getPhasesBySeasonId, getPublicPhaseStandingsParticipants } from '@/lib/supabase/queries/league-phases';
+import { getPublicMatchesByPhaseIds } from '@/lib/supabase/queries/phase-matches';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
 import { getSeasonById, getPublicSeasonParticipants } from '@/lib/supabase/queries/seasons';
 import {
   getStagesBySeasonId,
@@ -76,11 +91,12 @@ import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getRoundsByTournament } from '@/lib/supabase/queries/rounds';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
-import { getAggregates } from '@/lib/supabase/queries/aggregates';
+import { getAggregates, getAggregatesSummary } from '@/lib/supabase/queries/aggregates';
 import { computeStandingsForSeason, loadRankingContext } from '@/lib/tournament/season-standings';
 import { leaguePlayoffsFixture } from '@/test/fixtures/league-playoffs';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { expectNoPrivateMatchData } from '@/lib/match/__tests__/private-match-fields';
+import { toPublicMatch } from '@/lib/match/public-match';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { makeRequest } from '@/lib/__tests__/helpers/api-request';
 
@@ -147,8 +163,9 @@ const mockStandings = [
 ];
 
 describe('GET /api/broadcast/standings/[sid]', () => {
-  it('uses bracket places and shared third place without adding playoff wins to the group records', async () => {
+  it.each(['legacy', 'frozen_legacy'] as const)('uses legacy bracket places and group records in %s', async (mode) => {
     const fixture = leaguePlayoffsFixture();
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
     vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: 'singles' } as never);
     vi.mocked(getStagesBySeasonId).mockResolvedValue([...fixture.stages] as never);
     vi.mocked(getPublicSeasonParticipants).mockResolvedValue([...fixture.participants] as never);
@@ -166,12 +183,174 @@ describe('GET /api/broadcast/standings/[sid]', () => {
       .toEqual([['Orbit', 1], ['Nova', 2], ['Comet', 3], ['Meteor', 3]]);
     expect(body.data.standings[0].wins).toBe(0);
     expect(getMatchesByTournamentIds).toHaveBeenCalledOnce();
+    expect(getAggregates).toHaveBeenCalledExactlyOnceWith('tournament', 'groups');
     expect(getParticipants).not.toHaveBeenCalled();
+    expect(getPhasesBySeasonId).not.toHaveBeenCalled();
+    expect(getPublicMatchesByPhaseIds).not.toHaveBeenCalled();
     expectNoPrivatePlayerData(body);
     expectNoPrivateMatchData(body);
   });
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  });
+
+  describe('native reads', () => {
+    const [phaseId, secondPhaseId, playoffId] = ['phase-1', 'phase-2', 'phase-playoff'];
+
+    beforeEach(() => {
+      vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+      vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: 'custom' } as never);
+      vi.mocked(getPlayerRatingsBatch).mockResolvedValue(new Map());
+      vi.mocked(getPlayerSignaturesBatch).mockResolvedValue(new Map());
+      vi.mocked(getAggregatesSummary).mockResolvedValue([]);
+    });
+
+    function expectNoLegacyReads() {
+      expect(getAggregates).not.toHaveBeenCalled();
+      expect(getStagesBySeasonId).not.toHaveBeenCalled();
+      expect(getParticipants).not.toHaveBeenCalled();
+      expect(getMatchesByTournament).not.toHaveBeenCalled();
+      expect(getMatchesByTournamentIds).not.toHaveBeenCalled();
+      expect(getRoundsByTournament).not.toHaveBeenCalled();
+      expect(computeStandingsForSeason).not.toHaveBeenCalled();
+      expect(loadRankingContext).not.toHaveBeenCalled();
+    }
+
+    it.each(['phase', 'frozen_phase'] as const)('reads only the primary phase without playoffs in %s', async (mode) => {
+      vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+      vi.mocked(getPhasesBySeasonId).mockResolvedValue([
+        { id: phaseId, name: 'First Swiss', bracket_type: 'swiss' },
+        { id: secondPhaseId, name: 'Second Swiss', bracket_type: 'swiss' },
+      ] as never);
+      vi.mocked(getPublicPhaseStandingsParticipants).mockResolvedValue(mockParticipants as never);
+      vi.mocked(getPublicMatchesByPhaseIds).mockResolvedValue(new Map([
+        [phaseId, [{ ...mockMatch, phase_id: phaseId }]],
+      ]) as never);
+      vi.mocked(getByeRoundsByPhaseIds).mockResolvedValue(new Map([
+        [phaseId, [{ id: 'round-1', phase_id: phaseId, round_number: 1, bye_player_ids: ['p2'] }]],
+      ]));
+      vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue({
+        formatType: 'custom',
+        kit: {
+          engine: 'kit',
+          stages: {
+            [secondPhaseId]: { key: 'second', scoring: { win: 3, loss: 0, bye: 1 }, rank: [] },
+            [phaseId]: { key: 'first', scoring: { win: 3, loss: 0, bye: 5 }, rank: [] },
+          },
+          stageOfMatch: { [mockMatch.id]: phaseId }, outcomes: {}, coinFlips: {},
+        },
+      });
+      vi.mocked(getAggregatesSummary).mockResolvedValue([
+        { pokemon_name: 'Eevee', total_kos_dealt: 7, total_brought: 3, total_wins: 3 },
+      ] as never);
+
+      const res = await GET(makeRequest(), routeContext);
+      const body = await res.json();
+
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect(body.data.standings[0]).toMatchObject({ player_id: 'p2', wins: 1, points: 5 });
+      expect(body.data.recent_results).toEqual([{
+        match_id: mockMatch.id, player1_name: 'Alice', player2_name: 'Bob', winner_name: 'Alice',
+        player1_avatar_url: mockMatch.player_1_avatar_url, player2_avatar_url: null, pokemon_score: '2-0', series_score: '2-0',
+      }]);
+      expect(body.data.leaders.most_kos).toMatchObject({ pokemon_name: 'Eevee', kos: 7 });
+      expect(getPublicPhaseStandingsParticipants).toHaveBeenCalledExactlyOnceWith(phaseId);
+      expect(getPublicMatchesByPhaseIds).toHaveBeenCalledExactlyOnceWith([phaseId]);
+      expect(getByeRoundsByPhaseIds).toHaveBeenCalledExactlyOnceWith([phaseId]);
+      expect(getAggregatesSummary).toHaveBeenCalledExactlyOnceWith('phase', phaseId);
+      expect(getPublicSeasonParticipants).not.toHaveBeenCalled();
+      expect(getSeasonGroups).not.toHaveBeenCalled();
+      expectNoLegacyReads();
+      expectNoPrivatePlayerData(body);
+      expectNoPrivateMatchData(body);
+    });
+
+    it('ranks completed playoffs, keeps season-group standings, and includes playoff matches in results', async () => {
+      const fixture = leaguePlayoffsFixture();
+      vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: 'singles' } as never);
+      vi.mocked(getPhasesBySeasonId).mockResolvedValue([
+        { ...fixture.stages[0], id: phaseId, bracket_type: 'swiss' },
+        { id: secondPhaseId, name: 'Second Swiss', bracket_type: 'swiss' },
+        { ...fixture.stages[1], id: playoffId },
+      ] as never);
+      vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue(fixture.context);
+      vi.mocked(getPublicSeasonParticipants).mockResolvedValue([...fixture.participants] as never);
+      vi.mocked(getSeasonGroups).mockResolvedValue([...fixture.groups] as never);
+      vi.mocked(getPublicMatchesByPhaseIds).mockResolvedValue(new Map(
+        [...fixture.matchesByStage].map(([legacyId, matches]) => {
+          const owner = legacyId === 'playoffs' ? playoffId : phaseId;
+          return [owner, matches.map((match) => {
+            const { tournament_id: _, ...facts } = toPublicMatch(match);
+            return { ...facts, phase_id: owner, round_number: match.round_number,
+              updated_at: legacyId === 'playoffs' ? '2026-09-10T00:00:00Z' : '2026-09-01T00:00:00Z' };
+          })];
+        }),
+      ));
+      vi.mocked(getByeRoundsByPhaseIds).mockResolvedValue(new Map([
+        [phaseId, [{ id: 'one', phase_id: phaseId, round_number: 1, bye_player_ids: ['Pulsar'] }]],
+        [secondPhaseId, [1, 2, 3].map((round) => ({
+          id: `second-${round}`, phase_id: secondPhaseId, round_number: round, bye_player_ids: ['Quasar'],
+        }))],
+      ]));
+
+      const body = await (await GET(makeRequest(), routeContext)).json();
+      expect(body.data.standings.slice(0, 4).map(({ player_id, rank, wins }: { player_id: string; rank: number; wins: number }) =>
+        [player_id, rank, wins])).toEqual([['Orbit', 1, 0], ['Nova', 2, 1], ['Comet', 3, 2], ['Meteor', 3, 1]]);
+      expect(body.data.standings.slice(4)).toMatchObject([
+        { player_id: 'Pulsar', wins: 2, losses: 0 },
+        { player_id: 'Quasar', wins: 3, losses: 1 },
+      ]);
+      expect(body.data.recent_results).toHaveLength(5);
+      expect(body.data.recent_results[0].match_id).toBe('playoffs-1-Comet');
+      expect(getPublicPhaseStandingsParticipants).not.toHaveBeenCalled();
+      expect(getSeasonGroups).toHaveBeenCalledExactlyOnceWith(mockSeason.id);
+      expect(getPublicMatchesByPhaseIds).toHaveBeenCalledExactlyOnceWith([phaseId, secondPhaseId, playoffId]);
+      expect(getByeRoundsByPhaseIds).toHaveBeenCalledExactlyOnceWith([phaseId, secondPhaseId]);
+      expect(getAggregatesSummary).toHaveBeenCalledExactlyOnceWith('phase', phaseId);
+      expectNoLegacyReads();
+    });
+
+    it('uses the EPB tiebreaker order without reading native bye rounds', async () => {
+      const formatType = 'evolution_point_buy';
+      vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: formatType } as never);
+      vi.mocked(getPhasesBySeasonId).mockResolvedValue([{ id: phaseId, bracket_type: 'swiss' }] as never);
+      vi.mocked(getPublicPhaseStandingsParticipants).mockResolvedValue(mockParticipants as never);
+      vi.mocked(getPublicMatchesByPhaseIds).mockResolvedValue(new Map([
+        [phaseId, [{ ...mockMatch, phase_id: phaseId }]],
+      ]) as never);
+      vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue({
+        formatType, evolutionPoints: { p1: 0, p2: 5 }, tiebreakerOrder: ['evolution_points', 'match_points'],
+      });
+
+      const body = await (await GET(makeRequest(), routeContext)).json();
+      expect(body.data.standings[0]).toMatchObject({ player_id: 'p2', evolution_points: 5, wins: 0 });
+      expect(getByeRoundsByPhaseIds).not.toHaveBeenCalled();
+      expectNoLegacyReads();
+    });
+
+    it('keeps the empty response when native phases are absent instead of falling back', async () => {
+      vi.mocked(getPhasesBySeasonId).mockResolvedValue([]);
+      const res = await GET(makeRequest(), routeContext);
+      expect(res.headers.get('Cache-Control')).toBe('no-store');
+      expect((await res.json()).data).toEqual({
+        season_id: mockSeason.id, league_name: mockSeason.name, standings: [], recent_results: [],
+        leaders: { season_id: mockSeason.id, most_kos: null, best_record: null, pokemon_mvp: null },
+      });
+      expect(getPublicMatchesByPhaseIds).not.toHaveBeenCalled();
+      expect(getAggregatesSummary).not.toHaveBeenCalled();
+      expectNoLegacyReads();
+    });
+
+    it('returns the safe error when the native stage read fails instead of retrying legacy', async () => {
+      const error = new Error('Native read failed');
+      vi.mocked(getPhasesBySeasonId).mockRejectedValueOnce(error);
+
+      const res = await GET(makeRequest(), routeContext);
+      expect(res.status).toBe(500);
+      expect(safeErrorResponse).toHaveBeenCalledExactlyOnceWith(error, 'Failed to compute standings');
+      expectNoLegacyReads();
+    });
   });
 
   it('returns enriched standings for a season', async () => {
