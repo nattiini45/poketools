@@ -9,7 +9,7 @@ import { getApprovedNotes } from './wiki-notes';
 
 const NOTE_LIMIT = 500;
 const LEGACY_SCAN_PAGES = 4;
-const PHASE_ID_BATCH = 100;
+const OWNER_ID_BATCH = 100;
 
 type RetainedWikiNote = Pick<WikiNote,
   'id' | 'entity_type' | 'entity_name' | 'author_name' | 'content' | 'scope_type' | 'scope_id' | 'created_at' | 'updated_at'
@@ -33,7 +33,8 @@ async function readNativeNotes(type: WikiEntityType, name: string) {
 async function readRetainedNotes(type: WikiEntityType, name: string, nativeNoteIds: Set<string>) {
   const retained: RetainedWikiNote[] = [];
   const nativePhaseIds = new Set<string>();
-  const checkedPhaseIds = new Set<string>();
+  const standaloneTournamentIds = new Set<string>();
+  const checkedScopeIds = new Set<string>();
   for (let page = 0; page < LEGACY_SCAN_PAGES; page++) {
     const offset = page * NOTE_LIMIT;
     const { data, error } = await supabase.from('wiki_notes')
@@ -44,18 +45,24 @@ async function readRetainedNotes(type: WikiEntityType, name: string, nativeNoteI
       .range(offset, offset + NOTE_LIMIT - 1);
     if (error) throw error;
     const scopeIds = [...new Set(data.flatMap(row =>
-      row.scope_type === 'tournament' && row.scope_id && !checkedPhaseIds.has(row.scope_id) ? [row.scope_id] : [],
+      row.scope_type === 'tournament' && row.scope_id && !checkedScopeIds.has(row.scope_id) ? [row.scope_id] : [],
     ))];
-    for (let from = 0; from < scopeIds.length; from += PHASE_ID_BATCH) {
-      const ids = scopeIds.slice(from, from + PHASE_ID_BATCH);
-      const phases = await supabase.from('league_phases').select('id').in('id', ids);
+    for (let from = 0; from < scopeIds.length; from += OWNER_ID_BATCH) {
+      const ids = scopeIds.slice(from, from + OWNER_ID_BATCH);
+      const [phases, tournaments] = await Promise.all([
+        supabase.from('league_phases').select('id').in('id', ids),
+        supabase.from('tournaments').select('id').in('id', ids).is('season_id', null),
+      ]);
       if (phases.error) throw phases.error;
+      if (tournaments.error) throw tournaments.error;
       phases.data.forEach(phase => nativePhaseIds.add(phase.id));
-      ids.forEach(id => checkedPhaseIds.add(id));
+      tournaments.data.forEach(tournament => standaloneTournamentIds.add(tournament.id));
+      ids.forEach(id => checkedScopeIds.add(id));
     }
     for (const row of data) {
       if (nativeNoteIds.has(row.id)) continue;
-      if (row.scope_type === 'tournament' && row.scope_id && nativePhaseIds.has(row.scope_id)) continue;
+      if (row.scope_type === 'tournament' && row.scope_id
+        && (nativePhaseIds.has(row.scope_id) || !standaloneTournamentIds.has(row.scope_id))) continue;
       if (row.scope_type !== 'global' && row.scope_type !== 'league' && row.scope_type !== 'tournament') continue;
       retained.push({
         id: row.id, entity_type: type, entity_name: row.entity_name, content: row.content,

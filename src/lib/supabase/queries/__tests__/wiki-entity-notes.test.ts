@@ -14,6 +14,7 @@ import { GET as abilityDetails } from '@/app/api/wiki/abilities/[name]/route';
 const legacy = createMockSupabase();
 const native = createMockSupabase();
 const owners = createMockSupabase();
+const tournaments = createMockSupabase();
 const phase = '11111111-1111-4111-8111-111111111111';
 const tournament = '22222222-2222-4222-8222-222222222222';
 const league = '33333333-3333-4333-8333-333333333333';
@@ -32,11 +33,12 @@ const retainedNote = { ...common, id: 'z', scope_type: 'tournament', scope_id: t
 beforeEach(() => {
   h.from.mockReset();
   h.mode.mockReset();
-  for (const store of [legacy, native, owners]) store.__reset();
+  for (const store of [legacy, native, owners, tournaments]) store.__reset();
   h.from.mockImplementation((table: string) => {
     if (table === 'wiki_notes') return legacy;
     if (table === 'phase_wiki_notes') return native;
     if (table === 'league_phases') return owners;
+    if (table === 'tournaments') return tournaments;
     throw new Error(`Unexpected read: ${table}`);
   });
   h.mode.mockResolvedValue('phase');
@@ -74,6 +76,7 @@ describe('approved entity wiki notes after phase cutover', () => {
       { ...retainedNote, id: 'x', scope_type: 'global', scope_id: null },
     ]);
     owners.__setResult([{ id: phase }]);
+    tournaments.__setResult([{ id: tournament }]);
     const { notes, cacheable } = await getApprovedEntityNotes('move', 'Tackle');
     expect(cacheable).toBe(false);
     expect(notes.map(note => note.id)).toEqual(['a', 'z', 'y', 'x']);
@@ -84,6 +87,8 @@ describe('approved entity wiki notes after phase cutover', () => {
     expect(notes[1]).toMatchObject({ scope_type: 'tournament', scope_id: tournament, approved: true });
     expect(JSON.stringify(notes)).not.toMatch(/private-|author_id|approved_by|rejected_at|resubmission_blocked/);
     expect(owners.in).toHaveBeenCalledExactlyOnceWith('id', [phase, tournament]);
+    expect(tournaments.in).toHaveBeenCalledExactlyOnceWith('id', [phase, tournament]);
+    expect(tournaments.is).toHaveBeenCalledWith('season_id', null);
     expect(native.eq).toHaveBeenCalledWith('entity_type', 'move');
     expect(native.eq).toHaveBeenCalledWith('entity_name', 'Tackle');
     expect(native.eq).toHaveBeenCalledWith('approved', true);
@@ -95,6 +100,7 @@ describe('approved entity wiki notes after phase cutover', () => {
   it('refills a filtered legacy page and caps the merged newest-first list at 500', async () => {
     native.__setResult([nativeNote]);
     owners.__setResult([{ id: phase }]);
+    tournaments.__setResult([{ id: tournament }]);
     const oldest = '2026-11-18T12:00:00Z';
     vi.mocked(legacy.range as ReturnType<typeof vi.fn>)
       .mockResolvedValueOnce({ data: Array.from({ length: 500 }, (_, index) => ({ ...retainedNote, id: `retired-${index}`, scope_id: phase })), error: null })
@@ -107,6 +113,20 @@ describe('approved entity wiki notes after phase cutover', () => {
     expect(notes.at(-1)?.id).toBe('legacy-001');
     expect(legacy.range).toHaveBeenCalledWith(500, 999);
     expect(notes.some(note => note.id.startsWith('retired'))).toBe(false);
+  });
+
+  it('drops a tournament-scoped note whose tournament is league-owned rather than standalone', async () => {
+    const leagueOwned = '44444444-4444-4444-8444-444444444444';
+    legacy.__setResult([
+      retainedNote,
+      { ...retainedNote, id: 'moved-into-a-league', scope_id: leagueOwned },
+    ]);
+    owners.__setResult([]);
+    tournaments.__setResult([{ id: tournament }]);
+    const { notes } = await getApprovedEntityNotes('move', 'Tackle');
+    expect(notes.map(note => note.id)).toEqual(['z']);
+    expect(tournaments.in).toHaveBeenCalledExactlyOnceWith('id', [tournament, leagueOwned]);
+    expect(tournaments.is).toHaveBeenCalledWith('season_id', null);
   });
 
   it('does not fall back to unscoped legacy when mode or native ownership cannot be read', async () => {
