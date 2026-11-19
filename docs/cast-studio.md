@@ -51,7 +51,9 @@ The existing private session URLs use the server's storage mode. Flag off (or le
 
 In native mode, a request can supply `phase_ref: { season_id, phase_id, match_id }` instead of the legacy match/tournament/season fields. Creating with a ref creates a phase-owned session. Creating without one keeps the independent flow: populate with a non-null native match ref, then PATCH the same independent session with the ref and editor fields. This writes only its native pointers and leaves its ID, Realtime key, notes and optional league-only association intact. A PATCH with `phase_ref.match_id: null` explicitly clears the match and keeps the phase. Populate is read-only. Legacy pointers and a native ref aren't interchangeable; switching from a native-owned session to a standalone one isn't a cross-table update.
 
-The Studio UI still needs native-aware match options, state/autosave and editor loaders before this mode can be activated; this API layer doesn't change public solo overlays or channel names.
+The private Studio editor, tools and solo pages read the same session generation after the live creator gate and keep the owner-only page check in both generations. The public OBS solo-state API reads the same generation, but returns only its existing public tracker fields, never the channel key, caster notes or full teams. Its original cache policy is unchanged with the flag off; when the flag is on, it sends `no-store` even in legacy mode or during a freeze. Channel names are unchanged.
+
+Native mode still needs client integration before activation: match selection and autosave must carry the explicit phase ref. Until then, a native-bound session can load with the correct channel and match but the existing editor's legacy autosave payload is refused.
 
 ### CastStudioContext
 - **Provider**: `CastStudioProvider` wraps session data into a `useReducer` state machine

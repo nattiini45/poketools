@@ -3,9 +3,13 @@ import { UserFacingError } from '@/lib/api/user-facing-error';
 import { phaseStorageEnvSchema, readEnv } from '@/lib/env';
 import { readPhaseStorageMode, type PhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
 
-export async function getPhaseRouteMode(): Promise<PhaseStorageMode> {
+export function isPhaseRouteModeEnabled(): boolean {
   const { READ_PHASE_STORAGE_STATE } = readEnv(phaseStorageEnvSchema);
-  return READ_PHASE_STORAGE_STATE === 'true' ? readPhaseStorageMode() : 'legacy';
+  return READ_PHASE_STORAGE_STATE === 'true';
+}
+
+export async function getPhaseRouteMode(): Promise<PhaseStorageMode> {
+  return isPhaseRouteModeEnabled() ? readPhaseStorageMode() : 'legacy';
 }
 
 export async function requireOpenPhaseRouteMode(): Promise<'legacy' | 'phase'> {

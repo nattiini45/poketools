@@ -27,12 +27,12 @@ import type { TrackerState } from '@/types/broadcast';
 import type { PokemonSet } from '@/types/team';
 import type { GameSummary } from '@/types/match';
 import type {
-  CastSession,
   CastSessionUpdate,
   CastSessionMode,
   CastSessionPopulateResult,
   CastSessionRealtimeAction,
 } from '@/types/cast-session';
+import type { StudioCastSession } from '@/types/phase-cast-session';
 
 // ─── Studio-level state (wraps tracker state + session metadata) ───
 
@@ -124,10 +124,14 @@ function ensureTeamSlots(team: PokemonSet[], minLength = 6): PokemonSet[] {
   return Array.from({ length: size }, (_, index) => team[index] ?? createEmptyPokemonSet());
 }
 
-function normalizeSessionTracker(session: CastSession, tracker: TrackerState): TrackerState {
+function normalizeSessionTracker(session: StudioCastSession, tracker: TrackerState): TrackerState {
   if (session.mode !== 'solo') return tracker;
 
   return normalizeSoloTrackerState(tracker, soloPlayerDefaults(session));
+}
+
+function sessionMatchId(session: StudioCastSession) {
+  return 'tournament_id' in session && session.phase_ref ? session.phase_ref.match_id : session.match_id;
 }
 
 function buildCastSessionUpdate(state: CastStudioState): CastSessionUpdate {
@@ -168,7 +172,7 @@ type StudioAction =
   | { type: 'save_ok'; at: string }
   | { type: 'save_fail'; error: ApiErrorLike }
   | { type: 'populate_match'; data: CastSessionPopulateResult }
-  | { type: 'load_session'; session: CastSession }
+  | { type: 'load_session'; session: StudioCastSession }
   | { type: 'set_sync_status'; status: CastChannelStatus };
 
 function isRealtimeStudioAction(action: StudioAction): action is CastSessionRealtimeAction {
@@ -293,12 +297,12 @@ function applyEdit(state: CastStudioState, action: StudioAction): CastStudioStat
 }
 
 /** The studio state of a stored session (the load_session action). */
-function loadSession(state: CastStudioState, s: CastSession): CastStudioState {
+function loadSession(state: CastStudioState, s: StudioCastSession): CastStudioState {
   const defaults = s.mode === 'solo' ? soloPlayerDefaults(s) : null;
   const trackerState = s.tracker_state
     ? normalizeSessionTracker(s, s.tracker_state as unknown as TrackerState)
     : buildTrackerState(
-        s.match_id,
+        sessionMatchId(s),
         {
           id: defaults?.player1.id ?? s.player1_id,
           name: defaults?.player1.name ?? s.player1_name,
@@ -319,8 +323,8 @@ function loadSession(state: CastStudioState, s: CastSession): CastStudioState {
     mode: s.mode,
     format: s.format,
     generation: s.generation,
-    matchId: s.match_id,
-    tournamentId: s.tournament_id,
+    matchId: sessionMatchId(s),
+    tournamentId: 'tournament_id' in s ? s.tournament_id : null,
     seasonId: s.season_id,
     player1Team: s.player1_team,
     player2Team: s.player2_team,
@@ -354,7 +358,7 @@ export function useCastStudio(): CastStudioContextValue {
 // ─── Provider ──────────────────────────────────────────────────────
 
 interface CastStudioProviderProps {
-  session: CastSession;
+  session: StudioCastSession;
   children: ReactNode;
 }
 
@@ -363,7 +367,7 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
   const initialTracker = session.tracker_state
     ? normalizeSessionTracker(session, session.tracker_state as unknown as TrackerState)
     : buildTrackerState(
-        session.match_id,
+        sessionMatchId(session),
         {
           id: defaults?.player1.id ?? session.player1_id,
           name: defaults?.player1.name ?? session.player1_name,
@@ -384,8 +388,8 @@ export function CastStudioProvider({ session, children }: CastStudioProviderProp
     mode: session.mode,
     format: session.format,
     generation: session.generation,
-    matchId: session.match_id,
-    tournamentId: session.tournament_id,
+    matchId: sessionMatchId(session),
+    tournamentId: 'tournament_id' in session ? session.tournament_id : null,
     seasonId: session.season_id,
     player1Team: session.player1_team,
     player2Team: session.player2_team,

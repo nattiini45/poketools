@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CastSession } from '@/types/cast-session';
+import type { PhaseCastSession } from '@/types/phase-cast-session';
 
 vi.mock('@/lib/auth/helpers', () => ({
   AuthError: class AuthError extends Error {
@@ -14,7 +15,10 @@ vi.mock('@/lib/auth/helpers', () => ({
 
 vi.mock('@/lib/supabase/queries/cast-sessions', () => ({
   getCastSessionById: vi.fn(),
+  getIndependentCastSession: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/phase-cast-sessions', () => ({ getPhaseCastSessionById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 
 // The limiter decision is covered in roadcast/__tests__/overlay-limits.test.ts.
 vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
@@ -23,11 +27,34 @@ vi.mock('@/lib/utils/rate-limit', async (importOriginal) => ({
 }));
 
 import { GET } from '@/app/api/broadcast/solo/[sessionId]/route';
-import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
+import { getCastSessionById, getIndependentCastSession } from '@/lib/supabase/queries/cast-sessions';
+import { getPhaseCastSessionById } from '@/lib/supabase/queries/phase-cast-sessions';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { checkPublicRateLimit } from '@/lib/utils/rate-limit';
+
+const SESSION_ID = 'dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const native = {
+  id: SESSION_ID, name: 'Fixture broadcast', mode: 'solo', status: 'live',
+  owner_id: 'fixture-owner', realtime_key: 'fixture-private-key',
+  phase_id: 'fixture-phase', season_id: 'fixture-league', match_id: 'fixture-match',
+  player1_id: 'fixture-player', player1_name: 'Fixture Caster', player1_avatar_url: null,
+  player2_id: null, player2_name: null, player2_avatar_url: null, player1_team: [], player2_team: [],
+  caster_notes: { match: 'fixture-private-notes' }, tracker_state: null, overlay_config: {},
+  format: 'gen9ou', generation: 9, created_at: '2026-04-07T00:00:00Z', updated_at: '2026-04-07T00:00:00Z',
+} satisfies PhaseCastSession;
+
+function read(sessionId = SESSION_ID, query = '') {
+  return GET(new Request(`http://localhost/api/broadcast/solo/${sessionId}${query}`), {
+    params: Promise.resolve({ sessionId }),
+  });
+}
+
+afterEach(() => vi.unstubAllEnvs());
 
 describe('broadcast solo session route', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
   });
 
   it('returns a public-safe solo broadcast payload', async () => {
@@ -120,6 +147,8 @@ describe('broadcast solo session route', () => {
     };
 
     expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('public, s-maxage=2, stale-while-revalidate=5');
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
     expect(payload.success).toBe(true);
     expect(payload.data.player1_team).toEqual([{ species: 'Pikachu' }]);
     expect(payload.data.current_game.player1.player_id).toBe('owner-1');
@@ -173,5 +202,77 @@ describe('broadcast solo session route', () => {
     expect(response.status).toBe(404);
     const payload = await response.json();
     expect(payload).toEqual({ success: false, error: 'Solo session not found', code: 'solo_session_not_found' });
+  });
+});
+
+describe('mode-aware OBS solo reads', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(getPhaseCastSessionById).mockResolvedValue(native);
+  });
+
+  it('serves the existing public DTO for a migrated UUID without any private or competition fields', async () => {
+    const response = await read();
+    const { data } = await response.json();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(Object.keys(data).sort()).toEqual([
+      'current_game', 'games_submitted', 'losses', 'player1_id', 'player1_name', 'player1_team',
+      'player2_name', 'player2_team', 'session_id', 'updated_at', 'wins',
+    ]);
+    expect(data).toMatchObject({ session_id: SESSION_ID, player1_name: 'Fixture Caster' });
+    expect(JSON.stringify(data)).not.toMatch(/fixture-private-|fixture-phase|fixture-league|fixture-match|fixture-owner/);
+    expect(getPhaseCastSessionById).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+    expect(getIndependentCastSession).not.toHaveBeenCalled();
+    expect(getCastSessionById).not.toHaveBeenCalled();
+  });
+
+  it('reads independent solo sessions after native absence but not after a native error', async () => {
+    const { phase_id: _phase, ...common } = native;
+    vi.mocked(getIndependentCastSession).mockResolvedValue({ ...common, tournament_id: null });
+    vi.mocked(getPhaseCastSessionById).mockResolvedValueOnce(null).mockRejectedValueOnce(new Error('fixture read failed'));
+    expect((await read()).status).toBe(200);
+    const failed = await read();
+    expect(failed.status).toBe(500);
+    expect(failed.headers.get('cache-control')).toBe('no-store');
+    expect(getIndependentCastSession).toHaveBeenCalledTimes(1);
+    expect(getCastSessionById).not.toHaveBeenCalled();
+  });
+
+  it('keeps the legacy reader but avoids CDN caching while enabled in legacy mode', async () => {
+    const { phase_id: _phase, ...common } = native;
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('legacy');
+    vi.mocked(getCastSessionById).mockResolvedValue({ ...common, tournament_id: null });
+    const response = await read();
+    expect(response.status).toBe(200);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(getCastSessionById).toHaveBeenCalledExactlyOnceWith(SESSION_ID);
+    expect(getPhaseCastSessionById).not.toHaveBeenCalled();
+  });
+
+  it.each(['frozen_legacy', 'frozen_phase'] as const)('refuses %s without reading a session', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+    const response = await read();
+    expect(response.status).toBe(503);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({ code: 'phase_storage_unavailable' });
+    expect(getPhaseCastSessionById).not.toHaveBeenCalled();
+    expect(getIndependentCastSession).not.toHaveBeenCalled();
+    expect(getCastSessionById).not.toHaveBeenCalled();
+  });
+
+  it('keeps path, query and rate gates ahead of all generation and session reads', async () => {
+    expect((await read('bad')).status).toBe(404);
+    expect((await read(SESSION_ID, '?unused=1')).status).toBe(400);
+    expect(checkPublicRateLimit).not.toHaveBeenCalled();
+    vi.mocked(checkPublicRateLimit).mockResolvedValueOnce({ allowed: false, remaining: 0, retryAfterSeconds: 17 });
+    const limited = await read();
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('17');
+    expect(limited.headers.get('cache-control')).toBe('no-store');
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(getPhaseCastSessionById).not.toHaveBeenCalled();
   });
 });
