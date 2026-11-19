@@ -39,13 +39,19 @@ src/app/broadcast/solo/[sessionId]/ko-stats/page.tsx  # Public KO stats overlay
 
 ## Core Functions/Classes
 
-### Native phase sessions (dormant)
+### Native phase sessions
 
 `phase-cast-sessions.ts` stores phase-owned sessions separately, derives their league from the real phase, and guards updates with the captured owner, phase, status and monotonic timestamp version. `createPhaseCastServices` keeps the live creator gate and owner/site-admin rule; organizing a phase grants no access to another creator's notes or channel key. Solo creation keeps the live creator defaults. Population reads only native matches, rounds, teams and battle stats, checks phase ownership, and applies the shared match-roster visibility rule: owning a studio session grants no preparation access. Its result carries `phase_id`, never a tournament alias.
 
 `toPublicPhaseCastSession` is a metadata-only allowlist: no realtime key, owner id, private teams, tracker state, overlay configuration or caster notes. Authorized studio reads retain those fields. Match cleanup clears the pointer, not the reusable session; P3's native child cleanup also clears retained legacy cross-store pointers.
 
-`20261117150000_phase_cast_capabilities.sql` serializes realtime-key writes across both stores and checks the final transaction state with deferred constraints. It permits a UUID-preserving transfer only when the source row is removed before commit, and makes a restore fail atomically if an outside session took its key. Both insertion orders, updates, commit/rollback and restore retry have opt-in disposable-database tests. Existing routes and channel names are not activated or changed by this layer, and default requests require no new SQL.
+`20261117150000_phase_cast_capabilities.sql` serializes realtime-key writes across both stores and checks the final transaction state with deferred constraints. It permits a UUID-preserving transfer only when the source row is removed before commit, and makes a restore fail atomically if an outside session took its key. Both insertion orders, updates, commit/rollback and restore retry have opt-in disposable-database tests.
+
+The existing private session URLs use the server's storage mode. Flag off (or legacy mode) keeps the legacy request and response shapes. Frozen modes return 503, including for independent sessions, so Studio pauses during transfer. Native mode lists the caller's independent and migrated sessions together; a session owned by a native phase has `phase_id`, not `tournament_id`. Retired league-tournament rows aren't served as standalone sessions.
+
+In native mode, a request can supply `phase_ref: { season_id, phase_id, match_id }` instead of the legacy match/tournament/season fields. Creating with a ref creates a phase-owned session. Creating without one keeps the independent flow: populate with a non-null native match ref, then PATCH the same independent session with the ref and editor fields. This writes only its native pointers and leaves its ID, Realtime key, notes and optional league-only association intact. A PATCH with `phase_ref.match_id: null` explicitly clears the match and keeps the phase. Populate is read-only. Legacy pointers and a native ref aren't interchangeable; switching from a native-owned session to a standalone one isn't a cross-table update.
+
+The Studio UI still needs native-aware match options, state/autosave and editor loaders before this mode can be activated; this API layer doesn't change public solo overlays or channel names.
 
 ### CastStudioContext
 - **Provider**: `CastStudioProvider` wraps session data into a `useReducer` state machine

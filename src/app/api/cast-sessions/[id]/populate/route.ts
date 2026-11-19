@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCreator } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { castSessionPopulateSchema, formatZodErrors } from '@/lib/validation';
+import { studioCastSessionPopulateSchema } from '@/lib/broadcast/studio-session-schemas';
 import { getCastSessionById } from '@/lib/supabase/queries/cast-sessions';
 import { getMatchById } from '@/lib/supabase/queries/matches';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -15,6 +16,9 @@ import { generationOf } from '@/lib/pkmn/format-id';
 import type { ApiResult } from '@/types/api';
 import type { CastSessionPopulateResult } from '@/types/cast-session';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { castSessionBindingConflict, getStudioCastSession, populateStudioPhaseMatch } from '@/lib/broadcast/studio-sessions.server';
+import type { PhaseCastPopulateResult, StudioCastSession } from '@/types/phase-cast-session';
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -36,7 +40,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     if (invalidId) return invalidId;
 
     // Verify session ownership
-    const session = await getCastSessionById(id);
+    const mode = await requireOpenPhaseRouteMode();
+    const session: StudioCastSession | null = mode === 'phase' ? await getStudioCastSession(id) : await getCastSessionById(id);
     if (!session) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Session not found', code: 'cast_session_not_found' },
@@ -51,7 +56,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
     }
 
     const rawBody = await request.json();
-    const zodResult = castSessionPopulateSchema.safeParse(rawBody);
+    const zodResult = (mode === 'phase' ? studioCastSessionPopulateSchema : castSessionPopulateSchema).safeParse(rawBody);
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
       return NextResponse.json<ApiResult<never>>(
@@ -59,6 +64,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
+
+    if ('phase_ref' in zodResult.data) {
+      const result = await populateStudioPhaseMatch(session, zodResult.data.phase_ref, player);
+      return NextResponse.json<ApiResult<PhaseCastPopulateResult>>({ success: true, data: result });
+    }
+    if ('phase_id' in session || session.phase_ref) throw castSessionBindingConflict();
 
     // Load match with player names
     const match = await getMatchById(zodResult.data.match_id);
@@ -74,6 +85,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       getRoundById(match.round_id),
       getTournamentById(match.tournament_id),
     ]);
+    if (mode === 'phase' && (!tournament || tournament.season_id !== null)) {
+      return NextResponse.json<ApiResult<never>>(
+        { success: false, error: 'Match not found', code: 'match_not_found' },
+        { status: 404 }
+      );
+    }
 
     // Try to load actual teams from battle_stats first (confirmed game data),
     // falling back to each player's team for this match if no games have been

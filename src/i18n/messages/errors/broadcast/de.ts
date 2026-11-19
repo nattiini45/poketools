@@ -19,6 +19,7 @@ export default defineDe<typeof en>()({
   INVALID_STORYLINE_ID: 'Storyline nicht gefunden.',
   cast_session_forbidden: 'Dazu bist du nicht berechtigt.',
   cast_session_changed: 'Die Session wurde inzwischen geändert. Lade die Seite neu und versuche es noch einmal.',
+  cast_session_binding_conflict: 'Dieses Spiel oder diese Phase kann nicht mit der Session verknüpft werden.',
 
   webhook_not_found: 'Webhook nicht gefunden.',
   discord_webhook_test_rejected: 'Discord hat die Testnachricht abgelehnt (HTTP {status}).',

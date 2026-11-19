@@ -2,20 +2,24 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCreator } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { castSessionCreateSchema, formatZodErrors } from '@/lib/validation';
+import { studioCastSessionCreateSchema } from '@/lib/broadcast/studio-session-schemas';
 import {
   listCastSessions,
   createCastSession,
 } from '@/lib/supabase/queries/cast-sessions';
 import { SOLO_PLAYER2_DEFAULT_NAME } from '@/lib/broadcast/solo-defaults';
 import type { ApiResult } from '@/types/api';
-import type { CastSession, CastSessionInsert } from '@/types/cast-session';
+import type { StudioCastSession, StudioCastSessionInsert } from '@/types/phase-cast-session';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { createStudioCastSession, listStudioCastSessions } from '@/lib/broadcast/studio-sessions.server';
 
 /** GET /api/cast-sessions — list current user's cast sessions */
 export async function GET() {
   try {
     const player = await requireCreator();
-    const sessions = await listCastSessions(player.playerId);
-    return NextResponse.json<ApiResult<CastSession[]>>({
+    const mode = await requireOpenPhaseRouteMode();
+    const sessions = mode === 'phase' ? await listStudioCastSessions(player.playerId) : await listCastSessions(player.playerId);
+    return NextResponse.json<ApiResult<StudioCastSession[]>>({
       success: true,
       data: sessions,
     });
@@ -28,8 +32,9 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const player = await requireCreator();
+    const mode = await requireOpenPhaseRouteMode();
     const rawBody = await request.json();
-    const zodResult = castSessionCreateSchema.safeParse(rawBody);
+    const zodResult = (mode === 'phase' ? studioCastSessionCreateSchema : castSessionCreateSchema).safeParse(rawBody);
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
       return NextResponse.json<ApiResult<never>>(
@@ -37,8 +42,8 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    const body = zodResult.data as CastSessionInsert;
-    const input: CastSessionInsert = body.mode === 'solo'
+    const body = zodResult.data;
+    const input: StudioCastSessionInsert = body.mode === 'solo'
       ? {
           ...body,
           player1_id: body.player1_id ?? player.playerId,
@@ -50,9 +55,11 @@ export async function POST(request: NextRequest) {
         }
       : body;
 
-    const session = await createCastSession(player.playerId, input);
+    const session = mode === 'phase'
+      ? await createStudioCastSession(player.playerId, input)
+      : await createCastSession(player.playerId, input);
 
-    return NextResponse.json<ApiResult<CastSession>>(
+    return NextResponse.json<ApiResult<StudioCastSession>>(
       { success: true, data: session },
       { status: 201 }
     );

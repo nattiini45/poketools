@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCreator } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { castSessionUpdateSchema, formatZodErrors } from '@/lib/validation';
+import { studioCastSessionUpdateSchema } from '@/lib/broadcast/studio-session-schemas';
 import {
   getCastSessionById,
   updateCastSession,
@@ -11,8 +12,11 @@ import {
 import { castSessionMachine } from '@/lib/broadcast/cast-session-state';
 import { logger } from '@/lib/logger';
 import type { ApiResult } from '@/types/api';
-import type { CastSession, CastSessionUpdate } from '@/types/cast-session';
+import type { CastSession } from '@/types/cast-session';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { deleteStudioCastSession, getStudioCastSession, updateStudioCastSession } from '@/lib/broadcast/studio-sessions.server';
+import type { StudioCastSession, StudioCastSessionUpdate } from '@/types/phase-cast-session';
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -24,7 +28,8 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_SESSION_ID');
     if (invalidId) return invalidId;
 
-    const session = await getCastSessionById(id);
+    const mode = await requireOpenPhaseRouteMode();
+    const session = mode === 'phase' ? await getStudioCastSession(id) : await getCastSessionById(id);
     if (!session) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Session not found', code: 'cast_session_not_found' },
@@ -38,7 +43,7 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    return NextResponse.json<ApiResult<CastSession>>({
+    return NextResponse.json<ApiResult<StudioCastSession>>({
       success: true,
       data: session,
     });
@@ -55,7 +60,8 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_SESSION_ID');
     if (invalidId) return invalidId;
 
-    const existing = await getCastSessionById(id);
+    const mode = await requireOpenPhaseRouteMode();
+    const existing = mode === 'phase' ? await getStudioCastSession(id) : await getCastSessionById(id);
     if (!existing) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Session not found', code: 'cast_session_not_found' },
@@ -70,7 +76,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const rawBody = await request.json();
-    const zodResult = castSessionUpdateSchema.safeParse(rawBody);
+    const zodResult = (mode === 'phase' ? studioCastSessionUpdateSchema : castSessionUpdateSchema).safeParse(rawBody);
     if (!zodResult.success) {
       const issues = formatZodErrors(zodResult.error);
       return NextResponse.json<ApiResult<never>>(
@@ -78,7 +84,18 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         { status: 400 }
       );
     }
-    const body = zodResult.data as CastSessionUpdate;
+    const body = zodResult.data as StudioCastSessionUpdate;
+    if (!('phase_id' in existing) && body.status !== undefined && body.status !== existing.status) {
+      castSessionMachine.assertTransition(
+        existing.status,
+        body.status,
+        existing.owner_id === player.playerId ? 'owner' : 'admin',
+      );
+    }
+    if (mode === 'phase') {
+      const updated = await updateStudioCastSession(existing, body, player.playerId);
+      return NextResponse.json<ApiResult<StudioCastSession>>({ success: true, data: updated });
+    }
     if (body.status === undefined || body.status === existing.status) {
       const updated = await updateCastSession(id, body);
       return NextResponse.json<ApiResult<CastSession>>({
@@ -87,11 +104,6 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       });
     }
 
-    castSessionMachine.assertTransition(
-      existing.status,
-      body.status,
-      existing.owner_id === player.playerId ? 'owner' : 'admin',
-    );
     const updated = await updateCastSessionFromStatus(id, body, existing.status);
     if (!updated) {
       logger.warn('api/cast-sessions', 'Cast session status changed during the update', {
@@ -122,7 +134,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_SESSION_ID');
     if (invalidId) return invalidId;
 
-    const existing = await getCastSessionById(id);
+    const mode = await requireOpenPhaseRouteMode();
+    const existing = mode === 'phase' ? await getStudioCastSession(id) : await getCastSessionById(id);
     if (!existing) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Session not found', code: 'cast_session_not_found' },
@@ -136,7 +149,8 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    await deleteCastSession(id);
+    if (mode === 'phase') await deleteStudioCastSession(existing);
+    else await deleteCastSession(id);
 
     return NextResponse.json<ApiResult<{ deleted: true }>>({
       success: true,
