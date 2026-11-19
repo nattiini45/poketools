@@ -54,6 +54,8 @@ npm run visual:diff -- --base before --head after
 
 Output goes to `.visual/` (gitignored): `<label>/<set>/*.png` with a `manifest.json`, and `diff-<base>-vs-<head>-<set>/report.md` with the base, head and diff image (changed pixels in magenta) of every capture that changed. `diff.mjs` exits 1 when a frozen capture changed, appeared, disappeared, changed size or failed to load.
 
+A failed run is readable from its log and its artifact. `compare.mjs` prints the count, then one line per differing capture with its status and diff ratio (`CHANGED route-world-desktop-light.png 0.0123 % changed`) and one line per job whose capture errored; the advisory `visual` job uploads every `diff-*` report as the `visual-report` artifact with `include-hidden-files: true`, because `.visual` is hidden and `upload-artifact` skips hidden files by default, which left failed runs with an empty artifact.
+
 `run.mjs` boots its own `next dev` on port 3123 (3124 and 3125 in `compare.mjs`) behind `.claude/local-db.cjs`, with the example pack (`FORMAT_PACK=example`). Next allows one dev server per checkout, so pass `--base-url` when one already runs.
 
 ## Determinism
