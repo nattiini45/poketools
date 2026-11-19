@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
+import { getPhaseRouteMode, requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getMatchById } from '@/lib/supabase/queries/matches';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { findNativePhaseAliasOwner, standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { createPhaseMoment, getPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
 import { isValidUuid } from '@/lib/utils/uuid';
 import {
   getMomentsByMatch,
@@ -12,6 +16,7 @@ import type { BroadcastMoment, BroadcastMomentInsert } from '@/types/broadcast';
 import { broadcastMomentSchema, formatZodErrors } from '@/lib/validation';
 
 /** GET /api/broadcast/moments?match_id=xxx */
+// Public: no auth required
 export async function GET(request: NextRequest) {
   try {
     const matchId = request.nextUrl.searchParams.get('match_id');
@@ -30,7 +35,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const moments = await getMomentsByMatch(matchId);
+    const mode = await getPhaseRouteMode();
+    const native = mode === 'phase' || mode === 'frozen_phase';
+    const owner = native ? await findNativePhaseAliasOwner({ matchId }) : null;
+    const moments = owner ? await getPhaseMomentsByMatch(matchId)
+      : !native || await standaloneMatchAliasExists(matchId) ? await getMomentsByMatch(matchId) : [];
     return NextResponse.json<ApiResult<BroadcastMoment[]>>({
       success: true,
       data: moments,
@@ -56,7 +65,10 @@ export async function POST(request: NextRequest) {
     const body = zodResult.data;
 
     // Verify authorization: match participant, creator, or admin
-    const match = await getMatchById(body.match_id);
+    const mode = await requireOpenPhaseRouteMode();
+    const nativeMatch = mode === 'phase' ? await getPhaseMatchById(body.match_id) : null;
+    const match = nativeMatch ?? (mode === 'legacy' || await standaloneMatchAliasExists(body.match_id)
+      ? await getMatchById(body.match_id) : null);
     if (!match) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Match not found', code: 'match_not_found' },
@@ -75,13 +87,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const moment = await createMoment({
+    const values = {
       match_id: body.match_id,
       moment_type: body.moment_type,
       description: body.description ?? null,
-      timestamp_ms: body.timestamp_ms ?? null,
       created_by: player.playerId,
-    } as BroadcastMomentInsert);
+    };
+    const moment = nativeMatch
+      ? await createPhaseMoment(values)
+      : await createMoment({ ...values, timestamp_ms: body.timestamp_ms ?? null } as BroadcastMomentInsert);
 
     return NextResponse.json<ApiResult<BroadcastMoment>>({
       success: true,

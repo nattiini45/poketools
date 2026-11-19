@@ -1,6 +1,6 @@
 import 'server-only';
 import type { Tables, TablesInsert } from '@/types/database';
-import type { BroadcastMoment } from '@/types/broadcast';
+import type { BroadcastMoment, BroadcastMomentInsert } from '@/types/broadcast';
 import { supabase } from '../client';
 import { readAllPages } from '../read-all-pages';
 
@@ -35,6 +35,12 @@ export async function getRecentPhaseMomentsByMatch(matchId: string, limit = 5): 
   const { data, error } = await phaseMomentsQuery(matchId, false).limit(limit);
   if (error) throw error;
   return (data ?? []).map(toBroadcastMoment);
+}
+
+export async function createPhaseMoment(input: Pick<BroadcastMomentInsert, 'match_id' | 'moment_type' | 'description' | 'created_by'>): Promise<BroadcastMoment> {
+  const { data, error } = await supabase.from('phase_broadcast_moments').insert(input).select().single();
+  if (error) throw error;
+  return toBroadcastMoment(data);
 }
 
 export async function createPhaseMomentsBatch(

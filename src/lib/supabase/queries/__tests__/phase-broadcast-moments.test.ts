@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { getPhaseMomentsByMatch, getRecentPhaseMomentsByMatch } from '../phase-broadcast-moments';
+import { createPhaseMoment, getPhaseMomentsByMatch, getRecentPhaseMomentsByMatch } from '../phase-broadcast-moments';
 import type { BroadcastMoment } from '@/types/broadcast';
 
 const query = vi.hoisted(() => ({
@@ -9,6 +9,8 @@ const query = vi.hoisted(() => ({
   order: vi.fn().mockReturnThis(),
   limit: vi.fn(),
   range: vi.fn(),
+  insert: vi.fn().mockReturnThis(),
+  single: vi.fn(),
 }));
 
 vi.mock('@/lib/supabase/client', () => ({ supabase: query }));
@@ -61,5 +63,27 @@ describe('phase broadcast moment reads', () => {
     query.limit.mockResolvedValueOnce({ data: null, error });
 
     await expect(getRecentPhaseMomentsByMatch(moment.match_id)).rejects.toBe(error);
+  });
+});
+
+describe('manual phase broadcast moment writes', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const { match_id, moment_type, description, created_by } = moment;
+  const input = { match_id, moment_type, description, created_by };
+
+  it('inserts only the manual moment fields and returns the stored defaults', async () => {
+    query.single.mockResolvedValueOnce({ data: moment, error: null });
+
+    await expect(createPhaseMoment(input)).resolves.toEqual(moment);
+    expect(query.from).toHaveBeenCalledExactlyOnceWith('phase_broadcast_moments');
+    expect(query.insert).toHaveBeenCalledExactlyOnceWith(input);
+  });
+
+  it('propagates a storage refusal instead of reporting a saved moment', async () => {
+    const error = new Error('moment insert refused');
+    query.single.mockResolvedValueOnce({ data: null, error });
+
+    await expect(createPhaseMoment(input)).rejects.toBe(error);
   });
 });

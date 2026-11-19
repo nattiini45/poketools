@@ -73,7 +73,7 @@ src/lib/broadcast/
   - [AI Module](./ai.md) - optional recap narrative generation
 
 ## API Routes
-- `/api/broadcast/moments`
+- `/api/broadcast/moments` keeps the match ID and response shape. In native storage it reads and writes phase-owned moments; standalone matches still use tournament storage. Either freeze refuses writes.
 - `/api/broadcast/state/[mid]`
 - `/api/broadcast/preview/[mid]`
 - `/api/broadcast/recap/[sid]`
