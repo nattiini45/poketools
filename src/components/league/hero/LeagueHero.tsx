@@ -41,7 +41,7 @@ export default function LeagueHero({ league, worldId, view, locale }: LeagueHero
   const lore = LORE_WORLDS.find((id): id is LoreWorld => id === worldId);
   const standing = (side: HeroSide) =>
     side.rank !== null && side.points !== null ? t('hero.standing', { rank: side.rank, points: side.points }) : null;
-  const matchHref = match ? `/tournaments/${match.tournamentId}/matches/${match.matchId}` : null;
+  const matchHref = match?.href;
 
   return (
     <section

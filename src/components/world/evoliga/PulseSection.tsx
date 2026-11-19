@@ -12,14 +12,14 @@ import { enumMessages } from '@/i18n/messages/enums';
 import { glossaryMessages } from '@/i18n/messages/glossary';
 import { worldEvoligaMessages } from '@/i18n/messages/world/evoliga';
 import type { SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { Standing } from '@/lib/tournament/types';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
 import type { EvoligaLocaleProps } from './types';
 
 interface PulseSectionProps extends EvoligaLocaleProps {
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   standings: Standing[];
   fixtures: LeagueFixture[];
   /** True only when a draft pool exists for the season (a bound list alone is not enough). */

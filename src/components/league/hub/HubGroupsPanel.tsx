@@ -2,6 +2,7 @@ import RoundRobinTable, { type RoundRobinTableLabels } from '@/components/bracke
 import { FOCUS_RING } from '@/components/world/panel';
 import { HUB_INSET as PANEL_INSET, HUB_SUBHEADING } from './hub-style';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
+import { hubStageHref } from '@/lib/league-hub/tabs';
 import type { HubTableStage } from '@/lib/league-hub/views';
 import { HubNotice, HubStageHeader } from './HubBits';
 import HubStandingsTable from './HubStandingsTable';
@@ -10,6 +11,7 @@ interface HubGroupsPanelProps {
   stages: HubTableStage[];
   isEvolutionPointBuy: boolean;
   copy: LeagueHubCopy;
+  phaseSeasonId?: string;
   /** The results grid's words in another language; absent keeps its English. */
   gridLabels?: RoundRobinTableLabels;
 }
@@ -20,7 +22,7 @@ interface HubGroupsPanelProps {
  * zone; round robin tables add a results grid. An ungrouped phase gets one
  * table. Scoring matches the phase page.
  */
-export default function HubGroupsPanel({ stages, isEvolutionPointBuy, copy, gridLabels }: HubGroupsPanelProps) {
+export default function HubGroupsPanel({ stages, isEvolutionPointBuy, copy, gridLabels, phaseSeasonId }: HubGroupsPanelProps) {
   if (stages.length === 0) return <HubNotice>{copy.groupsEmpty}</HubNotice>;
 
   return (
@@ -41,7 +43,7 @@ export default function HubGroupsPanel({ stages, isEvolutionPointBuy, copy, grid
               meta={`${copy.bracketType[stage.bracket_type] ?? stage.bracket_type} · ${notes.join(' · ')}`}
               status={stage.status}
               statusLabel={copy.status[stage.status] ?? stage.status}
-              href={`/tournaments/${stage.id}`}
+              href={hubStageHref(stage.id, phaseSeasonId)}
               linkLabel={copy.links.phasePage}
             />
             {tables.length === 0 ? (

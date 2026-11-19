@@ -3,12 +3,14 @@ import GymTypedName from '@/components/shared/GymTypedName';
 import { FOCUS_RING } from '@/components/world/panel';
 import { HUB_INSET as PANEL_INSET } from './hub-style';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
+import { hubStageHref } from '@/lib/league-hub/tabs';
 import type { HubPhase } from '@/lib/league-hub/load';
 import { HubNotice, HubStatusChip } from './HubBits';
 
 interface HubPhasesPanelProps {
   phases: HubPhase[];
   copy: LeagueHubCopy;
+  phaseSeasonId?: string;
 }
 
 /**
@@ -17,7 +19,7 @@ interface HubPhasesPanelProps {
  * groups and their members (the players the group tables list). Each card
  * opens the phase page.
  */
-export default function HubPhasesPanel({ phases, copy }: HubPhasesPanelProps) {
+export default function HubPhasesPanel({ phases, copy, phaseSeasonId }: HubPhasesPanelProps) {
   if (phases.length === 0) return <HubNotice>{copy.phasesEmpty}</HubNotice>;
 
   return (
@@ -25,7 +27,7 @@ export default function HubPhasesPanel({ phases, copy }: HubPhasesPanelProps) {
       {phases.map(({ stage, groups, showAdvancement }, index) => (
         <li key={stage.id}>
           <Link
-            href={`/tournaments/${stage.id}`}
+            href={hubStageHref(stage.id, phaseSeasonId)}
             className={`block ${PANEL_INSET} p-4 transition-colors duration-[80ms] hover:bg-hover ${FOCUS_RING}`}
           >
             <div className="flex flex-wrap items-start justify-between gap-3">

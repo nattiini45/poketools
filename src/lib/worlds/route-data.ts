@@ -3,19 +3,19 @@ import type { EvolutionTracker } from '@/types/evolution';
 import type { FormatRules } from '@/types/format-rules';
 import type { PointBuyListEntry } from '@/types/point-buy';
 import type { SeasonFormatType, SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
 import {
   toPublicParticipants,
   type ParticipantSource,
   type PublicParticipant,
   type PublicSeasonParticipant,
 } from '@/lib/players/public-player';
-import { toPublicMatch } from '@/lib/match/public-match';
+import { toPublicCompetitionMatch } from '@/lib/match/public-match';
 import { getFormatCapabilities } from '@/lib/season/format-capabilities';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
 import { epbStandingsContext, sumEvolutionPoints, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { KitStandingsData } from '@/lib/format-engine/context';
 import { loadKitStandingsData } from '@/lib/format-engine/load';
+import { loadNativeKitStandingsData } from '@/lib/league-phase/standings-context';
 import { getDraftPoolsBySeason } from '@/lib/supabase/queries/drafts';
 import { getFormatRules } from '@/lib/supabase/queries/format-rules';
 import { getSeasonTrackers } from '@/lib/supabase/queries/evolutions';
@@ -26,10 +26,14 @@ import {
   type LeagueFixtureSource,
   type LeagueGroupStandings,
   type LeagueStanding,
+  type LeagueStage,
 } from '@/lib/supabase/queries/league-standings';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import type { CombinedRanking } from '@/lib/tournament/group-standings';
 import { getMatchesByTournamentIds } from '@/lib/supabase/queries/matches';
+import { getPublicMatchesByPhaseIds } from '@/lib/supabase/queries/phase-matches';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
+import { listSeasonPhaseTeamLeadsWithFacts } from '@/lib/supabase/queries/phase-teams';
 import { formatScoresByes } from '@/lib/tournament/byes';
 import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
 import { getListEntries } from '@/lib/supabase/queries/point-buy-lists';
@@ -59,7 +63,7 @@ import type { SeasonWorld } from './types';
  * Participants cross as `PublicParticipant` (id, name, gym band) only —
  * `assembleWorldRouteData` maps every participant through
  * `toPublicParticipants`, so a full player row handed in (admin getters,
- * fixtures) never reaches the client. Fixture matches cross as `PublicMatch`
+ * fixtures) never reaches the client. Fixture matches cross as `PublicCompetitionMatch`
  * (`src/lib/match/public-match.ts`) only: `assembleWorldRouteData` maps every
  * fixture through `toPublicFixtures` (again, after `assembleLeagueSchedule`),
  * so a full match row handed in never carries the admin notes, the
@@ -100,7 +104,7 @@ export interface WorldRouteData {
    * with no season context (rules then come from the stages).
    */
   league: SeasonWithDetails | null;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   /** Public participant shape only: no private player columns (see SECURITY above). */
   participants: PublicParticipant[];
   /**
@@ -150,7 +154,7 @@ export interface WorldRouteDataInput {
   league: SeasonWithDetails | null;
   /** Explicit format override; defaults to the season's format, else `'singles'`. */
   format?: SeasonFormatType;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   /**
    * Participants in any shape carrying id, name and gym band — full rows are
    * accepted and narrowed to `PublicParticipant` on assembly.
@@ -259,7 +263,7 @@ function toPublicFixtures(fixtures: readonly LeagueFixtureSource[]): LeagueFixtu
   return fixtures.map((fixture) => ({
     stageId: fixture.stageId,
     stageName: fixture.stageName,
-    match: toPublicMatch(fixture.match),
+    match: toPublicCompetitionMatch(fixture.match),
   }));
 }
 
@@ -317,8 +321,10 @@ export function worldStandingsContext(
  */
 export interface WorldRouteDataPreload {
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   participants: readonly PublicSeasonParticipant[];
+  storage?: 'legacy' | 'phase';
+  hasDraftPool?: boolean;
 }
 
 /**
@@ -348,17 +354,21 @@ export async function buildWorldRouteData(
   const [stages, participants] = preloaded
     ? [preloaded.stages, preloaded.participants]
     : await Promise.all([getStagesBySeasonId(seasonId), getPublicSeasonParticipants(seasonId)]);
+  const native = preloaded?.storage === 'phase';
+  const stageIds = stages.map((stage) => stage.id);
 
   // The season table scores a Swiss stage's stored byes as its stage table does. The read joins the wave only for
   // a league with a Swiss stage; Evolution Point Buy standings never read byes, so they skip it too.
-  const readsByes = stages.some((stage) => stage.bracket_type === 'swiss') && formatScoresByes(league.format_type);
+  const swissIds = formatScoresByes(league.format_type)
+    ? stages.filter((stage) => stage.bracket_type === 'swiss').map((stage) => stage.id)
+    : [];
 
   const [
     pointBuyEntries,
     formatRules,
     evolutionTrackers,
     matchesByStage,
-    draftPools,
+    hasDraftPool,
     teamLeads,
     leagueGroups,
     byeRoundsByStage,
@@ -371,11 +381,11 @@ export async function buildWorldRouteData(
       // whole TTL. A league without a format_rules row still reads null (the defaults are the rules then).
       getFormatRules(seasonId),
       getSeasonTrackers(seasonId),
-      getMatchesByTournamentIds(stages.map((stage) => stage.id)),
+      native ? getPublicMatchesByPhaseIds(stageIds) : getMatchesByTournamentIds(stageIds),
       // Every pool of the season (a league with groups has one per group); any row means a draft exists. No
       // fallback (lead ruling round 4, AGENTS.md rule 5): a failed read fails the payload like the other core
       // reads, instead of telling every visitor "no draft".
-      getDraftPoolsBySeason(seasonId),
+      preloaded?.hasDraftPool ?? getDraftPoolsBySeason(seasonId).then((pools) => pools.length > 0),
       // No fallback (AGENTS.md rule 5, the round-4 hasDraftPool ruling applied to aces): a failed lead read
       // fails the payload like the other core reads, so a cached page never shows participant names in place
       // of the aces for its whole TTL.
@@ -385,17 +395,20 @@ export async function buildWorldRouteData(
       // never reaches the page. The read covers the season's rows AND its
       // stages' rows, where a played match's team lives, so a
       // hidden_until_match league shows the aces of its completed matches.
-      listSeasonTeamLeadsWithFacts(
-        seasonId,
-        stages.map((stage) => stage.id)
-      ).then(selectAnonymousVisibleLeads),
+      (native ? listSeasonPhaseTeamLeadsWithFacts(seasonId) : listSeasonTeamLeadsWithFacts(seasonId, stageIds))
+        .then(selectAnonymousVisibleLeads),
       // The group tables are the standings themselves: a failed read fails the world, as the matches do.
       getSeasonGroups(seasonId),
-      readsByes ? loadSeasonSwissByeRounds(seasonId) : Promise.resolve(undefined),
-      league.format_type === 'custom' ? loadKitStandingsData(seasonId) : Promise.resolve(undefined),
+      swissIds.length
+        ? native ? getByeRoundsByPhaseIds(swissIds) : loadSeasonSwissByeRounds(seasonId)
+        : Promise.resolve(undefined),
+      league.format_type === 'custom'
+        ? native ? loadNativeKitStandingsData(seasonId) : loadKitStandingsData(seasonId)
+        : Promise.resolve(undefined),
     ]);
 
   const schedule = assembleLeagueSchedule({
+    seasonId,
     stages,
     participants,
     matchesByStage,
@@ -406,7 +419,7 @@ export async function buildWorldRouteData(
   });
 
   return assembleWorldRouteData({
-    league,
+    league: native ? { ...league, tournament_count: stages.length } : league,
     stages,
     participants,
     rosterLines: pointBuyEntries,
@@ -417,7 +430,7 @@ export async function buildWorldRouteData(
     standingsRanking: schedule.standingsRanking,
     fixtures: schedule.fixtures,
     formatRules,
-    hasDraftPool: draftPools.length > 0,
+    hasDraftPool,
     teamLeads,
     kit,
   });

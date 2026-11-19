@@ -27,18 +27,30 @@ const reads = vi.hoisted(() => ({
   totalGames: vi.fn(),
   seasonBattleStats: vi.fn(),
 }));
+const phaseReads = vi.hoisted(() => ({
+  rounds: vi.fn(),
+  participants: vi.fn(),
+  groups: vi.fn(),
+  battleStats: vi.fn(),
+  reports: vi.fn(),
+  seasonGameTotal: vi.fn(),
+  seasonBattleStats: vi.fn(),
+}));
 const rulesets = vi.hoisted(() => ({ getRulesetById: vi.fn() }));
 
 vi.mock('@/lib/cache/public-reads', () => ({ publicReads: reads }));
+vi.mock('@/lib/cache/phase-public-reads', () => ({ phasePublicReads: phaseReads }));
 vi.mock('@/lib/supabase/queries/rulesets', () => rulesets);
 
 import { loadLeagueHubPanel, type LeagueHubLoadContext, type LeagueHubPanelData } from '../load';
 import type { LeagueHubTab } from '../tabs';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
 import type { PublicMatch } from '@/lib/match/public-match';
+import type { PublicPhaseReport } from '@/lib/league-phase/public-report';
 import type { WorldRouteData } from '@/lib/worlds/route-data';
 import type { SeasonWithDetails, TournamentGroupWithMembers } from '@/types/season';
 import type { TournamentWithDetails } from '@/types/tournament';
+import type { PhaseGroupWithMembers, PhaseRound } from '@/types/league-phase';
 
 const STAMP = '2026-03-01T18:00:00Z';
 
@@ -139,6 +151,8 @@ function routeDataOf(): WorldRouteData {
 }
 
 beforeEach(() => {
+  for (const fn of Object.values(phaseReads)) fn.mockResolvedValue([]);
+  phaseReads.seasonGameTotal.mockResolvedValue(0);
   reads.tournamentRounds.mockResolvedValue([]);
   reads.tournamentParticipants.mockImplementation(async (id: string) =>
     id === 'groups'
@@ -159,7 +173,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.restoreAllMocks();
-  for (const fn of [...Object.values(reads), rulesets.getRulesetById]) fn.mockReset();
+  for (const fn of [...Object.values(reads), ...Object.values(phaseReads), rulesets.getRulesetById]) fn.mockReset();
 });
 
 describe('a failed tab read', () => {
@@ -361,5 +375,166 @@ describe('playoffs tab', () => {
     const panel = await loadLeagueHubPanel('playoffs', context());
     if (panel?.tab !== 'playoffs') throw new Error('expected the playoffs panel');
     expect(panel.stages.map((s) => [s.stage.id, s.stage.status])).toEqual([['playoffs', 'completed']]);
+  });
+});
+
+describe.each(['legacy', 'phase'] as const)('%s hub read budget', (storage) => {
+  const native = storage === 'phase';
+  const selected = {
+    rounds: native ? phaseReads.rounds : reads.tournamentRounds,
+    participants: native ? phaseReads.participants : reads.tournamentParticipants,
+    groups: native ? phaseReads.groups : reads.tournamentGroups,
+    battleStats: native ? phaseReads.battleStats : reads.tournamentBattleStats,
+    reports: native ? phaseReads.reports : reads.tournamentReports,
+    gameTotal: native ? phaseReads.seasonGameTotal : reads.totalGames,
+    seasonStats: native ? phaseReads.seasonBattleStats : reads.seasonBattleStats,
+    aggregates: reads.aggregatesSummary,
+    ruleset: rulesets.getRulesetById,
+  };
+  const cases: [LeagueHubTab, Partial<Record<keyof typeof selected, string[][]>>][] = [
+    ['standings', {}],
+    ['matches', { rounds: [['groups'], ['swiss'], ['playoffs']] }],
+    ['groups', {
+      groups: [['groups'], ['swiss']],
+      participants: [['groups'], ['swiss']],
+      battleStats: [['groups']],
+      rounds: [['swiss']],
+    }],
+    ['playoffs', { rounds: [['playoffs']], participants: [['playoffs']] }],
+    ['phases', { groups: [['groups'], ['swiss']], participants: [['groups'], ['swiss']] }],
+    ['insights', {
+      aggregates: [['league', 'season-1']],
+      gameTotal: [native ? ['season-1'] : ['league', 'season-1']],
+      seasonStats: [['season-1']],
+    }],
+    ['rules', { ruleset: [['rs-1']] }],
+    ['reports', { reports: [['groups'], ['swiss'], ['playoffs']] }],
+  ];
+
+  it.each(cases)('%s reads only the selected tab from its owner', async (tab, expected) => {
+    const panel = await loadLeagueHubPanel(tab, {
+      ...context(),
+      stages: [GROUPS, stage('swiss', { bracket_type: 'swiss' }), PLAYOFFS],
+      storage,
+    });
+    expect(panel?.tab).toBe(tab);
+    for (const key of Object.keys(selected) as (keyof typeof selected)[]) {
+      expect(selected[key].mock.calls).toEqual(expected[key] ?? []);
+    }
+    const otherStore = native ? Object.values(reads).filter((read) => read !== reads.aggregatesSummary) : Object.values(phaseReads);
+    for (const read of otherStore) expect(read).not.toHaveBeenCalled();
+  });
+});
+
+describe('phase-owned hub rows', () => {
+  const legacyFixture = FIXTURES[2];
+  const { tournament_id: phaseId, ...common } = match('m-final', 'playoffs', 'ash', 'sub', 'ash');
+  const nativeMatch = { ...common, phase_id: phaseId, season_id: 'season-1' };
+  const nativeFixture = { ...legacyFixture, match: nativeMatch };
+  const round: PhaseRound = {
+    id: nativeMatch.round_id,
+    phase_id: phaseId,
+    name: 'Finals',
+    round_number: 1,
+    best_of: 3,
+    status: 'active',
+    pairings_generated: true,
+    deadline: null,
+    bracket_side: 'winners',
+    bye_player_ids: [],
+    created_at: STAMP,
+    updated_at: STAMP,
+  };
+
+  it('keeps native match and round identities in the match and bracket panels', async () => {
+    phaseReads.rounds.mockResolvedValue([round]);
+    const ctx: LeagueHubLoadContext = {
+      ...context(Promise.resolve({ ...routeDataOf(), fixtures: [nativeFixture] })),
+      stages: [PLAYOFFS],
+      storage: 'phase',
+    };
+    const matchPanel = await loadLeagueHubPanel('matches', ctx);
+    expect(matchPanel).toMatchObject({
+      tab: 'matches',
+      stages: [{ rounds: [{ name: 'Finals', status: 'completed', matches: [nativeMatch] }] }],
+    });
+    const bracketPanel = await loadLeagueHubPanel('playoffs', ctx);
+    expect(bracketPanel).toMatchObject({ tab: 'playoffs', stages: [{ rounds: [round], matches: [nativeMatch] }] });
+    if (bracketPanel?.tab !== 'playoffs') throw new Error('expected the playoffs panel');
+    expect(bracketPanel.stages[0].rounds[0]).not.toHaveProperty('tournament_id');
+    expect(bracketPanel.stages[0].matches[0]).not.toHaveProperty('tournament_id');
+  });
+
+  it('ranks native group members from native fixtures and refreshes their public labels on the phase card', async () => {
+    const { tournament_id, ...fields } = match('m-group', 'groups', 'ash', 'sub', 'sub');
+    const group: PhaseGroupWithMembers = {
+      id: 'native-group',
+      phase_id: tournament_id,
+      season_id: 'season-1',
+      name: 'Group A',
+      group_number: 1,
+      season_group_id: null,
+      created_at: STAMP,
+      updated_at: STAMP,
+      members: [
+        { player_id: 'ash', player_name: 'Ash (group row)', seed: 1, gym_type: null },
+        { player_id: 'sub', player_name: 'Sub (group row)', seed: 2, gym_type: null },
+      ],
+    };
+    phaseReads.groups.mockResolvedValue([group]);
+    phaseReads.participants.mockResolvedValue(context().participants);
+    const ctx: LeagueHubLoadContext = {
+      ...context(Promise.resolve({
+        ...routeDataOf(),
+        fixtures: [{
+          stageId: group.phase_id,
+          stageName: GROUPS.name,
+          match: { ...fields, phase_id: group.phase_id, season_id: group.season_id },
+        }],
+      })),
+      stages: [GROUPS],
+      storage: 'phase',
+    };
+
+    const groups = await loadLeagueHubPanel('groups', ctx);
+    if (groups?.tab !== 'groups') throw new Error('expected the groups panel');
+    expect(groups.stages[0].tables[0].standings.map((row) => row.player_id)).toEqual(['sub', 'ash']);
+
+    const phases = await loadLeagueHubPanel('phases', ctx);
+    if (phases?.tab !== 'phases') throw new Error('expected the phases panel');
+    expect(phases.phases[0].groups[0]).toEqual({
+      ...group,
+      members: [
+        { player_id: 'ash', player_name: 'Ash', seed: 1, gym_type: 'Fire' },
+        { player_id: 'sub', player_name: 'Late Sub', seed: 2, gym_type: 'Water' },
+      ],
+    });
+  });
+
+  it('preserves a native report allowlist, without legacy report ownership or model metadata', async () => {
+    const report: PublicPhaseReport = {
+      id: 'report-1',
+      phase_id: phaseId,
+      round_id: round.id,
+      report_type: 'round_recap',
+      content: {} as PublicPhaseReport['content'],
+      status: 'completed',
+      created_at: STAMP,
+      updated_at: STAMP,
+    };
+    phaseReads.reports.mockResolvedValue([report]);
+    const panel = await loadLeagueHubPanel('reports', { ...context(), stages: [PLAYOFFS], storage: 'phase' });
+    expect(panel).toEqual({ tab: 'reports', reports: [{ stage: PLAYOFFS, reports: [report] }] });
+  });
+
+  it('logs an optional failed phase read without retrying on legacy storage', async () => {
+    const error = new Error('phase enrollment unavailable');
+    phaseReads.participants.mockRejectedValue(error);
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect(await loadLeagueHubPanel('playoffs', { ...context(), storage: 'phase' })).toEqual({
+      tab: 'unavailable', requested: 'playoffs',
+    });
+    expect(log).toHaveBeenCalledWith('[league-hub] playoffs tab read failed:', error);
+    expect(reads.tournamentParticipants).not.toHaveBeenCalled();
   });
 });

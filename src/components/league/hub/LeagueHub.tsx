@@ -8,11 +8,11 @@ import { isEvolutionPointBuy, leagueDraftHref } from '@/lib/season/format-utils'
 import { LEAGUE_TIME_ZONE, type Locale } from '@/i18n/config';
 import { createFormatter } from '@/i18n/format';
 import { hubSharedLabels, leagueHubCopy, type HubSharedLabels, type LeagueHubCopy } from '@/lib/league-hub/copy';
-import { leagueHubHref, type LeagueHubTab } from '@/lib/league-hub/tabs';
+import { leagueHubHref, type LeagueHubTab, type PhaseStorage } from '@/lib/league-hub/tabs';
 import type { LeagueHubPanelData } from '@/lib/league-hub/load';
 import type { PublicSeasonParticipant } from '@/lib/players/public-player';
 import type { SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import { HubNotice, HubStatusChip } from './HubBits';
 import HubTabPending from './HubTabPending';
 import HubTabStripScroll from './HubTabStripScroll';
@@ -27,7 +27,8 @@ import HubReportsPanel from './HubReportsPanel';
 
 export interface LeagueHubProps {
   league: SeasonWithDetails;
-  stages: readonly TournamentWithDetails[];
+  stages: readonly LeagueStage[];
+  storage?: PhaseStorage;
   participants: readonly PublicSeasonParticipant[];
   /** The viewer's UI language (`getLocale()`); the hub no longer follows the world. */
   locale: Locale;
@@ -67,7 +68,7 @@ function tabIconStyle(tab: LeagueHubTab): CSSProperties {
 /** The DOM id of the active panel; the active tab points at it. */
 export const LEAGUE_HUB_PANEL_ID = 'league-hub-panel';
 
-function tabLabel(tab: LeagueHubTab, stages: readonly TournamentWithDetails[], copy: LeagueHubCopy): string {
+function tabLabel(tab: LeagueHubTab, stages: readonly LeagueStage[], copy: LeagueHubCopy): string {
   if (tab === 'groups' && !stages.some((stage) => stage.bracket_type === 'round_robin')) return copy.swissTab;
   return copy.tabs[tab];
 }
@@ -75,12 +76,14 @@ function tabLabel(tab: LeagueHubTab, stages: readonly TournamentWithDetails[], c
 function Panel({
   panel,
   league,
+  phaseSeasonId,
   participants,
   copy,
   shared,
 }: {
   panel: LeagueHubPanelData;
   league: SeasonWithDetails;
+  phaseSeasonId?: string;
   participants: readonly PublicSeasonParticipant[];
   copy: LeagueHubCopy;
   /** German labels for the shared components the panels embed; null in English (their defaults). */
@@ -169,7 +172,7 @@ function Panel({
       );
     }
     case 'matches':
-      return <HubMatchesPanel stages={panel.stages} copy={copy} />;
+      return <HubMatchesPanel stages={panel.stages} copy={copy} phaseSeasonId={phaseSeasonId} />;
     case 'groups':
       return (
         <HubGroupsPanel
@@ -177,12 +180,13 @@ function Panel({
           isEvolutionPointBuy={panel.isEvolutionPointBuy}
           copy={copy}
           gridLabels={shared?.resultsGrid}
+          phaseSeasonId={phaseSeasonId}
         />
       );
     case 'playoffs':
-      return <HubPlayoffsPanel stages={panel.stages} copy={copy} bracketCopy={shared?.bracket} />;
+      return <HubPlayoffsPanel stages={panel.stages} copy={copy} bracketCopy={shared?.bracket} phaseSeasonId={phaseSeasonId} />;
     case 'phases':
-      return <HubPhasesPanel phases={panel.phases} copy={copy} />;
+      return <HubPhasesPanel phases={panel.phases} copy={copy} phaseSeasonId={phaseSeasonId} />;
     case 'insights':
       return (
         <HubInsightsPanel
@@ -214,7 +218,7 @@ function Panel({
         />
       );
     case 'reports':
-      return <HubReportsPanel reports={panel.reports} copy={copy} />;
+      return <HubReportsPanel reports={panel.reports} copy={copy} phaseSeasonId={phaseSeasonId} />;
     case 'unavailable':
       // The tab's reads failed (logged server-side by the loader); the rest
       // of the league page still renders.
@@ -242,6 +246,7 @@ function Panel({
 export default function LeagueHub({
   league,
   stages,
+  storage = 'legacy',
   participants,
   locale,
   query,
@@ -345,6 +350,7 @@ export default function LeagueHub({
         <Panel
           panel={panel}
           league={league}
+          phaseSeasonId={storage === 'phase' ? league.id : undefined}
           participants={participants}
           copy={copy}
           shared={hubSharedLabels(locale)}

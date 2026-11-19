@@ -1,4 +1,5 @@
 import type { HeroSide } from '@/components/competition/HeroBits';
+import { publicCompetitionMatchHref } from '@/lib/match/public-match';
 import type { LeagueFixture, LeagueStanding } from '@/lib/supabase/queries/league-standings';
 import type { MatchStatus } from '@/types/match';
 import type { SeasonWithDetails } from '@/types/season';
@@ -17,7 +18,7 @@ export type HeroMatchKind = 'yours' | 'live' | 'next';
 export interface HeroMatch {
   kind: HeroMatchKind;
   matchId: string;
-  tournamentId: string;
+  href: string;
   status: MatchStatus;
   scheduledAt: string | null;
   /** The viewer in a `yours` match, player 1 otherwise. */
@@ -92,7 +93,7 @@ export function buildLeagueHero(input: {
     return {
       kind,
       matchId: m.id,
-      tournamentId: m.tournament_id,
+      href: publicCompetitionMatchHref(m),
       status: m.status,
       scheduledAt: m.scheduled_at,
       home: viewerIsTwo ? two : one,

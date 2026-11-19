@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { publicReads } from '@/lib/cache/public-reads';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { leagueMetadata } from '@/lib/seo/page-metadata';
 import { readLeague } from '@/lib/seo/page-reads';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
@@ -79,12 +81,12 @@ export async function generateMetadata({ params }: Pick<PageProps, 'params'>): P
  * Data flow (query budget, D36 fix 4). Every public read below goes through
  * the tagged public read cache (D36 fix 5), so a warm render issues only the
  * viewer-scoped reads; the counts are for a cold cache:
- *   1. the season row (also the world resolver's input);
+ *   1. the season row, with draft availability (also the world resolver's input);
  *   2. one wave shared by both branches: stages, PUBLIC participant rows
  *      (`getPublicSeasonParticipants` — no private player columns are read)
  *      and the viewer's session;
  *   3a. route-world branch (every registered world): `buildWorldRouteData`
- *      with the rows above preloaded — one wave of ≤ 6 reads — plus, for a
+ *      with the rows above preloaded, plus, for a
  *      signed-in viewer only, the world-experience preference. The league hub's default tab (season standings)
  *      renders from that payload, so a bare league URL reads no ruleset,
  *      aggregates, game totals or battle_stats. Only a selected hub tab
@@ -95,10 +97,13 @@ export async function generateMetadata({ params }: Pick<PageProps, 'params'>): P
  *      and reports, and the schedule.
  */
 export default async function LeagueDetailPage({ params, searchParams }: PageProps) {
-  const { id } = await params;
+  const { id: requestedId } = await params;
   const query = await searchParams;
-  const league = await readLeague(id);
-  if (!league) notFound();
+  const [leaguePage, mode] = await Promise.all([readLeague(requestedId), getPhaseRouteMode()]);
+  if (!leaguePage) notFound();
+  const { hasDraftPool, ...league } = leaguePage;
+  const { id } = league;
+  const native = mode === 'phase' || mode === 'frozen_phase';
 
   const caps = getFormatCapabilities(league.format_type);
 
@@ -120,12 +125,13 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   // The viewer's language is a cookie read (no query); every visible word
   // below and in the hub follows it, whatever the world.
   const [stages, participants, sessionPlayer, locale] = await Promise.all([
-    publicReads.seasonStages(id),
+    native ? phasePublicReads.bySeasonIds([id]).then((rows) => rows[id] ?? []) : publicReads.seasonStages(id),
     publicReads.seasonParticipants(id),
     getSessionPlayer(),
     getLocale(),
   ]);
   const t = createTranslator(leaguesMessages, locale);
+  const nativePreload = native ? { storage: 'phase' as const } : {};
 
   if (RouteWorld) {
     // C-093 wave-1 production wiring: EVERY route world fetches through the
@@ -149,7 +155,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     // (see `loadLeagueHubPanel`).
     const hubTabs = availableLeagueHubTabs(stages, { reports: ENABLE_KALE_CABBAGE });
     const hubTab = parseLeagueHubTab(query[LEAGUE_HUB_TAB_PARAM], hubTabs);
-    const routeDataRead = publicReads.worldRouteData(id, { league, stages, participants });
+    const routeDataRead = publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, ...nativePreload });
     const [routeData, worldExperience, hubPanel] = await Promise.all([
       routeDataRead,
       sessionPlayer
@@ -158,7 +164,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
             return DEFAULT_WORLD_EXPERIENCE;
           })
         : Promise.resolve<WorldExperience>(DEFAULT_WORLD_EXPERIENCE),
-      loadLeagueHubPanel(hubTab, { seasonId: id, league, stages, participants, routeData: routeDataRead }),
+      loadLeagueHubPanel(hubTab, { seasonId: id, league, stages, participants, routeData: routeDataRead, ...nativePreload }),
     ]);
     if (!routeData || !hubPanel) notFound();
 
@@ -180,6 +186,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
         <div data-league-top className="flex flex-col gap-6">
           <LeagueHero league={league} worldId={world.id} view={hero} locale={locale} />
           <LeagueHub
+            {...nativePreload}
             league={league}
             stages={stages}
             participants={participants}
@@ -219,14 +226,20 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
     // routes revalidate `/admin/rulesets` only).
     league.ruleset_id ? getRulesetById(league.ruleset_id) : Promise.resolve(null),
     publicReads.aggregatesSummary('league', id),
-    publicReads.totalGames('league', id),
-    publicReads.seasonBattleStats(id),
+    native ? phasePublicReads.seasonGameTotal(id) : publicReads.totalGames('league', id),
+    native ? phasePublicReads.seasonBattleStats(id) : publicReads.seasonBattleStats(id),
     Promise.all(
-      stages.map(async (stage) => ({ stage, groups: await publicReads.tournamentGroups(stage.id) })),
+      stages.map(async (stage) => ({
+        stage,
+        groups: await (native ? phasePublicReads.groups(stage.id) : publicReads.tournamentGroups(stage.id)),
+      })),
     ),
-    Promise.all(stages.map((stage) => publicReads.tournamentReports(stage.id))),
-    publicReads.leagueSchedule(id, { stages, participants }),
+    Promise.all(stages.map((stage) => native ? phasePublicReads.reports(stage.id) : publicReads.tournamentReports(stage.id))),
+    native
+      ? publicReads.worldRouteData(id, { league, stages, participants, hasDraftPool, storage: 'phase' })
+      : publicReads.leagueSchedule(id, { stages, participants }),
   ]);
+  if (!schedule) notFound();
 
   const tGlossary = createTranslator(glossaryMessages, locale);
   const usageRows = aggregatesToUsageRows(aggregates, totalGamesInScope);
@@ -255,6 +268,7 @@ export default async function LeagueDetailPage({ params, searchParams }: PagePro
   return (
     <PageContainer title={league.name}>
       <DefaultWorld
+        {...nativePreload}
         world={world}
         league={{
           id,

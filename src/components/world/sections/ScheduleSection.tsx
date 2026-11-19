@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { publicCompetitionMatchHref } from '@/lib/match/public-match';
 import SectionShell from '@/components/world/SectionShell';
 import { PANEL, TABLE_HEAD, FOCUS_RING } from '@/components/world/panel';
 import { createTranslator } from '@/i18n/core';
@@ -31,7 +32,7 @@ function When({ fixture }: { fixture: Fixture }) {
 }
 
 function matchHref(fixture: Fixture): string {
-  return `/tournaments/${fixture.match.tournament_id}/matches/${fixture.match.id}`;
+  return publicCompetitionMatchHref(fixture.match);
 }
 
 function score(fixture: Fixture): string {

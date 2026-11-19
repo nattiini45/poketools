@@ -3,13 +3,13 @@ import { roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import type { ByeRecord, MatchRecord, Standing } from '@/lib/tournament/types';
 import type { SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import type { TournamentBattleStat } from '@/lib/supabase/queries/games';
-import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
+import type { LeagueFixture, LeagueStage } from '@/lib/supabase/queries/league-standings';
 import type { PublicTournamentParticipant } from '@/lib/players/public-player';
 import type { AdvancementRule, TournamentGroupWithMembers } from '@/types/season';
 import type { BracketSide } from '@/types/match';
-import type { PublicMatch } from '@/lib/match/public-match';
+import type { PublicCompetitionMatch } from '@/lib/match/public-match';
 import type { Round, RoundStatus } from '@/types/round';
-import type { TournamentStatus, TournamentWithDetails } from '@/types/tournament';
+import type { TournamentStatus } from '@/types/tournament';
 import { stageKind } from './tabs';
 import { splitGroupTables } from '@/lib/tournament/group-standings';
 import { kitForPhase } from '@/lib/format-engine/context';
@@ -25,7 +25,7 @@ import { kitForPhase } from '@/lib/format-engine/context';
 
 /** The phase fields the hub renders. */
 export type HubStage = Pick<
-  TournamentWithDetails,
+  LeagueStage,
   | 'id'
   | 'name'
   | 'bracket_type'
@@ -39,13 +39,16 @@ export type HubStage = Pick<
   | 'third_place_enabled'
 >;
 
+export type HubRound = Pick<Round, 'id' | 'name' | 'round_number' | 'status' | 'bracket_side' | 'bye_player_ids'>;
+export type HubGroup = Omit<TournamentGroupWithMembers, 'tournament_id'>;
+
 // ─── Scores ───────────────────────────────────────────────────────────────
 
 /**
  * Games won by each player of a match, from its game rows. Null while no game
  * has a winner (an unplayed or freshly started match shows no score).
  */
-export function gameScore(match: Pick<PublicMatch, 'player_1_id' | 'player_2_id' | 'games'>): {
+export function gameScore(match: Pick<PublicCompetitionMatch, 'player_1_id' | 'player_2_id' | 'games'>): {
   player1: number;
   player2: number;
 } | null {
@@ -71,9 +74,9 @@ export function gameScore(match: Pick<PublicMatch, 'player_1_id' | 'player_2_id'
 const ROUND_STATUS_RANK: Record<RoundStatus, number> = { pending: 0, active: 1, completed: 2 };
 const STAGE_STATUS_RANK: Record<TournamentStatus, number> = { upcoming: 0, active: 1, completed: 2 };
 
-type StatusMatch = Pick<PublicMatch, 'status' | 'round_id' | 'bracket_side' | 'player_1_id' | 'player_2_id'>;
+type StatusMatch = Pick<PublicCompetitionMatch, 'status' | 'round_id' | 'bracket_side' | 'player_1_id' | 'player_2_id'>;
 
-function hasStarted(match: Pick<PublicMatch, 'status'>): boolean {
+function hasStarted(match: Pick<PublicCompetitionMatch, 'status'>): boolean {
   return match.status !== 'scheduled';
 }
 
@@ -199,7 +202,7 @@ export function withDisplayStatus<T extends HubStage>(
  */
 export function displayRoundStatus(
   stored: RoundStatus | null,
-  matches: readonly Pick<PublicMatch, 'status'>[],
+  matches: readonly Pick<PublicCompetitionMatch, 'status'>[],
   options: { elimination: boolean; stageFinished: boolean },
 ): RoundStatus | null {
   if (stored === null) return null;
@@ -224,7 +227,7 @@ export interface HubRoundMatches {
   position: number;
   status: RoundStatus | null;
   bracketSide: BracketSide | null;
-  matches: PublicMatch[];
+  matches: PublicCompetitionMatch[];
 }
 
 export interface HubStageMatches {
@@ -234,18 +237,18 @@ export interface HubStageMatches {
 
 const SIDE_ORDER: Record<BracketSide, number> = { winners: 0, losers: 1, grand_finals: 2 };
 
-function kickoff(match: PublicMatch): string {
+function kickoff(match: PublicCompetitionMatch): string {
   return match.scheduled_at ?? match.date_played ?? match.created_at;
 }
 
-function earliestKickoff(matches: readonly PublicMatch[]): string {
+function earliestKickoff(matches: readonly PublicCompetitionMatch[]): string {
   return matches.reduce((earliest, match) => {
     const time = kickoff(match);
     return time.localeCompare(earliest) < 0 ? time : earliest;
   }, kickoff(matches[0]));
 }
 
-function compareMatches(a: PublicMatch, b: PublicMatch): number {
+function compareMatches(a: PublicCompetitionMatch, b: PublicCompetitionMatch): number {
   const pos = (a.bracket_pos ?? Number.MAX_SAFE_INTEGER) - (b.bracket_pos ?? Number.MAX_SAFE_INTEGER);
   if (pos !== 0) return pos;
   const time = kickoff(a).localeCompare(kickoff(b));
@@ -264,12 +267,12 @@ function compareMatches(a: PublicMatch, b: PublicMatch): number {
 export function groupStageMatches(
   stages: readonly HubStage[],
   fixtures: readonly LeagueFixture[],
-  roundsByStage: Readonly<Record<string, readonly Round[]>>,
+  roundsByStage: Readonly<Record<string, readonly HubRound[]>>,
 ): HubStageMatches[] {
   return stages.map((stage) => {
     const rounds = roundsByStage[stage.id] ?? [];
     const roundById = new Map(rounds.map((round) => [round.id, round]));
-    const byRound = new Map<string, PublicMatch[]>();
+    const byRound = new Map<string, PublicCompetitionMatch[]>();
     for (const fixture of fixtures) {
       if (fixture.stageId !== stage.id) continue;
       const list = byRound.get(fixture.match.round_id);
@@ -341,7 +344,7 @@ export interface HubGroupTable {
   /** Table members in standings order, for the results grid. */
   members: { id: string; name: string }[];
   /** The phase's matches between two members of this table. */
-  matches: PublicMatch[];
+  matches: PublicCompetitionMatch[];
   /**
    * Rows that sit in the advancement zone: the rule's count per group, or the
    * overall count on an ungrouped phase. Null when the rule cannot be shown
@@ -363,10 +366,10 @@ export interface HubTableStage {
 export interface TableStageInput {
   stage: HubStage;
   /** The phase's matches (any status); only completed ones count. */
-  matches: readonly PublicMatch[];
+  matches: readonly PublicCompetitionMatch[];
   /** Phase enrollment (seed order); used when the phase has no groups. */
   participants: readonly Pick<PublicTournamentParticipant, 'id' | 'name' | 'avatar_url'>[];
-  groups: readonly TournamentGroupWithMembers[];
+  groups: readonly HubGroup[];
   /** The phase's battle stats (round robin kill difference); empty for Swiss. */
   battleStats: readonly TournamentBattleStat[];
   /** Round numbers of the phase's rounds, for the match records. */
@@ -379,7 +382,7 @@ export interface TableStageInput {
   showAdvancement?: boolean;
 }
 
-function toRecord(match: PublicMatch, roundNumbers: Readonly<Record<string, number>>): MatchRecord {
+function toRecord(match: PublicCompetitionMatch, roundNumbers: Readonly<Record<string, number>>): MatchRecord {
   return {
     match_id: match.id,
     player_1_id: match.player_1_id,
@@ -427,8 +430,8 @@ function advanceCountFor(
  * opponents have no group either are left out.
  */
 function placeUngroupedPlayers(
-  groups: readonly TournamentGroupWithMembers[],
-  matches: readonly PublicMatch[],
+  groups: readonly HubGroup[],
+  matches: readonly PublicCompetitionMatch[],
   enrolled: ReadonlySet<string>,
 ): Map<string, { id: string; name: string }[]> {
   const groupOf = new Map<string, string>();
@@ -483,8 +486,8 @@ export interface HubGroupMember {
  * the two tabs list the same players.
  */
 export function resolveGroupMembers(
-  groups: readonly TournamentGroupWithMembers[],
-  matches: readonly PublicMatch[],
+  groups: readonly HubGroup[],
+  matches: readonly PublicCompetitionMatch[],
   enrolled: ReadonlySet<string>,
 ): Map<string, HubGroupMember[]> {
   const ordered = [...groups].sort((a, b) => a.group_number - b.group_number);
@@ -698,6 +701,6 @@ export function roundRobinStages<T extends Pick<HubStage, 'bracket_type'>>(stage
 }
 
 /** A phase's matches from the season fixtures, in fixture order. */
-export function stageMatches(fixtures: readonly LeagueFixture[], stageId: string): PublicMatch[] {
+export function stageMatches(fixtures: readonly LeagueFixture[], stageId: string): PublicCompetitionMatch[] {
   return fixtures.filter((fixture) => fixture.stageId === stageId).map((fixture) => fixture.match);
 }

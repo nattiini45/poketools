@@ -2,18 +2,16 @@ import { getStagesBySeasonId } from './tournaments';
 import { getPublicSeasonParticipants } from './seasons';
 import { getMatchesByTournamentIds } from './matches';
 import { getSeasonGroups } from './season-groups';
-import type { ByeRound } from './rounds';
 import {
   computeStandingsFromContext,
   loadSeasonStandingsContext,
   type SeasonStandingsContext,
 } from '@/lib/tournament/season-standings';
 import { loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
-import { countByesByPlayer, formatScoresByes, scoringByeRecordsForStages } from '@/lib/tournament/byes';
+import { countByesByPlayer, formatScoresByes, scoringByeRecordsForStages, type RoundByeSource } from '@/lib/tournament/byes';
 import type { Standing, MatchRecord, ByeRecord } from '@/lib/tournament/types';
 import { rankCombinedTable, splitGroupTables, type CombinedRanking } from '@/lib/tournament/group-standings';
-import type { MatchWithRoundNumber } from '@/types/match';
-import { toPublicMatch, type PublicMatch, type PublicMatchSource } from '@/lib/match/public-match';
+import { toPublicMatch, toPublicPhaseMatch, type PublicCompetitionMatch, type PublicMatchSource, type PublicPhaseMatch } from '@/lib/match/public-match';
 import type { TournamentWithDetails } from '@/types/tournament';
 import type { PublicSeasonParticipant } from '@/lib/players/public-player';
 import { finalLeaguePlacings, groupStageIds, groupStageRanking } from '@/lib/tournament/league-placings';
@@ -42,7 +40,7 @@ import { finalLeaguePlacings, groupStageIds, groupStageRanking } from '@/lib/tou
 export interface LeagueFixture {
   stageId: string;
   stageName: string;
-  match: PublicMatch;
+  match: PublicCompetitionMatch;
 }
 
 /**
@@ -52,7 +50,7 @@ export interface LeagueFixture {
 export interface LeagueFixtureSource {
   stageId: string;
   stageName: string;
-  match: PublicMatchSource;
+  match: PublicCompetitionMatch;
 }
 
 /**
@@ -191,6 +189,10 @@ export function deriveRankChanges(
 export type LeagueScheduleStage = Pick<TournamentWithDetails, 'id' | 'name'> &
   Partial<Pick<TournamentWithDetails, 'bracket_type' | 'third_place_enabled' | 'participant_count' | 'bracket_reset_enabled'>>;
 
+export type LeagueStage = Omit<TournamentWithDetails, 'enrollment_source'>;
+type ScheduleMatch = (PublicMatchSource & { round_number?: number }) | PublicPhaseMatch;
+type ScheduleByeRound = RoundByeSource & { id: string };
+
 /** The participant fields the schedule reads (public columns only). */
 export type LeagueScheduleParticipant = Pick<PublicSeasonParticipant, 'id' | 'name' | 'avatar_url'>;
 
@@ -200,7 +202,8 @@ export interface LeagueScheduleInput {
   stages: readonly LeagueScheduleStage[];
   participants: readonly LeagueScheduleParticipant[];
   /** Matches per stage id (`getMatchesByTournamentIds`); a missing id means none. */
-  matchesByStage: ReadonlyMap<string, MatchWithRoundNumber[]>;
+  matchesByStage: ReadonlyMap<string, readonly ScheduleMatch[]>;
+  seasonId?: string;
   /** The season's format and, for EPB, its evolution points. */
   context: SeasonStandingsContext;
   /** The league's groups in display order (`getSeasonGroups`); empty or absent for a league without groups. */
@@ -210,7 +213,7 @@ export interface LeagueScheduleInput {
    * counts in the season table as a win, like in the stage's own table. Absent for a league that scores none, and
    * never read by Evolution Point Buy standings.
    */
-  byeRoundsByStage?: ReadonlyMap<string, readonly ByeRound[]>;
+  byeRoundsByStage?: ReadonlyMap<string, readonly ScheduleByeRound[]>;
 }
 
 /**
@@ -270,7 +273,7 @@ export async function getLeagueSchedule(
  */
 function seasonByes(
   stages: readonly LeagueScheduleStage[],
-  byeRoundsByStage: ReadonlyMap<string, readonly ByeRound[]>,
+  byeRoundsByStage: ReadonlyMap<string, readonly ScheduleByeRound[]>,
   matchdays: readonly CompletedMatchday[],
 ): { current: ByeRecord[]; previous: ByeRecord[] } {
   // No previous table before a second matchday: every bye stands.
@@ -282,17 +285,17 @@ function seasonByes(
     ? byeRoundsByStage.get(latest.stageId)?.find((round) => round.id === latest.roundId)
     : undefined;
 
-  const standsBeforeLatest = (round: ByeRound) => {
+  const standsBeforeLatest = (round: ScheduleByeRound, stageId: string) => {
     if (!latest) return true;
     if (played.has(round.id)) return playedBefore.has(round.id);
-    if (round.tournament_id === latest.stageId) {
+    if (stageId === latest.stageId) {
       return !(latestRound && round.round_number > latestRound.round_number);
     }
     // An unknown stage stands, as before.
-    return !((stageOrder.get(round.tournament_id) ?? -1) > (stageOrder.get(latest.stageId) ?? Infinity));
+    return !((stageOrder.get(stageId) ?? -1) > (stageOrder.get(latest.stageId) ?? Infinity));
   };
   const earlier = new Map(
-    [...byeRoundsByStage].map(([stageId, rounds]) => [stageId, rounds.filter(standsBeforeLatest)] as const),
+    [...byeRoundsByStage].map(([stageId, rounds]) => [stageId, rounds.filter((round) => standsBeforeLatest(round, stageId))] as const),
   );
   return {
     current: scoringByeRecordsForStages(stages, byeRoundsByStage),
@@ -320,11 +323,13 @@ export function assembleLeagueSchedule(input: LeagueScheduleInput): LeagueSchedu
   // The public boundary: full match rows in, `PublicMatch` out, so neither
   // the cached schedule nor the world payload holds admin-only columns.
   const fixtures: LeagueFixture[] = stages.flatMap((stage) =>
-    (matchesByStage.get(stage.id) ?? []).map((match) => ({
-      stageId: stage.id,
-      stageName: stage.name,
-      match: toPublicMatch(match),
-    })),
+    (matchesByStage.get(stage.id) ?? []).map((match) => {
+      if ('phase_id' in match) {
+        if (!input.seasonId || match.phase_id !== stage.id) throw new Error('Phase fixture owner does not match its league schedule');
+        return { stageId: stage.id, stageName: stage.name, match: { ...toPublicPhaseMatch(match), season_id: input.seasonId } };
+      }
+      return { stageId: stage.id, stageName: stage.name, match: toPublicMatch(match) };
+    }),
   );
 
   const participantIds = participants.map((p) => p.id);

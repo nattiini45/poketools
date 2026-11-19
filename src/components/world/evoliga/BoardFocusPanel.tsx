@@ -1,7 +1,7 @@
 import type { Standing } from '@/lib/tournament/types';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
 import type { SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import { currentStage } from '@/components/world/sections/rules-context';
 import { createTranslator } from '@/i18n/core';
 import type { Locale } from '@/i18n/config';
@@ -16,7 +16,7 @@ export type BoardPanelKind = 'pulse' | 'schedule';
 interface BoardFocusPanelProps extends EvoligaLocaleProps {
   kind: BoardPanelKind;
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   standings: Standing[];
   fixtures: LeagueFixture[];
 }
@@ -36,7 +36,7 @@ const SHOULDER =
   'row-start-1 select-none rounded-md border border-arena-border px-1.5 py-0.5 text-[10.8px] ' +
   'font-bold text-arena-ink-secondary';
 
-export function boardPanelTitle(kind: BoardPanelKind, stages: TournamentWithDetails[], locale: Locale): string {
+export function boardPanelTitle(kind: BoardPanelKind, stages: LeagueStage[], locale: Locale): string {
   const t = createTranslator(worldEvoligaMessages, locale);
   const active = stages.find((stage) => stage.status === 'active');
   if (kind === 'pulse') return t('board.pulseTitle');

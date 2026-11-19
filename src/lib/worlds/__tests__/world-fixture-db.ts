@@ -88,6 +88,7 @@ function season(id: string, name: string, format: string, extra: Partial<FakeRow
     rulesets: { name: 'Liga-Regelwerk', name_text: 'Liga-Regelwerk' },
     season_participants: participantIds.map((player_id) => ({ player_id })),
     tournaments: stageIds.map((tid) => ({ id: tid })),
+    draft_pools: id === EPB_SEASON_ID ? [{ id: 'pool-1' }] : [],
     ...extra,
   };
 }

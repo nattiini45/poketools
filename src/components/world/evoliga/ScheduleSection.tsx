@@ -4,13 +4,13 @@ import { createTranslator } from '@/i18n/core';
 import { worldEvoligaMessages } from '@/i18n/messages/world/evoliga';
 import type { Standing } from '@/lib/tournament/types';
 import type { LeagueFixture } from '@/lib/supabase/queries/league-standings';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import FixtureList from './FixtureList';
 import StandingsTable from './StandingsTable';
 import type { EvoligaLocaleProps } from './types';
 
 interface ScheduleSectionProps extends EvoligaLocaleProps {
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   fixtures: LeagueFixture[];
   standings: Standing[];
 }

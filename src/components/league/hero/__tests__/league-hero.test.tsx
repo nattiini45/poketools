@@ -19,7 +19,7 @@ const VIEW: LeagueHeroView = { matchday: 3, matchesPlayed: 6, daysLeft: 21, star
 const match = (kind: 'yours' | 'live' | 'next', canSubmit = false): LeagueHeroView['match'] => ({
   kind,
   matchId: 'm1',
-  tournamentId: 't1',
+  href: '/tournaments/t1/matches/m1',
   status: 'scheduled',
   scheduledAt: null,
   home: side('Aria', 1),

@@ -14,7 +14,7 @@ function match(stage: string, round: number, a: string, b: string, winner: strin
   };
 }
 
-export function leaguePlayoffsFixture(playoffs = true): LeagueScheduleInput {
+export function leaguePlayoffsFixture(playoffs = true) {
   return {
     stages: [{ id: 'groups', name: 'Groups', bracket_type: 'round_robin' },
       ...(playoffs ? [{ id: 'playoffs', name: 'Playoffs', bracket_type: 'single_elim' as const, participant_count: 4 }] : [])],
@@ -29,5 +29,5 @@ export function leaguePlayoffsFixture(playoffs = true): LeagueScheduleInput {
       ['playoffs', [match('playoffs', 1, 'Comet', 'Orbit', 'Orbit'),
         { ...match('playoffs', 1, 'Meteor', 'Nova', 'Nova'), bracket_pos: 1 }, match('playoffs', 2, 'Orbit', 'Nova', 'Orbit')]],
     ]),
-  };
+  } satisfies LeagueScheduleInput;
 }

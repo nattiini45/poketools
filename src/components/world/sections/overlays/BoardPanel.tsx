@@ -6,7 +6,7 @@ import { LocalTime } from '@/i18n/LocalTime';
 import { enumMessages } from '@/i18n/messages/enums';
 import { worldMessages } from '@/i18n/messages/world';
 import type { SeasonWithDetails } from '@/types/season';
-import type { TournamentWithDetails } from '@/types/tournament';
+import type { LeagueStage } from '@/lib/supabase/queries/league-standings';
 import { currentStage } from '../rules-context';
 import type { ThemeRouteData, WorldLocaleProps } from '../types';
 
@@ -20,14 +20,14 @@ export type BoardPanelKind = 'pulse' | 'schedule';
 interface BoardPanelProps extends WorldLocaleProps {
   kind: BoardPanelKind;
   league: SeasonWithDetails;
-  stages: TournamentWithDetails[];
+  stages: LeagueStage[];
   standings: StandingRow[];
   fixtures: FixtureRow[];
 }
 
 export function boardPanelTitle(
   kind: BoardPanelKind,
-  stages: TournamentWithDetails[],
+  stages: LeagueStage[],
   locale: Locale = 'en',
 ): string {
   const t = createTranslator(worldMessages, locale);

@@ -3,14 +3,16 @@ import { FOCUS_RING } from '@/components/world/panel';
 import { HUB_INSET as PANEL_INSET } from './hub-style';
 import { LocalTime } from '@/i18n/LocalTime';
 import type { LeagueHubCopy } from '@/lib/league-hub/copy';
+import { hubStageHref } from '@/lib/league-hub/tabs';
 import { gameScore, openRoundId, type HubRoundMatches, type HubStageMatches } from '@/lib/league-hub/views';
 import type { BracketSide } from '@/types/match';
-import type { PublicMatch } from '@/lib/match/public-match';
+import { publicCompetitionMatchHref, type PublicCompetitionMatch } from '@/lib/match/public-match';
 import { HubNotice, HubStageHeader, HubStatusChip } from './HubBits';
 
 interface HubMatchesPanelProps {
   stages: HubStageMatches[];
   copy: LeagueHubCopy;
+  phaseSeasonId?: string;
 }
 
 /** The words a round name uses for its side (the bracket engine names rounds in English). */
@@ -37,7 +39,7 @@ function roundLabel(round: HubRoundMatches, copy: LeagueHubCopy, doubleElim: boo
  * the replays were imported) the outcome in the table's letters ("W : L",
  * "D : D"), since there is no score to show; else "vs".
  */
-function resultCell(match: PublicMatch, copy: LeagueHubCopy): { text: string; title?: string } | null {
+function resultCell(match: PublicCompetitionMatch, copy: LeagueHubCopy): { text: string; title?: string } | null {
   const score = gameScore(match);
   if (score) return { text: `${score.player1} : ${score.player2}` };
   if (match.status !== 'completed') return null;
@@ -51,7 +53,7 @@ function resultCell(match: PublicMatch, copy: LeagueHubCopy): { text: string; ti
   return { text, title: copy.resultWithoutGames };
 }
 
-function MatchRow({ match, copy }: { match: PublicMatch; copy: LeagueHubCopy }) {
+function MatchRow({ match, copy }: { match: PublicCompetitionMatch; copy: LeagueHubCopy }) {
   const result = resultCell(match, copy);
   const when = match.scheduled_at ?? match.date_played;
   const p1Won = match.winner_id !== null && match.winner_id === match.player_1_id;
@@ -59,7 +61,7 @@ function MatchRow({ match, copy }: { match: PublicMatch; copy: LeagueHubCopy }) 
   return (
     <li>
       <Link
-        href={`/tournaments/${match.tournament_id}/matches/${match.id}`}
+        href={publicCompetitionMatchHref(match)}
         className={`grid grid-cols-[1fr_auto_1fr] items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-150 hover:bg-arena-elevated motion-reduce:transition-none sm:grid-cols-[calc(var(--spacing)*30)_1fr_auto_1fr_auto] ${FOCUS_RING}`}
       >
         <span className="hidden text-xs text-arena-ink-secondary sm:block">
@@ -90,7 +92,7 @@ function MatchRow({ match, copy }: { match: PublicMatch; copy: LeagueHubCopy }) 
  * viewer's time zone) and status, each match linking to its detail page. The active (or next open)
  * round of each phase starts expanded; finished rounds fold away.
  */
-export default function HubMatchesPanel({ stages, copy }: HubMatchesPanelProps) {
+export default function HubMatchesPanel({ stages, copy, phaseSeasonId }: HubMatchesPanelProps) {
   if (stages.length === 0) return <HubNotice>{copy.phasesEmpty}</HubNotice>;
 
   return (
@@ -104,7 +106,7 @@ export default function HubMatchesPanel({ stages, copy }: HubMatchesPanelProps) 
               meta={`${copy.bracketType[stage.bracket_type] ?? stage.bracket_type} · ${copy.bestOf(stage.best_of_default)}`}
               status={stage.status}
               statusLabel={copy.status[stage.status] ?? stage.status}
-              href={`/tournaments/${stage.id}`}
+              href={hubStageHref(stage.id, phaseSeasonId)}
               linkLabel={copy.links.phasePage}
             />
             {rounds.length === 0 ? (

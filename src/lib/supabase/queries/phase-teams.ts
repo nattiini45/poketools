@@ -3,6 +3,7 @@ import { readAllPages } from '../read-all-pages';
 import { readBoundedPages } from '../read-bounded-pages';
 import { ilikeAnyOf, postgrestQuoted } from '../postgrest-filter';
 import { TEAM_COLUMNS, type TeamVisibilityFacts, type PinImpactTeam } from './teams';
+import type { TeamLeadWithFacts } from './teams';
 import { TeamChangedError, throwTeamWriteError } from '@/lib/team/completed-match-lock';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { Json, Tables } from '@/types/database';
@@ -12,6 +13,7 @@ import { canWriteTeam, teamLockState, type TeamRosterActor } from '@/lib/team/te
 import type { MatchStatus } from '@/types/match';
 import teamErrors from '@/i18n/messages/errors/teams/en';
 import { teamLibraryMachine, teamShareMachine, type TeamFlagActor } from '@/lib/team/team-share-state';
+import { assertValidUuid } from '@/lib/utils/uuid';
 
 export const PHASE_TEAM_COLUMNS = 'id, player_id, phase_id, season_id, name, match_id, pokemon, import_source, locked, is_draft_team, draft_pool_id, library_published_at, library_title, library_description, library_tags, forked_from_team_id, forked_from_phase_team_id, created_at, updated_at' as const;
 const PREP_COLUMNS = 'id, match_id, player_id, pokemon, import_source, created_at, updated_at' as const;
@@ -136,6 +138,30 @@ export async function getPhaseTeamVisibilityFacts(ids: readonly string[]): Promi
     for (const row of data ?? []) out.set(row.id, { match_status: row.match?.status ?? null, tournament_visibility: row.phase?.team_visibility ?? null });
   }
   return out;
+}
+
+export async function listSeasonPhaseTeamLeadsWithFacts(seasonId: string): Promise<TeamLeadWithFacts[]> {
+  assertValidUuid(seasonId, 'seasonId');
+  const { rows } = await readBoundedPages(
+    (from, to) => supabase.from('phase_teams')
+      .select(`
+        id, player_id, updated_at, lead_species:pokemon->0->>species,
+        match:phase_matches!phase_teams_phase_match_fkey ( status ),
+        phase:league_phases!phase_teams_phase_id_fkey!inner ( team_visibility )
+      `)
+      .eq('phase.season_id', seasonId).order('created_at').order('id').range(from, to),
+    { label: 'listSeasonPhaseTeamLeadsWithFacts' },
+  );
+  return rows.map(row => ({
+    id: row.id,
+    player_id: row.player_id,
+    updated_at: row.updated_at,
+    lead_species: typeof row.lead_species === 'string' ? row.lead_species : null,
+    facts: {
+      match_status: row.match?.status ?? null,
+      tournament_visibility: row.phase?.team_visibility ?? null,
+    },
+  }));
 }
 
 export async function getPhaseTeamByShareToken(token: string): Promise<PhaseTeam | null> {
