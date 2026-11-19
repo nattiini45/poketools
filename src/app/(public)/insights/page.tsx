@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { redirect } from 'next/navigation';
 import { Suspense } from 'react';
 import PageContainer from '@/components/ui/PageContainer';
 import ScopeSelector from '@/components/shared/ScopeSelector';
@@ -10,6 +11,10 @@ import {
   insightsLeagueOptions,
 } from '@/lib/insights/scope';
 import { publicReads } from '@/lib/cache/public-reads';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { phaseStatsHref } from '@/lib/league-phase/paths';
+import { findNativePhaseAliasOwner } from '@/lib/supabase/queries/phase-route-owners';
 import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
 import { loadSupplement, packExtensions } from '@/lib/pack-extensions';
 import type { SupplementaryKillRowView } from '@/components/supplementary/SupplementaryKillRanking';
@@ -22,7 +27,7 @@ import { buildKillRanking } from '@/lib/stats/kill-ranking';
 import { combinePokemonUsage, type CombinedPokemonUsageRow } from '@/lib/stats/combined-statistics';
 import { historicalCompetitionOptions, readHistoricalUsage } from '@/lib/stats/historical-statistics';
 import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats/standings-rows';
-import { groupStageRanking } from '@/lib/tournament/league-placings';
+import { groupStageIds, groupStageRanking } from '@/lib/tournament/league-placings';
 import {
   formatScoresByes,
   groupRoundsByStage,
@@ -46,9 +51,9 @@ type InsightsScope = ReturnType<typeof parseScopeFromSearchParams>;
  * The standings context of an Evolution Point Buy league (evolution points, stored order) or a kit league (its kit
  * data), from the league's cached reads (30 s, season-tagged); undefined for every other league.
  */
-async function leagueRanking(seasonId: string, formatType: string): Promise<SeasonStandingsContext | undefined> {
+async function leagueRanking(seasonId: string, formatType: string, native = false): Promise<SeasonStandingsContext | undefined> {
   if (formatType === 'custom') {
-    const kit = await publicReads.seasonKitStandings(seasonId);
+    const kit = await (native ? phasePublicReads.seasonKitStandings(seasonId) : publicReads.seasonKitStandings(seasonId));
     return kit ? { formatType, kit } : undefined;
   }
   if (!isEvolutionPointBuy(formatType)) return undefined;
@@ -79,7 +84,7 @@ interface ScopeRows {
  * tournament pages). Null when the scope's tournament or league does not
  * exist. Only ids and names leave this function for the client tabs.
  */
-async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
+async function loadScopeRows(scope: InsightsScope, native: boolean): Promise<ScopeRows | null> {
   if (scope.type === 'archive') {
     const competition = (await historicalCompetitionOptions()).find((option) => option.id === scope.id);
     return competition ? {
@@ -88,7 +93,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
   }
   if (scope.type === 'tournament') {
     const tournament = await publicReads.tournament(scope.id);
-    if (!tournament) {
+    if (!tournament || (native && tournament.season_id !== null)) {
       return null;
     }
     const [parts, records, battleStats] = await Promise.all([
@@ -130,12 +135,15 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
   }
 
   if (scope.type === 'league') {
+    const stageRead = native ? phasePublicReads.bySeasonIds([scope.id.toLowerCase()]).then((bySeason) => bySeason[scope.id.toLowerCase()] ?? [])
+      : publicReads.seasonStages(scope.id);
     const [season, parts, battleStats, matchRecords, stages] = await Promise.all([
       publicReads.season(scope.id),
       publicReads.seasonParticipants(scope.id),
-      publicReads.seasonBattleStats(scope.id),
-      publicReads.seasonMatchRecords(scope.id),
-      publicReads.seasonStages(scope.id),
+      native ? phasePublicReads.seasonBattleStats(scope.id) : publicReads.seasonBattleStats(scope.id),
+      native ? stageRead.then((rows) => phasePublicReads.seasonMatchRecords(scope.id, groupStageIds(rows)))
+        : publicReads.seasonMatchRecords(scope.id),
+      stageRead,
     ]);
     if (!season) {
       return null;
@@ -145,12 +153,15 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
     // batched read for all Swiss stages, and a league with no Swiss stage, or an Evolution Point Buy one (its
     // tables never read byes), reads none.
     const readsByes = formatScoresByes(season.format_type) && stages.some((stage) => stage.bracket_type === 'swiss');
-    const [byeRounds, ranking] = await Promise.all([
-      readsByes ? publicReads.seasonByeRounds(scope.id) : [],
+    const [byes, ranking] = await Promise.all([
+      readsByes
+        ? native
+          ? phasePublicReads.seasonByeRounds(scope.id).then((rounds) => scoringByeRecords('swiss', rounds))
+          : publicReads.seasonByeRounds(scope.id).then((rounds) => scoringByeRecordsForStages(stages, groupRoundsByStage(rounds)))
+        : [],
       // An Evolution Point Buy or kit league ranks like its tables.
-      leagueRanking(scope.id, season.format_type),
+      leagueRanking(scope.id, season.format_type, native),
     ]);
-    const byes = scoringByeRecordsForStages(stages, groupRoundsByStage(byeRounds));
     return {
       title: season.name,
       isDoubles: isLeagueDoubles(season.format_type, stages),
@@ -186,7 +197,7 @@ async function loadScopeRows(scope: InsightsScope): Promise<ScopeRows | null> {
  * aggregate COUNTERS (no move_counts) and the game total run alongside the
  * scope reads instead of before them.
  */
-async function loadScopeData(scope: InsightsScope) {
+async function loadScopeData(scope: InsightsScope, native: boolean) {
   const { scopeType, scopeId } = scope.type === 'archive'
     ? { scopeType: 'archive' as const, scopeId: scope.id }
     : scopeAggregateKey(scope);
@@ -194,9 +205,11 @@ async function loadScopeData(scope: InsightsScope) {
   const [[aggregates, totalGames], rows, historical] = await Promise.all([
     scopeType === 'archive' ? Promise.resolve<[never[], number]>([[], 0]) : Promise.all([
       publicReads.aggregatesSummary(scopeType, scopeId),
-      publicReads.totalGames(scopeType, scopeId),
+      native && scope.type === 'league' ? phasePublicReads.seasonGameTotal(scope.id)
+        : native && scope.type === 'global' ? phasePublicReads.allTimeGameTotal()
+          : publicReads.totalGames(scopeType, scopeId),
     ]),
-    loadScopeRows(scope),
+    loadScopeRows(scope, native),
     readHistoricalUsage({ scopeType, scopeId }),
   ]);
   if (!rows) {
@@ -244,15 +257,28 @@ async function loadSupplementaryKills(scope: InsightsScope): Promise<Supplementa
 async function InsightsPageContent({ searchParams }: PageProps) {
   const params = await searchParams;
   const scope = parseScopeFromSearchParams(params);
+  const mode = await getPhaseRouteMode();
+  const native = mode === 'phase' || mode === 'frozen_phase';
+  if (mode === 'phase' && scope.type === 'tournament') {
+    const phase = await findNativePhaseAliasOwner({ phaseId: scope.id });
+    if (phase) {
+      const query = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (key === 'scope' || key === 'id' || value === undefined) continue;
+        for (const item of Array.isArray(value) ? value : [value]) query.append(key, item);
+      }
+      redirect(`${phaseStatsHref(phase)}${query.size ? `?${query}` : ''}`);
+    }
+  }
   const tab = parseInsightsTab(
     typeof params.tab === 'string' ? params.tab : undefined,
   );
 
   const [leagues, tournaments, allRatingRows, scopeData, allStreakEntries, t, supplementaryKills, hiddenPlayerIds, archiveOptions] = await Promise.all([
-    publicReads.seasonList(),
+    native ? publicReads.nativeSeasonList() : publicReads.seasonList(),
     publicReads.tournamentList(),
     publicReads.ratingLeaderboard(5),
-    loadScopeData(scope),
+    loadScopeData(scope, native),
     publicReads.streakLeaderboard(),
     getT(insightsMessages),
     loadSupplementaryKills(scope),

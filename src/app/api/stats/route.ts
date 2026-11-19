@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getAggregates, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
+import { getAggregates, getTotalGamesInMixedScope, getTotalGamesInScope } from '@/lib/supabase/queries/aggregates';
+import { getPhaseSeasonGameTotal } from '@/lib/supabase/queries/phase-games';
 import { aggregatesToUsageRows } from '@/lib/stats/usage-rows';
 import { readHistoricalUsage } from '@/lib/stats/historical-statistics';
 import { combinePokemonUsage, type CombinedPokemonUsageRow, type HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
@@ -10,7 +11,7 @@ import { CACHE } from '@/lib/api/cache';
 import { getMoveNatDex } from '@/lib/pkmn/dex';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { UserFacingError } from '@/lib/api/user-facing-error';
-import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseRouteMode, requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { resolveLeaguePhaseRoute } from '@/lib/supabase/queries/phase-route-owners';
 import type { ApiResult } from '@/types/api';
 import type {
@@ -112,7 +113,9 @@ export async function GET(request: NextRequest) {
       aggregateScope === 'archive' ? Promise.resolve([]) : getAggregates(aggregateScope, scopedId),
       readHistoricalUsage({ scopeType, scopeId: scopedId }),
     ]);
-    const headers = scopeType === 'phase' || packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS;
+    const mode = view === 'usage' && (scopeType === 'league' || scopeType === 'all_time') ? await getPhaseRouteMode() : 'legacy';
+    const nativeUsage = mode === 'phase' || mode === 'frozen_phase';
+    const headers = scopeType === 'phase' || nativeUsage || packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS;
     const provenance = historical.history.state === 'absent' ? {} : { history: historical.history };
 
     if (view === 'raw') {
@@ -181,7 +184,10 @@ export async function GET(request: NextRequest) {
     }
 
     // Default: usage view with computed percentages
-    const totalGames = aggregateScope === 'archive' ? 0 : await getTotalGamesInScope(aggregateScope, scopedId);
+    const totalGames = aggregateScope === 'archive' ? 0
+      : nativeUsage && scopeType === 'league' && scopedId ? await getPhaseSeasonGameTotal(scopedId)
+        : nativeUsage && scopeType === 'all_time' ? await getTotalGamesInMixedScope('all_time', null)
+          : await getTotalGamesInScope(aggregateScope, scopedId);
 
     const usageRows = historical.data
       ? combinePokemonUsage(aggregates, totalGames, historical.data)
