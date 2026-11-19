@@ -3,8 +3,11 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import {
   getAggregateForPokemon,
   getPlayerAggregatesForPokemon,
+  getTotalGamesInMixedScope,
   getTotalGamesInScope,
 } from '@/lib/supabase/queries/aggregates';
+import { getPhaseSeasonGameTotal } from '@/lib/supabase/queries/phase-games';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { publicReads } from '@/lib/cache/public-reads';
 import { withoutHiddenPlayers } from '@/lib/players/hidden-players';
@@ -98,15 +101,20 @@ export async function GET(
   const scopedId = scopeType === 'all_time' ? null : scopeId;
 
   try {
+    const mode = scopeType === 'league' || scopeType === 'all_time' ? await getPhaseRouteMode() : 'legacy';
+    const native = mode === 'phase' || mode === 'frozen_phase';
     const [historical, totalGames, livePlayers, aggregate] = await Promise.all([
       readHistoricalUsage({ scopeType, scopeId: scopedId, playerId }),
-      scopeType === 'archive' ? Promise.resolve(0) : getTotalGamesInScope(scopeType, scopedId),
+      scopeType === 'archive' ? 0
+        : native && scopeType === 'league' && scopedId ? getPhaseSeasonGameTotal(scopedId)
+          : native && scopeType === 'all_time' ? getTotalGamesInMixedScope('all_time', null)
+            : getTotalGamesInScope(scopeType, scopedId),
       scopeType === 'archive' ? Promise.resolve([]) : getPlayerAggregatesForPokemon(pokemonName, scopeType, scopedId, playerId),
       scopeType === 'archive' || playerId ? Promise.resolve(null) : getAggregateForPokemon(pokemonName, scopeType, scopedId),
     ]);
     const selectedAggregate = playerId ? livePlayers[0] ?? null : aggregate;
     const result = pokemonDetailStats(pokemonName, selectedAggregate, totalGames, historical.data, historical.history);
-    result.items = scopeType === 'archive' ? [] : await readItemUsage(pokemonName, scopeType, scopedId, playerId ?? null, selectedAggregate !== null);
+    result.items = scopeType === 'archive' ? [] : await readItemUsage(pokemonName, scopeType, scopedId, playerId ?? null, selectedAggregate !== null, native);
 
     if (!playerId) {
       const hidden = await publicReads.hiddenPlayerIds();
@@ -139,7 +147,7 @@ export async function GET(
 
     return NextResponse.json<ApiResult<PokemonDetailStats>>(
       { success: true, data: result },
-      { headers: packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS }
+      { headers: native || packExtensions.historicalUsage ? CACHE.NONE : CACHE.STATS }
     );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to fetch Pokemon stats');
@@ -160,9 +168,15 @@ function readItemUsage(
   scopeType: AggregateScope,
   scopeId: string | null,
   playerId: string | null,
-  hasAggregate: boolean
+  hasAggregate: boolean,
+  native: boolean,
 ): Promise<PokemonDetailStats['items']> {
   const bounded = hasAggregate || (scopeType === 'all_time' && playerId === null);
+  if (native) {
+    return bounded
+      ? publicReads.itemUsage(pokemonName, scopeType, scopeId, playerId, 'phase')
+      : getItemUsageForPokemon(pokemonName, scopeType, scopeId, playerId ?? undefined, 'phase');
+  }
   return bounded
     ? publicReads.itemUsage(pokemonName, scopeType, scopeId, playerId)
     : getItemUsageForPokemon(pokemonName, scopeType, scopeId, playerId ?? undefined);

@@ -357,6 +357,14 @@ describe('public read cache — hits', () => {
     expect(listSeasons).toHaveBeenCalledWith();
   });
 
+  it('keeps native item usage in its own cache namespace and shares aggregate invalidation', async () => {
+    await publicReads.itemUsage('Garchomp', 'league', S, null);
+    await publicReads.itemUsage('Garchomp', 'league', S, null, 'phase');
+    await publicReads.itemUsage('Garchomp', 'league', S, null, 'phase');
+    expect(fakeNextCache.reads.map((entry) => entry.hit)).toEqual([false, false, true]);
+    expect(fakeNextCache.reads.every((entry) => entry.tags.includes(publicTags.aggregates('league', S)))).toBe(true);
+  });
+
   it('keeps phase and legacy catalog counts separate and expires both on league changes', async () => {
     await publicReads.seasonList();
     await publicReads.nativeSeasonList();

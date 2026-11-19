@@ -6,8 +6,11 @@ import type { NextRequest } from 'next/server';
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregateForPokemon: vi.fn(),
   getPlayerAggregatesForPokemon: vi.fn(),
+  getTotalGamesInMixedScope: vi.fn(),
   getTotalGamesInScope: vi.fn(),
 }));
+vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseSeasonGameTotal: vi.fn() }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
 
 // Item usage goes through the tagged public read cache (H9).
 vi.mock('@/lib/cache/public-reads', () => ({
@@ -27,8 +30,11 @@ import { GET } from '../route';
 import {
   getAggregateForPokemon,
   getPlayerAggregatesForPokemon,
+  getTotalGamesInMixedScope,
   getTotalGamesInScope,
 } from '@/lib/supabase/queries/aggregates';
+import { getPhaseSeasonGameTotal } from '@/lib/supabase/queries/phase-games';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { publicReads } from '@/lib/cache/public-reads';
 import { resolvePlayerNames } from '@/lib/supabase/queries/players';
 import { getItemUsageForPokemon } from '@/lib/supabase/queries/teams';
@@ -67,7 +73,42 @@ const SAMPLE_AGG = {
 };
 
 describe('GET /api/pokemon/[name]/stats', () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('uses native totals and item reads in %s', async (mode) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(getPhaseSeasonGameTotal).mockResolvedValue(80);
+    vi.mocked(getTotalGamesInMixedScope).mockResolvedValue(125);
+    mockGetAggregate.mockResolvedValue(SAMPLE_AGG);
+    mockGetPlayerAggs.mockResolvedValue([]);
+    mockGetItems.mockResolvedValue([{ name: 'Leftovers', count: 1, usage_percent: 100 }]);
+
+    const league = await GET(...makeArgs('Garchomp', { scope: 'league', scope_id: SCOPE_ID }));
+    const global = await GET(...makeArgs('Garchomp'));
+    expect(league.status).toBe(200);
+    expect(global.status).toBe(200);
+    expect((await league.json()).data).toMatchObject({ total_games_in_scope: 80, usage_percent: 62.5 });
+    expect((await global.json()).data).toMatchObject({ total_games_in_scope: 125, usage_percent: 40 });
+    expect(mockGetTotalGames).not.toHaveBeenCalled();
+    expect(mockGetItems).toHaveBeenNthCalledWith(1, 'Garchomp', 'league', SCOPE_ID, null, 'phase');
+    expect(mockGetItems).toHaveBeenNthCalledWith(2, 'Garchomp', 'all_time', null, null, 'phase');
+  });
+
+  it('does not cache native item usage for a player without a species aggregate', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(getPhaseSeasonGameTotal).mockResolvedValue(10);
+    mockGetPlayerAggs.mockResolvedValue([]);
+    mockGetItemsUncached.mockResolvedValue([]);
+
+    const response = await GET(...makeArgs('Garchomp', { scope: 'league', scope_id: SCOPE_ID, player_id: PLAYER_ID }));
+
+    expect(response.status).toBe(200);
+    expect(mockGetItems).not.toHaveBeenCalled();
+    expect(mockGetItemsUncached).toHaveBeenCalledExactlyOnceWith('Garchomp', 'league', SCOPE_ID, PLAYER_ID, 'phase');
+  });
 
   it('returns stats for all_time scope (default)', async () => {
     mockGetTotalGames.mockResolvedValue(100);

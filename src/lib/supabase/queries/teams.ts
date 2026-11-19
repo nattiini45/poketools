@@ -623,9 +623,13 @@ export async function getItemUsageForPokemon(
   pokemonName: string,
   scopeType: AggregateScope,
   scopeId: string | null,
-  playerId?: string
+  playerId?: string,
+  storage: 'legacy' | 'phase' = 'legacy',
 ): Promise<ItemUsageRow[]> {
-  const { data, error } = await supabase.rpc('get_item_usage_for_pokemon', {
+  const rpc = storage === 'phase' && (scopeType === 'league' || scopeType === 'all_time')
+    ? 'get_item_usage_for_pokemon_phase_storage'
+    : 'get_item_usage_for_pokemon';
+  const { data, error } = await supabase.rpc(rpc, {
     p_species: pokemonName,
     p_scope_type: scopeType,
     ...(scopeId ? { p_scope_id: scopeId } : {}),

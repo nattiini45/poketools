@@ -9582,6 +9582,20 @@ export type Database = {
           uses: number
         }[]
       }
+      get_item_usage_for_pokemon_phase_storage: {
+        Args: {
+          p_limit?: number
+          p_player_id?: string
+          p_scope_id?: string
+          p_scope_type: Database["public"]["Enums"]["aggregate_scope"]
+          p_species: string
+        }
+        Returns: {
+          item: string
+          total_sets: number
+          uses: number
+        }[]
+      }
       get_total_games_in_mixed_scope: {
         Args: {
           p_scope_id: string

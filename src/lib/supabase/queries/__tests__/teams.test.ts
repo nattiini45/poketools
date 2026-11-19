@@ -701,6 +701,16 @@ describe('getItemUsageForPokemon (H9: aggregated in SQL)', () => {
     expect(row.usage_percent).toBe(25);
   });
 
+  it('uses the native item RPC only for league and all-time scopes in phase storage', async () => {
+    mockBuilder.rpc.mockResolvedValue({ data: [], error: null });
+    await getItemUsageForPokemon('Garchomp', 'league', 's1', 'p1', 'phase');
+    await getItemUsageForPokemon('Garchomp', 'all_time', null, undefined, 'phase');
+    await getItemUsageForPokemon('Garchomp', 'tournament', 't1', undefined, 'phase');
+    expect(mockBuilder.rpc.mock.calls.map(([name]) => name)).toEqual([
+      'get_item_usage_for_pokemon_phase_storage', 'get_item_usage_for_pokemon_phase_storage', 'get_item_usage_for_pokemon',
+    ]);
+  });
+
   it('returns an empty list for no rows', async () => {
     mockBuilder.rpc.mockResolvedValueOnce({ data: [], error: null });
     expect(await getItemUsageForPokemon('MissingNo', 'tournament', 't1')).toEqual([]);
