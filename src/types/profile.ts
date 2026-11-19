@@ -7,6 +7,7 @@ import type { SignaturePokemon } from './signature';
 import type { EarnedAchievement } from './achievement';
 import type { HistoricalCompetitionOption, HistoricalHonor } from '@/lib/pack-extensions/historical-statistics-types';
 import type { HistoricalStatisticsView } from '@/lib/stats/combined-statistics';
+import type { LeaguePhaseAddress } from '@/lib/league-phase/paths';
 
 // ─── Per-participation entry ────────────────────────────────────────
 
@@ -22,23 +23,20 @@ export interface ProfileBestPokemon {
   kos_dealt: number;
 }
 
-export interface ProfileParticipation {
+export type ProfileParticipation = {
   id: string;
   name: string;
-  type: 'tournament';
   status: 'upcoming' | 'active' | 'completed';
   bracket_type: BracketType | null;
   standing: ProfileStanding | null;
   best_pokemon: ProfileBestPokemon | null;
   competition?: HistoricalCompetitionOption;
-}
+} & ({ type: 'tournament' } | ({ type: 'phase' } & LeaguePhaseAddress));
 
 // ─── Match summary ──────────────────────────────────────────────────
 
-export interface ProfileMatch {
+export type ProfileMatch = {
   id: string;
-  tournament_id: string;
-  tournament_name: string;
   opponent_id: string;
   opponent_name: string;
   opponent_avatar_url: string | null;
@@ -46,7 +44,7 @@ export interface ProfileMatch {
   winner_id: string | null;
   date_played: string | null;
   game_score: string; // pre-formatted "2-1", "0-0"
-}
+} & ({ tournament_id: string; tournament_name: string } | (LeaguePhaseAddress & { phase_name: string }));
 
 // ─── Player-scoped Pokémon stats ────────────────────────────────────
 
@@ -82,11 +80,11 @@ export interface ProfileHeadlineStats {
 
 // ─── Trophy ─────────────────────────────────────────────────────────
 
-export interface ProfileTrophy {
+export type ProfileTrophy = {
   id: string;
   name: string;
   rank: 1 | 2 | 3;
-}
+} & (LeaguePhaseAddress | { phase_id?: never; season_id?: never });
 
 // ─── Full profile response ──────────────────────────────────────────
 

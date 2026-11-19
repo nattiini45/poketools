@@ -6,6 +6,7 @@ import PokemonSprite from '@/components/shared/PokemonSprite';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
 import SkewPlate from '@/components/ui/SkewPlate';
 import type { ProfileParticipation } from '@/types/profile';
+import { phaseHref } from '@/lib/league-phase/paths';
 import { useT } from '@/i18n/client';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { enumMessages } from '@/i18n/messages/enums';
@@ -33,7 +34,7 @@ function ParticipationRow({ p }: { p: ProfileParticipation }) {
   return (
     <li>
       <Link
-        href={p.competition?.href ?? `/tournaments/${p.id}`}
+        href={p.competition?.href ?? (p.type === 'phase' ? phaseHref(p) : `/tournaments/${p.id}`)}
         className={cn(
           'flex items-center gap-3 rounded-poke-md border border-hairline bg-elevated px-3 py-2.5 transition-colors duration-80 ease-out hover:border-hairline-strong hover:bg-hover',
           FOCUS,

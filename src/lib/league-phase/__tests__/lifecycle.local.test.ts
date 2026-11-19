@@ -81,6 +81,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     const nativeMatch = randomUUID();
     const queueMatch = randomUUID();
     const foreignMatch = randomUUID();
+    const phaseGame = randomUUID();
     const standaloneId = randomUUID();
     const retiredId = randomUUID();
     try {
@@ -97,6 +98,12 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         { phase_id: other.id, season_id: seasonId, player_id: player, name: 'Other phase fixture team' },
         { phase_id: phase.id, season_id: seasonId, player_id: opponent, name: 'Other player fixture team' },
       ], { defaultToNull: false })).error).toBeNull();
+      expect((await admin.from('phase_games').insert({
+        id: phaseGame, match_id: nativeMatch, game_number: 1, winner_id: player,
+      })).error).toBeNull();
+      expect((await admin.from('phase_battle_stats').insert({
+        game_id: phaseGame, player_id: player, pokemon_name: 'Pikachu', kos_dealt: 2,
+      })).error).toBeNull();
       const legacyMatchIds = [];
       for (const [id, season_id] of [[standaloneId, null], [retiredId, seasonId]] as const) {
         const round_id = randomUUID();
@@ -109,6 +116,11 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
           name: 'Legacy fixture round', round_number: 1, best_of: 1 })).error).toBeNull();
         expect((await admin.from('matches').insert({ id: match_id, round_id, tournament_id: id,
           player_1_id: player, player_2_id: opponent })).error).toBeNull();
+        const game_id = randomUUID();
+        expect((await admin.from('games').insert({ id: game_id, match_id, game_number: 1, winner_id: player })).error).toBeNull();
+        expect((await admin.from('battle_stats').insert({
+          game_id, player_id: player, pokemon_name: season_id ? 'Ditto' : 'Pikachu', kos_dealt: 1,
+        })).error).toBeNull();
       }
       const matches = await listDashboardPhaseMatches(player);
       expect(matches.map(({ id }) => id)).toEqual([nativeMatch, queueMatch]);
@@ -124,9 +136,25 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       expect(standings.find(({ player_id }) => player_id === player)).toMatchObject({ wins: 1, losses: 0 });
       expect(standings.find(({ player_id }) => player_id === opponent)).toMatchObject({ wins: 0, losses: 1 });
       expect(standings.find(({ player_id }) => player_id === byePlayer)).toMatchObject({ wins: 1, losses: 0 });
+
+      const { getMixedProfileMatches, getMixedProfileBattleStats, getProfilePhases, getProfilePhaseParticipants } =
+        await import('@/lib/supabase/queries/profile');
+      const profileMatches = await getMixedProfileMatches(player);
+      expect(profileMatches.map(({ id }) => id).sort()).toEqual([nativeMatch, queueMatch, standaloneMatchId].sort());
+      const result = profileMatches.find(({ id }) => id === nativeMatch);
+      expect(result).toMatchObject({ phase_id: phase.id, season_id: seasonId, games: [{ winner_id: player }] });
+      expect(result).not.toHaveProperty('notes');
+      expect(result).not.toHaveProperty('tournament_id');
+      expect(await getMixedProfileBattleStats(player)).toEqual([
+        { pokemon_name: 'Pikachu', kos_dealt: 1, tournament_id: standaloneId },
+        { pokemon_name: 'Pikachu', kos_dealt: 2, phase_id: phase.id },
+      ]);
+      expect((await getProfilePhases(player)).map(({ id }) => id).sort()).toEqual([phase.id, other.id].sort());
+      expect((await getProfilePhaseParticipants([phase.id])).get(phase.id)?.map(({ id }) => id).sort()).toEqual(playerIds.slice(0, 4).sort());
     } finally {
       expect((await admin.from('tournaments').delete().in('id', [standaloneId, retiredId])).error).toBeNull();
       expect((await admin.from('phase_teams').delete().in('phase_id', [phase.id, other.id])).error).toBeNull();
+      expect((await admin.from('phase_games').delete().eq('id', phaseGame)).error).toBeNull();
       expect((await admin.from('phase_matches').delete().in('id', [nativeMatch, queueMatch, foreignMatch])).error).toBeNull();
       expect((await admin.from('phase_rounds').delete().eq('id', nativeRound)).error).toBeNull();
     }

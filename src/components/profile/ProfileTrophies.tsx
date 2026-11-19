@@ -6,6 +6,7 @@ import SkewPlate from '@/components/ui/SkewPlate';
 import { useT } from '@/i18n/client';
 import { profileMessages } from '@/i18n/messages/profile';
 import type { ProfileTrophy } from '@/types/profile';
+import { phaseHref } from '@/lib/league-phase/paths';
 import { cn } from '@/lib/utils/cn';
 import { FOCUS } from './focus';
 import { ordinalSuffix } from './ordinal';
@@ -24,7 +25,8 @@ export default function ProfileTrophies({ trophies }: ProfileTrophiesProps) {
       {trophies.map((trophy) => (
         <li key={trophy.id}>
           <Link
-            href={`/tournaments/${trophy.id}`}
+            href={trophy.phase_id && trophy.season_id
+              ? phaseHref({ phase_id: trophy.phase_id, season_id: trophy.season_id }) : `/tournaments/${trophy.id}`}
             className={cn('flex min-h-11 items-center gap-3 rounded-poke-sm text-body font-[550] text-fg transition-colors duration-80 ease-out hover:text-accent-ink', FOCUS)}
           >
             <span className="inline-flex shrink-0">

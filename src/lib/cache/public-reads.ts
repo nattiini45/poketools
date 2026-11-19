@@ -49,6 +49,7 @@ import {
 } from '@/lib/players/public-player';
 import { toPublicMatches, type PublicMatch } from '@/lib/match/public-match';
 import { composePlayerProfile } from '@/lib/profile/compose';
+import type { ProfileStorage } from '@/lib/profile/storage';
 import { getStandingsPreview } from '@/lib/stats/standings-preview';
 import { buildWorldRouteData, type WorldRouteDataPreload } from '@/lib/worlds/route-data';
 import type { AggregateScope } from '@/types/game';
@@ -577,10 +578,10 @@ const tournamentGroups = cache((tournamentId: string) =>
  * participation ranks by the league's stored tiebreaker order. A new name keeps Data Cache entries written before
  * that deploy from ever being served again.
  */
-const playerProfile = cache((playerId: string) =>
+const playerProfile = cache((playerId: string, storage: ProfileStorage = 'legacy') =>
   cachedRead(
     {
-      name: 'player-profile-v5',
+      name: storage === 'phase' ? 'player-profile-phase' : 'player-profile-v5',
       key: [playerId],
       tags: [
         publicTags.player(playerId),
@@ -592,7 +593,7 @@ const playerProfile = cache((playerId: string) =>
       ttl: PUBLIC_DETAIL_TTL_S,
     },
     async (): Promise<CachedPlayerProfile | null> => {
-      const profile = await composePlayerProfile(playerId);
+      const profile = storage === 'phase' ? await composePlayerProfile(playerId, storage) : await composePlayerProfile(playerId);
       return profile ? { ...profile, player: toPublicPlayer(profile.player) } : null;
     },
   ),

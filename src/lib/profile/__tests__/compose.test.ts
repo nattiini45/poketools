@@ -25,6 +25,15 @@ vi.mock('@/lib/supabase/queries/games', () => ({
   getPlayerBattleStats: vi.fn(async () => []),
 }));
 
+vi.mock('@/lib/supabase/queries/profile', () => ({
+  getProfilePhases: vi.fn(async () => []),
+  getProfilePhaseParticipants: vi.fn(async () => new Map()),
+  getMixedProfileBattleStats: vi.fn(async () => []),
+  getMixedProfileMatches: vi.fn(async () => []),
+}));
+vi.mock('@/lib/supabase/queries/phase-format-runtime', () => ({ getCompletedPhaseMatchRecordsBatch: vi.fn(async () => new Map()) }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getByeRoundsByPhaseIds: vi.fn(async () => new Map()) }));
+
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getGlobalKillRankForPokemon: vi.fn(async () => ({
     rankings: new Map(),
@@ -34,6 +43,7 @@ vi.mock('@/lib/supabase/queries/aggregates', () => ({
 }));
 
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
+  getTournamentsByPlayer: vi.fn(async () => []),
   listTournamentsByIds: vi.fn(async () => [
     {
       id: 'tourney-1', name: 'Test Cup', status: 'active',
@@ -88,7 +98,10 @@ import { getPlayerById, getPlayerParticipations } from '@/lib/supabase/queries/p
 import { getMatchesByPlayerWithTournament } from '@/lib/supabase/queries/matches';
 import { getPlayerBattleStats } from '@/lib/supabase/queries/games';
 import { getGlobalKillRankForPokemon, getAllTimePlayerAggregates } from '@/lib/supabase/queries/aggregates';
-import { listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
+import { getTournamentsByPlayer, listTournamentsByIds } from '@/lib/supabase/queries/tournaments';
+import { getMixedProfileBattleStats, getMixedProfileMatches, getProfilePhaseParticipants, getProfilePhases } from '@/lib/supabase/queries/profile';
+import { getCompletedPhaseMatchRecordsBatch } from '@/lib/supabase/queries/phase-format-runtime';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
 import { getByeRoundsByTournamentIds } from '@/lib/supabase/queries/rounds';
 import { getPlayerRating } from '@/lib/supabase/queries/ratings';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
@@ -158,6 +171,37 @@ describe('composePlayerProfile', () => {
     expect(getPlayerStreaks).toHaveBeenCalledWith('player-1');
     expect(getPlayerSignatures).toHaveBeenCalledWith('player-1');
     expect(getPlayerAchievements).toHaveBeenCalledWith('player-1');
+  });
+
+  it('composes phase results, rankings and trophies without retired league reads or synthetic tournament IDs', async () => {
+    const time = '2026-11-18T00:00:00Z';
+    vi.mocked(getProfilePhases).mockResolvedValueOnce([{
+      id: 'phase-1', season_id: 'league-1', name: 'Fixture Phase', bracket_type: 'swiss', status: 'completed',
+      created_at: time, bracket_reset_enabled: true, third_place_enabled: false,
+    }]);
+    vi.mocked(getProfilePhaseParticipants).mockResolvedValueOnce(new Map([['phase-1', [{ id: 'player-1', name: 'Alice' }]]]));
+    vi.mocked(getMixedProfileMatches).mockResolvedValueOnce([{
+      id: 'match-1', created_at: time, date_played: time, scheduled_at: null,
+      status: 'completed', winner_id: 'player-1', player_1_id: 'player-1', player_2_id: 'player-2',
+      player_1_name: 'Alice', player_2_name: 'Bob', player_1_avatar_url: null, player_2_avatar_url: null,
+      phase_id: 'phase-1', season_id: 'league-1', phase_name: 'Fixture Phase', games: [{ winner_id: 'player-1' }],
+    }]);
+    vi.mocked(getMixedProfileBattleStats).mockResolvedValueOnce([{ pokemon_name: 'Pikachu', kos_dealt: 2, phase_id: 'phase-1' }]);
+    const profile = await composePlayerProfile('player-1', 'phase');
+    expect(getTournamentsByPlayer).toHaveBeenCalledExactlyOnceWith('player-1', { standaloneOnly: true });
+    expect(getPlayerParticipations).not.toHaveBeenCalled();
+    expect(getMatchesByPlayerWithTournament).not.toHaveBeenCalled();
+    expect(getPlayerBattleStats).not.toHaveBeenCalled();
+    expect(getCompletedPhaseMatchRecordsBatch).toHaveBeenCalledExactlyOnceWith(['phase-1']);
+    expect(getByeRoundsByPhaseIds).toHaveBeenCalledExactlyOnceWith(['phase-1']);
+    expect(profile?.headline).toMatchObject({ total_matches: 1, total_wins: 1, tournaments_entered: 1 });
+    expect(profile?.recent_matches[0]).toMatchObject({ phase_id: 'phase-1', season_id: 'league-1', game_score: '1-0' });
+    expect(profile?.recent_matches[0]).not.toHaveProperty('tournament_id');
+    expect(profile?.past_participations[0]).toMatchObject({
+      type: 'phase', phase_id: 'phase-1', season_id: 'league-1', standing: { rank: 1 },
+      best_pokemon: { pokemon_name: 'Pikachu', kos_dealt: 2 },
+    });
+    expect(profile?.trophies).toEqual([{ id: 'phase-1', phase_id: 'phase-1', season_id: 'league-1', name: 'Fixture Phase', rank: 1 }]);
   });
 
   it('retains full numeric counters before truncating the live spotlight', async () => {
