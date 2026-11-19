@@ -5,6 +5,10 @@ import type { WikiEntityType, WikiNoteReportStatus } from '@/types/wiki';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import wikiErrors from '@/i18n/messages/errors/stats/en';
 
+type WikiQueuePage = { limit: number; offset: number };
+type WikiNoteQueuePage = WikiQueuePage & { status: 'pending' | 'approved' | 'rejected' | 'all' };
+type WikiReportQueuePage = WikiQueuePage & { status?: WikiNoteReportStatus };
+
 function noteGuard(note: PhaseWikiNote) {
   return { approved: note.approved, rejected_at: note.rejected_at, resubmission_blocked_at: note.resubmission_blocked_at };
 }
@@ -15,13 +19,21 @@ export const phaseWikiStorage = {
     if (error) throw error;
     return data;
   },
-  async listNotes(phaseId: string, approvedOnly: boolean, entity?: { type: WikiEntityType; name: string }): Promise<PhaseWikiNote[]> {
-    const rows = await readAllPages((from, to) => {
+  async listNotes(phaseId: string, approvedOnly: boolean, entity?: { type: WikiEntityType; name: string }, page?: WikiNoteQueuePage): Promise<PhaseWikiNote[]> {
+    const fetchPage = (from: number, to: number) => {
       let query = supabase.from('phase_wiki_notes').select('*, players!phase_wiki_notes_author_id_fkey(name)').eq('phase_id', phaseId);
-      if (approvedOnly) query = query.eq('approved', true).is('rejected_at', null).is('resubmission_blocked_at', null);
+      if (approvedOnly || page?.status === 'approved') query = query.eq('approved', true).is('rejected_at', null).is('resubmission_blocked_at', null);
+      if (page?.status === 'pending') query = query.eq('approved', false).is('rejected_at', null);
+      if (page?.status === 'rejected') query = query.eq('approved', false).not('rejected_at', 'is', null);
       if (entity) query = query.eq('entity_type', entity.type).eq('entity_name', entity.name);
-      return query.order('created_at').order('id').range(from, to);
-    });
+      return (page ? query.order('created_at', { ascending: false }) : query.order('created_at')).order('id').range(from, to);
+    };
+    const rows = page
+      ? await fetchPage(page.offset, page.offset + page.limit - 1).then(({ data, error }) => {
+        if (error) throw error;
+        return data;
+      })
+      : await readAllPages(fetchPage);
     return rows.map(({ players, ...note }) => ({ ...note, author_name: players?.name }));
   },
   async createNote(phaseId: string, authorId: string, input: PhaseWikiNoteInput, flags: string[]): Promise<PhaseWikiNote> {
@@ -56,11 +68,21 @@ export const phaseWikiStorage = {
     if (error) throw error;
     return data;
   },
-  async listReports(phaseId: string): Promise<PhaseWikiReport[]> {
-    const rows = await readAllPages((from, to) => supabase.from('phase_wiki_note_reports')
-      .select('*, phase_wiki_notes!inner(phase_id)').eq('phase_wiki_notes.phase_id', phaseId)
-      .order('created_at').order('id').range(from, to));
-    return rows.map(({ phase_wiki_notes: _owner, ...report }) => report);
+  async listReports(phaseId: string, page?: WikiReportQueuePage) {
+    const fetchPage = (from: number, to: number) => {
+      let query = supabase.from('phase_wiki_note_reports')
+        .select('*, phase_wiki_notes!inner(id, phase_id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at)')
+        .eq('phase_wiki_notes.phase_id', phaseId);
+      if (page?.status) query = query.eq('status', page.status);
+      return (page ? query.order('created_at', { ascending: false }) : query.order('created_at')).order('id').range(from, to);
+    };
+    const rows = page
+      ? await fetchPage(page.offset, page.offset + page.limit - 1).then(({ data, error }) => {
+        if (error) throw error;
+        return data;
+      })
+      : await readAllPages(fetchPage);
+    return rows.map(({ phase_wiki_notes: note, ...report }) => ({ ...report, note }));
   },
   async submitReport(note: PhaseWikiNote, reporterId: string, reason: string, details: string | null, previous: PhaseWikiReport | null): Promise<PhaseWikiReport> {
     const { data, error } = await supabase.rpc('phase_wiki_report_submit', {
