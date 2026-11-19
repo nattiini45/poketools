@@ -99,6 +99,7 @@ The overlay data routes need no session, and a miss runs the whole database fan-
 - A request without a client IP (a local run, the capture harness) is not limited on the in-memory store.
 - Legacy `Cache-Control` on successful responses stays the same (state 2 s, or 5 s with `enrich=true`; preview 30 s; standings 60 s; solo 2 s). Native standings follows the league's phases, even during a native freeze, and is not shared-cacheable across storage generations.
 - With phase routing on, preview and state use the verified match owner and return `no-store`.
+- The recap URL still takes `tournament_id` and `round_id`. In native or frozen-native storage, those IDs identify a phase of the requested league and a round of that phase. The recap reads its completed matches, moments, usage counters and standings from phase storage and returns `no-store`.
 - With playoffs, the overlay shows the same league-wide standings and final placings as the league page. Both read the league roster from `season_participants` in either storage generation, so a league member who hasn't joined a phase stays in the table. Phase enrollment is the source for a primary-phase-only table, not a substitute for the league roster.
 
 ### Client behaviour under a limit

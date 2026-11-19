@@ -15,6 +15,10 @@ vi.mock('@/lib/supabase/queries/rounds', () => ({
   getRoundById: vi.fn(),
 }));
 
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getPhaseRoundById: vi.fn() }));
+
 vi.mock('@/lib/broadcast/recap-engine', () => ({
   composeWeeklyRecap: vi.fn(),
 }));
@@ -38,6 +42,9 @@ import { checkPublicRateLimit } from '@/lib/utils/rate-limit';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
 import { composeWeeklyRecap } from '@/lib/broadcast/recap-engine';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { resolveContentLocale } from '@/i18n/content-locale';
@@ -73,6 +80,38 @@ describe('GET /api/broadcast/recap/[sid]', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(resolveContentLocale).mockResolvedValue('de');
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('reads only the scoped native phase and round in %s', async (mode) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
+    vi.mocked(getPhaseById).mockResolvedValue({ ...mockTournament, bracket_type: 'swiss' } as never);
+    vi.mocked(getPhaseRoundById).mockResolvedValue({ ...mockRound, phase_id: mockTournament.id } as never);
+    vi.mocked(composeWeeklyRecap).mockResolvedValue(mockRecap as never);
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(getPhaseRoundById).toHaveBeenCalledExactlyOnceWith(mockRound.id, mockTournament.id);
+    expect(composeWeeklyRecap).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({
+      tournamentId: mockTournament.id, roundId: mockRound.id, phase: expect.objectContaining({ id: mockTournament.id, bracket_type: 'swiss' }),
+    }));
+    expect(getTournamentById).not.toHaveBeenCalled();
+    expect(getRoundById).not.toHaveBeenCalled();
+  });
+
+  it('rejects a foreign native phase before composing a recap', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(getSeasonById).mockResolvedValue(mockSeason as never);
+    vi.mocked(getPhaseById).mockResolvedValue({ ...mockTournament, season_id: mockTournament.id } as never);
+    vi.mocked(getPhaseRoundById).mockResolvedValue({ ...mockRound, phase_id: mockTournament.id } as never);
+
+    const res = await GET(makeRequest(undefined, validQuery), { params: makeParams({ sid: SID }) });
+    expect(res.status).toBe(404);
+    expect((await res.json()).code).toBe('tournament_not_found');
+    expect(composeWeeklyRecap).not.toHaveBeenCalled();
+    expect(getTournamentById).not.toHaveBeenCalled();
   });
 
   it('returns 400 when tournament_id is missing', async () => {

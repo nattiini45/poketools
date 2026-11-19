@@ -17,7 +17,15 @@ vi.mock('@/lib/supabase/queries/broadcast-moments', () => ({
 
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
+  getAggregatesSummary: vi.fn(),
 }));
+
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPublicPhaseStandingsParticipants: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getMatchesByPhase: vi.fn(), getPhaseMatchesByRound: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseBattleStatsByMatch: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getByeRoundsByPhaseIds: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-broadcast-moments', () => ({ getPhaseMomentsByMatch: vi.fn() }));
+vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: vi.fn() }));
 
 vi.mock('@/lib/supabase/queries/tournaments', () => ({
   getParticipants: vi.fn(),
@@ -26,6 +34,7 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 
 vi.mock('@/lib/tournament/season-standings', () => ({
   computeStandingsForSeason: vi.fn(async () => []),
+  computeStandingsFromContext: vi.fn(() => []),
 }));
 
 vi.mock('@/lib/match/aggregation', () => ({
@@ -44,9 +53,15 @@ vi.mock('@/lib/ai/client', () => ({
 import { getMatchesByRound, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
-import { getAggregates } from '@/lib/supabase/queries/aggregates';
+import { getAggregates, getAggregatesSummary } from '@/lib/supabase/queries/aggregates';
 import { getParticipants } from '@/lib/supabase/queries/tournaments';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { getPublicPhaseStandingsParticipants } from '@/lib/supabase/queries/league-phases';
+import { getMatchesByPhase, getPhaseMatchesByRound } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
+import { getPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
+import { computeStandingsForSeason, computeStandingsFromContext } from '@/lib/tournament/season-standings';
 import { computePokemonScore, aggregateTeamFromStats } from '@/lib/match/aggregation';
 import { siteSpriteUrl } from '@/lib/pkmn/sprite-styles';
 import { outputLanguageInstruction } from '@/lib/ai/language';
@@ -105,6 +120,40 @@ beforeEach(() => {
 // ── Tests ──────────────────────────────────────────────────────────
 
 describe('composeWeeklyRecap', () => {
+  it('uses native completed matches, public moments, aggregates and stage-owned Swiss byes without legacy reads', async () => {
+    const phase = { id: 'phase-1', bracket_type: 'swiss' } as const;
+    const match = makeMatch('m1', { phase_id: phase.id, round_number: 2 });
+    vi.mocked(getPhaseMatchesByRound).mockResolvedValue([match, makeMatch('future', { status: 'scheduled' })] as never);
+    vi.mocked(getPhaseBattleStatsByMatch).mockResolvedValue({});
+    vi.mocked(getPhaseMomentsByMatch).mockResolvedValue([]);
+    vi.mocked(getAggregatesSummary).mockResolvedValue([{ pokemon_name: 'Eevee', total_kos_dealt: 5 }] as never);
+    vi.mocked(getMatchesByPhase).mockResolvedValue([match] as never);
+    vi.mocked(getPublicPhaseStandingsParticipants).mockResolvedValue([]);
+    vi.mocked(getByeRoundsByPhaseIds).mockResolvedValue(new Map([
+      [phase.id, [{ id: 'r1', phase_id: phase.id, round_number: 1, bye_player_ids: ['p2'] }]],
+    ]));
+    vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue({ formatType: 'singles' });
+
+    const recap = await composeWeeklyRecap({ ...DEFAULT_OPTIONS, tournamentId: phase.id, phase, roundNumber: 2 });
+
+    expect(recap.results).toHaveLength(1);
+    expect(recap.stat_leaders.most_kos).toMatchObject({ pokemon_name: 'Eevee', kos: 5 });
+    expect(getPhaseMatchesByRound).toHaveBeenCalledExactlyOnceWith(DEFAULT_OPTIONS.roundId);
+    expect(getPhaseBattleStatsByMatch).toHaveBeenCalledExactlyOnceWith('m1');
+    expect(getPhaseMomentsByMatch).toHaveBeenCalledExactlyOnceWith('m1');
+    expect(getAggregatesSummary).toHaveBeenCalledExactlyOnceWith('phase', phase.id);
+    expect(getMatchesByPhase).toHaveBeenCalledExactlyOnceWith(phase.id);
+    expect(getPublicPhaseStandingsParticipants).toHaveBeenCalledExactlyOnceWith(phase.id);
+    expect(computeStandingsFromContext).toHaveBeenCalledWith(
+      expect.objectContaining({ formatType: 'singles' }), [], {}, expect.any(Array), {},
+      { byes: [{ player_id: 'p2', round_number: 1, stage_id: phase.id }] },
+    );
+    for (const legacy of [getMatchesByRound, getMatchesByTournament, getBattleStatsByMatch,
+      getMomentsByMatch, getAggregates, getParticipants, computeStandingsForSeason]) {
+      expect(legacy).not.toHaveBeenCalled();
+    }
+  });
+
   it('returns empty recap when no matches in round', async () => {
     vi.mocked(getMatchesByRound).mockResolvedValue([]);
 

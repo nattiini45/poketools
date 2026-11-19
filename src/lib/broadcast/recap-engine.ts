@@ -2,9 +2,17 @@ import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
 import { getMatchesByRound, getMatchesByTournament } from '@/lib/supabase/queries/matches';
 import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getMomentsByMatch } from '@/lib/supabase/queries/broadcast-moments';
-import { getAggregates } from '@/lib/supabase/queries/aggregates';
+import { getPhaseMomentsByMatch } from '@/lib/supabase/queries/phase-broadcast-moments';
+import { getAggregates, getAggregatesSummary } from '@/lib/supabase/queries/aggregates';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { getPublicPhaseStandingsParticipants } from '@/lib/supabase/queries/league-phases';
+import { getMatchesByPhase, getPhaseMatchesByRound } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
+import { getByeRoundsByPhaseIds } from '@/lib/supabase/queries/phase-rounds';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
+import { kitForPhase } from '@/lib/format-engine/context';
+import { computeStandingsForSeason, computeStandingsFromContext } from '@/lib/tournament/season-standings';
+import { formatScoresByes, scoringByeRecordsForStages } from '@/lib/tournament/byes';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
 import {
   computePokemonScore,
@@ -21,6 +29,8 @@ import type {
   RecapMatchSummary,
 } from '@/types/broadcast';
 import type { MatchRecord } from '@/lib/tournament/types';
+import type { LeagueRankingStage } from '@/lib/tournament/league-placings';
+import type { BracketType } from '@/types/tournament';
 import { isLocale, type Locale } from '@/i18n/config';
 import { createTranslator } from '@/i18n/core';
 import { broadcastCasterMessages } from '@/i18n/messages/broadcast-caster';
@@ -30,6 +40,8 @@ import { RECAP_NARRATIVE_SYSTEM_PROMPT, buildNarrativePrompt, type NarrativeInpu
 
 // ─── Recap Composition ───────────────────────────────────────────────
 
+type RecapPhase = LeagueRankingStage & { bracket_type: BracketType };
+
 interface ComposeRecapOptions {
   seasonId: string;
   leagueName: string;
@@ -38,6 +50,7 @@ interface ComposeRecapOptions {
   roundId: string;
   roundName: string;
   roundNumber: number;
+  phase?: RecapPhase;
   /** If true, call AI for narrative generation */
   generateNarrative?: boolean;
   /**
@@ -67,23 +80,24 @@ export async function composeWeeklyRecap(
     roundId,
     roundName,
     roundNumber,
+    phase,
   } = options;
   // Validated so a caller passing an unchecked string still gets a known translator.
   const locale: Locale = isLocale(options.locale) ? options.locale : 'en';
   const t = createTranslator(broadcastCasterMessages, locale);
 
   // Get completed matches in the specified round
-  const allMatches = await getMatchesByRound(roundId);
+  const allMatches = await (phase ? getPhaseMatchesByRound(roundId) : getMatchesByRound(roundId));
   const completedMatches = allMatches.filter((m) => m.status === 'completed');
 
   // Fetch battle stats for all completed matches in parallel
   const battleStatsMap = new Map<string, Record<string, import('@/types/game').BattleStat[]>>();
   const [, momentsResults] = await Promise.all([
     Promise.all(completedMatches.map(async (m) => {
-      const stats = await getBattleStatsByMatch(m.id);
+      const stats = await (phase ? getPhaseBattleStatsByMatch(m.id) : getBattleStatsByMatch(m.id));
       battleStatsMap.set(m.id, stats);
     })),
-    Promise.all(completedMatches.map((m) => getMomentsByMatch(m.id))),
+    Promise.all(completedMatches.map((m) => phase ? getPhaseMomentsByMatch(m.id) : getMomentsByMatch(m.id))),
   ]);
 
   // Build enriched match results
@@ -141,13 +155,15 @@ export async function composeWeeklyRecap(
   }, null);
 
   // Compute stat leaders from tournament-scoped aggregates
-  const statLeaders = await computeStatLeaders(tournamentId, seasonId);
+  const statLeaders = await computeStatLeaders(tournamentId, seasonId, phase);
 
   // Compute standings movement
   const standingsMovement = await computeStandingsMovement(
     tournamentId,
     roundNumber,
     t('generated.unknownPlayer'),
+    seasonId,
+    phase,
   );
 
   // Compute pokemon usage across the round
@@ -234,9 +250,10 @@ function enrichTeam(
 async function computeStatLeaders(
   tournamentId: string,
   seasonId: string,
+  phase?: RecapPhase,
 ): Promise<SeasonLeaders> {
   try {
-    const aggregates = await getAggregates('tournament', tournamentId);
+    const aggregates = await (phase ? getAggregatesSummary('phase', phase.id) : getAggregates('tournament', tournamentId));
 
     // Most KOs: find pokemon with highest total_kos_dealt
     const mostKosPokemon = aggregates.length > 0
@@ -279,7 +296,8 @@ async function computeStatLeaders(
           }
         : null,
     };
-  } catch {
+  } catch (error) {
+    if (phase) throw error;
     return {
       season_id: seasonId,
       most_kos: null,
@@ -296,6 +314,8 @@ async function computeStandingsMovement(
   currentRoundNumber: number,
   /** Localized name for a player missing from the participant list. */
   unknownPlayer: string,
+  seasonId: string,
+  phase?: RecapPhase,
 ): Promise<{ risers: { player_name: string; old_rank: number; new_rank: number }[]; fallers: { player_name: string; old_rank: number; new_rank: number }[] }> {
   try {
     if (currentRoundNumber <= 1) return { risers: [], fallers: [] };
@@ -303,9 +323,9 @@ async function computeStandingsMovement(
     // Get all matches and participants for the tournament (+ season context
     // for format-aware standings)
     const [allMatches, participants, tournament] = await Promise.all([
-      getMatchesByTournament(tournamentId),
-      getParticipants(tournamentId),
-      getTournamentById(tournamentId),
+      phase ? getMatchesByPhase(phase.id) : getMatchesByTournament(tournamentId),
+      phase ? getPublicPhaseStandingsParticipants(phase.id) : getParticipants(tournamentId),
+      phase ? null : getTournamentById(tournamentId),
     ]);
 
     const completedMatches = allMatches.filter((m) => m.status === 'completed');
@@ -332,17 +352,19 @@ async function computeStandingsMovement(
 
     // A Swiss stage scores its stored byes as wins. Both tables below read the
     // same match records, so they read the same byes.
-    const byes = tournament ? await loadScoringByes(tournament) : [];
+    const nativeContext = phase ? await loadNativeSeasonStandingsContext(seasonId) : null;
+    const byes = phase && nativeContext?.formatType && formatScoresByes(nativeContext.formatType) && phase.bracket_type === 'swiss'
+      ? scoringByeRecordsForStages([phase], await getByeRoundsByPhaseIds([phase.id]))
+      : tournament ? await loadScoringByes(tournament) : [];
+    const standingsOptions = { byes, ...playoffStandingsOptions(phase ?? tournament, participantIds.length) };
+    const rank = (records: MatchRecord[]) => nativeContext && phase
+      ? computeStandingsFromContext({ ...nativeContext, kit: kitForPhase(nativeContext.kit, phase.id) },
+          participantIds, participantNames, records, participantAvatars, standingsOptions)
+      : computeStandingsForSeason(tournament?.season_id ?? null,
+          participantIds, participantNames, records, participantAvatars, standingsOptions);
 
     // Current standings (all rounds up to current)
-    const currentStandings = await computeStandingsForSeason(
-      tournament?.season_id ?? null,
-      participantIds,
-      participantNames,
-      matchRecords,
-      participantAvatars,
-      { byes, ...playoffStandingsOptions(tournament, participantIds.length) },
-    );
+    const currentStandings = await rank(matchRecords);
 
     // Previous standings (exclude current round's matches)
     // We need to know which matches belong to the current round
@@ -356,14 +378,7 @@ async function computeStandingsMovement(
     // Simpler approach: compare current rank vs rank at (currentRound - 1)
     // by filtering out matches that are in the current round
     const previousMatches = matchRecords; // We include all since we can't filter by round here
-    const previousStandings = await computeStandingsForSeason(
-      tournament?.season_id ?? null,
-      participantIds,
-      participantNames,
-      previousMatches,
-      participantAvatars,
-      { byes, ...playoffStandingsOptions(tournament, participantIds.length) },
-    );
+    const previousStandings = await rank(previousMatches);
 
     // Build rank maps
     const currentRankMap = new Map<string, number>();
@@ -390,7 +405,8 @@ async function computeStandingsMovement(
     fallers.sort((a, b) => (a.new_rank - a.old_rank) - (b.new_rank - b.old_rank));
 
     return { risers, fallers };
-  } catch {
+  } catch (error) {
+    if (phase) throw error;
     return { risers: [], fallers: [] };
   }
 }
