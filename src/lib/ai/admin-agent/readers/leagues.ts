@@ -2,16 +2,21 @@ import 'server-only';
 /**
  * League readers (plan 3.6.2): `league_list`, `league_get`, `league_roster_get`, `player_search`, `phase_get`.
  *
- * Every one runs its route's live guard through `guardFor` before reading, and returns a hand-built projection checked
+ * Every one runs a live guard through `guardFor` before reading, then returns a hand-built projection checked
  * by a strict output schema. Players leave only as `{id, label}` (the public ref); the roster comes from
  * `getPublicSeasonParticipants`, which never selects a private player column. Stored text is fenced (`fence.ts`).
  */
 import { z } from 'zod';
+import { validateAgentResourceRefs } from '@/lib/ai/agent/resource-ref';
 import { getAdminScope, scopeAllowsSeason } from '@/lib/auth/admin-scope';
 import { UserFacingError } from '@/lib/api/user-facing-error';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { toPublicPlayerRef } from '@/lib/players/public-player';
+import { getPhaseWithDetails, getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
 import { getLeagueTrashBySeason } from '@/lib/supabase/queries/league-trash';
+import { findNativePhaseAliasOwner, findStandaloneTournamentAlias } from '@/lib/supabase/queries/phase-route-owners';
 import { listPlayers } from '@/lib/supabase/queries/players';
+import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
 import { getPublicSeasonParticipants, getSeasonWithDetails, listSeasons } from '@/lib/supabase/queries/seasons';
@@ -20,6 +25,7 @@ import { defineRunnable } from '../registry/define';
 import { guardFor } from '../registry/guard';
 import { capped, code, id, intArg, isoDateTime, label, textArg, userText, uuidArg } from '../registry/atoms';
 import { fenceLabel, fenceText } from '../registry/fence';
+import { createAdminAgentOwnershipReader } from './ownership';
 
 /** `listSeasons` reads at most this many rows; a full page means the list may be cut. */
 const LIST_SEASONS_CAP = 100;
@@ -33,6 +39,7 @@ function enrollmentOf(source: { type: string } | null): 'roster' | 'standings' |
 }
 
 const phaseNotFound = () => new UserFacingError('Phase not found', { code: 'tournament_not_found', status: 404 });
+const forbidden = () => new UserFacingError('Admin access required for this resource', { code: 'forbidden', status: 403 });
 
 const leagueSummary = z.strictObject({
   id: id(),
@@ -64,11 +71,19 @@ export const leagueList = defineRunnable('any', {
   guard: () => ({ kind: 'any' }),
   output: z.strictObject({ leagues: capped(leagueSummary) }),
   async execute(args, guarded) {
-    const scope = await getAdminScope(guarded.player);
-    const rows = await listSeasons({ includeTestSeasons: args.include_test_leagues !== false });
+    const mode = await getPhaseRouteMode();
+    const native = mode === 'phase' || mode === 'frozen_phase';
+    const player = guarded.player;
+    const nativeSeasonIds = native && !player.isAdmin ? new Set(await getAdminSeasonIds(player.playerId)) : null;
+    const scope = native ? null : await getAdminScope(player);
+    const rows = await listSeasons({
+      includeTestSeasons: args.include_test_leagues !== false,
+      ...(native ? { storage: 'phase' as const } : {}),
+    });
     const needle = args.name_contains?.toLowerCase();
     const visible = rows.filter(
-      (row) => scopeAllowsSeason(scope, row.id) && (needle === undefined || row.name.toLowerCase().includes(needle)),
+      (row) => (scope ? scopeAllowsSeason(scope, row.id) : nativeSeasonIds === null || nativeSeasonIds.has(row.id))
+        && (needle === undefined || row.name.toLowerCase().includes(needle)),
     );
     return {
       leagues: {
@@ -137,15 +152,19 @@ export const leagueGet = defineRunnable('season', {
       .nullable(),
   }),
   async execute(args) {
-    const season = await getSeasonWithDetails(args.league_id);
+    const mode = await getPhaseRouteMode();
+    const native = mode === 'phase' || mode === 'frozen_phase';
+    const season = native
+      ? await getSeasonWithDetails(args.league_id, false, 'phase')
+      : await getSeasonWithDetails(args.league_id);
     if (season === null) {
       const trashed = await getLeagueTrashBySeason(args.league_id);
       return { found: false, trash: trashed === null ? null : { purge_after: trashed.purge_after }, league: null };
     }
     const [stages, groups, signals] = await Promise.all([
-      getStagesBySeasonId(season.id),
+      native ? getPhasesBySeasonId(season.id) : getStagesBySeasonId(season.id),
       getSeasonGroups(season.id),
-      getSeasonStartSignals(season.id),
+      native ? getSeasonStartSignals(season.id, 'native') : getSeasonStartSignals(season.id),
     ]);
     const started =
       signals !== null && (signals.status !== 'upcoming' || signals.phases.some((phase) => phase.status !== 'upcoming' || phase.rounds_total > 0));
@@ -266,7 +285,12 @@ export const playerSearch = defineRunnable('any', {
     if (!guarded.player.isAdmin) {
       // Same scope rule as GET /api/admin/player-search: the scope is a guard, not a filter.
       if (args.league_id) await guardFor({ kind: 'season', id: args.league_id });
-      else if (args.tournament_id) await guardFor({ kind: 'tournament', id: args.tournament_id });
+      else if (args.tournament_id) {
+        const mode = await getPhaseRouteMode();
+        if ((mode === 'phase' || mode === 'frozen_phase')
+          && !await findStandaloneTournamentAlias(args.tournament_id)) throw forbidden();
+        await guardFor({ kind: 'tournament', id: args.tournament_id });
+      }
       else throw new UserFacingError('A league or tournament is required', { code: 'validation_failed', params: { issues: 'league_id: league_id or tournament_id is required' }, status: 400 });
     }
     const limit = args.limit ?? 10;
@@ -289,14 +313,14 @@ export const playerSearch = defineRunnable('any', {
 
 // ─── phase_get ───────────────────────────────────────────────────────────────
 
-export const phaseGet = defineRunnable('tournament', {
+export const phaseGet = defineRunnable('phaseRead', {
   name: 'phase_get',
   class: 'R',
   description:
     'Get one phase of a league (or one standalone tournament) by its tournament id: bracket type, status, best-of settings, the pinned ruleset version, enrollment, advancement and how many participants it has. Use tournament_get for the participant list.',
   args: z.strictObject({ tournament_id: uuidArg('Phase or tournament id') }),
   phase: 0,
-  guard: (args) => ({ kind: 'tournament', id: args.tournament_id }),
+  guard: (args) => ({ kind: 'phaseRead', id: args.tournament_id }),
   output: z.strictObject({
     phase: phaseSummary.extend({
         league_id: id().nullable(),
@@ -308,40 +332,73 @@ export const phaseGet = defineRunnable('tournament', {
         description_user_text: userText(),
       }),
   }),
-  async execute(args) {
-    const tournament = await getTournamentWithDetails(args.tournament_id);
-    if (tournament === null) throw phaseNotFound();
+  async execute(args, guarded) {
+    const tournamentId = args.tournament_id;
+    const competition = guarded.storage === 'legacy'
+      ? await getTournamentWithDetails(tournamentId)
+      : await readNativePhaseOrStandalone(tournamentId, guarded.player.isAdmin);
+    if (competition === null) throw phaseNotFound();
     return {
       phase: {
-        id: tournament.id,
-        label: fenceLabel(tournament.name),
-        bracket_type: tournament.bracket_type,
-        status: tournament.status,
-        stage_order: tournament.stage_order,
-        current_round: tournament.current_round,
-        best_of_default: tournament.best_of_default,
-        team_visibility: tournament.team_visibility,
-        archived: tournament.archived,
-        ruleset_id: tournament.ruleset_id,
-        ruleset_label: fenceLabel(tournament.ruleset_name),
-        participant_count: tournament.participant_count,
-        enrollment: enrollmentOf(tournament.enrollment_source),
-        enrollment_frozen: tournament.enrollment_source?.frozen ?? false,
-        advancement: tournament.advancement_rule
-          ? { type: tournament.advancement_rule.type, count: tournament.advancement_rule.count, per_group: tournament.advancement_rule.per_group }
+        id: competition.id,
+        label: fenceLabel(competition.name),
+        bracket_type: competition.bracket_type,
+        status: competition.status,
+        stage_order: competition.stage_order,
+        current_round: competition.current_round,
+        best_of_default: competition.best_of_default,
+        team_visibility: competition.team_visibility,
+        archived: competition.archived,
+        ruleset_id: competition.ruleset_id,
+        ruleset_label: fenceLabel(competition.ruleset_name),
+        participant_count: competition.participant_count,
+        enrollment: enrollmentOf(competition.enrollment_source),
+        enrollment_frozen: competition.enrollment_source?.frozen ?? false,
+        advancement: competition.advancement_rule
+          ? { type: competition.advancement_rule.type, count: competition.advancement_rule.count, per_group: competition.advancement_rule.per_group }
           : null,
-        league_id: tournament.season_id,
-        league_label: tournament.season_name === null ? null : fenceLabel(tournament.season_name),
-        is_doubles: tournament.is_doubles,
-        bo_overrides: Object.entries(tournament.bo_overrides)
+        league_id: competition.season_id,
+        league_label: competition.season_name === null ? null : fenceLabel(competition.season_name),
+        is_doubles: competition.is_doubles,
+        bo_overrides: Object.entries(competition.bo_overrides)
           .slice(0, 20)
           .map(([round, bestOf]) => ({ round_label: fenceLabel(round), best_of: bestOf })),
-        bracket_reset_enabled: tournament.bracket_reset_enabled ?? true,
-        third_place_enabled: tournament.third_place_enabled ?? false,
-        description_user_text: fenceText(tournament.description),
+        bracket_reset_enabled: competition.bracket_reset_enabled ?? true,
+        third_place_enabled: competition.third_place_enabled ?? false,
+        description_user_text: fenceText(competition.description),
       },
     };
   },
 });
+
+async function readNativePhaseOrStandalone(id: string, isSiteAdmin: boolean) {
+  const [owner, standalone] = await Promise.all([
+    findNativePhaseAliasOwner({ phaseId: id }),
+    findStandaloneTournamentAlias(id),
+  ]);
+  if (owner && standalone) {
+    if (!isSiteAdmin) throw forbidden();
+    throw new UserFacingError('Phase or tournament id is ambiguous', {
+      code: 'validation_failed', status: 400, params: { issues: 'tournament_id: matches both a phase and a standalone tournament' },
+    });
+  }
+  if (owner) {
+    const verified = await validateAgentResourceRefs([{
+      resource: 'competition',
+      owner: { kind: 'phase', phaseId: owner.phase_id, seasonId: owner.season_id },
+    }], createAdminAgentOwnershipReader());
+    if (!verified.ok) {
+      if (!isSiteAdmin) throw forbidden();
+      return null;
+    }
+    return getPhaseWithDetails(owner.phase_id, owner.season_id);
+  }
+  if (standalone) {
+    await guardFor({ kind: 'tournament', id });
+    return getTournamentWithDetails(id, { standaloneOnly: true });
+  }
+  if (!isSiteAdmin) throw forbidden();
+  return null;
+}
 
 export const LEAGUE_READERS = [leagueList, leagueGet, leagueRosterGet, playerSearch, phaseGet] as const;
