@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { comparePixels, expandMatrix, expandTargets, fillTemplate, requestPolicy, verdictOf } from '../visual/lib.mjs';
+import { comparePixels, expandMatrix, expandTargets, failureSummary, fillTemplate, requestPolicy, verdictOf } from '../visual/lib.mjs';
 
 const frozen = JSON.parse(readFileSync(new URL('../visual/frozen.json', import.meta.url), 'utf8'));
 const routes = JSON.parse(readFileSync(new URL('../visual/routes.json', import.meta.url), 'utf8'));
@@ -102,5 +102,37 @@ describe('visual harness comparison', () => {
     expect(verdictOf({ base: null, head: {}, comparison: same })).toMatchObject({ status: 'added', pass: false });
     expect(verdictOf({ base: {}, head: null, comparison: same })).toMatchObject({ status: 'removed', pass: false });
     expect(verdictOf({ base: {}, head: {}, comparison: { sameSize: false } })).toMatchObject({ status: 'resized', pass: false });
+  });
+});
+
+describe('visual harness failure report', () => {
+  it('names every differing capture with its diff ratio, and every job that errored', () => {
+    const lines = failureSummary({
+      failing: [
+        { file: 'route-world-desktop-light.png', status: 'changed', changedPct: 0.0123 },
+        { file: 'epb-replay-phone-dark.png', status: 'changed', changedPct: 12.5 },
+        { file: 'replay-new.png', status: 'added', changedPct: 0 },
+        { file: 'replay-gone.png', status: 'removed', changedPct: 0 },
+        { file: 'card-resized.png', status: 'resized', changedPct: 100 },
+      ],
+      errored: [{ key: 'draft-room', base: null, head: 'timeout' }],
+    });
+    expect(lines).toEqual([
+      'CHANGED route-world-desktop-light.png 0.0123 % changed',
+      'CHANGED epb-replay-phone-dark.png 12.5000 % changed',
+      'ADDED replay-new.png',
+      'REMOVED replay-gone.png',
+      'RESIZED card-resized.png',
+      'ERROR job draft-room: base ok, head timeout',
+    ]);
+  });
+
+  it('prints nothing for a run without failures', () => {
+    expect(failureSummary({ failing: [], errored: [] })).toEqual([]);
+    expect(failureSummary({})).toEqual([]);
+  });
+
+  it('is what compare.mjs prints under its count line', () => {
+    expect(readFileSync(new URL('../visual/compare.mjs', import.meta.url), 'utf8')).toMatch(/for \(const line of failureSummary\(result\)\) console\.log\('visual: ' \+ s \+ ': ' \+ line\)/);
   });
 });

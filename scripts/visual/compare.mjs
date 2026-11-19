@@ -20,6 +20,7 @@ import { cp, readFile, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { capture, DEFAULT_PORT } from './run.mjs';
+import { failureSummary } from './lib.mjs';
 import { diffLabels } from './diff.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -97,6 +98,7 @@ async function main() {
   for (const s of sets) {
     const result = await diffLabels({ base: baseLabel, head: headLabel, set: s, out: OUT });
     console.log('visual: ' + s + ': ' + result.compared + ' compared, ' + result.failing.length + ' failing, ' + result.errored.length + ' errored; ' + join(result.reportDir, 'report.md'));
+    for (const line of failureSummary(result)) console.log('visual: ' + s + ': ' + line);
     pass = pass && result.pass;
   }
   if (!argv.includes('--keep')) {

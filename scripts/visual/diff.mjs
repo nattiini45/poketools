@@ -17,7 +17,7 @@ import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import sharp from 'sharp';
-import { comparePixels, verdictOf } from './lib.mjs';
+import { comparePixels, failureSummary, verdictOf } from './lib.mjs';
 
 const REPO = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -126,7 +126,7 @@ async function main() {
   }
   const result = await diffLabels({ base, head, set: option(argv, 'set', 'frozen'), out: resolve(option(argv, 'out', join(REPO, '.visual'))) });
   console.log('visual: ' + result.compared + ' compared, ' + result.failing.length + ' failing, ' + result.errored.length + ' errored; report ' + join(result.reportDir, 'report.md'));
-  for (const r of result.failing.slice(0, 30)) console.log('visual: ' + r.status.toUpperCase() + ' ' + r.file + (r.changedPct ? ' ' + r.changedPct.toFixed(4) + ' %' : ''));
+  for (const line of failureSummary(result)) console.log('visual: ' + line);
   process.exit(result.pass ? 0 : 1);
 }
 

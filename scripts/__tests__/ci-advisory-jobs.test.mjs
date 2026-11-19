@@ -48,4 +48,14 @@ describe('advisory local-stack CI jobs', () => {
     expect(body).toMatch(/test-results\//);
     expect(body).toMatch(/run: npm run test:e2e/);
   });
+
+  it('the visual job uploads its report even on failure, hidden directory included', () => {
+    const body = job('visual');
+    expect(body).toMatch(/run: node scripts\/visual\/compare\.mjs/);
+    expect(body).toMatch(/^ {8}if: always\(\)$/m);
+    expect(body).toMatch(/^ {10}path: \.visual\/diff-\*\/$/m);
+    // `.visual` is hidden: without `include-hidden-files` the glob matches nothing and the failed run
+    // uploads an empty artifact, which is the one thing a red visual job needs.
+    expect(body).toMatch(/^ {10}include-hidden-files: true$/m);
+  });
 });

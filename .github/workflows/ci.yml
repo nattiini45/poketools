@@ -343,4 +343,8 @@ jobs:
         with:
           name: visual-report
           path: .visual/diff-*/
+          # The report lives under `.visual`, and upload-artifact skips hidden files unless told otherwise
+          # (`excludeHiddenFiles` in its file search), so without this the glob matches nothing and every
+          # failed run uploads an empty artifact. Verified against a generated .visual/diff-* tree.
+          include-hidden-files: true
           retention-days: 7

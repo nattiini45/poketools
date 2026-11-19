@@ -166,3 +166,20 @@ export function verdictOf({ base, head, comparison, tolerance = { maxChangedPct:
   const pass = comparison.changedPct <= (tolerance.maxChangedPct ?? 0);
   return { status: pass ? 'within-tolerance' : 'changed', pass };
 }
+
+/**
+ * One line per differing capture and per job that errored, for a run's stdout: a failure names what
+ * differed and by how much without opening the uploaded report. Only a changed capture has a ratio; an
+ * added, removed or resized one has none, and its status already says why it failed.
+ * @param {{ failing?: Array<{ file: string, status: string, changedPct?: number | null }>,
+ *   errored?: Array<{ key: string, base?: string | null, head?: string | null }> }} result
+ * @returns {string[]}
+ */
+export function failureSummary({ failing = [], errored = [] } = {}) {
+  const lines = failing.map((row) => {
+    const ratio = row.status === 'changed' && typeof row.changedPct === 'number' ? ' ' + row.changedPct.toFixed(4) + ' % changed' : '';
+    return row.status.toUpperCase() + ' ' + row.file + ratio;
+  });
+  for (const job of errored) lines.push('ERROR job ' + job.key + ': base ' + (job.base ?? 'ok') + ', head ' + (job.head ?? 'ok'));
+  return lines;
+}
