@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { contentHash } from '@/lib/studio-core/json';
-import { ownershipRegistryVersion, validateNativePlanReferences } from '../ownership-contract';
+import { ownershipRegistryVersion } from '../../registry/ownership-version';
+import { validateNativePlanReferences } from '../ownership-contract';
 import { workedExample, uid } from '../../plans/__tests__/fixtures';
 
 const owner = { kind: 'phase' as const, seasonId: uid(1), phaseId: uid(2) };

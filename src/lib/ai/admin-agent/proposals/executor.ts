@@ -27,6 +27,7 @@ import type { Session } from 'next-auth';
 import { createTranslator } from '@/i18n/core';
 import type { ApiErrorCode, ApiErrorParams } from '@/i18n/messages/errors';
 import { errorsAdminAssistant } from '@/i18n/messages/errors/admin-assistant';
+import { errorsCommon } from '@/i18n/messages/errors/common';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import type { AuditLogEntry } from '@/lib/audit/log';
 import type { JsonValue } from '@/lib/studio-core/json';
@@ -35,7 +36,8 @@ import { DEFAULT_ROUTE_TIMEOUT_MS, checkCall, harnessError, invokeRoute, isUnkno
 import type { BindingRegistry, DispatchContext, DispatchQuery, Outcome, QueryValue, RouteBinding, VerifyContext, VerifyResult } from '../dispatch';
 import type { AdminAgentConfig } from '../env';
 import { computePreviewHash, computeProposalHash, planCode } from '../plans/hash';
-import { ownershipRegistryVersion, type AgentStorageGeneration } from './ownership-contract';
+import { ownershipRegistryVersion, proposalStorageGeneration, type AgentStorageGeneration, type ProposalStorageMode } from '../registry/ownership-version';
+import { allowsProposalSteps, isProposalStorageFrozen, type ProposalOwnershipFence } from './ownership-contract';
 import { isRefObject, REF_PATH_PATTERN } from '../plans/route-bodies';
 import { PLAN_OPS, type PlanOp } from '../plans/ops';
 import { UNDO_MAX_STEPS } from '../plans/undo';
@@ -120,6 +122,7 @@ export interface ExecutorStore {
 
 export interface ExecutorDeps {
   readonly storageGeneration?: AgentStorageGeneration;
+  readonly ownership?: ProposalOwnershipFence;
   readonly store: ExecutorStore;
   /** The in-code bindings; the only source of what a step may call (`_ops/g`). */
   readonly bindings: BindingRegistry;
@@ -312,6 +315,7 @@ interface RunContext {
   readonly runs: Map<string, StepRun>;
   readonly ledger: Map<string, ActionRecord>;
   readonly startedAt: number;
+  readonly storageMode: ProposalStorageMode;
 }
 
 const nowMs = (ctx: RunContext): number => ctx.deps.now().getTime();
@@ -361,11 +365,19 @@ async function assertEligible(deps: ExecutorDeps, input: ExecuteInput, proposal:
   // A role downgrade since staging. An unreadable step list is dealt with after the claim, where a failure consumes the proposal.
   if (steps !== null && !input.isSiteAdmin && steps.some((step) => step.min_role === 'site')) throw refuse('proposal_forbidden', 'role_downgraded');
 
+  await checkFrozenOwnership(deps, await deps.ownership?.mode() ?? null, steps);
+
   const rate = await deps.rateLimit(input.adminId, { limit: cfg.limits.writesPerHour, windowSeconds: WRITE_LIMIT_WINDOW_SECONDS });
   if (!rate.allowed) {
     const seconds = Math.max(1, Math.ceil(rate.retryAfterSeconds));
     throw refuse('agent_rate_limited', 'write_limiter', { seconds }, seconds);
   }
+}
+
+async function checkFrozenOwnership(deps: ExecutorDeps, mode: ProposalStorageMode, steps: readonly StoredStep[] | null): Promise<void> {
+  if (!deps.ownership || !isProposalStorageFrozen(mode)) return;
+  if (steps !== null && await allowsProposalSteps(mode, steps, deps.ownership.reader)) return;
+  throw new UserFacingError(createTranslator(errorsCommon, 'en')('phase_storage_unavailable'), { code: 'phase_storage_unavailable', status: 503 });
 }
 
 // ─── The recheck (after the claim) ───────────────────────────────────────────
@@ -379,13 +391,14 @@ interface Refusal {
  * Whether the claimed proposal still is what was shown, and still is something the running code can execute. Stored JSON is
  * data: every step is resolved by `op` in the registry and compared with it, never trusted. First failure wins.
  */
-async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: ProposalRecord, steps: readonly StoredStep[] | null): Promise<Refusal | null> {
+async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: ProposalRecord, steps: readonly StoredStep[] | null, mode: ProposalStorageMode): Promise<Refusal | null> {
   const cfg = deps.config();
   if (steps === null) return { code: 'proposal_stale', reason: 'steps_unreadable' };
 
   const conversation = await deps.store.conversations.getConversation(input.adminId, proposal.conversation_id);
   if (conversation === null) return { code: 'proposal_stale', reason: 'conversation_gone' };
-  if (ownershipRegistryVersion(deps.registryVersion(conversation.tool_set), deps.storageGeneration ?? 'legacy') !== proposal.tool_registry_version) return { code: 'proposal_stale', reason: 'registry_version_changed' };
+  const generation = deps.ownership ? proposalStorageGeneration(mode) : deps.storageGeneration ?? 'legacy';
+  if (ownershipRegistryVersion(deps.registryVersion(conversation.tool_set), generation) !== proposal.tool_registry_version) return { code: 'proposal_stale', reason: 'registry_version_changed' };
 
   if (proposal.kind === 'undo' && (proposal.class !== 'G' || steps.length > UNDO_MAX_STEPS)) return { code: 'proposal_stale', reason: 'undo_shape' };
 
@@ -442,6 +455,9 @@ async function recheck(deps: ExecutorDeps, input: ExecuteInput, proposal: Propos
       const typed = input.approval.typed?.[ack.id];
       if (ack.expected === undefined || typed === undefined || normalizeTypedName(typed) !== ack.expected.text) return { code: 'proposal_ack_missing', reason: 'typed_name' };
     }
+  }
+  if (deps.ownership && mode === 'phase' && !(await allowsProposalSteps(mode, steps, deps.ownership.reader))) {
+    return { code: 'proposal_stale', reason: 'unsupported_phase_ownership' };
   }
   return null;
 }
@@ -789,6 +805,18 @@ async function dispatchStep(ctx: RunContext, step: StoredStep, binding: RouteBin
   }
   const extra = { call, before };
 
+  if (ctx.deps.ownership) {
+    const unchanged = await ctx.deps.ownership.mode().then((mode) => mode === ctx.storageMode).catch((error: unknown) => {
+      console.error(`${logTag}: the phase storage mode could not be rechecked`, error);
+      return false;
+    });
+    if (!unchanged) {
+      const run = await settleStep(ctx, step, action, { status: 'failed', code: 'proposal_stale' });
+      auditStep(ctx, step, run);
+      return { run, stale: true };
+    }
+  }
+
   // e. Dispatch as the verified session. `invokeRoute` never rejects. A route that takes no body is sent none.
   const outcome = await invokeRoute(
     binding,
@@ -998,9 +1026,20 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
 
   // 3. The recheck after the claim: a failed check consumes the proposal.
   const steps = stepsOf(proposal);
-  const refusal = await recheck(deps, input, proposal, steps).catch((error: unknown): Refusal => {
+  const { storageMode, refusal } = await (async () => {
+    const storageMode = await deps.ownership?.mode() ?? null;
+    await checkFrozenOwnership(deps, storageMode, steps);
+    return { storageMode, refusal: await recheck(deps, input, proposal, steps, storageMode) };
+  })().catch((error: unknown): { storageMode: ProposalStorageMode; refusal: Refusal } => {
     console.error(`${logTag}: the recheck could not run`, error);
-    return { code: 'proposal_stale', reason: 'recheck_failed' };
+    return {
+      storageMode: null,
+      refusal: {
+        code: 'proposal_stale',
+        reason: error instanceof UserFacingError && error.code === 'phase_storage_unavailable'
+          ? 'storage_froze_after_claim' : 'recheck_failed',
+      },
+    };
   });
   if (refusal !== null || steps === null) return refuseClaimed(deps, input, proposal, steps, refusal ?? { code: 'proposal_stale', reason: 'steps_unreadable' });
 
@@ -1027,7 +1066,7 @@ export async function executeProposal(deps: ExecutorDeps, input: ExecuteInput): 
   // 4. The steps.
   const ledger = new Map<string, ActionRecord>();
   for (const row of await store.actions.listProposalActions(input.adminId, proposal.id)) if (row.step_key !== null) ledger.set(row.step_key, row);
-  const ctx: RunContext = { deps, input, proposal, steps, runs: new Map(), ledger, startedAt };
+  const ctx: RunContext = { deps, input, proposal, steps, runs: new Map(), ledger, startedAt, storageMode };
 
   let stop: StopReason | null = null;
   for (const step of steps) {

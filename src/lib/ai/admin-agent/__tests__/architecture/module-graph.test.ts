@@ -241,11 +241,10 @@ describe('lazy imports are literal', () => {
 const ALLOWED_LAYER_EDGES: Record<string, readonly string[]> = {
   // The harness sits on top of everything and nothing imports it.
   eval: ['loop', 'plans', 'previews', 'prompts', 'readers', 'registry', 'root', 'store'],
-  // The loop knows the store's pure pieces (errors, ids, payload guard) and nothing else: tools, staging and dispatch are injected.
-  loop: ['store'],
+  loop: ['registry', 'store'],
   previews: ['registry'],
   // The executor dispatches approved steps through `dispatch/`; staging imports nothing from it.
-  proposals: ['dispatch', 'plans', 'registry', 'root', 'store'],
+  proposals: ['dispatch', 'plans', 'readers', 'registry', 'root', 'store'],
   readers: ['plans', 'registry'],
   registry: ['plans', 'previews', 'readers'],
   root: ['loop', 'prompts', 'registry', 'store'],
@@ -291,6 +290,13 @@ describe('layer matrix (plan 3.2)', () => {
     const stale: string[] = [];
     for (const [layer, deps] of Object.entries(ALLOWED_LAYER_EDGES)) for (const dep of deps) if (!actual.get(layer)?.has(dep)) stale.push(`${layer} -> ${dep}`);
     expect(stale).toEqual([]);
+  });
+
+  it('limits ownership wiring to the registry contract and the live read adapter', () => {
+    const edges = [...graph.edges.entries()].flatMap(([file, deps]) => deps.map((dep) => [relFromRepo(file), relFromRepo(dep)]));
+    const fromTo = (from: string, to: string) => edges.filter(([file, dep]) => file.startsWith(`${AGENT_REL}/${from}/`) && dep.startsWith(`${AGENT_REL}/${to}/`));
+    expect(fromTo('loop', 'registry')).toEqual([[`${AGENT_REL}/loop/start.ts`, `${AGENT_REL}/registry/ownership-version.ts`]]);
+    expect(fromTo('proposals', 'readers')).toEqual([[`${AGENT_REL}/proposals/live.ts`, `${AGENT_REL}/readers/ownership.ts`]]);
   });
 
   it('keeps the privileged-looking layers pure: the planner, the dispatcher and the prompt import no other assistant module', () => {

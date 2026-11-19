@@ -11,8 +11,9 @@ import 'server-only';
  * the pure `buildStartupChecklist`, and from `previewRecipients` over the senders' own matchers. A read the app cannot answer
  * still fails closed with `ReadUnavailable` (staging answers `tool_not_available`).
  */
-import { requireEnv } from '@/lib/env';
+import { phaseStorageEnvSchema, readEnv, requireEnv } from '@/lib/env';
 import { requireAnyAdmin } from '@/lib/auth/helpers';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getSpeciesNatDex, getMoveNatDex, getItemNatDex, getAbilityNatDex } from '@/lib/pkmn/dex';
 import { resolveTourOverlay } from '@/lib/pkmn/preset-rules.server';
 import { isRulesetPresetId } from '@/lib/pkmn/ruleset-preset-catalog';
@@ -55,6 +56,8 @@ import { adminAgentStore } from '../store';
 import { draftDocState, draftLifeState, leagueAfterState, pinTargetsState, rosterMembersState, tournamentAfterState, type StepFacts } from './after-state';
 import type { FingerprintSource, ReadName, ReadTarget } from './fingerprints';
 import { createProposalStager } from './stage';
+import { createAdminAgentOwnershipReader } from '../readers/ownership';
+import type { ProposalOwnershipFence } from './ownership-contract';
 import type { EpbBattleRulesetHead, StagerDeps, StagingSource } from './types';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -547,4 +550,12 @@ export function liveStagerDeps(): StagerDeps {
   };
 }
 
-export const liveStager = createProposalStager(liveStagerDeps());
+export const liveProposalOwnership: ProposalOwnershipFence = {
+  mode: async () => readEnv(phaseStorageEnvSchema).READ_PHASE_STORAGE_STATE === 'true' ? getPhaseRouteMode() : null,
+  reader: createAdminAgentOwnershipReader(),
+};
+
+export const liveStager = createProposalStager(liveStagerDeps(), {
+  ...liveProposalOwnership,
+  getConversation: adminAgentStore.conversations.getConversation,
+});

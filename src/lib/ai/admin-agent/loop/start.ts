@@ -12,6 +12,8 @@
  * history the API sees is always valid.
  */
 import { createHash } from 'node:crypto';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { ownershipRegistryVersion, proposalStorageGeneration } from '../registry/ownership-version';
 import type { ConversationRecord } from '../store/types';
 import { AdminAgentStoreError } from '../store/errors';
 import { turnLeaseError } from '../store/conversations';
@@ -37,7 +39,7 @@ export interface StartedTurn {
   completion: Promise<TurnOutcome>;
 }
 
-function validateConversation(deps: LoopDeps, request: TurnRequest, conversation: ConversationRecord | null): { conversation: ConversationRecord; toolSet: ToolSet } {
+async function validateConversation(deps: LoopDeps, request: TurnRequest, conversation: ConversationRecord | null): Promise<{ conversation: ConversationRecord; toolSet: ToolSet }> {
   // The route answers 404 for a switched-off assistant before it gets here; this is the second line of defence.
   if (!deps.config().enabled) throw new AdminAgentLoopError('agent_disabled', 'disabled');
   if (conversation === null) throw new AdminAgentStoreError('conversation_not_found');
@@ -47,7 +49,7 @@ function validateConversation(deps: LoopDeps, request: TurnRequest, conversation
   const toolSet = deps.buildToolSet({ role: conversation.tool_set as ToolRole, maxPhase: deps.config().maxPhase });
   // A deploy that changes tool text or the system prompt only affects new conversations (the cache prefix and the
   // thinking-block binding both depend on the exact bytes).
-  if (toolSet.registryVersion !== conversation.tool_registry_version) throw new AdminAgentLoopError(loopCode('outdated'), 'tool_registry_changed');
+  if (ownershipRegistryVersion(toolSet.registryVersion, proposalStorageGeneration(await getPhaseRouteMode())) !== conversation.tool_registry_version) throw new AdminAgentLoopError(loopCode('outdated'), 'tool_registry_changed');
   if (deps.systemPrompt.version !== conversation.system_prompt_version) throw new AdminAgentLoopError(loopCode('outdated'), 'system_prompt_changed');
   return { conversation, toolSet };
 }
@@ -66,7 +68,7 @@ function checkedText(deps: LoopDeps, request: TurnRequest, conversationId: strin
 export async function startTurn(deps: LoopDeps, request: TurnRequest): Promise<StartedTurn> {
   const { store } = deps;
   const found = await store.conversations.getConversation(request.adminId, request.conversationId);
-  const { conversation, toolSet } = validateConversation(deps, request, found);
+  const { conversation, toolSet } = await validateConversation(deps, request, found);
   const text = request.input.kind === 'message' ? checkedText(deps, request, conversation.id, request.input.text) : null;
 
   const lease = await store.conversations.acquireTurnLease(request.adminId, conversation.id);
