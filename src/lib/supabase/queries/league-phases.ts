@@ -385,6 +385,18 @@ export async function getPhaseParticipants(phaseId: string): Promise<PhasePartic
   });
 }
 
+export async function getPublicPhaseStandingsParticipants(phaseId: string) {
+  const { rows } = await readBoundedPages((from, to) => supabase.from('phase_participants')
+    .select('seed, players ( id, name, avatar_url )').eq('phase_id', phaseId)
+    .order('player_id').range(from, to), { label: 'getPublicPhaseStandingsParticipants' });
+  return rows.sort((a, b) => {
+    if (a.seed !== null && b.seed !== null) return a.seed - b.seed;
+    if (a.seed !== null) return -1;
+    if (b.seed !== null) return 1;
+    return a.players.name.localeCompare(b.players.name);
+  }).map(({ players }) => players);
+}
+
 export async function getPhaseParticipantsBatch(
   phaseIds: string[]
 ): Promise<Map<string, PhaseParticipant[]>> {
