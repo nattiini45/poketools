@@ -47,6 +47,8 @@ const ALLOWED: Record<string, Allowed> = {
   '@/lib/ruleset-kit/overlay': ['applyTourOverlay'],
   '@/lib/ruleset-kit/types': ['RULESET_CATEGORIES'],
   '@/lib/studio-core/ltext': ['resolveLText'],
+  // Canonical JSON hashing of the generation-stamped registry version; pure, no I/O.
+  '@/lib/studio-core/json': ['contentHash'],
   // One definition of the invisible characters (tag characters, bidi marks, zero-width, variation selectors).
   '@/lib/utils/hidden-text': ['stripHiddenChars'],
   '@/lib/tournament/bracket-structure': ['bracketStructureOptionsOf', 'buildBracketStructureForParticipants'],
