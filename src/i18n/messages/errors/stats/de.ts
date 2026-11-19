@@ -41,8 +41,12 @@ export default defineDe<typeof en>()({
   wiki_note_block_superadmin_only: 'Nur der Superadmin kann eine Notiz für erneutes Einreichen sperren.',
   wiki_note_block_not_rejected: 'Nur eine abgelehnte Notiz kann für erneutes Einreichen gesperrt werden.',
   wiki_note_changed: 'Diese Notiz hat sich geändert, seit du sie geladen hast. Lade neu und prüfe sie noch einmal.',
+  wiki_note_owner_conflict: 'Die Notiz oder ihr Bereich ist nicht eindeutig zugeordnet. Es wurde nichts geändert.',
   wiki_report_not_found: 'Meldung nicht gefunden.',
   wiki_report_changed: 'Ein anderer Moderator hat diese Meldung schon geschlossen. Lade neu, um den aktuellen Stand zu sehen.',
+  wiki_report_owner_conflict: 'Die Meldung ist nicht eindeutig zugeordnet. Es wurde nichts geändert.',
+  wiki_queue_id_conflict: 'Diese Moderationsliste enthält doppelt vergebene Eintrags-IDs.',
+  wiki_queue_scan_limit: 'Diese Seite der Moderationsliste liegt zu weit hinten. Wähle einen kleineren Startwert oder einen engeren Filter.',
 
   unknown_move: 'Unbekannte Attacke: {move}.',
   unknown_item: 'Unbekanntes Item: {item}.',

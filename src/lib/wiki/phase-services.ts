@@ -37,8 +37,9 @@ function noteResource(row: PhaseWikiNote) {
   return { resource_type: 'wiki_note', resource_id: row.id, resource_name: `${row.entity_type}:${row.entity_name}` };
 }
 
-function assertNoteVersion(row: PhaseWikiNote, current: NoteModerationState, expected: PhaseWikiVersion) {
-  if (expected.state !== current || expected.updatedAt !== row.updated_at) {
+function assertNoteVersion(row: PhaseWikiNote, current: NoteModerationState, expected: Partial<PhaseWikiVersion>) {
+  if ((expected.state !== undefined && expected.state !== current)
+    || (expected.updatedAt !== undefined && expected.updatedAt !== row.updated_at)) {
     failure('wiki_note_changed', 'This note changed after you loaded it. Reload and review it again.', 409);
   }
 }
@@ -121,7 +122,7 @@ export function createPhaseWikiServices(deps: PhaseWikiDependencies) {
       await write(row, {}, true);
       deps.auditCommit?.({ action: 'wiki.note.delete', resource: noteResource(row), metadata: { author_id: row.author_id } });
     },
-    async verdict(phaseId: string, id: string, target: 'approved' | 'rejected', expected: PhaseWikiVersion, reason: string | null = null) {
+    async verdict(phaseId: string, id: string, target: 'approved' | 'rejected', expected: Partial<PhaseWikiVersion>, reason: string | null = null) {
       const actor = await deps.requireActor(phaseId);
       siteAdmin(actor);
       const row = await note(phaseId, id);

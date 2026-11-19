@@ -2,6 +2,7 @@ import { supabase } from '../client';
 import { readAllPages } from '../read-all-pages';
 import type { PhaseWikiNote, PhaseWikiNoteChanges, PhaseWikiNoteInput, PhaseWikiReport } from '@/types/phase-wiki';
 import type { WikiEntityType, WikiNoteReportStatus } from '@/types/wiki';
+import type { CompetitionOwner } from '@/types/competition-owner';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import wikiErrors from '@/i18n/messages/errors/stats/en';
 
@@ -13,20 +14,50 @@ function noteGuard(note: PhaseWikiNote) {
   return { approved: note.approved, rejected_at: note.rejected_at, resubmission_blocked_at: note.resubmission_blocked_at };
 }
 
+export async function findNativeWikiNoteOwner(id: string): Promise<Extract<CompetitionOwner, { kind: 'phase' }> | null> {
+  const { data, error } = await supabase.from('phase_wiki_notes')
+    .select('phase_id, phase:league_phases!inner(season_id)').eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data?.phase ? { kind: 'phase', phase_id: data.phase_id, season_id: data.phase.season_id } : null;
+}
+
+export async function findNativeWikiReportOwner(id: string) {
+  const { data, error } = await supabase.from('phase_wiki_note_reports')
+    .select('note_id, reporter_id, note:phase_wiki_notes!inner(phase_id, phase:league_phases!inner(season_id))')
+    .eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data?.note.phase ? {
+    noteId: data.note_id, reporterId: data.reporter_id,
+    owner: { kind: 'phase' as const, phase_id: data.note.phase_id, season_id: data.note.phase.season_id },
+  } : null;
+}
+
+export async function listNativeWikiReportsForMerge({ status, limit, offset }: WikiReportQueuePage) {
+  let query = supabase.from('phase_wiki_note_reports')
+    .select('*, players!phase_wiki_note_reports_reporter_id_fkey(name), note:phase_wiki_notes!inner(id, phase_id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at)');
+  if (status) query = query.eq('status', status);
+  const { data, error } = await query.order('created_at', { ascending: false }).order('id', { ascending: false })
+    .range(offset, offset + limit - 1);
+  if (error) throw error;
+  return data.map(({ players, ...report }) => ({ ...report, reporter_name: players?.name }));
+}
+
 export const phaseWikiStorage = {
   async getNote(phaseId: string, id: string): Promise<PhaseWikiNote | null> {
     const { data, error } = await supabase.from('phase_wiki_notes').select('*').eq('phase_id', phaseId).eq('id', id).maybeSingle();
     if (error) throw error;
     return data;
   },
-  async listNotes(phaseId: string, approvedOnly: boolean, entity?: { type: WikiEntityType; name: string }, page?: WikiNoteQueuePage): Promise<PhaseWikiNote[]> {
+  async listNotes(phaseId: string | undefined, approvedOnly: boolean, entity?: { type: WikiEntityType; name: string }, page?: WikiNoteQueuePage): Promise<PhaseWikiNote[]> {
     const fetchPage = (from: number, to: number) => {
-      let query = supabase.from('phase_wiki_notes').select('*, players!phase_wiki_notes_author_id_fkey(name)').eq('phase_id', phaseId);
+      let query = supabase.from('phase_wiki_notes').select('*, players!phase_wiki_notes_author_id_fkey(name)');
+      if (phaseId !== undefined) query = query.eq('phase_id', phaseId);
       if (approvedOnly || page?.status === 'approved') query = query.eq('approved', true).is('rejected_at', null).is('resubmission_blocked_at', null);
       if (page?.status === 'pending') query = query.eq('approved', false).is('rejected_at', null);
       if (page?.status === 'rejected') query = query.eq('approved', false).not('rejected_at', 'is', null);
       if (entity) query = query.eq('entity_type', entity.type).eq('entity_name', entity.name);
-      return (page ? query.order('created_at', { ascending: false }) : query.order('created_at')).order('id').range(from, to);
+      query = page ? query.order('created_at', { ascending: false }) : query.order('created_at');
+      return (phaseId === undefined ? query.order('id', { ascending: false }) : query.order('id')).range(from, to);
     };
     const rows = page
       ? await fetchPage(page.offset, page.offset + page.limit - 1).then(({ data, error }) => {

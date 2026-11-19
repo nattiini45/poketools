@@ -5,6 +5,7 @@ import { wikiNoteCreateSchema, formatZodErrors } from '@/lib/validation';
 import { createNote } from '@/lib/supabase/queries/wiki-notes';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
+import { bindScopedPhaseWikiServices, resolveWikiCreateScope } from '@/lib/wiki/native-phase-services';
 import type { ApiResult } from '@/types/api';
 import type { WikiNote, WikiNoteInsert } from '@/types/wiki';
 
@@ -26,7 +27,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const note = await createNote(player.playerId, zodResult.data as unknown as WikiNoteInsert);
+    const input = zodResult.data;
+    if (input.scope_type === 'tournament' && input.scope_id) {
+      const owner = await resolveWikiCreateScope(input.scope_id);
+      if (owner) {
+        const { entity_type, entity_name, content } = input;
+        const note = await bindScopedPhaseWikiServices({ owner, player }, request).create(
+          owner.phase_id, { entity_type, entity_name, content },
+        );
+        return NextResponse.json({
+          success: true,
+          data: { id: note.id, phase_id: note.phase_id, approved: note.approved, created_at: note.created_at, updated_at: note.updated_at },
+        }, { status: 201 });
+      }
+    }
+
+    const note = await createNote(player.playerId, input as unknown as WikiNoteInsert);
     logAuditEvent({
       actor_id: player.playerId,
       actor_name: player.name,

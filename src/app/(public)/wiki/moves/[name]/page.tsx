@@ -2,7 +2,7 @@ import type { Metadata } from 'next';
 import { moveMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import { getSession } from '@/lib/auth/helpers';
-import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
+import { getApprovedEntityNotes } from '@/lib/supabase/queries/wiki-entity-notes';
 import { getWikiMoveDetail } from '@/lib/wiki/index-rows.server';
 import { localizeWikiEntry } from '@/lib/wiki/localize-entry.server';
 import { getDataLocale, getLocale, getT } from '@/i18n/server';
@@ -39,7 +39,7 @@ export default async function WikiMovePage({
   ]);
   const { entry, descFallback } = localizeWikiEntry('move', move, locale);
   const notes = session
-    ? await getApprovedNotes('move', move.name).catch(() => [])
+    ? await getApprovedEntityNotes('move', move.name).then(({ notes }) => notes)
     : [];
 
   return (

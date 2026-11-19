@@ -12,6 +12,7 @@ import { DANGER_OUTLINE } from '@/components/admin/match-styles';
 import { TOUCH } from '@/components/admin/admin-table';
 import { cn } from '@/lib/utils/cn';
 import type { WikiNote, WikiNoteReport } from '@/types/wiki';
+import type { PhaseWikiNote } from '@/types/phase-wiki';
 import { useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -64,6 +65,8 @@ export function reportReasonKey(reason: string): string {
 }
 
 type SeenNote = Pick<WikiNote, 'approved' | 'rejected_at' | 'resubmission_blocked_at'> & { updated_at?: string };
+type ModerationNote = WikiNote | PhaseWikiNote;
+type ModerationReport = WikiNoteReport & { note?: NonNullable<WikiNoteReport['note']> & { phase_id?: string } };
 
 /** Whether the machine offers the admin `event` from the note's state. */
 function offers(note: SeenNote, event: string, actor: 'admin' | 'superadmin' = 'admin'): boolean {
@@ -118,24 +121,24 @@ export function noteBlockRequest(noteId: string, block: boolean): { url: string;
   };
 }
 
-function isBlocked(note: WikiNote): boolean {
+function isBlocked(note: SeenNote): boolean {
   return noteModerationState(note) === 'blocked';
 }
 
 /** Only the superadmin may block, and only a rejected note that is not blocked yet. */
-export function canBlockResubmission(note: WikiNote, isSuperadmin: boolean): boolean {
+export function canBlockResubmission(note: SeenNote, isSuperadmin: boolean): boolean {
   return isSuperadmin && offers(note, 'block', 'superadmin');
 }
 
 /** Only the superadmin may lift a block. */
-export function canAllowResubmission(note: WikiNote, isSuperadmin: boolean): boolean {
+export function canAllowResubmission(note: SeenNote, isSuperadmin: boolean): boolean {
   return isSuperadmin && offers(note, 'unblock', 'superadmin');
 }
 
 interface RejectedNoteCardProps {
-  note: WikiNote;
+  note: ModerationNote;
   isSuperadmin: boolean;
-  onApprove: (note: WikiNote) => void;
+  onApprove: (note: ModerationNote) => void;
   onDelete: (noteId: string) => void;
   onBlock: (noteId: string) => void;
   onAllow: (noteId: string) => void;
@@ -179,6 +182,19 @@ export function canCloseReport(report: WikiNoteReport, to: 'reviewed' | 'dismiss
   return report.status !== to && noteReportMachine.nextStates(report.status, 'admin').includes(to);
 }
 
+export function reportCloseRequest(report: ModerationReport, status: 'reviewed' | 'dismissed') {
+  return {
+    url: `/api/admin/wiki/reports/${report.id}`,
+    init: {
+      method: 'PATCH',
+      body: JSON.stringify({
+        status,
+        ...(report.note?.phase_id ? { expected_status: report.status, expected_updated_at: report.updated_at } : {}),
+      }),
+    },
+  };
+}
+
 function toPanelError(e: unknown, fallback: PanelErrorKey): PanelError {
   if (e instanceof ModerationRequestError) return { api: e.apiError, fallback };
   if (e instanceof TypeError) return { api: toApiErrorLike(e), fallback };
@@ -190,8 +206,8 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
   const tc = useT(commonMessages);
   const apiErrorText = useApiErrorText(errorsAdmin, errorsStats);
 
-  const [notes, setNotes] = useState<WikiNote[]>([]);
-  const [reports, setReports] = useState<WikiNoteReport[]>([]);
+  const [notes, setNotes] = useState<ModerationNote[]>([]);
+  const [reports, setReports] = useState<ModerationReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<PanelError | null>(null);
   const [rejecting, setRejecting] = useState<Record<string, string>>({});
@@ -204,8 +220,8 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
     setError(null);
     try {
       const [pendingNotes, openReports] = await Promise.all([
-        readApi<WikiNote[]>(`/api/admin/wiki/notes?status=${view}&limit=50`),
-        readApi<WikiNoteReport[]>('/api/admin/wiki/reports?status=open&limit=50'),
+        readApi<ModerationNote[]>(`/api/admin/wiki/notes?status=${view}&limit=50`),
+        readApi<ModerationReport[]>('/api/admin/wiki/reports?status=open&limit=50'),
       ]);
       setNotes(pendingNotes);
       setReports(openReports);
@@ -236,12 +252,12 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
     if (await write(url, init)) await load();
   }
 
-  async function approveNote(note: WikiNote) {
+  async function approveNote(note: ModerationNote) {
     const { url, init } = noteApproveRequest(note.id, note);
     await moderate(url, init);
   }
 
-  async function rejectNote(note: WikiNote) {
+  async function rejectNote(note: ModerationNote) {
     const { url, init } = noteRejectRequest(note.id, rejecting[note.id], note);
     await moderate(url, init);
   }
@@ -250,15 +266,13 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
    * Unpublishes a reported, approved note and closes the report as reviewed. The report is closed only after the
    * note write succeeded; if closing fails, the note stays unpublished and the report stays open.
    */
-  async function unpublishReportedNote(report: WikiNoteReport) {
+  async function unpublishReportedNote(report: ModerationReport) {
     if (!report.note) return;
     const noteId = report.note.id;
     const { url, init } = noteRejectRequest(noteId, rejecting[noteId], report.note);
     if (!(await write(url, init))) return;
-    const closed = await write(`/api/admin/wiki/reports/${report.id}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status: 'reviewed' }),
-    });
+    const close = reportCloseRequest(report, 'reviewed');
+    const closed = await write(close.url, close.init);
     if (closed) {
       await load();
       return;
@@ -289,11 +303,9 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
     await moderate(`/api/wiki/notes/${noteId}`, { method: 'DELETE' });
   }
 
-  async function closeReport(reportId: string, status: 'reviewed' | 'dismissed') {
-    await moderate(`/api/admin/wiki/reports/${reportId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ status }),
-    });
+  async function closeReport(report: ModerationReport, status: 'reviewed' | 'dismissed') {
+    const { url, init } = reportCloseRequest(report, status);
+    await moderate(url, init);
   }
 
   const errorText =
@@ -449,12 +461,12 @@ export default function WikiModerationPanel({ isSuperadmin = false }: { isSupera
                   </Button>
                 )}
                 {canCloseReport(report, 'reviewed') && (
-                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report.id, 'reviewed')}>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report, 'reviewed')}>
                     {t('wiki.reviewed')}
                   </Button>
                 )}
                 {canCloseReport(report, 'dismissed') && (
-                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report.id, 'dismissed')}>
+                  <Button type="button" size="sm" variant="secondary" className={TOUCH} onClick={() => void closeReport(report, 'dismissed')}>
                     {t('wiki.dismiss')}
                   </Button>
                 )}

@@ -10,7 +10,7 @@ import { getSession } from '@/lib/auth/helpers';
 import { publicReads } from '@/lib/cache/public-reads';
 import { phasePublicReads } from '@/lib/cache/phase-public-reads';
 import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
-import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
+import { getApprovedEntityNotes } from '@/lib/supabase/queries/wiki-entity-notes';
 import { getWikiSpeciesDetail } from '@/lib/wiki/index-rows.server';
 import { getDataLocale, getT } from '@/i18n/server';
 import type { Translator } from '@/i18n/core';
@@ -62,15 +62,16 @@ export default async function PokemonDetailPage({ params }: PageProps) {
   };
 
   const [session, t, dataLocale] = await Promise.all([getSession(), getT(wikiMessages), getDataLocale()]);
+  const phaseMode = getPhaseRouteMode();
 
   // Fetch default all_time stats + wiki content (notes only when logged in)
   const [aggregate, totalGames, notes, historical, archiveOptions] = await Promise.all([
     publicReads.pokemonAggregate(species.name),
-    getPhaseRouteMode().then((mode) => mode === 'phase' || mode === 'frozen_phase'
+    phaseMode.then((mode) => mode === 'phase' || mode === 'frozen_phase'
       ? phasePublicReads.allTimeGameTotal()
       : publicReads.totalGames('all_time', null)),
     session
-      ? getApprovedNotes('pokemon', species.name).catch(() => [])
+      ? phaseMode.then(mode => getApprovedEntityNotes('pokemon', species.name, mode)).then(({ notes }) => notes)
       : Promise.resolve([]),
     readHistoricalUsage({ scopeType: 'all_time', scopeId: null }),
     historicalCompetitionOptions(),

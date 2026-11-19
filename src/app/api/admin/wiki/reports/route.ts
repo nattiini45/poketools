@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { wikiReportsQuerySchema, formatZodErrors } from '@/lib/validation';
-import { listNoteReports } from '@/lib/supabase/queries/wiki-notes';
+import { readGlobalWikiReportQueue } from '@/lib/supabase/queries/wiki-moderation-queues';
+import { CACHE } from '@/lib/api/cache';
 import type { ApiResult } from '@/types/api';
-import type { WikiNoteReport } from '@/types/wiki';
 
 export async function GET(request: NextRequest) {
   try {
@@ -20,8 +20,9 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const reports = await listNoteReports(zodResult.data);
-    return NextResponse.json<ApiResult<WikiNoteReport[]>>({ success: true, data: reports });
+    const { reports, mixed } = await readGlobalWikiReportQueue(zodResult.data);
+    return NextResponse.json<ApiResult<typeof reports>>({ success: true, data: reports },
+      mixed ? { headers: CACHE.NONE } : undefined);
   } catch (err) {
     return safeErrorResponse(err, 'Failed to list wiki reports');
   }

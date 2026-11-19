@@ -3,7 +3,7 @@ import { teraMetadata } from '@/lib/seo/wiki-metadata';
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { getSession } from '@/lib/auth/helpers';
-import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
+import { getApprovedEntityNotes } from '@/lib/supabase/queries/wiki-entity-notes';
 import { localizeType } from '@/lib/pkmn/i18n/names/misc';
 import {
   getWikiTeraTypes,
@@ -42,7 +42,7 @@ export default async function WikiTeraTypePage({
   const [t, dataLocale, session] = await Promise.all([getT(wikiMessages), getDataLocale(), getSession()]);
   const typeLabel = localizeType(normalizedType, dataLocale);
   const notes = session
-    ? await getApprovedNotes('tera', normalizedType).catch(() => [])
+    ? await getApprovedEntityNotes('tera', normalizedType).then(({ notes }) => notes)
     : [];
 
   const matchupRow = (key: string, label: string, tone: string, types: readonly string[]) =>

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getAbilityNatDex } from '@/lib/pkmn/dex';
 import { buildWikiAbilityEntry } from '@/lib/wiki/entries';
-import { getApprovedNotes } from '@/lib/supabase/queries/wiki-notes';
+import { getApprovedEntityNotes } from '@/lib/supabase/queries/wiki-entity-notes';
 import { CACHE } from '@/lib/api/cache';
 import type { ApiResult } from '@/types/api';
-import type { WikiAbilityEntry, WikiNote } from '@/types/wiki';
+import type { WikiAbilityEntry } from '@/types/wiki';
 
 // Public: no auth required — wiki entries are public dex data
 export async function GET(
@@ -24,15 +24,10 @@ export async function GET(
   const { entity: ability, resolvedGen } = resolved;
   const entry: WikiAbilityEntry = buildWikiAbilityEntry(ability, resolvedGen);
 
-  let notes: WikiNote[] = [];
-  try {
-    notes = await getApprovedNotes('ability', ability.name);
-  } catch {
-    // Non-critical: continue without notes
-  }
+  const { notes, cacheable } = await getApprovedEntityNotes('ability', ability.name);
 
-  return NextResponse.json<ApiResult<{ ability: WikiAbilityEntry; notes: WikiNote[] }>>(
+  return NextResponse.json<ApiResult<{ ability: WikiAbilityEntry; notes: typeof notes }>>(
     { success: true, data: { ability: entry, notes } },
-    { headers: CACHE.HOUR },
+    { headers: cacheable ? CACHE.HOUR : CACHE.NONE },
   );
 }

@@ -258,7 +258,7 @@ describe('route walk: every tournament, league and draft write expires public ta
       if (wikiMethods) {
         expect(body).toMatch(/bindScopedPhaseWikiServices\(/);
         for (const method of wikiMethods) expect(body).toMatch(new RegExp(`\\.${method}\\(`));
-        const context = readFileSync(path.join(API_DIR, PHASE_WIKI_NOTES, '_lib/route-context.ts'), 'utf8');
+        const context = readFileSync(path.resolve(API_DIR, '../../lib/wiki/native-phase-services.ts'), 'utf8');
         expect(context).toMatch(/invalidate:\s*async\s+phaseId\s*=>\s*expirePhaseReads\(/);
         return;
       }
