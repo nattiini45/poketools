@@ -5,6 +5,9 @@ import { checkPublicRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limi
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { composeWeeklyRecap } from '@/lib/broadcast/recap-engine';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
+import { getPhaseRoundById } from '@/lib/supabase/queries/phase-rounds';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
@@ -64,11 +67,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
       }
     }
 
-    // Look up entities for display names
+    const mode = await getPhaseRouteMode();
+    const native = mode === 'phase' || mode === 'frozen_phase';
     const [season, tournament, round] = await Promise.all([
       getSeasonById(sid),
-      getTournamentById(tournamentId),
-      getRoundById(roundId),
+      native ? getPhaseById(tournamentId) : getTournamentById(tournamentId),
+      native ? getPhaseRoundById(roundId, tournamentId) : getRoundById(roundId),
     ]);
 
     if (!season) {
@@ -85,7 +89,7 @@ export async function GET(request: NextRequest, context: RouteContext) {
         { status: 404 }
       );
     }
-    if (!round || round.tournament_id !== tournament.id) {
+    if (!round || ('phase_id' in round ? round.phase_id : round.tournament_id) !== tournament.id) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Round not found', code: 'round_not_found' },
         { status: 404 }
@@ -103,11 +107,12 @@ export async function GET(request: NextRequest, context: RouteContext) {
       roundName: round.name,
       roundNumber: round.round_number,
       locale,
+      ...(native ? { phase: { id: tournament.id, bracket_type: tournament.bracket_type, third_place_enabled: tournament.third_place_enabled, bracket_reset_enabled: tournament.bracket_reset_enabled } } : {}),
     });
 
     return NextResponse.json<ApiResult<EnrichedRecap>>(
       { success: true, data: recap },
-      { headers: cacheHeaders(30, 60) }
+      { headers: native ? { 'Cache-Control': 'no-store' } : cacheHeaders(30, 60) }
     );
   } catch (err) {
     return safeErrorResponse(err, 'Failed to generate broadcast recap');
