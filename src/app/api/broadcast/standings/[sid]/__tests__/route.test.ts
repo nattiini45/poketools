@@ -266,7 +266,7 @@ describe('GET /api/broadcast/standings/[sid]', () => {
       expectNoPrivateMatchData(body);
     });
 
-    it('ranks completed playoffs, keeps season-group standings, and includes playoff matches in results', async () => {
+    it('ranks native playoffs and groups against the shared league roster, including members outside phase enrollment', async () => {
       const fixture = leaguePlayoffsFixture();
       vi.mocked(getSeasonById).mockResolvedValue({ ...mockSeason, format_type: 'singles' } as never);
       vi.mocked(getPhasesBySeasonId).mockResolvedValue([
@@ -275,7 +275,13 @@ describe('GET /api/broadcast/standings/[sid]', () => {
         { ...fixture.stages[1], id: playoffId },
       ] as never);
       vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue(fixture.context);
-      vi.mocked(getPublicSeasonParticipants).mockResolvedValue([...fixture.participants] as never);
+      vi.mocked(getPublicSeasonParticipants).mockResolvedValue([
+        ...fixture.participants,
+        { id: 'unseeded', name: 'Unseeded Player', avatar_url: null, gym_type: null, core_types: null },
+      ] as never);
+      vi.mocked(getPublicPhaseStandingsParticipants).mockResolvedValue([
+        { id: 'outside-roster', name: 'Outside the League Roster', avatar_url: null },
+      ]);
       vi.mocked(getSeasonGroups).mockResolvedValue([...fixture.groups] as never);
       vi.mocked(getPublicMatchesByPhaseIds).mockResolvedValue(new Map(
         [...fixture.matchesByStage].map(([legacyId, matches]) => {
@@ -297,10 +303,14 @@ describe('GET /api/broadcast/standings/[sid]', () => {
       const body = await (await GET(makeRequest(), routeContext)).json();
       expect(body.data.standings.slice(0, 4).map(({ player_id, rank, wins }: { player_id: string; rank: number; wins: number }) =>
         [player_id, rank, wins])).toEqual([['Orbit', 1, 0], ['Nova', 2, 1], ['Comet', 3, 2], ['Meteor', 3, 1]]);
-      expect(body.data.standings.slice(4)).toMatchObject([
+      expect(body.data.standings.slice(4, 6)).toMatchObject([
         { player_id: 'Pulsar', wins: 2, losses: 0 },
         { player_id: 'Quasar', wins: 3, losses: 1 },
       ]);
+      expect(body.data.standings).toHaveLength(7);
+      expect(body.data.standings).toContainEqual(expect.objectContaining({ player_id: 'unseeded', wins: 0 }));
+      expect(body.data.standings).not.toContainEqual(expect.objectContaining({ player_id: 'outside-roster' }));
+      expect(getPublicSeasonParticipants).toHaveBeenCalledExactlyOnceWith(mockSeason.id);
       expect(body.data.recent_results).toHaveLength(5);
       expect(body.data.recent_results[0].match_id).toBe('playoffs-1-Comet');
       expect(getPublicPhaseStandingsParticipants).not.toHaveBeenCalled();

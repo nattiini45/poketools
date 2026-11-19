@@ -97,6 +97,7 @@ The overlay data routes need no session, and a miss runs the whole database fan-
 - The limiter fails open: a limiter outage (it is a Postgres RPC on Vercel) lets requests through rather than blacking out a live broadcast. The query refusal protects the database either way.
 - A request without a client IP (a local run, the capture harness) is not limited on the in-memory store.
 - Legacy `Cache-Control` on successful responses stays the same (state 2 s, or 5 s with `enrich=true`; preview 30 s; standings 60 s; solo 2 s). Native standings follows the league's phases, even during a native freeze, and is not shared-cacheable across storage generations.
+- With playoffs, the overlay shows the same league-wide standings and final placings as the league page. Both read the league roster from `season_participants` in either storage generation, so a league member who hasn't joined a phase stays in the table. Phase enrollment is the source for a primary-phase-only table, not a substitute for the league roster.
 
 ### Client behaviour under a limit
 Polling overlays run on `usePollLoop` (`poll-loop.ts`, schedule in `poll-schedule.ts`): ticks chain on `setTimeout`, a failed poll doubles the wait up to 30 s (never below the caster's `?poll=`), and a `429`'s `Retry-After` is honoured (at most 120 s). The overlay keeps its last good data and returns to the normal interval after the first good answer. One-shot overlays (preview, results, story, moments, team comparison) fetch once and are not affected.
