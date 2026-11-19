@@ -1,4 +1,13 @@
 import { playoffStandingsOptions } from '@/lib/tournament/league-placings';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
+import { kitForPhase } from '@/lib/format-engine/context';
+import { standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { getPhaseMatchById, getPublicMatchesByPhaseIds } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseById, getPublicPhaseStandingsParticipants } from '@/lib/supabase/queries/league-phases';
+import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import { getPlayerPhaseTeamForMatch } from '@/lib/supabase/queries/phase-teams';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
 import { getMatchById, getH2HBetweenPlayers, getMatchesByPlayer, getCompletedMatchRecords } from '@/lib/supabase/queries/matches';
 import { getPlayerTeamForMatch } from '@/lib/supabase/queries/teams';
 import { decideMatchRosterVisibility, type TeamViewer } from '@/lib/team/visibility';
@@ -7,12 +16,14 @@ import { resolveActualTeam } from '@/lib/match/aggregation';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
-import { getAggregates, getTotalGamesInScope, getPlayerAggregatesForPokemon } from '@/lib/supabase/queries/aggregates';
+import { getAggregates, getAggregatesSummary, getTotalGamesInScope, getPlayerAggregatesForPokemon } from '@/lib/supabase/queries/aggregates';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
-import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
+import { computeStandingsForSeason, computeStandingsFromContext } from '@/lib/tournament/season-standings';
 import { loadScoringByes } from '@/lib/tournament/scoring-byes';
+import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
+import { effectiveMatchPoints, roundRobinMatchPoints } from '@/lib/tournament/standings-rules';
 import { getBaseStats } from '@/lib/pkmn/dex';
 import { generationOrDefault } from '@/lib/pkmn/format-id';
 import { getItemSpriteUrl } from '@/lib/pkmn/sprites';
@@ -22,14 +33,18 @@ import { classifyTeam } from '@/lib/pkmn/archetype';
 import type { PokemonSet } from '@/types/team';
 import type { Aggregate, PlayerAggregate } from '@/types/game';
 import type { CasterData, CasterPokemonInfo, CasterH2H } from '@/types/caster';
-import type { MatchRecord } from '@/lib/tournament/types';
+import { isValidUuid } from '@/lib/utils/uuid';
+import type { MatchRecord, Standing } from '@/lib/tournament/types';
+import type { PhaseMatchWithPlayers } from '@/types/league-phase-match';
 
 // ─── Helpers ────────────────────────────────────────────────────────
+
+type UsageCounts = Pick<Aggregate, 'total_appearances' | 'total_led' | 'total_brought'>;
 
 function enrichPokemon(
   set: PokemonSet,
   gen: number,
-  aggregateMap: Map<string, Aggregate>,
+  aggregateMap: ReadonlyMap<string, UsageCounts>,
   totalGames: number,
   playerAggMap: Map<string, PlayerAggregate>
 ): CasterPokemonInfo {
@@ -75,12 +90,186 @@ export async function fetchCasterData(
   matchId: string,
   viewer: TeamViewer
 ): Promise<CasterData | null> {
+  const mode = await getPhaseRouteMode();
+  if (mode === 'legacy' || mode === 'frozen_legacy') return loadLegacyCasterData(matchId, viewer);
+
+  if (!isValidUuid(matchId)) return null;
+  const match = await getPhaseMatchById(matchId);
+  if (match) return loadNativeCasterData(match, viewer);
+  if (!await standaloneMatchAliasExists(matchId)) return null;
+  return loadLegacyCasterData(matchId, viewer, true);
+}
+
+async function loadNativeCasterData(match: PhaseMatchWithPlayers, viewer: TeamViewer): Promise<CasterData | null> {
+  const selectedPhase = await getPhaseById(match.phase_id);
+  if (!selectedPhase) return null;
+  const phase = selectedPhase;
+  const { id: matchId, player_1_id: p1Id, player_2_id: p2Id } = match;
+  const phaseId = phase.id;
+  const [rounds, history, participants, ruleset, team1, team2, ratingMap, sigMap, p1Streaks, p2Streaks] = await Promise.all([
+    getRoundsByPhase(phaseId),
+    getPublicMatchesByPhaseIds([phaseId]),
+    getPublicPhaseStandingsParticipants(phaseId),
+    getRulesetById(phase.ruleset_id),
+    getPlayerPhaseTeamForMatch(p1Id, match),
+    getPlayerPhaseTeamForMatch(p2Id, match),
+    getPlayerRatingsBatch([p1Id, p2Id]),
+    getPlayerSignaturesBatch([p1Id, p2Id]),
+    getPlayerStreaks(p1Id),
+    getPlayerStreaks(p2Id),
+  ]);
+  if (!ruleset) throw new Error('Caster phase ruleset pin not found');
+  const format = ruleset.base_format;
+  const gen = generationOrDefault(format);
+  const roundsById = new Map(rounds.map(round => [round.id, round]));
+  const round = roundsById.get(match.round_id);
+  const matches = history.get(phaseId) ?? [];
+  const completed = matches.filter(row => row.status === 'completed');
+  const matchRecords: MatchRecord[] = completed.map(row => {
+    if (row.round_number === undefined) throw new Error('Completed caster phase match has no round number');
+    return {
+      match_id: row.id, player_1_id: row.player_1_id, player_2_id: row.player_2_id,
+      winner_id: row.winner_id, round_number: row.round_number,
+      bracket_side: row.bracket_side, bracket_pos: row.bracket_pos,
+    };
+  });
+
+  const canSeeActual = (playerId: string) => decideMatchRosterVisibility(
+    { player_id: playerId, match_id: matchId, library_published_at: null }, viewer, match, phase.team_visibility,
+  );
+  const actual1 = canSeeActual(p1Id);
+  const actual2 = canSeeActual(p2Id);
+  const [battleStats, aggregates, totalGames, standings] = await Promise.all([
+    actual1 || actual2 ? getPhaseBattleStatsByMatch(matchId) : {},
+    getAggregatesSummary('phase', phaseId),
+    getTotalGamesInScope('phase', phaseId),
+    loadNativeStandings(),
+  ]);
+  function roster(team: typeof team1, playerId: string, actualVisible: boolean) {
+    const planned = team && decideMatchRosterVisibility(team, viewer, match, phase.team_visibility) ? team.pokemon : [];
+    return (actualVisible ? resolveActualTeam(battleStats, playerId, planned) : null) ?? planned;
+  }
+  async function loadNativeStandings() {
+    const storedByes = scoringByeRecords(phase.bracket_type, rounds);
+    if (!participants.length || (!matchRecords.length && !storedByes.length)) return null;
+    const context = await loadNativeSeasonStandingsContext(phase.season_id);
+    const kit = kitForPhase(context.kit, phaseId);
+    if (context.kit && !kit) throw new Error('Caster phase has no attached kit stage');
+    const byes = formatScoresByes(context.formatType) ? storedByes : [];
+    if (!matchRecords.length && !byes.length) return null;
+    const ids = participants.map(player => player.id);
+    const points = effectiveMatchPoints(context.formatType, phase.bracket_type === 'round_robin'
+      ? roundRobinMatchPoints(context.formatType) : {});
+    return computeStandingsFromContext(
+      { ...context, kit }, ids, Object.fromEntries(participants.map(player => [player.id, player.name])), matchRecords, {},
+      { ...points, ...playoffStandingsOptions(phase, ids.length), byes },
+    );
+  }
+
+  const upcoming = matches.filter(row => row.id !== matchId && (row.status === 'scheduled' || row.status === 'in_progress'))
+    .sort((a, b) => (a.round_number ?? Infinity) - (b.round_number ?? Infinity)
+      || (a.scheduled_at ?? a.created_at).localeCompare(b.scheduled_at ?? b.created_at));
+  function nextMatch(playerId: string) {
+    const next = upcoming.find(row => row.player_1_id === playerId || row.player_2_id === playerId);
+    return next ? {
+      opponentName: next.player_1_id === playerId ? next.player_2_name : next.player_1_name,
+      roundName: roundsById.get(next.round_id)?.name ?? null,
+    } : null;
+  }
+  const aggMap = new Map(aggregates.map(row => [row.pokemon_name.toLowerCase(), row]));
+  const scope = { type: 'phase' as const, id: phaseId };
+  const [player1, player2] = await Promise.all([
+    buildCasterPlayer({ id: p1Id, name: match.player_1_name, avatarUrl: match.player_1_avatar_url,
+      rating: ratingMap.get(p1Id), signature: sigMap.get(p1Id)?.[0]?.pokemon_name, streak: p1Streaks,
+      sets: roster(team1, p1Id, actual1), nextMatch: nextMatch(p1Id) }, gen, aggMap, totalGames, matchRecords, scope),
+    buildCasterPlayer({ id: p2Id, name: match.player_2_name, avatarUrl: match.player_2_avatar_url,
+      rating: ratingMap.get(p2Id), signature: sigMap.get(p2Id)?.[0]?.pokemon_name, streak: p2Streaks,
+      sets: roster(team2, p2Id, actual2), nextMatch: nextMatch(p2Id) }, gen, aggMap, totalGames, matchRecords, scope),
+  ]);
+  const headToHead = completed.filter(row =>
+    (row.player_1_id === p1Id && row.player_2_id === p2Id) || (row.player_1_id === p2Id && row.player_2_id === p1Id));
+
+  return {
+    matchId,
+    tournamentId: null,
+    seasonId: phase.season_id,
+    roundName: round?.name ?? null,
+    bestOf: round?.best_of ?? phase.best_of_default,
+    format,
+    generation: gen,
+    player1,
+    player2,
+    h2h: buildH2H(p1Id, p2Id, headToHead, row => roundsById.get(row.round_id)?.name ?? null),
+    standings: toCasterStandings(standings),
+  };
+}
+
+function buildH2H<T extends { id: string; winner_id: string | null; date_played: string | null; created_at: string }>(
+  p1Id: string, p2Id: string, matches: T[], roundName: (match: T) => string | null,
+): CasterH2H {
+  return {
+    player1Wins: matches.filter(row => row.winner_id === p1Id).length,
+    player2Wins: matches.filter(row => row.winner_id === p2Id).length,
+    draws: matches.filter(row => row.winner_id === null).length,
+    pastMatches: matches.map(row => ({
+      matchId: row.id, roundName: roundName(row), winnerId: row.winner_id, date: row.date_played ?? row.created_at,
+    })),
+  };
+}
+
+function toCasterStandings(standings: Standing[] | null): CasterData['standings'] {
+  return standings?.slice(0, 12).map((row, index) => ({
+    playerId: row.player_id, playerName: row.player_name, rank: row.rank ?? index + 1,
+    points: row.points, wins: row.wins, losses: row.losses,
+  })) ?? null;
+}
+
+async function buildCasterPlayer({
+  id, name, avatarUrl, rating, signature, streak, sets, nextMatch,
+}: {
+  id: string; name: string; avatarUrl: string | null; rating?: { rating: number; rd: number };
+  signature?: string; streak: Awaited<ReturnType<typeof getPlayerStreaks>>;
+  sets: PokemonSet[]; nextMatch: CasterData['player1']['nextMatch'];
+}, gen: number, aggregates: ReadonlyMap<string, UsageCounts>, totalGames: number, records: MatchRecord[],
+scope: { type: 'phase' | 'tournament'; id: string } | null): Promise<CasterData['player1']> {
+  const playerAggregates = new Map<string, PlayerAggregate>();
+  if (scope) {
+    const species = [...new Set(sets.map(set => set.species))];
+    const rows = await Promise.all(species.map(name => getPlayerAggregatesForPokemon(name, scope.type, scope.id, id)));
+    for (const row of rows.flat()) {
+      if (row.player_id === id) playerAggregates.set(row.pokemon_name.toLowerCase(), row);
+    }
+  }
+  const record = { wins: 0, losses: 0, draws: 0 };
+  for (const row of records) {
+    if (row.player_1_id !== id && row.player_2_id !== id) continue;
+    if (row.winner_id === id) record.wins++;
+    else if (row.winner_id === null) record.draws++;
+    else record.losses++;
+  }
+  return {
+    id, name, avatarUrl, record, nextMatch,
+    rating: rating?.rating ?? null,
+    rd: rating?.rd ?? null,
+    signaturePokemon: signature ?? null,
+    streak: streak && streak.current_win_streak > 0 ? { type: 'win', count: streak.current_win_streak }
+      : streak && streak.current_loss_streak > 0 ? { type: 'loss', count: streak.current_loss_streak }
+        : { type: null, count: 0 },
+    team: sets,
+    pokemon: sets.map(set => enrichPokemon(set, gen, aggregates, totalGames, playerAggregates)),
+    archetype: sets.length > 0 ? classifyTeam(sets, gen) : null,
+  };
+}
+
+async function loadLegacyCasterData(matchId: string, viewer: TeamViewer, standaloneOnly = false): Promise<CasterData | null> {
   const match = await getMatchById(matchId);
   if (!match) return null;
 
   const p1Id = match.player_1_id;
   const p2Id = match.player_2_id;
   const tournamentId = match.tournament_id;
+  const standalone = standaloneOnly && tournamentId ? await getTournamentById(tournamentId) : null;
+  if (standaloneOnly && (!standalone || standalone.season_id !== null)) return null;
 
   // ── Parallel fetch all context ──────────────────────────────────
   const [
@@ -101,7 +290,7 @@ export async function fetchCasterData(
     battleStatsByGame,
   ] = await Promise.all([
     getRoundById(match.round_id),
-    tournamentId ? getTournamentById(tournamentId) : null,
+    standalone ?? (tournamentId ? getTournamentById(tournamentId) : null),
     getPlayerRatingsBatch([p1Id, p2Id]),
     getPlayerSignaturesBatch([p1Id, p2Id]),
     getPlayerStreaks(p1Id),

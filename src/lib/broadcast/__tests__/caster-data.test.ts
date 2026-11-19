@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ─── Mocks ─────────────────────────────────────────────────────────
 
@@ -16,9 +16,24 @@ vi.mock('@/lib/supabase/queries/teams', () => ({
 vi.mock('@/lib/supabase/queries/games', () => ({
   getBattleStatsByMatch: vi.fn(),
 }));
-vi.mock('@/lib/match/aggregation', () => ({
-  resolveActualTeam: vi.fn(),
+vi.mock('@/lib/supabase/client', () => ({
+  supabase: {
+    from: vi.fn(() => { throw new Error('Unexpected database read'); }),
+    rpc: vi.fn(() => { throw new Error('Unexpected database RPC'); }),
+  },
 }));
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ standaloneMatchAliasExists: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({
+  getPhaseMatchById: vi.fn(), getPublicMatchesByPhaseIds: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({
+  getPhaseById: vi.fn(), getPublicPhaseStandingsParticipants: vi.fn(),
+}));
+vi.mock('@/lib/supabase/queries/phase-rounds', () => ({ getRoundsByPhase: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-teams', () => ({ getPlayerPhaseTeamForMatch: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseBattleStatsByMatch: vi.fn() }));
+vi.mock('@/lib/league-phase/standings-context', () => ({ loadNativeSeasonStandingsContext: vi.fn() }));
 vi.mock('@/lib/supabase/queries/ratings', () => ({
   getPlayerRatingsBatch: vi.fn(),
 }));
@@ -30,6 +45,7 @@ vi.mock('@/lib/supabase/queries/streaks', () => ({
 }));
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
+  getAggregatesSummary: vi.fn(),
   getTotalGamesInScope: vi.fn(),
   getPlayerAggregatesForPokemon: vi.fn(),
 }));
@@ -42,7 +58,8 @@ vi.mock('@/lib/supabase/queries/tournaments', () => ({
 vi.mock('@/lib/supabase/queries/rulesets', () => ({
   getRulesetById: vi.fn(),
 }));
-vi.mock('@/lib/tournament/season-standings', () => ({
+vi.mock('@/lib/tournament/season-standings', async (importOriginal) => ({
+  ...await importOriginal<typeof import('@/lib/tournament/season-standings')>(),
   computeStandingsForSeason: vi.fn(),
 }));
 vi.mock('@/lib/pkmn/dex', () => ({
@@ -70,12 +87,20 @@ import { getBattleStatsByMatch } from '@/lib/supabase/queries/games';
 import { getPlayerRatingsBatch } from '@/lib/supabase/queries/ratings';
 import { getPlayerSignaturesBatch } from '@/lib/supabase/queries/signatures';
 import { getPlayerStreaks } from '@/lib/supabase/queries/streaks';
-import { getAggregates, getTotalGamesInScope, getPlayerAggregatesForPokemon } from '@/lib/supabase/queries/aggregates';
+import { getAggregates, getAggregatesSummary, getTotalGamesInScope, getPlayerAggregatesForPokemon } from '@/lib/supabase/queries/aggregates';
 import { getRoundById } from '@/lib/supabase/queries/rounds';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { computeStandingsForSeason } from '@/lib/tournament/season-standings';
 import { getBaseStats } from '@/lib/pkmn/dex';
+import { readPhaseStorageMode } from '@/lib/supabase/queries/phase-storage';
+import { standaloneMatchAliasExists } from '@/lib/supabase/queries/phase-route-owners';
+import { getPhaseMatchById, getPublicMatchesByPhaseIds } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseById, getPublicPhaseStandingsParticipants } from '@/lib/supabase/queries/league-phases';
+import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import { getPlayerPhaseTeamForMatch } from '@/lib/supabase/queries/phase-teams';
+import { getPhaseBattleStatsByMatch } from '@/lib/supabase/queries/phase-games';
+import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
 
 const mockGetMatch = vi.mocked(getMatchById);
 const mockGetH2H = vi.mocked(getH2HBetweenPlayers);
@@ -143,8 +168,11 @@ function setupMocks() {
 describe('fetchCasterData', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'false');
     setupMocks();
   });
+
+  afterEach(() => vi.unstubAllEnvs());
 
   it('returns null when match not found', async () => {
     mockGetMatch.mockResolvedValue(null as never);
@@ -167,6 +195,9 @@ describe('fetchCasterData', () => {
     expect(result!.format).toBe('gen9ou');
     expect(result!.generation).toBe(9);
     expect(result!.bestOf).toBe(3);
+    expect(readPhaseStorageMode).not.toHaveBeenCalled();
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
   });
 
   it('enriches pokemon with base stats and speed tiers', async () => {
@@ -323,5 +354,202 @@ describe('fetchCasterData', () => {
       const result = await fetchCasterData('m1', CREATOR);
       expect(result!.player1.team[0].species).toBe('Pikachu');
     });
+  });
+});
+
+describe('native caster data', () => {
+  const matchId = '55666777-0123-4567-89ab-cdef01234567';
+  const phaseId = 'phase-a';
+  const match = {
+    id: matchId, phase_id: phaseId, round_id: 'round-2', status: 'in_progress',
+    player_1_id: 'p1', player_2_id: 'p2', player_1_name: 'Ash', player_2_name: 'Gary',
+    player_1_avatar_url: null, player_2_avatar_url: '/trainer.png',
+    notes: 'not for the caster', submitter_id: 'private-submitter',
+  };
+  const phase = {
+    id: phaseId, season_id: 'league-a', ruleset_id: 'phase-pin', best_of_default: 3,
+    bracket_type: 'swiss', team_visibility: 'hidden_until_match',
+  };
+  const team = (playerId: string, species: string, published: string | null = null) => ({
+    player_id: playerId, match_id: null, library_published_at: published,
+    pokemon: [{ species, item: 'Leftovers', ability: 'Static', moves: ['Encore'], level: 50 }],
+    share_token: 'not for the caster',
+  });
+  const rounds = [
+    { id: 'round-1', phase_id: phaseId, round_number: 1, name: 'Opening', best_of: 3, bye_player_ids: ['p4'] },
+    { id: 'round-2', phase_id: phaseId, round_number: 2, name: 'Swiss 2', best_of: 5, bye_player_ids: [] },
+    { id: 'round-3', phase_id: phaseId, round_number: 3, name: 'Swiss 3', best_of: 3, bye_player_ids: [] },
+  ];
+  const history = [
+    { ...match, id: 'prior', round_id: 'round-1', round_number: 1, status: 'completed',
+      winner_id: 'p1', date_played: '2026-11-01', created_at: '2026-10-31' },
+    { ...match, id: 'draw', round_id: 'round-2', round_number: 2, status: 'completed',
+      player_1_id: 'p2', player_2_id: 'p1', winner_id: null, date_played: null, created_at: '2026-11-02' },
+    { ...match, id: 'other-pair', round_id: 'round-2', round_number: 2, status: 'completed',
+      player_1_id: 'p3', player_2_id: 'p4', winner_id: 'p3' },
+    { ...match, id: 'next', round_id: 'round-3', round_number: 3, status: 'scheduled',
+      player_2_id: 'p3', player_2_name: 'Brock', created_at: '2026-11-03' },
+  ];
+  const battleStats = {
+    game: [
+      { player_id: 'p1', pokemon_name: 'Pikachu', moves_used: ['Thunderbolt'] },
+      { player_id: 'p1', pokemon_name: 'Raichu', moves_used: ['Surf'] },
+      { player_id: 'p2', pokemon_name: 'Umbreon', moves_used: ['Moonlight'] },
+    ],
+  };
+
+  beforeEach(() => {
+    vi.resetAllMocks();
+    setupMocks();
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    vi.mocked(readPhaseStorageMode).mockResolvedValue('phase');
+    vi.mocked(getPhaseMatchById).mockResolvedValue(match as never);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValue(false);
+    vi.mocked(getPhaseById).mockResolvedValue(phase as never);
+    vi.mocked(getRoundsByPhase).mockResolvedValue(rounds as never);
+    vi.mocked(getPublicMatchesByPhaseIds).mockResolvedValue(new Map([[phaseId, history]]) as never);
+    vi.mocked(getPublicPhaseStandingsParticipants).mockResolvedValue(
+      [{ id: 'p1', name: 'Ash' }, { id: 'p2', name: 'Gary' }, { id: 'p3', name: 'Brock' }, { id: 'p4', name: 'Misty' }] as never,
+    );
+    vi.mocked(getRulesetById).mockResolvedValue({ id: 'phase-pin', base_format: 'gen4ou' } as never);
+    vi.mocked(getPlayerPhaseTeamForMatch).mockImplementation(async (playerId) =>
+      (playerId === 'p1' ? team('p1', 'Pikachu') : team('p2', 'Eevee')) as never);
+    vi.mocked(getPhaseBattleStatsByMatch).mockResolvedValue(battleStats as never);
+    vi.mocked(getAggregatesSummary).mockResolvedValue([
+      { pokemon_name: 'Pikachu', total_appearances: 4, total_led: 1, total_brought: 3, total_games: 2 },
+    ] as never);
+    vi.mocked(getPlayerAggregatesForPokemon).mockImplementation(async (name, _scope, _phase, playerId) =>
+      name === 'Pikachu' && playerId === 'p1'
+        ? [{ player_id: 'p1', pokemon_name: 'Pikachu', total_kos_dealt: 7, total_koed: 2 }] as never : []);
+    vi.mocked(loadNativeSeasonStandingsContext).mockResolvedValue({ formatType: null });
+  });
+
+  afterEach(() => vi.unstubAllEnvs());
+
+  it.each(['phase', 'frozen_phase'] as const)('uses only native match readers in %s', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+    const result = await fetchCasterData(matchId, ADMIN);
+    expect(result).toMatchObject({
+      matchId, seasonId: 'league-a', tournamentId: null, roundName: 'Swiss 2', bestOf: 5, format: 'gen4ou', generation: 4,
+      player1: {
+        record: { wins: 1, losses: 0, draws: 1 }, nextMatch: { opponentName: 'Brock', roundName: 'Swiss 3' },
+        pokemon: [
+          { species: 'Pikachu', usagePct: 40, leadPct: 25, bringPct: 75, koDealt: 7, koReceived: 2 },
+          { species: 'Raichu', moves: ['Surf'] },
+        ],
+      },
+      player2: { record: { wins: 0, losses: 1, draws: 1 }, pokemon: [{ species: 'Umbreon', moves: ['Moonlight'] }] },
+      h2h: { player1Wins: 1, player2Wins: 0, draws: 1, pastMatches: [
+        { matchId: 'prior', roundName: 'Opening', winnerId: 'p1', date: '2026-11-01' },
+        { matchId: 'draw', roundName: 'Swiss 2', winnerId: null, date: '2026-11-02' },
+      ] },
+    });
+    expect(result?.player1.team[0]).toMatchObject({ item: 'Leftovers', ability: 'Static', moves: ['Encore'] });
+    expect(result?.standings).toEqual(expect.arrayContaining([
+      expect.objectContaining({ playerId: 'p4', wins: 1, losses: 1, points: 1 }),
+      expect.objectContaining({ playerId: 'p3', wins: 1, points: 1 }),
+    ]));
+    expect(JSON.stringify(result)).not.toMatch(/private-submitter|not for the caster|Eevee/);
+    expect(getRulesetById).toHaveBeenCalledWith('phase-pin');
+    expect(getPhaseById).toHaveBeenCalledWith(phaseId);
+    expect(getPublicMatchesByPhaseIds).toHaveBeenCalledWith([phaseId]);
+    expect(getPlayerPhaseTeamForMatch).toHaveBeenCalledWith('p2', expect.objectContaining({ id: matchId, phase_id: phaseId }));
+    expect(getTotalGamesInScope).toHaveBeenCalledWith('phase', phaseId);
+    expect(getAggregatesSummary).toHaveBeenCalledWith('phase', phaseId);
+    expect(getPlayerAggregatesForPokemon).toHaveBeenCalledWith('Pikachu', 'phase', phaseId, 'p1');
+    for (const reader of [getMatchById, getTournamentById, getRoundById, getMatchesByPlayer, getH2HBetweenPlayers,
+      getCompletedMatchRecords, getPlayerTeamForMatch, getBattleStatsByMatch, getAggregates, computeStandingsForSeason,
+      standaloneMatchAliasExists]) expect(reader).not.toHaveBeenCalled();
+  });
+
+  it('keeps hidden species and their enrichment out of creator and participant views', async () => {
+    const creator = await fetchCasterData(matchId, CREATOR);
+    for (const player of [creator?.player1, creator?.player2]) {
+      expect(player).toMatchObject({ team: [], pokemon: [], archetype: null });
+    }
+    expect(JSON.stringify(creator)).not.toMatch(/Pikachu|Raichu|Eevee|Umbreon|Moonlight|Leftovers/);
+    expect(getPhaseBattleStatsByMatch).not.toHaveBeenCalled();
+    expect(getPlayerAggregatesForPokemon).not.toHaveBeenCalled();
+    const participant = await fetchCasterData(matchId, { viewerId: 'p1', isAdmin: false });
+    expect(participant?.player1.team.map(set => set.species)).toEqual(['Pikachu', 'Raichu']);
+    expect(participant?.player2).toMatchObject({ team: [], pokemon: [], archetype: null });
+    expect(JSON.stringify(participant)).not.toMatch(/Eevee|Umbreon|Moonlight/);
+  });
+
+  it('allows the published planned sets without exposing private battle stats', async () => {
+    vi.mocked(getPlayerPhaseTeamForMatch).mockResolvedValueOnce(team('p1', 'Pikachu', '2026-11-01') as never);
+    const result = await fetchCasterData(matchId, CREATOR);
+    expect(result?.player1.team.map(set => set.species)).toEqual(['Pikachu']);
+    expect(JSON.stringify(result)).not.toMatch(/Raichu|Umbreon|Surf|Moonlight/);
+    expect(getPhaseBattleStatsByMatch).not.toHaveBeenCalled();
+  });
+
+  it.each(['completed', 'always_public'])('shows actual rosters, even without a team row, when %s', async (grant) => {
+    if (grant === 'completed') vi.mocked(getPhaseMatchById).mockResolvedValue({ ...match, status: 'completed' } as never);
+    else vi.mocked(getPhaseById).mockResolvedValue({ ...phase, team_visibility: grant } as never);
+    vi.mocked(getPlayerPhaseTeamForMatch).mockResolvedValueOnce(null);
+    const result = await fetchCasterData(matchId, CREATOR);
+    expect(result?.player1.team.map(set => set.species)).toEqual(['Pikachu', 'Raichu']);
+    expect(result?.player2.team.map(set => set.species)).toEqual(['Umbreon']);
+  });
+
+  it('uses visible planned sets when a successful read has no actual stats', async () => {
+    vi.mocked(getPhaseBattleStatsByMatch).mockResolvedValue({});
+    const result = await fetchCasterData(matchId, ADMIN);
+    expect(result?.player1.team.map(set => set.species)).toEqual(['Pikachu']);
+    expect(result?.player2.team.map(set => set.species)).toEqual(['Eevee']);
+  });
+
+  it('does not turn native query errors into legacy or planned fallbacks', async () => {
+    vi.mocked(getPhaseMatchById).mockRejectedValueOnce(new Error('native match read failed'));
+    await expect(fetchCasterData(matchId, ADMIN)).rejects.toThrow('native match read failed');
+    vi.mocked(getPhaseBattleStatsByMatch).mockRejectedValueOnce(new Error('native battle stats failed'));
+    await expect(fetchCasterData(matchId, ADMIN)).rejects.toThrow('native battle stats failed');
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
+
+  it('propagates mode and standalone owner lookup errors', async () => {
+    vi.mocked(readPhaseStorageMode).mockRejectedValueOnce(new Error('mode read failed'));
+    await expect(fetchCasterData(matchId, ADMIN)).rejects.toThrow('mode read failed');
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    vi.mocked(getPhaseMatchById).mockResolvedValue(null);
+    vi.mocked(standaloneMatchAliasExists).mockRejectedValueOnce(new Error('owner read failed'));
+    await expect(fetchCasterData(matchId, ADMIN)).rejects.toThrow('owner read failed');
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
+
+  it('returns not found without switching stores when the actual native phase is missing', async () => {
+    vi.mocked(getPhaseById).mockResolvedValue(null);
+    expect(await fetchCasterData(matchId, ADMIN)).toBeNull();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
+    expect(getMatchById).not.toHaveBeenCalled();
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('allows only positively standalone legacy matches in %s', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+    vi.mocked(getPhaseMatchById).mockResolvedValue(null);
+    expect(await fetchCasterData(matchId, ADMIN)).toBeNull();
+    expect(standaloneMatchAliasExists).toHaveBeenCalledWith(matchId);
+    expect(getMatchById).not.toHaveBeenCalled();
+
+    mockGetMatch.mockResolvedValue({ id: matchId, tournament_id: 't1', round_id: 'r1', status: 'scheduled',
+      player_1_id: 'p1', player_2_id: 'p2', player_1_name: 'Ash', player_2_name: 'Gary' } as never);
+    vi.mocked(standaloneMatchAliasExists).mockResolvedValue(true);
+    expect(await fetchCasterData(matchId, ADMIN)).toBeNull();
+    expect(getBattleStatsByMatch).not.toHaveBeenCalled();
+    expect(getRoundById).not.toHaveBeenCalled();
+    mockGetTournament.mockResolvedValue({ id: 't1', season_id: null, ruleset_id: 'rs1' } as never);
+    expect(await fetchCasterData(matchId, ADMIN)).toMatchObject({ tournamentId: 't1', seasonId: null });
+    expect(getBattleStatsByMatch).toHaveBeenCalledWith(matchId);
+    expect(getPhaseBattleStatsByMatch).not.toHaveBeenCalled();
+  });
+
+  it.each(['legacy', 'frozen_legacy'] as const)('uses only old match readers in %s', async (mode) => {
+    vi.mocked(readPhaseStorageMode).mockResolvedValue(mode);
+    expect(await fetchCasterData(matchId, ADMIN)).toMatchObject({ tournamentId: 't1', seasonId: 's1' });
+    expect(getMatchById).toHaveBeenCalledWith(matchId);
+    expect(getPhaseMatchById).not.toHaveBeenCalled();
+    expect(standaloneMatchAliasExists).not.toHaveBeenCalled();
   });
 });
