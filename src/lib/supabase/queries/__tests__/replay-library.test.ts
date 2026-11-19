@@ -58,12 +58,94 @@ function replayRowWithId(id: string) {
   return { ...replayRow, id, replay_url: `https://replay.pokemonshowdown.com/${id}` };
 }
 
+const phaseReplay = {
+  row_key: 'game-2:phase',
+  game_number: 2,
+  replay_url: replayRow.replay_url,
+  game_created_at: replayRow.created_at,
+  match_id: 'match-1',
+  match_played_at: replayRow.matches.date_played,
+  tournament_id: null,
+  phase_id: 'phase-1',
+  league_id: 'league-1',
+  league_name: 'Summer League',
+  stage_name: 'Summer Open',
+  round_name: 'Round 3',
+  player_1_name: 'Opponent 1',
+  player_1_ps_username: 'opp1ps',
+  player_2_name: 'Opponent 2',
+  player_2_ps_username: 'opp2ps',
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   for (const method of chainMethods) {
     mockBuilder[method].mockReset();
     mockBuilder[method].mockReturnValue(mockBuilder);
   }
+});
+
+describe('native replay browse and search', () => {
+  it('reads one counted range and builds ownership-specific spoiler-safe links', async () => {
+    const standalone = { ...phaseReplay, row_key: 'game-2:standalone', phase_id: null,
+      league_id: null, league_name: null, tournament_id: 'tournament-1', stage_name: 'Fixture Cup' };
+    mockBuilder.range.mockReturnValueOnce({ data: [phaseReplay, standalone], error: null, count: 42 });
+    const page = await listReplayLibraryPage({ page: 2, perPage: 20, ascending: false }, 'phase');
+    expect(mockBuilder.from).toHaveBeenCalledExactlyOnceWith('phase_replay_library');
+    expect(mockBuilder.select).toHaveBeenCalledExactlyOnceWith('*', { count: 'exact' });
+    expect(mockBuilder.range).toHaveBeenCalledExactlyOnceWith(20, 39);
+    expect(mockBuilder.order.mock.calls).toEqual([
+      ['match_played_at', { ascending: false, nullsFirst: true }],
+      ['game_created_at', { ascending: false }],
+      ['row_key', { ascending: false }],
+    ]);
+    expect(page.total).toBe(42);
+    expect(page.rows[0]).toEqual({
+      label: 'Opponent 1 vs Opponent 2, Summer League, Round 3, match 2',
+      date: replayRow.matches.date_played,
+      league: 'Summer League', tournamentName: 'Summer Open', round: 'Round 3',
+      competitionUrl: '/leagues/league-1', matchNumber: 2,
+      player1Name: 'Opponent 1', player1PsUsername: 'opp1ps', player2Name: 'Opponent 2', player2PsUsername: 'opp2ps',
+      matchUrl: '/leagues/league-1/phases/phase-1/matches/match-1', replayUrl: replayRow.replay_url,
+    });
+    expect(page.rows[1]).toMatchObject({ matchUrl: '/tournaments/tournament-1/matches/match-1', competitionUrl: '/tournaments/tournament-1' });
+  });
+
+  it('counts the same mixed relation when an unfiltered page is past the end', async () => {
+    mockBuilder.range
+      .mockReturnValueOnce({ data: null, error: { code: 'PGRST103' }, count: null })
+      .mockReturnValueOnce({ data: [phaseReplay], error: null, count: 21 });
+    mockBuilder.select.mockReturnValueOnce(mockBuilder).mockReturnValueOnce({ count: 21, error: null }).mockReturnValueOnce(mockBuilder);
+    await expect(listReplayLibraryPage({ page: 5, perPage: 20, ascending: true }, 'phase')).resolves.toMatchObject({ page: 2, total: 21 });
+    expect(mockBuilder.select).toHaveBeenNthCalledWith(2, 'row_key', { count: 'exact', head: true });
+    expect(mockBuilder.range.mock.calls).toEqual([[80, 99], [20, 39]]);
+  });
+
+  it('pages filtered inputs and narrow facets past max_rows without dropping either owner', async () => {
+    const first = Array.from({ length: REPLAY_LIBRARY_READ_CHUNK }, (_, i) => ({ ...phaseReplay, row_key: `${i}:phase` }));
+    const last = { ...phaseReplay, row_key: '0:standalone', phase_id: null, league_id: null, league_name: null,
+      tournament_id: 'tournament-1', stage_name: 'Fixture Cup' };
+    mockBuilder.range
+      .mockReturnValueOnce({ data: first, error: null, count: 1001 })
+      .mockReturnValueOnce({ data: [last], error: null, count: null })
+      .mockReturnValueOnce({ data: first, error: null, count: 1001 })
+      .mockReturnValueOnce({ data: [last], error: null, count: null });
+    const all = await listReplayLibraryRows(undefined, 'phase');
+    expect(all).toHaveLength(1001);
+    expect(all.at(-1)?.matchUrl).toBe('/tournaments/tournament-1/matches/match-1');
+    const facets = await listReplayLibraryFacetRows('phase');
+    expect(facets).toHaveLength(1001);
+    expect(facets.at(-1)).toEqual({ league: 'Unknown league', tournamentName: 'Fixture Cup', round: 'Round 3' });
+    expect(mockBuilder.select).toHaveBeenNthCalledWith(3, 'league_name, stage_name, round_name', { count: 'exact' });
+    expect(mockBuilder.range.mock.calls).toEqual([[0, 999], [1000, 1999], [0, 999], [1000, 1999]]);
+  });
+
+  it('propagates a missing view instead of falling back to retired data', async () => {
+    const error = { code: 'PGRST205', message: 'View not found' };
+    mockBuilder.range.mockReturnValueOnce({ data: null, error, count: null });
+    await expect(listReplayLibraryPage({ page: 1, perPage: 20, ascending: false }, 'phase')).rejects.toBe(error);
+    expect(mockBuilder.from).toHaveBeenCalledExactlyOnceWith('phase_replay_library');
+  });
 });
 
 describe('listReplayLibraryRows', () => {

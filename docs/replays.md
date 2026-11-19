@@ -14,7 +14,10 @@ the upstream PS replay.
 
 It does **not** parse replays itself — that pipeline lives in
 [PKMN](./pkmn.md) (`POST /api/parse-replay`). This module only reads from
-`games` rows where `parsed = true AND source = 'ps_replay' AND replay_url <> ''`.
+parsed Showdown games with a nonempty replay URL. Legacy and frozen-legacy
+read the existing `games` relation. Native and frozen-native use the
+service-role-only `phase_replay_library` view to read standalone `games` and
+league `phase_games` in a single ordered stream.
 
 ## File Structure
 
@@ -44,7 +47,15 @@ The page is also linked from `src/components/shared/NavBar.tsx`.
 - **Mapping** (`toReplayLibraryRow`): produces a flat, spoiler-safe row:
   `label` (players, league, round, match number), `date`, `league`,
   `tournamentName`, `round`, `matchNumber`, both player names + PS usernames,
-  `matchUrl` (`/tournaments/{tid}/matches/{mid}`), and `replayUrl`.
+  `matchUrl` (`/tournaments/{tid}/matches/{mid}` for legacy and standalone;
+  `/leagues/{lid}/phases/{pid}/matches/{mid}` for native), and `replayUrl`.
+
+The unfiltered pager fetches an exact count and one ranged page plus a narrow,
+paged facet read. The native view sorts by the same played/created date rule;
+its final key combines the game UUID and source so even identical UUIDs in
+different stores cannot tie. Filtered search reads all chunks from the selected
+relation. In native mode the Tournament filter still matches a league phase's
+name. The view carries no outcome, match notes, or team fields.
 
 ### `parseReplayLibraryParams(params)` — `replay-library-utils.ts`
 - Validates `sort` as `{column}-{asc|desc}` for columns
