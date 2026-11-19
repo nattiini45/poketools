@@ -1,4 +1,6 @@
 import { supabase } from '../client';
+import { readAllPages } from '../read-all-pages';
+import type { CastSessionPhaseRef, IndependentCastSession } from '@/types/phase-cast-session';
 import type { Json } from '@/types/database';
 import type {
   CastSession,
@@ -160,6 +162,88 @@ function castSessionUpdatePayload(update: CastSessionUpdate): Record<string, unk
   if (update.format !== undefined) payload.format = update.format;
   if (update.generation !== undefined) payload.generation = update.generation;
   return payload;
+}
+
+const INDEPENDENT_SESSION_SELECT = `
+  *,
+  tournament:tournaments!cast_sessions_tournament_id_fkey(season_id),
+  legacy_match:matches!cast_sessions_match_id_fkey(
+    tournament_id, tournament:tournaments!matches_tournament_id_fkey(season_id)
+  ),
+  phase:league_phases!cast_sessions_phase_id_fkey(season_id),
+  phase_match:phase_matches!cast_sessions_phase_match_fkey(id, phase_id)
+` as const;
+
+function independentSessionFromRow(row: CastSessionRow & {
+  phase_id: string | null;
+  phase_match_id: string | null;
+  tournament: { season_id: string | null } | null;
+  legacy_match: { tournament_id: string; tournament: { season_id: string | null } | null } | null;
+  phase: { season_id: string } | null;
+  phase_match: { id: string; phase_id: string } | null;
+}): IndependentCastSession | null {
+  if (row.tournament_id && row.tournament?.season_id !== null) return null;
+  if (row.match_id && (row.legacy_match?.tournament?.season_id !== null
+    || (row.tournament_id !== null && row.tournament_id !== row.legacy_match.tournament_id))) return null;
+
+  const session = toCastSession(row);
+  if (row.phase_id === null) return row.phase_match_id === null ? session : null;
+  if (!row.phase || row.tournament_id !== null || row.match_id !== null
+    || (row.season_id !== null && row.season_id !== row.phase.season_id)
+    || (row.phase_match_id !== null && (row.phase_match?.id !== row.phase_match_id
+      || row.phase_match.phase_id !== row.phase_id))) return null;
+
+  return { ...session, phase_ref: {
+    season_id: row.phase.season_id, phase_id: row.phase_id, match_id: row.phase_match_id,
+  } };
+}
+
+export async function listIndependentCastSessions(ownerId: string): Promise<IndependentCastSession[]> {
+  const rows = await readAllPages((from, to) => supabase.from('cast_sessions')
+    .select(INDEPENDENT_SESSION_SELECT).eq('owner_id', ownerId)
+    .order('updated_at', { ascending: false }).order('id').range(from, to));
+  return rows.map(independentSessionFromRow).filter((session) => session !== null);
+}
+
+export async function getIndependentCastSession(id: string): Promise<IndependentCastSession | null> {
+  const { data, error } = await supabase.from('cast_sessions').select(INDEPENDENT_SESSION_SELECT).eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data ? independentSessionFromRow(data) : null;
+}
+
+function guardIndependentSession<
+  Q extends { eq(column: string, value: string): Q; is(column: string, value: null): Q },
+>(query: Q, current: IndependentCastSession): Q {
+  query = query.eq('id', current.id).eq('owner_id', current.owner_id)
+    .eq('status', current.status).eq('updated_at', current.updated_at);
+  for (const [key, value] of [
+    ['tournament_id', current.tournament_id], ['match_id', current.match_id],
+    ['season_id', current.season_id], ['phase_id', current.phase_ref?.phase_id ?? null],
+    ['phase_match_id', current.phase_ref?.match_id ?? null],
+  ] as const) {
+    query = value === null ? query.is(key, null) : query.eq(key, value);
+  }
+  return query;
+}
+
+export async function updateIndependentCastSession(
+  current: IndependentCastSession, input: CastSessionUpdate, phaseRef?: CastSessionPhaseRef,
+): Promise<IndependentCastSession | null> {
+  const values = {
+    ...castSessionUpdatePayload(input),
+    updated_at: new Date(Math.max(Date.now(), Date.parse(current.updated_at) + 1)).toISOString(),
+    ...(phaseRef ? { phase_id: phaseRef.phase_id, phase_match_id: phaseRef.match_id } : {}),
+  };
+  const { data, error } = await guardIndependentSession(supabase.from('cast_sessions').update(values), current)
+    .select(INDEPENDENT_SESSION_SELECT).maybeSingle();
+  if (error) throw error;
+  return data ? independentSessionFromRow(data) : null;
+}
+
+export async function deleteIndependentCastSession(current: IndependentCastSession): Promise<boolean> {
+  const { data, error } = await guardIndependentSession(supabase.from('cast_sessions').delete(), current).select('id');
+  if (error) throw error;
+  return (data ?? []).length === 1;
 }
 
 /** Update a cast session (partial update). */

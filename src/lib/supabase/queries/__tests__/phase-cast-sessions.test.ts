@@ -19,12 +19,13 @@ vi.mock('../league-phases', () => q);
 import { clearPhaseCastSessionsMatchPointer, createPhaseCastSession, deletePhaseCastSession, getPhaseCastSessionById, listPhaseCastSessions, updatePhaseCastSession } from '../phase-cast-sessions';
 import { toPublicPhaseCastSession } from '@/lib/broadcast/phase-session-view';
 
-const row: Tables<'phase_cast_sessions'> = {
+const row = {
   id: 'session', owner_id: 'creator', realtime_key: 'private-capability', phase_id: 'phase', season_id: 'league', match_id: 'match',
   name: 'Fixture session', mode: 'cast', status: 'draft', player1_id: null, player1_name: null, player1_avatar_url: null,
   player2_id: null, player2_name: null, player2_avatar_url: null, player1_team: [], player2_team: [], tracker_state: {},
   overlay_config: {}, caster_notes: { match: 'private notes' }, format: 'gen9ou', generation: 9, created_at: 'created', updated_at: '2026-01-01T00:00:00.000Z',
-};
+  phase: { season_id: 'league' }, match: { id: 'match', phase_id: 'phase' },
+} satisfies Tables<'phase_cast_sessions'> & { phase: { season_id: string }; match: { id: string; phase_id: string } };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -111,5 +112,16 @@ describe('native phase cast persistence', () => {
   it('propagates unexpected storage failures', async () => {
     q.results.push({ data: null, error: new Error('cast failed') });
     await expect(getPhaseCastSessionById('session')).rejects.toThrow('cast failed');
+  });
+
+  it('rejects mismatched owners and derives the league for a retained nullable season', async () => {
+    q.results.push(
+      { data: { ...row, phase: { season_id: 'wrong' } }, error: null },
+      { data: { ...row, match: { ...row.match, phase_id: 'wrong' } }, error: null },
+      { data: { ...row, season_id: null }, error: null },
+    );
+    await expect(getPhaseCastSessionById('session')).rejects.toThrow('Invalid native cast session ownership');
+    await expect(getPhaseCastSessionById('session')).rejects.toThrow('Invalid native cast session ownership');
+    await expect(getPhaseCastSessionById('session')).resolves.toMatchObject({ season_id: 'league' });
   });
 });

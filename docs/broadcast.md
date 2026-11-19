@@ -31,6 +31,8 @@ src/lib/broadcast/
 ├── momentum-calc.ts  # Momentum score from -100 to +100
 ├── overlay-locale.ts  # The language of an OBS overlay
 ├── solo-defaults.ts  # Stored placeholder names of solo sessions
+├── studio-session-schemas.ts  # Explicit native phase references for Cast Studio writes
+├── studio-sessions.server.ts  # Cast Studio session ownership and storage routing for the API
 ├── standings-impact.ts  # Rank deltas of both outcomes of a match
 ├── url-builder.ts  # Overlay type registry and overlay URL builder
 ├── use-solo-broadcast.ts  # useSoloBroadcastPoll, the hook the solo overlays share

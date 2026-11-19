@@ -38,6 +38,7 @@ export default {
   cast_session_forbidden: 'Not authorized',
   // The session's status moved between the read and the guarded write (castSessionMachine)
   cast_session_changed: 'Session changed in the meantime',
+  cast_session_binding_conflict: 'That match or phase cannot be linked to this session.',
 
   // Discord webhooks (`api/discord-webhooks/**`)
   webhook_not_found: 'Webhook not found',
