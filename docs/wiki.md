@@ -116,7 +116,34 @@ wiki_note_reports (
 
 `createPhaseWikiServices` requires explicit storage, `requireActor(phaseId)`, `assertPublicPhase(phaseId)` and `invalidate(phaseId)` ports. Assembly must bind live identity and phase visibility checks, distinguish site-admin status from resource-admin access, and verify the superadmin identity live. Resource-admin access alone grants no moderation, queue access, moderator editing or superadmin blocking. The signed-in author may edit/delete their own note; site admins may edit/delete any note. Public listing first checks phase visibility. Native routes must add the existing write rate limits, safe error responses and audit events; the factory is not a route or an auth helper. Invalidation must expire native phase and league wiki consumers after each committed mutation before activation.
 
-`createNativePhaseWikiServices(invalidate)` supplies the real native storage, live `requireAuth()` identity and superadmin decision, and actual phase-existence check (phases have no private visibility flag). It performs no read when constructed. It still requires an explicit invalidation callback; P5 binds phase/league cache expiry and routes rather than using a no-op. A phase administrator remains an ordinary note author unless the live identity is also a site administrator.
+`createNativePhaseWikiServices(invalidate)` supplies the real native storage, live `requireAuth()` identity and superadmin decision, and phase existence (phases have no private visibility flag). It performs no read when constructed. The P5 HTTP assembly binds the same live identity and native store to the verified league and phase pair, then calls `expirePhaseReads` after each successful mutation. A phase administrator remains an ordinary note author unless the live identity is also a site administrator.
+
+### Native phase API checkpoint
+
+All routes are under `/api/seasons/[id]/phases/[phaseId]/wiki/notes` and require a live registered player in good standing. The league and phase UUIDs must identify a real native phase owned by that league; item routes also scope the note to that phase. There is no legacy fallback. `legacy` returns 404 without querying either wiki store. `frozen_legacy` returns 503 without querying the phase store. `frozen_phase` permits listing the frozen native snapshot but returns 503 for writes before any phase or wiki store access. Applying this code does not select a storage mode.
+
+| Method and suffix | Input | Success |
+| --- | --- | --- |
+| `GET` | `entity_type` and `entity_name` query parameters | 200, approved public-note projection only; no edge cache |
+| `POST` | `entity_type`, `entity_name`, `content` | 201, pending note ID, phase ID, approval flag and timestamps |
+| `PATCH /[noteId]` | `content` only | 200, `updated` and `requeued`; authors requeue, site admins retain state |
+| `DELETE /[noteId]` | No body | 200, `deleted` |
+| `POST /[noteId]/report` | `reason` and optional `details` | 201, report receipt (ID, status and timestamps only) |
+
+Create and report share the existing per-player `wiki-notes` and `wiki-report` buckets (10 per 24 hours each); edit/delete retain the global routes’ policy of no separate wiki-specific bucket. Every committed write records its matching `wiki.note.*` audit event with both scope IDs and expires the phase and league tags. The existing global APIs and SSR pages are unchanged. The legacy entity APIs and signed-in SSR note reads call `getApprovedNotes` without scope filters, so approved rows from other legacy scopes can appear there. The native routes never use that reader.
+
+### Native phase moderation API checkpoint
+
+These routes are under `/api/seasons/[id]/phases/[phaseId]/wiki/moderation`. They require live site-admin access; league or phase administration alone grants none. They use the same league/phase and storage-mode gates as the registered-player routes. Queues are uncached and paginated in stable newest-first order. The legacy moderation UI is unchanged.
+
+| Method and suffix | Input and behavior |
+| --- | --- |
+| `GET /notes` | Optional `status=pending\|approved\|rejected\|all` (default `pending`); `rejected` includes blocked notes. |
+| `GET /reports` | Optional `status=open\|reviewed\|dismissed` (default all); includes the reported note for review. |
+| `PATCH /notes/[noteId]` | Exactly one of `approved: true`, `rejected: true` (optional `rejection_reason`), or `block_resubmission: boolean`; also requires the exact `expected_state` and `expected_updated_at` from the queue. Blocking and unblocking require the live superadmin identity. |
+| `PATCH /reports/[reportId]` | `status` to review or dismiss, plus `expected_status` and exact `expected_updated_at` from the queue. A moderator cannot reopen or swap closed statuses. |
+
+Both lists accept `limit` (1–100, default 50) and `offset` (default 0). Mutations use the existing compare-and-set guards, and a stale client or intervening write returns 409. Repeating a block/unblock with the current version is a no-op. A committed mutation emits the matching legacy audit action with native phase and league IDs and expires both tags; these admin routes have no separate wiki-specific rate bucket, like their global counterparts.
 
 The services reuse `scanWikiNoteContent`, `noteModerationMachine`, `noteModerationState` and `noteReportMachine`. Author edits atomically clear verdicts and requeue; blocked authors cannot resubmit. Site-admin edits retain the state. Only the superadmin may block/unblock, only rejected notes may be blocked, and approval clears the block. Approve/reject requires the state and exact `updated_at` the reviewer saw. Every note edit, verdict, block/unblock and delete compares the phase, id, state fields and exact version; a stale write cannot overwrite intervening text or a block. New versions advance even within the same clock millisecond. A missed write distinguishes a missing row from a changed one.
 

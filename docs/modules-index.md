@@ -137,6 +137,7 @@ Test suites live in `__tests__/` directories adjacent to the modules they cover.
 | Admin scope and page gates | `src/lib/auth/__tests__/admin-scope.test.ts`, `resource-gate.test.ts` | `getAdminScope`, `gateResourceAdmin` |
 | Tournament Engine | `src/lib/tournament/__tests__/*.test.ts` | Match state, standings, Swiss/RR/SE/DE pairing, bracket-structure, serpentine |
 | League phases API | `src/app/api/seasons/[id]/phases/__tests__/route.test.ts` | Phase CRUD/list guards |
+| Phase wiki notes API | `src/app/api/seasons/[id]/phases/[phaseId]/wiki/notes/__tests__/route.test.ts` | Live player and league/phase ownership guards, frozen modes, approved projection, reports and post-commit effects |
 | Substitute | `src/lib/season/__tests__/substitute.test.ts`, `src/app/api/seasons/[id]/participants/substitute/__tests__/route.test.ts` | Substitute planner + API |
 | Group repair | `src/lib/season/__tests__/group-repair.test.ts`, `src/app/api/seasons/[id]/phases/[phaseId]/groups/repair/__tests__/route.test.ts`, `src/components/league/__tests__/PhaseGroupRepair.test.tsx` | Planner for group rows left by pre-handover substitutions (audit pairing, chains, scope, fixture fallback) + API + admin control |
 | Guest claim | `src/app/api/players/[id]/claim/__tests__/route.test.ts` | Claim guards |

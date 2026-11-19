@@ -29,6 +29,7 @@ import {
   draftWriteTags,
   expireDraftReads,
   expireFormatLibraryReads,
+  expirePhaseReads,
   expireSeasonReads,
   expireTournamentReads,
   playerVisibilityTags,
@@ -70,6 +71,15 @@ const EXPIRE_CALL =
   /\b(expireTournamentReads|expirePhaseReads|expireSeasonReads|expireDraftReads|expireFormatLibraryReads|expirePlayerVisibilityReads|expirePublicTags|revalidateMatchPages|revalidatePhaseMatchPages|revalidatePublicPath|saveAction|submitAction|applyAdjustment|resolveCheck|answerChallenge|generatePhaseRounds)\(/;
 
 const WRITE_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+const PHASE_WIKI_NOTES = 'seasons/[id]/phases/[phaseId]/wiki/notes';
+const PHASE_WIKI_WRITES = new Map([
+  [`${PHASE_WIKI_NOTES}/route.ts#POST`, ['create']],
+  [`${PHASE_WIKI_NOTES}/[noteId]/route.ts#PATCH`, ['edit']],
+  [`${PHASE_WIKI_NOTES}/[noteId]/route.ts#DELETE`, ['remove']],
+  [`${PHASE_WIKI_NOTES}/[noteId]/report/route.ts#POST`, ['report']],
+  ['seasons/[id]/phases/[phaseId]/wiki/moderation/[queue]/[entryId]/route.ts#PATCH', ['verdict', 'block', 'closeReport']],
+]);
 
 /**
  * Write handlers that change nothing a cached public read shows. Key:
@@ -135,6 +145,7 @@ const REQUIRED = [
   'seasons/[id]/phases/[phaseId]/route.ts#PATCH',
   'seasons/[id]/phases/[phaseId]/route.ts#DELETE',
   'seasons/[id]/phases/[phaseId]/participants/route.ts#POST',
+  ...PHASE_WIKI_WRITES.keys(),
   'seasons/[id]/participants/route.ts#POST',
   'seasons/[id]/participants/route.ts#DELETE',
   'seasons/[id]/participants/substitute/route.ts#POST',
@@ -242,7 +253,15 @@ describe('route walk: every tournament, league and draft write expires public ta
 
   it.each(HANDLERS.filter((h) => !(h.key in EXEMPT)).map((h) => [h.key, h.body] as const))(
     '%s calls an expiry helper',
-    (_key, body) => {
+    (key, body) => {
+      const wikiMethods = PHASE_WIKI_WRITES.get(key);
+      if (wikiMethods) {
+        expect(body).toMatch(/bindScopedPhaseWikiServices\(/);
+        for (const method of wikiMethods) expect(body).toMatch(new RegExp(`\\.${method}\\(`));
+        const context = readFileSync(path.join(API_DIR, PHASE_WIKI_NOTES, '_lib/route-context.ts'), 'utf8');
+        expect(context).toMatch(/invalidate:\s*async\s+phaseId\s*=>\s*expirePhaseReads\(/);
+        return;
+      }
       expect(body).toMatch(EXPIRE_CALL);
     },
   );
@@ -287,6 +306,14 @@ describe('write tags: what each route helper expires', () => {
 
   it('a draft write expires its league only', () => {
     expect(draftWriteTags('s1')).toEqual(['season:s1']);
+  });
+
+  it('a native phase write expires the owning phase and league without tournament tags', () => {
+    vi.mocked(revalidateTag).mockClear();
+    expirePhaseReads('p1', 's1');
+    expect(vi.mocked(revalidateTag).mock.calls).toEqual([
+      ['season:s1', EXPIRE_NOW], ['seasons', EXPIRE_NOW], ['player-profiles', EXPIRE_NOW], ['phase:p1', EXPIRE_NOW],
+    ]);
   });
 
   it('a format library write expires the format-library tag, immediately', () => {

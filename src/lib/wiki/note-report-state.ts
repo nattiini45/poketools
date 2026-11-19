@@ -2,6 +2,7 @@ import { defineMachine } from '@/lib/state-machine/machine';
 
 /** Reports on a wiki note (docs/state-machines.md, "Wiki note report"). Client-safe. */
 const PHASE_WRITERS = ['src/lib/wiki/phase-services.ts', 'src/lib/supabase/queries/phase-wiki-notes.ts'];
+const PHASE_MODERATION_ROUTE = 'src/app/api/seasons/[id]/phases/[phaseId]/wiki/moderation/[queue]/[entryId]/route.ts';
 
 export const noteReportMachine = defineMachine({
   id: 'wiki_note_report.status',
@@ -20,7 +21,7 @@ export const noteReportMachine = defineMachine({
       from: ['open', 'reviewed', 'dismissed'],
       to: 'open',
       actors: ['reporter'],
-      writers: ['src/app/api/wiki/notes/[id]/report/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', ...PHASE_WRITERS, 'supabase/migrations/20261117140000_phase_wiki_services.sql#phase_wiki_report_submit'],
+      writers: ['src/app/api/wiki/notes/[id]/report/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', 'src/app/api/seasons/[id]/phases/[phaseId]/wiki/notes/[noteId]/report/route.ts', ...PHASE_WRITERS, 'supabase/migrations/20261117140000_phase_wiki_services.sql#phase_wiki_report_submit'],
       note: 'The reporter reports the note again: the report reopens with the new reason.',
     },
     {
@@ -28,7 +29,7 @@ export const noteReportMachine = defineMachine({
       from: ['open', 'reviewed'],
       to: 'reviewed',
       actors: ['admin'],
-      writers: ['src/app/api/admin/wiki/reports/[id]/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', ...PHASE_WRITERS],
+      writers: ['src/app/api/admin/wiki/reports/[id]/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', PHASE_MODERATION_ROUTE, ...PHASE_WRITERS],
       note: 'The moderator acted on the report (for example unpublished the note).',
     },
     {
@@ -36,7 +37,7 @@ export const noteReportMachine = defineMachine({
       from: ['open', 'dismissed'],
       to: 'dismissed',
       actors: ['admin'],
-      writers: ['src/app/api/admin/wiki/reports/[id]/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', ...PHASE_WRITERS],
+      writers: ['src/app/api/admin/wiki/reports/[id]/route.ts', 'src/lib/supabase/queries/wiki-notes.ts', PHASE_MODERATION_ROUTE, ...PHASE_WRITERS],
     },
   ],
 });

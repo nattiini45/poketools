@@ -64,6 +64,27 @@ describe('native phase wiki persistence', () => {
     expect(db.select).toHaveBeenCalledWith('*, phase_wiki_notes!inner(phase_id)');
   });
 
+  it('reads only one filtered newest-first queue page, including blocked notes in rejected', async () => {
+    db.__setResult([note]);
+    await phaseWikiStorage.listNotes('phase', false, undefined, { status: 'rejected', limit: 10, offset: 5 });
+    expect(db.eq).toHaveBeenCalledWith('phase_id', 'phase');
+    expect(db.eq).toHaveBeenCalledWith('approved', false);
+    expect(db.not).toHaveBeenCalledWith('rejected_at', 'is', null);
+    expect(db.order).toHaveBeenCalledWith('created_at', { ascending: false });
+    expect(db.order).toHaveBeenCalledWith('id');
+    expect(db.range).toHaveBeenCalledExactlyOnceWith(5, 14);
+  });
+
+  it('reads one status-filtered report page with its owning note and no player embed', async () => {
+    const report = { id: 'report', note_id: 'note', status: 'open' };
+    db.__setResult([{ ...report, phase_wiki_notes: note }]);
+    expect(await phaseWikiStorage.listReports('phase', { status: 'open', limit: 10, offset: 0 })).toEqual([{ ...report, note }]);
+    expect(db.eq).toHaveBeenCalledWith('phase_wiki_notes.phase_id', 'phase');
+    expect(db.eq).toHaveBeenCalledWith('status', 'open');
+    expect(db.select).toHaveBeenCalledWith(expect.not.stringContaining('players'));
+    expect(db.range).toHaveBeenCalledExactlyOnceWith(0, 9);
+  });
+
   it('does not mask storage failures and distinguishes report RPC conflicts', async () => {
     const error = Object.assign(new Error('wiki_report_changed'), { code: 'P0001' });
     db.__setError(error);

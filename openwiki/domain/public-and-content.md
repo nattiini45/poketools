@@ -59,6 +59,7 @@ Public, SEO-friendly Pokémon reference pages. Community notes layer for player-
 - `/wiki/[slug]` — Entry detail
 - Entry builders: `src/lib/wiki/entries.ts`
 - Notes: `src/lib/supabase/queries/wiki-notes.ts`
+- Native phase notes: `/api/seasons/[id]/phases/[phaseId]/wiki/notes` serves the verified phase only to live registered players. The endpoint has no legacy fallback; existing wiki pages and moderation are unchanged. See [the native phase API checkpoint](../../docs/wiki.md#native-phase-api-checkpoint).
 
 ## Replays
 
