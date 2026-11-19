@@ -9,6 +9,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CastSession } from '@/types/cast-session';
+import type { StudioCastSession } from '@/types/phase-cast-session';
 import { withI18n } from '@/test/i18n';
 
 vi.mock('@/lib/broadcast/channel', () => ({
@@ -117,6 +118,8 @@ describe('Cast Studio autosave', () => {
     await advance(1);
     expect(patchBodies()).toHaveLength(1);
     expect(patchBodies()[0]).toMatchObject({ name: 'Finals', mode: 'cast', format: 'gen9ou', generation: 9 });
+    expect(patchBodies()[0]).toMatchObject({ season_id: null, tournament_id: null, match_id: null });
+    expect(patchBodies()[0]).not.toHaveProperty('phase_ref');
     expect(screen.getByText('Saved')).toBeTruthy();
   });
 
@@ -157,6 +160,50 @@ describe('Cast Studio autosave', () => {
     fetchMock.mockClear();
     window.dispatchEvent(new Event('pagehide'));
     expect(fetchMock).not.toHaveBeenCalled();
+  });
+});
+
+const PHASE_REF = {
+  season_id: 'a0000000-0000-4000-a000-000000000001',
+  phase_id: 'a0000000-0000-4000-a000-000000000002',
+  match_id: 'a0000000-0000-4000-a000-000000000003',
+};
+const { tournament_id: _tournament, ...nativeFields } = SESSION;
+const nativeSessions: [string, StudioCastSession][] = [
+  ['phase-owned', { ...nativeFields, ...PHASE_REF }],
+  ['independent with native pointer', { ...SESSION, phase_ref: PHASE_REF }],
+];
+
+describe.each(nativeSessions)('%s Studio autosave', (_label, session) => {
+  it('writes only the phase ref on normal autosave and keeps the same session ID', async () => {
+    render(withI18n(
+      <CastStudioProvider session={session} phaseMode>
+        <CastToolbar />
+      </CastStudioProvider>,
+    ));
+    rename('Finals');
+    await advance(5_000);
+    expect(patchBodies()).toHaveLength(1);
+    const [body] = patchBodies();
+    expect(body).toMatchObject({ name: 'Finals', phase_ref: PHASE_REF, tracker_state: { match_id: PHASE_REF.match_id } });
+    for (const key of ['match_id', 'tournament_id', 'season_id']) expect(body).not.toHaveProperty(key);
+  });
+
+  it('Change Match clears only the match and pagehide saves the retained phase with keepalive', async () => {
+    render(withI18n(
+      <CastStudioProvider session={session} phaseMode>
+        <CastStudio />
+      </CastStudioProvider>,
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Change Match' }));
+    expect(screen.getByText('match selector')).toBeTruthy();
+    window.dispatchEvent(new Event('pagehide'));
+    const [body] = patchBodies();
+    expect(body).toMatchObject({ phase_ref: { ...PHASE_REF, match_id: null }, tracker_state: { match_id: '' } });
+    for (const key of ['match_id', 'tournament_id', 'season_id']) expect(body).not.toHaveProperty(key);
+    expect(fetchMock.mock.calls[0][1]).toMatchObject({ method: 'PATCH', keepalive: true });
+    await advance(5_000);
+    expect(patchBodies().at(-1)).toEqual(body);
   });
 });
 

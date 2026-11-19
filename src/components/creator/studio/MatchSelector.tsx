@@ -1,27 +1,32 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useCastStudio } from './CastStudioContext';
 import { useLocale, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
-import { errorsTournaments } from '@/i18n/messages/errors';
+import { errorsBroadcast, errorsMatches, errorsTournaments } from '@/i18n/messages/errors';
 import { creatorStudioMessages } from '@/i18n/messages/creator/studio';
 import { enumMessages } from '@/i18n/messages/enums';
 import { enumLabel } from '@/i18n/content/enum-label';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 import Select from '@/components/ui/Select';
+import type { ApiResult } from '@/types/api';
+import type { CastSessionPopulateResult } from '@/types/cast-session';
+import type { CastSessionPhaseRef, PhaseCastPopulateResult } from '@/types/phase-cast-session';
 
 // ─── Lightweight list shapes (only what we need for display) ───────
 
 export interface SeasonOption { id: string; name: string }
-interface TournamentOption { id: string; name: string }
-interface RoundOption { id: string; name: string; round_number: number; best_of: number }
+interface CompetitionOption { id: string; name: string; season_id?: string }
+interface RoundOption { id: string; name: string; round_number: number; best_of: number; phase_id?: string }
 export interface MatchOption {
   id: string;
   player_1_name: string;
   player_2_name: string;
   status: string;
+  phase_id?: string;
+  round_id?: string;
 }
 
 // ─── League (season) options ───────────────────────────────────────
@@ -77,16 +82,49 @@ export async function fetchRoundMatchOptions(
   roundId: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<RoundMatchOptionsLoad> {
+  return fetchRoundMatchOptionsAt(`/api/tournaments/${tournamentId}/rounds/${roundId}`, fetchImpl);
+}
+
+async function fetchRoundMatchOptionsAt(
+  url: string,
+  fetchImpl: typeof fetch,
+  scope?: { phaseId: string; roundId: string },
+): Promise<RoundMatchOptionsLoad> {
   try {
-    const res = await fetchImpl(`/api/tournaments/${tournamentId}/rounds/${roundId}`);
+    const res = await fetchImpl(url);
     const json = (await res.json()) as
-      | { success: true; data: { matches: MatchOption[] } }
+      | { success: true; data: { id?: string; phase_id?: string; matches: MatchOption[] } }
       | { success: false; error: string; code?: string };
-    if (!json.success) return { ok: false, error: toApiErrorLike(json) };
+    if (!res.ok || !json.success) return { ok: false, error: toApiErrorLike(json) };
+    if (scope && (json.data.id !== scope.roundId || json.data.phase_id !== scope.phaseId
+      || json.data.matches.some((match) => match.round_id !== scope.roundId || match.phase_id !== scope.phaseId))) {
+      return { ok: false, error: {} };
+    }
     return { ok: true, matches: json.data.matches };
   } catch {
     return { ok: false, error: {} };
   }
+}
+
+function useScopedOptions<T>(url: string | null) {
+  const [loaded, setLoaded] = useState<{ url: string; options: T[] } | null>(null);
+  useEffect(() => {
+    if (!url) return;
+    let current = true;
+    void (async () => {
+      let options: T[] = [];
+      try {
+        const response = await fetch(url);
+        const result: ApiResult<T[]> = await response.json();
+        if (response.ok && result.success) options = result.data;
+      } catch {
+        options = [];
+      }
+      if (current) setLoaded({ url, options });
+    })();
+    return () => { current = false; };
+  }, [url]);
+  return { options: url !== null && loaded?.url === url ? loaded.options : [], loading: url !== null && loaded?.url !== url };
 }
 
 /**
@@ -113,18 +151,19 @@ export default function MatchSelector() {
   const t = useT(creatorStudioMessages);
   const tEnum = useT(enumMessages);
   const locale = useLocale();
+  const populateErrorText = useApiErrorText(errorsBroadcast, errorsMatches);
+  const native = state.phaseMode && !state.tournamentId;
 
   const [seasons, setSeasons] = useState<SeasonOption[]>([]);
-  const [tournaments, setTournaments] = useState<TournamentOption[]>([]);
-  const [rounds, setRounds] = useState<RoundOption[]>([]);
   const [loadedMatches, setLoadedMatches] = useState<LoadedRoundMatches | null>(null);
   const [matchesAttempt, setMatchesAttempt] = useState(0);
 
   const [selectedSeasonId, setSelectedSeasonId] = useState<string>(state.seasonId ?? '');
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string>(state.tournamentId ?? '');
+  const [competitionId, setCompetitionId] = useState<string>(state.phaseRef?.phase_id ?? state.tournamentId ?? '');
   const [selectedRoundId, setSelectedRoundId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
   const [populating, setPopulating] = useState(false);
+  const [populateError, setPopulateError] = useState<ApiErrorLike | null>(null);
+  const selection = useRef(0);
 
   // Fetch seasons (test leagues included) on mount
   useEffect(() => {
@@ -137,70 +176,79 @@ export default function MatchSelector() {
     };
   }, []);
 
-  // Fetch tournaments when season changes
-  useEffect(() => {
-    if (!selectedSeasonId) { setTournaments([]); return; }
-    setLoading(true);
-    fetch(`/api/tournaments?season_id=${selectedSeasonId}`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) setTournaments(res.data);
-      })
-      .catch(() => { /* ignore */ })
-      .finally(() => setLoading(false));
-  }, [selectedSeasonId]);
-
-  // Fetch rounds when tournament changes
-  useEffect(() => {
-    if (!selectedTournamentId) { setRounds([]); return; }
-    setLoading(true);
-    fetch(`/api/tournaments/${selectedTournamentId}/rounds`)
-      .then((r) => r.json())
-      .then((res) => {
-        if (res.success) setRounds(res.data);
-      })
-      .catch(() => { /* ignore */ })
-      .finally(() => setLoading(false));
-  }, [selectedTournamentId]);
+  const phaseRoot = `/api/seasons/${selectedSeasonId}/phases`;
+  const competitions = useScopedOptions<CompetitionOption>(selectedSeasonId
+    ? native ? phaseRoot : `/api/tournaments?season_id=${selectedSeasonId}`
+    : null);
+  const competitionOptions = native
+    ? competitions.options.filter((option) => option.season_id === selectedSeasonId)
+    : competitions.options;
+  const roundsPath = competitionId && (!native || selectedSeasonId)
+    ? native ? `${phaseRoot}/${competitionId}/rounds` : `/api/tournaments/${competitionId}/rounds`
+    : null;
+  const rounds = useScopedOptions<RoundOption>(roundsPath);
+  const roundOptions = native ? rounds.options.filter((option) => option.phase_id === competitionId) : rounds.options;
 
   // Fetch matches when the round changes. The result is kept with the
   // request it answers, and a response for a round no longer selected is
   // dropped, so the select never lists a previous round's matches.
-  const matchesKey =
-    selectedRoundId && selectedTournamentId
-      ? roundMatchesKey(selectedTournamentId, selectedRoundId, matchesAttempt)
-      : null;
+  const matchesPath = roundsPath && selectedRoundId ? `${roundsPath}/${selectedRoundId}` : null;
+  const matchesKey = matchesPath ? roundMatchesKey(native ? `${phaseRoot}/${competitionId}` : competitionId, selectedRoundId, matchesAttempt) : null;
   useEffect(() => {
-    if (!matchesKey) return;
+    if (!matchesKey || !matchesPath) return;
     let current = true;
-    void fetchRoundMatchOptions(selectedTournamentId, selectedRoundId).then((result) => {
+    const scope = native ? { phaseId: competitionId, roundId: selectedRoundId } : undefined;
+    void fetchRoundMatchOptionsAt(matchesPath, fetch, scope).then((result) => {
       if (current) setLoadedMatches({ key: matchesKey, result });
     });
     return () => {
       current = false;
     };
-  }, [matchesKey, selectedRoundId, selectedTournamentId]);
+  }, [matchesKey, matchesPath, native, selectedRoundId, competitionId]);
   const matchOptions = matchOptionsFor(loadedMatches, matchesKey);
 
-  // Populate session from selected match
-  const handleMatchSelect = useCallback(async (matchId: string) => {
+  useEffect(() => () => { selection.current++; }, [state.sessionId, native]);
+
+  function invalidateSelection() {
+    selection.current++;
+    setPopulating(false);
+    setPopulateError(null);
+  }
+
+  async function handleMatchSelect(matchId: string) {
+    if (!matchOptions.matches.some((match) => match.id === matchId)) return;
+    const version = ++selection.current;
+    const phaseRef: CastSessionPhaseRef | undefined = native
+      ? { season_id: selectedSeasonId, phase_id: competitionId, match_id: matchId } : undefined;
     setPopulating(true);
+    setPopulateError(null);
     try {
       const res = await fetch(`/api/cast-sessions/${state.sessionId}/populate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ match_id: matchId }),
+        body: JSON.stringify(phaseRef ? { phase_ref: phaseRef } : { match_id: matchId }),
       });
-      const json = await res.json();
-      if (json.success) {
-        dispatch({ type: 'populate_match', data: json.data });
+      const json: ApiResult<CastSessionPopulateResult | PhaseCastPopulateResult> = await res.json();
+      if (version !== selection.current) return;
+      if (!res.ok || !json.success) {
+        if (native) setPopulateError(toApiErrorLike(json));
+        return;
+      }
+      const { match } = json.data;
+      if (phaseRef && 'phase_id' in match && match.id === matchId
+        && match.phase_id === phaseRef.phase_id && match.season_id === phaseRef.season_id) {
+        dispatch({ type: 'populate_match', data: { ...json.data, match: { ...match, tournament_id: null } }, phaseRef });
+      } else if (!phaseRef && 'tournament_id' in match && match.id === matchId && match.tournament_id === competitionId) {
+        dispatch({ type: 'populate_match', data: { ...json.data, match } });
+      } else if (native) {
+        setPopulateError({});
       }
     } catch {
-      // Populate failed — user can still edit manually
+      if (native && version === selection.current) setPopulateError({});
     } finally {
-      setPopulating(false);
+      if (version === selection.current) setPopulating(false);
     }
-  }, [state.sessionId, dispatch]);
+  }
 
   return (
     <section className="space-y-3 rounded-poke-lg border border-hairline bg-surface p-4">
@@ -213,8 +261,9 @@ export default function MatchSelector() {
             label={t('matchSelector.season')}
             value={selectedSeasonId}
             onChange={(e) => {
+              invalidateSelection();
               setSelectedSeasonId(e.target.value);
-              setSelectedTournamentId('');
+              setCompetitionId('');
               setSelectedRoundId('');
             }}
           >
@@ -228,17 +277,18 @@ export default function MatchSelector() {
         {/* Tournament */}
         <div>
           <Select
-            label={t('matchSelector.tournament')}
-            value={selectedTournamentId}
+            label={native ? t('matchSelector.phase') : t('matchSelector.tournament')}
+            value={competitionId}
             disabled={!selectedSeasonId}
             onChange={(e) => {
-              setSelectedTournamentId(e.target.value);
+              invalidateSelection();
+              setCompetitionId(e.target.value);
               setSelectedRoundId('');
             }}
           >
-            <option value="">{t('matchSelector.selectTournament')}</option>
-            {tournaments.map((tournament) => (
-              <option key={tournament.id} value={tournament.id}>{tournament.name}</option>
+            <option value="">{native ? t('matchSelector.selectPhase') : t('matchSelector.selectTournament')}</option>
+            {competitionOptions.map((option) => (
+              <option key={option.id} value={option.id}>{option.name}</option>
             ))}
           </Select>
         </div>
@@ -248,11 +298,14 @@ export default function MatchSelector() {
           <Select
             label={t('matchSelector.round')}
             value={selectedRoundId}
-            disabled={!selectedTournamentId}
-            onChange={(e) => setSelectedRoundId(e.target.value)}
+            disabled={!competitionId}
+            onChange={(e) => {
+              invalidateSelection();
+              setSelectedRoundId(e.target.value);
+            }}
           >
             <option value="">{t('matchSelector.selectRound')}</option>
-            {rounds.map((r) => (
+            {roundOptions.map((r) => (
               <option key={r.id} value={r.id}>
                 {t('matchSelector.roundOption', {
                   name: translateEngineLabel('round', r.name, locale),
@@ -267,6 +320,7 @@ export default function MatchSelector() {
         <div>
           <Select
             label={t('matchSelector.match')}
+            value=""
             disabled={!selectedRoundId || populating || matchOptions.loading}
             onChange={(e) => {
               if (e.target.value) handleMatchSelect(e.target.value);
@@ -286,7 +340,7 @@ export default function MatchSelector() {
         </div>
       </div>
 
-      {(loading || matchOptions.loading) && (
+      {(competitions.loading || rounds.loading || matchOptions.loading) && (
         <p className="text-caption text-fg-muted animate-pulse">{t('matchSelector.loading')}</p>
       )}
       {matchOptions.error && (
@@ -297,6 +351,11 @@ export default function MatchSelector() {
       )}
       {populating && (
         <p className="text-caption text-accent-ink animate-pulse">{t('matchSelector.populating')}</p>
+      )}
+      {populateError && (
+        <p role="alert" className="text-caption text-loss">
+          {populateError.error || populateError.code ? populateErrorText(populateError) : t('matchSelector.populateFailed')}
+        </p>
       )}
     </section>
   );

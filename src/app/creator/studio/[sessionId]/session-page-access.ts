@@ -14,5 +14,5 @@ export async function loadStudioSessionPage(sessionId: string) {
   const session = mode === 'phase' ? await getStudioCastSession(sessionId) : await getCastSessionById(sessionId);
   if (!session) notFound();
   if (session.owner_id !== gate.playerId) redirect('/creator/studio');
-  return { ok: true as const, session };
+  return { ok: true as const, session, phaseMode: mode === 'phase' };
 }
