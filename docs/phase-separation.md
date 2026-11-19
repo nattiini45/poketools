@@ -93,3 +93,31 @@ The database CI job replays migrations and runs the synthetic phase foundation r
 `src/lib/league-phase/__tests__/lifecycle.local.test.ts` exercises native enrollment and status contention, first-round uniqueness, group-mirror refusal, substitution and atomic bracket/status contention through PostgREST. It belongs only to the loopback-guarded `db` project and requires phase mode on a disposable stack, as does the native trash fixture. Unit port tests prohibit legacy persistence on native paths; they do not substitute for the database rehearsal.
 
 `native-format.local.test.ts` uses the same disposable phase-mode gate to exercise native format creation, attachment, replacement, detachment, preset pins and cleanup. Its runtime-clear confirmation, started-round refusal and failed-materialisation rollback checks run through the real RPCs, not the mocked unit adapters.
+
+## P6 preflight
+
+`scripts/phase-separation/p6-preflight.sql` is the sanitized measurement that precedes the maintenance transfer. It is a single read-only psql script: the whole file runs in one `BEGIN READ ONLY` transaction, so a write — or a function that writes — aborts it instead of changing anything. It creates no temp table, selects nothing `INTO`, and calls no writer. `\timing on` prints a cost line per statement, so the window is chosen from a measurement rather than an estimate.
+
+Only the deployment's owner runs it, on the hosted project, with an operator connection:
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/phase-separation/p6-preflight.sql
+```
+
+It reports counts, booleans and ids only — never a player name, e-mail, avatar, credential, replay hash or share token — in blocks emitted cheapest-first, with the plan's section number as the label. The inherently linear anti-join runs last, alone, and its output is bounded to 200 phase ids after a total row computed in the same pass:
+
+It runs on **two schema states**, because the P6 order is preflight, then migrations, then transfer: the pre-bundle schema (production's head before the phase bundle) and the full bundle. One capability probe at the top decides which blocks may speak about the native generation. On the pre-bundle schema every legacy half still runs — block 1 counts the legacy family through the inventory that exists there, block 2 reads the snapshots, blocks 4 and 5 report their scope as unknown targets, block 9 keeps its anti-join, block 11 reports `moved_id_scope = legacy_only` — while each native block prints an explicit `skipped: needs <migration file>` row instead of failing the run. `ON_ERROR_STOP=1` therefore exits 0 on both states, with the holes named.
+
+1. **Ownership families** — for every `public.league_trash__inventory()` relation that is `owned` or `derived`, the rows a league owns (phase ids derived from `tournaments.season_id IS NOT NULL`, closed through the inventory predicates, native `phase_*` rows counted through `{native_phases}`) against the whole-table count, plus the relation footprint and the share of it the owned rows estimate; then the split by generation and the grand total.
+2. **Trash generation** — one row per snapshot format (`phase_only`, `phase_and_legacy`, `legacy_only`) and `purge_after` bucket, with the captured tables, rows and stored payload bytes, the conversion scope for snapshots that actually hold a phase-owned family, and the per-relation payload. A capture of an empty native table does not make a snapshot native.
+3. **Applied migration versions** — the complete `supabase_migrations.schema_migrations` ledger, plus an explicit applied flag for the five phase migrations the plan names.
+4. **Outside references** — every foreign key into the moved graph (phase targets and the legacy phase family) whose own table the inventory does not classify, with its delete action and deferrability. These are the references the transfer must retarget or refuse.
+5. **Triggers on moved tables** — every trigger that fires on INSERT or DELETE there and is not the known `phase_storage__guard`, so an unknown one cannot inject side effects during the copy.
+6. **Null and cross-owner anomalies** — one count per check: standalone tournaments holding phase-shaped children, children claiming a league under a standalone tournament, a league match whose round belongs to another tournament, statistics naming a player the phase never enrolled, a moment whose game is in another match, a group/member/aggregate job that disagrees with its phase, a league pointer that no longer resolves, and a phase id that collides with an independent tournament.
+7. **Queues and leases** — aggregate jobs by status in both stores for phase-owned games, the pending/processing/failed work a freeze would strand, open game edit leases, and live cast sessions.
+8. **Replay and share-key collisions** — duplicate `replay_hash` values inside the phase union, duplicate cast realtime keys and duplicate team share tokens across both stores. Counts only.
+9. **Historical group repair prerequisite** — group slots whose player is not in the owning phase's roster, grouped by phase id, with a total row. A non-zero total stops the transfer before it starts (see "Historical group repair" above).
+10. **Storage state** — the current `phase_storage_state.mode`, native rows per phase relation, and whether any phase row exists while the mode is not yet `phase`.
+11. **JSON-embedded moved ids** — every `jsonb` column of an inventory `owned`/`derived` relation (plus the two phase parents) scanned for UUID text that resolves to a phase, match, round or game id the transfer moves, one timed statement per column. A relation whose planner estimate exceeds 2,000,000 rows is printed as `skipped_oversize` with that estimate instead of scanned, so an omission is visible. This is the half of the graph the column predicates cannot close: an id that exists only inside a stage spec, an enrollment source or a stored analysis payload.
+
+Agents and CI never run it against the hosted project: it reads ordinary tables, and the quota rule in `AGENTS.md` covers a report just as it covers a capture loop.
