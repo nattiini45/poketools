@@ -1,11 +1,9 @@
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { getStagesBySeasonId } from '@/lib/supabase/queries/tournaments';
-import { listTeamsByTournamentIds } from '@/lib/supabase/queries/teams';
 import { getPlayerById } from '@/lib/supabase/queries/players';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { pickDisplayTeams, resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
+import { getLeagueDisplayTeams } from '@/lib/team/phase-visibility';
 import TeamDisplay from '@/components/teambuilder/TeamDisplay';
 import { getT } from '@/i18n/server';
 import { leaguesMessages } from '@/i18n/messages/leagues';
@@ -40,19 +38,11 @@ export default async function PlayerTeamPage({ params }: PageProps) {
 
   if (!teamOwner) notFound();
 
-  const stages = await getStagesBySeasonId(seasonId);
-  const stageIds = stages.map((s) => s.id);
-  const allTeams = await listTeamsByTournamentIds(stageIds);
-  const playerTeams = allTeams.filter((t) => t.player_id === playerId);
-  if (playerTeams.length === 0) notFound();
-
-  // Spec §7 per row (H3), same row choice as the league team list.
-  const visibility = await resolveTeamVisibility(playerTeams, {
+  const [team] = await getLeagueDisplayTeams(seasonId, {
     viewerId: access?.player?.playerId ?? null,
     isAdmin: access?.isSiteAdmin ?? false,
-  });
-  const [{ team: foundTeam, visible }] = pickDisplayTeams(playerTeams, visibility);
-  const displayPokemon = toVisibleTeam(foundTeam, visible).pokemon;
+  }, playerId);
+  if (!team) notFound();
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -61,13 +51,13 @@ export default async function PlayerTeamPage({ params }: PageProps) {
         <p className="text-sm text-fg-muted">{season.name}</p>
       </div>
 
-      {!visible ? (
+      {!team.visible ? (
         <div className="p-4 bg-accent-subtle border border-hairline-strong rounded text-sm text-accent-ink mb-4">
           {t('team.hidden')}
         </div>
       ) : null}
 
-      <TeamDisplay pokemon={displayPokemon} readOnly />
+      <TeamDisplay pokemon={team.pokemon} readOnly />
 
       <Link
         href={`/leagues/${seasonId}/teams`}

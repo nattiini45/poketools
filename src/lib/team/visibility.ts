@@ -174,11 +174,11 @@ export async function filterTeamVisibility(
  * Players keep the order of their first row. `visible[i]` belongs to
  * `teams[i]` (from `resolveTeamVisibility`).
  */
-export function pickDisplayTeams(
-  teams: readonly Team[],
+export function pickDisplayTeams<T extends Pick<Team, 'player_id' | 'created_at'>>(
+  teams: readonly T[],
   visible: readonly boolean[]
-): { team: Team; visible: boolean }[] {
-  const picked = new Map<string, { team: Team; visible: boolean }>();
+): { team: T; visible: boolean }[] {
+  const picked = new Map<string, { team: T; visible: boolean }>();
   teams.forEach((team, i) => {
     const current = picked.get(team.player_id);
     const isVisible = visible[i] === true;

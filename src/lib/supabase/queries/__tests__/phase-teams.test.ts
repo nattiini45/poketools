@@ -12,7 +12,7 @@ const { query, rpc, settle } = vi.hoisted(() => {
 vi.mock('@/lib/supabase/client', () => ({ supabase: { from: query.from, rpc } }));
 import { PHASE_TEAM_COLUMNS, getPhaseTeamById, getPlayerPhaseTeamForMatch, setPhaseTeamShareToken,
   writePhaseTeam, publishPhaseTeam, releasePhaseTeamsFromMatches, listPhaseTeamsForPinImpact, listPhaseTeams,
-  forkPhaseTeamToLibrary } from '../phase-teams';
+  forkPhaseTeamToLibrary, listSeasonPhaseRostersWithFacts } from '../phase-teams';
 import { PhaseTeamRowConflictError } from '../phase-teams';
 
 beforeEach(() => {
@@ -48,6 +48,55 @@ describe('native phase team persistence', () => {
     expect(await listPhaseTeams({ kind: 'phase', id: 'phase' })).toHaveLength(2);
     expect(query.range.mock.calls).toEqual([[0, 999], [1, 1000], [2, 1001]]);
     expect(query.order).toHaveBeenCalledWith('id');
+  });
+
+  it('scopes public rosters to the phase’s league and optionally the player on every page', async () => {
+    const ownRoster = {
+      ...phaseTeam({ id: 'own', player_id: 'owner', season_id: null, match_id: 'own-match' }),
+      phase: { season_id: 'league', team_visibility: 'hidden_until_match' },
+      match: { status: 'completed', notes: 'private match note' },
+      share_token: 'private token',
+    };
+    const candidates = [
+      ownRoster,
+      { ...ownRoster, id: 'other-league', season_id: 'league', phase: { ...ownRoster.phase, season_id: 'other-league' } },
+      { ...ownRoster, id: 'other-player', player_id: 'rival' },
+    ];
+    settle.mockImplementation(() => {
+      const projection = String(query.select.mock.lastCall?.[0]).replace(/\s/g, '');
+      const filters = query.eq.mock.calls;
+      const from = Number(query.range.mock.lastCall?.[0]);
+      const rows = candidates.filter((row) => (
+        (!projection.includes('phase:league_phases!phase_teams_phase_id_fkey!inner(') ||
+          !filters.some(([column, value]) => column === 'phase.season_id' && value === 'league') ||
+          row.phase.season_id === 'league') &&
+        (!filters.some(([column, value]) => column === 'player_id' && value === 'owner') || row.player_id === 'owner')
+      ));
+      return { data: rows.slice(from) };
+    });
+
+    expect(await listSeasonPhaseRostersWithFacts('league', 'owner')).toEqual([{
+      id: 'own', player_id: 'owner', match_id: 'own-match', created_at: ownRoster.created_at,
+      library_published_at: ownRoster.library_published_at, pokemon: ownRoster.pokemon,
+      facts: { match_status: 'completed', tournament_visibility: 'hidden_until_match' },
+    }]);
+    expect(query.eq.mock.calls).toEqual([
+      ['phase.season_id', 'league'], ['player_id', 'owner'],
+      ['phase.season_id', 'league'], ['player_id', 'owner'],
+    ]);
+    expect(query.select.mock.calls.map(([projection]) => String(projection).replace(/\s/g, ''))).toEqual(
+      Array(2).fill('id,player_id,match_id,created_at,library_published_at,pokemon,' +
+        'match:phase_matches!phase_teams_phase_match_fkey(status),phase:league_phases!phase_teams_phase_id_fkey!inner(team_visibility)'),
+    );
+    expect(query.from.mock.calls).toEqual([['phase_teams'], ['phase_teams']]);
+    expect(query.order.mock.calls).toEqual([['created_at'], ['id'], ['created_at'], ['id']]);
+    expect(query.range.mock.calls).toEqual([[0, 999], [1, 1000]]);
+  });
+
+  it('batches all public roster rows of a league without a player filter', async () => {
+    await expect(listSeasonPhaseRostersWithFacts('league')).resolves.toEqual([]);
+    expect(query.from).toHaveBeenCalledExactlyOnceWith('phase_teams');
+    expect(query.eq).toHaveBeenCalledExactlyOnceWith('phase.season_id', 'league');
   });
 
   it('uses guarded native RPC writes and maps completed-match failures', async () => {

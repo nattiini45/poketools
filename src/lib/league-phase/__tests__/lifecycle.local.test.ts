@@ -75,9 +75,9 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
     const { getSeasonWithDetails } = await import('@/lib/supabase/queries/seasons');
     const { getNativeLeagueStandingsPreview } = await import('@/lib/stats/standings-preview');
     const { getPublicMatchesByPhaseIds } = await import('@/lib/supabase/queries/phase-matches');
-    const { listSeasonPhaseTeamLeadsWithFacts } = await import('@/lib/supabase/queries/phase-teams');
+    const { listSeasonPhaseRostersWithFacts, listSeasonPhaseTeamLeadsWithFacts } = await import('@/lib/supabase/queries/phase-teams');
     const { getPhaseSeasonBattleStats, getPhaseSeasonGameTotal } = await import('@/lib/supabase/queries/phase-games');
-    const { selectAnonymousVisibleLeads } = await import('@/lib/team/visibility');
+    const { decideTeamPokemonVisibility, selectAnonymousVisibleLeads } = await import('@/lib/team/visibility');
     const [player, opponent, otherPlayer, byePlayer] = playerIds;
     expect(await getSeasonWithDetails(seasonId, true)).toMatchObject({ id: seasonId, hasDraftPool: false });
     const phase = await create('swiss');
@@ -162,6 +162,11 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
       } }));
       expect(selectAnonymousVisibleLeads(leads).map(({ lead_species }) => lead_species)).toEqual(['Pikachu']);
       expect(JSON.stringify(leads)).not.toContain('Eevee');
+      const rosters = await listSeasonPhaseRostersWithFacts(seasonId, player);
+      expect(rosters.map(({ pokemon }) => pokemon[0]?.species).sort()).toEqual(['Ditto', 'Pikachu']);
+      expect(await listSeasonPhaseRostersWithFacts(randomUUID(), player)).toEqual([]);
+      const visible = rosters.filter((team) => decideTeamPokemonVisibility(team, { viewerId: null, isAdmin: false }, team.facts));
+      expect(visible.map(({ pokemon }) => pokemon[0]?.species)).toEqual(['Pikachu']);
       expect(await getPhaseSeasonBattleStats(seasonId)).toEqual([expect.objectContaining({
         pokemon_name: 'Pikachu', kos_dealt: 2, round_number: 1,
       })]);

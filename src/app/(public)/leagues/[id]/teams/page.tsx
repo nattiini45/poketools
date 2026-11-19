@@ -1,12 +1,9 @@
 import Link from 'next/link';
 import { notFound, permanentRedirect } from 'next/navigation';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
-import { getStagesBySeasonId } from '@/lib/supabase/queries/tournaments';
-import { listTeamsByTournamentIds } from '@/lib/supabase/queries/teams';
 import { getPlayersByIds } from '@/lib/supabase/queries/players';
 import { getLiveAccess } from '@/lib/auth/helpers';
-import { pickDisplayTeams, resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
-import type { PublicTeam } from '@/lib/team/public-team';
+import { getLeagueDisplayTeams } from '@/lib/team/phase-visibility';
 import PageContainer from '@/components/ui/PageContainer';
 import Card from '@/components/ui/Card';
 import PokemonSprite from '@/components/shared/PokemonSprite';
@@ -19,11 +16,6 @@ export const revalidate = 60;
 
 interface PageProps {
   params: Promise<{ id: string }>;
-}
-
-interface TeamWithVisibility extends PublicTeam {
-  player_name: string;
-  visible: boolean;
 }
 
 export default async function LeagueTeamsPage({ params }: PageProps) {
@@ -40,41 +32,25 @@ export default async function LeagueTeamsPage({ params }: PageProps) {
   // Live roles (AGENTS.md): the admin grant reveals hidden rosters, so a
   // demoted admin must lose it at once, not when the session token refreshes.
   const [access, t] = await Promise.all([getLiveAccess(), getT(leaguesMessages)]);
-  const viewerId = access?.player?.playerId ?? null;
-  const isAdmin = access?.isSiteAdmin ?? false;
-
-  // Fetch stages + all teams in a single batch (not per-stage)
-  const stages = await getStagesBySeasonId(id);
-  const stageIds = stages.map((s) => s.id);
-  const allTeams = await listTeamsByTournamentIds(stageIds);
-
-  // Spec §7 per row (H3): owner/admin always see; everyone else sees a row
-  // once it is linked to a completed match (or the stage is always_public).
-  // One row per player: their newest visible row, else their first row.
-  const visibility = await resolveTeamVisibility(allTeams, { viewerId, isAdmin });
-  const uniqueTeams = pickDisplayTeams(allTeams, visibility);
-
-  const playerMap = await getPlayersByIds(uniqueTeams.map(({ team }) => team.player_id));
-
-  const teamsWithVisibility: TeamWithVisibility[] = uniqueTeams.map(({ team, visible }) => ({
-    ...toVisibleTeam(team, visible),
-    player_name: playerMap.get(team.player_id)?.name ?? t('teams.unknownPlayer'),
-    visible,
-  }));
+  const teams = await getLeagueDisplayTeams(id, {
+    viewerId: access?.player?.playerId ?? null,
+    isAdmin: access?.isSiteAdmin ?? false,
+  });
+  const playerMap = await getPlayersByIds(teams.map((team) => team.player_id));
 
   return (
     <PageContainer
       title={t('teams.title', { league: season.name })}
-      subtitle={t('teams.registered', { count: teamsWithVisibility.length })}
+      subtitle={t('teams.registered', { count: teams.length })}
     >
-      {teamsWithVisibility.length === 0 ? (
+      {teams.length === 0 ? (
         <p className="text-fg-muted">{t('teams.empty')}</p>
       ) : (
         <div className="grid gap-4">
-          {teamsWithVisibility.map((team) => (
+          {teams.map((team) => (
             <Link key={team.id} href={`/leagues/${id}/teams/${team.player_id}`}>
               <Card hover padding="md">
-                <h2 className="font-heading font-semibold text-sm text-fg mb-2">{team.player_name}</h2>
+                <h2 className="font-heading font-semibold text-sm text-fg mb-2">{playerMap.get(team.player_id)?.name ?? t('teams.unknownPlayer')}</h2>
                 <div className="flex gap-2">
                   {team.visible ? (
                     team.pokemon.slice(0, 6).map((poke, i) => (
