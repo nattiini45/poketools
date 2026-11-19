@@ -305,6 +305,14 @@ describe('seasons', () => {
 
   // ── getSeasonWithDetails ────────────────────────────────────────
   describe('getSeasonWithDetails', () => {
+    it('counts only native phases when requested', async () => {
+      mockBuilder.maybeSingle.mockResolvedValue({ data: seasonWithJoins, error: null });
+      await expect(getSeasonWithDetails('s1', false, 'phase')).resolves.toMatchObject({ tournament_count: 1 });
+      const projection = String(mockBuilder.select.mock.lastCall?.[0]);
+      expect(projection).toContain('tournaments:league_phases!league_phases_season_id_fkey ( count )');
+      expect(projection).not.toContain('tournaments ( count )');
+    });
+
     it('returns mapped season with joins', async () => {
       mockBuilder.maybeSingle.mockResolvedValue({ data: seasonWithJoins, error: null });
 

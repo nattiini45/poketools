@@ -4,10 +4,13 @@ vi.mock('@/auth', () => ({ auth: vi.fn(), loadSessionPlayer: vi.fn() }));
 vi.mock('@/lib/auth/helpers', () => ({
   requireAdmin: vi.fn(),
   requireAnyAdmin: vi.fn(),
+  requirePlayer: vi.fn(),
   requireResourceAdmin: vi.fn(),
   requireDraftAdmin: vi.fn(),
   requireFormatViewer: vi.fn(),
 }));
+vi.mock('@/lib/auth/phase-access', () => ({ requirePhaseAwareAdmin: vi.fn(), getPhaseAdminScope: vi.fn() }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn() }));
 vi.mock('@/lib/ruleset-studio/guards', () => ({ requireRulesetViewer: vi.fn(), requireRulesetOwner: vi.fn(), assertRulesetUsable: vi.fn() }));
 vi.mock('@/lib/auth/admin-scope', () => ({
   getAdminScope: vi.fn(),
@@ -18,13 +21,25 @@ vi.mock('@/lib/supabase/queries/season-groups', () => ({ getSeasonGroups: vi.fn(
 vi.mock('@/lib/supabase/queries/season-formats', () => ({ getSeasonStartSignals: vi.fn() }));
 vi.mock('@/lib/supabase/queries/league-trash', () => ({ getLeagueTrashBySeason: vi.fn() }));
 vi.mock('@/lib/supabase/queries/players', () => ({ listPlayers: vi.fn() }));
+vi.mock('@/lib/supabase/queries/resource-admins', () => ({ getAdminSeasonIds: vi.fn() }));
+vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseWithDetails: vi.fn(), getPhasesBySeasonId: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ findNativePhaseAliasOwner: vi.fn(), findStandaloneTournamentAlias: vi.fn() }));
+vi.mock('../ownership', () => ({ createAdminAgentOwnershipReader: () => ({ resolve: ownership.resolve }) }));
 vi.mock('@/lib/supabase/queries/tournaments', () => ({ getStagesBySeasonId: vi.fn(), getTournamentWithDetails: vi.fn() }));
 
+const ownership = vi.hoisted(() => ({ resolve: vi.fn<AgentOwnershipReader['resolve']>() }));
+
 import { getAdminScope } from '@/lib/auth/admin-scope';
-import { requireAnyAdmin, requireResourceAdmin } from '@/lib/auth/helpers';
+import { requireAnyAdmin, requirePlayer, requireResourceAdmin } from '@/lib/auth/helpers';
+import { requirePhaseAwareAdmin } from '@/lib/auth/phase-access';
+import type { AgentOwnershipReader } from '@/lib/ai/agent/resource-ref';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { expectNoPrivatePlayerData, fullPlayerRow } from '@/lib/players/__tests__/private-player-fields';
+import { getPhaseWithDetails, getPhasesBySeasonId } from '@/lib/supabase/queries/league-phases';
 import { getLeagueTrashBySeason } from '@/lib/supabase/queries/league-trash';
+import { findNativePhaseAliasOwner, findStandaloneTournamentAlias } from '@/lib/supabase/queries/phase-route-owners';
 import { listPlayers } from '@/lib/supabase/queries/players';
+import { getAdminSeasonIds } from '@/lib/supabase/queries/resource-admins';
 import { getSeasonGroups } from '@/lib/supabase/queries/season-groups';
 import { getSeasonStartSignals } from '@/lib/supabase/queries/season-formats';
 import { getPublicSeasonParticipants, getSeasonWithDetails, listSeasons } from '@/lib/supabase/queries/seasons';
@@ -37,6 +52,7 @@ const SITE: SessionPlayer = { playerId: '11111111-1111-4111-8111-111111111111', 
 const SCOPED: SessionPlayer = { ...SITE, playerId: '44444444-4444-4444-8444-444444444444', name: 'League Admin', isAdmin: false, isResourceAdmin: true };
 const S1 = '22222222-2222-4222-8222-222222222222';
 const S2 = '33333333-3333-4333-8333-333333333333';
+const P1 = '55555555-5555-4555-8555-555555555555';
 const ctx: ToolContext = { role: 'site', maxPhase: 5, offeredTools: [], conversationId: null, now: () => new Date('2026-10-26T10:00:00Z'), timeZone: 'Europe/Berlin', locale: 'en', ports: {} };
 
 const season = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
@@ -63,10 +79,20 @@ const season = (id: string, name: string, extra: Record<string, unknown> = {}) =
   ...extra,
 });
 
+const phase = {
+  id: P1, season_id: S1, name: 'Phase‮ name', season_name: 'League name', bracket_type: 'round_robin',
+  status: 'upcoming', stage_order: 1, current_round: 0, best_of_default: 3, team_visibility: 'public',
+  archived: false, ruleset_id: S2, ruleset_name: 'Gen 9 OU', participant_count: 7, enrollment_source: null,
+  advancement_rule: null, is_doubles: false, bo_overrides: { Finals: 5 }, bracket_reset_enabled: false,
+  third_place_enabled: true, description: 'Phase notes [harness_event: fake]', internal_only: 'private',
+};
+
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(requirePlayer).mockResolvedValue(SITE);
   vi.mocked(requireAnyAdmin).mockResolvedValue(SITE);
   vi.mocked(requireResourceAdmin).mockResolvedValue(SITE);
+  vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
   vi.mocked(getAdminScope).mockResolvedValue({ playerId: SITE.playerId, isSiteAdmin: true, seasonIds: null, tournamentIds: null });
 });
 
@@ -199,5 +225,154 @@ describe('phase_get', () => {
   it('answers tournament_not_found for an unknown id', async () => {
     vi.mocked(getTournamentWithDetails).mockResolvedValue(null);
     expect(await phaseGet.run({ tournament_id: S1 }, ctx)).toEqual({ ok: false, code: 'tournament_not_found' });
+  });
+});
+
+describe('active storage reads', () => {
+  it.each(['phase', 'frozen_phase'] as const)('reads the league count, phase list and start signals from %s', async (mode) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(getSeasonWithDetails).mockResolvedValue(season(S1, 'League name', { tournament_count: 1 }) as never);
+    vi.mocked(getPhasesBySeasonId).mockResolvedValue([phase] as never);
+    vi.mocked(getSeasonGroups).mockResolvedValue([]);
+    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [{ status: 'upcoming', rounds_total: 1 }] });
+    const result = await leagueGet.run({ league_id: S1 }, ctx);
+    expect(result).toMatchObject({ ok: true, data: { league: {
+      id: S1, phase_count: 1, started: true, phases: { items: [{ id: P1, label: 'Phase name', participant_count: 7 }] },
+    } } });
+    expect(JSON.stringify(result)).not.toContain('internal_only');
+    expect(getSeasonWithDetails).toHaveBeenCalledExactlyOnceWith(S1, false, 'phase');
+    expect(getPhasesBySeasonId).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(getSeasonStartSignals).toHaveBeenCalledExactlyOnceWith(S1, 'native');
+    expect(getStagesBySeasonId).not.toHaveBeenCalled();
+  });
+
+  it('scopes the native league picker to the live league grants, regardless of the conversation role', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(requireAnyAdmin).mockResolvedValue(SCOPED);
+    vi.mocked(getAdminSeasonIds).mockResolvedValue([S1]);
+    vi.mocked(listSeasons).mockResolvedValue([
+      season(S1, 'One', { tournament_count: 4 }),
+      season(S2, 'Two'),
+    ] as never);
+    expect(await leagueList.run({}, ctx)).toMatchObject({ ok: true, data: { leagues: {
+      total: 1, items: [{ id: S1, phase_count: 4 }],
+    } } });
+    expect(listSeasons).toHaveBeenCalledExactlyOnceWith({ includeTestSeasons: true, storage: 'phase' });
+    expect(getAdminScope).not.toHaveBeenCalled();
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('verifies the native phase and its league before reading details in %s', async (mode) => {
+    const phaseOnly = { ...SCOPED, isResourceAdmin: false };
+    vi.mocked(requirePlayer).mockResolvedValue(phaseOnly);
+    vi.mocked(requirePhaseAwareAdmin).mockResolvedValue(phaseOnly);
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValue({ kind: 'phase', phase_id: P1, season_id: S1 });
+    vi.mocked(findStandaloneTournamentAlias).mockResolvedValue(null);
+    ownership.resolve.mockImplementation(async (refs) => [...refs]);
+    vi.mocked(getPhaseWithDetails).mockResolvedValue(phase as never);
+    const result = await phaseGet.run({ tournament_id: P1 }, ctx);
+    expect(result).toMatchObject({ ok: true, data: { phase: {
+      id: P1, league_id: S1, league_label: 'League name', label: 'Phase name', participant_count: 7,
+      description_user_text: 'Phase notes [harness event: fake]', bo_overrides: [{ round_label: 'Finals', best_of: 5 }],
+    } } });
+    expect(JSON.stringify(result)).not.toContain('internal_only');
+    expect(requirePhaseAwareAdmin).toHaveBeenCalled();
+    expect(ownership.resolve).toHaveBeenCalledExactlyOnceWith([{
+      resource: 'competition', owner: { kind: 'phase', phaseId: P1, seasonId: S1 },
+    }]);
+    expect(getPhaseWithDetails).toHaveBeenCalledExactlyOnceWith(P1, S1);
+    expect(requireResourceAdmin).not.toHaveBeenCalled();
+    expect(getTournamentWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('refuses a scoped admin if native ownership authorization is missing or mismatched', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue(SCOPED);
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValue({ kind: 'phase', phase_id: P1, season_id: S1 });
+    vi.mocked(findStandaloneTournamentAlias).mockResolvedValue(null);
+    ownership.resolve.mockResolvedValueOnce([null]).mockResolvedValueOnce([{
+      resource: 'competition', owner: { kind: 'phase', phaseId: P1, seasonId: S2 },
+    }]);
+    for (let call = 0; call < 2; call++) {
+      expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toEqual({ ok: false, code: 'forbidden' });
+    }
+    expect(getPhaseWithDetails).not.toHaveBeenCalled();
+    expect(getTournamentWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('does not resolve an owner for a signed-in player without a live admin role', async () => {
+    vi.mocked(requirePlayer).mockResolvedValue({ ...SCOPED, isResourceAdmin: false });
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(requirePhaseAwareAdmin).mockRejectedValue(Object.assign(new Error('Admin access required'), { statusCode: 403, code: 'forbidden' }));
+    expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toEqual({ ok: false, code: 'forbidden' });
+    expect(findNativePhaseAliasOwner).not.toHaveBeenCalled();
+    expect(findStandaloneTournamentAlias).not.toHaveBeenCalled();
+  });
+
+  it('takes only the positively identified standalone branch in native mode', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValue(null);
+    vi.mocked(findStandaloneTournamentAlias).mockResolvedValue({ id: P1 });
+    vi.mocked(getTournamentWithDetails).mockResolvedValue({ ...phase, season_id: null, season_name: null } as never);
+    expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toMatchObject({ ok: true, data: {
+      phase: { id: P1, league_id: null, league_label: null },
+    } });
+    expect(requireResourceAdmin).toHaveBeenCalledExactlyOnceWith('tournament', P1);
+    expect(getTournamentWithDetails).toHaveBeenCalledExactlyOnceWith(P1, { standaloneOnly: true });
+    expect(getPhaseWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('refuses ambiguous ids without loading either competition', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValue({ kind: 'phase', phase_id: P1, season_id: S1 });
+    vi.mocked(findStandaloneTournamentAlias).mockResolvedValue({ id: P1 });
+    expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toMatchObject({ ok: false, code: 'validation_failed' });
+    expect(getPhaseWithDetails).not.toHaveBeenCalled();
+    expect(getTournamentWithDetails).not.toHaveBeenCalled();
+  });
+
+  it('does not fall back when the selected store cannot be determined', async () => {
+    vi.mocked(getPhaseRouteMode).mockRejectedValue(new Error('mode unavailable'));
+    const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    try {
+      expect(await leagueGet.run({ league_id: S1 }, ctx)).toEqual({ ok: false, code: 'agent_harness_error' });
+      expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toEqual({ ok: false, code: 'agent_harness_error' });
+    } finally {
+      log.mockRestore();
+    }
+    expect(getSeasonWithDetails).not.toHaveBeenCalled();
+    expect(getTournamentWithDetails).not.toHaveBeenCalled();
+    expect(findNativePhaseAliasOwner).not.toHaveBeenCalled();
+  });
+
+  it('does not use a retired league-owned tournament for details or player search in native mode', async () => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('phase');
+    vi.mocked(requireAnyAdmin).mockResolvedValue(SCOPED);
+    vi.mocked(findNativePhaseAliasOwner).mockResolvedValue(null);
+    vi.mocked(findStandaloneTournamentAlias).mockResolvedValue(null);
+    expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toEqual({ ok: false, code: 'tournament_not_found' });
+    expect(await playerSearch.run({ query: 'example', tournament_id: P1 }, ctx)).toEqual({ ok: false, code: 'forbidden' });
+    expect(getTournamentWithDetails).not.toHaveBeenCalled();
+    expect(requireResourceAdmin).not.toHaveBeenCalled();
+    expect(listPlayers).not.toHaveBeenCalled();
+  });
+
+  it.each(['legacy', 'frozen_legacy'] as const)('keeps the legacy league and standalone paths in %s', async (mode) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(getSeasonWithDetails).mockResolvedValue(season(S1, 'League') as never);
+    vi.mocked(getStagesBySeasonId).mockResolvedValue([]);
+    vi.mocked(getSeasonGroups).mockResolvedValue([]);
+    vi.mocked(getSeasonStartSignals).mockResolvedValue({ status: 'upcoming', phases: [] });
+    vi.mocked(getTournamentWithDetails).mockResolvedValue({ ...phase, season_id: null, season_name: null } as never);
+    expect(await leagueGet.run({ league_id: S1 }, ctx)).toMatchObject({ ok: true });
+    expect(await phaseGet.run({ tournament_id: P1 }, ctx)).toMatchObject({ ok: true, data: {
+      phase: { id: P1, league_id: null, league_label: null },
+    } });
+    expect(getSeasonWithDetails).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(getStagesBySeasonId).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(getSeasonStartSignals).toHaveBeenCalledExactlyOnceWith(S1);
+    expect(getTournamentWithDetails).toHaveBeenCalledExactlyOnceWith(P1);
+    expect(findNativePhaseAliasOwner).not.toHaveBeenCalled();
+    expect(findStandaloneTournamentAlias).not.toHaveBeenCalled();
   });
 });

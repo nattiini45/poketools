@@ -26,6 +26,7 @@ vi.mock('@/lib/auth/helpers', () => {
   return {
     requireAdmin: vi.fn(refuse),
     requireAnyAdmin: vi.fn(refuse),
+    requirePlayer: vi.fn(refuse),
     requireResourceAdmin: vi.fn(refuse),
     requireDraftAdmin: vi.fn(refuse),
     requireFormatViewer: vi.fn(refuse),
@@ -108,7 +109,7 @@ describe('every runnable tool is guarded before it reads', () => {
 
   it('declares a guard kind on every tool', () => {
     for (const tool of runnable) {
-      expect(['site', 'any', 'season', 'tournament', 'draft', 'formatViewer', 'rulesetViewer', 'rulesetOwner', 'rulesetUsable'], tool.name).toContain(tool.guardKind);
+      expect(['site', 'any', 'season', 'tournament', 'phaseRead', 'draft', 'formatViewer', 'rulesetViewer', 'rulesetOwner', 'rulesetUsable'], tool.name).toContain(tool.guardKind);
     }
   });
 

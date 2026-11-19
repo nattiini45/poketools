@@ -333,6 +333,13 @@ describe('getTournamentById', () => {
 });
 
 describe('getTournamentWithDetails', () => {
+  it('filters by standalone ownership in the detail query when requested', async () => {
+    mockBuilder.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(getTournamentWithDetails('t1', { standaloneOnly: true })).resolves.toBeNull();
+    expect(mockBuilder.eq).toHaveBeenCalledWith('id', 't1');
+    expect(mockBuilder.is).toHaveBeenCalledWith('season_id', null);
+  });
+
   it('returns tournament with joined details', async () => {
     mockBuilder.maybeSingle.mockResolvedValue({
       data: TOURNAMENT_WITH_DETAILS_ROW,

@@ -82,6 +82,12 @@ const SEASON_DETAILS_SELECT = `
   season_participants ( count ),
   tournaments ( count )
 `;
+const NATIVE_SEASON_DETAILS_SELECT = `
+  *,
+  rulesets:ruleset_definition_versions ( name:name_text ),
+  season_participants ( count ),
+  tournaments:league_phases!league_phases_season_id_fkey ( count )
+`;
 
 /** Read a `child ( count )` embed: `[{ count: n }]` → n (0 when absent). */
 function embedCount(value: unknown): number {
@@ -125,12 +131,7 @@ export async function listSeasons(
 ): Promise<SeasonWithDetails[]> {
   const table = supabase.from('seasons');
   let query = (opts.storage === 'phase'
-    ? table.select(`
-      *,
-      rulesets:ruleset_definition_versions ( name:name_text ),
-      season_participants ( count ),
-      tournaments:league_phases!league_phases_season_id_fkey ( count )
-    `)
+    ? table.select(NATIVE_SEASON_DETAILS_SELECT)
     : table.select(SEASON_DETAILS_SELECT)).eq('archived', false);
   if (opts.includeTestSeasons === false) query = query.eq('is_test_season', false);
 
@@ -303,11 +304,13 @@ export async function getSeasonFormatTypes(
 export const getSeasonWithDetails = cache(async function getSeasonWithDetails(
   id: string,
   includeDraftPool = false,
+  storage: 'legacy' | 'phase' = 'legacy',
 ): Promise<(SeasonWithDetails & { hasDraftPool?: boolean }) | null> {
   const table = supabase.from('seasons');
+  const columns = storage === 'phase' ? NATIVE_SEASON_DETAILS_SELECT : SEASON_DETAILS_SELECT;
   const { data, error } = await (includeDraftPool
-    ? table.select(`${SEASON_DETAILS_SELECT}, draft_pools!draft_pools_season_id_fkey ( count )`).eq('id', id).maybeSingle()
-    : table.select(SEASON_DETAILS_SELECT).eq('id', id).maybeSingle());
+    ? table.select(`${columns}, draft_pools!draft_pools_season_id_fkey ( count )`).eq('id', id).maybeSingle()
+    : table.select(columns).eq('id', id).maybeSingle());
 
   if (error) throw error;
   if (!data) return null;

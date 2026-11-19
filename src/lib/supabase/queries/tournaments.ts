@@ -209,9 +209,10 @@ export async function getTournamentSubmitContext(id: string): Promise<Tournament
 }
 
 export async function getTournamentWithDetails(
-  id: string
+  id: string,
+  opts: { standaloneOnly?: boolean } = {},
 ): Promise<TournamentWithDetails | null> {
-  const { data, error } = await supabase
+  let query = supabase
     .from('tournaments')
     .select(`
       *,
@@ -219,8 +220,9 @@ export async function getTournamentWithDetails(
       seasons ( name, format_type ),
       tournament_participants ( count )
     `)
-    .eq('id', id)
-    .maybeSingle();
+    .eq('id', id);
+  if (opts.standaloneOnly) query = query.is('season_id', null);
+  const { data, error } = await query.maybeSingle();
 
   if (error) throw error;
   if (!data) return null;

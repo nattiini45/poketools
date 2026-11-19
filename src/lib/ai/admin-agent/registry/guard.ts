@@ -4,6 +4,7 @@ import 'server-only';
  *
  *   `site` -> `requireAdmin`            `any` -> `requireAnyAdmin`
  *   `season` / `tournament` -> `requireResourceAdmin(type, id)`
+ *   `phaseRead` -> live player before reading the mode, then legacy tournament guard or native admin admission
  *   `draft` -> `requireDraftAdmin(id)`   `formatViewer` -> `requireFormatViewer(id)`
  *   `rulesetViewer` / `rulesetOwner` -> `requireRulesetViewer(id)` / `requireRulesetOwner(id)`
  *   `rulesetUsable` -> `requireAnyAdmin` + `assertRulesetUsable(player, versionId)`
@@ -21,9 +22,12 @@ import {
   requireAnyAdmin,
   requireDraftAdmin,
   requireFormatViewer,
+  requirePlayer,
   requireResourceAdmin,
   type FormatAccess,
 } from '@/lib/auth/helpers';
+import { requirePhaseAwareAdmin } from '@/lib/auth/phase-access';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import {
   assertRulesetUsable,
   requireRulesetOwner,
@@ -39,6 +43,7 @@ export type GuardSpec =
   | { readonly kind: 'any' }
   | { readonly kind: 'season'; readonly id: string }
   | { readonly kind: 'tournament'; readonly id: string }
+  | { readonly kind: 'phaseRead'; readonly id: string }
   | { readonly kind: 'draft'; readonly id: string }
   | { readonly kind: 'formatViewer'; readonly id: string }
   | { readonly kind: 'rulesetViewer'; readonly id: string }
@@ -54,6 +59,7 @@ interface GuardExtras {
   any: Record<never, never>;
   season: { readonly resourceId: string };
   tournament: { readonly resourceId: string };
+  phaseRead: { readonly storage: 'legacy' | 'native' };
   draft: { readonly resourceId: string };
   formatViewer: { readonly format: FormatAccess };
   rulesetViewer: { readonly ruleset: RulesetAccess };
@@ -100,6 +106,14 @@ export async function guardFor(spec: GuardSpec): Promise<GuardedAs<GuardKind>> {
       return mint('season', await requireResourceAdmin('season', spec.id), { resourceId: spec.id });
     case 'tournament':
       return mint('tournament', await requireResourceAdmin('tournament', spec.id), { resourceId: spec.id });
+    case 'phaseRead': {
+      const player = await requirePlayer();
+      const mode = await getPhaseRouteMode();
+      if (mode === 'phase' || mode === 'frozen_phase') {
+        return mint('phaseRead', player.isAdmin || player.isResourceAdmin ? player : await requirePhaseAwareAdmin(), { storage: 'native' });
+      }
+      return mint('phaseRead', await requireResourceAdmin('tournament', spec.id), { storage: 'legacy' });
+    }
     case 'draft':
       return mint('draft', await requireDraftAdmin(spec.id), { resourceId: spec.id });
     case 'formatViewer': {
