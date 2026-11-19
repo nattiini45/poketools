@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { publicReads } from '@/lib/cache/public-reads';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import PageContainer from '@/components/ui/PageContainer';
 import TestLeagueBadge from '@/components/league/TestLeagueBadge';
 import PublicCompetitionList, { parseCompetitionStatusFilter } from '@/components/competition/PublicCompetitionList';
@@ -13,8 +14,7 @@ import { packExtensions } from '@/lib/pack-extensions';
 // Stays dynamic although it reads no session: without `force-dynamic` the
 // page would be prerendered by `next build`, which queries Supabase at build
 // time (CI builds against a placeholder URL and would fail). The list itself
-// comes from the tagged public read cache (60 s, expired by match writes), so
-// a render costs no Supabase query while the entry is warm.
+// comes from the tagged public read cache (60 s); the enabled phase-store lookup stays live.
 export const dynamic = 'force-dynamic';
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -28,7 +28,9 @@ export default async function LeaguesPage({ searchParams }: { searchParams?: Pro
   // The language is a cookie read, outside the cached list read (cached values hold no text).
   // The status tabs filter the one cached list in memory: a tab costs no query.
   const [leagues, t, common, enums, formatter, query] = await Promise.all([
-    publicReads.seasonList(),
+    getPhaseRouteMode().then((mode) => mode === 'phase' || mode === 'frozen_phase'
+      ? publicReads.nativeSeasonList()
+      : publicReads.seasonList()),
     getT(leaguesMessages),
     getT(commonMessages),
     getT(enumMessages),

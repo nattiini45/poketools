@@ -210,6 +210,7 @@ const PRELOAD = {
 /** One sample call per cached read (the tests below walk this table). */
 const CALLS = {
   seasonList: () => publicReads.seasonList(),
+  nativeSeasonList: () => publicReads.nativeSeasonList(),
   tournamentList: () => publicReads.tournamentList(),
   hiddenPlayerIds: () => publicReads.hiddenPlayerIds(),
   playerDirectory: () => publicReads.playerDirectory(48, 0),
@@ -255,6 +256,7 @@ const CALLS = {
 const LIST_READS = new Set<ReaderName>([
   'hiddenPlayerIds',
   'seasonList',
+  'nativeSeasonList',
   'tournamentList',
   'playerDirectory',
   'ratingLeaderboard',
@@ -355,6 +357,17 @@ describe('public read cache — hits', () => {
     expect(listSeasons).toHaveBeenCalledWith();
   });
 
+  it('keeps phase and legacy catalog counts separate and expires both on league changes', async () => {
+    await publicReads.seasonList();
+    await publicReads.nativeSeasonList();
+    await publicReads.nativeSeasonList();
+    await publicReads.seasonList();
+    expect(vi.mocked(listSeasons).mock.calls).toEqual([[], [{ storage: 'phase' }]]);
+    expect(fakeNextCache.reads.map((entry) => [entry.hit, entry.tags])).toEqual(
+      [false, false, true, true].map((hit) => [hit, [publicTags.seasons]]),
+    );
+  });
+
   it('entries are keyed by their arguments', async () => {
     await publicReads.season('a');
     await publicReads.season('b');
@@ -440,7 +453,7 @@ describe('public read cache — the write-route helpers expire exactly the reads
     'tournamentReports',
     'tournamentGroups',
   ];
-  const LISTS: ReaderName[] = ['seasonList', 'tournamentList'];
+  const LISTS: ReaderName[] = ['seasonList', 'nativeSeasonList', 'tournamentList'];
 
   /** Warm every read, run the write-side expiry, and return the reads that missed. */
   async function missedAfter(expire: () => void): Promise<ReaderName[]> {

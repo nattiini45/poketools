@@ -506,7 +506,7 @@
       "expires": ["expireFormatLibraryReads", "expireSeasonReads", "revalidatePath"],
       "audit": ["season.auto_bind_point_buy_list", "season.auto_create_battle_ruleset", "season.clear_battle_ruleset_bans", "season.create", "season.create_from_format"],
       "emits": [],
-      "importFingerprint": "55ef7abea9343a99",
+      "importFingerprint": "a8874be82e3c626b",
       "importFiles": 321,
       "imports": {
         "src/lib/api/error-response.ts": { "names": ["safeErrorResponse"], "closure": "ce1811a3e7574d91", "files": 5 },
@@ -517,7 +517,7 @@
         "src/lib/format-studio/create-league.ts": { "names": ["createLeagueFromFormat"], "closure": "03f53183903eb953", "files": 247 },
         "src/lib/league-phase/classic-storage.ts": { "names": ["createClassicLeague"], "closure": "7a1a5c7432c9d9e5", "files": 28 },
         "src/lib/league-phase/format-storage.ts": { "names": ["legacyFormatStorage", "nativeFormatStorage"], "closure": "99266c91d83cee72", "files": 41 },
-        "src/lib/league-phase/route-mode.ts": { "names": ["requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
+        "src/lib/league-phase/route-mode.ts": { "names": ["getPhaseRouteMode", "requireOpenPhaseRouteMode"], "closure": "97db15a688b7f095", "files": 9 },
         "src/lib/logger.ts": { "names": ["logger"], "closure": "e3b0c44298fc1c14", "files": 1 },
         "src/lib/revalidation.ts": { "names": ["expireFormatLibraryReads", "expireSeasonReads"], "closure": "0dd78e925674b4fa", "files": 29 },
         "src/lib/ruleset-studio/pin-change.ts": { "names": ["assertRulesetUsableForCreate"], "closure": "20c204f93a71f355", "files": 89 },

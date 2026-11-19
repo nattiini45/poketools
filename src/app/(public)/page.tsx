@@ -2,6 +2,8 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ArrowRight } from 'lucide-react';
 import { publicReads } from '@/lib/cache/public-reads';
+import { phasePublicReads } from '@/lib/cache/phase-public-reads';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import TestLeagueBadge from '@/components/league/TestLeagueBadge';
 import ItemIcon from '@/components/ui/ItemIcon';
 import SkewChip, { type SkewChipTone } from '@/components/ui/SkewChip';
@@ -20,9 +22,7 @@ import { homeMessages } from '@/i18n/messages/home';
 import { leaguesMessages } from '@/i18n/messages/leagues';
 import { shellMessages } from '@/i18n/messages/shell';
 
-// Dynamic: the page reads the viewer's session. The lists and the featured
-// standings come from the tagged public read cache (60 s, expired by match
-// writes), so a render costs no Supabase query while the entries are warm.
+// Dynamic: the page reads the viewer's session and, when enabled, the active phase store.
 export const dynamic = 'force-dynamic';
 
 // Self-referencing canonical for the home page (Search Console flagged it as a
@@ -125,15 +125,17 @@ function EmptyTeaser({ text }: { text: string }) {
 }
 
 export default async function Home() {
-  const [tournaments, leagues, sessionPlayer, t, tCommon, tEnums, tLeagues, tShell] = await Promise.all([
+  const native = getPhaseRouteMode().then((mode) => mode === 'phase' || mode === 'frozen_phase');
+  const [tournaments, leagues, sessionPlayer, t, tCommon, tEnums, tLeagues, tShell, nativeStore] = await Promise.all([
     publicReads.tournamentList(),
-    publicReads.seasonList(),
+    native.then((useNative) => useNative ? publicReads.nativeSeasonList() : publicReads.seasonList()),
     getSessionPlayer(),
     getT(homeMessages),
     getT(commonMessages),
     getT(enumMessages),
     getT(leaguesMessages),
     getT(shellMessages),
+    native,
   ]);
   const isAuthenticated = sessionPlayer != null;
 
@@ -153,10 +155,10 @@ export default async function Home() {
   const liveCount =
     leagues.filter((l) => l.status === 'active').length + tournaments.filter((t) => t.status === 'active').length;
 
-  const featuredStandings =
-    featured != null
-      ? await publicReads.standingsPreview(featured.type, featured.item.id, 3)
-      : [];
+  const featuredStandings = featured === null ? []
+    : nativeStore && featured.type === 'league'
+      ? await phasePublicReads.seasonStandingsPreview(featured.item.id, 3)
+      : await publicReads.standingsPreview(featured.type, featured.item.id, 3);
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-8">

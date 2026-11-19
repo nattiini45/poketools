@@ -65,6 +65,8 @@ vi.mock('@/lib/season/clone', () => ({
 }));
 
 import { GET, POST } from '@/app/api/seasons/route';
+
+vi.mock('@/lib/supabase/queries/phase-storage', () => ({ readPhaseStorageMode: vi.fn() }));
 import { getLiveAccess, requireAnyAdmin, AuthError } from '@/lib/auth/helpers';
 import { listSeasons, listArchivedSeasons, listSeasonsByIds, createSeason } from '@/lib/supabase/queries/seasons';
 import { addResourceAdmin, getAdminSeasonIds, getAdminTournamentIds } from '@/lib/supabase/queries/resource-admins';
@@ -158,6 +160,21 @@ describe('GET /api/seasons', () => {
     await GET(request);
 
     expect(listSeasons).toHaveBeenCalledWith();
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('uses native counts for the public list in %s mode', async (mode) => {
+    vi.stubEnv('READ_PHASE_STORAGE_STATE', 'true');
+    const { readPhaseStorageMode } = await import('@/lib/supabase/queries/phase-storage');
+    vi.mocked(readPhaseStorageMode).mockResolvedValueOnce(mode);
+    vi.mocked(listSeasons).mockResolvedValue([mockSeason]);
+    try {
+      const response = await GET({ url: 'http://localhost:3000/api/seasons' } as unknown as NextRequest);
+      expect(response.status).toBe(200);
+      expect(listSeasons).toHaveBeenCalledExactlyOnceWith({ storage: 'phase' });
+      expect(requireAnyAdmin).not.toHaveBeenCalled();
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('requires admin for archived seasons', async () => {

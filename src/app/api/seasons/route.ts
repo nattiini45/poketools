@@ -21,6 +21,7 @@ import { logAuditEvent } from '@/lib/audit/log';
 import { initializeEpbFormatRules } from '@/lib/season/format-rules-defaults';
 import { ensurePointBuyBattleRuleset } from '@/lib/season/point-buy-battle-ruleset';
 import { isEvolutionPointBuy } from '@/lib/season/format-utils';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { assertSeasonDateRange } from '@/lib/season/settings-guards';
 import { expireFormatLibraryReads, expireSeasonReads } from '@/lib/revalidation';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
@@ -74,7 +75,10 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    const seasons = await listSeasons();
+    const mode = await getPhaseRouteMode();
+    const seasons = mode === 'phase' || mode === 'frozen_phase'
+      ? await listSeasons({ storage: 'phase' })
+      : await listSeasons();
     return NextResponse.json<ApiResult<SeasonWithDetails[]>>({
       success: true,
       data: seasons,

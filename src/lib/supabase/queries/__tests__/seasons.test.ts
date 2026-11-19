@@ -144,6 +144,17 @@ describe('seasons', () => {
       expect(mockBuilder.limit).toHaveBeenCalledWith(100);
     });
 
+    it('selects only native counts when requested, keeping the existing list fields', async () => {
+      mockBuilder.limit.mockReturnValue({ data: [{ ...seasonWithJoins, tournaments: [{ count: 3 }] }], error: null });
+
+      await expect(listSeasons({ storage: 'phase' })).resolves.toEqual([
+        expect.objectContaining({ participant_count: 2, tournament_count: 3 }),
+      ]);
+      expect(mockBuilder.select).toHaveBeenCalledExactlyOnceWith(expect.stringContaining(
+        'tournaments:league_phases!league_phases_season_id_fkey ( count )',
+      ));
+    });
+
     it('keeps test leagues with includeTestSeasons: true (admin lists)', async () => {
       mockBuilder.limit.mockReturnValue({ data: [], error: null });
 
