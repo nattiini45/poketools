@@ -203,6 +203,44 @@ jobs:
         env:
           LOCAL_STACK_CI: '1'
 
+      - name: P6 preflight report
+        # Runs the read-only cutover preflight against a seeded database and asserts its contract, so an edit
+        # that breaks the script fails here instead of during the owner's production run. It is the last step
+        # because it commits the lab seed; the suites above need a clean database and must not see it.
+        #
+        # Only the full-bundle state is asserted. The pre-bundle state (a replay stopped at 20261115120000,
+        # where the native blocks print `skipped: needs <file>` rows) needs a second stack and is covered by
+        # the rehearsal that produced the script, not by CI.
+        run: |
+          set -euo pipefail
+          out="$(mktemp)"
+          # The seed is committed here on purpose: the rehearsal above rolls its copy back, and the preflight
+          # is only meaningful against rows. Every statement in the preflight itself is a SELECT inside one
+          # BEGIN READ ONLY transaction.
+          {
+            printf 'BEGIN;\n'
+            cat scripts/league-trash-lab/seed.sql
+            echo "SELECT lt_lab.seed(8, 4, 'P6 preflight fixture');"
+            printf 'COMMIT;\n'
+          } | docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1
+          leagues="$(docker exec -i supabase_db_poketools psql -U postgres -d postgres -tAc 'SELECT count(*) FROM public.seasons' | tr -d '[:space:]')"
+          test "${leagues:-0}" -ge 1
+          docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 -f - \
+            < scripts/phase-separation/p6-preflight.sql | tee "$out"
+          grep -q '### phase schema (bundle) applied: true' "$out"
+          if grep -q 'needs 2026' "$out"; then
+            echo '::error::the preflight reported a block it could not run on a full bundle'
+            exit 1
+          fi
+          for block in '[1] Ownership families' '[2] Trash generation' '[3] Applied migration' \
+                       '[4] Foreign keys into the moved graph' '[5] INSERT/DELETE triggers' \
+                       '[6] Null and cross-owner' '[7] Aggregate queues' '[8] Replay-hash' \
+                       '[9] Group slots' '[10] Storage generation' '[11] JSON-embedded'; do
+            grep -qF "=== $block" "$out" || { echo "::error::missing preflight block: $block"; exit 1; }
+          done
+          grep -q '1.ownership-total' "$out"
+          test "$(grep -c '^11\.json-refs|' "$out")" -ge 30
+
   # ADVISORY: not a required check and never added to the main-protection ruleset. It starts its own ephemeral
   # Supabase stack on the runner (loopback only, no hosted project, no secrets), builds the app against it and runs
   # the Playwright smoke suite in Chromium (CONTRIBUTING.md, "End-to-end tests"). A failure uploads the HTML report
