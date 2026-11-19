@@ -4,8 +4,16 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // The Insights standings score a Swiss stage's stored byes in the league scope as they do in the tournament scope.
 
 const h = vi.hoisted(() => ({
+  mode: vi.fn(),
+  alias: vi.fn(),
+  redirect: vi.fn((href: string): never => { throw new Error(href); }),
+  phasePublicReads: {
+    bySeasonIds: vi.fn(), seasonMatchRecords: vi.fn(), seasonByeRounds: vi.fn(),
+    seasonGameTotal: vi.fn(), seasonBattleStats: vi.fn(), allTimeGameTotal: vi.fn(), seasonKitStandings: vi.fn(),
+  },
   publicReads: {
     seasonList: vi.fn(),
+    nativeSeasonList: vi.fn(),
     tournamentList: vi.fn(),
     ratingLeaderboard: vi.fn(),
     streakLeaderboard: vi.fn(),
@@ -29,8 +37,12 @@ const h = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/cache/public-reads', () => ({ publicReads: h.publicReads }));
+vi.mock('@/lib/cache/phase-public-reads', () => ({ phasePublicReads: h.phasePublicReads }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: h.mode }));
+vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ findNativePhaseAliasOwner: h.alias }));
+vi.mock('next/navigation', () => ({ redirect: h.redirect }));
 vi.mock('@/lib/pack-extensions', () => ({
-  loadSupplement: vi.fn(),
+  loadSupplement: vi.fn(async () => ({ state: 'absent' })),
   packExtensions: { supplementaryKillRanking: undefined },
 }));
 vi.mock('@/i18n/server', () => ({ getT: async () => (key: string) => key }));
@@ -49,7 +61,7 @@ interface StandingsRowView {
 }
 
 /** Renders the page for a scope and returns its children (the scope selector and the client tabs). */
-async function renderPage(searchParams: Record<string, string>): Promise<ReactElement[]> {
+async function renderPage(searchParams: Record<string, string | string[]>): Promise<ReactElement[]> {
   const suspense = (await InsightsPage({ searchParams: Promise.resolve(searchParams) })) as ReactElement<{
     children: ReactElement;
   }>;
@@ -85,9 +97,14 @@ function eve(rows: StandingsRowView[]) {
 }
 
 beforeEach(() => {
+  h.mode.mockReset().mockResolvedValue('legacy');
+  h.alias.mockReset();
+  h.redirect.mockClear();
+  for (const read of Object.values(h.phasePublicReads)) read.mockReset();
   for (const read of Object.values(h.publicReads)) read.mockReset();
   const reads = h.publicReads;
   reads.seasonList.mockResolvedValue([]);
+  reads.nativeSeasonList.mockResolvedValue([]);
   reads.tournamentList.mockResolvedValue([]);
   reads.ratingLeaderboard.mockResolvedValue([]);
   reads.streakLeaderboard.mockResolvedValue([]);
@@ -113,6 +130,77 @@ beforeEach(() => {
 });
 
 describe('Insights standings', () => {
+  it.each(['phase', 'frozen_phase'])('uses only the native match, bye, kill, and denominator reads in %s', async (mode) => {
+    h.mode.mockResolvedValue(mode);
+    const phase = h.phasePublicReads;
+    phase.bySeasonIds.mockResolvedValue({ 'season-1': [
+      { id: 'native-swiss', bracket_type: 'swiss' },
+      { id: 'native-playoff', bracket_type: 'single_elim' },
+    ] });
+    phase.seasonMatchRecords.mockResolvedValue(aBeatsB);
+    phase.seasonByeRounds.mockResolvedValue([{ ...byeRounds[0], phase_id: 'native-swiss' }]);
+    phase.seasonBattleStats.mockResolvedValue([]);
+    phase.seasonGameTotal.mockResolvedValue(7);
+
+    const standings = await renderStandings({ scope: 'league', id: 'season-1' });
+    expect(eve(standings)).toMatchObject({ wins: 1, losses: 0 });
+    expect(phase.seasonMatchRecords).toHaveBeenCalledExactlyOnceWith('season-1', ['native-swiss']);
+    expect(phase.seasonByeRounds).toHaveBeenCalledExactlyOnceWith('season-1');
+    expect(phase.seasonBattleStats).toHaveBeenCalledExactlyOnceWith('season-1');
+    expect(phase.seasonGameTotal).toHaveBeenCalledExactlyOnceWith('season-1');
+    for (const oldRead of [h.publicReads.seasonStages, h.publicReads.seasonMatchRecords, h.publicReads.seasonByeRounds,
+      h.publicReads.seasonBattleStats, h.publicReads.totalGames]) expect(oldRead).not.toHaveBeenCalled();
+  });
+
+  it('redirects an old phase stats selection only after resolving its native owner', async () => {
+    h.mode.mockResolvedValue('phase');
+    h.alias.mockResolvedValue({ kind: 'phase', phase_id: 'phase-fixture', season_id: 'league-fixture' });
+    const target = '/leagues/league-fixture/phases/phase-fixture/stats?tab=kills&show=a&show=b';
+    await expect(renderPage({ scope: 'tournament', id: 'phase-fixture', tab: 'kills', show: ['a', 'b'] })).rejects.toThrow(target);
+    expect(h.alias).toHaveBeenCalledExactlyOnceWith({ phaseId: 'phase-fixture' });
+    expect(h.publicReads.tournament).not.toHaveBeenCalled();
+  });
+
+  it('ranks by the distinct bye points of each native Swiss stage', async () => {
+    h.mode.mockResolvedValue('phase');
+    h.publicReads.season.mockResolvedValue({ id: 'season-1', name: 'League', format_type: 'custom' });
+    const phase = h.phasePublicReads;
+    phase.bySeasonIds.mockResolvedValue({ 'season-1': [
+      { id: 'small-bye', bracket_type: 'swiss' }, { id: 'large-bye', bracket_type: 'swiss' },
+    ] });
+    phase.seasonMatchRecords.mockResolvedValue([]);
+    phase.seasonByeRounds.mockResolvedValue([
+      { id: 'round-small', phase_id: 'small-bye', round_number: 1, bye_player_ids: ['a'] },
+      { id: 'round-large', phase_id: 'large-bye', round_number: 1, bye_player_ids: ['b'] },
+    ]);
+    phase.seasonBattleStats.mockResolvedValue([]);
+    phase.seasonGameTotal.mockResolvedValue(0);
+    const rules = (key: string, bye: number) => ({
+      key, scoring: { win: 3, loss: 0, bye }, rank: [{ kind: 'metric', metric: 'points', direction: 'desc' }],
+    });
+    phase.seasonKitStandings.mockResolvedValue({
+      engine: 'kit', stages: { 'small-bye': rules('small', 1), 'large-bye': rules('large', 5) },
+      stageOfMatch: {}, outcomes: {}, coinFlips: {},
+    });
+
+    const rows = await renderStandings({ scope: 'league', id: 'season-1' });
+    expect(rows.map((row) => row.player_id)).toEqual(['b', 'a', 'e']);
+  });
+
+  it('uses the mixed denominator only for the native global view', async () => {
+    h.mode.mockResolvedValue('phase');
+    h.phasePublicReads.allTimeGameTotal.mockResolvedValue(5);
+    h.publicReads.aggregatesSummary.mockResolvedValue([{
+      pokemon_name: 'Pikachu', total_appearances: 2, total_games: 2, total_wins: 1,
+      total_led: 0, total_brought: 2, total_kos_dealt: 0, total_koed: 0,
+    }]);
+    const tabs = (await renderPage({})).find((child) => child?.type === InsightsTabs) as ReactElement<{
+      usageRows: { usage_percent: number }[];
+    }>;
+    expect(tabs.props.usageRows[0].usage_percent).toBe(40);
+    expect(h.phasePublicReads.allTimeGameTotal).toHaveBeenCalledOnce();
+    expect(h.publicReads.totalGames).not.toHaveBeenCalled();
+  });
   it('league scope scores the Swiss stage byes, agreeing with the tournament scope', async () => {
     const league = await renderStandings({ scope: 'league', id: 'season-1' });
     const tournament = await renderStandings({ scope: 'tournament', id: 'swiss-1' });

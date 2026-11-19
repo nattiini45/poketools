@@ -2,7 +2,7 @@ import { buildStandingsRowsFromMatchRecords, rankingForPhase } from '@/lib/stats
 import { getCompletedMatchRecords, getCompletedMatchRecordsBatch } from '@/lib/supabase/queries/matches';
 import { getParticipants, getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { loadScoringByes, loadSeasonSwissByeRounds } from '@/lib/tournament/scoring-byes';
-import { formatScoresByes, scoringByeRecords } from '@/lib/tournament/byes';
+import { formatScoresByes, scoringByeRecords, scoringByeRecordsForStages } from '@/lib/tournament/byes';
 import { getPublicSeasonParticipants, getSeasonParticipants, getSeasonStageBrackets } from '@/lib/supabase/queries/seasons';
 import { loadRankingContext, type SeasonStandingsContext } from '@/lib/tournament/season-standings';
 import { loadNativeSeasonStandingsContext } from '@/lib/league-phase/standings-context';
@@ -88,7 +88,7 @@ export async function getNativeLeagueStandingsPreview(seasonId: string, limit: n
     ? stages.filter((stage) => stage.bracket_type === 'swiss').map((stage) => stage.id)
     : [];
   const byeRounds = await getByeRoundsByPhaseIds(swissIds);
-  const byes = scoringByeRecords('swiss', [...byeRounds.values()].flat());
+  const byes = scoringByeRecordsForStages(stages, byeRounds);
   return toPreviewRows(leaguePreviewTable(parts, records, byes, ranking, ids, stages, stages.some((stage) => stage.hasGroups)), limit);
 }
 

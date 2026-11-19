@@ -74,8 +74,10 @@ export type InsightsTab =
 - Optional historical contributions are loaded outside the shared cache and combined before the global Smogon fallback. External meta percentages are never added to community counts. A failed or inactive historical read has its own state instead of silently displaying external fallback data.
 - Archive scopes read the selected archive cohort only. Scope metadata remains available with inclusion off. Coverage identifies each competition, included/excluded/withheld battles, missing periods and unmatched teams; unknown counters render as unknown, not zero. Player-filtered Pokémon usage keeps the full selected battle denominator while filtering actor counters.
 - Global/archive species KO rankings use combined known source totals, with provenance; requested empty kills views stay selected. Existing scoped live player rankings remain separate. Moves, ratings and streaks identify their live-only coverage; archive moves never query an unrelated live scope.
-- Always: `getAggregates(scopeType, scopeId)` + `getTotalGamesInScope(...)` →
-  `aggregatesToUsageRows(...)` for the usage tab.
+- Live usage reads aggregate counters and a mode-scoped game total. Native
+  league totals count only phase games; native global totals count eligible
+  phase and standalone games across both stores. Legacy totals keep their
+  existing query.
 - **Global fallback**: if no scoped aggregates exist, falls back to
   `getUsageByFormat(DEFAULT_GLOBAL_META_FORMAT, …)` → `metaUsageToUsageRows`
   (Smogon meta-usage import — see [Smogon](./smogon.md)).
@@ -84,9 +86,11 @@ export type InsightsTab =
 - **Tournament scope**: `getTournamentWithDetails`, `getParticipants`,
   `getCompletedMatchRecords`, `getBattleStatsForTournament` → standings +
   kill ranking.
-- **League scope**: `getSeasonWithDetails`, `getSeasonParticipants`,
-  `getBattleStatsForSeason`, plus batched `getCompletedMatchRecordsBatch`
-  across the season's tournaments → standings + kill ranking.
+- **League scope**: shared public season and participant reads, then
+  ownership-specific stages, completed table-stage match records, Swiss byes
+  where scored, and narrow kill-ranking stats. In phase mode a legacy
+  tournament-scope URL redirects to native phase stats only when that phase
+  owner resolves; standalone tournament scope remains unchanged.
 
 > Per `CLAUDE.md`'s "pre-compute aggregates" rule: the **usage** tab reads
 > pre-computed `aggregates`; the **standings / kills** tabs read completed match

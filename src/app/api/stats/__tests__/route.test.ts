@@ -3,18 +3,22 @@ import type { NextRequest } from 'next/server';
 
 vi.mock('@/lib/supabase/queries/aggregates', () => ({
   getAggregates: vi.fn(),
+  getTotalGamesInMixedScope: vi.fn(),
   getTotalGamesInScope: vi.fn(),
 }));
-vi.mock('@/lib/league-phase/route-mode', () => ({ requireOpenPhaseRouteMode: vi.fn() }));
+vi.mock('@/lib/supabase/queries/phase-games', () => ({ getPhaseSeasonGameTotal: vi.fn() }));
+vi.mock('@/lib/league-phase/route-mode', () => ({ getPhaseRouteMode: vi.fn(), requireOpenPhaseRouteMode: vi.fn() }));
 vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({ resolveLeaguePhaseRoute: vi.fn() }));
 
 import { GET } from '@/app/api/stats/route';
-import { requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { getPhaseRouteMode, requireOpenPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { resolveLeaguePhaseRoute } from '@/lib/supabase/queries/phase-route-owners';
 import {
   getAggregates,
+  getTotalGamesInMixedScope,
   getTotalGamesInScope,
 } from '@/lib/supabase/queries/aggregates';
+import { getPhaseSeasonGameTotal } from '@/lib/supabase/queries/phase-games';
 
 function makeRequest(params: Record<string, string>): NextRequest {
   const url = new URL('http://localhost:3000/api/stats');
@@ -46,6 +50,24 @@ const fakeAggregate = (name: string) => ({
 describe('GET /api/stats', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(getPhaseRouteMode).mockResolvedValue('legacy');
+  });
+
+  it.each(['phase', 'frozen_phase'] as const)('uses native league and mixed global denominators in %s', async (mode) => {
+    vi.mocked(getPhaseRouteMode).mockResolvedValue(mode);
+    vi.mocked(getAggregates).mockResolvedValue([fakeAggregate('Pikachu')]);
+    vi.mocked(getPhaseSeasonGameTotal).mockResolvedValue(20);
+    vi.mocked(getTotalGamesInMixedScope).mockResolvedValue(40);
+
+    const league = await GET(makeRequest({ scope: 'league', scope_id: LEAGUE_ID }));
+    const global = await GET(makeRequest({ scope: 'all_time' }));
+    expect(league.status).toBe(200);
+    expect(global.status).toBe(200);
+    expect((await league.json()).data[0].usage_percent).toBe(50);
+    expect((await global.json()).data[0].usage_percent).toBe(25);
+    expect(getPhaseSeasonGameTotal).toHaveBeenCalledExactlyOnceWith(LEAGUE_ID);
+    expect(getTotalGamesInMixedScope).toHaveBeenCalledExactlyOnceWith('all_time', null);
+    expect(getTotalGamesInScope).not.toHaveBeenCalled();
   });
 
   // ── Validation ────────────────────────────────────────────

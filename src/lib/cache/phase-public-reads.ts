@@ -9,11 +9,13 @@ import { toPublicPhaseMatch } from '@/lib/match/public-match';
 import { toPublicTournamentParticipant } from '@/lib/players/public-player';
 import { publicTags } from '@/lib/revalidation';
 import { getPhaseParticipants, getPhaseWithDetails, getPhasesBySeasonIds } from '@/lib/supabase/queries/league-phases';
+import { getTotalGamesInMixedScope } from '@/lib/supabase/queries/aggregates';
+import { getCompletedPhaseMatchRecordsBatch } from '@/lib/supabase/queries/phase-format-runtime';
 import { getGroupsByPhase } from '@/lib/supabase/queries/phase-groups';
 import { getPhaseSeasonBattleStats, getPhaseSeasonGameTotal, getPhaseStandingsBattleStats } from '@/lib/supabase/queries/phase-games';
 import { getMatchesByPhase, getPhaseHeadToHead, getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
 import { getPhaseReports } from '@/lib/supabase/queries/phase-reports';
-import { getRoundsByPhase } from '@/lib/supabase/queries/phase-rounds';
+import { getRoundsByPhase, getSwissByeRoundsBySeason } from '@/lib/supabase/queries/phase-rounds';
 import type { PhaseWithDetails } from '@/types/league-phase';
 export { toPublicPhaseMatch, type PublicPhaseMatch } from '@/lib/match/public-match';
 
@@ -169,6 +171,23 @@ const seasonBattleStats = cache((seasonId: string) =>
   cachedRead('season-battle-stats', [seasonId], [publicTags.season(seasonId)], () => getPhaseSeasonBattleStats(seasonId)),
 );
 
+const allTimeGameTotal = cache(() =>
+  unstable_cache(() => getTotalGamesInMixedScope('all_time', null), ['phase-public-read:v1', 'all-time-game-total'], {
+    tags: [publicTags.aggregates('all_time', null)],
+    revalidate: 60,
+  })(),
+);
+
+const seasonByeRounds = cache((seasonId: string) =>
+  cachedRead('season-bye-rounds', [seasonId], [publicTags.season(seasonId)], () => getSwissByeRoundsBySeason(seasonId)),
+);
+
+function seasonMatchRecords(seasonId: string, tablePhaseIds: string[]) {
+  return cachedRead('season-match-records', [seasonId, ...tablePhaseIds], [publicTags.season(seasonId)], async () =>
+    [...(await getCompletedPhaseMatchRecordsBatch(tablePhaseIds)).values()].flat(),
+  );
+}
+
 const seasonStandingsPreview = cache((seasonId: string, limit: number) =>
   cachedRead('season-standings-preview', [seasonId, String(limit)], [publicTags.season(seasonId), publicTags.players, publicTags.ratings], () =>
     getNativeLeagueStandingsPreview(seasonId, limit),
@@ -177,5 +196,5 @@ const seasonStandingsPreview = cache((seasonId: string, limit: number) =>
 
 export const phasePublicReads = {
   detail, bySeasonIds, rounds, matches, match, headToHead, participants, groups, reports, battleStats,
-  seasonGameTotal, seasonBattleStats, seasonKitStandings, seasonStandingsPreview,
+  seasonGameTotal, seasonBattleStats, allTimeGameTotal, seasonByeRounds, seasonMatchRecords, seasonKitStandings, seasonStandingsPreview,
 } as const;
