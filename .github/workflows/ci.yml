@@ -122,10 +122,31 @@ jobs:
 
       - run: npm ci
 
+      - name: Reserve the stack's host ports
+        # Supabase publishes the stack on fixed host ports (54321-54327), and those sit inside the kernel's
+        # ephemeral source-port range (32768-60999). An outbound connection (`npm ci`, an image pull) can take
+        # 54322 (Postgres) or 54324 (Mailpit) as its source port, and Docker's host bind then fails with
+        # "address already in use" before any test runs. A reserved port is skipped for automatic source-port
+        # assignment and stays explicitly bindable, so the stack keeps its documented ports.
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+
       - name: Start the local Supabase stack
         # postgres-meta stays: `supabase gen types --local` (db:types:check) reads the schema through it. Mailpit stays
         # for the e2e job's sign-up mail; this job does not use it.
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+        run: |
+          # Bounded retry. The reservation above is preventive: a socket that took one of these ports
+          # before it ran keeps it until it closes, and no container cleanup can free it. Clearing the
+          # stack and waiting lets that connection go; the next step resets the database anyway.
+          for attempt in 1 2 3; do
+            if npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor; then
+              exit 0
+            fi
+            echo "::warning::supabase start failed on attempt ${attempt}; sockets on the stack's ports:"
+            sudo ss -tanp | grep -E ':5432[0-9]' || true
+            npx supabase stop --no-backup || true
+            sleep 10
+          done
+          exit 1
 
       - name: Replay every migration on an empty database
         id: schema-replay
@@ -204,9 +225,30 @@ jobs:
 
       - run: npm ci
 
+      - name: Reserve the stack's host ports
+        # Supabase publishes the stack on fixed host ports (54321-54327), and those sit inside the kernel's
+        # ephemeral source-port range (32768-60999). An outbound connection (`npm ci`, an image pull) can take
+        # 54322 (Postgres) or 54324 (Mailpit) as its source port, and Docker's host bind then fails with
+        # "address already in use" before any test runs. A reserved port is skipped for automatic source-port
+        # assignment and stays explicitly bindable, so the stack keeps its documented ports.
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+
       - name: Start the local Supabase stack
         # Mailpit stays: the sign-up test reads its confirmation mail from it.
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+        run: |
+          # Bounded retry. The reservation above is preventive: a socket that took one of these ports
+          # before it ran keeps it until it closes, and no container cleanup can free it. Clearing the
+          # stack and waiting lets that connection go; the next step resets the database anyway.
+          for attempt in 1 2 3; do
+            if npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor; then
+              exit 0
+            fi
+            echo "::warning::supabase start failed on attempt ${attempt}; sockets on the stack's ports:"
+            sudo ss -tanp | grep -E ':5432[0-9]' || true
+            npx supabase stop --no-backup || true
+            sleep 10
+          done
+          exit 1
 
       - name: Replay every migration on an empty database
         run: npx supabase db reset --local
@@ -257,8 +299,29 @@ jobs:
 
       - run: npm ci
 
+      - name: Reserve the stack's host ports
+        # Supabase publishes the stack on fixed host ports (54321-54327), and those sit inside the kernel's
+        # ephemeral source-port range (32768-60999). An outbound connection (`npm ci`, an image pull) can take
+        # 54322 (Postgres) or 54324 (Mailpit) as its source port, and Docker's host bind then fails with
+        # "address already in use" before any test runs. A reserved port is skipped for automatic source-port
+        # assignment and stays explicitly bindable, so the stack keeps its documented ports.
+        run: sudo sysctl -w net.ipv4.ip_local_reserved_ports=54320-54329
+
       - name: Start the local Supabase stack
-        run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+        run: |
+          # Bounded retry. The reservation above is preventive: a socket that took one of these ports
+          # before it ran keeps it until it closes, and no container cleanup can free it. Clearing the
+          # stack and waiting lets that connection go; the next step resets the database anyway.
+          for attempt in 1 2 3; do
+            if npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor; then
+              exit 0
+            fi
+            echo "::warning::supabase start failed on attempt ${attempt}; sockets on the stack's ports:"
+            sudo ss -tanp | grep -E ':5432[0-9]' || true
+            npx supabase stop --no-backup || true
+            sleep 10
+          done
+          exit 1
 
       - name: Replay every migration on an empty database
         run: npx supabase db reset --local
