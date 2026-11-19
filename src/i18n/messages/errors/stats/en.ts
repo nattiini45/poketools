@@ -60,8 +60,12 @@ export default {
   wiki_note_block_superadmin_only: 'Only the superadmin can block a note from resubmitting',
   wiki_note_block_not_rejected: 'Only a rejected note can be blocked from resubmitting',
   wiki_note_changed: 'This note changed after you loaded it. Reload and review it again.',
+  wiki_note_owner_conflict: 'This note or scope has conflicting owners. No change was made.',
   wiki_report_not_found: 'Report not found',
   wiki_report_changed: 'Another moderator already closed this report. Reload to see its current status.',
+  wiki_report_owner_conflict: 'This report has conflicting owners. No change was made.',
+  wiki_queue_id_conflict: 'This moderation queue contains conflicting entry IDs.',
+  wiki_queue_scan_limit: 'This moderation page is too deep to read safely. Use a smaller offset or a narrower filter.',
 
   // Damage calc per-item errors (`api/calc/**` result `error`, AI calc tool;
   // `unknown_species` above is shared). `{type}` is the English Tera type name.

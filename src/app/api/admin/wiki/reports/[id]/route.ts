@@ -1,13 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { z } from 'zod';
 import { requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { wikiReportUpdateSchema, formatZodErrors } from '@/lib/validation';
-import { getNoteReportStatus, updateNoteReportStatus } from '@/lib/supabase/queries/wiki-notes';
+import { updateNoteReportStatus } from '@/lib/supabase/queries/wiki-notes';
 import { logAuditEvent } from '@/lib/audit/log';
 import { logger } from '@/lib/logger';
 import { noteReportMachine } from '@/lib/wiki/note-report-state';
 import type { ApiResult } from '@/types/api';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import { bindScopedPhaseWikiServices, resolveWikiReportWrite } from '@/lib/wiki/native-phase-services';
+
+const nativeCloseSchema = wikiReportUpdateSchema.extend({
+  expected_status: wikiReportUpdateSchema.shape.status,
+  expected_updated_at: z.iso.datetime({ offset: true }),
+}).strict();
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -29,7 +37,20 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
     }
 
     const to = zodResult.data.status;
-    const from = await getNoteReportStatus(id);
+    const target = await resolveWikiReportWrite(id);
+    if (target.kind === 'phase') {
+      const parsed = nativeCloseSchema.safeParse(rawBody);
+      if (!parsed.success) {
+        const issues = formatZodErrors(parsed.error);
+        throw new UserFacingError(issues, { code: 'validation_failed', params: { issues } });
+      }
+      const { owner } = target;
+      await bindScopedPhaseWikiServices({ owner, player: admin }, request).closeReport(owner.phase_id, id.toLowerCase(), to, {
+        status: parsed.data.expected_status, updatedAt: parsed.data.expected_updated_at,
+      });
+      return NextResponse.json<ApiResult<{ updated: true }>>({ success: true, data: { updated: true } });
+    }
+    const from = target.status;
     if (!from) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Report not found', code: 'wiki_report_not_found' },

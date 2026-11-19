@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requirePlayer } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { wikiNoteReportSchema, formatZodErrors } from '@/lib/validation';
-import { createNoteReport, getNoteById } from '@/lib/supabase/queries/wiki-notes';
+import { createNoteReport } from '@/lib/supabase/queries/wiki-notes';
 import { logAuditEvent } from '@/lib/audit/log';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import type { ApiResult } from '@/types/api';
 import type { WikiNoteReport } from '@/types/wiki';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { bindScopedPhaseWikiServices, resolveWikiNoteWrite } from '@/lib/wiki/native-phase-services';
 
 type RouteParams = { params: Promise<{ id: string }> };
 
@@ -31,7 +32,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       );
     }
 
-    const note = await getNoteById(id);
+    const target = await resolveWikiNoteWrite(id);
+    if (target.kind === 'phase') {
+      const { owner } = target;
+      const receipt = await bindScopedPhaseWikiServices({ owner, player }, request).report(owner.phase_id, id.toLowerCase(), zodResult.data);
+      return NextResponse.json({ success: true, data: receipt }, { status: 201 });
+    }
+    const { note } = target;
     if (!note || !note.approved) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Note not found', code: 'wiki_note_not_found' },

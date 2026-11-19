@@ -1,6 +1,8 @@
 import type { PhaseWikiNote, PhaseWikiReport, PublicPhaseWikiNote } from '@/types/phase-wiki';
 
-export function toPublicPhaseWikiNote(note: PhaseWikiNote): PublicPhaseWikiNote | null {
+export function toPublicPhaseWikiNote(
+  note: Pick<PhaseWikiNote, keyof PublicPhaseWikiNote | 'approved' | 'rejected_at' | 'resubmission_blocked_at'>,
+): PublicPhaseWikiNote | null {
   if (!note.approved || note.rejected_at || note.resubmission_blocked_at) return null;
   if (!['pokemon', 'move', 'item', 'ability', 'tera'].includes(note.entity_type)) return null;
   return {

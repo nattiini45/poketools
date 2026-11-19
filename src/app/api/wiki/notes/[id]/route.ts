@@ -18,6 +18,9 @@ import { noteModerationMachine, noteModerationState } from '@/lib/wiki/note-mode
 import type { ApiResult } from '@/types/api';
 import type { WikiNotePatchInput } from '@/lib/validation';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
+import { bindScopedPhaseWikiServices, resolveWikiNoteWrite } from '@/lib/wiki/native-phase-services';
+import { UserFacingError } from '@/lib/api/user-facing-error';
+import wikiErrors from '@/i18n/messages/errors/stats/en';
 
 function noteNotFoundResponse() {
   return NextResponse.json<ApiResult<never>>(
@@ -60,7 +63,7 @@ function blockNotRejectedResponse() {
  * Blocking keeps the note rejected; it is refused (409) for a note that is not rejected. Site admins who are not the
  * superadmin get 403. Repeating the current state is a no-op (nothing written, nothing audited).
  */
-async function handleResubmissionBlock(id: string, rawBody: unknown) {
+async function handleResubmissionBlock(request: Request, id: string, rawBody: unknown) {
   const zodResult = wikiNoteBlockResubmissionSchema.safeParse(rawBody);
   if (!zodResult.success) {
     const issues = formatZodErrors(zodResult.error);
@@ -83,7 +86,16 @@ async function handleResubmissionBlock(id: string, rawBody: unknown) {
     );
   }
 
-  const note = await getNoteById(id);
+  const target = await resolveWikiNoteWrite(id);
+  if (target.kind === 'phase') {
+    const { owner } = target;
+    await bindScopedPhaseWikiServices({ owner, player: admin, isSuperadmin: true }, request)
+      .block(owner.phase_id, id.toLowerCase(), block);
+    return NextResponse.json<ApiResult<{ updated: true; blocked: boolean }>>(
+      { success: true, data: { updated: true, blocked: block } },
+    );
+  }
+  const { note } = target;
   if (!note) {
     return NextResponse.json<ApiResult<never>>(
       { success: false, error: 'Note not found', code: 'wiki_note_not_found' },
@@ -163,7 +175,7 @@ export async function PATCH(
 
     // The superadmin's block / unblock request is its own strict body, never mixed with an edit or a verdict.
     if (typeof rawBody === 'object' && rawBody !== null && 'block_resubmission' in rawBody) {
-      return await handleResubmissionBlock(id, rawBody);
+      return await handleResubmissionBlock(request, id, rawBody);
     }
 
     const zodResult = wikiNotePatchSchema.safeParse(rawBody);
@@ -189,45 +201,32 @@ export async function PATCH(
       );
     }
 
-    // Approving a note requires admin
-    if (body.approved === true) {
+    if (body.approved === true || body.rejected === true) {
       const admin = await requireAdmin();
-      const note = await getNoteById(id);
-      if (!note) return noteNotFoundResponse();
-      const guard = verdictGuard(id, note, body, 'approved');
-      if (!guard) return noteChangedResponse();
-      if (!(await approveNote(id, admin.playerId, guard))) return await verdictMissedResponse(id);
-      logAuditEvent({
-        actor_id: admin.playerId,
-        actor_name: admin.name,
-        action: 'wiki.note.approve',
-        resource_type: 'wiki_note',
-        resource_id: id,
-        resource_name: `${note.entity_type}:${note.entity_name}`,
-      });
-      return NextResponse.json<ApiResult<{ updated: true }>>(
-        { success: true, data: { updated: true } },
-      );
-    }
-
-    if (body.rejected === true) {
-      const admin = await requireAdmin();
-      const note = await getNoteById(id);
-      if (!note) return noteNotFoundResponse();
-      const guard = verdictGuard(id, note, body, 'rejected');
-      if (!guard) return noteChangedResponse();
-      // No reason given is stored as null (never an English default); a UI showing
-      // the reason labels null in the viewer's language.
+      const target = await resolveWikiNoteWrite(id);
+      const next = body.approved === true ? 'approved' : 'rejected';
       const reason = body.rejection_reason ?? null;
-      if (!(await rejectNote(id, admin.playerId, reason, guard))) return await verdictMissedResponse(id);
+      if (target.kind === 'phase') {
+        const { owner } = target;
+        await bindScopedPhaseWikiServices({ owner, player: admin }, request).verdict(owner.phase_id, id.toLowerCase(), next, {
+          state: body.expected_state, updatedAt: body.expected_updated_at,
+        }, reason);
+        return NextResponse.json<ApiResult<{ updated: true }>>({ success: true, data: { updated: true } });
+      }
+      const { note } = target;
+      if (!note) return noteNotFoundResponse();
+      const guard = verdictGuard(id, note, body, next);
+      if (!guard) return noteChangedResponse();
+      const applied = next === 'approved' ? await approveNote(id, admin.playerId, guard) : await rejectNote(id, admin.playerId, reason, guard);
+      if (!applied) return await verdictMissedResponse(id);
       logAuditEvent({
         actor_id: admin.playerId,
         actor_name: admin.name,
-        action: 'wiki.note.reject',
+        action: next === 'approved' ? 'wiki.note.approve' : 'wiki.note.reject',
         resource_type: 'wiki_note',
         resource_id: id,
         resource_name: `${note.entity_type}:${note.entity_name}`,
-        metadata: { reason, was_approved: note.approved },
+        ...(next === 'rejected' ? { metadata: { reason, was_approved: note.approved } } : {}),
       });
       return NextResponse.json<ApiResult<{ updated: true }>>(
         { success: true, data: { updated: true } },
@@ -236,7 +235,16 @@ export async function PATCH(
 
     // Updating content requires being the author
     const player = await requirePlayer();
-    const note = await getNoteById(id);
+    const target = await resolveWikiNoteWrite(id);
+    if (target.kind === 'phase') {
+      if (!body.content) throw new UserFacingError(wikiErrors.wiki_note_content_required, { code: 'wiki_note_content_required', status: 400 });
+      const { owner } = target;
+      const { requeued } = await bindScopedPhaseWikiServices({ owner, player }, request).edit(owner.phase_id, id.toLowerCase(), body.content);
+      return NextResponse.json<ApiResult<{ updated: true; requeued: boolean }>>(
+        { success: true, data: { updated: true, requeued } },
+      );
+    }
+    const { note } = target;
     if (!note) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Note not found', code: 'wiki_note_not_found' },
@@ -296,7 +304,7 @@ export async function PATCH(
 }
 
 export async function DELETE(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
@@ -305,7 +313,13 @@ export async function DELETE(
     const invalidId = rejectInvalidPathId(id, 'INVALID_NOTE_ID');
     if (invalidId) return invalidId;
 
-    const note = await getNoteById(id);
+    const target = await resolveWikiNoteWrite(id);
+    if (target.kind === 'phase') {
+      const { owner } = target;
+      await bindScopedPhaseWikiServices({ owner, player }, request).remove(owner.phase_id, id.toLowerCase());
+      return NextResponse.json<ApiResult<{ deleted: true }>>({ success: true, data: { deleted: true } });
+    }
+    const { note } = target;
     if (!note) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Note not found', code: 'wiki_note_not_found' },

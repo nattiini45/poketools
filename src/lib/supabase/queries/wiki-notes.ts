@@ -43,7 +43,7 @@ type WikiNoteReportRow = {
   players?: { name: string } | null;
   wiki_notes?:
     | (Pick<WikiNoteRow, 'id' | 'entity_type' | 'entity_name' | 'content' | 'author_id' | 'approved'> &
-        Partial<Pick<WikiNoteRow, 'rejected_at' | 'resubmission_blocked_at' | 'updated_at'>>)
+        Partial<Pick<WikiNoteRow, 'rejected_at' | 'resubmission_blocked_at' | 'updated_at' | 'scope_type' | 'scope_id'>>)
     | null;
 };
 
@@ -149,7 +149,7 @@ export async function getApprovedNotes(
   return ((data as unknown as WikiNoteRow[] | null) ?? []).map(toWikiNote);
 }
 
-export async function listNotesForModeration(filters: WikiModerationFilters = {}): Promise<WikiNote[]> {
+export async function listNotesForModeration(filters: WikiModerationFilters = {}, mixed = false): Promise<WikiNote[]> {
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
   let query = supabase
@@ -166,7 +166,7 @@ export async function listNotesForModeration(filters: WikiModerationFilters = {}
     query = query.not('rejected_at', 'is', null);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await (mixed ? query.order('id', { ascending: false }) : query);
   if (error) throw error;
   return ((data as unknown as WikiNoteRow[] | null) ?? []).map(toWikiNote);
 }
@@ -384,12 +384,14 @@ export async function createNoteReport(
   return toWikiReport(data as unknown as WikiNoteReportRow);
 }
 
-export async function listNoteReports(filters: WikiReportFilters = {}): Promise<WikiNoteReport[]> {
+async function readNoteReports(filters: WikiReportFilters, mixed: boolean): Promise<WikiNoteReportRow[]> {
   const limit = filters.limit ?? 50;
   const offset = filters.offset ?? 0;
   let query = supabase
     .from('wiki_note_reports')
-    .select('*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at)')
+    .select(mixed
+      ? '*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey!inner(id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at, scope_type, scope_id)'
+      : '*, players!wiki_note_reports_reporter_id_fkey(name), wiki_notes!wiki_note_reports_note_id_fkey(id, entity_type, entity_name, content, author_id, approved, rejected_at, resubmission_blocked_at, updated_at)')
     .order('created_at', { ascending: false })
     .range(offset, offset + limit - 1);
 
@@ -397,9 +399,29 @@ export async function listNoteReports(filters: WikiReportFilters = {}): Promise<
     query = query.eq('status', filters.status);
   }
 
-  const { data, error } = await query;
+  const { data, error } = await (mixed ? query.order('id', { ascending: false }) : query);
   if (error) throw error;
-  return ((data as unknown as WikiNoteReportRow[] | null) ?? []).map(toWikiReport);
+  return (data as unknown as WikiNoteReportRow[] | null) ?? [];
+}
+
+export async function listNoteReports(filters: WikiReportFilters = {}): Promise<WikiNoteReport[]> {
+  return (await readNoteReports(filters, false)).map(toWikiReport);
+}
+
+export async function listLegacyWikiReportsForMerge(filters: WikiReportFilters) {
+  return (await readNoteReports(filters, true)).map(row => ({
+    ...toWikiReport(row),
+    scope_type: row.wiki_notes?.scope_type,
+    scope_id: row.wiki_notes?.scope_id,
+  }));
+}
+
+export async function getLegacyWikiReportTarget(id: string) {
+  const { data, error } = await supabase.from('wiki_note_reports')
+    .select('note_id, reporter_id, status, note:wiki_notes!inner(scope_type, scope_id)')
+    .eq('id', id).maybeSingle();
+  if (error) throw error;
+  return data && { ...data, status: data.status as WikiNoteReportStatus };
 }
 
 /** The status of one report, or null when there is none with that id. */

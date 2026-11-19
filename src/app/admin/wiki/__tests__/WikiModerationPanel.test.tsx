@@ -13,6 +13,7 @@ import WikiModerationPanel, {
   noteApproveRequest,
   noteBlockRequest,
   noteRejectRequest,
+  reportCloseRequest,
 } from '../WikiModerationPanel';
 
 function reportOn(approved: boolean | undefined): WikiNoteReport {
@@ -240,5 +241,26 @@ describe('canCloseReport', () => {
     expect(canCloseReport(open, 'dismissed')).toBe(true);
     expect(canCloseReport({ ...open, status: 'reviewed' }, 'dismissed')).toBe(false);
     expect(canCloseReport({ ...open, status: 'dismissed' }, 'reviewed')).toBe(false);
+  });
+});
+
+describe('reportCloseRequest', () => {
+  it('keeps the old report URL and status-only body for a retained legacy report', () => {
+    const { url, init } = reportCloseRequest(reportOn(true), 'dismissed');
+    expect(url).toBe('/api/admin/wiki/reports/r1');
+    expect(init.method).toBe('PATCH');
+    expect(JSON.parse(init.body)).toEqual({ status: 'dismissed' });
+  });
+
+  it('sends the exact report version, not the embedded note version, for either native close', () => {
+    const base = reportOn(true);
+    if (!base.note) throw new Error('Expected a note');
+    const updated_at = '2026-01-01T00:00:00.123456+00:00';
+    const report = { ...base, updated_at, note: { ...base.note, phase_id: 'phase', updated_at: base.updated_at } };
+    for (const status of ['reviewed', 'dismissed'] as const) {
+      expect(JSON.parse(reportCloseRequest(report, status).init.body)).toEqual({
+        status, expected_status: 'open', expected_updated_at: updated_at,
+      });
+    }
   });
 });

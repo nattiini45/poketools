@@ -39,7 +39,7 @@ type NoteFeedback =
 interface WikiNotesSectionProps {
   entityType: WikiEntityType;
   entityName: string;
-  notes: WikiNote[];
+  notes: Pick<WikiNote, 'id' | 'content' | 'author_name' | 'created_at'>[];
   /** When true, notes are hidden and a sign-in CTA is shown */
   unauthenticated?: boolean;
 }
@@ -89,7 +89,7 @@ function WikiNotesAuthenticated({
   const t = useT(wikiMessages);
   const formatter = useFormatter();
   const apiErrorText = useApiErrorText(errorsStats);
-  const [localNotes] = useState<WikiNote[]>(notes);
+  const [localNotes] = useState(notes);
   const [content, setContent] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<NoteFeedback | null>(null);

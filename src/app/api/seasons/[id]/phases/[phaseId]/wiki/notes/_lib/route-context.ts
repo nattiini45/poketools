@@ -1,17 +1,13 @@
 import { NextResponse } from 'next/server';
 import type { ZodType } from 'zod';
 import { AuthError, isSuperadmin, requireAuth } from '@/lib/auth/helpers';
-import { logAuditEvent } from '@/lib/audit/log';
 import { CACHE } from '@/lib/api/cache';
 import { rejectInvalidPathId } from '@/lib/api/invalid-path-id';
 import { UserFacingError } from '@/lib/api/user-facing-error';
 import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
-import { expirePhaseReads } from '@/lib/revalidation';
 import { resolveLeaguePhaseRoute } from '@/lib/supabase/queries/phase-route-owners';
-import { phaseWikiStorage } from '@/lib/supabase/queries/phase-wiki-notes';
 import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { formatZodErrors } from '@/lib/validation';
-import { createPhaseWikiServices } from '@/lib/wiki/phase-services';
 import type { ApiResult } from '@/types/api';
 import seasonErrors from '@/i18n/messages/errors/seasons/en';
 
@@ -19,7 +15,7 @@ export type WikiPhaseParams = { id: string; phaseId: string };
 export type WikiNoteParams = WikiPhaseParams & { noteId: string };
 export type WikiReportParams = WikiPhaseParams & { reportId: string };
 
-type Scope = Exclude<Awaited<ReturnType<typeof resolveWikiPhase>>, NextResponse>;
+export { bindScopedPhaseWikiServices } from '@/lib/wiki/native-phase-services';
 
 function phaseNotFound() {
   return new UserFacingError(seasonErrors.PHASE_NOT_FOUND, { code: 'PHASE_NOT_FOUND', status: 404 });
@@ -52,29 +48,6 @@ export async function resolveWikiPhase(
   const owner = await resolveLeaguePhaseRoute(id.toLowerCase(), phaseId.toLowerCase(), 'phase');
   if (owner?.kind !== 'phase') throw phaseNotFound();
   return { owner, player, isSuperadmin: isSuperadmin(session) };
-}
-
-export function bindScopedPhaseWikiServices({ owner, player, isSuperadmin }: Scope, request: Request) {
-  async function assertScopedPhase(phaseId: string) {
-    if (phaseId !== owner.phase_id) throw phaseNotFound();
-  }
-  return createPhaseWikiServices({
-    storage: phaseWikiStorage,
-    assertPublicPhase: assertScopedPhase,
-    requireActor: async phaseId => {
-      await assertScopedPhase(phaseId);
-      return { playerId: player.playerId, isSiteAdmin: player.isAdmin, isSuperadmin };
-    },
-    invalidate: async phaseId => expirePhaseReads(phaseId, owner.season_id),
-    auditCommit: ({ action, resource, metadata }) => logAuditEvent({
-      actor_id: player.playerId,
-      actor_name: player.name,
-      action,
-      ...resource,
-      metadata: { ...metadata, phase_id: owner.phase_id, season_id: owner.season_id },
-      ip_address: request.headers.get('x-forwarded-for') ?? undefined,
-    }),
-  });
 }
 
 export function parseWikiInput<T>(schema: ZodType<T>, input: unknown) {
