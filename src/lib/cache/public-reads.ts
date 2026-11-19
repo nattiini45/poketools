@@ -168,6 +168,13 @@ const seasonList = cache(() =>
   ),
 );
 
+const nativeSeasonList = cache(() =>
+  cachedRead(
+    { name: 'native-season-list', key: [], tags: [publicTags.seasons], ttl: PUBLIC_LIST_TTL_S },
+    () => listSeasons({ storage: 'phase' }),
+  ),
+);
+
 const tournamentList = cache(() =>
   cachedRead(
     { name: 'tournament-list', key: [], tags: [publicTags.tournaments], ttl: PUBLIC_LIST_TTL_S },
@@ -619,6 +626,7 @@ const playerRatingHistory = cache((playerId: string, limit: number) =>
 export const publicReads = {
   hiddenPlayerIds,
   seasonList,
+  nativeSeasonList,
   tournamentList,
   playerDirectory,
   ratingLeaderboard,

@@ -121,12 +121,17 @@ function toSeasonDetails(row: {
  * (src/lib/rating/rating-scope.ts).
  */
 export async function listSeasons(
-  opts: { includeTestSeasons?: boolean } = {},
+  opts: { includeTestSeasons?: boolean; storage?: 'legacy' | 'phase' } = {},
 ): Promise<SeasonWithDetails[]> {
-  let query = supabase
-    .from('seasons')
-    .select(SEASON_DETAILS_SELECT)
-    .eq('archived', false);
+  const table = supabase.from('seasons');
+  let query = (opts.storage === 'phase'
+    ? table.select(`
+      *,
+      rulesets:ruleset_definition_versions ( name:name_text ),
+      season_participants ( count ),
+      tournaments:league_phases!league_phases_season_id_fkey ( count )
+    `)
+    : table.select(SEASON_DETAILS_SELECT)).eq('archived', false);
   if (opts.includeTestSeasons === false) query = query.eq('is_test_season', false);
 
   const { data, error } = await query

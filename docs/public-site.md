@@ -53,9 +53,9 @@ src/app/(public)/
 - `export const dynamic = 'force-dynamic'`: rendered per request, because it
   reads the viewer's session. There is no page-level `revalidate` (it had one;
   `force-dynamic` overrode it).
-- The lists and the featured standings come from the public read cache
-  (60 s, see [Public read cache](#public-read-cache)), so a warm render issues
-  no Supabase query; only the session read remains.
+- The lists and featured standings come from tagged public caches. The mode
+  lookup stays live only when phase storage is enabled; neither store reuses
+  the other's league list or league standings cache.
 
 ### Data flow
 
@@ -64,7 +64,7 @@ The homepage runs three reads in parallel up front:
 ```typescript
 const [tournaments, leagues, sessionPlayer] = await Promise.all([
   publicReads.tournamentList(), // cached listTournaments (tag `tournaments`, 60 s)
-  publicReads.seasonList(),     // cached listSeasons (tag `seasons`, 60 s; leagues = seasons)
+  leagueListForMode,           // legacy or phase-count list (tag `seasons`, 60 s)
   getSessionPlayer(),           // src/lib/auth/helpers — live, null when anonymous
 ]);
 ```
@@ -73,10 +73,10 @@ Then it computes the **featured card**:
 
 1. Pick the first `status === 'active'` league; fall back to the first
    `status === 'active'` tournament; otherwise render the empty-state message.
-2. For the featured entity, call
-   `publicReads.standingsPreview(type, id, 3)` (cached `getStandingsPreview`,
-   tags `season:<id>` or `tournament:<id>` plus `players`) → top-3 standings
-   rows for the card.
+2. For a native league, call `phasePublicReads.seasonStandingsPreview(id, 3)`.
+   For a legacy league or standalone tournament, call
+   `publicReads.standingsPreview(type, id, 3)`. Both return the card's top
+   three standings rows and expire on changes to the competition or players.
 
 > **`getStandingsPreview` dependency** (in
 > [`src/lib/stats/standings-preview.ts`](../src/lib/stats/standings-preview.ts)):
