@@ -314,6 +314,7 @@ describe('guard triggers that fire on INSERT of an owned table', () => {
     'tournament_participants.trg_phase_storage_legacy_freeze',
     'tournament_reports.trg_phase_storage_legacy_freeze',
     'tournaments.trg_phase_storage_legacy_freeze',
+    'tournaments.trg_phase_storage_legacy_league_tournament',
     'wiki_note_reports.trg_phase_storage_legacy_freeze',
     'wiki_notes.trg_phase_storage_legacy_freeze',
   ];

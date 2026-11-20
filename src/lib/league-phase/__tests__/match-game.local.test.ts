@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 import type { Database } from '@/types/database';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_MATCH_GAME');
 
@@ -351,7 +352,7 @@ describe.skipIf(!optedIn)('native match/game persistence on the CI disposable st
         { game_id: nativeGame, player_id: players[0], pokemon_name: 'Bulbasaur', kos_dealt: 7 },
         { game_id: otherGame, player_id: players[0], pokemon_name: 'Charmander', kos_dealt: 11 },
       ])).error).toBeNull();
-      expect((await admin.from('tournaments').insert({ id: linkedTournament, season_id: seasonId, name: 'Legacy evolution owner', bracket_type: 'round_robin', ruleset_id: rulesetId })).error).toBeNull();
+      await insertAsSchemaOwner('tournaments', [{ id: linkedTournament, season_id: seasonId, name: 'Legacy evolution owner', bracket_type: 'round_robin', ruleset_id: rulesetId }]);
       expect((await admin.from('rounds').insert({ id: linkedRound, tournament_id: linkedTournament, name: 'Round 1', round_number: 1, best_of: 3 })).error).toBeNull();
       expect((await admin.from('matches').insert({ id: linkedMatch, tournament_id: linkedTournament, round_id: linkedRound, player_1_id: players[0], player_2_id: players[1] })).error).toBeNull();
       expect((await admin.from('games').insert([

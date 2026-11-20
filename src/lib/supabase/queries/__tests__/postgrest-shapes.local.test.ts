@@ -3,6 +3,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { expectNoPrivatePlayerData } from '@/lib/players/__tests__/private-player-fields';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL test: it seeds rows into a LOCAL Supabase stack and runs the real
 // query functions against real PostgREST, to prove the select shapes the unit
@@ -145,15 +146,12 @@ describe.skipIf(!optIn)('PostgREST select shapes (local stack)', () => {
         { season_id: ids.seasonA, player_id: ids.p3 },
       ], { defaultToNull: false }),
     );
-    await run(
-      'tournaments',
-      client.from('tournaments').insert([
+    await insertAsSchemaOwner('tournaments', [
         { id: ids.t1, name: `Shapes ${RUN} Stage 1`, season_id: ids.seasonA, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset },
         { id: ids.t2, name: `Shapes ${RUN} Stage 2`, season_id: ids.seasonA, stage_order: 1, bracket_type: 'single_elim', ruleset_id: ids.ruleset },
         { id: ids.t3, name: `Shapes ${RUN} Open`, bracket_type: 'swiss', ruleset_id: ids.ruleset },
         { id: ids.t4, name: `Shapes ${RUN} Old Open`, bracket_type: 'double_elim', ruleset_id: ids.ruleset, archived: true },
-      ], { defaultToNull: false }),
-    );
+    ]);
     await run(
       'tournament_participants',
       client.from('tournament_participants').insert([

@@ -5,6 +5,7 @@ import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/loca
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 import type { BattleStat } from '@/types/game';
 import type { Json } from '@/types/database';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 vi.mock('@/lib/revalidation', () => ({
   expireSeasonReads: vi.fn(), revalidateMatchPages: vi.fn(), revalidatePublicPath: vi.fn(),
@@ -40,7 +41,7 @@ describe.skipIf(!optedIn)('native aggregate atomicity on the disposable CI datab
     await ok(db.from('league_phases').insert({ id: ids.phase, season_id: ids.season, name: 'Aggregate fixture phase', bracket_type: 'swiss', ruleset_id: ids.ruleset }));
     await ok(db.from('phase_rounds').insert({ id: ids.round, phase_id: ids.phase, name: 'Round 1', round_number: 1, best_of: 3 }));
     await ok(db.from('phase_matches').insert({ id: ids.match, phase_id: ids.phase, round_id: ids.round, player_1_id: ids.players[0], player_2_id: ids.players[1], status: 'in_progress' }));
-    await ok(db.from('tournaments').insert({ id: ids.tournament, season_id: ids.season, name: 'Legacy aggregate fixture', bracket_type: 'swiss', ruleset_id: ids.ruleset }));
+    await insertAsSchemaOwner('tournaments', [{ id: ids.tournament, season_id: ids.season, name: 'Legacy aggregate fixture', bracket_type: 'swiss', ruleset_id: ids.ruleset }]);
     await ok(db.from('rounds').insert({ id: ids.legacyRound, tournament_id: ids.tournament, name: 'Round 1', round_number: 1, best_of: 3 }));
     await ok(db.from('matches').insert({ id: ids.legacyMatch, tournament_id: ids.tournament, round_id: ids.legacyRound, player_1_id: ids.players[0], player_2_id: ids.players[1], status: 'in_progress' }));
   });

@@ -186,6 +186,8 @@ export default defineDe<typeof en>()({
   LEAGUE_TRASH_EXPIRED: 'Die Frist zum Wiederherstellen dieser Liga ist abgelaufen, sie lässt sich nicht mehr wiederherstellen.',
   LEAGUE_TRASH_SEASON_EXISTS:
     'Es gibt wieder eine Liga mit derselben ID, daher lässt sich die gelöschte Liga nicht wiederherstellen. Es wurde nichts wiederhergestellt.',
+  LEAGUE_TRASH_LEGACY_SNAPSHOT:
+    'Diese Liga wurde gelöscht, bevor ihre Phasen in den neuen Liga-Speicher umgezogen sind, daher lässt sie sich nicht mehr wiederherstellen. Es wurde nichts wiederhergestellt.',
   LEAGUE_TRASH_SCHEMA_DRIFT:
     'Die Liga lässt sich nicht wiederherstellen: Die Tabelle {rel} hat sich nach dem Löschen der Liga geändert und braucht jetzt die Spalten {columns}, die die gespeicherte Kopie nicht hat. Es wurde nichts wiederhergestellt.',
   LEAGUE_TRASH_PARENT_MISSING:

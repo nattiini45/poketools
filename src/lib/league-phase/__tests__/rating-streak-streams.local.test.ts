@@ -6,6 +6,7 @@ import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/loca
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 import type { Database, Json } from '@/types/database';
 import type { RatingStoragePort } from '@/lib/rating/storage';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_RATING_STREAMS');
 
@@ -138,7 +139,7 @@ describe.skipIf(!optedIn)('rating/streak streams on the disposable phase-mode st
     const legacyRound = randomUUID();
     const legacyMatch = randomUUID();
     try {
-      expect((await client.from('tournaments').insert({ id: legacyOwner, season_id: season, name: 'Obsolete league history fixture', bracket_type: 'round_robin', ruleset_id: ruleset })).error).toBeNull();
+      await insertAsSchemaOwner('tournaments', [{ id: legacyOwner, season_id: season, name: 'Obsolete league history fixture', bracket_type: 'round_robin', ruleset_id: ruleset }]);
       expect((await client.from('rounds').insert({ id: legacyRound, tournament_id: legacyOwner, name: 'Round 1', round_number: 1, best_of: 3 })).error).toBeNull();
       expect((await client.from('matches').insert({ id: legacyMatch, tournament_id: legacyOwner, round_id: legacyRound, player_1_id: players[0], player_2_id: players[1], winner_id: players[0], status: 'completed', date_played: '2026-01-02T00:00:00Z' })).error).toBeNull();
       expect((await client.from('rating_history').insert(players.map((player_id, index) => ({

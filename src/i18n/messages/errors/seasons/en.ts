@@ -215,6 +215,8 @@ export default {
   LEAGUE_TRASH_NOT_FOUND: 'This league is not in the trash (it was already restored or removed).',
   LEAGUE_TRASH_EXPIRED: 'The restore window of this league has ended, so it can no longer be restored.',
   LEAGUE_TRASH_SEASON_EXISTS: 'A league with the same id exists again, so the trashed league cannot be restored. Nothing was restored.',
+  LEAGUE_TRASH_LEGACY_SNAPSHOT:
+    'This league was deleted before its phases moved to the new league storage, so it can no longer be restored. Nothing was restored.',
   LEAGUE_TRASH_SCHEMA_DRIFT:
     'The league cannot be restored: the table {rel} changed after the league was deleted and now needs the columns {columns}, which the saved copy does not have. Nothing was restored.',
   LEAGUE_TRASH_PARENT_MISSING:

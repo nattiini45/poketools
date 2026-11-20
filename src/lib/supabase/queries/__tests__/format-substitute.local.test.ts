@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL test for format_substitute_seat (supabase/migrations/20261106090000_format_challenges.sql). It runs the query
 // module against a LOCAL Supabase stack to prove the seat handover of a substitution: the links (both sides), items, picks
@@ -138,13 +139,10 @@ describe.skipIf(!optIn)('format_substitute_seat (local stack)', () => {
         engine: 'kit',
       }),
     );
-    await run(
-      'tournaments',
-      client.from('tournaments').insert([
-        { id: ids.phaseA, name: `Seat ${RUN} A`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
-        { id: ids.phaseB, name: `Seat ${RUN} B`, season_id: ids.season, stage_order: 1, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
-      ]),
-    );
+    await insertAsSchemaOwner('tournaments', [
+      { id: ids.phaseA, name: `Seat ${RUN} A`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
+      { id: ids.phaseB, name: `Seat ${RUN} B`, season_id: ids.season, stage_order: 1, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
+    ]);
   }, 60_000);
 
   afterAll(async () => {

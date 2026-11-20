@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL proof of the PostgREST shapes behind the admin match list
 // (`listAdminMatchesPage`) that the mocked unit tests cannot prove:
@@ -108,17 +109,14 @@ describe.skipIf(!optIn)('admin match list: PostgREST shapes (local stack)', () =
         { id: ids.seasonArchived, name: `MatchList ${RUN} Archived`, format_type: 'singles', archived: true },
       ], { defaultToNull: false }),
     );
-    await run(
-      'tournaments',
-      client.from('tournaments').insert([
+    await insertAsSchemaOwner('tournaments', [
         { id: ids.tLive, name: `ML ${RUN} live`, bracket_type: 'swiss', ruleset_id: ids.rulesetA, season_id: ids.seasonLive },
         { id: ids.tTest, name: `ML ${RUN} test`, bracket_type: 'round_robin', ruleset_id: ids.rulesetB, season_id: ids.seasonTest },
         // Archiving a league archives its tournaments (archiveTournamentsBySeason), and a phase can be archived alone.
         { id: ids.tArchivedLeague, name: `ML ${RUN} archived league`, bracket_type: 'swiss', ruleset_id: ids.rulesetA, season_id: ids.seasonArchived, archived: true },
         { id: ids.tArchived, name: `ML ${RUN} archived`, bracket_type: 'swiss', ruleset_id: ids.rulesetA, season_id: ids.seasonLive, archived: true },
         { id: ids.tSolo, name: `ML ${RUN} solo`, bracket_type: 'single_elim', ruleset_id: ids.rulesetA },
-      ], { defaultToNull: false }),
-    );
+    ]);
     await run(
       'rounds',
       client.from('rounds').insert([

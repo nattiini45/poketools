@@ -5,6 +5,7 @@ import { ltext } from '@/lib/studio-core/ltext';
 import { newRulesetDocument } from '../document';
 import type { SessionPlayer } from '@/types/auth';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL test of the ruleset library against a LOCAL Supabase stack (after `supabase db reset --local`): the real query
 // modules, the real library functions and the real database functions (publish, immutability, the pin keys, the format
@@ -185,7 +186,8 @@ describe.skipIf(!optIn)('ruleset library on the local stack', () => {
     expect((await attachQueries.getPublishedRulesetHeads([definitionId])).get(definitionId)).toBe(first.versionIds.get('gen9ou'));
 
     // A phase pins it: the cleanup keeps it; once nothing pins it, the cleanup deletes it (league-made only).
-    const tournament = unwrap(await admin.from('tournaments').insert({ name: `RS phase ${RUN}`, season_id: seasonId, bracket_type: 'round_robin', ruleset_id: first.versionIds.get('gen9ou') }).select('id').single());
+    const tournament = { id: randomUUID() };
+    await insertAsSchemaOwner('tournaments', [{ id: tournament.id, name: `RS phase ${RUN}`, season_id: seasonId, bracket_type: 'round_robin', ruleset_id: first.versionIds.get('gen9ou') }]);
     created.tournaments.push(tournament.id);
     const kept = await admin.rpc('format_delete_unused_preset_rulesets', { p_recorded: { gen9ou: definitionId }, p_kept: {} });
     expect(kept.data).toEqual([]);

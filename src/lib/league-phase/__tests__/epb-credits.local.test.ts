@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { insertLocalRuleset, deleteLocalRuleset } from '@/test/local-rulesets';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 const optedIn = localStackOptIn('LOCAL_PHASE_EPB');
 const ids = {
@@ -30,9 +31,9 @@ describe.skipIf(!optedIn)('native EPB credits on the disposable CI database', ()
     await ok(db.from('league_phases').insert({
       id: ids.phase, season_id: ids.season, name: 'EPB fixture phase', bracket_type: 'round_robin', ruleset_id: ids.ruleset,
     }));
-    await ok(db.from('tournaments').insert({
+    await insertAsSchemaOwner('tournaments', [{
       id: ids.tournament, season_id: ids.season, name: 'EPB legacy fixture', bracket_type: 'round_robin', ruleset_id: ids.ruleset,
-    }));
+    }]);
     await ok(db.from('phase_rounds').insert({
       id: ids.round, phase_id: ids.phase, name: 'Round 1', round_number: 1, best_of: 3,
     }));
