@@ -489,6 +489,8 @@ Every table in schema `public`, grouped by domain. All have RLS enabled and are 
 | `phase_aggregate_jobs` | Dormant phase-owned aggregate jobs projection/queue; see [Phase-owned storage](./phase-separation.md) |
 | `phase_rating_history` | Dormant phase-owned rating history projection/queue; see [Phase-owned storage](./phase-separation.md) |
 | `phase_storage_state` | Operator-only storage generation; service role reads it, phase writes remain dormant in legacy mode |
+| `phase_transfer_ledger` | One row per P6 maintenance transfer run (forward or inverse): the manifest, row counts and fingerprints it verified. Written only by the operator-only `phase_transfer_*` functions; service role reads it ([phase-separation.md](./phase-separation.md)) |
+| `phase_transfer_lineage` | Old id to new id for every row a transfer moved, kept across forward and inverse runs so both generations stay traceable. Same writers and read access as the ledger |
 | `ruleset_definitions` | Ruleset Studio library: one row per ruleset with slug, bilingual name, owner, visibility (`private`, `league`, `gallery`), the draft being edited and its revision, and the head version (4.7) |
 | `ruleset_definition_versions` | Immutable published versions of a ruleset: document, frozen effective rules, hashes, catalog version. A league or phase pins one (4.7, 9) |
 | `ruleset_pin_backfill_log` | The previous `ruleset_id` of every league and phase the one-time pin replay changed (revert source) |

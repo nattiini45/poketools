@@ -1391,9 +1391,9 @@ stateDiagram-v2
 | --- | --- | --- | --- | --- | --- |
 | `freeze_legacy` | `legacy` | `frozen_legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
 | `cancel` | `frozen_legacy` | `legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
-| `transfer` | `frozen_legacy` | `frozen_phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
-| `reverse_transfer` | `frozen_phase` | `frozen_legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
-| `open` | `frozen_phase` | `phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
+| `transfer` | `frozen_legacy` | `frozen_phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition`<br>`supabase/migrations/20261120100000_phase_transfer.sql#phase_transfer_forward` |  |
+| `reverse_transfer` | `frozen_phase` | `frozen_legacy` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition`<br>`supabase/migrations/20261120100000_phase_transfer.sql#phase_transfer_inverse` |  |
+| `open` | `frozen_phase` | `phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition`<br>`supabase/migrations/20261120100000_phase_transfer.sql#phase_transfer_activate` |  |
 | `freeze_phase` | `phase` | `frozen_phase` | operator | `supabase/migrations/20261117102000_phase_storage_fence.sql#phase_storage_transition` |  |
 
 ## Player moderation status

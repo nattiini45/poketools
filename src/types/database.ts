@@ -6023,6 +6023,75 @@ export type Database = {
           },
         ]
       }
+      phase_transfer_ledger: {
+        Row: {
+          direction: string
+          finished_at: string
+          from_mode: string
+          generation: number
+          id: number
+          operation_id: string
+          report: Json
+          schema_version: string
+          started_at: string
+          to_mode: string
+        }
+        Insert: {
+          direction: string
+          finished_at: string
+          from_mode: string
+          generation: number
+          id?: never
+          operation_id: string
+          report: Json
+          schema_version: string
+          started_at: string
+          to_mode: string
+        }
+        Update: {
+          direction?: string
+          finished_at?: string
+          from_mode?: string
+          generation?: number
+          id?: never
+          operation_id?: string
+          report?: Json
+          schema_version?: string
+          started_at?: string
+          to_mode?: string
+        }
+        Relationships: []
+      }
+      phase_transfer_lineage: {
+        Row: {
+          entity_id: string
+          entity_kind: string
+          first_operation_id: string
+          match_id: string | null
+          phase_id: string
+          recorded_at: string
+          season_id: string
+        }
+        Insert: {
+          entity_id: string
+          entity_kind: string
+          first_operation_id: string
+          match_id?: string | null
+          phase_id: string
+          recorded_at?: string
+          season_id: string
+        }
+        Update: {
+          entity_id?: string
+          entity_kind?: string
+          first_operation_id?: string
+          match_id?: string | null
+          phase_id?: string
+          recorded_at?: string
+          season_id?: string
+        }
+        Relationships: []
+      }
       phase_wiki_note_reports: {
         Row: {
           created_at: string
@@ -10200,6 +10269,61 @@ export type Database = {
       phase_teams_release_matches: {
         Args: { p_match_ids: string[] }
         Returns: number
+      }
+      phase_transfer__assert_keys: { Args: never; Returns: undefined }
+      phase_transfer__begin: {
+        Args: { p_direction: string; p_mode: string; p_operation_id: string }
+        Returns: Json
+      }
+      phase_transfer__copy: {
+        Args: { p_direction: string }
+        Returns: undefined
+      }
+      phase_transfer__drop_temp: { Args: never; Returns: undefined }
+      phase_transfer__finish: {
+        Args: {
+          p_direction: string
+          p_from: string
+          p_operation_id: string
+          p_report: Json
+          p_started: string
+          p_to: string
+        }
+        Returns: Json
+      }
+      phase_transfer__lock: { Args: never; Returns: number }
+      phase_transfer__manifest: {
+        Args: { p_direction: string }
+        Returns: {
+          dst: string
+          dst_where: string
+          exprs: Json
+          key_dst: string
+          key_src: string
+          seq: number
+          src: string
+          src_where: string
+        }[]
+      }
+      phase_transfer__point_challenges: {
+        Args: { p_parent: string }
+        Returns: string
+      }
+      phase_transfer__pointer_counts: { Args: never; Returns: Json }
+      phase_transfer__record_lineage: {
+        Args: { p_operation_id: string }
+        Returns: number
+      }
+      phase_transfer__shared_fingerprint: { Args: never; Returns: Json }
+      phase_transfer__verify_copies: { Args: never; Returns: Json }
+      phase_transfer_activate: { Args: never; Returns: Json }
+      phase_transfer_forward: {
+        Args: { p_operation_id: string }
+        Returns: Json
+      }
+      phase_transfer_inverse: {
+        Args: { p_operation_id: string }
+        Returns: Json
       }
       phase_wiki_report_submit: {
         Args: {
