@@ -197,7 +197,7 @@ jobs:
         run: |
           set -euo pipefail
           out="$(mktemp)"
-          { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/phase-fence-cascade-rehearsal.sql; } |
+          { printf 'BEGIN;\nSET SESSION AUTHORIZATION postgres;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/phase-fence-cascade-rehearsal.sql; } |
             docker exec -i supabase_db_poketools psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 2>&1 | tee "$out"
           grep -q 'phase fence: API cascades into phase rows refused after a rollback to legacy' "$out"
 

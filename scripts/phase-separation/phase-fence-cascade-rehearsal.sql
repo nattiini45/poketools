@@ -1,11 +1,12 @@
 -- Rehearses the phase storage fence against foreign-key cascades after a rollback from phase to legacy
 -- (20261120120000_phase_storage_fence_session.sql). Run after scripts/league-trash-lab/seed.sql inside one transaction
 -- that this file rolls back; the database starts in legacy mode:
---   { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/phase-fence-cascade-rehearsal.sql; } |
+--   { printf 'BEGIN;\nSET SESSION AUTHORIZATION postgres;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/phase-fence-cascade-rehearsal.sql; } |
 --     docker exec -i supabase_db_poketools psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1
 -- An API request reaches the database as session_user authenticator with role service_role, and the operator as
 -- session_user postgres. SET SESSION AUTHORIZATION reproduces both inside this transaction; only a superuser login
--- (supabase_admin on the local stack) may switch it, so the file connects as one and works as postgres.
+-- (supabase_admin on the local stack) may switch it, so the file connects as one and works as postgres. The switch comes
+-- before seed.sql, so the lab schema and its functions belong to postgres like the rest of the rehearsal.
 \set QUIET on
 SET SESSION AUTHORIZATION postgres;
 SELECT gen_random_uuid() AS season, gen_random_uuid() AS phase, gen_random_uuid() AS player, gen_random_uuid() AS bystander \gset
