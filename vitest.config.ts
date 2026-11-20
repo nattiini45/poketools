@@ -80,7 +80,10 @@ const LEGACY_FORMAT_SUITES = [
   'src/lib/supabase/queries/__tests__/format-fences.local.test.ts',
   'src/lib/supabase/queries/__tests__/format-runtime-attach.local.test.ts',
 ];
-const FROZEN_FORMAT_SUITES = ['src/lib/league-phase/__tests__/legacy-format-freeze.local.test.ts'];
+const FROZEN_FORMAT_SUITES = [
+  'src/lib/league-phase/__tests__/legacy-format-freeze.local.test.ts',
+  'src/lib/league-phase/__tests__/legacy-write-freeze.local.test.ts',
+];
 const dbPass = process.env.LOCAL_STACK_FORMAT_TEST_PASS;
 const dbSuites = dbPass === 'legacy' ? LEGACY_FORMAT_SUITES : dbPass === 'frozen_legacy' ? FROZEN_FORMAT_SUITES : LOCAL_STACK_SUITES;
 const dbExcluded = dbPass === 'phase' ? [...LEGACY_FORMAT_SUITES, ...FROZEN_FORMAT_SUITES] : [];
