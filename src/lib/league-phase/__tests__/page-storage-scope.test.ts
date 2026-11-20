@@ -1,10 +1,11 @@
 /**
  * A page that lists or opens match, tournament, team, round, game, cast-session, wiki-note or broadcast-moment
  * data reads a store that the phase separation splits in two. Such a page must pick a generation: by mode
- * (`getPhaseRouteMode`), by the owner of the row it was asked for (`resolveIdOnlyMatchRoute`), or by asking a
- * reader for the phase store (`storage: 'phase'`). A page that does none of those reads the legacy generation
- * always, which is how `/content` kept listing only legacy matches after every other match surface had been
- * bound (see the P6 handoff).
+ * (`getPhaseRouteMode`), by the owner of the id it was asked for (`resolveIdOnlyMatchRoute`,
+ * `resolveIdOnlyTeamRoute`, `resolveIdOnlyCompetitionRoute`), by asking a reader for the phase store
+ * (`storage: 'phase'`), or by handing the phase session to a client that opens it (`openPhaseSession`). A page
+ * that does none of those reads the legacy generation always, which is how `/content` kept listing only legacy
+ * matches after every other match surface had been bound (see the P6 handoff).
  *
  * The guard is a source walk over `src/app/**\/page.tsx`. A page that imports one of the migrated families'
  * legacy readers and shows none of the three signals must be listed in `LEGACY_BY_DESIGN` with its reason, so a
@@ -29,8 +30,12 @@ const MIGRATED_LEGACY_MODULES = [
   'broadcast-moments',
 ] as const;
 
-/** Any one of the three ways a surface picks its generation. */
-const DISPATCH = /getPhaseRouteMode|requireOpenPhaseRouteMode|isPhaseRouteModeEnabled|resolveIdOnlyMatchRoute|storage: 'phase'|phaseStorage/;
+/**
+ * Any one of the ways a surface picks its generation: by mode, by the owner of the id it was asked for (a match, a
+ * team, a competition), by asking a reader for the phase store, or by handing the phase session to a client that opens
+ * it (`openPhaseSession`, the broadcast tracker).
+ */
+const DISPATCH = /getPhaseRouteMode|requireOpenPhaseRouteMode|isPhaseRouteModeEnabled|resolveIdOnlyMatchRoute|resolveIdOnlyTeamRoute|resolveIdOnlyCompetitionRoute|openPhaseSession|storage: 'phase'|phaseStorage/;
 
 /**
  * Pages that read a migrated family's legacy store on purpose. Each entry names why, and the test fails if an
@@ -56,18 +61,6 @@ const LEGACY_BY_DESIGN: ReadonlyArray<{ file: string; reason: string }> = [
   {
     file: 'admin/matches/[id]/import-replay/page.tsx',
     reason: 'Legacy match replay import page. A native match is imported through its phase parse-replay route, so this page stays legacy.',
-  },
-  {
-    file: '(player)/dashboard/broadcast/[mid]/page.tsx',
-    reason: 'Legacy match broadcast view. A native match has no equivalent player page yet: open question named in the PR, not decided here.',
-  },
-  {
-    file: '(player)/dashboard/team/[tid]/page.tsx',
-    reason: 'Legacy team view for the signed-in player. Phase teams are read on the public league pages (#288); open question named in the PR.',
-  },
-  {
-    file: '(player)/teambuilder/[tid]/page.tsx',
-    reason: 'Legacy teambuilder bound to the legacy team row; the same open question as the player team page, not decided here.',
   },
 ];
 

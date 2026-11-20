@@ -9,6 +9,7 @@ import { checkRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 import { validateTeamSchema, formatZodErrors } from '@/lib/validation';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { readExposedRuleset } from '@/lib/ruleset-studio/exposure';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 import { getSeasonById } from '@/lib/supabase/queries/seasons';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { checkTeam } from '@/lib/team/check.server';
@@ -107,7 +108,12 @@ export async function POST(request: NextRequest) {
       kitTournament = tournament;
       ruleset = await getRulesetById(tournament.ruleset_id);
     } else {
-      ruleset = await readExposedRuleset(body.ruleset_id);
+      // Once phases are read, a version pinned by a league phase is as readable as one pinned by a season or
+      // tournament: the phase teambuilder checks a match-less team against its phase's pin here. The legacy
+      // generation keeps its exact read.
+      ruleset = (await getPhaseRouteMode()) === 'phase'
+        ? await (await import('@/lib/ruleset-studio/phase-pins')).readExposedRulesetWithPhases(body.ruleset_id)
+        : await readExposedRuleset(body.ruleset_id);
     }
 
     if (!ruleset) {

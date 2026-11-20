@@ -180,12 +180,19 @@ export default function TeamsEditor({
     'validation',
     'ai',
   ];
-  const actions = [
+  // Share and publish act on the legacy team store only (their routes, the shared-team page and the library
+  // listing all read `teams`): a native phase team's id has no endpoint there yet, so the editor offers neither
+  // until those surfaces are bound, rather than a dialog that can only fail.
+  const actions: { id: 'import' | 'export' | 'share' | 'publish'; icon: typeof Upload; open: () => void }[] = [
     { id: 'import', icon: Upload, open: () => setImportOpen(true) },
     { id: 'export', icon: Download, open: () => setExportOpen(true) },
-    { id: 'share', icon: Share2, open: () => setShareOpen(true) },
-    { id: 'publish', icon: BookUp, open: () => setPublishOpen(true) },
-  ] as const;
+    ...(state.phaseId
+      ? []
+      : [
+          { id: 'share' as const, icon: Share2, open: () => setShareOpen(true) },
+          { id: 'publish' as const, icon: BookUp, open: () => setPublishOpen(true) },
+        ]),
+  ];
 
   return (
     <EditorContext.Provider value={{ state, dispatch }}>

@@ -2,12 +2,15 @@ import { notFound, redirect } from 'next/navigation';
 import AuthGuard from '@/components/shared/AuthGuard';
 import TeambuilderClient from '@/components/teambuilder/TeambuilderClient';
 import { getTeamById, getTeamVisibilityFacts } from '@/lib/supabase/queries/teams';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { isCompletedMatchLocked } from '@/lib/team/completed-match-lock';
 import { canWriteTeam, teamLockState } from '@/lib/team/team-roster-state';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { getLiveAccess } from '@/lib/auth/helpers';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
 import { isValidUuid } from '@/lib/utils/uuid';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +30,52 @@ export default async function DashboardTeamPage({ params }: PageProps) {
 
   // A malformed id names no team (the uuid filter would fail as a 500).
   if (!isValidUuid(tid)) notFound();
+
+  // The id's owner decides the store (a league phase team, or the legacy row): a link that worked before the
+  // transfer keeps working, reading the row the transfer kept under the same id.
+  const owner = await resolveIdOnlyTeamRoute(tid);
+  if (owner?.kind === 'phase') {
+    const team = owner.team;
+    if (team.player_id !== player.playerId && !access.isSiteAdmin) redirect('/dashboard');
+
+    const phase = await getPhaseById(team.phase_id);
+    if (!phase) notFound();
+    const [ruleset, draftPool, completedMatch] = await Promise.all([
+      getRulesetById(phase.ruleset_id),
+      // The team owner's pool: the season's, or the owner's group's in a league with groups.
+      getInitialPoolForPlayer(phase.season_id, team.player_id),
+      // A team registered for a completed match is final (the save answers 409 team_match_completed); a site admin
+      // keeps the correction path, so the editor stays open for them.
+      team.match_id && !access.isSiteAdmin
+        ? getPhaseMatchById(team.match_id).then((match) => match?.status === 'completed')
+        : Promise.resolve(false),
+    ]);
+
+    const lockState = teamLockState({ locked: team.locked, linkedToMatch: !!team.match_id, closure: null, matchCompleted: completedMatch });
+    const editable = canWriteTeam(lockState, 'edit', access.isSiteAdmin ? 'admin' : 'owner');
+
+    return (
+      <AuthGuard>
+        <TeambuilderClient
+          tournamentId={null}
+          phaseId={phase.id}
+          matchId={team.match_id}
+          rulesetId={ruleset?.id}
+          rulesetName={ruleset?.name}
+          baseFormat={ruleset?.base_format}
+          gen={ruleset?.gen}
+          seasonId={phase.season_id}
+          isDraftLeague={!!draftPool}
+          initialPokemon={team.pokemon}
+          teamId={team.id}
+          teamName={team.name}
+          locked={!editable}
+          lockReason={lockState === 'match_completed' ? 'completed_match' : 'tournament'}
+        />
+      </AuthGuard>
+    );
+  }
+
   const team = await getTeamById(tid);
   if (!team) notFound();
 

@@ -85,6 +85,15 @@ describe('useTeamValidation', () => {
     expect(body).not.toHaveProperty('season_id');
   });
 
+  it('drops the phase scope of a team opened from a phase without a match (the API refuses a bare phase_id)', async () => {
+    const SEASON = '00000000-0000-4000-8000-000000000002';
+    const phaseId = '00000000-0000-4000-8000-000000000005';
+    const body = await sentBody(stateWith({ phaseId, matchId: null, seasonId: SEASON }));
+    expect(body).not.toHaveProperty('phase_id');
+    expect(body).not.toHaveProperty('match_id');
+    expect(body).toMatchObject({ ruleset_id: RULESET, season_id: SEASON });
+  });
+
   it('never sends a match without its tournament (the API refuses that)', async () => {
     const body = await sentBody(stateWith({ tournamentId: null, matchId: MATCH }));
     expect(body).not.toHaveProperty('match_id');

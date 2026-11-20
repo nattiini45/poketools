@@ -3,12 +3,20 @@ import { requirePlayer, requireAdmin } from '@/lib/auth/helpers';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import { teamUpdateSchema, formatZodErrors } from '@/lib/validation';
 import { getTeamById, updateTeamPokemon, deleteTeam } from '@/lib/supabase/queries/teams';
+import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { resolveTeamVisibility, toVisibleTeam } from '@/lib/team/visibility';
+import { filterPhaseTeamVisibility } from '@/lib/team/phase-visibility';
 import { toPublicTeam, type PublicTeam } from '@/lib/team/public-team';
+import { toPublicPhaseTeam, type PublicPhaseTeam } from '@/lib/team/phase-public-team';
+import { createPhaseTeamServices } from '@/lib/team/phase-services';
 import { expireItemUsageReads } from '@/lib/team/item-usage-cache';
 import { adviseKitTeam, type KitTeamAdvisory } from '@/lib/team/kit-team-gate';
 import { roundOfMatch } from '@/lib/team/match-round';
 import { logger } from '@/lib/logger';
+import { expirePhaseReads, expirePublicTags, publicTags } from '@/lib/revalidation';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
+import type { SessionPlayer } from '@/types/auth';
+import type { PhaseTeam } from '@/types/phase-team';
 import { teamWriteRefusal } from '../team-write-verdict';
 import type { ApiResult } from '@/types/api';
 import type { PokemonSet, TeamImportSource } from '@/types/team';
@@ -23,6 +31,9 @@ interface RouteParams {
  * roster is redacted unless the viewer is the owner or an admin, the team is
  * published, its tournament is `always_public`, or the row is linked to a
  * completed match. Always a `PublicTeam` (no share-link columns, C1).
+ *
+ * A native phase team answers as `PublicPhaseTeam` under the same redaction
+ * rule (`filterPhaseTeamVisibility`, which reads the same facts).
  */
 export async function GET(_request: NextRequest, { params }: RouteParams) {
   try {
@@ -30,6 +41,16 @@ export async function GET(_request: NextRequest, { params }: RouteParams) {
     const { id } = await params;
     const invalidId = rejectInvalidPathId(id, 'INVALID_TEAM_ID');
     if (invalidId) return invalidId;
+
+    const owner = await resolveIdOnlyTeamRoute(id);
+    if (owner?.kind === 'phase') {
+      const [visible] = await filterPhaseTeamVisibility([owner.team], {
+        viewerId: player.playerId,
+        isAdmin: player.isAdmin,
+      });
+      return NextResponse.json<ApiResult<PublicPhaseTeam>>({ success: true, data: visible });
+    }
+
     const team = await getTeamById(id);
 
     if (!team) {
@@ -78,6 +99,9 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
       import_source: TeamImportSource;
       name?: string;
     };
+
+    const owner = await resolveIdOnlyTeamRoute(id);
+    if (owner?.kind === 'phase') return await updateNativeTeam(owner.team, body, player);
 
     const team = await getTeamById(id);
     if (!team) {
@@ -156,6 +180,9 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
     const invalidId = rejectInvalidPathId(id, 'INVALID_TEAM_ID');
     if (invalidId) return invalidId;
 
+    const owner = await resolveIdOnlyTeamRoute(id);
+    if (owner?.kind === 'phase') return await deleteNativeTeam(owner.team, player);
+
     const team = await getTeamById(id);
     if (!team) {
       return NextResponse.json<ApiResult<never>>(
@@ -185,4 +212,65 @@ export async function DELETE(_request: NextRequest, { params }: RouteParams) {
   } catch (err) {
     return safeErrorResponse(err, 'Failed to delete team');
   }
+}
+
+/**
+ * Expire the cached reads a committed write to a native phase team feeds (the
+ * phase-tagged counterpart of `expireItemUsageReads`): the phase's public reads
+ * always, and the item-usage aggregate scopes when the row is linked to a
+ * match. Never fails the request: a failure is logged and the entries expire by
+ * their TTL.
+ */
+async function expireNativeTeamReads(team: PhaseTeam): Promise<void> {
+  try {
+    const seasonId = team.season_id ?? (await getPhaseById(team.phase_id))?.season_id ?? null;
+    if (seasonId) expirePhaseReads(team.phase_id, seasonId);
+    if (team.match_id) {
+      expirePublicTags([
+        publicTags.aggregates('all_time', null),
+        publicTags.aggregates('phase', team.phase_id),
+        ...(seasonId ? [publicTags.aggregates('league', seasonId)] : []),
+      ]);
+    }
+  } catch (err) {
+    logger.error('api/teams/[id]', 'Phase team cache: tag expiry failed after a committed write', {
+      teamId: team.id,
+      phaseId: team.phase_id,
+      error: err,
+    });
+  }
+}
+
+/**
+ * PATCH of a native phase team: the phase services decide the write (owner,
+ * manual lock, closed phase or league, completed match) with the same codes the
+ * legacy path answers for the same cause, and the guarded UPDATE refuses a row
+ * that moved on (`team_changed`). A kit advisory is not computed here: it is
+ * judged by the pinned format's stage and the phase's current round, which the
+ * phase paths that register a team for a match (`/api/match-prep`) own.
+ */
+async function updateNativeTeam(
+  team: PhaseTeam,
+  body: { pokemon: PokemonSet[]; import_source: TeamImportSource; name?: string },
+  player: SessionPlayer
+) {
+  const updated = await createPhaseTeamServices().edit(
+    { playerId: player.playerId, isAdmin: player.isAdmin },
+    team.id,
+    { pokemon: body.pokemon, import_source: body.import_source, name: body.name }
+  );
+  await expireNativeTeamReads(updated);
+  return NextResponse.json<ApiResult<PublicPhaseTeam>>({ success: true, data: toPublicPhaseTeam(updated) });
+}
+
+/**
+ * DELETE of a native phase team: the same rule as the legacy path, including
+ * the live admin re-check before a force-delete of a locked team (a correction
+ * the phase services let through for an admin only).
+ */
+async function deleteNativeTeam(team: PhaseTeam, player: SessionPlayer) {
+  if (team.locked && player.isAdmin) await requireAdmin();
+  await createPhaseTeamServices().delete({ playerId: player.playerId, isAdmin: player.isAdmin }, team.id);
+  await expireNativeTeamReads(team);
+  return NextResponse.json<ApiResult<null>>({ success: true, data: null });
 }
