@@ -16,7 +16,7 @@ import {
   type OverlayTypeKey,
 } from '@/lib/broadcast/url-builder';
 import type { OverlayConfig, BroadcastPresetConfig } from '@/types/broadcast';
-import type { PublicMatch } from '@/lib/match/public-match';
+import type { PublicCompetitionMatch } from '@/lib/match/public-match';
 import type { SeasonWithDetails } from '@/types/season';
 import type { DraftPoolWithDetails } from '@/types/draft';
 import type { TournamentWithDetails } from '@/types/tournament';
@@ -30,7 +30,7 @@ import { draftLegacyBoardMessages } from '@/i18n/messages/draft/legacy/board';
 import { translateEngineLabel } from '@/i18n/content/engine-labels';
 
 interface OverlayUrlBuilderProps {
-  matches: PublicMatch[];
+  matches: PublicCompetitionMatch[];
   seasons: SeasonWithDetails[];
   draftPools: DraftPoolWithDetails[];
   onSavePreset?: (name: string, typeKey: OverlayTypeKey, config: BroadcastPresetConfig) => void;
