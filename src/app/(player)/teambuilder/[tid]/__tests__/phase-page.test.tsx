@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   getPlayerPhaseTeamForPhase: vi.fn(),
   getTournamentById: vi.fn(),
   getPlayerTeamForTournament: vi.fn(),
+  getPhaseMatchById: vi.fn(),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -52,6 +53,7 @@ vi.mock('@/lib/supabase/queries/phase-route-owners', () => ({
   standaloneTournamentAliasExists: () => mocks.standaloneTournamentAliasExists(),
 }));
 vi.mock('@/lib/supabase/queries/league-phases', () => ({ getPhaseById: () => mocks.getPhaseById() }));
+vi.mock('@/lib/supabase/queries/phase-matches', () => ({ getPhaseMatchById: () => mocks.getPhaseMatchById() }));
 vi.mock('@/lib/supabase/queries/phase-teams', () => ({
   getPlayerPhaseTeamForPhase: () => mocks.getPlayerPhaseTeamForPhase(),
 }));
@@ -109,6 +111,17 @@ describe('tournament teambuilder page: a phase id', () => {
       matchId: null,
     });
     expect(mocks.getTournamentById).not.toHaveBeenCalled();
+  });
+
+  it('opens a roster registered for a completed match locked, as the dashboard team page does', async () => {
+    mocks.team = { ...(mocks.team as object), match_id: 'b1000000-0000-4000-8000-000000000001' };
+    mocks.getPhaseMatchById.mockResolvedValue({ id: 'b1000000-0000-4000-8000-000000000001', status: 'completed' });
+    await render();
+    expect(mocks.clientProps.at(-1)).toMatchObject({ locked: true, lockReason: 'completed_match' });
+
+    mocks.getPhaseMatchById.mockResolvedValue({ id: 'b1000000-0000-4000-8000-000000000001', status: 'scheduled' });
+    await render();
+    expect(mocks.clientProps.at(-1)).toMatchObject({ locked: false, lockReason: 'tournament' });
   });
 
   it('opens an empty editor when the player has no team for the phase yet, still bound to the phase', async () => {

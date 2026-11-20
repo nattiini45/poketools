@@ -4,6 +4,7 @@ import TeambuilderClient from '@/components/teambuilder/TeambuilderClient';
 import { getTournamentById } from '@/lib/supabase/queries/tournaments';
 import { getPhaseById } from '@/lib/supabase/queries/league-phases';
 import { getPlayerPhaseTeamForPhase } from '@/lib/supabase/queries/phase-teams';
+import { getPhaseMatchById } from '@/lib/supabase/queries/phase-matches';
 import { getRulesetById } from '@/lib/supabase/queries/rulesets';
 import { getInitialPoolForPlayer } from '@/lib/draft/player-pool';
 import { requireLiveIdentityOrSignIn } from '@/lib/auth/redirect-to-sign-in';
@@ -39,6 +40,11 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
       // The player's team for the phase: their planned row, else the roster they registered for a match of it.
       player ? getPlayerPhaseTeamForPhase(player.playerId, phase.id) : Promise.resolve(null),
     ]);
+    // A roster registered for a completed match is final for its owner (the save answers 409 team_match_completed),
+    // so it opens locked here exactly as on the dashboard team page.
+    const completedMatch = existingTeam?.match_id
+      ? (await getPhaseMatchById(existingTeam.match_id))?.status === 'completed'
+      : false;
 
     return (
       <AuthGuard>
@@ -55,7 +61,8 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
           initialPokemon={existingTeam?.pokemon}
           teamId={existingTeam?.id}
           teamName={existingTeam?.name}
-          locked={existingTeam?.locked}
+          locked={Boolean(existingTeam?.locked) || completedMatch}
+          lockReason={completedMatch ? 'completed_match' : 'tournament'}
         />
       </AuthGuard>
     );
