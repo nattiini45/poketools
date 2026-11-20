@@ -9,8 +9,10 @@ import { teambuilderMessages } from '@/i18n/messages/teambuilder';
 // Save is handled internally by TeamsEditor via useTeamSave
 
 interface TeambuilderClientProps {
-  /** Tournament ID (null for standalone mode) */
+  /** Tournament ID (null for standalone mode, and for a league phase team) */
   tournamentId: string | null;
+  /** League phase the team belongs to, when the id names no tournament row */
+  phaseId?: string | null;
   /** Ruleset ID for validation */
   rulesetId?: string;
   /** Pre-loaded team (for edit mode) */
@@ -41,6 +43,7 @@ interface TeambuilderClientProps {
 
 export default function TeambuilderClient({
   tournamentId,
+  phaseId,
   rulesetId,
   initialPokemon,
   teamId,
@@ -71,6 +74,7 @@ export default function TeambuilderClient({
         format={baseFormat ?? 'gen9ou'}
         generation={generation}
         tournamentId={tournamentId}
+        phaseId={phaseId}
         seasonId={seasonId}
         initialPokemon={initialPokemon}
         teamId={teamId}

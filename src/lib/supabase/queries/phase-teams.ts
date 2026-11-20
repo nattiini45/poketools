@@ -62,6 +62,21 @@ export async function getPlannedPhaseTeam(playerId: string, phaseId: string): Pr
   return data ? toTeam(data) : null;
 }
 
+/**
+ * The player's team for a phase as the teambuilder names one: their planned row, else the newest row they registered
+ * for a match of that phase (the teambuilder is one team per competition; a match's own prep editor reads its row
+ * through `getPlayerPhaseTeamForMatch`).
+ */
+export async function getPlayerPhaseTeamForPhase(playerId: string, phaseId: string): Promise<PhaseTeam | null> {
+  const planned = await getPlannedPhaseTeam(playerId, phaseId);
+  if (planned) return planned;
+  const { data, error } = await supabase.from('phase_teams').select(PHASE_TEAM_COLUMNS)
+    .eq('player_id', playerId).eq('phase_id', phaseId).not('match_id', 'is', null)
+    .order('created_at', { ascending: false }).order('id').limit(1);
+  if (error) throw error;
+  return data?.[0] ? toTeam(data[0]) : null;
+}
+
 export class PhaseTeamRowConflictError extends Error {
   constructor() {
     super('Conflicting phase team rows');
