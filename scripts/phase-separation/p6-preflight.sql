@@ -31,7 +31,7 @@
 --   8   replay-hash and share/stream-key collisions (counts only, never the key values)             (linear in games/teams)
 --   2   trash generation: snapshots that hold phase-owned families                                 (linear in captured payload)
 --   7   aggregate queues, leases and the work a freeze would strand                                (linear in jobs/games)
---   6   null and cross-owner anomalies, each a count                                                (linear in matches/stats)
+--   6   null and cross-owner anomalies, each a count, plus the informational standalone-with-children count (linear in matches/stats)
 --   1   ownership families: phase-owned rows and bytes per inventory relation, plus the grand total (widest: every relation)
 --   11  JSON-embedded moved ids, one scan per jsonb column of an owned/derived relation     (linear in jsonb payload)
 --   9   historical group repair prerequisite: group slots held by a player outside the phase roster (one anti-join, last)
@@ -552,17 +552,31 @@ SELECT '7.stranded', 'skipped', 'needs 20261117100000_phase_owned_schema.sql'
 -- schema state; the native ones are gated because they read the phase tables. A pre-bundle run therefore reports
 -- the holes as explicit rows instead of stopping at the first missing relation.
 \echo
+\echo '=== [6] Standalone tournaments holding children (informational, not an anomaly) ==='
+-- A standalone tournament that holds participants, groups, rounds or matches is what a standalone event is;
+-- reporting it as an anomaly made every real standalone event look like a broken league phase. It is counted
+-- here, apart from the anomaly table, and the anomaly itself moved into block 6 as the discriminator: a row
+-- that carries league-only markers without a season.
+SELECT '6.standalone'::text AS section, 'standalone_tournaments_holding_children'::text AS item,
+       count(*)::bigint AS n
+  FROM public.tournaments t
+ WHERE t.season_id IS NULL
+   AND (EXISTS (SELECT 1 FROM public.tournament_participants p WHERE p.tournament_id = t.id)
+     OR EXISTS (SELECT 1 FROM public.tournament_groups g WHERE g.tournament_id = t.id)
+     OR EXISTS (SELECT 1 FROM public.rounds r WHERE r.tournament_id = t.id)
+     OR EXISTS (SELECT 1 FROM public.matches m WHERE m.tournament_id = t.id));
+
+\echo
 \echo '=== [6] Null and cross-owner anomalies, legacy family (counts) ==='
 SELECT '6.anomalies'::text AS section, a.check_name, a.n
   FROM (
-    -- a standalone tournament that nevertheless holds phase-shaped children: the season_id derivation misses it
-    SELECT 'tournaments_without_league_holding_children'::text AS check_name, count(*)::bigint AS n
+    -- a league stage that lost its season: the league-only markers (an enrollment source, a stage order above
+    -- zero, a format stage key) cannot belong to a standalone event, so this is the anomaly the plain
+    -- "standalone with children" count used to be mistaken for
+    SELECT 'league_stages_missing_their_season'::text AS check_name, count(*)::bigint AS n
       FROM public.tournaments t
      WHERE t.season_id IS NULL
-       AND (EXISTS (SELECT 1 FROM public.tournament_participants p WHERE p.tournament_id = t.id)
-         OR EXISTS (SELECT 1 FROM public.tournament_groups g WHERE g.tournament_id = t.id)
-         OR EXISTS (SELECT 1 FROM public.rounds r WHERE r.tournament_id = t.id)
-         OR EXISTS (SELECT 1 FROM public.matches m WHERE m.tournament_id = t.id))
+       AND (t.enrollment_source IS NOT NULL OR t.stage_order > 0 OR t.format_stage_key IS NOT NULL)
     UNION ALL
     -- a child that claims a league while its tournament is standalone: two owners for one row
     SELECT 'children_claiming_league_under_standalone_tournament', count(*)
