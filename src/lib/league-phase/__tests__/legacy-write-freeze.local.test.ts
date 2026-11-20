@@ -31,16 +31,23 @@ it.skipIf(!localStackOptIn('LOCAL_LEGACY_WRITE_FREEZE'))('refuses every legacy w
     expect(error?.details, table).toContain(`"table": "${table}"`);
   }
 
-  const player = randomUUID();
-  const created = await supabase.from('players').insert({ id: player, name: `Freeze fixture ${player}`, is_guest: true });
+  // Deleting a player is itself frozen: its foreign keys cascade into fenced tables, and PostgreSQL runs those cascades
+  // as the table owner, so the guard must not trust current_user there. The fixture keeps a fixed id, so a rerun reuses
+  // it instead of leaving one player per run behind; a database reset removes it.
+  const player = '41928000-0000-4000-8000-0000000000f1';
+  const created = await supabase.from('players').upsert({ id: player, name: 'Freeze fixture', is_guest: true }, { onConflict: 'id' });
   expect(created.error).toBeNull();
-  try {
-    const insert = await supabase.from('resource_admins').insert({ player_id: player, resource_type: 'tournament', resource_id: randomUUID() });
-    expect(insert.error?.message).toBe('phase_storage_not_ready');
-    const rows = await supabase.from('resource_admins').select('id').eq('player_id', player);
-    expect(rows.error).toBeNull();
-    expect(rows.data).toEqual([]);
-  } finally {
-    await supabase.from('players').delete().eq('id', player);
-  }
+
+  const insert = await supabase.from('resource_admins').insert({ player_id: player, resource_type: 'tournament', resource_id: randomUUID() });
+  expect(insert.error?.message).toBe('phase_storage_not_ready');
+  const rows = await supabase.from('resource_admins').select('id').eq('player_id', player);
+  expect(rows.error).toBeNull();
+  expect(rows.data).toEqual([]);
+
+  const cascade = await supabase.from('players').delete().eq('id', player);
+  expect(cascade.error?.message).toBe('phase_storage_not_ready');
+  expect(cascade.error?.details).toContain('"op": "DELETE"');
+  const kept = await supabase.from('players').select('id').eq('id', player);
+  expect(kept.error).toBeNull();
+  expect(kept.data).toEqual([{ id: player }]);
 });

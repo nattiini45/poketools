@@ -5,8 +5,11 @@
 -- One statement-level trigger per table: it reads the mode once per statement through phase_storage_mode(), which takes
 -- the mode row FOR SHARE, so a writer that got in before the freeze holds the row until it commits and
 -- phase_storage_transition('legacy', 'frozen_legacy') waits for it (lock_timeout bounds the wait). Legacy and phase
--- modes pass; standalone tournaments keep writing in phase mode. The schema owner (the operator connection and the
--- transfer procedures) is not fenced, like the phase guard; no SECURITY DEFINER function writes these tables.
+-- modes pass; standalone tournaments keep writing in phase mode. Only a session that logged in as the schema owner (the
+-- operator connection and the transfer procedures it runs) is exempt. The test is on session_user as well as
+-- current_user: PostgreSQL runs ON DELETE CASCADE / SET NULL actions as the referencing table's owner, so inside a
+-- cascade from an API request current_user is postgres while session_user stays authenticator. A service-role DELETE
+-- on an unfenced parent (players) therefore cannot reach a fenced child through its foreign key.
 --
 BEGIN;
 SET LOCAL lock_timeout = '5s';
@@ -15,7 +18,7 @@ CREATE OR REPLACE FUNCTION public.phase_storage__legacy_freeze()
 RETURNS trigger LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_mode text;
 BEGIN
-  IF current_user <> 'postgres' THEN
+  IF NOT (current_user = 'postgres' AND session_user = 'postgres') THEN
     v_mode := public.phase_storage_mode();
     IF v_mode IN ('frozen_legacy', 'frozen_phase') THEN
       RAISE EXCEPTION 'phase_storage_not_ready' USING ERRCODE = 'P0001',
