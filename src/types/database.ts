@@ -10305,6 +10305,10 @@ export type Database = {
           src_where: string
         }[]
       }
+      phase_transfer__point_challenges: {
+        Args: { p_parent: string }
+        Returns: string
+      }
       phase_transfer__pointer_counts: { Args: never; Returns: Json }
       phase_transfer__record_lineage: {
         Args: { p_operation_id: string }
