@@ -10,7 +10,10 @@ test.describe('admin shell', () => {
 
     const sidebar = page.getByRole('navigation', { name: 'Admin' });
     await expect(sidebar.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('link', { name: 'New competition' })).toHaveAttribute('href', '/admin/leagues/new');
+    // The rail's create-competition link sits in its header, above the Admin navigation, so the rail is the scope:
+    // the dashboard renders its own "New competition" CTA in the Attention Required card.
+    const newCompetition = page.locator('[data-admin-rail]').getByRole('link', { name: 'New competition' });
+    await expect(newCompetition).toHaveAttribute('href', '/admin/leagues/new');
 
     // Competitions is one section over the list pages; its views show once the page is inside it.
     await sidebar.getByRole('link', { name: 'Competitions' }).click();
