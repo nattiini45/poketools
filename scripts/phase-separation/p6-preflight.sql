@@ -556,7 +556,7 @@ SELECT '7.stranded', 'skipped', 'needs 20261117100000_phase_owned_schema.sql'
 -- A standalone tournament that holds participants, groups, rounds or matches is what a standalone event is;
 -- reporting it as an anomaly made every real standalone event look like a broken league phase. It is counted
 -- here, apart from the anomaly table, and the anomaly itself moved into block 6 as the discriminator: a row
--- that carries league-only markers without a season.
+-- that carries a marker no standalone write path can set without a season.
 SELECT '6.standalone'::text AS section, 'standalone_tournaments_holding_children'::text AS item,
        count(*)::bigint AS n
   FROM public.tournaments t
@@ -570,13 +570,19 @@ SELECT '6.standalone'::text AS section, 'standalone_tournaments_holding_children
 \echo '=== [6] Null and cross-owner anomalies, legacy family (counts) ==='
 SELECT '6.anomalies'::text AS section, a.check_name, a.n
   FROM (
-    -- a league stage that lost its season: the league-only markers (an enrollment source, a stage order above
-    -- zero, a format stage key) cannot belong to a standalone event, so this is the anomaly the plain
-    -- "standalone with children" count used to be mistaken for
+    -- a league stage that lost its season: this is the anomaly the plain "standalone with children" count used to
+    -- be mistaken for. Both arms are markers no standalone write path can set:
+    --   enrollment_source is written only by syncStandingsEnrollment, which throws unless the phase's season_id
+    --   equals the league id it was called with;
+    --   format_stage_key is written only by the season-scoped format materialisation functions, which insert it
+    --   with that season's id.
+    -- stage_order is deliberately not an arm: POST /api/tournaments accepts it and createTournament writes it,
+    -- and PATCH /api/tournaments/[id] accepts it because the phase-editability guard returns early when the row
+    -- has no season. A standalone event may legally carry a stage order.
     SELECT 'league_stages_missing_their_season'::text AS check_name, count(*)::bigint AS n
       FROM public.tournaments t
      WHERE t.season_id IS NULL
-       AND (t.enrollment_source IS NOT NULL OR t.stage_order > 0 OR t.format_stage_key IS NOT NULL)
+       AND (t.enrollment_source IS NOT NULL OR t.format_stage_key IS NOT NULL)
     UNION ALL
     -- a child that claims a league while its tournament is standalone: two owners for one row
     SELECT 'children_claiming_league_under_standalone_tournament', count(*)
