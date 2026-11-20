@@ -1,6 +1,7 @@
 import { supabase } from '../client';
 import { ilikeAnyOf, postgrestQuoted } from '../postgrest-filter';
 import { readBoundedPages } from '../read-bounded-pages';
+import { POSTGREST_PAGE_SIZE } from '../read-all-pages';
 import type { Tables, Json } from '@/types/database';
 import type { AggregateScope } from '@/types/game';
 import type { MatchStatus } from '@/types/match';
@@ -952,5 +953,63 @@ export async function listTeamsForPinImpact(
   return {
     teams: open.slice(0, limit).map((row) => ({ id: row.id, player_id: row.player_id, pokemon: row.pokemon as unknown as PokemonSet[] })),
     truncated: truncated || open.length > limit,
+  };
+}
+
+/**
+ * The head of the published library listing: the first `take` entries in the listing order
+ * (`library_published_at` descending, then the unique `id`) plus the exact total of published rows, so a merged
+ * listing over both stores can answer any offset exactly instead of approximating one. `.range()` pages keep the read
+ * under PostgREST `max_rows`; the count rides on the first page (`{ count: 'exact' }`).
+ */
+export async function listLibraryHead(
+  take: number,
+  params?: TeamLibraryListParams
+): Promise<{ data: TeamLibraryEntry[]; total: number }> {
+  const listed = () => {
+    let query = supabase.from('teams').select(
+      'id, player_id, pokemon, library_title, library_description, library_tags, library_published_at, forked_from_team_id, created_at, updated_at',
+      { count: 'exact' }
+    ).not('library_published_at', 'is', null);
+    if (params?.tags && params.tags.length > 0) query = query.overlaps('library_tags', params.tags);
+    if (params?.search) query = query.or(ilikeAnyOf(['library_title', 'library_description'], params.search));
+    return query;
+  };
+
+  let total = 0;
+  const { rows } = await readBoundedPages<{
+    id: string;
+    player_id: string;
+    pokemon: Json;
+    library_title: string | null;
+    library_description: string | null;
+    library_tags: string[] | null;
+    library_published_at: string | null;
+    forked_from_team_id: string | null;
+    created_at: string;
+    updated_at: string;
+  }>((from, to) => (async () => {
+    const { data, error, count } = await listed()
+      .order('library_published_at', { ascending: false })
+      .order('id')
+      .range(from, to);
+    if (count !== null) total = count;
+    return { data, error };
+  })(), { label: 'listLibraryHead', maxPages: Math.max(1, Math.ceil(take / POSTGREST_PAGE_SIZE)) });
+
+  return {
+    data: rows.slice(0, take).map((row) => ({
+      id: row.id,
+      player_id: row.player_id,
+      pokemon: row.pokemon as unknown as PokemonSet[],
+      library_title: row.library_title,
+      library_description: row.library_description,
+      library_tags: row.library_tags,
+      library_published_at: row.library_published_at!,
+      forked_from_team_id: row.forked_from_team_id,
+      created_at: row.created_at,
+      updated_at: row.updated_at,
+    })),
+    total,
   };
 }

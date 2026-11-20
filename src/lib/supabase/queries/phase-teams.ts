@@ -1,5 +1,5 @@
 import { supabase } from '../client';
-import { readAllPages } from '../read-all-pages';
+import { POSTGREST_PAGE_SIZE, readAllPages } from '../read-all-pages';
 import { readBoundedPages } from '../read-bounded-pages';
 import { ilikeAnyOf, postgrestQuoted } from '../postgrest-filter';
 import { TEAM_COLUMNS, type TeamVisibilityFacts, type PinImpactTeam } from './teams';
@@ -278,4 +278,34 @@ export async function listPhaseTeamsForPinImpact(phaseId: string, budget: number
     closure: null, matchCompleted: row.match?.status === 'completed' }), 'edit', 'owner'));
   return { teams: open.slice(0, budget).map((row) => ({ id: row.id, player_id: row.player_id,
     pokemon: row.pokemon as unknown as PhaseTeam['pokemon'] })), truncated: truncated || open.length > budget };
+}
+
+/**
+ * The head of the native published library listing, the phase counterpart of `listLibraryHead`: the first `take`
+ * entries in the listing order (`library_published_at` descending, then by the unique `id`, since a phase team cannot
+ * be named by `forked_from_team_id` alone) plus the exact total, so a merged listing answers any offset exactly.
+ */
+export async function listPhaseLibraryHead(
+  take: number,
+  params: TeamLibraryListParams = {}
+): Promise<{ rows: PhaseTeam[]; total: number }> {
+  const listed = () => {
+    let query = supabase.from('phase_teams').select(PHASE_TEAM_COLUMNS, { count: 'exact' })
+      .not('library_published_at', 'is', null);
+    if (params.tags?.length) query = query.overlaps('library_tags', params.tags);
+    if (params.search) query = query.or(ilikeAnyOf(['library_title', 'library_description'], params.search));
+    return query;
+  };
+
+  let total = 0;
+  const { rows } = await readBoundedPages<Row>((from, to) => (async () => {
+    const { data, error, count } = await listed()
+      .order('library_published_at', { ascending: false })
+      .order('id')
+      .range(from, to);
+    if (count !== null) total = count;
+    return { data, error };
+  })(), { label: 'listPhaseLibraryHead', maxPages: Math.max(1, Math.ceil(take / POSTGREST_PAGE_SIZE)) });
+
+  return { rows: rows.slice(0, take).map(toTeam), total };
 }

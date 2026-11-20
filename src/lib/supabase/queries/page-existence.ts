@@ -1,32 +1,32 @@
 import { supabase } from '@/lib/supabase/client';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
 
 /**
  * Existence checks for the pages whose 404 the proxy decides (`src/lib/seo/page-gate.ts`): a streamed `notFound()`
  * cannot change the 200 status the root `loading.tsx` has committed. Each reads one id column, never the row's
- * contents, and applies the same rule as the page's own read (an enabled share link, a published library entry).
+ * contents, and applies the same rule as the page's own read (an enabled share link, a published library entry), in
+ * every store the page's own loader reads (`resolveSharedTeam`, `resolveIdOnlyTeamRoute`).
  */
 
-export async function shareLinkIsLive(shareToken: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('teams')
-    .select('id')
-    .eq('share_token', shareToken)
-    .not('share_enabled_at', 'is', null)
-    .maybeSingle();
-  if (error) throw error;
-  return data !== null;
+type TeamStore = 'teams' | 'phase_teams';
+
+/** The legacy store alone in the default generation; both stores once the phase store is read (a transfer keeps ids and tokens). */
+async function teamStores(): Promise<TeamStore[]> {
+  return (await getPhaseRouteMode()) === 'legacy' ? ['teams'] : ['teams', 'phase_teams'];
 }
 
-export async function libraryEntryIsPublished(teamId: string): Promise<boolean> {
-  const { data, error } = await supabase
-    .from('teams')
-    .select('id')
-    .eq('id', teamId)
-    .not('library_published_at', 'is', null)
-    .maybeSingle();
-  if (error) throw error;
-  return data !== null;
+async function anyTeamRow(column: 'share_token' | 'id', value: string, live: 'share_enabled_at' | 'library_published_at'): Promise<boolean> {
+  const hits = await Promise.all((await teamStores()).map(async (store) => {
+    const { data, error } = await supabase.from(store).select('id').eq(column, value).not(live, 'is', null).maybeSingle();
+    if (error) throw error;
+    return data !== null;
+  }));
+  return hits.includes(true);
 }
+
+export const shareLinkIsLive = (shareToken: string) => anyTeamRow('share_token', shareToken, 'share_enabled_at');
+
+export const libraryEntryIsPublished = (teamId: string) => anyTeamRow('id', teamId, 'library_published_at');
 
 /**
  * A league or tournament page is public the whole time the row exists, and a deleted one is gone (the recycle bin

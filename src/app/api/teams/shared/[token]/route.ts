@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { safeErrorResponse } from '@/lib/api/error-response';
 import type { ApiResult } from '@/types/api';
-import { getTeamByShareToken } from '@/lib/supabase/queries/teams';
 import { filterTeamForShare } from '@/lib/team/visibility';
+import { phaseTeamShareView } from '@/lib/team/phase-public-team';
+import { resolveSharedTeam } from '@/lib/team/shared-team';
 import { isValidUuid } from '@/lib/utils/uuid';
 import { checkPublicRateLimit, rateLimitedResponse } from '@/lib/utils/rate-limit';
 
@@ -32,15 +33,16 @@ export async function GET(
       );
     }
 
-    const team = await getTeamByShareToken(token);
-    if (!team) {
+    // The token names a row in either store (the transfer keeps tokens): each answers through the same allowlist.
+    const shared = await resolveSharedTeam(token);
+    if (!shared) {
       return NextResponse.json<ApiResult<never>>(
         { success: false, error: 'Team not found or link expired', code: 'team_shared_not_found' },
         { status: 404 }
       );
     }
 
-    const visible = filterTeamForShare(team);
+    const visible = shared.kind === 'phase' ? phaseTeamShareView(shared.team) : filterTeamForShare(shared.team);
     return NextResponse.json({ success: true, team: visible });
   } catch (error) {
     return safeErrorResponse(error, 'Failed to fetch shared team');

@@ -16,6 +16,8 @@ src/lib/team/
 ├── page-loaders.ts, page-text.ts  # Library entry as a page renders it and the sets a visitor sees
 ├── public-team.ts  # Public team shape: the only team fields that may leave the server
 ├── phase-public-team.ts  # Public native phase team projection
+├── shared-team.ts  # Resolves a share token in the active store (resolveSharedTeam)
+├── library-listing.ts  # Library page merged from both stores (listLibraryPage)
 ├── phase-services.ts  # Dormant native phase team operations
 ├── phase-visibility.ts  # Native phase team visibility and redaction
 ├── showdown-set.ts  # Showdown paste text (always English)
@@ -69,7 +71,7 @@ const visibleTeams = await filterTeamVisibility(teams, ctx);
 ```
 
 ## Testing
-- **Test Files**: `src/lib/team/__tests__/` (15 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts`, `visibility.test.ts`, `team-roster-state.test.ts` (the roster machine, its read-minimal verdict and the SQL parity) and `team-share-state.test.ts`; `private-team-fields.ts` is the shared leak assertion Native coverage: `phase-services.test.ts`, `phase-visibility.test.ts` and the opt-in disposable-stack `phase-teams.local.test.ts`.
+- **Test Files**: `src/lib/team/__tests__/` (17 test files): `check.test.ts` and `parity.test.ts` (the one team check), `kit-team-gate.test.ts` (the advisory verdict), `match-round.test.ts`, `completed-match-lock.test.ts`, `page-loaders.test.ts`, `public-team.test.ts`, `showdown-set.test.ts`, `stat-spread.test.ts`, `visibility.test.ts`, `team-roster-state.test.ts` (the roster machine, its read-minimal verdict and the SQL parity) and `team-share-state.test.ts`; `private-team-fields.ts` is the shared leak assertion Native coverage: `phase-services.test.ts`, `phase-visibility.test.ts`, `page-loaders-native.test.ts` (loaders dispatching to the phase store), `library-listing.test.ts` (the merged library page) and the opt-in disposable-stack `phase-teams.local.test.ts`.
 - **Testing Approach**: Unit tests of every helper; the team API routes and pages run the leak assertion on their payloads.
 
 ## Dormant native phase teams

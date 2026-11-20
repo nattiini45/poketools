@@ -8,6 +8,8 @@ import {
   getTeamById,
 } from '@/lib/supabase/queries/teams';
 import { requireTeamAccess } from '@/lib/api/team-auth';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
+import { createPhaseTeamServices } from '@/lib/team/phase-services';
 import { teamShareCreateSchema, teamShareDeleteSchema, formatZodErrors } from '@/lib/validation';
 
 /**
@@ -34,6 +36,16 @@ export async function POST(req: NextRequest) {
     }
     const { teamId } = zodResult.data;
 
+    const owner = await resolveIdOnlyTeamRoute(teamId);
+    if (owner?.kind === 'phase') {
+      // The origin is resolved BEFORE the link is enabled, exactly as on the legacy path: a misconfiguration must not
+      // leave a live share link behind an error response.
+      const origin = teamShareOrigin(req);
+      if (!origin) return teamShareOriginMissing();
+      const link = await createPhaseTeamServices().share({ playerId: player.playerId, isAdmin: player.isAdmin }, teamId);
+      return NextResponse.json({ success: true, shareToken: link.share_token, shareUrl: `${origin}/teams/shared/${link.share_token}` });
+    }
+
     const team = await getTeamById(teamId);
     if (!team) {
       return NextResponse.json<ApiResult<never>>(
@@ -46,17 +58,8 @@ export async function POST(req: NextRequest) {
 
     // Resolve the origin BEFORE enabling the link: a misconfiguration must not
     // leave a live share link behind an error response.
-    const origin = req.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL;
-    if (!origin) {
-      return NextResponse.json<ApiResult<never>>(
-        {
-          success: false,
-          error: 'Server misconfiguration: site URL not set',
-          code: 'team_share_site_url_missing',
-        },
-        { status: 500 }
-      );
-    }
+    const origin = teamShareOrigin(req);
+    if (!origin) return teamShareOriginMissing();
     const link = await setTeamShareToken(teamId);
     const shareUrl = `${origin}/teams/shared/${link.share_token}`;
 
@@ -89,6 +92,12 @@ export async function DELETE(req: NextRequest) {
     }
     const { teamId } = zodResult.data;
 
+    const owner = await resolveIdOnlyTeamRoute(teamId);
+    if (owner?.kind === 'phase') {
+      await createPhaseTeamServices().unshare({ playerId: player.playerId, isAdmin: player.isAdmin }, teamId);
+      return NextResponse.json({ success: true });
+    }
+
     const team = await getTeamById(teamId);
     if (!team) {
       return NextResponse.json<ApiResult<never>>(
@@ -104,4 +113,16 @@ export async function DELETE(req: NextRequest) {
   } catch (error) {
     return safeErrorResponse(error, 'Failed to disable share link');
   }
+}
+
+/** The site a share link is built on, from the request origin or the configured site URL. */
+function teamShareOrigin(req: NextRequest): string | null {
+  return req.headers.get('origin') || process.env.NEXT_PUBLIC_SITE_URL || null;
+}
+
+function teamShareOriginMissing() {
+  return NextResponse.json<ApiResult<never>>(
+    { success: false, error: 'Server misconfiguration: site URL not set', code: 'team_share_site_url_missing' },
+    { status: 500 }
+  );
 }
