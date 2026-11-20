@@ -234,11 +234,14 @@ jobs:
           fi
           for block in '[1] Ownership families' '[2] Trash generation' '[3] Applied migration' \
                        '[4] Foreign keys into the moved graph' '[5] INSERT/DELETE triggers' \
-                       '[6] Null and cross-owner' '[7] Aggregate queues' '[8] Replay-hash' \
+                       '[6] Standalone tournaments' '[6] Null and cross-owner' \
+                       '[7] Aggregate queues' '[8] Replay-hash' \
                        '[9] Group slots' '[10] Storage generation' '[11] JSON-embedded'; do
             grep -qF "=== $block" "$out" || { echo "::error::missing preflight block: $block"; exit 1; }
           done
           grep -q '1.ownership-total' "$out"
+          grep -q '6.standalone' "$out"
+          grep -q 'league_stages_missing_their_season' "$out"
           test "$(grep -c '^11\.json-refs|' "$out")" -ge 30
 
   # ADVISORY: not a required check and never added to the main-protection ruleset. It starts its own ephemeral
