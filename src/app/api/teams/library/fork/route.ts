@@ -4,6 +4,8 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import type { ApiResult } from '@/types/api';
 import { forkTeam, getTeamById } from '@/lib/supabase/queries/teams';
 import { checkTeamForkAccess } from '@/lib/team/visibility';
+import { createPhaseTeamServices } from '@/lib/team/phase-services';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
 import { toPublicTeam } from '@/lib/team/public-team';
 import { teamForkSchema, formatZodErrors } from '@/lib/validation';
 
@@ -28,6 +30,18 @@ export async function POST(req: NextRequest) {
       );
     }
     const { sourceTeamId, shareToken } = zodResult.data;
+
+    // A native source forks into the caller's own collection as a personal team, exactly as a legacy source does; the
+    // phase service checks the same access (`checkPhaseTeamForkAccess`) and answers the same codes for the same cause.
+    const owner = await resolveIdOnlyTeamRoute(sourceTeamId);
+    if (owner?.kind === 'phase') {
+      const forked = await createPhaseTeamServices().fork(
+        { playerId: player.playerId, isAdmin: player.isAdmin },
+        sourceTeamId,
+        shareToken
+      );
+      return NextResponse.json({ success: true, team: toPublicTeam(forked) });
+    }
 
     const source = await getTeamById(sourceTeamId);
     if (!source) {

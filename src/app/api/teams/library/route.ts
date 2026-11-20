@@ -4,11 +4,14 @@ import { safeErrorResponse } from '@/lib/api/error-response';
 import type { ApiResult } from '@/types/api';
 import { parsePagination } from '@/lib/api/pagination';
 import {
-  listLibraryTeams,
   publishTeamToLibrary,
   unpublishTeamFromLibrary,
   getTeamById,
 } from '@/lib/supabase/queries/teams';
+import { toPublicPhaseTeam } from '@/lib/team/phase-public-team';
+import { createPhaseTeamServices } from '@/lib/team/phase-services';
+import { listLibraryPage } from '@/lib/team/library-listing';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
 import { filterLibraryEntryForDisplay } from '@/lib/team/visibility';
 import { toPublicTeam } from '@/lib/team/public-team';
 import { requireTeamAccess } from '@/lib/api/team-auth';
@@ -39,7 +42,7 @@ export async function GET(req: NextRequest) {
     }
     const { search, tags } = query.data;
 
-    const result = await listLibraryTeams({ search, tags, limit, offset });
+    const result = await listLibraryPage({ search, tags, limit, offset });
     const data = result.data.map(filterLibraryEntryForDisplay);
 
     return NextResponse.json({ success: true, data, total: result.total });
@@ -68,6 +71,18 @@ export async function POST(req: NextRequest) {
       );
     }
     const { teamId, title, description, tags } = zodResult.data;
+
+    const owner = await resolveIdOnlyTeamRoute(teamId);
+    if (owner?.kind === 'phase') {
+      // Machine `team.library` in the phase services decides the publication state and the actor, and answers the same
+      // codes for the same cause (`team_not_owner`, `team_changed`).
+      const updated = await createPhaseTeamServices().publish(
+        { playerId: player.playerId, isAdmin: player.isAdmin },
+        teamId,
+        { title, description, tags }
+      );
+      return NextResponse.json({ success: true, team: toPublicPhaseTeam(updated) });
+    }
 
     const team = await getTeamById(teamId);
     if (!team) {
@@ -107,6 +122,12 @@ export async function DELETE(req: NextRequest) {
       );
     }
     const { teamId } = zodResult.data;
+
+    const owner = await resolveIdOnlyTeamRoute(teamId);
+    if (owner?.kind === 'phase') {
+      await createPhaseTeamServices().unpublish({ playerId: player.playerId, isAdmin: player.isAdmin }, teamId);
+      return NextResponse.json({ success: true });
+    }
 
     const team = await getTeamById(teamId);
     if (!team) {

@@ -1,8 +1,7 @@
 /** @vitest-environment jsdom */
 /**
- * Share and publish act on the legacy team store only: their routes, the shared-team page and the library listing all
- * read `teams`. A native phase team's id has no endpoint there, so the editor offers neither action rather than a
- * dialog that can only answer `team_not_found`.
+ * Share and publish work for a native phase team as they do for a legacy one (their routes, the shared-team page and
+ * the library listing resolve either store), so the editor offers them in both cases.
  */
 import { render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
@@ -25,11 +24,9 @@ describe('TeamsEditor actions', () => {
     expect(screen.getByRole('button', { name: 'Export team' })).toBeTruthy();
   });
 
-  it('offers neither for a native phase team, keeping import and export', () => {
+  it('offers them for a native phase team too', () => {
     render(withI18n(<TeamsEditor phaseId={PHASE} />));
-    expect(screen.queryByRole('button', { name: 'Share team' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Publish to library' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Export team' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Import team' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Share team' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Publish to library' })).toBeTruthy();
   });
 });

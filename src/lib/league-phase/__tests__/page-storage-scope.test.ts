@@ -7,10 +7,12 @@
  * that does none of those reads the legacy generation always, which is how `/content` kept listing only legacy
  * matches after every other match surface had been bound (see the P6 handoff).
  *
- * The guard is a source walk over `src/app/**\/page.tsx`. A page that imports one of the migrated families'
- * legacy readers and shows none of the three signals must be listed in `LEGACY_BY_DESIGN` with its reason, so a
- * new surface of this kind is a decision rather than an oversight. Route handlers are not walked here: their
- * storage choice is covered by the per-slice route tests and by the route manifest's guard/schema records.
+ * The guard is a source walk over `src/app/**\/page.tsx`, plus the loader modules a page reads through
+ * (`LOADER_MODULES`), because a page that names only a loader hides its store choice from the page walk, which is
+ * how `/content` kept listing the legacy generation. A module that imports one of the migrated families' legacy
+ * readers and shows none of the signals must be listed in `LEGACY_BY_DESIGN` with its reason, so a new surface of
+ * this kind is a decision rather than an oversight. Route handlers are not walked here: their storage choice is
+ * covered by the per-slice route tests and by the route manifest's guard/schema records.
  */
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -64,6 +66,12 @@ const LEGACY_BY_DESIGN: ReadonlyArray<{ file: string; reason: string }> = [
   },
 ];
 
+/**
+ * Modules a page reads through: the page walk sees only `page.tsx` imports, so a loader must dispatch for the page
+ * that uses it. A new shared loader that reads a migrated family goes here, and the same "must dispatch" rule applies.
+ */
+const LOADER_MODULES = ['lib/team/page-loaders.ts'] as const;
+
 function pages(dir: string, found: string[] = []): string[] {
   for (const entry of readdirSync(dir)) {
     const full = path.join(dir, entry);
@@ -84,7 +92,8 @@ function legacyImport(src: string): string | null {
 }
 
 describe('page storage scope', () => {
-  const rows = pages(APP_DIR).flatMap((full) => {
+  const walked = [...pages(APP_DIR), ...LOADER_MODULES.map((entry) => path.resolve(__dirname, '../../../', entry))];
+  const rows = walked.flatMap((full) => {
     const src = readFileSync(full, 'utf8');
     const mod = legacyImport(src);
     if (!mod) return [];
@@ -92,8 +101,12 @@ describe('page storage scope', () => {
     return [{ file, mod, dispatched: DISPATCH.test(src) }];
   });
 
-  it('walks the page tree', () => {
+  it('walks the page tree and the loader modules', () => {
     expect(rows.length).toBeGreaterThan(0);
+    // Every loader module names a migrated read, so a rename or a move cannot drop it from the walk silently.
+    for (const entry of LOADER_MODULES) {
+      expect(readFileSync(path.resolve(__dirname, '../../../', entry), 'utf8')).toMatch(/@\/lib\/supabase\/queries\//);
+    }
   });
 
   it('a page reading a migrated legacy store picks a generation, or says why it does not', () => {

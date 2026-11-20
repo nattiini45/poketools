@@ -1,8 +1,11 @@
 import 'server-only';
 import { cache } from 'react';
 import { headers } from 'next/headers';
-import { getTeamById, getTeamByShareToken } from '@/lib/supabase/queries/teams';
+import { getTeamById } from '@/lib/supabase/queries/teams';
 import { filterTeamForShare, filterLibraryEntryForDisplay } from '@/lib/team/visibility';
+import { phaseTeamLibraryEntry, phaseTeamShareView } from '@/lib/team/phase-public-team';
+import { resolveSharedTeam } from '@/lib/team/shared-team';
+import { resolveIdOnlyTeamRoute } from '@/lib/league-phase/team-route-owner';
 import { isRouterPrefetch, parseShareLimitMark, SHARE_LIMIT_HEADER } from '@/lib/seo/share-limit-marker';
 import { checkPublicRateLimit } from '@/lib/utils/rate-limit';
 import { isValidUuid } from '@/lib/utils/uuid';
@@ -57,13 +60,23 @@ export const loadSharedTeam = cache(async (token: string): Promise<SharedTeamRes
   if (!rate.allowed) return { status: 'rate_limited', retryAfterSeconds: rate.retryAfterSeconds };
   // Tokens are UUID v4 (`setTeamShareToken`): anything else cannot match.
   if (!isValidUuid(token)) return { status: 'invalid' };
-  const team = await getTeamByShareToken(token);
-  if (!team) return { status: 'not_found' };
-  return { status: 'ok', team: filterTeamForShare(team) };
+  // The token names a row in either store (the transfer keeps tokens): each answers through the same allowlist.
+  const shared = await resolveSharedTeam(token);
+  if (!shared) return { status: 'not_found' };
+  return { status: 'ok', team: shared.kind === 'phase' ? phaseTeamShareView(shared.team) : filterTeamForShare(shared.team) };
 });
 
 export const loadLibraryEntry = cache(async (id: string): Promise<LibraryEntryResult> => {
   if (!isValidUuid(id)) return { status: 'invalid' };
+
+  // A published native entry resolves like a legacy one, so a library link minted before cutover keeps working.
+  const owner = await resolveIdOnlyTeamRoute(id);
+  if (owner?.kind === 'phase') {
+    if (!owner.team.library_published_at) return { status: 'not_found' };
+    const { player_id: _owner, ...view } = phaseTeamLibraryEntry(owner.team);
+    return { status: 'ok', entry: view };
+  }
+
   const team = await getTeamById(id);
   if (!team || !team.library_published_at) return { status: 'not_found' };
   const entry = filterLibraryEntryForDisplay({
