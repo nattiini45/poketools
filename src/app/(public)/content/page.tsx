@@ -1,9 +1,9 @@
 import CreatorGuard from '@/components/shared/CreatorGuard';
 import PageContainer from '@/components/ui/PageContainer';
 import ContentDashboardClient from '@/components/content/ContentDashboardClient';
-import { getSession } from '@/lib/auth/helpers';
-import { listAllMatches } from '@/lib/supabase/queries/matches';
-import { toPublicMatches } from '@/lib/match/public-match';
+import { getLiveAccess } from '@/lib/auth/helpers';
+import { getPhaseRouteMode } from '@/lib/league-phase/route-mode';
+import { listContentMatches } from '@/lib/supabase/queries/creator-content';
 import { listSeasons } from '@/lib/supabase/queries/seasons';
 import { getPresetsByOwner } from '@/lib/supabase/queries/broadcast-presets';
 import { listDraftPools } from '@/lib/supabase/queries/drafts';
@@ -15,10 +15,10 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 export default async function ContentPage() {
-  const [session, t] = await Promise.all([getSession(), getT(discoverMessages)]);
-  const playerId = session?.player?.playerId;
+  const [access, t] = await Promise.all([getLiveAccess(), getT(discoverMessages)]);
+  const playerId = access?.player?.playerId;
 
-  if (!playerId) {
+  if (!access?.isCreator || !playerId) {
     return (
       <CreatorGuard>
         <PageContainer title={t('content.title')}>
@@ -28,15 +28,13 @@ export default async function ContentPage() {
     );
   }
 
-  const [matchRows, seasons, presets, draftPools] = await Promise.all([
-    listAllMatches(),
-    listSeasons(),
+  const mode = await getPhaseRouteMode();
+  const [matches, seasons, presets, draftPools] = await Promise.all([
+    listContentMatches(mode),
+    listSeasons(mode === 'phase' || mode === 'frozen_phase' ? { storage: 'phase' } : undefined),
     getPresetsByOwner(playerId),
     listDraftPools(),
   ]);
-  // Creators are not admins: the client dashboard receives the public match
-  // shape only (no admin notes, submitter or confirmation timestamps).
-  const matches = toPublicMatches(matchRows);
 
   return (
     <CreatorGuard>

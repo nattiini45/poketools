@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import Card from '@/components/ui/Card';
 import Select from '@/components/ui/Select';
 import type { BroadcastMoment, BroadcastMomentType } from '@/types/broadcast';
-import type { PublicMatch } from '@/lib/match/public-match';
+import type { PublicCompetitionMatch } from '@/lib/match/public-match';
 import { useDataLocale, useFormatter, useT } from '@/i18n/client';
 import { useApiErrorText } from '@/i18n/use-api-error';
 import { toApiErrorLike, type ApiErrorLike } from '@/i18n/api-errors';
@@ -13,7 +13,7 @@ import { creatorContentMessages } from '@/i18n/messages/creator/content';
 import { localizeSpecies } from '@/lib/pkmn/i18n/names/species';
 
 interface MomentsBrowserProps {
-  matches: PublicMatch[];
+  matches: PublicCompetitionMatch[];
 }
 
 const MOMENT_TYPES: readonly BroadcastMomentType[] = ['turning_point', 'big_ko', 'misplay', 'clutch', 'highlight'];

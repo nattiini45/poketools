@@ -12,7 +12,7 @@ import type {
   BroadcastPresetConfig,
   BroadcastPresetType,
 } from '@/types/broadcast';
-import type { PublicMatch } from '@/lib/match/public-match';
+import type { PublicCompetitionMatch } from '@/lib/match/public-match';
 import type { SeasonWithDetails } from '@/types/season';
 import type { DraftPoolWithDetails } from '@/types/draft';
 import { OVERLAY_TYPES, type OverlayTypeKey } from '@/lib/broadcast/url-builder';
@@ -20,7 +20,7 @@ import { useT } from '@/i18n/client';
 import { creatorContentMessages } from '@/i18n/messages/creator/content';
 
 interface ContentDashboardClientProps {
-  matches: PublicMatch[];
+  matches: PublicCompetitionMatch[];
   seasons: SeasonWithDetails[];
   draftPools: DraftPoolWithDetails[];
   presets: BroadcastPreset[];

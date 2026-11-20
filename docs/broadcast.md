@@ -123,6 +123,12 @@ Polling overlays run on `usePollLoop` (`poll-loop.ts`, schedule in `poll-schedul
 
 ## Overlay Types (url-builder.ts)
 
+### Creator dashboard match picker
+
+`/content` checks the viewer's live creator or site-admin access before reading its lists. In legacy mode (including flag-off) and a legacy freeze, the match picker reads the same newest 200 legacy matches. In phase mode and a native freeze it combines verified standalone tournament matches with native matches that have a league phase owner. It keeps one newest-first cap of 200 (match ID breaks time ties), with the native row winning ID collisions because the existing selectors use one match ID. The page sends public match fields plus the actual phase and league IDs for native rows, never notes, confirmation metadata or private overlay keys.
+
+The pickers, generated OBS URLs and tracker link are unchanged. Opening a native selection still depends on the corresponding overlay or moments reader being ported; the player tracker hub and detail pages are separate from this list.
+
 ### Dormant versioned saved match references
 
 `BroadcastPresetConfig.resource` is an optional explicit envelope: `{ version: 1, overlay, target }`. The seven match overlay kinds use the strict match-resource reference shared with the agent boundary: a native owner carries `kind: 'phase'`, `seasonId` and `phaseId`; a standalone owner carries `kind: 'tournament'` and `tournamentId`. Appearance settings and opaque `extra` remain unchanged. A config without the envelope stays on the legacy/default path; an unknown envelope version, malformed reference or mismatched overlay/preset family is refused rather than guessed from an extra key.
