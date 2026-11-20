@@ -121,3 +121,65 @@ It runs on **two schema states**, because the P6 order is preflight, then migrat
 11. **JSON-embedded moved ids** — every `jsonb` column of an inventory `owned`/`derived` relation (plus the two phase parents) scanned for UUID text that resolves to a phase, match, round or game id the transfer moves, one timed statement per column. A relation whose planner estimate exceeds 2,000,000 rows is printed as `skipped_oversize` with that estimate instead of scanned, so an omission is visible. This is the half of the graph the column predicates cannot close: an id that exists only inside a stage spec, an enrollment source or a stored analysis payload.
 
 Agents and CI never run it against the hosted project: it reads ordinary tables, and the quota rule in `AGENTS.md` covers a report just as it covers a capture loop.
+
+## P6 transfer
+
+`supabase/migrations/20261120100000_phase_transfer.sql` holds the maintenance transfer. Applying it moves no data: it creates the ledger (`phase_transfer_ledger`), the lineage table (`phase_transfer_lineage`) and the operator procedures. Only the schema owner can run them, on an operator connection. No API role can execute them, and the new tables are readable only by `service_role`.
+
+**Ladder.** Each step is its own transaction, and every procedure refuses with `PHASE_TRANSFER_WRONG_MODE` outside its step:
+
+| Step | Statement | Mode after |
+| --- | --- | --- |
+| Freeze | `SELECT phase_storage_transition('legacy', 'frozen_legacy');` then drain traffic, workers and leases | `frozen_legacy` |
+| Transfer | `SELECT phase_transfer_forward('<operation uuid>');` | `frozen_phase` |
+| Activate | `SELECT phase_transfer_activate();` (lineage gate) | `phase` |
+| Rollback freeze | `SELECT phase_storage_transition('phase', 'frozen_phase');` then drain again | `frozen_phase` |
+| Inverse | `SELECT phase_transfer_inverse('<operation uuid>');` | `frozen_legacy` |
+| Reopen legacy | `SELECT phase_storage_transition('frozen_legacy', 'legacy');` | `legacy` |
+
+A failed transfer rolls back completely and writes no ledger row, so the operator can rerun it with the same operation id. Once an operation id has completed, rerunning it returns the stored report with `noop: true` and copies nothing.
+
+**What the forward does, in order:**
+
+1. It takes the transfer advisory lock, every league advisory lock in UUID order, the season rows, and then every source and target table in `EXCLUSIVE` mode, with `lock_timeout = 5s`. The inverse takes the same locks in the same order.
+2. It refuses before any write when:
+   - the phase store is not empty;
+   - a group slot is held by a player outside its phase roster (`PHASE_TRANSFER_GROUP_ORPHANS`);
+   - a trash snapshot holds a legacy phase family (`PHASE_TRANSFER_TRASH_CONVERSION_REQUIRED`);
+   - an aggregate job or team crosses owners;
+   - the trash inventory assertion fails.
+3. It copies the manifest families in dependency order and keeps every id. It records a row count and an md5 fingerprint for each family.
+4. It records lineage for every moved phase, round, match and game.
+5. It retargets every outside pointer before any delete: agent suggestions, match-only cast sessions, streaks, outside teams' match and fork pointers, and format challenges.
+6. It deletes the legacy rows, matches before teams, so the referential action clears `teams.match_id` before `trg_teams_completed_match_lock` sees the team.
+7. It asserts:
+   - every copy still matches its source fingerprint, and no source row is left;
+   - no pointer was nulled, both per row and in the per-column counts;
+   - players, seasons, rosters, the audit log, league and all-time projections, streak counters, other games' jobs and standalone tournaments are unchanged;
+   - there are zero duplicate replay hashes, share tokens or realtime keys across both stores;
+   - the trash inventory still holds.
+
+The inverse moves the current native rows back, including rows written after reopening. It restores each tournament with its `season_id` before its groups and its groups before its rounds, re-points outside pointers to the legacy columns, and makes the same assertions.
+
+**Decisions this procedure makes:**
+
+- `format_challenges.phase_id` cascades from `tournaments`. A native phase has no tournament row, so the forward drops `format_challenges_phase_id_fkey` and mirrors the phase into `league_phase_id` (`phase_pointer_3`). The inverse restores the constraint.
+- `aggregate_jobs.season_id` is nullable in legacy storage and required in native storage. A null value takes the phase's season.
+- Retargeting an outside team's pointer is an `UPDATE`, so `trg_teams_updated` stamps that team's `updated_at`. It is the only column the round trip changes.
+- Lineage has no foreign key and is never deleted, so audited activity of either generation keeps an owner proof.
+- Trash snapshots that hold a moved family are refused, not converted. The production preflight found none.
+
+**Rehearsal.** `scripts/phase-separation/p6-transfer-rehearsal.sql` runs inside one transaction and ends in `ROLLBACK`. The CI `database` job runs it. It seeds five leagues (15 phases, 150 matches, 180 games, 2,160 battle-stat rows) plus a standalone tournament with children, then checks the expected refusals and runs this sequence:
+
+1. forward, then rerun with the same id (no-op), then activate;
+2. inverse, then a whole-row comparison of 36 tables against the pre-forward state;
+3. re-forward, then native writes after reopening;
+4. inverse, which carries those rows and their lineage back;
+5. a final re-forward.
+
+`-v leagues=N` scales the seed. Local timings, server-side inside the transaction:
+
+| Seed | Rows moved | Forward | Inverse |
+| --- | --- | --- | --- |
+| 5 leagues | 3,843 | 0.25–0.32 s | 0.25 s |
+| 50 leagues | 38,426 | 2.4–2.6 s | 2.0–2.1 s |

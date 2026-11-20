@@ -175,6 +175,21 @@ jobs:
           { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/p1-rehearsal.sql; } |
             docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1
 
+      - name: P6 transfer rehearsal
+        # Forward, inverse and re-forward of the maintenance transfer on five seeded leagues plus a standalone
+        # tournament, with every refusal and ordering case of plan 4.D. The script ends in ROLLBACK, so the suites
+        # below still start from an empty legacy database.
+        if: always() && steps.schema-replay.outcome == 'success'
+        run: |
+          set -euo pipefail
+          out="$(mktemp)"
+          { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/p6-transfer-rehearsal.sql; } |
+            docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 2>&1 | tee "$out"
+          grep -q 'forward + inverse: legacy graph identical' "$out"
+          grep -q 'native match, game, team and pointer travelled back' "$out"
+          test "$(grep -c 'refused as expected' "$out")" -ge 7
+          test "$(docker exec -i supabase_db_poketools psql -U postgres -d postgres -tAc 'SELECT mode FROM public.phase_storage_state' | tr -d '[:space:]')" = legacy
+
       - name: Export the local stack's URL and keys
         run: |
           npx supabase status -o env | while IFS='=' read -r key value; do
