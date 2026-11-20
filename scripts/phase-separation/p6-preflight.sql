@@ -571,11 +571,11 @@ SELECT '6.standalone'::text AS section, 'standalone_tournaments_holding_children
 SELECT '6.anomalies'::text AS section, a.check_name, a.n
   FROM (
     -- a league stage that lost its season: this is the anomaly the plain "standalone with children" count used to
-    -- be mistaken for. Both arms are markers no standalone write path can set:
-    --   enrollment_source is written only by syncStandingsEnrollment, which throws unless the phase's season_id
-    --   equals the league id it was called with;
-    --   format_stage_key is written only by the season-scoped format materialisation functions, which insert it
-    --   with that season's id.
+    -- be mistaken for. `enrollment_source` is the arm that names it: only syncStandingsEnrollment writes it, and
+    -- that throws unless the phase's season_id equals the league id it was called with.
+    -- `format_stage_key` is a redundant second arm, kept deliberately: tournaments_format_stage_season_check
+    -- (format_stage_key IS NULL OR season_id IS NOT NULL) already makes the combination impossible, so it can only
+    -- fire on a database that lost that constraint, and that is itself worth reporting rather than ignoring.
     -- stage_order is deliberately not an arm: POST /api/tournaments accepts it and createTournament writes it,
     -- and PATCH /api/tournaments/[id] accepts it because the phase-editability guard returns early when the row
     -- has no season. A standalone event may legally carry a stage order.
