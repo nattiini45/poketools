@@ -190,6 +190,17 @@ jobs:
           test "$(grep -c 'refused as expected' "$out")" -ge 8
           test "$(docker exec -i supabase_db_poketools psql -U postgres -d postgres -tAc 'SELECT mode FROM public.phase_storage_state' | tr -d '[:space:]')" = legacy
 
+      - name: Phase fence cascade rehearsal
+        # A rollback from phase to legacy, then a service-role player delete whose cascade would reach the phase rows
+        # left behind. Ends in ROLLBACK.
+        if: always() && steps.schema-replay.outcome == 'success'
+        run: |
+          set -euo pipefail
+          out="$(mktemp)"
+          { printf 'BEGIN;\n'; cat scripts/league-trash-lab/seed.sql scripts/phase-separation/phase-fence-cascade-rehearsal.sql; } |
+            docker exec -i supabase_db_poketools psql -U supabase_admin -d postgres -v ON_ERROR_STOP=1 2>&1 | tee "$out"
+          grep -q 'phase fence: API cascades into phase rows refused after a rollback to legacy' "$out"
+
       - name: Export the local stack's URL and keys
         run: |
           npx supabase status -o env | while IFS='=' read -r key value; do
