@@ -328,6 +328,23 @@ BEGIN
 END $$;
 REVOKE ALL ON FUNCTION public.phase_transfer__record_lineage(uuid) FROM PUBLIC, anon, authenticated, service_role;
 
+-- format_challenges.phase_id names the phase in whichever store owns it, so its cascade FK follows the phase: to
+-- league_phases(id) after the forward, back to tournaments(id) after the inverse, never absent while the site runs.
+-- The native model's own reference, league_phase_id (FK to league_phases, ON DELETE CASCADE), mirrors it
+-- (format_challenges_phase_pointer_3_check).
+CREATE OR REPLACE FUNCTION public.phase_transfer__point_challenges(p_parent text)
+RETURNS text LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF p_parent NOT IN ('tournaments', 'league_phases') THEN
+    RAISE EXCEPTION 'PHASE_TRANSFER_MANIFEST_INVALID' USING ERRCODE = 'P0001', DETAIL = p_parent;
+  END IF;
+  ALTER TABLE public.format_challenges DROP CONSTRAINT IF EXISTS format_challenges_phase_id_fkey;
+  EXECUTE format('ALTER TABLE public.format_challenges ADD CONSTRAINT format_challenges_phase_id_fkey '
+                 'FOREIGN KEY (phase_id) REFERENCES public.%I(id) ON DELETE CASCADE', p_parent);
+  RETURN p_parent;
+END $$;
+REVOKE ALL ON FUNCTION public.phase_transfer__point_challenges(text) FROM PUBLIC, anon, authenticated, service_role;
+
 CREATE OR REPLACE FUNCTION public.phase_transfer__drop_temp()
 RETURNS void LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE v_name text;
@@ -391,7 +408,7 @@ RETURNS jsonb LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   v_started timestamptz := clock_timestamp(); v_t timestamptz; v_noop jsonb; v_ms jsonb := '{}';
   v_n bigint; v_seasons int; v_ptr_before jsonb; v_ptr_after jsonb; v_shared_before jsonb; v_shared_after jsonb;
-  v_copies jsonb; v_lineage bigint; v_fc_fk boolean; v_report jsonb;
+  v_copies jsonb; v_lineage bigint; v_fc text; v_report jsonb;
 BEGIN
   v_noop := public.phase_transfer__begin(p_operation_id, 'forward', 'frozen_legacy');
   IF v_noop IS NOT NULL THEN RETURN v_noop; END IF;
@@ -442,6 +459,10 @@ BEGIN
   IF v_n > 0 THEN
     RAISE EXCEPTION 'PHASE_TRANSFER_CROSS_OWNER' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('teams', v_n)::text;
   END IF;
+  SELECT count(*) INTO v_n FROM public.format_challenges WHERE phase_id NOT IN (SELECT id FROM _pt_phase);
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'PHASE_TRANSFER_CHALLENGE_UNMOVABLE' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('format_challenges', v_n)::text;
+  END IF;
 
   v_ptr_before := public.phase_transfer__pointer_counts();
   v_shared_before := public.phase_transfer__shared_fingerprint();
@@ -469,12 +490,7 @@ BEGIN
   UPDATE public.teams SET phase_match_id = match_id, match_id = NULL WHERE match_id IN (SELECT id FROM _pt_match) AND id NOT IN (SELECT id FROM _pt_team);
   UPDATE public.teams SET forked_from_phase_team_id = forked_from_team_id, forked_from_team_id = NULL
    WHERE forked_from_team_id IN (SELECT id FROM _pt_team) AND id NOT IN (SELECT id FROM _pt_team);
-  -- format_challenges.phase_id mirrors league_phase_id once the phase is native, so its cascade FK to tournaments goes
-  -- with the tournament rows (restored by the inverse).
-  SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'format_challenges_phase_id_fkey' AND conrelid = 'public.format_challenges'::regclass) INTO v_fc_fk;
-  IF v_fc_fk THEN
-    ALTER TABLE public.format_challenges DROP CONSTRAINT format_challenges_phase_id_fkey;
-  END IF;
+  v_fc := public.phase_transfer__point_challenges('league_phases');
   UPDATE public.format_challenges
      SET league_phase_id = phase_id,
          phase_match_id = CASE WHEN match_id IN (SELECT id FROM _pt_match) THEN match_id END,
@@ -529,7 +545,7 @@ BEGIN
 
   v_report := public.phase_transfer__finish(p_operation_id, 'forward', 'frozen_legacy', 'frozen_phase', v_started,
     jsonb_build_object('seasons_locked', v_seasons, 'phases', (SELECT count(*) FROM _pt_phase), 'lineage_entities', v_lineage,
-                       'format_challenges_fk_dropped', v_fc_fk, 'families', v_copies, 'pointers', v_ptr_after,
+                       'format_challenges_fk_parent', v_fc, 'families', v_copies, 'pointers', v_ptr_after,
                        'pointer_rows_retargeted', (SELECT count(*) FROM _pt_ptr), 'timings', v_ms));
   PERFORM public.phase_transfer__drop_temp();
   RETURN v_report;
@@ -544,7 +560,7 @@ RETURNS jsonb LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
 DECLARE
   v_started timestamptz := clock_timestamp(); v_t timestamptz; v_noop jsonb; v_ms jsonb := '{}';
   v_n bigint; v_seasons int; v_ptr_before jsonb; v_ptr_after jsonb; v_shared_before jsonb; v_shared_after jsonb;
-  v_copies jsonb; v_lineage bigint; v_fc_fk boolean; v_report jsonb;
+  v_copies jsonb; v_lineage bigint; v_fc text; v_report jsonb;
 BEGIN
   v_noop := public.phase_transfer__begin(p_operation_id, 'inverse', 'frozen_phase');
   IF v_noop IS NOT NULL THEN RETURN v_noop; END IF;
@@ -562,6 +578,10 @@ BEGIN
   ANALYZE _pt_phase, _pt_group, _pt_round, _pt_match, _pt_game, _pt_team, _pt_cast, _pt_note;
 
   PERFORM public.league_trash__assert_inventory();
+  SELECT count(*) INTO v_n FROM public.format_challenges WHERE phase_id NOT IN (SELECT id FROM _pt_phase);
+  IF v_n > 0 THEN
+    RAISE EXCEPTION 'PHASE_TRANSFER_CHALLENGE_UNMOVABLE' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('format_challenges', v_n)::text;
+  END IF;
   SELECT count(*) INTO v_n FROM public.phase_reports WHERE round_id IS NULL;
   IF v_n > 0 THEN
     RAISE EXCEPTION 'PHASE_TRANSFER_INVERSE_UNREPRESENTABLE' USING ERRCODE = 'P0001', DETAIL = jsonb_build_object('phase_reports_without_round', v_n)::text;
@@ -598,6 +618,7 @@ BEGIN
   UPDATE public.teams SET match_id = phase_match_id, phase_match_id = NULL WHERE phase_match_id IS NOT NULL;
   UPDATE public.teams SET forked_from_team_id = forked_from_phase_team_id, forked_from_phase_team_id = NULL
    WHERE forked_from_phase_team_id IS NOT NULL AND id NOT IN (SELECT id FROM _pt_team);
+  v_fc := public.phase_transfer__point_challenges('tournaments');
   UPDATE public.format_challenges
      SET match_id = coalesce(phase_match_id, match_id), phase_match_id = NULL, league_phase_id = NULL
    WHERE league_phase_id IS NOT NULL;
@@ -613,11 +634,6 @@ BEGIN
   DELETE FROM public.phase_social_integrations;
   DELETE FROM public.phase_wiki_notes;
   DELETE FROM public.league_phases;
-  SELECT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'format_challenges_phase_id_fkey' AND conrelid = 'public.format_challenges'::regclass) INTO v_fc_fk;
-  IF NOT v_fc_fk THEN
-    ALTER TABLE public.format_challenges ADD CONSTRAINT format_challenges_phase_id_fkey
-      FOREIGN KEY (phase_id) REFERENCES public.tournaments(id) ON DELETE CASCADE;
-  END IF;
   v_ms := v_ms || jsonb_build_object('delete_ms', round(extract(epoch FROM clock_timestamp() - v_t) * 1000, 1)); v_t := clock_timestamp();
 
   v_copies := public.phase_transfer__verify_copies();
@@ -653,7 +669,7 @@ BEGIN
 
   v_report := public.phase_transfer__finish(p_operation_id, 'inverse', 'frozen_phase', 'frozen_legacy', v_started,
     jsonb_build_object('seasons_locked', v_seasons, 'phases', (SELECT count(*) FROM _pt_phase), 'lineage_entities', v_lineage,
-                       'format_challenges_fk_restored', NOT v_fc_fk, 'families', v_copies, 'pointers', v_ptr_after,
+                       'format_challenges_fk_parent', v_fc, 'families', v_copies, 'pointers', v_ptr_after,
                        'pointer_rows_retargeted', (SELECT count(*) FROM _pt_ptr), 'timings', v_ms));
   PERFORM public.phase_transfer__drop_temp();
   RETURN v_report;

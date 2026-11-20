@@ -123,6 +123,15 @@ SELECT pt_rh.expect($q$
        d AS (DELETE FROM tournament_participants p USING g WHERE p.tournament_id = g.tournament_id
               AND p.player_id = (SELECT m.player_id FROM tournament_group_members m WHERE m.group_id = g.id ORDER BY m.player_id LIMIT 1) RETURNING 1)
   SELECT public.phase_transfer_forward(gen_random_uuid()) FROM d$q$, 'PHASE_TRANSFER_GROUP_ORPHANS') AS group_orphan;
+-- a format challenge must name a phase that exists in the target store (its FK follows the phase)
+SELECT pt_rh.expect($q$
+  WITH c AS (INSERT INTO format_challenges (season_id, phase_id, round, challenger_id, defender_id, expires_at)
+             SELECT (SELECT id FROM seasons ORDER BY id LIMIT 1), t.id, 1, p.player_id, q.player_id, now() + interval '1 day'
+               FROM tournaments t
+               JOIN LATERAL (SELECT player_id FROM tournament_participants WHERE tournament_id = t.id ORDER BY player_id LIMIT 1) p ON true
+               JOIN LATERAL (SELECT player_id FROM tournament_participants WHERE tournament_id = t.id ORDER BY player_id OFFSET 1 LIMIT 1) q ON true
+              WHERE t.season_id IS NULL RETURNING 1)
+  SELECT public.phase_transfer_forward(gen_random_uuid()) FROM c$q$, 'PHASE_TRANSFER_CHALLENGE_UNMOVABLE') AS challenge_on_standalone;
 -- 4.D order 2: reaching teams before matches is the expected red (TEAM_MATCH_COMPLETED)
 SELECT pt_rh.expect($q$
   DELETE FROM teams t USING tournaments x, matches m
@@ -149,6 +158,22 @@ END $$;
 SELECT jsonb_pretty(public.phase_transfer_forward(:op1) - 'families') AS forward_1;
 SELECT (public.phase_transfer_forward(:op1) ->> 'noop')::boolean AS forward_1_reentry_noop;
 SELECT mode AS mode_after_forward FROM phase_storage_state;
+CREATE FUNCTION pt_rh.challenge_fk() RETURNS text LANGUAGE sql AS $$
+  SELECT confrelid::regclass::text || ' ON DELETE ' || CASE confdeltype WHEN 'c' THEN 'CASCADE' ELSE confdeltype::text END
+    FROM pg_constraint WHERE conname = 'format_challenges_phase_id_fkey' AND conrelid = 'public.format_challenges'::regclass
+$$;
+DO $$
+BEGIN
+  IF pt_rh.challenge_fk() IS DISTINCT FROM 'league_phases ON DELETE CASCADE' THEN
+    RAISE EXCEPTION 'format_challenges_phase_id_fkey after the forward: %', pt_rh.challenge_fk();
+  END IF;
+  IF (SELECT count(*) FROM format_challenges) = 0
+     OR EXISTS (SELECT 1 FROM format_challenges c WHERE c.league_phase_id IS DISTINCT FROM c.phase_id
+                   OR NOT EXISTS (SELECT 1 FROM league_phases p WHERE p.id = c.phase_id)) THEN
+    RAISE EXCEPTION 'format challenges did not follow their phases';
+  END IF;
+  RAISE NOTICE 'format challenges: % rows, phase FK now %', (SELECT count(*) FROM format_challenges), pt_rh.challenge_fk();
+END $$;
 -- 4.D order 3 precondition, proved on the native-mode schema: a group row may only follow a tournament row that carries its season
 SELECT pt_rh.expect($q$
   WITH t AS (INSERT INTO tournaments (id, name, season_id, bracket_type, ruleset_id, status)
@@ -167,6 +192,9 @@ SELECT b.rel, b.rows AS rows_before, a.rows AS rows_after
   FROM pt_rh.before b JOIN pt_rh.fingerprints() a USING (rel) WHERE a.fp <> b.fp OR a.rows <> b.rows;
 DO $$
 BEGIN
+  IF pt_rh.challenge_fk() IS DISTINCT FROM 'tournaments ON DELETE CASCADE' THEN
+    RAISE EXCEPTION 'format_challenges_phase_id_fkey after the inverse: %', pt_rh.challenge_fk();
+  END IF;
   IF EXISTS (SELECT 1 FROM pt_rh.before b JOIN pt_rh.fingerprints() a USING (rel) WHERE a.fp <> b.fp OR a.rows <> b.rows) THEN
     RAISE EXCEPTION 'round trip changed the legacy graph';
   END IF;
@@ -215,7 +243,7 @@ BEGIN
 END $$;
 \set op5 '''00000000-0000-4000-8000-000000000005'''
 SELECT (public.phase_transfer_forward(:op5) -> 'timings') AS forward_3_timings;
-SELECT public.phase_transfer_activate() ->> 'mode' AS final_mode;
+SELECT public.phase_transfer_activate() ->> 'mode' AS final_mode, pt_rh.challenge_fk() AS challenge_fk_in_phase_mode;
 
 -- 6. Summary: wall time per direction (server-side, inside the transaction) and the moved-row totals.
 SELECT generation, direction, report ->> 'phases' AS phases,

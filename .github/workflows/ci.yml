@@ -187,7 +187,7 @@ jobs:
             docker exec -i supabase_db_poketools psql -U postgres -d postgres -v ON_ERROR_STOP=1 2>&1 | tee "$out"
           grep -q 'forward + inverse: legacy graph identical' "$out"
           grep -q 'native match, game, team and pointer travelled back' "$out"
-          test "$(grep -c 'refused as expected' "$out")" -ge 7
+          test "$(grep -c 'refused as expected' "$out")" -ge 8
           test "$(docker exec -i supabase_db_poketools psql -U postgres -d postgres -tAc 'SELECT mode FROM public.phase_storage_state' | tr -d '[:space:]')" = legacy
 
       - name: Export the local stack's URL and keys

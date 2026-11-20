@@ -68,6 +68,16 @@ describe('P6 transfer migration (plan 4.D transfer-order acceptance)', () => {
     }
   });
 
+  it('moves the format challenge phase FK with the phase instead of leaving it dropped', () => {
+    const forward = body('phase_transfer_forward');
+    expect(position(forward, "phase_transfer__point_challenges('league_phases')")).toBeLessThan(position(forward, 'DELETE FROM public.tournaments'));
+    expect(position(forward, 'PHASE_TRANSFER_CHALLENGE_UNMOVABLE')).toBeLessThan(position(forward, "phase_transfer__copy('forward')"));
+    const inverse = body('phase_transfer_inverse');
+    expect(position(inverse, "phase_transfer__point_challenges('tournaments')")).toBeLessThan(position(inverse, 'DELETE FROM public.league_phases'));
+    expect(body('phase_transfer__point_challenges')).toContain('ON DELETE CASCADE');
+    expect(sql).not.toMatch(/DROP CONSTRAINT format_challenges_phase_id_fkey;/);
+  });
+
   it('keeps lineage across directions and gates activation on it', () => {
     expect(sql).not.toMatch(/DELETE FROM public\.phase_transfer_lineage/);
     expect(body('phase_transfer_activate')).toContain('PHASE_TRANSFER_LINEAGE_MISSING');

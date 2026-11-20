@@ -147,7 +147,8 @@ A failed transfer rolls back completely and writes no ledger row, so the operato
    - a group slot is held by a player outside its phase roster (`PHASE_TRANSFER_GROUP_ORPHANS`);
    - a trash snapshot holds a legacy phase family (`PHASE_TRANSFER_TRASH_CONVERSION_REQUIRED`);
    - an aggregate job or team crosses owners;
-   - the trash inventory assertion fails.
+   - the trash inventory assertion fails;
+   - a format challenge names a phase that does not move.
 3. It copies the manifest families in dependency order and keeps every id. It records a row count and an md5 fingerprint for each family.
 4. It records lineage for every moved phase, round, match and game.
 5. It retargets every outside pointer before any delete: agent suggestions, match-only cast sessions, streaks, outside teams' match and fork pointers, and format challenges.
@@ -163,9 +164,9 @@ The inverse moves the current native rows back, including rows written after reo
 
 **Decisions this procedure makes:**
 
-- `format_challenges.phase_id` cascades from `tournaments`. A native phase has no tournament row, so the forward drops `format_challenges_phase_id_fkey` and mirrors the phase into `league_phase_id` (`phase_pointer_3`). The inverse restores the constraint.
+- `format_challenges.phase_id` names the phase in whichever store owns it. The native model's own reference is `league_phase_id`, which has a foreign key to `league_phases` with `ON DELETE CASCADE` and mirrors `phase_id` (`format_challenges_phase_pointer_3_check`). The forward recreates `format_challenges_phase_id_fkey` against `league_phases(id)` with the same `ON DELETE CASCADE`, and the inverse points it back at `tournaments(id)`. The constraint therefore always exists while the site is running. A challenge whose phase does not move (for example one on a standalone tournament) stops the transfer with `PHASE_TRANSFER_CHALLENGE_UNMOVABLE` before any write.
 - `aggregate_jobs.season_id` is nullable in legacy storage and required in native storage. A null value takes the phase's season.
-- Retargeting an outside team's pointer is an `UPDATE`, so `trg_teams_updated` stamps that team's `updated_at`. It is the only column the round trip changes.
+- Retargeting an outside team's pointer is an `UPDATE`, so `trg_teams_updated` stamps that team's `updated_at`. This is accepted: it is the only column the round trip changes, and the rehearsal's whole-row comparison leaves it out for `teams`.
 - Lineage has no foreign key and is never deleted, so audited activity of either generation keeps an owner proof.
 - Trash snapshots that hold a moved family are refused, not converted. The production preflight found none.
 
