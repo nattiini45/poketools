@@ -124,6 +124,7 @@ describe('dashboard team page: a native phase team', () => {
       baseFormat: 'gen9ou',
       gen: 9,
       locked: false,
+      matchId: null,
     });
     expect(mocks.getTeamById).not.toHaveBeenCalled();
   });
@@ -139,7 +140,8 @@ describe('dashboard team page: a native phase team', () => {
     mocks.phaseTeam = { ...(mocks.phaseTeam as object), match_id: MATCH_ID };
     mocks.match = { id: MATCH_ID, phase_id: PHASE_ID, status: 'completed' };
     await render();
-    expect(mocks.clientProps[0]).toMatchObject({ locked: true, lockReason: 'completed_match' });
+    // The row's match rides along, so the live check is judged by that match's round.
+    expect(mocks.clientProps[0]).toMatchObject({ locked: true, lockReason: 'completed_match', matchId: MATCH_ID });
 
     mocks.access = access(OTHER_ID, true);
     mocks.getPhaseMatchById.mockClear();

@@ -41,7 +41,9 @@ export function useTeamValidation(
       abortRef.current = new AbortController();
 
       try {
-        const scope = phaseIdRef.current ? {
+        // A phase scope needs the match it is checked for: the API refuses `phase_id` without one. A team
+        // opened from a phase without a match is therefore checked against the pinned ruleset and its season.
+        const scope = phaseIdRef.current && matchIdRef.current ? {
           phase_id: phaseIdRef.current,
           match_id: matchIdRef.current,
         } : {

@@ -59,6 +59,7 @@ export default async function DashboardTeamPage({ params }: PageProps) {
         <TeambuilderClient
           tournamentId={null}
           phaseId={phase.id}
+          matchId={team.match_id}
           rulesetId={ruleset?.id}
           rulesetName={ruleset?.name}
           baseFormat={ruleset?.base_format}

@@ -83,7 +83,7 @@ beforeEach(() => {
   mocks.player = { playerId: PLAYER_ID, name: 'P', isAdmin: false, isResourceAdmin: false, isCreator: false, status: 'active' };
   mocks.owner = { kind: 'phase', phase_id: PHASE_ID, season_id: SEASON_ID };
   mocks.phase = { id: PHASE_ID, season_id: SEASON_ID, ruleset_id: 'ruleset-1', status: 'active', archived: false };
-  mocks.team = { id: TEAM_ID, phase_id: PHASE_ID, name: 'League rain', pokemon: [{ species: 'Pelipper' }], locked: false };
+  mocks.team = { id: TEAM_ID, phase_id: PHASE_ID, name: 'League rain', pokemon: [{ species: 'Pelipper' }], locked: false, match_id: null };
   mocks.findNativePhaseAliasOwner.mockImplementation(async () => mocks.owner);
   mocks.findLegacyPhaseAliasOwner.mockResolvedValue(null);
   mocks.standaloneTournamentAliasExists.mockResolvedValue(false);
@@ -106,6 +106,7 @@ describe('tournament teambuilder page: a phase id', () => {
       teamId: TEAM_ID,
       initialPokemon: [{ species: 'Pelipper' }],
       teamName: 'League rain',
+      matchId: null,
     });
     expect(mocks.getTournamentById).not.toHaveBeenCalled();
   });

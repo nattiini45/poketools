@@ -13,6 +13,8 @@ interface TeambuilderClientProps {
   tournamentId: string | null;
   /** League phase the team belongs to, when the id names no tournament row */
   phaseId?: string | null;
+  /** The match a phase team is registered for: the round its live check is judged by */
+  matchId?: string | null;
   /** Ruleset ID for validation */
   rulesetId?: string;
   /** Pre-loaded team (for edit mode) */
@@ -44,6 +46,7 @@ interface TeambuilderClientProps {
 export default function TeambuilderClient({
   tournamentId,
   phaseId,
+  matchId,
   rulesetId,
   initialPokemon,
   teamId,
@@ -75,6 +78,7 @@ export default function TeambuilderClient({
         generation={generation}
         tournamentId={tournamentId}
         phaseId={phaseId}
+        matchId={matchId}
         seasonId={seasonId}
         initialPokemon={initialPokemon}
         teamId={teamId}

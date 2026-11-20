@@ -45,6 +45,7 @@ export default async function TournamentTeambuilderPage({ params }: PageProps) {
         <TeambuilderClient
           tournamentId={null}
           phaseId={phase.id}
+          matchId={existingTeam?.match_id ?? null}
           rulesetId={ruleset?.id}
           rulesetName={ruleset?.name}
           baseFormat={ruleset?.base_format}
