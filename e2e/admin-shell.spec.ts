@@ -10,7 +10,7 @@ test.describe('admin shell', () => {
 
     const sidebar = page.getByRole('navigation', { name: 'Admin' });
     await expect(sidebar.getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('link', { name: 'New competition' })).toHaveAttribute('href', '/admin/leagues/new');
+    await expect(sidebar.getByRole('link', { name: 'New competition' })).toHaveAttribute('href', '/admin/leagues/new');
 
     // Competitions is one section over the list pages; its views show once the page is inside it.
     await sidebar.getByRole('link', { name: 'Competitions' }).click();
