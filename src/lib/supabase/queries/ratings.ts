@@ -348,8 +348,8 @@ export async function listSeasonCompletedMatchPlayerIds(seasonId: string): Promi
   return [...playerIds];
 }
 
-/** SQLSTATE `rating_replace_player_history` raises when its history fence fails. */
-const SERIALIZATION_FAILURE = '40001';
+/** SQLSTATEs `rating_replace_player_history` raises when its history fence fails: PT409 since migration 20261121220000 (40001 could not reach the client), kept for deploys ahead of the migration. */
+const FENCE_REFUSAL_CODES = new Set(['PT409', '40001']);
 
 /**
  * `rating_replace_player_history` refused the write (nothing written): the
@@ -435,7 +435,7 @@ export async function replacePlayerRatingCurve(
   });
 
   if (error) {
-    if (error.code === SERIALIZATION_FAILURE) throw new RatingCurveStaleError(playerId, error);
+    if (error.code && FENCE_REFUSAL_CODES.has(error.code)) throw new RatingCurveStaleError(playerId, error);
     throw error;
   }
   if (data !== history.length) {

@@ -10,6 +10,9 @@ import { describe, expect, it } from 'vitest';
 import { createRatingScope, matchCountsForRatings } from '../rating-scope';
 
 const MIGRATION = 'supabase/migrations/20261019130000_ratings_skip_test_seasons.sql';
+// The fence migration supersedes `rating_replace_player_history` (40001 -> PT409); the other
+// functions of 20261019130000 stay in effect there.
+const FENCE_MIGRATION = 'supabase/migrations/20261121220000_fence_sqlstate_pt409.sql';
 
 describe('matchCountsForRatings', () => {
   const scope = createRatingScope(['t-test-1', 't-test-2']);
@@ -36,8 +39,9 @@ describe('matchCountsForRatings', () => {
   });
 });
 
-describe('the SQL mirror (migration 20261019130000)', () => {
+describe('the SQL mirror (migrations 20261019130000 and 20261121220000)', () => {
   const sql = readFileSync(join(process.cwd(), MIGRATION), 'utf8');
+  const fenceSql = readFileSync(join(process.cwd(), FENCE_MIGRATION), 'utf8');
 
   it('defines match_in_test_season from the match -> tournament -> season flag, false when there is none', () => {
     expect(sql).toMatch(/CREATE OR REPLACE FUNCTION public\.match_in_test_season\(p_match_id uuid\)\s+RETURNS boolean/);
@@ -53,8 +57,8 @@ describe('the SQL mirror (migration 20261019130000)', () => {
   });
 
   it('makes the rebuild writer refuse a test-league history row and ignore such rows in its fence', () => {
-    const replace = sql.slice(sql.indexOf('CREATE OR REPLACE FUNCTION public.rating_replace_player_history'));
-    expect(replace).toMatch(/WHERE public\.match_in_test_season\(r\.match_id\)[\s\S]*?USING ERRCODE = '40001'/);
+    const replace = fenceSql.slice(fenceSql.indexOf('CREATE OR REPLACE FUNCTION public.rating_replace_player_history'));
+    expect(replace).toMatch(/WHERE public\.match_in_test_season\(r\.match_id\)[\s\S]*?USING ERRCODE = 'PT409'/);
     expect(replace).toMatch(/AND NOT public\.match_in_test_season\(h\.match_id\)/);
   });
 
@@ -64,8 +68,9 @@ describe('the SQL mirror (migration 20261019130000)', () => {
       'public.rating_apply_match_result(uuid, jsonb)',
       'public.rating_replace_player_history(uuid, jsonb, jsonb, uuid[])',
     ]) {
-      expect(sql).toContain(`REVOKE ALL ON FUNCTION ${signature} FROM PUBLIC, anon, authenticated;`);
-      expect(sql).toContain(`GRANT EXECUTE ON FUNCTION ${signature} TO service_role;`);
+      const grants = signature.startsWith('public.rating_replace_player_history') ? fenceSql : sql;
+      expect(grants).toContain(`REVOKE ALL ON FUNCTION ${signature} FROM PUBLIC, anon, authenticated;`);
+      expect(grants).toContain(`GRANT EXECUTE ON FUNCTION ${signature} TO service_role;`);
     }
   });
 });

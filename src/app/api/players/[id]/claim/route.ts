@@ -135,6 +135,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
           { code: 'SOURCE_HAS_ACTIVITY', status: 409 },
         );
       }
+      // The guest row changed between the pre-check and the locked UPDATE — a lost claim race.
+      if ((err as { code?: string } | null)?.code === 'PT409') {
+        logger.error('players', 'guest claim refused: guest player changed during the claim', {
+          guestId,
+          sourcePlayerId,
+          error: err,
+        });
+        throw new UserFacingError('Guest player changed — try again', {
+          code: 'GUEST_CHANGED',
+          status: 409,
+        });
+      }
       // The source was banned or suspended between the pre-check and the locked re-check.
       if ((err as { code?: string } | null)?.code === '55000') {
         logger.error('players', 'guest claim refused: source account not in good standing', {

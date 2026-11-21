@@ -7,6 +7,7 @@ export default defineDe<typeof en>()({
   SOURCE_IS_GUEST: 'Der Quellspieler muss ein registriertes Konto sein.',
   SOURCE_HAS_ACTIVITY: 'Das Quellkonto hat bereits Aktivität – nutze stattdessen den Spielerwechsel.',
   SOURCE_NOT_ACTIVE: 'Das Quellkonto ist gesperrt.',
+  GUEST_CHANGED: 'Der Gast-Spieler hat sich geändert – bitte erneut versuchen.',
   claim_same_player: 'Gastkonto und Quellkonto müssen verschiedene Spieler sein.',
   player_not_found: 'Spieler nicht gefunden.',
   INVALID_PLAYER_ID: 'Spieler nicht gefunden.',
