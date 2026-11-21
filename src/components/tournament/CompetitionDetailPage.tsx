@@ -251,6 +251,7 @@ export async function renderCompetitionDetail(
         view={hero}
         locale={locale}
       />
+      {competition.description && <p className="max-w-[62ch] whitespace-pre-wrap text-body text-fg-muted">{competition.description}</p>}
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <LinkTabs
           tabs={tabs.map((tab) => ({ key: tab, href: tabHref(tab), label: tabLabel[tab], icon: <ItemIcon item={TAB_ICON[tab]} /> }))}

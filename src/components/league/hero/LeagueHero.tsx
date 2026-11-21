@@ -28,10 +28,11 @@ interface LeagueHeroProps {
 }
 
 /**
- * The league hero (plan §4.2, B2; Direction B's versus screen): the league's name, status and matchday on the
- * arena sand, and the match that matters to this viewer on the versus slab: their own next match with its
- * actions, else the live match, else the next kickoff, else the top of the table. It is the page's `h1` and the
- * only place that carries world lore (D9). Server component; it renders from the world payload alone.
+ * The league hero (plan §4.2, B2; Direction B's versus screen): the league's name, status and matchday straight on
+ * the page background (no frame around them), and the match that matters to this viewer on the versus slab: their
+ * own next match with its actions, else the live match, else the next kickoff, else the top of the table. It is
+ * the page's `h1` and the only place that carries world lore (D9). Server component; it renders from the world
+ * payload alone.
  */
 export default function LeagueHero({ league, worldId, view, locale }: LeagueHeroProps) {
   const t = createTranslator(leaguesMessages, locale);
@@ -47,7 +48,7 @@ export default function LeagueHero({ league, worldId, view, locale }: LeagueHero
     <section
       aria-labelledby="league-hero-heading"
       data-league-hero={match?.kind ?? (leader ? 'leader' : 'plain')}
-      className={cn('league-hero overflow-hidden rounded-poke-lg border border-hairline', (match || leader) && 'league-hero-split')}
+      className={cn('league-hero', (match || leader) && 'league-hero-split')}
     >
       <div className="relative min-w-0 px-5 py-6 sm:px-8 sm:py-9">
         <SkewChip tone={STATUS_TONE[league.status]} className="text-body">
