@@ -6,6 +6,10 @@
  *   timeout 55P03 or deadlock 40P01: retry in a moment) and `LEAGUE_TRASH_TIMEOUT` (statement timeout 57014, or the
  *   request deadline of the Supabase client: the transaction rolled back, or committed after the caller stopped
  *   waiting, so a caller that cannot tell must read the trash back).
+ * - `LEAGUE_TRASH_LEGACY_SNAPSHOT` is the restore of a snapshot taken before the P6 transfer once the site runs on league
+ *   phases: the restore re-inserts league-owned `tournaments` rows, which the 4.C.6 guard refuses
+ *   (`phase_storage_not_ready` with `season_owned` in its detail, 20261120130000_phase_legacy_league_tournament_guard.sql).
+ *   The restore is one transaction, so nothing of the league comes back.
  * - `toLeagueTrashDbError` maps a PostgREST error to `LeagueTrashDbError`, matching on the code or message only,
  *   never on text a user typed. Anything else returns `null` and stays the caller's to rethrow.
  * - `leagueTrashBlockOf` reads a foreign-key violation (23503) raised by a delete of a player, a ruleset or a
@@ -23,6 +27,7 @@ export const LEAGUE_TRASH_DB_CODES = [
   'LEAGUE_TRASH_NOT_FOUND',
   'LEAGUE_TRASH_EXPIRED',
   'LEAGUE_TRASH_SEASON_EXISTS',
+  'LEAGUE_TRASH_LEGACY_SNAPSHOT',
   'LEAGUE_TRASH_REBUILD_PENDING',
   'LEAGUE_TRASH_SCHEMA_DRIFT',
   'LEAGUE_TRASH_PARENT_MISSING',
@@ -81,6 +86,9 @@ export function toLeagueTrashDbError(error: unknown): LeagueTrashDbError | null 
   if (e.code === '55P03' || e.code === '40P01') return new LeagueTrashDbError('LEAGUE_TRASH_BUSY', {}, { cause: error });
   if (e.code === '57014' || isSupabaseTimeoutError(error)) {
     return new LeagueTrashDbError('LEAGUE_TRASH_TIMEOUT', {}, { cause: error });
+  }
+  if (e.code === 'P0001' && e.message === 'phase_storage_not_ready' && detailOf(e).season_owned === true) {
+    return new LeagueTrashDbError('LEAGUE_TRASH_LEGACY_SNAPSHOT', {}, { cause: error });
   }
   if (e.code === 'P0001' && typeof e.message === 'string' && DB_CODE_SET.has(e.message)) {
     return new LeagueTrashDbError(e.message as LeagueTrashDbCode, detailOf(e), { cause: error });

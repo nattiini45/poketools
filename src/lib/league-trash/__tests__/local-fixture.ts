@@ -1,7 +1,11 @@
 /**
- * Seeds one evolution-point-buy league through supabase-js (PostgREST) into a LOCAL stack. With native: true it touches
- * EVERY owned table of the league recycle bin. The TypeScript twin of `scripts/league-trash-lab/seed.sql`, used by the
- * opt-in database lifecycle suite and, without the native graph, the legacy route and admin-agent suites.
+ * Seeds one evolution-point-buy league through supabase-js (PostgREST) into a LOCAL stack, in one of the two shapes a
+ * real league has: `legacy` (the default) keeps its stages in `tournaments` and their children, as every league does
+ * before the P6 transfer; `native` keeps them in `league_phases` and the `phase_*` tables, as every league does
+ * after it. A league never holds both (20261120130000_phase_legacy_league_tournament_guard.sql), so a legacy league is
+ * seeded in the legacy pass and a native one in phase mode. The legacy league-owned `tournaments` rows go in as the
+ * schema owner (`insertAsSchemaOwner`); everything else through the service role. Between them the two shapes touch
+ * every owned table of the league recycle bin. The TypeScript twin of `scripts/league-trash-lab/seed.sql`.
  *
  * The league has two season groups (A, B), two initial + two redraft draft pools (group A's initial pool is drafting
  * with an active slot, group B's redraft pool is in its submissions phase), a circular redraft slot <-> pick pair,
@@ -19,11 +23,14 @@
 import { createHash, randomUUID } from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { insertLocalRuleset } from '@/test/local-rulesets';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 export type Client = SupabaseClient;
 
+export type FixtureShape = 'legacy' | 'native';
+
 export interface FixtureSize {
-  native?: boolean;
+  shape?: FixtureShape;
   /** Even, at least 4. */
   players: number;
   phases: number;
@@ -33,6 +40,7 @@ export interface FixtureSize {
 }
 
 export interface LeagueIds {
+  shape: FixtureShape;
   seasonId: string;
   adminId: string;
   playerIds: string[];
@@ -94,6 +102,12 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
   const adminId = playerIds[0];
   const groupOf = (i: number) => (i < half ? 0 : 1);
   const groupMembers = (g: 0 | 1) => playerIds.slice(g * half, (g + 1) * half);
+  const shape = size.shape ?? 'legacy';
+  const native = shape === 'native';
+  type FixtureRow = Record<string, unknown>;
+  const onPhase = ({ tournament_id, ...row }: FixtureRow): FixtureRow => ({ ...row, phase_id: tournament_id });
+  const stage = (legacyTable: string, nativeTable: string, rows: FixtureRow[], toNative: (row: FixtureRow) => FixtureRow = (row) => row) =>
+    native ? insert(client, nativeTable, rows.map(toNative)) : insert(client, legacyTable, rows);
 
   // Parents outside the league.
   await insert(client, 'players', playerIds.map((id, i) => ({ id, name: `ltt_${tag}_${i}`, is_guest: true })));
@@ -316,12 +330,10 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
 
   // Phases, their groups, rounds and matches.
   const phaseIds = Array.from({ length: phaseCount }, () => uuid());
-  await insert(
-    client,
-    'tournaments',
-    phaseIds.map((id, i) => ({ id, name: `Phase ${i + 1}`, season_id: seasonId, bracket_type: 'round_robin', ruleset_id: rulesetId, status: 'active', stage_order: i + 1, format_stage_key: `p${i + 1}` })),
-  );
-  await insert(client, 'tournament_participants', phaseIds.flatMap((tournament_id) => playerIds.map((player_id) => ({ tournament_id, player_id }))));
+  const phaseRows = phaseIds.map((id, i) => ({ id, name: `Phase ${i + 1}`, season_id: seasonId, bracket_type: 'round_robin', ruleset_id: rulesetId, status: 'active', stage_order: i + 1, format_stage_key: `p${i + 1}` }));
+  if (native) await insert(client, 'league_phases', phaseRows);
+  else await insertAsSchemaOwner('tournaments', phaseRows);
+  await stage('tournament_participants', 'phase_participants', phaseIds.flatMap((tournament_id) => playerIds.map((player_id) => ({ tournament_id, player_id }))), onPhase);
   const tournamentGroupIds: string[] = [];
   const tgRows: Record<string, unknown>[] = [];
   const tgmRows: Record<string, unknown>[] = [];
@@ -333,8 +345,9 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
       groupMembers(g).forEach((player_id) => tgmRows.push({ group_id: id, player_id }));
     }
   }
-  await insert(client, 'tournament_groups', tgRows);
-  await insert(client, 'tournament_group_members', tgmRows);
+  const groupPhase = new Map(tgRows.map((group) => [group.id as string, group.tournament_id]));
+  await stage('tournament_groups', 'phase_groups', tgRows, (row) => ({ ...onPhase(row), season_id: seasonId }));
+  await stage('tournament_group_members', 'phase_group_members', tgmRows, (row) => ({ ...row, phase_id: groupPhase.get(row.group_id as string) }));
 
   const roundRows: Record<string, unknown>[] = [];
   const matchRows: Record<string, unknown>[] = [];
@@ -363,8 +376,8 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
       }
     }
   }
-  await insert(client, 'rounds', roundRows);
-  await insert(client, 'matches', matchRows);
+  await stage('rounds', 'phase_rounds', roundRows, onPhase);
+  await stage('matches', 'phase_matches', matchRows, onPhase);
 
   // Games, stats, queue rows, derived history and the per-match rows.
   const played = matchRows.filter((m) => m.status === 'completed' || m.status === 'pending_confirmation');
@@ -384,7 +397,7 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
       replay_url: `https://replay.example/${m.id as string}-${game_number}`,
     })),
   );
-  await insert(client, 'games', gameRows);
+  await stage('games', 'phase_games', gameRows);
   const matchById = new Map(matchRows.map((m) => [m.id as string, m]));
   const statRows: Record<string, unknown>[] = [];
   for (const g of gameRows) {
@@ -394,21 +407,23 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
       for (let k = 1; k <= 6; k += 1) statRows.push({ game_id: g.id, player_id, pokemon_name: `mon${k}`, was_brought: true, was_lead: k === 1, kos_dealt: k % 3 });
     }
   }
-  await insert(client, 'battle_stats', statRows);
-  await insert(
-    client,
+  await stage('battle_stats', 'phase_battle_stats', statRows);
+  const gameMatch = new Map(gameRows.map((g) => [g.id, g.match_id]));
+  await stage(
     'aggregate_jobs',
+    'phase_aggregate_jobs',
     gameRows.map((g) => ({ game_id: g.id, tournament_id: matchById.get(g.match_id as string)?.tournament_id, season_id: seasonId, status: g.aggregate_applied_at ? 'completed' : 'pending' })),
+    (row) => ({ ...onPhase(row), match_id: gameMatch.get(row.game_id as string) }),
   );
-  await insert(
-    client,
+  await stage(
     'rating_history',
+    'phase_rating_history',
     completed.map((m) => ({ player_id: m.player_1_id, match_id: m.id, rating_before: 1500, rating_after: 1510, rd_before: 100, rd_after: 95, opponent_id: m.player_2_id, opponent_rating: 1500, result: 'win' })),
   );
   const trackerRowById = new Map(trackerRows.map((t) => [t.id, t]));
-  await insert(
-    client,
+  await stage(
     'match_evolution_snapshots',
+    'phase_match_evolution_snapshots',
     completed.flatMap((m) =>
       (trackerByPlayer.get(m.player_1_id as string) ?? []).slice(0, 3).map((tracker_id) => ({
         match_id: m.id,
@@ -421,56 +436,62 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     ),
   );
   const every = <T,>(rows: T[], n: number) => rows.filter((_, i) => i % n === 0);
-  await insert(client, 'match_analyses', every(completed, 3).map((m) => ({ match_id: m.id, model_id: 'mdl' })));
-  await insert(
-    client,
+  await stage('match_analyses', 'phase_match_analyses', every(completed, 3).map((m) => ({ match_id: m.id, model_id: 'mdl' })));
+  await stage(
     'match_outcomes',
+    'phase_match_outcomes',
     every(completed, 2).map((m, i) =>
       i % 4 === 3
         ? { match_id: m.id, kind: 'forfeit', source: 'admin', reason: 'no show', set_by: adminId }
         : { match_id: m.id, kind: 'played', p1_faints: i % 6, p2_faints: 6, source: 'replay' },
     ),
   );
-  await insert(client, 'match_prep_analyses', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id, model_id: 'mdl' })));
-  await insert(client, 'match_prep_teams', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id })));
-  await insert(client, 'match_proposals', every(scheduled, 3).map((m) => ({ match_id: m.id, proposer_id: m.player_1_id, responder_id: m.player_2_id, proposed_at: at(0), expires_at: at(2 * DAY), status: 'pending' })));
-  await insert(client, 'epb_animation_views', every(completed, 5).map((m) => ({ player_id: m.player_1_id, match_id: m.id })));
-  await insert(client, 'broadcast_moments', every(gameRows, 20).map((g) => ({ match_id: g.match_id, moment_type: 'highlight', created_by: adminId, game_id: g.id })));
-  await insert(
-    client,
+  await stage('match_prep_analyses', 'phase_match_prep_analyses', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id, model_id: 'mdl' })));
+  await stage('match_prep_teams', 'phase_match_prep_teams', every(scheduled, 3).map((m) => ({ match_id: m.id, player_id: m.player_1_id })));
+  await stage('match_proposals', 'phase_match_proposals', every(scheduled, 3).map((m) => ({ match_id: m.id, proposer_id: m.player_1_id, responder_id: m.player_2_id, proposed_at: at(0), expires_at: at(2 * DAY), status: 'pending' })));
+  await stage('epb_animation_views', 'phase_epb_animation_views', every(completed, 5).map((m) => ({ player_id: m.player_1_id, match_id: m.id })));
+  await stage('broadcast_moments', 'phase_broadcast_moments', every(gameRows, 20).map((g) => ({ match_id: g.match_id, moment_type: 'highlight', created_by: adminId, game_id: g.id })));
+  await stage(
     'tournament_reports',
+    'phase_reports',
     roundRows.map((r) => ({ tournament_id: r.tournament_id, round_id: r.id, report_type: 'round_recap', model_id: 'mdl', status: 'completed' })),
+    onPhase,
   );
 
   // Teams: one per played match (p1's side), draft teams, plus two OUTSIDE teams that point into the league.
   const teamRows = played.map((m) => ({ id: uuid(), player_id: m.player_1_id, tournament_id: m.tournament_id, season_id: seasonId, match_id: m.id, pokemon: [{ species: 'x' }], name: `team ${m.id as string}` }));
   const draftTeamRows = groupMembers(0).map((player_id, i) => ({ id: uuid(), player_id, season_id: seasonId, draft_pool_id: poolIds[0], is_draft_team: true, pokemon: [], name: `draft ${i}` }));
-  await insert(client, 'teams', [...teamRows, ...draftTeamRows]);
+  await stage('teams', 'phase_teams', teamRows, onPhase);
+  await insert(client, 'teams', draftTeamRows);
   const forkTeamId = uuid();
   const pointerTeamId = uuid();
   const pointerMatch = completed.find((m) => !teamRows.some((t) => t.player_id === playerIds[1] && t.match_id === m.id));
   await insert(client, 'teams', [
-    { id: forkTeamId, player_id: playerIds[0], pokemon: [], name: 'fork', forked_from_team_id: teamRows[0]?.id ?? null },
-    { id: pointerTeamId, player_id: playerIds[1], pokemon: [], name: 'ptr', match_id: pointerMatch?.id ?? null },
+    { id: forkTeamId, player_id: playerIds[0], pokemon: [], name: 'fork', [native ? 'forked_from_phase_team_id' : 'forked_from_team_id']: teamRows[0]?.id ?? null },
+    { id: pointerTeamId, player_id: playerIds[1], pokemon: [], name: 'ptr', [native ? 'phase_match_id' : 'match_id']: pointerMatch?.id ?? null },
   ]);
 
   // Polymorphic rows (no foreign key to the league).
   await insert(client, 'resource_admins', [
     { player_id: playerIds[0], resource_type: 'season', resource_id: seasonId },
     { player_id: playerIds[1], resource_type: 'season', resource_id: seasonId },
-    ...phaseIds.map((resource_id) => ({ player_id: playerIds[2], resource_type: 'tournament', resource_id })),
   ]);
-  await insert(client, 'discord_webhooks', [
-    { scope_type: 'season', scope_id: seasonId, webhook_url: 'https://hook.example/season' },
-    { scope_type: 'tournament', scope_id: phaseIds[0], webhook_url: 'https://hook.example/t' },
-  ]);
+  await stage('resource_admins', 'phase_admins', phaseIds.map((resource_id) => ({ player_id: playerIds[2], resource_type: 'tournament', resource_id })),
+    ({ player_id, resource_id }) => ({ player_id, phase_id: resource_id }));
+  await insert(client, 'discord_webhooks', [{ scope_type: 'season', scope_id: seasonId, webhook_url: 'https://hook.example/season' }]);
+  await stage('discord_webhooks', 'phase_discord_webhooks', [{ scope_type: 'tournament', scope_id: phaseIds[0], webhook_url: 'https://hook.example/t' }],
+    ({ scope_id, webhook_url }) => ({ phase_id: scope_id, webhook_url }));
+  if (native) await insert(client, 'phase_social_integrations', [{ phase_id: phaseIds[0], provider: 'x', label: 'lt phase social' }]);
   await insert(client, 'social_integrations', [{ provider: 'x', scope_type: 'season', scope_id: seasonId, label: 'lt social' }]);
   const noteIds = [uuid(), uuid()];
   await insert(client, 'wiki_notes', [
     { id: noteIds[0], entity_type: 'pokemon', entity_name: 'pikachu', author_id: playerIds[0], content: 'note', scope_type: 'league', scope_id: seasonId },
-    { id: noteIds[1], entity_type: 'move', entity_name: 'tackle', author_id: playerIds[0], content: 'note', scope_type: 'tournament', scope_id: phaseIds[0] },
   ]);
+  await stage('wiki_notes', 'phase_wiki_notes',
+    [{ id: noteIds[1], entity_type: 'move', entity_name: 'tackle', author_id: playerIds[0], content: 'note', scope_type: 'tournament', scope_id: phaseIds[0] }],
+    ({ scope_type: _scope, scope_id, ...note }) => ({ ...note, phase_id: scope_id }));
   await insert(client, 'wiki_note_reports', [{ note_id: noteIds[0], reporter_id: playerIds[1], reason: 'spam' }]);
+  if (native) await insert(client, 'phase_wiki_note_reports', [{ note_id: noteIds[1], reporter_id: playerIds[1], reason: 'spam' }]);
 
   // Format runtime state (20261105090000): every table holds rows, the relation is a ring over the roster.
   await insert(client, 'format_relation_links', playerIds.map((from, i) => ({
@@ -505,8 +526,9 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     { season_id: seasonId, kind: 'rank', target: { stage: 'main' }, delta: { order: [] }, reason: 'tie break by hand', admin_id: null },
   ]);
   // Challenge ladder (20261106090000): an open challenge (its accept window shifts on restore), an accepted one that
-  // points at a scheduled match, and an expired one.
-  await insert(client, 'format_challenges', [
+  // points at a scheduled match, and an expired one. Legacy shape only: until the P6 transfer moves its foreign key,
+  // a challenge's phase is a `tournaments` row, which a native league does not have.
+  if (!native) await insert(client, 'format_challenges', [
     { season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[0], defender_id: playerIds[1], round: 1, expires_at: at(DAY) },
     {
       season_id: seasonId, phase_id: phaseIds[0], challenger_id: playerIds[2], defender_id: playerIds[3], round: 1, status: 'accepted',
@@ -517,68 +539,31 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
 
   // Derived rows.
   const aggs = (scope_type: string, scope_id: string) => Array.from({ length: 20 }, (_, g) => ({ scope_type, scope_id, pokemon_name: `mon${g + 1}`, total_appearances: 10 }));
-  await insert(client, 'aggregates', [...aggs('league', seasonId), ...phaseIds.flatMap((p) => aggs('tournament', p))]);
-  await insert(client, 'player_aggregates', [
-    ...playerIds.map((player_id) => ({ scope_type: 'league', scope_id: seasonId, player_id, pokemon_name: 'mon1', total_appearances: 2 })),
-    ...phaseIds.map((scope_id) => ({ scope_type: 'tournament', scope_id, player_id: playerIds[0], pokemon_name: 'mon1', total_appearances: 2 })),
-  ]);
+  const fromScope = ({ scope_type: _scope, scope_id, ...row }: FixtureRow): FixtureRow => ({ ...row, phase_id: scope_id });
+  await insert(client, 'aggregates', aggs('league', seasonId));
+  await stage('aggregates', 'phase_aggregates', phaseIds.flatMap((p) => aggs('tournament', p)), fromScope);
+  await insert(client, 'player_aggregates', playerIds.map((player_id) => ({ scope_type: 'league', scope_id: seasonId, player_id, pokemon_name: 'mon1', total_appearances: 2 })));
+  await stage('player_aggregates', 'phase_player_aggregates',
+    phaseIds.map((scope_id) => ({ scope_type: 'tournament', scope_id, player_id: playerIds[0], pokemon_name: 'mon1', total_appearances: 2 })), fromScope);
 
   // Pointers from outside: streaks (NO ACTION before the trash migration), a cast session, an agent suggestion.
   const streakRows = playerIds.flatMap((player_id) => {
     const m = completed.find((c) => c.player_1_id === player_id || c.player_2_id === player_id);
-    return m ? [{ player_id, last_match_id: m.id }] : [];
+    return m ? [{ player_id, [native ? 'last_phase_match_id' : 'last_match_id']: m.id }] : [];
   });
   await upsert(client, 'player_streaks', streakRows, 'player_id');
   const castSessionId = uuid();
-  await insert(client, 'cast_sessions', [{ id: castSessionId, owner_id: adminId, season_id: seasonId, tournament_id: phaseIds[0], match_id: matchRows[0]?.id, name: 'cast' }]);
+  await insert(client, 'cast_sessions', [native
+    ? { id: castSessionId, owner_id: adminId, season_id: seasonId, phase_id: phaseIds[0], phase_match_id: matchRows[0]?.id, name: 'cast' }
+    : { id: castSessionId, owner_id: adminId, season_id: seasonId, tournament_id: phaseIds[0], match_id: matchRows[0]?.id, name: 'cast' }]);
+  if (native) await insert(client, 'phase_cast_sessions', [{ phase_id: phaseIds[0], season_id: seasonId, match_id: matchRows[0]?.id, owner_id: adminId }]);
   const conversationId = uuid();
   const suggestionId = uuid();
   await insert(client, 'agent_conversations', [{ id: conversationId, player_id: adminId, persona: 'p', messages: [] }]);
-  await insert(client, 'agent_suggestions', [{ id: suggestionId, player_id: adminId, conversation_id: conversationId, match_id: matchRows[0]?.id, context_format: 'gen9' }]);
-
-  if (size.native) {
-    const nativePhaseId = phaseIds[0];
-    const nativeMatchId = gameRows[0].match_id;
-    const nativeMatch = matchById.get(nativeMatchId as string);
-    if (!nativeMatch) throw new Error('[local-fixture] missing match for native game');
-    const nativeGame = gameRows[0];
-    const nativePlayerId = nativeMatch.player_1_id;
-    const nativeOpponentId = nativeMatch.player_2_id;
-    await insert(client, 'league_phases', [{ id: nativePhaseId, season_id: seasonId, name: 'Native phase', bracket_type: 'round_robin', ruleset_id: rulesetId, status: 'active' }]);
-    await insert(client, 'phase_participants', playerIds.map((player_id) => ({ phase_id: nativePhaseId, player_id })));
-    const nativeGroups = tgRows.filter((group) => group.tournament_id === nativePhaseId).map(({ tournament_id, ...group }) => ({
-      ...group, id: group.id, phase_id: tournament_id, season_id: seasonId,
-    }));
-    const nativeGroupIds = new Set(nativeGroups.map((group) => group.id));
-    await insert(client, 'phase_groups', nativeGroups);
-    await insert(client, 'phase_group_members', tgmRows.filter((member) => nativeGroupIds.has(member.group_id)).map((member) => ({
-      ...member, phase_id: nativePhaseId,
-    })));
-    await insert(client, 'phase_rounds', [{ id: nativeMatch.round_id, phase_id: nativePhaseId, name: 'Native round', round_number: 1, best_of: 3, status: 'active', deadline: at(DAY) }]);
-    const { tournament_id: legacyPhaseId, ...nativeMatchRow } = nativeMatch;
-    if (legacyPhaseId !== nativePhaseId) throw new Error('[local-fixture] native match belongs to another phase');
-    await insert(client, 'phase_matches', [{ ...nativeMatchRow, phase_id: nativePhaseId }]);
-    await insert(client, 'phase_reports', [{ phase_id: nativePhaseId, round_id: nativeMatch.round_id, report_type: 'round_recap', model_id: 'fixture' }]);
-    await insert(client, 'phase_match_outcomes', [{ match_id: nativeMatchId, kind: 'played', source: 'replay' }]);
-    await insert(client, 'phase_games', [{ ...nativeGame, replay_hash: sha(`${nativeGame.id}:native`) }]);
-    await insert(client, 'phase_battle_stats', [{ game_id: nativeGame.id, player_id: nativePlayerId, pokemon_name: 'mon1' }]);
-    await insert(client, 'phase_match_analyses', [{ match_id: nativeMatchId, model_id: 'fixture' }]);
-    await insert(client, 'phase_match_prep_analyses', [{ match_id: nativeMatchId, player_id: nativePlayerId, model_id: 'fixture' }]);
-    await insert(client, 'phase_match_prep_teams', [{ match_id: nativeMatchId, player_id: nativePlayerId }]);
-    await insert(client, 'phase_match_proposals', [{ match_id: nativeMatchId, proposer_id: nativePlayerId, responder_id: nativeOpponentId, proposed_at: at(0), expires_at: at(DAY) }]);
-    await insert(client, 'phase_match_evolution_snapshots', [{ match_id: nativeMatchId, player_id: nativePlayerId, base_pokemon: 'mon1', species_at_match: 'mon1', stage_at_match: 1 }]);
-    await insert(client, 'phase_epb_animation_views', [{ match_id: nativeMatchId, player_id: nativePlayerId }]);
-    await insert(client, 'phase_broadcast_moments', [{ match_id: nativeMatchId, game_id: nativeGame.id, moment_type: 'highlight', created_by: adminId }]);
-    await insert(client, 'phase_teams', [{ phase_id: nativePhaseId, season_id: seasonId, match_id: nativeMatchId, player_id: nativePlayerId }]);
-    await insert(client, 'phase_cast_sessions', [{ phase_id: nativePhaseId, season_id: seasonId, match_id: nativeMatchId, owner_id: adminId }]);
-    await insert(client, 'phase_admins', [{ phase_id: nativePhaseId, player_id: adminId }]);
-    await insert(client, 'phase_discord_webhooks', [{ phase_id: nativePhaseId, webhook_url: 'https://hook.example/native' }]);
-    await insert(client, 'phase_social_integrations', [{ phase_id: nativePhaseId, provider: 'x', label: 'Native integration' }]);
-    await insert(client, 'phase_wiki_notes', [{ id: noteIds[1], phase_id: nativePhaseId, entity_type: 'pokemon', entity_name: 'mon1', author_id: adminId, content: 'Native note' }]);
-    await insert(client, 'phase_wiki_note_reports', [{ note_id: noteIds[1], reporter_id: adminId, reason: 'fixture' }]);
-  }
+  await insert(client, 'agent_suggestions', [{ id: suggestionId, player_id: adminId, conversation_id: conversationId, [native ? 'phase_match_id' : 'match_id']: matchRows[0]?.id, context_format: 'gen9' }]);
 
   return {
+    shape,
     seasonId,
     adminId,
     playerIds,
@@ -595,6 +580,6 @@ export async function seedLeague(client: Client, size: FixtureSize): Promise<Lea
     teamIds: [...teamRows, ...draftTeamRows].map((t) => t.id),
     noteIds,
     outside: { castSessionId, suggestionId, forkTeamId, pointerTeamId, streakPlayerIds: streakRows.map((s) => s.player_id) },
-    counts: { matches: matchRows.length, games: gameRows.length, phaseGames: size.native ? 1 : 0, battleStats: statRows.length, teams: teamRows.length + draftTeamRows.length },
+    counts: { matches: matchRows.length, games: native ? 0 : gameRows.length, phaseGames: native ? gameRows.length : 0, battleStats: statRows.length, teams: teamRows.length + draftTeamRows.length },
   };
 }

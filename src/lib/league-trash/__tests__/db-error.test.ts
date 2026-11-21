@@ -31,6 +31,18 @@ describe('toLeagueTrashDbError', () => {
     expect(toLeagueTrashDbError({ code: 'P0001', message: 'LEAGUE_TRASH_EXPIRED', details: 'not json' })?.detail).toEqual({});
   });
 
+  it('maps the guard refusing a league-owned tournament to LEGACY_SNAPSHOT', () => {
+    const details = JSON.stringify({ mode: 'phase', table: 'tournaments', season_owned: true });
+    const mapped = toLeagueTrashDbError({ code: 'P0001', message: 'phase_storage_not_ready', details });
+    expect(mapped?.code).toBe('LEAGUE_TRASH_LEGACY_SNAPSHOT');
+    expect(mapped?.detail).toEqual({});
+  });
+
+  it('leaves other storage-generation refusals alone', () => {
+    const details = JSON.stringify({ mode: 'legacy', table: 'phase_matches' });
+    expect(toLeagueTrashDbError({ code: 'P0001', message: 'phase_storage_not_ready', details })).toBeNull();
+  });
+
   it('maps lock timeout and deadlock to BUSY', () => {
     expect(toLeagueTrashDbError({ code: '55P03', message: 'x' })?.code).toBe('LEAGUE_TRASH_BUSY');
     expect(toLeagueTrashDbError({ code: '40P01', message: 'x' })?.code).toBe('LEAGUE_TRASH_BUSY');

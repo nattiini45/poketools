@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL test for supabase/migrations/20261106090000_format_challenges.sql. It runs the query module against a LOCAL
 // Supabase stack to prove the challenge functions: a challenge goes up the ladder within rank_range, one pair has one
@@ -143,13 +144,10 @@ describe.skipIf(!optIn)('format challenges (local stack)', () => {
         engine: 'kit',
       }),
     );
-    await run(
-      'tournaments',
-      client.from('tournaments').insert([
-        { id: ids.phase, name: `Challenges ${RUN} Ladder`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
-        { id: ids.emptyPhase, name: `Challenges ${RUN} Empty`, season_id: ids.season, stage_order: 1, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
-      ]),
-    );
+    await insertAsSchemaOwner('tournaments', [
+      { id: ids.phase, name: `Challenges ${RUN} Ladder`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
+      { id: ids.emptyPhase, name: `Challenges ${RUN} Empty`, season_id: ids.season, stage_order: 1, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' },
+    ]);
     await run(
       'tournament_participants',
       client.from('tournament_participants').insert([

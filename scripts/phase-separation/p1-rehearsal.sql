@@ -100,6 +100,25 @@ BEGIN
   END LOOP;
 END $$;
 
+-- The copy leaves the league native-only, as every league is after the P6 transfer: the legacy stage rows it came from
+-- go, so the trash snapshot holds no league-owned tournaments row (the 4.C.6 guard refuses to re-insert one in phase mode).
+DELETE FROM public.wiki_note_reports WHERE note_id IN (SELECT id FROM public.wiki_notes WHERE scope_type = 'tournament' AND scope_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid'));
+DELETE FROM public.wiki_notes WHERE scope_type = 'tournament' AND scope_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+DELETE FROM public.social_integrations WHERE scope_type = 'tournament' AND scope_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+DELETE FROM public.discord_webhooks WHERE scope_type = 'tournament' AND scope_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+DELETE FROM public.resource_admins WHERE resource_type = 'tournament' AND resource_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+DELETE FROM public.cast_sessions WHERE tournament_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+SET LOCAL poketools.team_correction = 'on';
+DELETE FROM public.teams WHERE tournament_id IN (SELECT id FROM public.tournaments WHERE season_id = :'sid');
+SET LOCAL poketools.team_correction = 'off';
+DELETE FROM public.tournaments WHERE season_id = :'sid';
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM public.tournaments WHERE season_id = (SELECT season_id FROM phase_fixture_context)) THEN
+    RAISE EXCEPTION 'fixture league still holds a league-owned tournaments row';
+  END IF;
+END $$;
+
 CREATE TEMP TABLE phase_external_links (kind text PRIMARY KEY, id uuid NOT NULL);
 UPDATE public.phase_teams SET forked_from_team_id = NULL,
   forked_from_phase_team_id = (SELECT id FROM public.phase_teams ORDER BY id OFFSET 1 LIMIT 1)

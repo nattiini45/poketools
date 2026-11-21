@@ -5,6 +5,7 @@ import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/loca
 import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 import type { Phase } from '@/types/league-phase';
 import type { Database } from '@/types/database';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 const optedIn = localStackOptIn('LOCAL_LEAGUE_PHASE');
 
@@ -118,8 +119,7 @@ describe.skipIf(!optedIn)('native phase lifecycle on the disposable local stack'
         const round_id = randomUUID();
         const match_id = randomUUID();
         legacyMatchIds.push(match_id);
-        expect((await admin.from('tournaments').insert({ id, season_id, ruleset_id: rulesetId,
-          name: 'Legacy fixture', bracket_type: 'swiss' })).error).toBeNull();
+        await insertAsSchemaOwner('tournaments', [{ id, season_id, ruleset_id: rulesetId, name: 'Legacy fixture', bracket_type: 'swiss' }]);
         expect((await admin.from('tournament_participants').insert({ tournament_id: id, player_id: player })).error).toBeNull();
         expect((await admin.from('rounds').insert({ id: round_id, tournament_id: id,
           name: 'Legacy fixture round', round_number: 1, best_of: 1 })).error).toBeNull();

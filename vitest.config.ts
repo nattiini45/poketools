@@ -76,16 +76,22 @@ const RUN_LOCAL_STACK_DB = process.env.LOCAL_STACK_DB === '1';
 /** Suites that talk to a real local stack (docs/supabase-environments.md, "Local-stack suites"): the `db` project only. */
 const LOCAL_STACK_SUITES = ['src/**/__tests__/**/*.local.test.{ts,tsx}', 'src/**/__tests__/**/*.live-db.test.{ts,tsx}'];
 const LEGACY_FORMAT_SUITES = [
+  'src/lib/dev-seed/__tests__/seed.local.test.ts',
   'src/lib/format-studio/__tests__/create-league.local.test.ts',
+  'src/lib/league-trash/__tests__/admin-agent-tables.local.test.ts',
+  'src/lib/league-trash/__tests__/routes.local.test.ts',
+  'src/lib/supabase/queries/__tests__/format-notifications.local.test.ts',
   'src/lib/supabase/queries/__tests__/format-fences.local.test.ts',
   'src/lib/supabase/queries/__tests__/format-runtime-attach.local.test.ts',
 ];
+/** Suites that run in the legacy pass and again in the phase pass, each time against the shape the mode allows. */
+const BOTH_FORMAT_SUITES = ['src/lib/league-trash/__tests__/league-trash.local.test.ts'];
 const FROZEN_FORMAT_SUITES = [
   'src/lib/league-phase/__tests__/legacy-format-freeze.local.test.ts',
   'src/lib/league-phase/__tests__/legacy-write-freeze.local.test.ts',
 ];
 const dbPass = process.env.LOCAL_STACK_FORMAT_TEST_PASS;
-const dbSuites = dbPass === 'legacy' ? LEGACY_FORMAT_SUITES : dbPass === 'frozen_legacy' ? FROZEN_FORMAT_SUITES : LOCAL_STACK_SUITES;
+const dbSuites = dbPass === 'legacy' ? [...LEGACY_FORMAT_SUITES, ...BOTH_FORMAT_SUITES] : dbPass === 'frozen_legacy' ? FROZEN_FORMAT_SUITES : LOCAL_STACK_SUITES;
 const dbExcluded = dbPass === 'phase' ? [...LEGACY_FORMAT_SUITES, ...FROZEN_FORMAT_SUITES] : [];
 /** Script tests spawn CLIs (node, bash, git) per case; 5 s is too tight on a cold or loaded runner. */
 const SCRIPT_TEST_TIMEOUT_MS = 60_000;

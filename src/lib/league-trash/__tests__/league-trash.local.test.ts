@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { LeagueTrashDbError, leagueTrashBlockOf } from '../db-error';
-import { seedLeague, type Client, type LeagueIds } from './local-fixture';
+import { seedLeague, type Client, type FixtureShape, type LeagueIds } from './local-fixture';
 import { DERIVED_SPECS, OWNED_SPECS, countsByKey, fingerprintLeague, readClocks } from './local-readers';
 import { deleteLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
@@ -21,6 +21,9 @@ import { assertLoopbackUrl, localStackOptIn } from '@/test/local-stack';
 //     are refused and restore nothing;
 //   * a restore racing an expiry ends in exactly one consistent state;
 //   * timings of a realistic league (and, with LOCAL_LEAGUE_TRASH_HUGE=1, of a ~118k battle_stats league).
+// The leagues have the shape the storage generation allows (local-fixture.ts): legacy in the legacy pass of
+// `npm run test:db`, native in the phase pass, so the two passes together cover every owned table. The phase pass also
+// proves that a legacy-shaped snapshot (one deleted before the P6 transfer) is refused on restore as a whole.
 // Schema drift needs DDL, which supabase-js cannot run: see scripts/league-trash-lab/ (04_schema_drift.sql).
 //
 // It seeds LOCAL data only (after `supabase db reset`), never loads `.env`, runs in CI only with LOCAL_STACK_CI=1, and cleans up after itself.
@@ -52,6 +55,20 @@ const DAY = 86_400_000;
 /** Every test below may seed and read many rows. */
 const SLOW = 15 * MINUTE;
 
+/**
+ * Owned tables each fixture shape leaves empty: a legacy league has no native stage rows, a native league no legacy
+ * stage rows (and no format challenge, whose phase key points at `tournaments` until the P6 transfer moves it).
+ */
+const LEGACY_STAGE_TABLES = [
+  'tournaments', 'tournament_participants', 'tournament_groups', 'tournament_group_members', 'rounds', 'tournament_reports', 'matches',
+  'match_outcomes', 'games', 'battle_stats', 'match_analyses', 'match_prep_analyses', 'match_prep_teams', 'match_proposals',
+  'match_evolution_snapshots', 'epb_animation_views', 'broadcast_moments', 'format_challenges',
+];
+const EMPTY_BY_SHAPE: Record<FixtureShape, readonly string[]> = {
+  legacy: ['redraft_trade_requests', ...OWNED_SPECS.map((spec) => spec.table).filter((table) => table === 'league_phases' || table.startsWith('phase_'))],
+  native: ['redraft_trade_requests', ...LEGACY_STAGE_TABLES],
+};
+
 type Queries = typeof import('@/lib/supabase/queries/league-trash');
 
 describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
@@ -60,8 +77,12 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
   const created: LeagueIds[] = [];
   const timings: string[] = [];
 
-  async function seed(players: number, phases: number, rounds: number, name: string): Promise<LeagueIds> {
-    const ids = await seedLeague(admin, { players, phases, rounds, name, native: true });
+  let shape: FixtureShape;
+  /** Relation names of the stage tables in the shape under test. */
+  const stageRel = (legacy: string) => (shape === 'native' ? `phase_${legacy}` : legacy);
+
+  async function seed(players: number, phases: number, rounds: number, name: string, as: FixtureShape = shape): Promise<LeagueIds> {
+    const ids = await seedLeague(admin, { players, phases, rounds, name, shape: as });
     created.push(ids);
     return ids;
   }
@@ -144,6 +165,10 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
     admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL as string, localServiceKey(), { auth: { persistSession: false, autoRefreshToken: false } });
     // The app's own query module, against the same local stack (the env above is what its client reads).
     q = await import('@/lib/supabase/queries/league-trash');
+    const mode = await admin.from('phase_storage_state').select('mode').single();
+    if (mode.error) throw new Error(`reading the storage mode: ${mode.error.message}`);
+    if (mode.data.mode !== 'legacy' && mode.data.mode !== 'phase') throw new Error(`[league-trash.local] no league shape for mode ${mode.data.mode}`);
+    shape = mode.data.mode === 'legacy' ? 'legacy' : 'native';
   }, SLOW);
 
   afterAll(async () => {
@@ -184,9 +209,11 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       draftLogBefore = await count('draft_action_log');
     }, SLOW);
 
-    it('the fixture touches every owned table (but the read-only archive, which only the SQL lab can seed)', () => {
-      const empty = Object.entries(before).filter(([, f]) => f.n === 0).map(([table]) => table);
-      expect(empty).toEqual(['redraft_trade_requests']);
+    it('the fixture touches every owned table its shape can hold, and the two shapes together touch all of them', () => {
+      const empty = Object.entries(before).filter(([, f]) => f.n === 0).map(([table]) => table).sort();
+      expect(empty).toEqual([...EMPTY_BY_SHAPE[shape]].sort());
+      // The read-only archive is the only table neither shape seeds (the SQL lab covers it).
+      expect(EMPTY_BY_SHAPE.legacy.filter((table) => EMPTY_BY_SHAPE.native.includes(table))).toEqual(['redraft_trade_requests']);
     });
 
     it('delete leaves zero rows by every key and touches nothing else', async () => {
@@ -197,8 +224,8 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(trash.frozen_pools).toBe(1);
       expect([...trash.player_ids].sort()).toEqual([...league.playerIds].sort());
       expect([...trash.phase_ids].sort()).toEqual([...league.phaseIds].sort());
-      expect(trash.counts.matches).toBe(league.counts.matches);
-      expect(trash.counts.battle_stats).toBe(league.counts.battleStats);
+      expect(trash.counts[stageRel('matches')]).toBe(league.counts.matches);
+      expect(trash.counts[stageRel('battle_stats')]).toBe(league.counts.battleStats);
       expect(trash.schema_version).toBe(await q.getLeagueTrashSchemaVersion());
 
       for (const spec of [...OWNED_SPECS, ...DERIVED_SPECS]) {
@@ -211,15 +238,15 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
     }, SLOW);
 
     it('nulls the outside rows that pointed into the league', async () => {
-      const cast = await admin.from('cast_sessions').select('season_id, tournament_id, match_id').eq('id', league.outside.castSessionId).single();
-      expect(cast.data).toEqual({ season_id: null, tournament_id: null, match_id: null });
-      const suggestion = await admin.from('agent_suggestions').select('match_id').eq('id', league.outside.suggestionId).single();
-      expect(suggestion.data).toEqual({ match_id: null });
-      const teams = await admin.from('teams').select('id, forked_from_team_id, match_id').in('id', [league.outside.forkTeamId, league.outside.pointerTeamId]);
-      expect(teams.data?.every((t) => t.forked_from_team_id === null && t.match_id === null)).toBe(true);
-      const streaks = await admin.from('player_streaks').select('last_match_id').in('player_id', league.outside.streakPlayerIds);
+      const cast = await admin.from('cast_sessions').select('season_id, tournament_id, match_id, phase_id, phase_match_id').eq('id', league.outside.castSessionId).single();
+      expect(cast.data).toEqual({ season_id: null, tournament_id: null, match_id: null, phase_id: null, phase_match_id: null });
+      const suggestion = await admin.from('agent_suggestions').select('match_id, phase_match_id').eq('id', league.outside.suggestionId).single();
+      expect(suggestion.data).toEqual({ match_id: null, phase_match_id: null });
+      const teams = await admin.from('teams').select('id, forked_from_team_id, forked_from_phase_team_id, match_id, phase_match_id').in('id', [league.outside.forkTeamId, league.outside.pointerTeamId]);
+      expect(teams.data?.every((t) => t.forked_from_team_id === null && t.forked_from_phase_team_id === null && t.match_id === null && t.phase_match_id === null)).toBe(true);
+      const streaks = await admin.from('player_streaks').select('last_match_id, last_phase_match_id').in('player_id', league.outside.streakPlayerIds);
       expect(streaks.data?.length).toBe(league.outside.streakPlayerIds.length);
-      expect(streaks.data?.every((s) => s.last_match_id === null)).toBe(true);
+      expect(streaks.data?.every((s) => s.last_match_id === null && s.last_phase_match_id === null)).toBe(true);
     });
 
     it('lists the entry without its snapshot and holds the parents', async () => {
@@ -232,7 +259,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
         schema_version: trash.schema_version,
       });
       expect(Object.keys(listed ?? {})).not.toContain('unlinked');
-      expect(listed?.counts.matches).toBe(league.counts.matches);
+      expect(listed?.counts[stageRel('matches')]).toBe(league.counts.matches);
       expect(new Date(listed?.purge_after ?? 0).getTime() - new Date(listed?.deleted_at ?? 0).getTime()).toBe(90 * DAY);
       expect(await count('league_trash_tables', (query) => query.eq('trash_id', trash.trash_id))).toBe(OWNED_SPECS.length);
       expect(await count('league_trash_players', (query) => query.eq('trash_id', trash.trash_id))).toBe(league.playerIds.length);
@@ -359,20 +386,25 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       expect(nativeJobs.data?.every((j) => j.operation === 'increment' && j.status === 'pending')).toBe(true);
       const nativeGames = await admin.from('phase_games').select('id, aggregate_applied_at').in('id', league.gameIds.slice(0, 50));
       expect(nativeGames.error).toBeNull();
-      expect(nativeGames.data).toHaveLength(league.counts.phaseGames);
+      expect(nativeGames.data).toHaveLength(Math.min(50, league.counts.phaseGames));
       expect(nativeGames.data?.every((g) => g.aggregate_applied_at === null)).toBe(true);
 
       // Outside rows are re-linked; the derived streak pointers are not (the app recomputes them).
-      const cast = await admin.from('cast_sessions').select('season_id, tournament_id, match_id').eq('id', league.outside.castSessionId).single();
-      expect(cast.data).toEqual({ season_id: league.seasonId, tournament_id: league.phaseIds[0], match_id: league.matchIds[0] });
-      const suggestion = await admin.from('agent_suggestions').select('match_id').eq('id', league.outside.suggestionId).single();
-      expect(suggestion.data).toEqual({ match_id: league.matchIds[0] });
-      const fork = await admin.from('teams').select('forked_from_team_id').eq('id', league.outside.forkTeamId).single();
-      expect(fork.data).toEqual({ forked_from_team_id: league.teamIds[0] });
-      const pointer = await admin.from('teams').select('match_id').eq('id', league.outside.pointerTeamId).single();
-      expect(pointer.data?.match_id).not.toBeNull();
-      const streaks = await admin.from('player_streaks').select('last_match_id').in('player_id', league.outside.streakPlayerIds.filter((p) => p !== registeredPlayerId));
-      expect(streaks.data?.every((s) => s.last_match_id === null)).toBe(true);
+      const native = shape === 'native';
+      const cast = await admin.from('cast_sessions').select('season_id, tournament_id, match_id, phase_id, phase_match_id').eq('id', league.outside.castSessionId).single();
+      expect(cast.data).toEqual(native
+        ? { season_id: league.seasonId, tournament_id: null, match_id: null, phase_id: league.phaseIds[0], phase_match_id: league.matchIds[0] }
+        : { season_id: league.seasonId, tournament_id: league.phaseIds[0], match_id: league.matchIds[0], phase_id: null, phase_match_id: null });
+      const suggestion = await admin.from('agent_suggestions').select('match_id, phase_match_id').eq('id', league.outside.suggestionId).single();
+      expect(suggestion.data).toEqual(native ? { match_id: null, phase_match_id: league.matchIds[0] } : { match_id: league.matchIds[0], phase_match_id: null });
+      const fork = await admin.from('teams').select('forked_from_team_id, forked_from_phase_team_id').eq('id', league.outside.forkTeamId).single();
+      expect(fork.data).toEqual(native
+        ? { forked_from_team_id: null, forked_from_phase_team_id: league.teamIds[0] }
+        : { forked_from_team_id: league.teamIds[0], forked_from_phase_team_id: null });
+      const pointer = await admin.from('teams').select('match_id, phase_match_id').eq('id', league.outside.pointerTeamId).single();
+      expect(native ? pointer.data?.phase_match_id : pointer.data?.match_id).not.toBeNull();
+      const streaks = await admin.from('player_streaks').select('last_match_id, last_phase_match_id').in('player_id', league.outside.streakPlayerIds.filter((p) => p !== registeredPlayerId));
+      expect(streaks.data?.every((s) => s.last_match_id === null && s.last_phase_match_id === null)).toBe(true);
 
       // The trash row, its captured rows and its junction rows are gone; the tombstone waits for the app's rebuild.
       expect(await trashRowExists(trash.trash_id)).toBe(false);
@@ -481,6 +513,24 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
     }, SLOW);
   });
 
+  describe('a legacy-shaped snapshot in phase mode', () => {
+    it('is refused on restore with its catalog code and restores nothing', async (ctx) => {
+      if (shape !== 'native') ctx.skip();
+      // A league deleted before the P6 transfer: seeded and trashed in its legacy shape while the site runs on phases.
+      const ids = await seed(4, 1, 2, 'LTT pre-transfer snapshot', 'legacy');
+      const trash = await q.moveLeagueToTrash(ids.seasonId, ids.adminId);
+      await q.markLeagueTrashRebuildDone(trash.trash_id);
+      expect(trash.counts.tournaments).toBe(1);
+
+      const refused = await q.restoreLeagueFromTrash(trash.trash_id).catch((e: unknown) => e);
+      expect(refused).toBeInstanceOf(LeagueTrashDbError);
+      expect(refused).toMatchObject({ code: 'LEAGUE_TRASH_LEGACY_SNAPSHOT' });
+      expect(await seasonExists(ids.seasonId)).toBe(false);
+      expect(await trashRowExists(trash.trash_id)).toBe(true);
+      for (const spec of OWNED_SPECS) expect(await countsByKey(admin, spec, ids), spec.table).toEqual(spec.by.map(() => 0));
+    }, SLOW);
+  });
+
   describe('timings', () => {
     async function timeCycle(label: string, ids: LeagueIds): Promise<void> {
       const t0 = Date.now();
@@ -491,7 +541,7 @@ describe.skipIf(!optIn)('league recycle bin on the local stack', () => {
       const restored = await q.restoreLeagueFromTrash(trash.trash_id);
       const restoreMs = Date.now() - t1;
       timings.push(`${label} (${ids.counts.matches} matches, ${ids.counts.games} games, ${ids.counts.battleStats} battle_stats): delete ${deleteMs} ms, restore ${restoreMs} ms`);
-      expect(restored.restored.battle_stats).toBe(ids.counts.battleStats);
+      expect(restored.restored[stageRel('battle_stats')]).toBe(ids.counts.battleStats);
       // Through PostgREST every call is ONE statement under the 8 s limit of the authenticator role.
       expect(deleteMs).toBeLessThan(8000);
       expect(restoreMs).toBeLessThan(8000);

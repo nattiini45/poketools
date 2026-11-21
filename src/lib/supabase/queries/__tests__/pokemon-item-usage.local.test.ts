@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import type { Database } from '@/types/database';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 const optIn = localStackOptIn('LOCAL_LEAGUE_PHASE');
 
@@ -82,10 +83,10 @@ describe.skipIf(!optIn)('species item usage on the disposable phase stack', () =
       { phase_id: phase, player_id: player, match_id: testOpponentMatch, pokemon: pokemon('Test opponent') },
       { phase_id: testPhase, player_id: player, match_id: testLeagueMatch, pokemon: pokemon('Test league') },
     ]));
-    await run(client.from('tournaments').insert([
+    await insertAsSchemaOwner('tournaments', [
       { id: standalone, season_id: null, name: species, bracket_type: 'swiss', ruleset_id: ruleset },
       { id: retired, season_id: league, name: species, bracket_type: 'swiss', ruleset_id: ruleset },
-    ]));
+    ]);
     for (const [tournament_id, matches] of [
       [standalone, [{ id: standaloneMatch, player_2_id: opponent }, { id: legacyTestMatch, player_2_id: testPlayer }]],
       [retired, [{ id: retiredMatch, player_2_id: opponent }]],

@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { assertLoopbackUrl, localStackOptIn, requireLocalKey } from '@/test/local-stack';
 import { deleteLocalRuleset, insertLocalRuleset } from '@/test/local-rulesets';
+import { insertAsSchemaOwner } from '@/test/local-schema-owner';
 
 // LIVE-LOCAL test for supabase/migrations/20261108090000_format_notifications.sql, against a LOCAL Supabase stack: who is told of
 // each challenge outcome, that a retry or a repeated sweep tells nobody twice, that a rule's notice is written only with
@@ -88,7 +89,7 @@ const seed = async () => {
   await run('seasons', client.from('seasons').insert({ id: ids.season, name: `Notify ${RUN}`, format_type: 'custom' }));
   await run('season_formats', client.from('season_formats').insert({ season_id: ids.season, version_no: 1, spec: {}, spec_hash: '0'.repeat(64), seed: `notify-${RUN}`, engine: 'kit' }));
   await run('other season', client.from('seasons').insert({ id: ids.otherSeason, name: `Notify ${RUN} Other`, format_type: 'custom' }));
-  await run('tournaments', client.from('tournaments').insert({ id: ids.phase, name: `Notify ${RUN} Ladder`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' }));
+  await insertAsSchemaOwner('tournaments', [{ id: ids.phase, name: `Notify ${RUN} Ladder`, season_id: ids.season, stage_order: 0, bracket_type: 'round_robin', ruleset_id: ids.ruleset, status: 'active' }]);
   await run('participants', client.from('tournament_participants').insert(PLAYERS.map((player_id) => ({ tournament_id: ids.phase, player_id }))));
   await run('rounds', client.from('rounds').insert({ id: ids.round, tournament_id: ids.phase, name: 'Round 1', round_number: 1, best_of: 1, status: 'pending' }));
 };
