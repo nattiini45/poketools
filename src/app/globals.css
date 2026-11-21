@@ -3114,7 +3114,9 @@ html:has([data-draft-room-screen]) #main-content {
   --hero-lean: 72px;
 }
 html[data-theme="dark"] .league-hero {
-  --hero-slab: #0e0b06;
+  /* Moonlit's page ground is nearly black, so the slab steps up to the sunken sand to keep reading as the panel
+     that carries the match — the same separation the hero had while it still carried its own frame. */
+  --hero-slab: var(--sunken);
   --hero-slab-ink: #f5eddd;
   --hero-slab-muted: #c4b596;
   --hero-vs: var(--tier-1);
